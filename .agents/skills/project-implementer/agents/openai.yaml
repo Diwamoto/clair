@@ -1,0 +1,4 @@
+interface:
+  display_name: "Project Implementer"
+  short_description: "Implement and verify a documented project by its code"
+  default_prompt: "Use $project-implementer to implement the project identified by this project code."
