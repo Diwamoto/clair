@@ -15,7 +15,11 @@
 | 複数projectをまたぐ順序や移行計画 | [plans/](plans/README.md) |
 | release、migration、recoveryなどの操作手順 | [runbooks/](runbooks/README.md) |
 
-GitHub issueは課題、議論、進行状況を扱います。project bundleが作られた後は、実装の目的・要件・設計・受け入れ条件をリポジトリ側の文書に残し、issueからリンクできる形にします。issue本文とdocsが食い違う場合は、明示的な新しい決定がない限り、受け入れ可能なproject bundleとaccepted ADRを実装の基準にします。
+GitHub issueは必要な場合だけ課題、議論、外部共有を扱います。PoC期間の実装順序と状態は
+[local feature queue](plans/clair-poc-queue.md)を正本とし、issue作成やproject bundle作成を
+機能開発の前提にしません。project bundleがある場合は、実装の目的・要件・設計・受け入れ条件を
+リポジトリ側の文書に残します。issue本文とdocsが食い違う場合は、明示的な新しい決定がない限り、
+local queue、受け入れ可能なproject bundle、accepted ADRを実装の基準にします。
 
 ## Project bundle
 
@@ -59,13 +63,13 @@ draft -> ready -> in-progress -> complete
 
 ## 標準フロー
 
-1. GitHub issueで課題を起票する。
-2. `$issue-to-project-docs` でissueをproject bundleへ変換する。
-3. 必要なspikeを `investigations/`、再現データを `benchmarks/` に残す。
-4. 長期的な選択をADRとして `decisions/` に残す。
-5. projectが `ready` になったら、`$project-implementer <project_code>` で実装する。
-6. 実装中の事実に合わせてplan、design、architecture、runbookを更新する。
-7. 全受け入れ条件と検証が完了した時だけ `complete` にする。
+1. [local feature queue](plans/clair-poc-queue.md)からdependency-readyな機能sliceを選ぶ。
+2. ReversibleなPoCはqueueのoutcome、scope、functional checksだけで実装する。
+3. Product、安全性、互換性、data migration、cross-component interfaceの判断が必要な場合だけ、
+   project bundle、investigation、ADRを追加する。
+4. 実装中の事実に合わせてqueue、architecture、runbookを更新する。
+5. Sliceの機能checkを通してcommitし、次のdependency-ready sliceへ進む。
+6. Performance corpusと反復計測はfinal load-test phaseでまとめて実行する。
 
 ## 文書化のルール
 
