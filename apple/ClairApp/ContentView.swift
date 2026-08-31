@@ -226,10 +226,21 @@ struct ContentView: View {
 
 }
 
+private enum ProjectNavigationSheet: String, Identifiable {
+  case quickOpen
+  case search
+  case history
+
+  var id: String {
+    rawValue
+  }
+}
+
 private struct ProjectWorkspaceDetail: View {
   let state: BootstrapState
   let project: Project
   @ObservedObject var surface: ProjectSurfaceModel
+  @State private var navigationSheet: ProjectNavigationSheet?
 
   var body: some View {
     VStack(spacing: 0) {
@@ -248,6 +259,27 @@ private struct ProjectWorkspaceDetail: View {
         }
 
         Spacer()
+
+        Button {
+          navigationSheet = .quickOpen
+        } label: {
+          Label("Quick Open", systemImage: "magnifyingglass")
+        }
+        .buttonStyle(.bordered)
+
+        Button {
+          navigationSheet = .search
+        } label: {
+          Label("Search", systemImage: "text.magnifyingglass")
+        }
+        .buttonStyle(.bordered)
+
+        Button {
+          navigationSheet = .history
+        } label: {
+          Label("History", systemImage: "clock.arrow.circlepath")
+        }
+        .buttonStyle(.bordered)
 
         Button(surface.isTerminalVisible ? "Show Editor" : "Open Terminal") {
           if surface.isTerminalVisible {
@@ -306,6 +338,23 @@ private struct ProjectWorkspaceDetail: View {
     } message: {
       Text(surface.lastEditorErrorMessage ?? "Unknown editor error.")
     }
+    .alert("Project navigation failed", isPresented: navigationErrorIsPresented) {
+      Button("OK") {
+        surface.dismissNavigationError()
+      }
+    } message: {
+      Text(surface.lastNavigationErrorMessage ?? "Unknown navigation error.")
+    }
+    .sheet(item: $navigationSheet) { sheet in
+      switch sheet {
+      case .quickOpen:
+        ProjectQuickOpenView(surface: surface)
+      case .search:
+        ProjectSearchView(surface: surface)
+      case .history:
+        ProjectHistoryView(surface: surface)
+      }
+    }
   }
 
   private var editorErrorIsPresented: Binding<Bool> {
@@ -314,6 +363,17 @@ private struct ProjectWorkspaceDetail: View {
       set: { isPresented in
         if !isPresented {
           surface.dismissEditorError()
+        }
+      }
+    )
+  }
+
+  private var navigationErrorIsPresented: Binding<Bool> {
+    Binding(
+      get: { surface.lastNavigationErrorMessage != nil },
+      set: { isPresented in
+        if !isPresented {
+          surface.dismissNavigationError()
         }
       }
     )
@@ -784,6 +844,276 @@ private struct ProjectFileTreeView: View {
   }
 }
 
+private struct ProjectQuickOpenView: View {
+  @ObservedObject var surface: ProjectSurfaceModel
+  @Environment(\.dismiss) private var dismiss
+  @State private var query = ""
+
+  var body: some View {
+    VStack(spacing: 0) {
+      HStack(spacing: 8) {
+        Image(systemName: "magnifyingglass")
+          .foregroundStyle(.secondary)
+        TextField("Search files by name or path", text: $query)
+          .textFieldStyle(.roundedBorder)
+          .onSubmit {
+            openFirstResult()
+          }
+      }
+      .padding(12)
+
+      Divider()
+
+      if items.isEmpty {
+        ContentUnavailableView(
+          query.isEmpty ? "No Files" : "No Matching Files",
+          systemImage: "doc.text.magnifyingglass",
+          description: Text(
+            query.isEmpty
+              ? "This Project has no files to open."
+              : "Try a different file name or path."
+          )
+        )
+      } else {
+        List(items) { item in
+          Button {
+            surface.openQuickOpenItem(item)
+            if surface.lastNavigationErrorMessage == nil {
+              dismiss()
+            }
+          } label: {
+            VStack(alignment: .leading, spacing: 3) {
+              Text(item.title)
+                .font(.body.weight(.medium))
+              Text(item.relativePath)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+          }
+          .buttonStyle(.plain)
+        }
+        .listStyle(.inset)
+      }
+    }
+    .frame(minWidth: 480, minHeight: 360)
+  }
+
+  private var items: [ProjectQuickOpenItem] {
+    surface.quickOpenItems(matching: query)
+  }
+
+  private func openFirstResult() {
+    guard let item = items.first else {
+      return
+    }
+    surface.openQuickOpenItem(item)
+    if surface.lastNavigationErrorMessage == nil {
+      dismiss()
+    }
+  }
+}
+
+private struct ProjectSearchView: View {
+  @ObservedObject var surface: ProjectSurfaceModel
+  @Environment(\.dismiss) private var dismiss
+  @State private var query = ""
+  @State private var replacement = ""
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      VStack(spacing: 8) {
+        HStack(spacing: 8) {
+          Image(systemName: "text.magnifyingglass")
+            .foregroundStyle(.secondary)
+          TextField("Find text in this Project", text: $query)
+            .textFieldStyle(.roundedBorder)
+            .onSubmit {
+              surface.search(query: query)
+            }
+        }
+
+        HStack(spacing: 8) {
+          TextField("Replace with", text: $replacement)
+            .textFieldStyle(.roundedBorder)
+          Button("Search") {
+            surface.search(query: query)
+          }
+          .disabled(query.isEmpty)
+          Button("Preview Replacement") {
+            surface.previewReplacement(query: query, replacement: replacement)
+          }
+          .disabled(query.isEmpty)
+        }
+
+        HStack {
+          Text(
+            query.isEmpty
+              ? "Searches UTF-8 text files and refreshes with the Project watcher."
+              : "\(surface.searchResults.count) match\(surface.searchResults.count == 1 ? "" : "es")"
+          )
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          Spacer()
+          Button("Close", action: dismiss.callAsFunction)
+            .buttonStyle(.borderless)
+        }
+      }
+      .padding(12)
+
+      if let status = surface.lastNavigationStatusMessage {
+        Label(status, systemImage: "checkmark.circle.fill")
+          .font(.caption)
+          .foregroundStyle(.green)
+          .fixedSize(horizontal: false, vertical: true)
+          .padding(.horizontal, 12)
+          .padding(.bottom, 8)
+      }
+
+      if let preview = surface.replacementPreview {
+        GroupBox("Replacement Preview") {
+          VStack(alignment: .leading, spacing: 8) {
+            Text(
+              "\(preview.matchCount) match\(preview.matchCount == 1 ? "" : "es") in \(preview.files.count) file\(preview.files.count == 1 ? "" : "s")"
+            )
+            .font(.caption.weight(.semibold))
+
+            ForEach(preview.files) { file in
+              HStack {
+                Text(file.relativePath)
+                  .lineLimit(1)
+                Spacer()
+                Text("\(file.matchCount)")
+                  .font(.caption.monospacedDigit())
+                  .foregroundStyle(.secondary)
+              }
+            }
+
+            HStack {
+              Spacer()
+              Button("Apply to Editor Buffers") {
+                surface.applyReplacement(preview)
+              }
+              .buttonStyle(.borderedProminent)
+            }
+          }
+          .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 12)
+        .padding(.bottom, 8)
+      }
+
+      Divider()
+
+      if query.isEmpty {
+        ContentUnavailableView(
+          "Search This Project",
+          systemImage: "text.magnifyingglass",
+          description: Text("Enter text above to search and preview replacements.")
+        )
+      } else if surface.searchResults.isEmpty {
+        ContentUnavailableView(
+          "No Matches",
+          systemImage: "magnifyingglass",
+          description: Text("No UTF-8 text file contains that text.")
+        )
+      } else {
+        List(surface.searchResults) { match in
+          Button {
+            surface.openSearchMatch(match)
+            if surface.lastNavigationErrorMessage == nil {
+              dismiss()
+            }
+          } label: {
+            VStack(alignment: .leading, spacing: 3) {
+              HStack(spacing: 6) {
+                Text(match.relativePath)
+                  .font(.body.weight(.medium))
+                  .lineLimit(1)
+                Spacer()
+                Text("\(match.line):\(match.column)")
+                  .font(.caption.monospacedDigit())
+                  .foregroundStyle(.secondary)
+              }
+              Text(match.lineText)
+                .font(.caption.monospaced())
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+          }
+          .buttonStyle(.plain)
+        }
+        .listStyle(.inset)
+      }
+    }
+    .frame(minWidth: 620, minHeight: 440)
+    .onChange(of: query, initial: true) { _, newValue in
+      surface.search(query: newValue)
+    }
+  }
+}
+
+private struct ProjectHistoryView: View {
+  @ObservedObject var surface: ProjectSurfaceModel
+  @Environment(\.dismiss) private var dismiss
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      HStack {
+        VStack(alignment: .leading, spacing: 3) {
+          Text("Project History")
+            .font(.title3.weight(.semibold))
+          Text("Restore a snapshot into an editor buffer; Save explicitly to write it to disk.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        Spacer()
+        Button("Close", action: dismiss.callAsFunction)
+          .buttonStyle(.borderless)
+      }
+      .padding(12)
+
+      Divider()
+
+      if surface.historyEntries.isEmpty {
+        ContentUnavailableView(
+          "No History Snapshots",
+          systemImage: "clock.arrow.circlepath",
+          description: Text("Clair will keep recovery snapshots when files are saved or reloaded.")
+        )
+      } else {
+        List(surface.historyEntries) { entry in
+          HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+              Text(entry.filePath)
+                .font(.body.weight(.medium))
+                .lineLimit(1)
+              Text(entry.displayLabel)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("Restore") {
+              surface.restoreHistoryEntry(entry)
+              if surface.lastNavigationErrorMessage == nil {
+                dismiss()
+              }
+            }
+            .buttonStyle(.bordered)
+          }
+        }
+        .listStyle(.inset)
+      }
+    }
+    .frame(minWidth: 560, minHeight: 360)
+    .onAppear {
+      surface.refreshHistoryEntries()
+    }
+  }
+}
+
 private struct ProjectFileTreeRow: View {
   let node: ProjectFileTreeNode
   @ObservedObject var surface: ProjectSurfaceModel
@@ -997,7 +1327,7 @@ private struct ProjectNativeEditorTab: View {
 
       Divider()
 
-      ProjectSourceEditorView(document: tab) {
+      ProjectSourceEditorView(document: tab, selection: tab.selectionRequest) {
         surface.save(tabID: tab.id)
       }
     }

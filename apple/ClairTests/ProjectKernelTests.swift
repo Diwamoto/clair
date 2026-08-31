@@ -415,6 +415,101 @@ final class ProjectKernelTests: XCTestCase {
     XCTAssertEqual(try XCTUnwrap(missing.activeSurface).paneIDs.count, 1)
   }
 
+  func testNavigationOpensSearchResultsAndAppliesReplacementToDirtyBuffers() throws {
+    let fixture = try Fixture()
+    let root = try fixture.makeDirectory(named: "navigation-project")
+    let nested = root.appendingPathComponent("Sources", isDirectory: true)
+    try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+    let firstFile = nested.appendingPathComponent("first.txt")
+    let secondFile = root.appendingPathComponent("second.txt")
+    try Data("old first\n".utf8).write(to: firstFile)
+    try Data("old second\n".utf8).write(to: secondFile)
+    let historyStore = ProjectLocalHistoryStore(
+      fileURL: fixture.root.appendingPathComponent("navigation-history.json")
+    )
+    let surface = ProjectSurfaceModel(
+      projectID: UUID(),
+      rootURL: root,
+      historyStore: historyStore
+    )
+
+    let quickOpen = surface.quickOpenItems(matching: "first")
+    XCTAssertEqual(quickOpen.map(\.relativePath), ["Sources/first.txt"])
+    surface.openQuickOpenItem(try XCTUnwrap(quickOpen.first))
+    XCTAssertEqual(surface.activeTab?.url.path, firstFile.path)
+
+    surface.search(query: "old")
+    XCTAssertEqual(surface.searchResults.count, 2)
+    let result = try XCTUnwrap(surface.searchResults.first { $0.filePath == firstFile.path })
+    surface.openSearchMatch(result)
+    XCTAssertEqual(surface.selectedNodeID, firstFile.path)
+    XCTAssertEqual(surface.activeTab?.id, firstFile.path)
+
+    surface.previewReplacement(query: "old", replacement: "new")
+    let preview = try XCTUnwrap(surface.replacementPreview)
+    XCTAssertEqual(preview.matchCount, 2)
+    surface.applyReplacement(preview)
+
+    XCTAssertEqual(surface.editorDocument(tabID: firstFile.path)?.content, "new first\n")
+    XCTAssertEqual(surface.editorDocument(tabID: secondFile.path)?.content, "new second\n")
+    XCTAssertTrue(surface.editorDocument(tabID: firstFile.path)?.isDirty == true)
+    XCTAssertEqual(try String(contentsOf: firstFile), "old first\n")
+    XCTAssertEqual(try String(contentsOf: secondFile), "old second\n")
+  }
+
+  func testSearchResultsRefreshAfterExternalFileChange() async throws {
+    let fixture = try Fixture()
+    let root = try fixture.makeDirectory(named: "search-watch-project")
+    let file = root.appendingPathComponent("watched.txt")
+    try Data("before\n".utf8).write(to: file)
+    let surface = ProjectSurfaceModel(
+      projectID: UUID(),
+      rootURL: root,
+      historyStore: ProjectLocalHistoryStore(
+        fileURL: fixture.root.appendingPathComponent("search-watch-history.json")
+      )
+    )
+
+    surface.search(query: "after")
+    XCTAssertTrue(surface.searchResults.isEmpty)
+    try Data("after\n".utf8).write(to: file)
+
+    await waitForSearch(surface) { results in
+      results.count == 1 && results.first?.lineText == "after"
+    }
+    surface.search(query: "before")
+    XCTAssertTrue(surface.searchResults.isEmpty)
+    surface.search(query: "after")
+    XCTAssertEqual(surface.searchResults.first?.relativePath, "watched.txt")
+  }
+
+  func testProjectHistoryBrowserRestoresAnEntryIntoDirtyBuffer() throws {
+    let fixture = try Fixture()
+    let root = try fixture.makeDirectory(named: "history-browser-project")
+    let file = root.appendingPathComponent("history.txt")
+    try Data("before\n".utf8).write(to: file)
+    let surface = ProjectSurfaceModel(
+      projectID: UUID(),
+      rootURL: root,
+      historyStore: ProjectLocalHistoryStore(
+        fileURL: fixture.root.appendingPathComponent("history-browser.json")
+      )
+    )
+
+    surface.select(nodeID: file.path)
+    let document = try XCTUnwrap(surface.activeTab)
+    document.replaceContent("after\n")
+    surface.save(tabID: document.id)
+    let entry = try XCTUnwrap(surface.historyEntries.first)
+
+    surface.restoreHistoryEntry(entry)
+
+    XCTAssertEqual(document.content, "before\n")
+    XCTAssertTrue(document.isDirty)
+    XCTAssertEqual(try String(contentsOf: file), "after\n")
+    XCTAssertTrue(surface.lastNavigationStatusMessage?.contains("history.txt") == true)
+  }
+
   private func splitRatios(in node: ProjectPaneNode) -> [Double] {
     switch node {
     case .leaf:
@@ -463,6 +558,23 @@ final class ProjectKernelTests: XCTestCase {
       try? await Task.sleep(nanoseconds: 50_000_000)
     }
     XCTFail("Timed out waiting for file tree refresh", file: file, line: line)
+  }
+
+  private func waitForSearch(
+    _ surface: ProjectSurfaceModel,
+    timeout: TimeInterval = 3,
+    matching predicate: ([ProjectSearchMatch]) -> Bool,
+    file: StaticString = #filePath,
+    line: UInt = #line
+  ) async {
+    let deadline = Date().addingTimeInterval(timeout)
+    while Date() < deadline {
+      if predicate(surface.searchResults) {
+        return
+      }
+      try? await Task.sleep(nanoseconds: 50_000_000)
+    }
+    XCTFail("Timed out waiting for search refresh", file: file, line: line)
   }
 }
 

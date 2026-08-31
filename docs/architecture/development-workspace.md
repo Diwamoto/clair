@@ -2,7 +2,7 @@
 
 ## Status
 
-Current as of local PoC item `P05 Mixed panes and Project workspace persistence`.
+Current as of local PoC item `P06 Quick Open, search, replace, and file history`.
 
 ## Workspace boundary
 
@@ -127,12 +127,13 @@ followed, and `.git` contents are omitted from the user-facing tree. A child dir
 that cannot be read is omitted while an unreadable root is represented by the existing
 Project availability state.
 
-`ProjectFileSystemWatcher` uses macOS directory file-system sources. It watches the
-root and every currently discovered child directory, rebuilding the watch set after a
-change so newly created directories are covered. If the root is missing, its nearest
-existing parent is watched; root recreation therefore returns the surface to the
-available state without a manual reopen. Events trigger a full tree rescan on the
-MainActor. The native editor behavior is described below.
+`ProjectFileSystemWatcher` uses macOS file-system sources for the root, every currently
+discovered child directory, and every regular file in the active Project. It rebuilds
+the watch set after a change so newly created directories and files are covered. If the
+root is missing, its nearest existing parent is watched; root recreation therefore
+returns the surface to the available state without a manual reopen. Events are lightly
+debounced and trigger a full tree and active-search rescan on the MainActor. The native
+editor behavior is described below.
 
 ## Mixed pane/tab model and workspace persistence
 
@@ -183,6 +184,28 @@ Application Support file `editor-history-v1.json` (schema version 1), with at mo
 P05 provides durable pane/tab layout restoration; P06 owns a searchable file-history
 browser, while P04 provides the recovery snapshots needed by those later surfaces.
 
+## Project navigation, search, replacement, and history
+
+`ProjectNavigation` is the project-scoped read/navigation service used by the active
+surface. Quick Open flattens the current file tree and ranks exact filename, filename
+prefix, path, and fuzzy matches deterministically. Search and replacement enumerate
+regular UTF-8 files under the Project root, skip `.git`, package descendants, symlinks,
+binary files, and unreadable files, and report 1-based line and grapheme-column
+locations. Search results validate the relative path against the Project root before
+opening a file; the editor converts the grapheme location to the UTF-16 range expected
+by `NSTextView` and scrolls that match into view.
+
+Replacement first produces a preview containing match counts, original bytes, and
+replacement bytes. Applying the preview updates the affected editor buffers through the
+existing undo/disk-safety boundary and deliberately does not write files; each tab must
+be saved explicitly. The directory/file watcher recomputes an active search query after
+external changes, so stale results are removed without reopening the Project.
+
+The Project History browser aggregates the channel-separated local recovery store for
+the current `ProjectID`, orders entries newest first, and restores a selected snapshot
+into an editor buffer. Restore marks the buffer dirty and leaves disk bytes unchanged
+until an explicit Save, preserving the P04 disk-wins and conflict-refusal contract.
+
 ## Developer command boundary
 
 The root `Makefile` is the supported local and CI interface. Rust 1.98.0 is
@@ -209,7 +232,9 @@ reopen, metadata/order persistence, store versioning, command risk/availability
 preflight, nested tree enumeration, fixture tab selection, external create/rename/
 delete refresh, missing-root recovery, Project surface isolation, nested mixed-pane
 operations, three-Project layout isolation across restart, and corrupt/missing workspace
-fallback. The project-scoped Dev XCTest target runs these tests. The `make test-swift`
+fallback, Quick Open and search result navigation, buffer-only replacement, active-search
+refresh after an external file change, and Project History restore. The project-scoped
+Dev XCTest target runs these tests. The `make test-swift`
 wrapper remains the CI-facing path where the workspace is accepted; with the current
 Xcode 26 environment, use the equivalent `xcodebuild -project Clair.xcodeproj ... test`
 command because the minimal committed workspace is rejected.
@@ -221,7 +246,10 @@ bytes, output flood, malformed frames, and child reaping.
 
 `apple/ClairTests/NativeEditorTests.swift` covers explicit save and undo/redo, Unicode
 and combining text, marked-text IME commits, external rewrite disk-wins reload with
-recovery, per-file watcher refresh, multi-tab isolation, and non-UTF-8 rejection.
+recovery, per-file watcher refresh, multi-tab isolation, search-result UTF-16 selection,
+and non-UTF-8 rejection. `apple/ClairTests/ProjectNavigationTests.swift` covers
+deterministic Quick Open ranking, Unicode search locations, replacement previews without
+disk writes, project-scoped history ordering, and Project-root path validation.
 
 ## Current limitations
 
@@ -232,7 +260,6 @@ recovery, per-file watcher refresh, multi-tab isolation, and non-UTF-8 rejection
 - The terminal surface is a selectable plain-text AppKit fallback, not a full ANSI/
   alternate-screen/cursor/colour terminal grid; a reproducible libghostty development
   artifact is still unavailable in this checkout. The editor does not yet provide
-  syntax highlighting, LSP, multi-cursor editing, Quick Open, search/replace, or a
-  searchable history browser; PTY reattach remains P07, while Git-backed diff/operations
-  and CLI/MCP adapters remain later queue items.
+  syntax highlighting, LSP, or multi-cursor editing; PTY reattach remains P07, while
+  Git-backed diff/operations and CLI/MCP adapters remain later queue items.
 - Formal app icons, signing, notarization, and update delivery are not present.

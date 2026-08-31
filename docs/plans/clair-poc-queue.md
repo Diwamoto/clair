@@ -138,8 +138,8 @@ P01から最小kernelを育て、後から既存featureを別実装へ置き換�
 - Durable detail: [development workspace architecture](../architecture/development-workspace.md) and
   [local development runbook](../runbooks/local-development.md) now document the native editor, disk safety,
   channel-separated recovery store, manual checks, and deferred boundaries.
-- Deferred: syntax highlighting/LSP, multi-cursor editing, Quick Open, search/replace, searchable history browser,
-  durable pane/tab layout, Git operations, and CLI/MCP adapters remain in downstream queue items.
+- Deferred: syntax highlighting/LSP and multi-cursor editing, Git operations, and CLI/MCP adapters remain in
+  downstream queue items.
 
 ### P05 Mixed panes and Project workspace persistence
 
@@ -168,16 +168,29 @@ P01から最小kernelを育て、後から既存featureを別実装へ置き換�
 
 ### P06 Quick Open, search, replace, and file history
 
-- Status: `next`
+- Status: `done`
 - Depends on: P04。
 - Outcome: Project内のfileへ素早く到達し、全文検索・置換と履歴復元ができる。
 - Scope: Quick Open、text search/replace、watcher refresh、local file history browser/restore。
 - Functional checks: result navigation、replace preview/apply、external change refresh、history restore。
 - Legacy issue coverage: #10、#13のnavigation/history subset。
+- Validation (2026-09-01): project-scoped `xcodebuild -project Clair.xcodeproj -scheme "Clair Dev"
+  -configuration Debug -derivedDataPath .build/xcode/p06-tests CODE_SIGNING_ALLOWED=NO
+  CODE_SIGNING_REQUIRED=NO test` passed all 40 Swift tests. The suite covers deterministic Quick
+  Open ranking, Unicode search locations, result navigation into the native editor, replacement
+  previews that leave disk bytes unchanged, buffer-only Apply with explicit Save, active-search
+  refresh after external file changes, project-scoped/newest-first history, and history restore
+  into a dirty buffer. `swift format lint --recursive --parallel --strict apple`,
+  `ruby scripts/validate-xcode-project.rb`, the Clair Dev build, and the Stable build passed.
+- Durable detail: [development workspace architecture](../architecture/development-workspace.md) and
+  [local development runbook](../runbooks/local-development.md) now document the navigation service,
+  watcher coverage, buffer-only replacement boundary, Project History browser, and manual checks.
+- Deferred: syntax highlighting/LSP/multi-cursor editing, durable PTY SessionID/catalog/reattach,
+  Git-backed diff content and operations, and CLI/MCP adapters remain in downstream queue items.
 
 ### P07 Local session lifecycle and reattach
 
-- Status: `queued`
+- Status: `next`
 - Depends on: P03。
 - Outcome: window closeとapp restartをまたいでlocal PTYへ再接続できる。
 - Scope: stable `SessionID`、same-user bounded/versioned local IPC、catalog、cursor/gap、backpressure、reattach。

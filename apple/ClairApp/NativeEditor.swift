@@ -39,6 +39,12 @@ enum ProjectEditorError: Error, Equatable, LocalizedError, Sendable {
   }
 }
 
+struct ProjectEditorSelection: Equatable, Sendable {
+  let line: Int
+  let column: Int
+  let length: Int
+}
+
 enum ProjectLocalHistoryReason: String, Codable, CaseIterable, Sendable {
   case save
   case externalChange
@@ -325,6 +331,7 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
   @Published private(set) var canRedo = false
   @Published private(set) var historyEntries: [ProjectLocalHistoryEntry] = []
   @Published private(set) var lastErrorMessage: String?
+  @Published private(set) var selectionRequest: ProjectEditorSelection?
 
   let projectID: UUID
   let rootURL: URL
@@ -403,6 +410,65 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
 
   func dismissError() {
     lastErrorMessage = nil
+  }
+
+  func requestSelection(line: Int, column: Int, length: Int) {
+    guard line > 0, column > 0, length >= 0 else {
+      return
+    }
+    selectionRequest = ProjectEditorSelection(
+      line: line,
+      column: column,
+      length: length
+    )
+  }
+
+  func clearSelectionRequest() {
+    selectionRequest = nil
+  }
+
+  func selectionRange(for selection: ProjectEditorSelection) -> NSRange? {
+    guard selection.line > 0, selection.column > 0, selection.length >= 0 else {
+      return nil
+    }
+
+    var lineStart = content.startIndex
+    var lineNumber = 1
+    while lineNumber < selection.line {
+      guard
+        let lineEnd = content[lineStart...].firstIndex(of: "\n"),
+        lineEnd < content.endIndex
+      else {
+        return nil
+      }
+      lineStart = content.index(after: lineEnd)
+      lineNumber += 1
+    }
+
+    let lineEnd = content[lineStart...].firstIndex(of: "\n") ?? content.endIndex
+    let line = String(content[lineStart..<lineEnd])
+    guard
+      let start = line.index(
+        line.startIndex,
+        offsetBy: selection.column - 1,
+        limitedBy: line.endIndex
+      )
+    else {
+      return nil
+    }
+    let end =
+      line.index(
+        start,
+        offsetBy: selection.length,
+        limitedBy: line.endIndex
+      ) ?? line.endIndex
+    let contentOffset = content.utf16.distance(from: content.startIndex, to: lineStart)
+    let lineOffset = line.utf16.distance(from: line.startIndex, to: start)
+    let length = line.utf16.distance(from: start, to: end)
+    return NSRange(
+      location: contentOffset + lineOffset,
+      length: length
+    )
   }
 
   var displayTitle: String {
@@ -585,7 +651,18 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
 @MainActor
 struct ProjectSourceEditorView: NSViewRepresentable {
   @ObservedObject var document: ProjectEditorTab
+  let selection: ProjectEditorSelection?
   let onSave: () -> Void
+
+  init(
+    document: ProjectEditorTab,
+    selection: ProjectEditorSelection? = nil,
+    onSave: @escaping () -> Void
+  ) {
+    self.document = document
+    self.selection = selection
+    self.onSave = onSave
+  }
 
   func makeCoordinator() -> Coordinator {
     Coordinator(document: document)
@@ -637,24 +714,22 @@ struct ProjectSourceEditorView: NSViewRepresentable {
 
     textView.onSave = onSave
     textView.isEditable = !document.isMissing
-    guard textView.string != document.content else {
-      return
-    }
+    if textView.string != document.content {
+      let selectedRange = textView.selectedRange()
+      context.coordinator.isUpdatingFromModel = true
+      textView.string = document.content
+      context.coordinator.isUpdatingFromModel = false
 
-    let selectedRange = textView.selectedRange()
-    context.coordinator.isUpdatingFromModel = true
-    textView.string = document.content
-    context.coordinator.isUpdatingFromModel = false
-
-    guard selectedRange.location != NSNotFound else {
-      return
+      if selectedRange.location != NSNotFound {
+        let location = min(selectedRange.location, document.content.utf16.count)
+        let length = min(
+          selectedRange.length,
+          document.content.utf16.count - location
+        )
+        textView.setSelectedRange(NSRange(location: location, length: length))
+      }
     }
-    let location = min(selectedRange.location, document.content.utf16.count)
-    let length = min(
-      selectedRange.length,
-      document.content.utf16.count - location
-    )
-    textView.setSelectedRange(NSRange(location: location, length: length))
+    applySelectionIfNeeded(to: textView, context: context)
   }
 
   static func dismantleNSView(_ nsView: NSScrollView, coordinator: Coordinator) {
@@ -671,6 +746,7 @@ struct ProjectSourceEditorView: NSViewRepresentable {
     let document: ProjectEditorTab
     weak var textView: NSTextView?
     var isUpdatingFromModel = false
+    var lastAppliedSelection: ProjectEditorSelection?
 
     init(document: ProjectEditorTab) {
       self.document = document
@@ -685,6 +761,32 @@ struct ProjectSourceEditorView: NSViewRepresentable {
 
     func undoManager(for textView: NSTextView) -> UndoManager? {
       document.editorUndoManager()
+    }
+  }
+
+  private func applySelectionIfNeeded(
+    to textView: NSTextView,
+    context: Context
+  ) {
+    guard let selection else {
+      context.coordinator.lastAppliedSelection = nil
+      return
+    }
+    guard
+      context.coordinator.lastAppliedSelection != selection,
+      let range = document.selectionRange(for: selection)
+    else {
+      return
+    }
+
+    context.coordinator.lastAppliedSelection = selection
+    textView.setSelectedRange(range)
+    textView.scrollRangeToVisible(range)
+    DispatchQueue.main.async { @MainActor [weak document] in
+      guard let document, document.selectionRequest == selection else {
+        return
+      }
+      document.clearSelectionRequest()
     }
   }
 }

@@ -70,6 +70,18 @@ final class NativeEditorTests: XCTestCase {
     XCTAssertEqual(document.content, "日本語")
   }
 
+  func testSearchSelectionConvertsLineAndCharacterColumnToUTF16Range() throws {
+    let fixture = try EditorFixture()
+    let fileURL = try fixture.makeFile(named: "selection.txt", content: "one\n日本Hello\nlast\n")
+    let document = try fixture.makeDocument(at: fileURL)
+
+    let range = document.selectionRange(
+      for: ProjectEditorSelection(line: 2, column: 3, length: 5)
+    )
+
+    XCTAssertEqual(range, NSRange(location: 6, length: 5))
+  }
+
   func testExternalRewriteWinsAndCapturesUnsavedBufferForRecovery() throws {
     let fixture = try EditorFixture()
     let fileURL = try fixture.makeFile(named: "agent.txt", content: "disk-v1\n")

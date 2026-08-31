@@ -397,10 +397,16 @@ final class ProjectSurfaceModel: ObservableObject {
   @Published private(set) var maximizedPaneID: UUID?
   @Published private(set) var selectedNodeID: String?
   @Published private(set) var lastEditorErrorMessage: String?
+  @Published private(set) var historyEntries: [ProjectLocalHistoryEntry] = []
+  @Published private(set) var searchResults: [ProjectSearchMatch] = []
+  @Published private(set) var replacementPreview: ProjectSearchReplacementPreview?
+  @Published private(set) var lastNavigationErrorMessage: String?
+  @Published private(set) var lastNavigationStatusMessage: String?
 
   private let rootChecker: any ProjectRootChecking
   private let fileManager: FileManager
   private let onSnapshotChange: ((ProjectSurfaceSnapshot) -> Void)?
+  private var activeSearchQuery = ""
   private var expandedNodeIDs: Set<String> = []
   private var editorDocuments: [String: ProjectEditorTab] = [:]
   private var terminalSessions: [String: TerminalSession] = [:]
@@ -435,6 +441,7 @@ final class ProjectSurfaceModel: ObservableObject {
     )
 
     restoreRuntimeTabs()
+    refreshHistoryEntries()
 
     watcher = ProjectFileSystemWatcher(
       rootURL: rootURL,
@@ -720,6 +727,166 @@ final class ProjectSurfaceModel: ObservableObject {
     lastEditorErrorMessage = nil
   }
 
+  func dismissNavigationError() {
+    lastNavigationErrorMessage = nil
+  }
+
+  func quickOpenItems(matching query: String) -> [ProjectQuickOpenItem] {
+    guard let root = fileTree.root else {
+      return []
+    }
+    return ProjectNavigation.quickOpenItems(
+      from: root,
+      rootURL: rootURL,
+      query: query
+    )
+  }
+
+  func openQuickOpenItem(_ item: ProjectQuickOpenItem) {
+    guard
+      let fileURL = ProjectNavigation.fileURL(for: item.relativePath, rootURL: rootURL),
+      fileURL.path == item.filePath,
+      let node = fileTree.node(withID: item.filePath)
+    else {
+      lastNavigationErrorMessage = "The Quick Open result is no longer available."
+      return
+    }
+    lastNavigationErrorMessage = nil
+    select(nodeID: node.id)
+  }
+
+  func search(query: String) {
+    activeSearchQuery = query
+    replacementPreview = nil
+    lastNavigationErrorMessage = nil
+    lastNavigationStatusMessage = nil
+    searchResults = ProjectNavigation.search(
+      query: query,
+      rootURL: rootURL,
+      fileManager: fileManager
+    )
+  }
+
+  func previewReplacement(query: String, replacement: String) {
+    activeSearchQuery = query
+    lastNavigationErrorMessage = nil
+    lastNavigationStatusMessage = nil
+    do {
+      let preview = try ProjectNavigation.previewReplacement(
+        query: query,
+        replacement: replacement,
+        rootURL: rootURL,
+        fileManager: fileManager
+      )
+      replacementPreview = preview
+      searchResults = preview.matches
+    } catch {
+      replacementPreview = nil
+      lastNavigationErrorMessage = error.localizedDescription
+    }
+  }
+
+  func applyReplacement(_ preview: ProjectSearchReplacementPreview) {
+    struct ReplacementTarget {
+      let node: ProjectFileTreeNode
+      let content: String
+    }
+
+    var targets: [ReplacementTarget] = []
+    for file in preview.files {
+      guard
+        let fileURL = ProjectNavigation.fileURL(
+          for: file.relativePath,
+          rootURL: rootURL
+        ),
+        let node = fileTree.node(withID: fileURL.path),
+        let currentData = try? Data(contentsOf: fileURL),
+        currentData == file.originalData,
+        let replacementContent = String(data: file.replacementData, encoding: .utf8)
+      else {
+        lastNavigationErrorMessage =
+          "The replacement preview is stale for \(file.relativePath). Preview the replacement again."
+        return
+      }
+      targets.append(
+        ReplacementTarget(
+          node: node,
+          content: replacementContent
+        )
+      )
+    }
+
+    var changedFiles = 0
+    for target in targets {
+      guard let document = openEditorTab(for: target.node) else {
+        lastNavigationErrorMessage =
+          "The replacement target is no longer available: \(target.node.name)"
+        return
+      }
+      document.replaceContent(target.content, actionName: "Replace All")
+      changedFiles += 1
+    }
+
+    activeSearchQuery = preview.query
+    replacementPreview = nil
+    searchResults = []
+    lastNavigationErrorMessage = nil
+    lastNavigationStatusMessage =
+      "Replacement applied to \(changedFiles) editor buffer\(changedFiles == 1 ? "" : "s"). Save the tab\(changedFiles == 1 ? "" : "s") to write to disk."
+  }
+
+  func openSearchMatch(_ match: ProjectSearchMatch) {
+    guard
+      let fileURL = ProjectNavigation.fileURL(for: match.relativePath, rootURL: rootURL),
+      fileURL.path == match.filePath,
+      let node = fileTree.node(withID: match.filePath)
+    else {
+      lastNavigationErrorMessage = "The search result is no longer available."
+      return
+    }
+    lastNavigationErrorMessage = nil
+    select(nodeID: node.id)
+    editorDocuments[node.id]?.requestSelection(
+      line: match.line,
+      column: match.column,
+      length: match.matchLength
+    )
+  }
+
+  func refreshHistoryEntries() {
+    do {
+      historyEntries = try historyStore.entries(for: projectID)
+    } catch {
+      historyEntries = []
+      lastNavigationErrorMessage = error.localizedDescription
+    }
+  }
+
+  func restoreHistoryEntry(_ entry: ProjectLocalHistoryEntry) {
+    guard entry.projectID == projectID else {
+      lastNavigationErrorMessage = "The history entry belongs to another Project."
+      return
+    }
+    guard
+      let fileURL = ProjectNavigation.fileURL(for: entry.filePath, rootURL: rootURL),
+      let node = fileTree.node(withID: fileURL.path),
+      let document = openEditorTab(for: node)
+    else {
+      lastNavigationErrorMessage =
+        "The history file is no longer available: \(entry.filePath)"
+      return
+    }
+
+    do {
+      try document.restoreHistoryEntry(id: entry.id)
+      lastNavigationErrorMessage = nil
+      lastNavigationStatusMessage =
+        "Restored \(entry.filePath) into the editor buffer. Save the tab to write it to disk."
+    } catch {
+      lastNavigationErrorMessage = error.localizedDescription
+    }
+  }
+
   func save(tabID: String? = nil) {
     guard let tab = editorTab(withID: tabID) else {
       return
@@ -728,6 +895,7 @@ final class ProjectSurfaceModel: ObservableObject {
     do {
       try tab.save()
       lastEditorErrorMessage = nil
+      refreshHistoryEntries()
     } catch {
       lastEditorErrorMessage = error.localizedDescription
     }
@@ -749,6 +917,7 @@ final class ProjectSurfaceModel: ObservableObject {
     do {
       try tab.restoreHistoryEntry(id: entryID)
       lastEditorErrorMessage = nil
+      refreshHistoryEntries()
     } catch {
       lastEditorErrorMessage = error.localizedDescription
     }
@@ -763,6 +932,18 @@ final class ProjectSurfaceModel: ObservableObject {
       fileManager: fileManager
     )
     fileTree = nextTree
+
+    if activeSearchQuery.isEmpty {
+      searchResults = []
+    } else {
+      searchResults = ProjectNavigation.search(
+        query: activeSearchQuery,
+        rootURL: rootURL,
+        fileManager: fileManager
+      )
+    }
+    replacementPreview = nil
+    refreshHistoryEntries()
 
     guard let root = nextTree.root else {
       expandedNodeIDs.removeAll()
@@ -861,9 +1042,10 @@ final class ProjectSurfaceModel: ObservableObject {
     notifySnapshotChanged()
   }
 
-  private func openEditorTab(for node: ProjectFileTreeNode) {
+  @discardableResult
+  private func openEditorTab(for node: ProjectFileTreeNode) -> ProjectEditorTab? {
     guard !node.isDirectory else {
-      return
+      return nil
     }
 
     if editorDocuments[node.id] == nil {
@@ -877,12 +1059,12 @@ final class ProjectSurfaceModel: ObservableObject {
         )
       } catch {
         lastEditorErrorMessage = error.localizedDescription
-        return
+        return nil
       }
     }
     if let existingLocation = tabLocation(for: node.id) {
       setActiveTab(node.id, in: existingLocation.paneID, revealEditor: false)
-      return
+      return editorDocuments[node.id]
     }
     let tab = ProjectPaneTab.editor(path: node.id, title: node.name)
     layout = updatingLeaf(in: layout, leafID: focusedPaneID) { leaf in
@@ -891,6 +1073,7 @@ final class ProjectSurfaceModel: ObservableObject {
       next.activeTabID = tab.id
       return next
     }
+    return editorDocuments[node.id]
   }
 
   private func editorTab(withID tabID: String?) -> ProjectEditorTab? {

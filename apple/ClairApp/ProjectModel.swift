@@ -452,6 +452,45 @@ enum ProjectFileTreeScanner {
     return directories
   }
 
+  static func pathsToWatch(
+    rootURL: URL,
+    fileManager: FileManager = .default
+  ) -> [URL] {
+    let directories = directoriesToWatch(rootURL: rootURL, fileManager: fileManager)
+    guard existingDirectory(for: rootURL, fileManager: fileManager) != nil else {
+      return directories
+    }
+
+    var paths = directories
+    guard
+      let enumerator = fileManager.enumerator(
+        at: rootURL.standardizedFileURL,
+        includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey, .isRegularFileKey],
+        options: [.skipsPackageDescendants]
+      )
+    else {
+      return paths
+    }
+
+    for case let url as URL in enumerator {
+      guard url.lastPathComponent != ".git" else {
+        enumerator.skipDescendants()
+        continue
+      }
+      guard
+        let values = try? url.resourceValues(
+          forKeys: [.isDirectoryKey, .isSymbolicLinkKey, .isRegularFileKey]
+        ),
+        values.isSymbolicLink != true,
+        values.isRegularFile == true
+      else {
+        continue
+      }
+      paths.append(url.standardizedFileURL)
+    }
+    return paths
+  }
+
   private static func node(
     at url: URL,
     fileManager: FileManager,
@@ -548,6 +587,7 @@ final class ProjectFileSystemWatcher: @unchecked Sendable {
   private let queue: DispatchQueue
   private let onChange: @Sendable () -> Void
   private var sources: [String: DispatchSourceFileSystemObject] = [:]
+  private var pendingEventWorkItem: DispatchWorkItem?
   private var isStarted = false
 
   init(
@@ -580,13 +620,24 @@ final class ProjectFileSystemWatcher: @unchecked Sendable {
         return
       }
       isStarted = false
+      pendingEventWorkItem?.cancel()
+      pendingEventWorkItem = nil
       cancelSources()
     }
   }
 
   private func handleEvent() {
-    rebuildSources()
-    onChange()
+    pendingEventWorkItem?.cancel()
+    let workItem = DispatchWorkItem { [weak self] in
+      guard let self, self.isStarted else {
+        return
+      }
+      self.rebuildSources()
+      self.onChange()
+      self.pendingEventWorkItem = nil
+    }
+    pendingEventWorkItem = workItem
+    queue.asyncAfter(deadline: .now() + .milliseconds(100), execute: workItem)
   }
 
   private func rebuildSources() {
@@ -595,7 +646,7 @@ final class ProjectFileSystemWatcher: @unchecked Sendable {
     }
 
     let desiredPaths = Set(
-      ProjectFileTreeScanner.directoriesToWatch(
+      ProjectFileTreeScanner.pathsToWatch(
         rootURL: rootURL,
         fileManager: fileManager
       ).map(\.path)

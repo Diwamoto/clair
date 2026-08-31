@@ -148,6 +148,38 @@ Build outputs are:
 - `target/debug/libclair_core.a`
 - `target/debug/clair-ptyhost`
 
+## Verify Quick Open, search, replacement, and Project History (P06)
+
+Build and launch Dev:
+
+```sh
+make build-dev
+make run-dev
+```
+
+Open a Project containing nested text files. Use **Quick Open** in the Project header,
+type a filename or path fragment, and open a result; Clair should select the file and
+open its existing editor tab or create one. Use **Search**, enter text, and confirm that
+results show the relative path, 1-based line/column, and matching line. `.git` contents,
+binary files, symlinks, and unreadable files should not appear in the results. Select a
+result and confirm that the editor scrolls to and selects the match.
+
+Enter replacement text and choose **Preview Replacement**. Confirm the preview lists
+each affected file and match count. Choose **Apply to Editor Buffers**, then verify from
+another terminal that the files on disk are unchanged and that the affected editor tabs
+are dirty. Save the tabs explicitly and verify the new bytes from the terminal.
+
+Leave a search open, rewrite a searched file from another terminal, and confirm that
+the active results refresh without reopening the Project. Search for the old text to
+confirm it disappears, then search for the new text to confirm it appears.
+
+Save an edited file to create a recovery snapshot, then open **History** from the
+Project header. The browser must show only entries for the active Project, newest first.
+Choose **Restore** and confirm the previous content returns to the editor as a dirty
+buffer while the on-disk file remains unchanged; use **Save** only when the restored
+content should replace the disk version. The existing per-file History menu remains
+available in each editor tab for the same recovery store.
+
 ## Run Stable and Dev together
 
 ```sh
