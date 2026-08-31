@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "contract_id": "clair-v1-performance-gate-v1",
+  "missing_evidence": "not-measured",
+  "comparison_rule": "compare only identical workload, corpus, display, build mode, metric name, and unit",
+  "metrics": {
+    "launch.cold_to_first_interactive": {"unit": "ms", "sample_policy": "5 fresh-profile trials; filesystem cache uncontrolled", "aggregation": ["median", "max"], "better": "lower"},
+    "launch.warm_to_first_interactive": {"unit": "ms", "sample_policy": "1 excluded warm-up plus 5 measured relaunches", "aggregation": ["median", "max"], "better": "lower"},
+    "launch.backend_setup": {"unit": "ms", "sample_policy": "every measured launch", "aggregation": ["median", "max"], "better": "lower"},
+    "launch.frontend_first_paint_after_load": {"unit": "ms", "sample_policy": "every measured launch with V1 marker", "aggregation": ["median", "max"], "better": "lower"},
+    "idle.rss": {"unit": "MiB", "sample_policy": "1 Hz for at least 30 seconds after settle", "aggregation": ["median", "max"], "better": "lower"},
+    "idle.cpu": {"unit": "%", "sample_policy": "1 Hz for at least 30 seconds after settle", "aggregation": ["median", "max"], "better": "lower"},
+    "idle.process_count": {"unit": "count", "sample_policy": "same snapshots as idle resource samples", "aggregation": ["median", "max"], "better": "lower"},
+    "idle.energy_impact": {"unit": "instrument-defined score", "sample_policy": "5 equal-duration Power Profiler windows", "aggregation": ["median", "max"], "better": "lower"},
+    "terminal.flood_cpu": {"unit": "%", "sample_policy": "5 fixed 100 MiB terminal flood trials", "aggregation": ["median", "max"], "better": "lower"},
+    "terminal.frame_time": {"unit": "ms/frame", "sample_policy": "at least 20 rendered-frame samples in each fixed flood window", "aggregation": ["median", "p95"], "better": "lower"},
+    "terminal.dropped_frame_ratio": {"unit": "ratio", "sample_policy": "5 fixed flood windows", "aggregation": ["median", "max"], "better": "lower"},
+    "terminal.input_to_glyph": {"unit": "ms", "sample_policy": "at least 20 timestamp-correlated input/frame samples", "aggregation": ["median", "p95"], "better": "lower"},
+    "file.open": {"unit": "ms", "sample_policy": "1 excluded warm-up plus 5 trials per file profile", "aggregation": ["median", "max"], "better": "lower"},
+    "file.scroll": {"unit": "ms/frame", "sample_policy": "at least 20 rendered-frame samples per file profile", "aggregation": ["median", "p95"], "better": "lower"},
+    "file.edit": {"unit": "ms", "sample_policy": "1 excluded warm-up plus 5 trials per file profile", "aggregation": ["median", "max"], "better": "lower"},
+    "file.find": {"unit": "ms", "sample_policy": "1 excluded warm-up plus 5 trials per file profile", "aggregation": ["median", "max"], "better": "lower"},
+    "file.save": {"unit": "ms", "sample_policy": "1 excluded warm-up plus 5 disposable-copy trials per file profile", "aggregation": ["median", "max"], "better": "lower"},
+    "tree.enumerate": {"unit": "ms", "sample_policy": "1 excluded warm-up plus 5 trials on the 10,000-file profile", "aggregation": ["median", "max"], "better": "lower"},
+    "tree.find": {"unit": "ms", "sample_policy": "1 excluded warm-up plus 5 trials on the 10,000-file profile", "aggregation": ["median", "max"], "better": "lower"},
+    "git.status": {"unit": "ms", "sample_policy": "1 excluded warm-up plus 5 trials from regenerated Git fixture state", "aggregation": ["median", "max"], "better": "lower"},
+    "pty.reattach": {"unit": "ms", "sample_policy": "1 excluded warm-up plus 5 app restart/reattach trials", "aggregation": ["median", "max"], "better": "lower"}
+  },
+  "percentile_rule": {
+    "method": "nearest-rank",
+    "minimum_sample_count": 20,
+    "formula": "sorted[ceil(0.95 * n) - 1]"
+  }
+}

@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "workload_id": "clair-v1-parity-v1",
+  "comparison_identity": {
+    "window_points": {"width": 1280, "height": 800},
+    "backing_scale": "record-and-require-equality",
+    "refresh_rate_hz": "record-and-require-equality",
+    "corpus_manifest_sha256": "record-and-require-equality"
+  },
+  "trial_policy": {
+    "fresh_profile_launch": {"warmups": 1, "measured_trials": 5, "summary": ["median", "max"]},
+    "warm_launch": {"warmups": 1, "measured_trials": 5, "summary": ["median", "max"]},
+    "idle": {"settle_seconds": 30, "sample_interval_seconds": 1, "minimum_samples": 30},
+    "ui_operations": {"warmups": 1, "measured_trials": 5, "summary": ["median", "max"]},
+    "p95_minimum_samples": 20
+  },
+  "actions": [
+    {
+      "id": "launch.fresh-profile",
+      "start_marker": "app-process-start",
+      "end_marker": "first-controlled-input-accepted",
+      "precondition": "benchmark-only profile is empty; filesystem cache is uncontrolled"
+    },
+    {
+      "id": "launch.warm",
+      "start_marker": "app-process-start",
+      "end_marker": "first-controlled-input-accepted",
+      "precondition": "same benchmark profile after one excluded warm-up"
+    },
+    {
+      "id": "terminal.flood-100MiB",
+      "command": "bash scripts/benchmarks/run-terminal-flood.sh --corpus <corpus> --repeats 100",
+      "payload": "terminal/flood-1MiB.txt",
+      "payload_bytes_per_repeat": 1048576,
+      "repeats": 100,
+      "trace_window": "CLAIR_BENCHMARK_START through CLAIR_BENCHMARK_END"
+    },
+    {
+      "id": "terminal.input-resize-selection",
+      "input_text": "clair-IME-日本語-😀-é-界",
+      "resize_points": [[1280, 800], [960, 640], [1280, 800]],
+      "scroll_pages": {"down": 20, "up": 20},
+      "selection_text": "日本語-😀-é-界"
+    },
+    {
+      "id": "terminal.osc-52-633",
+      "fixture": "terminal/osc-sequences.bin",
+      "precondition": "save the benchmark-only pasteboard value",
+      "postcondition": "restore the benchmark-only pasteboard value and verify OSC 633 prompt/command boundaries"
+    },
+    {
+      "id": "editor.large-file-10MiB",
+      "fixture": "large-files/text-10MiB.txt",
+      "operations": ["open", "find:first:line=000000", "scroll:100-pages-down", "edit:byte-offset:5242880:insert:CLAIR_EDIT", "save:disposable-copy"]
+    },
+    {
+      "id": "editor.large-file-100MiB",
+      "fixture": "large-files/text-100MiB.txt",
+      "operations": ["open", "find:first:line=000000", "scroll:100-pages-down", "edit:byte-offset:52428800:insert:CLAIR_EDIT", "save:disposable-copy"]
+    },
+    {
+      "id": "editor.ime-offsets",
+      "fixture": "unicode/ime-operations.json",
+      "operations": ["marked-text-update", "commit", "cancel", "verify-utf8-utf16-grapheme-boundaries"]
+    },
+    {
+      "id": "tree-and-git",
+      "fixtures": ["file-tree", "git-status"],
+      "operations": ["enumerate-to-stable-tree", "find:file-49.txt", "git-status-to-stable-result", "watcher:update-one-file"]
+    },
+    {
+      "id": "workspace.pane-drag-drop",
+      "operations": ["split-editor-right", "open-terminal-below", "drag-editor-to-terminal-tab-group", "restore-original-layout"]
+    },
+    {
+      "id": "pty.reattach",
+      "command": "counter=0; while :; do printf 'CLAIR_PTY_TICK %06d\\n' \"$counter\"; counter=$((counter + 1)); sleep 1; done",
+      "operations": ["start-session", "record-last-tick", "normal-app-quit", "relaunch", "reattach-same-session", "verify-next-tick-and-input"]
+    }
+  ],
+  "delegated_validation": [
+    {
+      "id": "rust-callback-mainactor-lifetime",
+      "reason": "native-only unit/integration validation; not observable in the V1 UI baseline",
+      "owners": ["#7", "#8"]
+    }
+  ]
+}
