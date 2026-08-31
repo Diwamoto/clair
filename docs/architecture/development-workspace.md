@@ -2,7 +2,7 @@
 
 ## Status
 
-Current as of local PoC item `P03 Native terminal feasibility and live shell`.
+Current as of local PoC item `P04 Native editor MVP`.
 
 ## Workspace boundary
 
@@ -117,9 +117,9 @@ switch, rename, color, reorder, and close. CLI/MCP adapters remain later slices.
 
 Each open Project has a `ProjectSurfaceModel` keyed by its stable `ProjectID`. The
 surface owns the in-memory file tree, expanded directory IDs, selected node, and
-read-only fixture editor tabs. Switching Projects changes the observed surface, so
-tree selection, expansion, and tabs cannot leak between Projects. Surface state is
-currently memory-only; workspace persistence is a later P05 responsibility.
+multi-file native editor tabs. Switching Projects changes the observed surface, so tree
+selection, expansion, and tabs cannot leak between Projects. Surface state is currently
+memory-only; workspace persistence is a later P05 responsibility.
 
 `ProjectFileTreeScanner` recursively enumerates the active root and sorts directories
 before files using a stable localized name/path order. Node identity is the
@@ -133,9 +133,29 @@ root and every currently discovered child directory, rebuilding the watch set af
 change so newly created directories are covered. If the root is missing, its nearest
 existing parent is watched; root recreation therefore returns the surface to the
 available state without a manual reopen. Events trigger a full tree rescan on the
-MainActor. The P02 fixture tab previews UTF-8-decoded file content and intentionally
-does not implement editing, saving, undo, or disk-wins reload; those behaviors belong
-to P04.
+MainActor. The native editor behavior is described below.
+
+## Native editor and disk safety
+
+`ProjectEditorTab` is an AppKit/TextKit-backed, UTF-8 editor document embedded through
+`NSViewRepresentable`. It supports multiple independent file tabs, normal
+`NSTextView` undo/redo, explicit Save (including Command-S), Japanese IME marked text,
+emoji, and combining characters. Non-UTF-8 files are rejected instead of being opened
+with replacement characters.
+
+The editor treats disk bytes as the baseline. Each open file has a file-system watcher
+in addition to the directory watcher. If an agent or another process rewrites a file,
+the disk version wins and the current in-memory buffer is recorded before reload. A
+deletion marks the tab missing while retaining it for recovery. Before an explicit save,
+the editor compares the current disk bytes with the baseline; if they differ, it
+reloads disk content and refuses to overwrite it. Closing a dirty or missing tab
+requires an explicit discard confirmation.
+
+Recovery snapshots are stored outside the repository in the channel-specific
+Application Support file `editor-history-v1.json` (schema version 1), with at most
+100 entries per Project/file. Stable and Dev use separate paths through ADR-0008.
+P05 owns durable pane/tab layout restoration; P06 owns a searchable file-history
+browser, while P04 provides the recovery snapshots needed by those later surfaces.
 
 ## Developer command boundary
 
@@ -169,6 +189,10 @@ UTF-8 input, frame bounds, split escape-sequence sanitization, and transcript UT
 trimming. Rust unit and integration tests cover PTY shell commands, resize, CJK/OSC
 bytes, output flood, malformed frames, and child reaping.
 
+`apple/ClairTests/NativeEditorTests.swift` covers explicit save and undo/redo, Unicode
+and combining text, marked-text IME commits, external rewrite disk-wins reload with
+recovery, per-file watcher refresh, multi-tab isolation, and non-UTF-8 rejection.
+
 ## Current limitations
 
 - Builds are unsigned and App Sandbox is disabled.
@@ -177,7 +201,8 @@ bytes, output flood, malformed frames, and child reaping.
 - The C ABI is a link/lifecycle smoke path, not the future domain interface.
 - The terminal surface is a selectable plain-text AppKit fallback, not a full ANSI/
   alternate-screen/cursor/colour terminal grid; a reproducible libghostty development
-  artifact is still unavailable in this checkout. The editor is currently a read-only
-  fixture tab; pane layout, Git operations, and CLI/MCP adapters remain later queue
-  items.
+  artifact is still unavailable in this checkout. The editor does not yet provide
+  syntax highlighting, LSP, multi-cursor editing, Quick Open, search/replace, or a
+  searchable history browser; pane layout, Git operations, and CLI/MCP adapters remain
+  later queue items.
 - Formal app icons, signing, notarization, and update delivery are not present.

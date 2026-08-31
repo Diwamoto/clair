@@ -99,13 +99,6 @@ struct ProjectFileTreeSnapshot: Equatable {
   }
 }
 
-struct ProjectEditorTab: Identifiable, Equatable {
-  let id: String
-  let url: URL
-  let title: String
-  let content: String
-}
-
 struct ProjectRecord: Codable, Equatable, Sendable {
   let id: UUID
   var rootPath: String

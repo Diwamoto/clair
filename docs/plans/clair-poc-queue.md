@@ -118,7 +118,7 @@ P01から最小kernelを育て、後から既存featureを別実装へ置き換�
 
 ### P04 Native editor MVP
 
-- Status: `next`
+- Status: `done`
 - Depends on: P02。
 - Outcome: 複数fileをopen/edit/save/undoでき、agentのdisk変更を安全に反映できる。
 - Scope: AppKit/TextKit-based reversible PoC、multi-file tabs、Unicode/IME、disk watcher、
@@ -126,10 +126,24 @@ P01から最小kernelを育て、後から既存featureを別実装へ置き換�
 - Functional checks: save/undo、IME/emoji/combining text、external rewrite reload、unsaved buffer recovery。
 - Note: up-front foundation比較benchmarkは行わず、usable PoCでblockerを観察する。
 - Legacy issue coverage: #11、#12、#13のeditor vertical slice。
+- Validation (2026-08-31): project-scoped `xcodebuild -project Clair.xcodeproj -scheme "Clair Dev" ... test`
+  passed all 28 Swift tests, including explicit save/undo/redo, Unicode/IME, external rewrite and deletion
+  recovery, save conflict refusal, per-file watcher refresh, multi-tab isolation, and non-UTF-8 rejection.
+  `cargo test --workspace --locked` (14 tests), `cargo fmt --all -- --check`, `cargo clippy
+  --workspace --all-targets --locked -- -D warnings`, `swift format lint --recursive --parallel --strict apple`,
+  Xcode analyze, Stable/Dev project-scoped builds, Xcode project validation, FFI/app-link, bundle, and artifact
+  smoke all passed. The existing `make build-*`/`make test-swift` workspace wrapper remains incompatible with
+  this Xcode 26.6 environment (`Clair.xcworkspace` is not recognized as a workspace); the project-scoped
+  commands are the verified equivalent.
+- Durable detail: [development workspace architecture](../architecture/development-workspace.md) and
+  [local development runbook](../runbooks/local-development.md) now document the native editor, disk safety,
+  channel-separated recovery store, manual checks, and deferred boundaries.
+- Deferred: syntax highlighting/LSP, multi-cursor editing, Quick Open, search/replace, searchable history browser,
+  durable pane/tab layout, Git operations, and CLI/MCP adapters remain in downstream queue items.
 
 ### P05 Mixed panes and Project workspace persistence
 
-- Status: `queued`
+- Status: `next`
 - Depends on: P03、P04。
 - Outcome: editor/terminal/diffを同じpane/tab modelへ置き、splitとrestart restoreが動く。
 - Scope: nested split、focus/move/close/maximize/equalize、per-Project versioned snapshot、

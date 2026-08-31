@@ -288,6 +288,24 @@ private struct ProjectWorkspaceDetail: View {
         }
       }
     }
+    .alert("Editor command failed", isPresented: editorErrorIsPresented) {
+      Button("OK") {
+        surface.dismissEditorError()
+      }
+    } message: {
+      Text(surface.lastEditorErrorMessage ?? "Unknown editor error.")
+    }
+  }
+
+  private var editorErrorIsPresented: Binding<Bool> {
+    Binding(
+      get: { surface.lastEditorErrorMessage != nil },
+      set: { isPresented in
+        if !isPresented {
+          surface.dismissEditorError()
+        }
+      }
+    )
   }
 }
 
@@ -490,6 +508,7 @@ private struct ProjectEditorTabHost: View {
   let state: BootstrapState
   let project: Project
   @ObservedObject var surface: ProjectSurfaceModel
+  @State private var pendingCloseTabID: String?
 
   var body: some View {
     VStack(spacing: 0) {
@@ -499,7 +518,7 @@ private struct ProjectEditorTabHost: View {
         tabBar
         Divider()
         if let tab = surface.activeTab {
-          ProjectFixtureEditorTab(tab: tab, surface: surface)
+          ProjectNativeEditorTab(tab: tab, surface: surface)
         } else {
           ContentUnavailableView(
             "No Active Tab",
@@ -511,6 +530,31 @@ private struct ProjectEditorTabHost: View {
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(.background)
+    .alert("Discard unsaved changes?", isPresented: pendingCloseIsPresented) {
+      Button("Cancel", role: .cancel) {
+        pendingCloseTabID = nil
+      }
+      Button("Discard", role: .destructive) {
+        guard let pendingCloseTabID else {
+          return
+        }
+        self.pendingCloseTabID = nil
+        surface.closeTab(id: pendingCloseTabID)
+      }
+    } message: {
+      Text("The editor buffer has changes that have not been saved to disk.")
+    }
+  }
+
+  private var pendingCloseIsPresented: Binding<Bool> {
+    Binding(
+      get: { pendingCloseTabID != nil },
+      set: { isPresented in
+        if !isPresented {
+          pendingCloseTabID = nil
+        }
+      }
+    )
   }
 
   private var tabBar: some View {
@@ -518,14 +562,14 @@ private struct ProjectEditorTabHost: View {
       HStack(spacing: 2) {
         ForEach(surface.editorTabs) { tab in
           HStack(spacing: 5) {
-            Button(tab.title) {
+            Button(tab.displayTitle) {
               surface.activateTab(id: tab.id)
             }
             .buttonStyle(.plain)
             .lineLimit(1)
 
             Button {
-              surface.closeTab(id: tab.id)
+              requestClose(tab)
             } label: {
               Image(systemName: "xmark")
                 .font(.caption2.weight(.bold))
@@ -549,10 +593,18 @@ private struct ProjectEditorTabHost: View {
     }
     .scrollIndicators(.hidden)
   }
+
+  private func requestClose(_ tab: ProjectEditorTab) {
+    if tab.isDirty {
+      pendingCloseTabID = tab.id
+    } else {
+      surface.closeTab(id: tab.id)
+    }
+  }
 }
 
-private struct ProjectFixtureEditorTab: View {
-  let tab: ProjectEditorTab
+private struct ProjectNativeEditorTab: View {
+  @ObservedObject var tab: ProjectEditorTab
   @ObservedObject var surface: ProjectSurfaceModel
 
   var body: some View {
@@ -565,6 +617,41 @@ private struct ProjectFixtureEditorTab: View {
           .foregroundStyle(.secondary)
           .lineLimit(1)
         Spacer()
+        if tab.isMissing {
+          Label("Missing", systemImage: "exclamationmark.triangle")
+            .font(.caption)
+            .foregroundStyle(.orange)
+        } else if tab.isDirty {
+          Text("Unsaved")
+            .font(.caption)
+            .foregroundStyle(.orange)
+        }
+        Menu("History") {
+          if tab.historyEntries.isEmpty {
+            Text("No recovery snapshots")
+          } else {
+            ForEach(tab.historyEntries) { entry in
+              Button(entry.displayLabel) {
+                surface.restoreHistoryEntry(entry.id, tabID: tab.id)
+              }
+            }
+          }
+        }
+        Button("Undo") {
+          surface.undoActiveTab()
+        }
+        .buttonStyle(.borderless)
+        .disabled(!tab.canUndo)
+        Button("Redo") {
+          surface.redoActiveTab()
+        }
+        .buttonStyle(.borderless)
+        .disabled(!tab.canRedo)
+        Button("Save") {
+          surface.save(tabID: tab.id)
+        }
+        .buttonStyle(.borderedProminent)
+        .disabled(!tab.isDirty || tab.isMissing)
         Button("Reveal in Tree") {
           surface.reveal(nodeID: tab.id)
         }
@@ -575,15 +662,28 @@ private struct ProjectFixtureEditorTab: View {
 
       Divider()
 
-      ScrollView {
-        Text(tab.content)
-          .font(.system(.body, design: .monospaced))
-          .textSelection(.enabled)
-          .frame(maxWidth: .infinity, alignment: .topLeading)
-          .padding(20)
+      ProjectSourceEditorView(document: tab) {
+        surface.save(tabID: tab.id)
       }
-      .background(.background)
     }
+    .alert("Editor update failed", isPresented: editorErrorIsPresented) {
+      Button("OK") {
+        tab.dismissError()
+      }
+    } message: {
+      Text(tab.lastErrorMessage ?? "Unknown editor error.")
+    }
+  }
+
+  private var editorErrorIsPresented: Binding<Bool> {
+    Binding(
+      get: { tab.lastErrorMessage != nil },
+      set: { isPresented in
+        if !isPresented {
+          tab.dismissError()
+        }
+      }
+    )
   }
 }
 
@@ -598,7 +698,7 @@ private struct ProjectWorkspaceOverview: View {
         VStack(alignment: .leading, spacing: 5) {
           Text("Workspace shell")
             .font(.largeTitle.weight(.semibold))
-          Text("Select a file in the tree to open a fixture editor tab.")
+          Text("Select a file in the tree to open a native editor tab.")
             .foregroundStyle(.secondary)
         }
 

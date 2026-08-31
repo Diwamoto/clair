@@ -63,24 +63,48 @@ while the already-open Projects and active selection remain intact.
 ## Verify the workspace shell and file tree
 
 With an active Project, confirm that the Files panel shows nested directories and
-files. Expand a directory and select a file; Clair should open a read-only fixture
-tab showing the file path and content. Use **Reveal in Tree** from the tab to return
-the selection to the file tree. Open a second Project and confirm that its tree and
-tabs contain only its own files; switch back and confirm the first Project's selection
-and tabs return.
+files. Expand a directory and select a file; Clair should open a native editor tab
+showing the file path and content. Use **Reveal in Tree** from the tab to return the
+selection to the file tree. Open a second Project and confirm that its tree and tabs
+contain only its own files; switch back and confirm the first Project's selection and
+tabs return.
 
 While Clair is running, create, rename, and delete a file from another terminal. The
 file tree should refresh without reopening the Project. Delete the active Project
 root and recreate it; the Files panel should show **Folder Missing** and then return
-to the available tree when the root is restored. P02 fixture tabs are intentionally
-read-only; editing, saving, undo, and durable workspace-state restoration are later
-queue items.
+to the available tree when the root is restored. P05 owns durable workspace-state
+restoration.
 
 The catalog is stored per channel at
 `~/Library/Application Support/Clair Dev/projects-v1.json` (or `Clair` for Stable).
 Do not remove this file as part of normal recovery; it contains the local Project
 catalog. Build artifacts can still be removed with `make clean-artifacts`.
 
+## Verify the native editor (P04)
+
+Build and launch Dev:
+
+```sh
+make build-dev
+make run-dev
+```
+
+In an active Project, open two text files and verify that each tab keeps its own
+buffer. Type ordinary text, Japanese through IME, emoji, and combining characters.
+Use **Undo**/**Redo**, then press **Save** or Command-S and verify the saved bytes from
+another terminal. Closing a dirty tab must ask for explicit discard confirmation.
+
+With a file open, edit it without saving and rewrite it from another terminal. The
+editor should reload the disk version, clear the dirty state, and expose the previous
+buffer in **History**. Restoring that snapshot should make the buffer dirty again;
+save it explicitly if it should replace the current disk version. Delete an open file
+and confirm that its tab remains marked **Missing** so the recovery snapshot remains
+available. A file containing invalid UTF-8 should be rejected with an editor error
+instead of displaying replacement characters.
+
+Recovery data is channel-separated and kept outside the repository at
+`~/Library/Application Support/Clair Dev/editor-history-v1.json` (or `Clair` for
+Stable). P04 does not persist pane/tab layout; that is P05.
 Build outputs are:
 
 - `.build/xcode/stable/Build/Products/Debug/Clair.app`

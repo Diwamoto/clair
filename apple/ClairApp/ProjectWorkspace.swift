@@ -6,6 +6,7 @@ final class ProjectWorkspaceModel: ObservableObject {
   let store: ProjectStore
   let rootChecker: any ProjectRootChecking
   let commandRegistry: CommandRegistry
+  let historyStore: ProjectLocalHistoryStore
 
   @Published private(set) var projects: [Project] = []
   @Published private(set) var activeProjectID: UUID?
@@ -18,11 +19,13 @@ final class ProjectWorkspaceModel: ObservableObject {
   init(
     store: ProjectStore,
     rootChecker: any ProjectRootChecking = FileSystemProjectRootChecker(),
-    commandRegistry: CommandRegistry = CommandRegistry()
+    commandRegistry: CommandRegistry = CommandRegistry(),
+    historyStore: ProjectLocalHistoryStore = .makeDefault(for: .current)
   ) {
     self.store = store
     self.rootChecker = rootChecker
     self.commandRegistry = commandRegistry
+    self.historyStore = historyStore
 
     do {
       let snapshot = try store.load()
@@ -299,7 +302,8 @@ final class ProjectWorkspaceModel: ObservableObject {
     let surface = ProjectSurfaceModel(
       projectID: project.id,
       rootURL: project.rootURL,
-      rootChecker: rootChecker
+      rootChecker: rootChecker,
+      historyStore: historyStore
     )
     surfaces[project.id] = surface
     activeSurface = surface
@@ -343,6 +347,7 @@ final class ProjectWorkspaceModel: ObservableObject {
 final class ProjectSurfaceModel: ObservableObject {
   let projectID: UUID
   let rootURL: URL
+  let historyStore: ProjectLocalHistoryStore
 
   @Published private(set) var fileTree: ProjectFileTreeSnapshot
   @Published private(set) var selectedNodeID: String?
@@ -350,6 +355,7 @@ final class ProjectSurfaceModel: ObservableObject {
   @Published private(set) var activeTabID: String?
   @Published private(set) var terminalSession: TerminalSession?
   @Published private(set) var isTerminalVisible = false
+  @Published private(set) var lastEditorErrorMessage: String?
 
   private let rootChecker: any ProjectRootChecking
   private let fileManager: FileManager
@@ -360,12 +366,14 @@ final class ProjectSurfaceModel: ObservableObject {
     projectID: UUID,
     rootURL: URL,
     rootChecker: any ProjectRootChecking = FileSystemProjectRootChecker(),
-    fileManager: FileManager = .default
+    fileManager: FileManager = .default,
+    historyStore: ProjectLocalHistoryStore = .makeDefault(for: .current)
   ) {
     self.projectID = projectID
     self.rootURL = rootURL
     self.rootChecker = rootChecker
     self.fileManager = fileManager
+    self.historyStore = historyStore
     self.fileTree = ProjectFileTreeSnapshot.empty(
       for: rootChecker.availability(for: rootURL)
     )
@@ -412,7 +420,47 @@ final class ProjectSurfaceModel: ObservableObject {
     isTerminalVisible = false
   }
 
+  func dismissEditorError() {
+    lastEditorErrorMessage = nil
+  }
+
+  func save(tabID: String? = nil) {
+    guard let tab = editorTab(withID: tabID) else {
+      return
+    }
+
+    do {
+      try tab.save()
+      lastEditorErrorMessage = nil
+    } catch {
+      lastEditorErrorMessage = error.localizedDescription
+    }
+  }
+
+  func undoActiveTab() {
+    activeTab?.undo()
+  }
+
+  func redoActiveTab() {
+    activeTab?.redo()
+  }
+
+  func restoreHistoryEntry(_ entryID: UUID, tabID: String? = nil) {
+    guard let tab = editorTab(withID: tabID) else {
+      return
+    }
+
+    do {
+      try tab.restoreHistoryEntry(id: entryID)
+      lastEditorErrorMessage = nil
+    } catch {
+      lastEditorErrorMessage = error.localizedDescription
+    }
+  }
+
   func reload() {
+    refreshEditorDocumentsFromDisk()
+
     let nextTree = ProjectFileTreeScanner.scan(
       rootURL: rootURL,
       rootChecker: rootChecker,
@@ -423,8 +471,6 @@ final class ProjectSurfaceModel: ObservableObject {
     guard let root = nextTree.root else {
       expandedNodeIDs.removeAll()
       selectedNodeID = nil
-      editorTabs.removeAll()
-      activeTabID = nil
       return
     }
 
@@ -436,7 +482,9 @@ final class ProjectSurfaceModel: ObservableObject {
       self.selectedNodeID = nil
     }
 
-    editorTabs = editorTabs.filter { availableNodeIDs.contains($0.id) }
+    editorTabs = editorTabs.filter {
+      availableNodeIDs.contains($0.id) || $0.isMissing
+    }
     if let activeTabID, !editorTabs.contains(where: { $0.id == activeTabID }) {
       self.activeTabID = editorTabs.last?.id
     }
@@ -515,26 +563,38 @@ final class ProjectSurfaceModel: ObservableObject {
     }
 
     if !editorTabs.contains(where: { $0.id == node.id }) {
-      editorTabs.append(
-        ProjectEditorTab(
-          id: node.id,
-          url: node.url,
-          title: node.name,
-          content: fixtureContent(for: node.url)
+      do {
+        editorTabs.append(
+          try ProjectEditorTab(
+            projectID: projectID,
+            rootURL: rootURL,
+            url: node.url,
+            historyStore: historyStore,
+            fileManager: fileManager
+          )
         )
-      )
+      } catch {
+        lastEditorErrorMessage = error.localizedDescription
+        return
+      }
     }
     activeTabID = node.id
   }
 
-  private func fixtureContent(for url: URL) -> String {
-    guard let data = try? Data(contentsOf: url) else {
-      return "This file cannot be previewed.\n\n\(url.path)"
+  private func editorTab(withID tabID: String?) -> ProjectEditorTab? {
+    if let tabID {
+      return editorTabs.first { $0.id == tabID }
     }
-    let content = String(decoding: data, as: UTF8.self)
-    if content.isEmpty {
-      return "(empty file)"
+    return activeTab
+  }
+
+  private func refreshEditorDocumentsFromDisk() {
+    for tab in editorTabs {
+      do {
+        _ = try tab.refreshFromDisk()
+      } catch {
+        lastEditorErrorMessage = error.localizedDescription
+      }
     }
-    return content
   }
 }
