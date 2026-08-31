@@ -1,0 +1,5 @@
+#include "App.xcconfig"
+
+PRODUCT_BUNDLE_IDENTIFIER = com.diwamoto.clair.dev
+PRODUCT_NAME = Clair Dev
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) CLAIR_DEV

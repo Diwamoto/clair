@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+
+# Rust
+/target/
+
+# Xcode and local Swift state
+/.build/
+/DerivedData/
+*.xcresult
+*.xcuserstate
+xcuserdata/
+
+# Generated bindings and intermediates
+/generated/
+/.tmp/
+
+# Interaction Lab is hosted and versioned as its own nested repository.
+/prototypes/clair-interaction-lab/

@@ -1,0 +1,460 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A00000000000000000000031 /* ClairApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000011 /* ClairApp.swift */; };
+		A00000000000000000000032 /* ClairRuntimeProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000012 /* ClairRuntimeProfile.swift */; };
+		A00000000000000000000033 /* RustCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000013 /* RustCore.swift */; };
+		A00000000000000000000034 /* BootstrapState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000014 /* BootstrapState.swift */; };
+		A00000000000000000000035 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000015 /* ContentView.swift */; };
+		A00000000000000000000036 /* ClairApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000011 /* ClairApp.swift */; };
+		A00000000000000000000037 /* ClairRuntimeProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000012 /* ClairRuntimeProfile.swift */; };
+		A00000000000000000000038 /* RustCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000013 /* RustCore.swift */; };
+		A00000000000000000000039 /* BootstrapState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000014 /* BootstrapState.swift */; };
+		A0000000000000000000003A /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000015 /* ContentView.swift */; };
+		A0000000000000000000003B /* ClairRuntimeProfileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000017 /* ClairRuntimeProfileTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A00000000000000000000054 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A00000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A00000000000000000000052;
+			remoteInfo = ClairDev;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		A00000000000000000000011 /* ClairApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClairApp.swift; sourceTree = "<group>"; };
+		A00000000000000000000012 /* ClairRuntimeProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClairRuntimeProfile.swift; sourceTree = "<group>"; };
+		A00000000000000000000013 /* RustCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RustCore.swift; sourceTree = "<group>"; };
+		A00000000000000000000014 /* BootstrapState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BootstrapState.swift; sourceTree = "<group>"; };
+		A00000000000000000000015 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		A00000000000000000000016 /* Clair-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Clair-Bridging-Header.h"; sourceTree = "<group>"; };
+		A00000000000000000000017 /* ClairRuntimeProfileTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClairRuntimeProfileTests.swift; sourceTree = "<group>"; };
+		A00000000000000000000018 /* clair_core.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = clair_core.h; sourceTree = "<group>"; };
+		A00000000000000000000019 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
+		A0000000000000000000001A /* App.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = App.xcconfig; sourceTree = "<group>"; };
+		A0000000000000000000001B /* Stable.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Stable.xcconfig; sourceTree = "<group>"; };
+		A0000000000000000000001C /* Dev.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Dev.xcconfig; sourceTree = "<group>"; };
+		A0000000000000000000001D /* Tests.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Tests.xcconfig; sourceTree = "<group>"; };
+		A00000000000000000000021 /* Clair.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Clair.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A00000000000000000000022 /* Clair Dev.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Clair Dev.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A00000000000000000000023 /* ClairTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ClairTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A00000000000000000000043 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00000000000000000000047 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A0000000000000000000004A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A00000000000000000000002 = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000004 /* Config */,
+				A00000000000000000000005 /* apple */,
+				A00000000000000000000008 /* include */,
+				A00000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A00000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000021 /* Clair.app */,
+				A00000000000000000000022 /* Clair Dev.app */,
+				A00000000000000000000023 /* ClairTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000004 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000019 /* Base.xcconfig */,
+				A0000000000000000000001A /* App.xcconfig */,
+				A0000000000000000000001B /* Stable.xcconfig */,
+				A0000000000000000000001C /* Dev.xcconfig */,
+				A0000000000000000000001D /* Tests.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000005 /* apple */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000006 /* ClairApp */,
+				A00000000000000000000007 /* ClairTests */,
+			);
+			path = apple;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000006 /* ClairApp */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000011 /* ClairApp.swift */,
+				A00000000000000000000012 /* ClairRuntimeProfile.swift */,
+				A00000000000000000000013 /* RustCore.swift */,
+				A00000000000000000000014 /* BootstrapState.swift */,
+				A00000000000000000000015 /* ContentView.swift */,
+				A00000000000000000000016 /* Clair-Bridging-Header.h */,
+			);
+			path = ClairApp;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000007 /* ClairTests */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000017 /* ClairRuntimeProfileTests.swift */,
+			);
+			path = ClairTests;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000008 /* include */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000018 /* clair_core.h */,
+			);
+			path = include;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A00000000000000000000051 /* ClairStable */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A00000000000000000000072 /* Build configuration list for PBXNativeTarget "ClairStable" */;
+			buildPhases = (
+				A00000000000000000000041 /* Build Rust Core */,
+				A00000000000000000000042 /* Sources */,
+				A00000000000000000000043 /* Frameworks */,
+				A00000000000000000000044 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ClairStable;
+			productName = Clair;
+			productReference = A00000000000000000000021 /* Clair.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A00000000000000000000052 /* ClairDev */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A00000000000000000000073 /* Build configuration list for PBXNativeTarget "ClairDev" */;
+			buildPhases = (
+				A00000000000000000000045 /* Build Rust Core */,
+				A00000000000000000000046 /* Sources */,
+				A00000000000000000000047 /* Frameworks */,
+				A00000000000000000000048 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ClairDev;
+			productName = "Clair Dev";
+			productReference = A00000000000000000000022 /* Clair Dev.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A00000000000000000000053 /* ClairTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A00000000000000000000074 /* Build configuration list for PBXNativeTarget "ClairTests" */;
+			buildPhases = (
+				A00000000000000000000049 /* Sources */,
+				A0000000000000000000004A /* Frameworks */,
+				A0000000000000000000004B /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A00000000000000000000055 /* PBXTargetDependency */,
+			);
+			name = ClairTests;
+			productName = ClairTests;
+			productReference = A00000000000000000000023 /* ClairTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A00000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					A00000000000000000000051 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					A00000000000000000000052 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					A00000000000000000000053 = {
+						CreatedOnToolsVersion = 16.0;
+						TestTargetID = A00000000000000000000052;
+					};
+				};
+			};
+			buildConfigurationList = A00000000000000000000071 /* Build configuration list for PBXProject "Clair" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A00000000000000000000002;
+			productRefGroup = A00000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A00000000000000000000051 /* ClairStable */,
+				A00000000000000000000052 /* ClairDev */,
+				A00000000000000000000053 /* ClairTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A00000000000000000000044 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00000000000000000000048 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A0000000000000000000004B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		A00000000000000000000041 /* Build Rust Core */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Build Rust Core";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"$PROJECT_DIR/scripts/build-rust.sh\" \"$CONFIGURATION\"";
+			showEnvVarsInLog = 0;
+		};
+		A00000000000000000000045 /* Build Rust Core */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Build Rust Core";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"$PROJECT_DIR/scripts/build-rust.sh\" \"$CONFIGURATION\"";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A00000000000000000000042 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A00000000000000000000031 /* ClairApp.swift in Sources */,
+				A00000000000000000000032 /* ClairRuntimeProfile.swift in Sources */,
+				A00000000000000000000033 /* RustCore.swift in Sources */,
+				A00000000000000000000034 /* BootstrapState.swift in Sources */,
+				A00000000000000000000035 /* ContentView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00000000000000000000046 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A00000000000000000000036 /* ClairApp.swift in Sources */,
+				A00000000000000000000037 /* ClairRuntimeProfile.swift in Sources */,
+				A00000000000000000000038 /* RustCore.swift in Sources */,
+				A00000000000000000000039 /* BootstrapState.swift in Sources */,
+				A0000000000000000000003A /* ContentView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00000000000000000000049 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A0000000000000000000003B /* ClairRuntimeProfileTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A00000000000000000000055 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A00000000000000000000052 /* ClairDev */;
+			targetProxy = A00000000000000000000054 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		A00000000000000000000061 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		A00000000000000000000062 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		A00000000000000000000063 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A0000000000000000000001B /* Stable.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		A00000000000000000000064 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A0000000000000000000001B /* Stable.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
+		A00000000000000000000065 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A0000000000000000000001C /* Dev.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		A00000000000000000000066 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A0000000000000000000001C /* Dev.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
+		A00000000000000000000067 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A0000000000000000000001D /* Tests.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		A00000000000000000000068 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A0000000000000000000001D /* Tests.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A00000000000000000000071 /* Build configuration list for PBXProject "Clair" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A00000000000000000000061 /* Debug */,
+				A00000000000000000000062 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A00000000000000000000072 /* Build configuration list for PBXNativeTarget "ClairStable" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A00000000000000000000063 /* Debug */,
+				A00000000000000000000064 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A00000000000000000000073 /* Build configuration list for PBXNativeTarget "ClairDev" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A00000000000000000000065 /* Debug */,
+				A00000000000000000000066 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A00000000000000000000074 /* Build configuration list for PBXNativeTarget "ClairTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A00000000000000000000067 /* Debug */,
+				A00000000000000000000068 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A00000000000000000000001 /* Project object */;
+}
