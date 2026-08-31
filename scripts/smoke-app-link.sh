@@ -42,6 +42,10 @@ for channel in stable dev; do
         "$repo_root/apple/ClairApp/ClairRuntimeProfile.swift" \
         "$repo_root/apple/ClairApp/RustCore.swift" \
         "$repo_root/apple/ClairApp/BootstrapState.swift" \
+        "$repo_root/apple/ClairApp/ProjectModel.swift" \
+        "$repo_root/apple/ClairApp/ProjectStore.swift" \
+        "$repo_root/apple/ClairApp/CommandRegistry.swift" \
+        "$repo_root/apple/ClairApp/ProjectWorkspace.swift" \
         "$repo_root/apple/ClairApp/ContentView.swift" \
         -o "$executable"
 

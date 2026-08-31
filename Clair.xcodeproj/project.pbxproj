@@ -18,6 +18,15 @@
 		A00000000000000000000039 /* BootstrapState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000014 /* BootstrapState.swift */; };
 		A0000000000000000000003A /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000015 /* ContentView.swift */; };
 		A0000000000000000000003B /* ClairRuntimeProfileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000017 /* ClairRuntimeProfileTests.swift */; };
+		A0000000000000000000003C /* ProjectModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000001E /* ProjectModel.swift */; };
+		A0000000000000000000003D /* ProjectStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000001F /* ProjectStore.swift */; };
+		A0000000000000000000003E /* CommandRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000020 /* CommandRegistry.swift */; };
+		A0000000000000000000003F /* ProjectWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000024 /* ProjectWorkspace.swift */; };
+		A00000000000000000000056 /* ProjectModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000001E /* ProjectModel.swift */; };
+		A00000000000000000000057 /* ProjectStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000001F /* ProjectStore.swift */; };
+		A00000000000000000000058 /* CommandRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000020 /* CommandRegistry.swift */; };
+		A00000000000000000000059 /* ProjectWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000024 /* ProjectWorkspace.swift */; };
+		A0000000000000000000005A /* ProjectKernelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000025 /* ProjectKernelTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -44,6 +53,11 @@
 		A0000000000000000000001B /* Stable.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Stable.xcconfig; sourceTree = "<group>"; };
 		A0000000000000000000001C /* Dev.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Dev.xcconfig; sourceTree = "<group>"; };
 		A0000000000000000000001D /* Tests.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Tests.xcconfig; sourceTree = "<group>"; };
+		A0000000000000000000001E /* ProjectModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectModel.swift; sourceTree = "<group>"; };
+		A0000000000000000000001F /* ProjectStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectStore.swift; sourceTree = "<group>"; };
+		A00000000000000000000020 /* CommandRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandRegistry.swift; sourceTree = "<group>"; };
+		A00000000000000000000024 /* ProjectWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectWorkspace.swift; sourceTree = "<group>"; };
+		A00000000000000000000025 /* ProjectKernelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectKernelTests.swift; sourceTree = "<group>"; };
 		A00000000000000000000021 /* Clair.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Clair.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A00000000000000000000022 /* Clair Dev.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Clair Dev.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A00000000000000000000023 /* ClairTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ClairTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -123,6 +137,10 @@
 				A00000000000000000000013 /* RustCore.swift */,
 				A00000000000000000000014 /* BootstrapState.swift */,
 				A00000000000000000000015 /* ContentView.swift */,
+				A0000000000000000000001E /* ProjectModel.swift */,
+				A0000000000000000000001F /* ProjectStore.swift */,
+				A00000000000000000000020 /* CommandRegistry.swift */,
+				A00000000000000000000024 /* ProjectWorkspace.swift */,
 				A00000000000000000000016 /* Clair-Bridging-Header.h */,
 			);
 			path = ClairApp;
@@ -132,6 +150,7 @@
 			isa = PBXGroup;
 			children = (
 				A00000000000000000000017 /* ClairRuntimeProfileTests.swift */,
+				A00000000000000000000025 /* ProjectKernelTests.swift */,
 			);
 			path = ClairTests;
 			sourceTree = "<group>";
@@ -320,6 +339,10 @@
 				A00000000000000000000033 /* RustCore.swift in Sources */,
 				A00000000000000000000034 /* BootstrapState.swift in Sources */,
 				A00000000000000000000035 /* ContentView.swift in Sources */,
+				A0000000000000000000003C /* ProjectModel.swift in Sources */,
+				A0000000000000000000003D /* ProjectStore.swift in Sources */,
+				A0000000000000000000003E /* CommandRegistry.swift in Sources */,
+				A0000000000000000000003F /* ProjectWorkspace.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -332,6 +355,10 @@
 				A00000000000000000000038 /* RustCore.swift in Sources */,
 				A00000000000000000000039 /* BootstrapState.swift in Sources */,
 				A0000000000000000000003A /* ContentView.swift in Sources */,
+				A00000000000000000000056 /* ProjectModel.swift in Sources */,
+				A00000000000000000000057 /* ProjectStore.swift in Sources */,
+				A00000000000000000000058 /* CommandRegistry.swift in Sources */,
+				A00000000000000000000059 /* ProjectWorkspace.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -340,6 +367,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A0000000000000000000003B /* ClairRuntimeProfileTests.swift in Sources */,
+				A0000000000000000000005A /* ProjectKernelTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

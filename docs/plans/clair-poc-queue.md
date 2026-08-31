@@ -52,16 +52,25 @@ P01から最小kernelを育て、後から既存featureを別実装へ置き換�
 
 ### P01 Project and command kernel
 
-- Status: `next`
+- Status: `done`
 - Outcome: Git有無を問わずfolderをProjectとしてopen/reopenし、一つのprocessで切り替えられる。
 - Scope: stable `ProjectID`、root dedupe、rename/color/reorder/close、versioned local store、
   minimal typed Command Registry、availability/error/preflight seam。
 - Functional checks: Git/non-Git/temp folderを3つopen、重複rootを拒否、invalid/permission errorが他Projectを壊さない。
 - Legacy issue coverage: #28、#33の最小kernel。
+- Validation (2026-08-31): `make test` and `make smoke` passed (Rust 2 tests, Swift 11 tests, Stable/Dev
+  FFI/link/build/bundle/artifact smoke); `make lint` passed (format, Clippy, Xcode analyze, workspace check).
+  `ProjectKernelTests` also passed canonical `.`/`..` and symlink dedupe, metadata persistence, stable-ID
+  reopen, and invalid/file/unreadable-root isolation.
+- Durable detail: [development workspace architecture](../architecture/development-workspace.md) and
+  [local development runbook](../runbooks/local-development.md) now document the Project store and recovery
+  boundaries.
+- Deferred: file tree/watcher, editor/terminal/pane state, Git operations, CLI/MCP adapters, and worktrees remain
+  in their downstream queue items.
 
 ### P02 Workspace shell and file tree
 
-- Status: `queued`
+- Status: `next`
 - Depends on: P01。
 - Outcome: active Projectにsidebar/file treeとeditor tab hostが表示され、folder変更が追従する。
 - Scope: watcher-backed tree、expand/select/reveal、missing root state、fixture editor tab。

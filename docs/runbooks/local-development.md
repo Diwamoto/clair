@@ -44,6 +44,27 @@ make smoke
 
 `make ci` runs the complete lint and smoke graph used by GitHub Actions.
 
+## Verify the Project kernel
+
+After building Dev, use `make run-dev` and select **Open Folder** in the Projects
+sidebar. Open one Git repository, one ordinary non-Git folder, and one temporary
+folder. Confirm that all three appear in the same process and that selecting a row
+changes the active Project and displayed root.
+
+Use a Project row's context menu to rename it, set a color, move it, and close it.
+Rename is display metadata only; it does not rename the folder on disk. Reopen the
+closed folder (or relaunch Dev) and confirm that its Project ID and metadata return.
+
+Try opening the same root through a `.`/`..` path or symlink and confirm that Clair
+reports a duplicate instead of adding a second row. Try a missing path, a regular
+file, and a folder without read access. Each command should report its local error
+while the already-open Projects and active selection remain intact.
+
+The catalog is stored per channel at
+`~/Library/Application Support/Clair Dev/projects-v1.json` (or `Clair` for Stable).
+Do not remove this file as part of normal recovery; it contains the local Project
+catalog. Build artifacts can still be removed with `make clean-artifacts`.
+
 Build outputs are:
 
 - `.build/xcode/stable/Build/Products/Debug/Clair.app`
