@@ -348,6 +348,8 @@ final class ProjectSurfaceModel: ObservableObject {
   @Published private(set) var selectedNodeID: String?
   @Published private(set) var editorTabs: [ProjectEditorTab] = []
   @Published private(set) var activeTabID: String?
+  @Published private(set) var terminalSession: TerminalSession?
+  @Published private(set) var isTerminalVisible = false
 
   private let rootChecker: any ProjectRootChecking
   private let fileManager: FileManager
@@ -389,6 +391,25 @@ final class ProjectSurfaceModel: ObservableObject {
       return nil
     }
     return editorTabs.first { $0.id == activeTabID }
+  }
+
+  func showTerminal() {
+    if terminalSession == nil {
+      let session = TerminalSession(projectRootURL: rootURL)
+      terminalSession = session
+      session.start()
+    }
+    isTerminalVisible = true
+  }
+
+  func hideTerminal() {
+    isTerminalVisible = false
+  }
+
+  func endTerminal() {
+    terminalSession?.stop()
+    terminalSession = nil
+    isTerminalVisible = false
   }
 
   func reload() {

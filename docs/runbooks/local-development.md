@@ -108,7 +108,34 @@ channel is running. Confirm that:
 Quit both apps normally after the check. The build scripts never remove their
 preferences or Application Support directories.
 
-## Run the PTY host skeleton
+## Verify the live terminal (P03)
+
+Build and launch Dev:
+
+```sh
+make build-dev
+make run-dev
+```
+
+Open a Project, choose **Open Terminal**, and verify the same live session can:
+
+1. Run a shell command such as `printf 'CLAIR_SHELL_OK\n'` and show its output.
+2. Run `stty size`, resize the window, and run it again; the reported rows/columns
+   should follow the surface.
+3. Type and execute CJK text, select output with the mouse, copy it, and scroll
+   through earlier output without losing the active shell.
+4. Run `printf '\033]0;title\007'` and confirm control bytes do not corrupt the
+   plain transcript.
+5. Generate a bounded flood, for example `for i in $(seq 1 100); do echo line-$i; done`,
+   and confirm the app remains responsive and the shell can still accept input.
+
+Click **End** before closing the Project. P03 keeps the visible transcript in memory
+only; it does not persist or reattach the PTY. The verified implementation is an
+AppKit selectable plain-text fallback while a reproducible libghostty development
+artifact is unavailable; full terminal-grid behavior and reattach are later queue
+items.
+
+## Run the PTY host smoke path
 
 ```sh
 cargo run -p clair-ptyhost -- --smoke

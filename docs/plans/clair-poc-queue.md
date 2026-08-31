@@ -94,17 +94,31 @@ P01から最小kernelを育て、後から既存featureを別実装へ置き換�
 
 ### P03 Native terminal feasibility and live shell
 
-- Status: `next`
+- Status: `done`
 - Depends on: P01。
 - Outcome: native terminal surfaceで実際のzshへinputし、resize、scrollback、selectionできる。
 - Scope: timeboxed libghostty embed feasibility、`clair-ptyhost` spawn/attach、raw bytes、IME/CJK/OSC smoke。
 - Functional checks: shell command、resize、selection、CJK input、terminal floodのcrash smoke。
 - Note: formal performance comparisonではない。libghostty integration blockerだけを早期発見する。
 - Legacy issue coverage: #5、#6のlocal live-session subset。
+- Validation (2026-08-31): `cargo fmt --all -- --check`、`cargo test --workspace --locked --offline`
+  (clair-core 1、ptyhost unit 9、live-shell integration 4)、`cargo clippy --workspace --all-targets
+  --locked --offline -- -D warnings` passed. `swift format lint --recursive --parallel --strict apple`、strict
+  Swift 6 typecheck、Xcode project validation、Stable/Dev project-scoped build、Dev XCTest (19 tests)、Dev
+  analyze、and `scripts/smoke-app-link.sh` passed. The live-shell tests cover shell command/resize, raw CJK and
+  OSC bytes, output flood, malformed frame rejection, and child reaping; the AppKit fallback is selectable and
+  scrollable in both linked app targets. The Computer Use inspector could launch and open the app shell, but
+  macOS 26.6 dropped its accessibility pipe after the fixture project was opened, so click-level UI interaction
+  was not completed; the exact manual checks remain in the local-development runbook.
+- Durable detail: [development workspace architecture](../architecture/development-workspace.md) and
+  [local development runbook](../runbooks/local-development.md) document the PTY host, versioned frame protocol,
+  AppKit fallback, manual checks, and current limitations.
+- Deferred: reproducible libghostty development headers/library and full terminal-grid behavior; durable
+  SessionID/catalog/reattach/backpressure remains P07.
 
 ### P04 Native editor MVP
 
-- Status: `queued`
+- Status: `next`
 - Depends on: P02。
 - Outcome: 複数fileをopen/edit/save/undoでき、agentのdisk変更を安全に反映できる。
 - Scope: AppKit/TextKit-based reversible PoC、multi-file tabs、Unicode/IME、disk watcher、

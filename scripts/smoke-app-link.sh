@@ -47,6 +47,9 @@ for channel in stable dev; do
         "$repo_root/apple/ClairApp/CommandRegistry.swift" \
         "$repo_root/apple/ClairApp/ProjectWorkspace.swift" \
         "$repo_root/apple/ClairApp/ContentView.swift" \
+        "$repo_root/apple/ClairApp/TerminalProtocol.swift" \
+        "$repo_root/apple/ClairApp/TerminalSession.swift" \
+        "$repo_root/apple/ClairApp/TerminalSurface.swift" \
         -o "$executable"
 
     if ! nm -gU "$executable" | grep -q ' _clair_core_smoke$'; then

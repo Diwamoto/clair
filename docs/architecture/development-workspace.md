@@ -2,7 +2,7 @@
 
 ## Status
 
-Current as of local PoC item `P02 Workspace shell and file tree`.
+Current as of local PoC item `P03 Native terminal feasibility and live shell`.
 
 ## Workspace boundary
 
@@ -17,7 +17,7 @@ Clair.xcworkspace
 
 Cargo.toml
 ├── clair-core (Rust library + static library)
-└── clair-ptyhost (process skeleton)
+└── clair-ptyhost (local PTY host)
 ```
 
 The Stable and Dev application targets compile the same files under `apple/ClairApp`.
@@ -45,9 +45,45 @@ The bootstrap ABI contains one allocation-free function:
 uint32_t clair_core_smoke(void);
 ```
 
-It returns `0x434C4149`. PTY streams, object ownership, callbacks, and async control
-flow are intentionally absent; later interfaces must document their own lifecycle
-and threading contracts.
+It returns `0x434C4149`. The live terminal does not use this C ABI: the app starts
+`clair-ptyhost --spawn` as a child process and exchanges a bounded binary stream on
+its stdin/stdout. Later interfaces must document their own lifecycle and threading
+contracts rather than extending the bootstrap symbol implicitly.
+
+## Live terminal path
+
+Each visible Project terminal owns one `TerminalSession`. The session starts one
+`clair-ptyhost` process with the Project root, shell path, and current dimensions.
+The host uses macOS `forkpty`, starts a login shell with `TERM=xterm-256color`,
+applies `TIOCSWINSZ` on resize, forwards input bytes unchanged, and terminates the
+child process group when the session closes. The host waits for and reports the
+child exit status, so a normal shell exit cannot leave an unreaped local child.
+
+The transport frame is version 1 and has this fixed header:
+
+```text
+magic[2] = CP | version[1] | kind[1] | payload_length[4, big endian] | payload
+```
+
+Payloads are capped at 64 KiB before allocation. Client frames are raw input,
+resize (`rows`, `columns` as big-endian `u16` values), and close. Host frames are
+raw output, one-byte exit status, and diagnostic error. Partial reads are buffered;
+malformed or oversized frames terminate the child and return a bounded diagnostic.
+
+`TerminalSurfaceView` is an AppKit-backed selectable and scrollable native surface,
+embedded in the SwiftUI Project shell. It forwards ordinary keys, control keys,
+navigation sequences, and UTF-8 text to the PTY. The current surface keeps a bounded
+2 MiB sanitized transcript for rendering and selection; split ANSI CSI/OSC-like
+sequences are removed from this plain-text fallback, while CJK UTF-8 bytes are
+retained. This is deliberately a reversible feasibility slice, not a replacement
+for a terminal grid renderer.
+
+The local checkout does not contain a public libghostty development header/library
+that can be built and linked reproducibly. Therefore P03 records the AppKit native
+fallback as the verified surface and leaves the libghostty embed as an explicit
+follow-up blocker. P07 owns stable session identity, persistence, reattach, and
+cross-process backpressure; P03's session is live only while its Project surface
+owns it.
 
 ## Project and command kernel
 
@@ -110,9 +146,11 @@ underlying tool exit codes. GitHub Actions runs `make ci` rather than maintainin
 separate command graph. `make smoke-ffi` also compiles a small Swift CLI against the
 Rust static library, so the language boundary can be verified before a full Xcode
 application build. `make smoke-app-link` links the complete shared SwiftUI source
-graph for both channel compile conditions and verifies the Rust symbol in each
-Mach-O executable. Bundle smoke also follows Xcode 26's Debug `*.debug.dylib`
-image when the app's main executable is a generated debug stub.
+graph, including the terminal surface, for both channel compile conditions and
+verifies the Rust symbol in each Mach-O executable. The Rust build also emits
+`target/debug/clair-ptyhost` for local app discovery. Bundle smoke follows Xcode
+26's Debug `*.debug.dylib` image when the app's main executable is a generated
+debug stub.
 
 Build output under `.build/`, Cargo `target/`, generated output, and Xcode user state
 are disposable and ignored. `THIRD_PARTY_NOTICES.md` is the tracked notice source.
@@ -126,11 +164,20 @@ preflight, nested tree enumeration, fixture tab selection, external create/renam
 delete refresh, missing-root recovery, and Project surface isolation. `make test-swift`
 runs these tests in the Dev host app.
 
+`apple/ClairTests/TerminalTests.swift` covers partial/batched frame decoding, binary
+UTF-8 input, frame bounds, split escape-sequence sanitization, and transcript UTF-8
+trimming. Rust unit and integration tests cover PTY shell commands, resize, CJK/OSC
+bytes, output flood, malformed frames, and child reaping.
+
 ## Current limitations
 
 - Builds are unsigned and App Sandbox is disabled.
-- `clair-ptyhost` is a process/smoke skeleton and does not own a PTY.
+- `clair-ptyhost` owns one local PTY per live app session, but has no durable session
+  catalog, detached lifecycle, or restart reattach; those are P07.
 - The C ABI is a link/lifecycle smoke path, not the future domain interface.
-- The editor is currently a read-only fixture tab; terminal, pane layout, Git operations,
-  and CLI/MCP adapters remain later queue items.
+- The terminal surface is a selectable plain-text AppKit fallback, not a full ANSI/
+  alternate-screen/cursor/colour terminal grid; a reproducible libghostty development
+  artifact is still unavailable in this checkout. The editor is currently a read-only
+  fixture tab; pane layout, Git operations, and CLI/MCP adapters remain later queue
+  items.
 - Formal app icons, signing, notarization, and update delivery are not present.

@@ -249,6 +249,15 @@ private struct ProjectWorkspaceDetail: View {
 
         Spacer()
 
+        Button(surface.isTerminalVisible ? "Show Editor" : "Open Terminal") {
+          if surface.isTerminalVisible {
+            surface.hideTerminal()
+          } else {
+            surface.showTerminal()
+          }
+        }
+        .buttonStyle(.bordered)
+
         Text(surface.fileTree.availability.displayName)
           .font(.caption.weight(.bold))
           .foregroundStyle(surface.fileTree.isAvailable ? .green : .orange)
@@ -267,8 +276,74 @@ private struct ProjectWorkspaceDetail: View {
 
         Divider()
 
-        ProjectEditorTabHost(state: state, project: project, surface: surface)
+        if surface.isTerminalVisible, let terminalSession = surface.terminalSession {
+          ProjectTerminalPanel(
+            project: project,
+            session: terminalSession,
+            onHide: surface.hideTerminal,
+            onEnd: surface.endTerminal
+          )
+        } else {
+          ProjectEditorTabHost(state: state, project: project, surface: surface)
+        }
       }
+    }
+  }
+}
+
+private struct ProjectTerminalPanel: View {
+  let project: Project
+  @ObservedObject var session: TerminalSession
+  let onHide: () -> Void
+  let onEnd: () -> Void
+
+  var body: some View {
+    VStack(spacing: 0) {
+      HStack(spacing: 10) {
+        Label("Terminal", systemImage: "terminal")
+          .font(.headline)
+        Text(project.rootURL.path)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+        Spacer()
+        Text(session.statusDescription)
+          .font(.caption)
+          .foregroundStyle(statusColor)
+        Text("\(session.dimensions.columns) × \(session.dimensions.rows)")
+          .font(.caption.monospacedDigit())
+          .foregroundStyle(.secondary)
+        Button("Editor", action: onHide)
+          .buttonStyle(.borderless)
+        Button("End", action: onEnd)
+          .buttonStyle(.borderless)
+          .foregroundStyle(.red)
+      }
+      .padding(.horizontal, 12)
+      .padding(.vertical, 8)
+
+      Divider()
+
+      TerminalSurfaceView(session: session)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(nsColor: .textBackgroundColor))
+        .onAppear {
+          session.start()
+        }
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+  }
+
+  private var statusColor: Color {
+    switch session.state {
+    case .running, .starting:
+      .green
+    case .idle, .stopping:
+      .secondary
+    case .exited:
+      .orange
+    case .failed:
+      .red
     }
   }
 }
