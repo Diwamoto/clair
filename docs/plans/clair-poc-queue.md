@@ -143,17 +143,32 @@ P01から最小kernelを育て、後から既存featureを別実装へ置き換�
 
 ### P05 Mixed panes and Project workspace persistence
 
-- Status: `next`
+- Status: `done`
 - Depends on: P03、P04。
 - Outcome: editor/terminal/diffを同じpane/tab modelへ置き、splitとrestart restoreが動く。
 - Scope: nested split、focus/move/close/maximize/equalize、per-Project versioned snapshot、
   corrupt/missing surface fallback。Terminal transcript本文はsnapshotへ保存しない。
 - Functional checks: nested layout operations、3 Project isolation、normal/abnormal restart、corrupt snapshot recovery。
 - Legacy issue coverage: #34、#35。
+- Validation (2026-09-01): project-scoped `xcodebuild -project Clair.xcodeproj -scheme "Clair Dev"
+  -configuration Debug -derivedDataPath .build/xcode/p05-staged-tests CODE_SIGNING_ALLOWED=NO
+  CODE_SIGNING_REQUIRED=NO test` passed. The expanded `ProjectKernelTests` cover nested
+  split/focus/move/close/maximize/equalize, editor/terminal/diff descriptors without a
+  terminal transcript in the snapshot, three-Project isolation across a fresh workspace
+  model, and corrupt/missing workspace-store fallback. `swift format lint --recursive
+  --parallel --strict apple`, `ruby scripts/validate-xcode-project.rb Clair.xcodeproj`,
+  `scripts/smoke-app-link.sh` (Stable/Dev), and Dev `xcodebuild ... analyze`
+  passed. The unit restart path recreates the workspace model from the same store; the
+  runbook records the disposable-fixture abnormal-restart smoke check.
+- Durable detail: [development workspace architecture](../architecture/development-workspace.md) and
+  [local development runbook](../runbooks/local-development.md) document the recursive pane
+  model, schema-1 `workspace-v1.json` boundary, recovery behavior, and manual checks.
+- Deferred: durable PTY SessionID/catalog/reattach and transcript recovery remain P07;
+  Git-backed diff content and operations remain P08.
 
 ### P06 Quick Open, search, replace, and file history
 
-- Status: `queued`
+- Status: `next`
 - Depends on: P04。
 - Outcome: Project内のfileへ素早く到達し、全文検索・置換と履歴復元ができる。
 - Scope: Quick Open、text search/replace、watcher refresh、local file history browser/restore。

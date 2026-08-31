@@ -290,6 +290,140 @@ final class ProjectKernelTests: XCTestCase {
     XCTAssertNil(restoredSurface.fileTree.node(withID: secondFile.path))
   }
 
+  func testPaneLayoutSupportsNestedSplitsTabMoveCloseMaximizeAndEqualize() throws {
+    let fixture = try Fixture()
+    let root = try fixture.makeDirectory(named: "pane-layout-project")
+    let file = root.appendingPathComponent("main.txt")
+    try Data("pane layout".utf8).write(to: file)
+    let workspace = fixture.makeWorkspace()
+
+    _ = workspace.execute(.openProject(OpenProjectCommand(rootURL: root)))
+    let surface = try XCTUnwrap(workspace.activeSurface)
+    surface.select(nodeID: file.path)
+    let originalPaneID = surface.focusedPaneID
+
+    surface.splitFocusedPane(orientation: .horizontal)
+    let rightPaneID = surface.focusedPaneID
+    XCTAssertEqual(surface.paneIDs.count, 2)
+    XCTAssertNotEqual(originalPaneID, rightPaneID)
+
+    surface.openDiff(in: rightPaneID)
+    surface.splitFocusedPane(orientation: .vertical)
+    let lowerPaneID = surface.focusedPaneID
+    XCTAssertEqual(surface.paneIDs.count, 3)
+    XCTAssertTrue(surface.tabs(in: rightPaneID).contains { $0.kind == .diff })
+
+    surface.openDiff(in: lowerPaneID)
+    let movedTabID = try XCTUnwrap(surface.activeTab(in: lowerPaneID)?.id)
+    surface.moveActiveTab(to: originalPaneID)
+    XCTAssertFalse(surface.tabs(in: lowerPaneID).contains { $0.id == movedTabID })
+    XCTAssertTrue(surface.tabs(in: originalPaneID).contains { $0.id == movedTabID })
+    XCTAssertEqual(surface.focusedPaneID, originalPaneID)
+
+    surface.toggleMaximizeFocusedPane()
+    XCTAssertEqual(surface.maximizedPaneID, originalPaneID)
+    surface.equalizeSplits()
+    XCTAssertTrue(splitRatios(in: surface.layout).allSatisfy { $0 == 0.5 })
+
+    surface.showTerminal(in: originalPaneID)
+    let terminalTabID = try XCTUnwrap(
+      surface.tabs(in: originalPaneID).first(where: { $0.kind == .terminal })?.id
+    )
+    XCTAssertNotNil(surface.terminalSession(tabID: terminalTabID))
+
+    let encoded = try JSONEncoder().encode(surface.workspaceSnapshot)
+    let encodedText = String(decoding: encoded, as: UTF8.self)
+    XCTAssertFalse(encodedText.contains("transcript"))
+
+    surface.endTerminal()
+    surface.closePane(id: lowerPaneID)
+    XCTAssertEqual(surface.paneIDs.count, 2)
+    XCTAssertTrue(surface.workspaceSnapshot.validated(for: surface.projectID) != nil)
+  }
+
+  func testThreeProjectPaneLayoutsRemainIsolatedAcrossRestart() throws {
+    let fixture = try Fixture()
+    let roots = try ["first", "second", "third"].map { name -> (URL, URL) in
+      let root = try fixture.makeDirectory(named: "pane-\(name)")
+      let file = root.appendingPathComponent("\(name).txt")
+      try Data(name.utf8).write(to: file)
+      return (root, file)
+    }
+    let workspace = fixture.makeWorkspace()
+    var projects: [(project: Project, file: URL, snapshot: ProjectSurfaceSnapshot)] = []
+
+    for (index, pair) in roots.enumerated() {
+      let project = try XCTUnwrap(
+        project(workspace.execute(.openProject(OpenProjectCommand(rootURL: pair.0))))
+      )
+      let surface = try XCTUnwrap(workspace.activeSurface)
+      surface.select(nodeID: pair.1.path)
+      if index == 0 {
+        surface.splitFocusedPane(orientation: .horizontal)
+        surface.openDiff(in: surface.focusedPaneID)
+      } else if index == 1 {
+        surface.openDiff()
+      } else {
+        surface.splitFocusedPane(orientation: .vertical)
+      }
+      projects.append((project, pair.1, surface.workspaceSnapshot))
+    }
+
+    let restored = fixture.makeWorkspace()
+    XCTAssertEqual(restored.activeProjectID, projects.last?.project.id)
+
+    for expected in projects {
+      _ = restored.execute(
+        .switchProject(SwitchProjectCommand(projectID: expected.project.id))
+      )
+      let surface = try XCTUnwrap(restored.activeSurface)
+      XCTAssertEqual(surface.workspaceSnapshot, expected.snapshot)
+      XCTAssertTrue(
+        surface.editorTabs.allSatisfy { $0.projectID == expected.project.id }
+      )
+      XCTAssertTrue(
+        surface.editorTabs.allSatisfy {
+          $0.url.standardizedFileURL.path == expected.file.standardizedFileURL.path
+        }
+      )
+    }
+  }
+
+  func testCorruptOrMissingWorkspaceSnapshotFallsBackWithoutReplacingCorruptData() throws {
+    let fixture = try Fixture()
+    let root = try fixture.makeDirectory(named: "recoverable-pane-project")
+    let workspace = fixture.makeWorkspace()
+    let project = try XCTUnwrap(
+      project(workspace.execute(.openProject(OpenProjectCommand(rootURL: root))))
+    )
+    let surface = try XCTUnwrap(workspace.activeSurface)
+    surface.splitFocusedPane(orientation: .horizontal)
+    let workspaceURL = try XCTUnwrap(fixture.store.workspaceFileURL)
+    let corruptData = Data("{not-json".utf8)
+    try corruptData.write(to: workspaceURL)
+
+    let recovered = fixture.makeWorkspace()
+    XCTAssertTrue(recovered.projects.contains { $0.id == project.id })
+    XCTAssertTrue(recovered.lastErrorMessage?.contains("workspace store is malformed") == true)
+    let recoveredSurface = try XCTUnwrap(recovered.activeSurface)
+    XCTAssertEqual(recoveredSurface.paneIDs.count, 1)
+    XCTAssertEqual(try Data(contentsOf: workspaceURL), corruptData)
+
+    try FileManager.default.removeItem(at: workspaceURL)
+    let missing = fixture.makeWorkspace()
+    XCTAssertNil(missing.lastErrorMessage)
+    XCTAssertEqual(try XCTUnwrap(missing.activeSurface).paneIDs.count, 1)
+  }
+
+  private func splitRatios(in node: ProjectPaneNode) -> [Double] {
+    switch node {
+    case .leaf:
+      []
+    case .split(_, _, let ratio, let first, let second):
+      [ratio] + splitRatios(in: first) + splitRatios(in: second)
+    }
+  }
+
   private func project(
     _ result: Result<ClairCommandResult, CommandError>,
     file: StaticString = #filePath,

@@ -2,7 +2,7 @@
 
 ## Status
 
-Current as of local PoC item `P04 Native editor MVP`.
+Current as of local PoC item `P05 Mixed panes and Project workspace persistence`.
 
 ## Workspace boundary
 
@@ -116,10 +116,9 @@ switch, rename, color, reorder, and close. CLI/MCP adapters remain later slices.
 ## Workspace shell and file tree
 
 Each open Project has a `ProjectSurfaceModel` keyed by its stable `ProjectID`. The
-surface owns the in-memory file tree, expanded directory IDs, selected node, and
-multi-file native editor tabs. Switching Projects changes the observed surface, so tree
-selection, expansion, and tabs cannot leak between Projects. Surface state is currently
-memory-only; workspace persistence is a later P05 responsibility.
+surface owns the file tree, expanded directory IDs, selected node, and a mixed pane/tab
+layout. Switching Projects changes the observed surface, so tree selection, expansion,
+and tabs cannot leak between Projects. Durable layout restoration is described below.
 
 `ProjectFileTreeScanner` recursively enumerates the active root and sorts directories
 before files using a stable localized name/path order. Node identity is the
@@ -134,6 +133,33 @@ change so newly created directories are covered. If the root is missing, its nea
 existing parent is watched; root recreation therefore returns the surface to the
 available state without a manual reopen. Events trigger a full tree rescan on the
 MainActor. The native editor behavior is described below.
+
+## Mixed pane/tab model and workspace persistence
+
+The Project surface stores a recursive `ProjectPaneNode` tree. A leaf is a pane with
+an ordered tab list; each tab is an editor, terminal, or diff descriptor. Split nodes
+carry horizontal/vertical orientation and a bounded ratio, so nested layouts are
+represented without coupling the model to SwiftUI views. The surface supports focus,
+split, tab move, close, maximize, and equalize operations. Runtime editor documents and
+live PTY sessions remain separate maps keyed by their tab descriptors.
+
+Workspace state is stored independently from the Project catalog in the channel-specific
+`workspace-v1.json` file beside `projects-v1.json`. The version-1
+`ProjectWorkspaceStoreSnapshot` contains one validated `ProjectSurfaceSnapshot`
+per stable Project ID. Each surface snapshot contains the pane tree, active/focused
+selection, maximized pane, selected file-tree node, expanded node IDs, and tab
+descriptors. It never contains editor document bodies, PTY processes, live terminal
+sessions, or the in-memory terminal transcript. Writes create the profile directory and
+use atomic replacement, so a completed layout mutation is recoverable after a normal or
+abnormal process restart.
+
+On restore, the surface rebuilds runtime objects from the descriptors. Editor tabs whose
+paths are outside the Project root, missing, or directories are filtered out; terminal
+descriptors return as a restart placeholder because P07 owns PTY reattach, and diff
+descriptors currently render the P08 navigation placeholder. A missing workspace file
+starts with one empty pane. A malformed or unsupported top-level snapshot leaves the
+Project catalog intact and starts the affected surface from the same default; malformed
+individual surface entries are discarded while valid Project surfaces remain available.
 
 ## Native editor and disk safety
 
@@ -154,7 +180,7 @@ requires an explicit discard confirmation.
 Recovery snapshots are stored outside the repository in the channel-specific
 Application Support file `editor-history-v1.json` (schema version 1), with at most
 100 entries per Project/file. Stable and Dev use separate paths through ADR-0008.
-P05 owns durable pane/tab layout restoration; P06 owns a searchable file-history
+P05 provides durable pane/tab layout restoration; P06 owns a searchable file-history
 browser, while P04 provides the recovery snapshots needed by those later surfaces.
 
 ## Developer command boundary
@@ -181,8 +207,12 @@ are disposable and ignored. `THIRD_PARTY_NOTICES.md` is the tracked notice sourc
 canonical-root duplicate rejection, invalid/file/unreadable-root isolation, stable ID
 reopen, metadata/order persistence, store versioning, command risk/availability
 preflight, nested tree enumeration, fixture tab selection, external create/rename/
-delete refresh, missing-root recovery, and Project surface isolation. `make test-swift`
-runs these tests in the Dev host app.
+delete refresh, missing-root recovery, Project surface isolation, nested mixed-pane
+operations, three-Project layout isolation across restart, and corrupt/missing workspace
+fallback. The project-scoped Dev XCTest target runs these tests. The `make test-swift`
+wrapper remains the CI-facing path where the workspace is accepted; with the current
+Xcode 26 environment, use the equivalent `xcodebuild -project Clair.xcodeproj ... test`
+command because the minimal committed workspace is rejected.
 
 `apple/ClairTests/TerminalTests.swift` covers partial/batched frame decoding, binary
 UTF-8 input, frame bounds, split escape-sequence sanitization, and transcript UTF-8
@@ -203,6 +233,6 @@ recovery, per-file watcher refresh, multi-tab isolation, and non-UTF-8 rejection
   alternate-screen/cursor/colour terminal grid; a reproducible libghostty development
   artifact is still unavailable in this checkout. The editor does not yet provide
   syntax highlighting, LSP, multi-cursor editing, Quick Open, search/replace, or a
-  searchable history browser; pane layout, Git operations, and CLI/MCP adapters remain
-  later queue items.
+  searchable history browser; PTY reattach remains P07, while Git-backed diff/operations
+  and CLI/MCP adapters remain later queue items.
 - Formal app icons, signing, notarization, and update delivery are not present.

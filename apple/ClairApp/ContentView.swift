@@ -258,6 +258,21 @@ private struct ProjectWorkspaceDetail: View {
         }
         .buttonStyle(.bordered)
 
+        Button(surface.isFocusedPaneMaximized ? "Restore Pane" : "Maximize Pane") {
+          surface.toggleMaximizeFocusedPane()
+        }
+        .buttonStyle(.bordered)
+
+        Button("Equalize") {
+          surface.equalizeSplits()
+        }
+        .buttonStyle(.bordered)
+
+        Button("Diff") {
+          surface.openDiff()
+        }
+        .buttonStyle(.bordered)
+
         Text(surface.fileTree.availability.displayName)
           .font(.caption.weight(.bold))
           .foregroundStyle(surface.fileTree.isAvailable ? .green : .orange)
@@ -276,16 +291,12 @@ private struct ProjectWorkspaceDetail: View {
 
         Divider()
 
-        if surface.isTerminalVisible, let terminalSession = surface.terminalSession {
-          ProjectTerminalPanel(
-            project: project,
-            session: terminalSession,
-            onHide: surface.hideTerminal,
-            onEnd: surface.endTerminal
-          )
-        } else {
-          ProjectEditorTabHost(state: state, project: project, surface: surface)
-        }
+        ProjectPaneLayoutView(
+          state: state,
+          project: project,
+          surface: surface,
+          node: surface.visibleLayout
+        )
       }
     }
     .alert("Editor command failed", isPresented: editorErrorIsPresented) {
@@ -363,6 +374,330 @@ private struct ProjectTerminalPanel: View {
     case .failed:
       .red
     }
+  }
+}
+
+private struct ProjectPaneLayoutView: View {
+  let state: BootstrapState
+  let project: Project
+  @ObservedObject var surface: ProjectSurfaceModel
+  let node: ProjectPaneNode
+
+  var body: some View {
+    nodeView(node)
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+  }
+
+  private func nodeView(_ node: ProjectPaneNode) -> AnyView {
+    switch node {
+    case .leaf(let leaf):
+      return AnyView(
+        ProjectPaneView(
+          state: state,
+          project: project,
+          surface: surface,
+          paneID: leaf.id
+        )
+      )
+    case .split(_, let orientation, let ratio, let first, let second):
+      return AnyView(
+        GeometryReader { proxy in
+          let fraction = CGFloat(min(max(ratio, 0.05), 0.95))
+          Group {
+            if orientation == .horizontal {
+              HStack(spacing: 0) {
+                nodeView(first)
+                  .frame(width: proxy.size.width * fraction)
+                Divider()
+                nodeView(second)
+                  .frame(maxWidth: .infinity, maxHeight: .infinity)
+              }
+            } else {
+              VStack(spacing: 0) {
+                nodeView(first)
+                  .frame(height: proxy.size.height * fraction)
+                Divider()
+                nodeView(second)
+                  .frame(maxWidth: .infinity, maxHeight: .infinity)
+              }
+            }
+          }
+        }
+      )
+    }
+  }
+}
+
+private struct ProjectPaneView: View {
+  let state: BootstrapState
+  let project: Project
+  @ObservedObject var surface: ProjectSurfaceModel
+  let paneID: UUID
+
+  @State private var pendingCloseTabID: String?
+
+  var body: some View {
+    VStack(spacing: 0) {
+      paneToolbar
+      Divider()
+      tabBar
+      Divider()
+      tabContent
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background(.background)
+    .overlay {
+      RoundedRectangle(cornerRadius: 4)
+        .stroke(
+          surface.isFocusedPane(paneID) ? Color.accentColor : Color.clear,
+          lineWidth: 2
+        )
+        .allowsHitTesting(false)
+    }
+    .contentShape(Rectangle())
+    .onTapGesture {
+      surface.focusPane(id: paneID)
+    }
+    .alert("Discard unsaved changes?", isPresented: pendingCloseIsPresented) {
+      Button("Cancel", role: .cancel) {
+        pendingCloseTabID = nil
+      }
+      Button("Discard", role: .destructive) {
+        guard let pendingCloseTabID else {
+          return
+        }
+        self.pendingCloseTabID = nil
+        surface.closeTab(id: pendingCloseTabID)
+      }
+    } message: {
+      Text("The editor buffer has changes that have not been saved to disk.")
+    }
+  }
+
+  private var paneToolbar: some View {
+    HStack(spacing: 6) {
+      Button(surface.isFocusedPane(paneID) ? "Focused" : "Focus") {
+        surface.focusPane(id: paneID)
+      }
+      .buttonStyle(.borderless)
+
+      Menu("Split") {
+        Button("Split Right") {
+          surface.focusPane(id: paneID)
+          surface.splitFocusedPane(orientation: .horizontal)
+        }
+        Button("Split Below") {
+          surface.focusPane(id: paneID)
+          surface.splitFocusedPane(orientation: .vertical)
+        }
+      }
+      .menuStyle(.borderlessButton)
+
+      Menu("Move Tab") {
+        if surface.paneIDs.count == 1 {
+          Text("No other panes")
+        } else {
+          ForEach(surface.paneIDs.filter { $0 != paneID }, id: \.self) { destination in
+            Button("Pane \(destination.uuidString.prefix(4))") {
+              surface.focusPane(id: paneID)
+              surface.moveActiveTab(to: destination)
+            }
+          }
+        }
+      }
+      .menuStyle(.borderlessButton)
+
+      Button(
+        surface.isFocusedPaneMaximized && surface.isFocusedPane(paneID) ? "Restore" : "Maximize"
+      ) {
+        surface.focusPane(id: paneID)
+        surface.toggleMaximizeFocusedPane()
+      }
+      .buttonStyle(.borderless)
+
+      Button("Close Pane", role: .destructive) {
+        surface.closePane(id: paneID)
+      }
+      .buttonStyle(.borderless)
+      .disabled(surface.paneIDs.count == 1)
+
+      Spacer(minLength: 4)
+
+      Button("Editor") {
+        surface.focusPane(id: paneID)
+        surface.hideTerminal()
+      }
+      .buttonStyle(.borderless)
+      Button("Terminal") {
+        surface.showTerminal(in: paneID)
+      }
+      .buttonStyle(.borderless)
+      Button("Diff") {
+        surface.openDiff(in: paneID)
+      }
+      .buttonStyle(.borderless)
+    }
+    .font(.caption)
+    .padding(.horizontal, 8)
+    .padding(.vertical, 5)
+    .background(.background.secondary)
+  }
+
+  private var tabBar: some View {
+    ScrollView(.horizontal) {
+      HStack(spacing: 2) {
+        ForEach(surface.tabs(in: paneID)) { tab in
+          HStack(spacing: 5) {
+            Button(displayTitle(for: tab)) {
+              surface.activateTab(id: tab.id)
+            }
+            .buttonStyle(.plain)
+            .lineLimit(1)
+
+            Button {
+              requestClose(tab)
+            } label: {
+              Image(systemName: "xmark")
+                .font(.caption2.weight(.bold))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close \(tab.title)")
+          }
+          .padding(.horizontal, 8)
+          .padding(.vertical, 5)
+          .background(
+            surface.activeTab(in: paneID)?.id == tab.id
+              ? Color.accentColor.opacity(0.16)
+              : Color.clear,
+            in: RoundedRectangle(cornerRadius: 5)
+          )
+        }
+        Spacer(minLength: 0)
+      }
+      .padding(.horizontal, 6)
+      .padding(.vertical, 3)
+    }
+    .scrollIndicators(.hidden)
+    .frame(minHeight: 29)
+  }
+
+  @ViewBuilder
+  private var tabContent: some View {
+    if let tab = surface.activeTab(in: paneID) {
+      switch tab.kind {
+      case .editor:
+        if let document = surface.editorDocument(tabID: tab.id) {
+          ProjectNativeEditorTab(tab: document, surface: surface)
+        } else {
+          ContentUnavailableView(
+            "Editor Unavailable",
+            systemImage: "doc.text.magnifyingglass",
+            description: Text("The file could not be restored in this Project.")
+          )
+        }
+      case .terminal:
+        if let session = surface.terminalSession(tabID: tab.id) {
+          ProjectTerminalPanel(
+            project: project,
+            session: session,
+            onHide: surface.hideTerminal,
+            onEnd: surface.endTerminal
+          )
+        } else {
+          ProjectRestoredTerminalView {
+            surface.startTerminal(tabID: tab.id)
+          }
+        }
+      case .diff:
+        ProjectDiffPreview()
+      }
+    } else {
+      VStack(spacing: 8) {
+        Image(systemName: "rectangle.split.3x1")
+          .font(.title2)
+          .foregroundStyle(.secondary)
+        Text("Empty pane")
+          .font(.headline)
+        Text("Open an editor, terminal, or diff tab.")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+  }
+
+  private var pendingCloseIsPresented: Binding<Bool> {
+    Binding(
+      get: { pendingCloseTabID != nil },
+      set: { isPresented in
+        if !isPresented {
+          pendingCloseTabID = nil
+        }
+      }
+    )
+  }
+
+  private func displayTitle(for tab: ProjectPaneTab) -> String {
+    guard tab.kind == .editor,
+      surface.editorDocument(tabID: tab.id)?.isDirty == true
+    else {
+      return tab.title
+    }
+    return "\(tab.title) •"
+  }
+
+  private func requestClose(_ tab: ProjectPaneTab) {
+    if tab.kind == .editor, surface.editorDocument(tabID: tab.id)?.isDirty == true {
+      pendingCloseTabID = tab.id
+    } else {
+      surface.closeTab(id: tab.id)
+    }
+  }
+}
+
+private struct ProjectRestoredTerminalView: View {
+  let onStart: () -> Void
+
+  var body: some View {
+    VStack(spacing: 12) {
+      Image(systemName: "terminal")
+        .font(.system(size: 34))
+        .foregroundStyle(.secondary)
+      Text("Terminal session is not running")
+        .font(.headline)
+      Text(
+        "The terminal layout was restored, but its transcript is intentionally not saved. Start a new local session."
+      )
+      .font(.caption)
+      .foregroundStyle(.secondary)
+      .multilineTextAlignment(.center)
+      .frame(maxWidth: 420)
+      Button("Start Terminal", action: onStart)
+        .buttonStyle(.borderedProminent)
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .padding(24)
+  }
+}
+
+private struct ProjectDiffPreview: View {
+  var body: some View {
+    VStack(spacing: 12) {
+      Image(systemName: "doc.on.doc")
+        .font(.system(size: 34))
+        .foregroundStyle(.secondary)
+      Text("Diff preview")
+        .font(.headline)
+      Text(
+        "This pane is ready for Project diffs. Git status and change navigation arrive in the Git working-tree slice."
+      )
+      .font(.caption)
+      .foregroundStyle(.secondary)
+      .multilineTextAlignment(.center)
+      .frame(maxWidth: 420)
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .padding(24)
   }
 }
 

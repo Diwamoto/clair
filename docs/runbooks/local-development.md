@@ -72,13 +72,48 @@ tabs return.
 While Clair is running, create, rename, and delete a file from another terminal. The
 file tree should refresh without reopening the Project. Delete the active Project
 root and recreate it; the Files panel should show **Folder Missing** and then return
-to the available tree when the root is restored. P05 owns durable workspace-state
-restoration.
+to the available tree when the root is restored. P05 persists this file-tree state
+alongside the Project's pane layout.
 
 The catalog is stored per channel at
 `~/Library/Application Support/Clair Dev/projects-v1.json` (or `Clair` for Stable).
-Do not remove this file as part of normal recovery; it contains the local Project
-catalog. Build artifacts can still be removed with `make clean-artifacts`.
+Mixed pane snapshots are stored separately at
+`~/Library/Application Support/Clair Dev/workspace-v1.json` (or `Clair` for
+Stable). Do not remove either file as part of normal recovery; the first contains the
+local Project catalog and the second contains the restored workspace layout. Build
+artifacts can still be removed with `make clean-artifacts`.
+
+## Verify mixed panes and workspace persistence (P05)
+
+Build and launch the Dev app with the project-scoped command used by the current Xcode
+environment:
+
+```sh
+xcodebuild -project Clair.xcodeproj -scheme "Clair Dev" -configuration Debug \
+  -derivedDataPath .build/xcode/p05-manual CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGNING_REQUIRED=NO build
+open -n ".build/xcode/p05-manual/Build/Products/Debug/Clair Dev.app"
+```
+
+Open an editor file in a Project. From the pane toolbar, add a **Terminal** and a
+**Diff** tab, then use **Split Right** and **Split Below** to make a nested layout.
+Move the active tab to another pane, focus each pane, maximize and restore it, equalize
+the split ratios, and close a non-final pane. Switch to two other Projects and confirm
+their layouts, file selections, and editor tabs remain independent.
+
+Quit normally, relaunch, and confirm that the tree selection, pane structure, active
+tabs, focus, and maximize state return for each Project. A terminal tab restores only
+as a placeholder: start a new terminal before using it, and do not expect the old
+transcript or PTY session to return. The diff tab is a navigation placeholder until
+P08 supplies Git-backed content.
+
+For an abnormal-restart smoke check, use only disposable fixture Projects: force-quit
+the app after a completed layout action, relaunch, and confirm that the last atomically
+saved workspace state or a safe one-pane fallback appears. The automated XCTest suite
+covers corrupt and missing workspace files. If testing corruption manually, first copy
+`workspace-v1.json` while the app is quit, replace only that copied test profile's
+file with invalid JSON, relaunch to verify the catalog remains intact and a default
+surface appears, then restore the backup before continuing.
 
 ## Verify the native editor (P04)
 
@@ -104,7 +139,8 @@ instead of displaying replacement characters.
 
 Recovery data is channel-separated and kept outside the repository at
 `~/Library/Application Support/Clair Dev/editor-history-v1.json` (or `Clair` for
-Stable). P04 does not persist pane/tab layout; that is P05.
+Stable). P05 persists pane/tab descriptors and workspace state separately; it does not
+persist editor buffers, terminal transcripts, or live PTY sessions.
 Build outputs are:
 
 - `.build/xcode/stable/Build/Products/Debug/Clair.app`

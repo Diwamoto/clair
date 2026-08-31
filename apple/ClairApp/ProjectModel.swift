@@ -124,6 +124,265 @@ struct ProjectStoreSnapshot: Codable, Equatable, Sendable {
   }
 }
 
+enum ProjectPaneOrientation: String, Codable, CaseIterable, Sendable {
+  case horizontal
+  case vertical
+}
+
+enum ProjectPaneTabKind: String, Codable, CaseIterable, Sendable {
+  case editor
+  case terminal
+  case diff
+}
+
+struct ProjectPaneTab: Codable, Equatable, Identifiable, Sendable {
+  let id: String
+  let kind: ProjectPaneTabKind
+  var title: String
+  let filePath: String?
+
+  static func editor(path: String, title: String) -> ProjectPaneTab {
+    ProjectPaneTab(
+      id: path,
+      kind: .editor,
+      title: title,
+      filePath: path
+    )
+  }
+
+  static func terminal(id: UUID = UUID()) -> ProjectPaneTab {
+    ProjectPaneTab(
+      id: "terminal:\(id.uuidString)",
+      kind: .terminal,
+      title: "Terminal",
+      filePath: nil
+    )
+  }
+
+  static func diff(id: UUID = UUID()) -> ProjectPaneTab {
+    ProjectPaneTab(
+      id: "diff:\(id.uuidString)",
+      kind: .diff,
+      title: "Diff Preview",
+      filePath: nil
+    )
+  }
+}
+
+struct ProjectPaneLeaf: Codable, Equatable, Sendable {
+  let id: UUID
+  var tabs: [ProjectPaneTab]
+  var activeTabID: String?
+
+  init(
+    id: UUID = UUID(),
+    tabs: [ProjectPaneTab] = [],
+    activeTabID: String? = nil
+  ) {
+    self.id = id
+    self.tabs = tabs
+    self.activeTabID = activeTabID
+  }
+}
+
+indirect enum ProjectPaneNode: Codable, Equatable, Sendable {
+  case leaf(ProjectPaneLeaf)
+  case split(
+    id: UUID,
+    orientation: ProjectPaneOrientation,
+    ratio: Double,
+    first: ProjectPaneNode,
+    second: ProjectPaneNode
+  )
+
+  var id: UUID {
+    switch self {
+    case .leaf(let leaf):
+      leaf.id
+    case .split(let id, _, _, _, _):
+      id
+    }
+  }
+
+  var leafIDs: [UUID] {
+    switch self {
+    case .leaf(let leaf):
+      [leaf.id]
+    case .split(_, _, _, let first, let second):
+      first.leafIDs + second.leafIDs
+    }
+  }
+
+  var leaves: [ProjectPaneLeaf] {
+    switch self {
+    case .leaf(let leaf):
+      [leaf]
+    case .split(_, _, _, let first, let second):
+      first.leaves + second.leaves
+    }
+  }
+
+  var isLeaf: Bool {
+    if case .leaf = self {
+      return true
+    }
+    return false
+  }
+
+  func leaf(withID leafID: UUID) -> ProjectPaneLeaf? {
+    switch self {
+    case .leaf(let leaf):
+      return leaf.id == leafID ? leaf : nil
+    case .split(_, _, _, let first, let second):
+      return first.leaf(withID: leafID) ?? second.leaf(withID: leafID)
+    }
+  }
+
+  func contains(nodeID: UUID) -> Bool {
+    switch self {
+    case .leaf(let leaf):
+      leaf.id == nodeID
+    case .split(let id, _, _, let first, let second):
+      id == nodeID || first.contains(nodeID: nodeID) || second.contains(nodeID: nodeID)
+    }
+  }
+
+  func validate(
+    nodeIDs: inout Set<UUID>,
+    tabIDs: inout Set<String>
+  ) -> Bool {
+    guard nodeIDs.insert(id).inserted else {
+      return false
+    }
+
+    switch self {
+    case .leaf(let leaf):
+      let ids = Set(leaf.tabs.map(\.id))
+      guard ids.count == leaf.tabs.count else {
+        return false
+      }
+      if let activeTabID = leaf.activeTabID, !ids.contains(activeTabID) {
+        return false
+      }
+      for tab in leaf.tabs {
+        guard !tab.id.isEmpty, !tab.title.isEmpty, tabIDs.insert(tab.id).inserted else {
+          return false
+        }
+        switch tab.kind {
+        case .editor:
+          guard let filePath = tab.filePath, !filePath.isEmpty else {
+            return false
+          }
+        case .terminal, .diff:
+          guard tab.filePath == nil else {
+            return false
+          }
+        }
+      }
+      return true
+    case .split(_, _, let ratio, let first, let second):
+      guard ratio.isFinite, (0.05...0.95).contains(ratio) else {
+        return false
+      }
+      guard first.id != second.id else {
+        return false
+      }
+      return first.validate(nodeIDs: &nodeIDs, tabIDs: &tabIDs)
+        && second.validate(nodeIDs: &nodeIDs, tabIDs: &tabIDs)
+    }
+  }
+}
+
+struct ProjectSurfaceSnapshot: Codable, Equatable, Sendable {
+  static let currentSchemaVersion = 1
+
+  var schemaVersion: Int
+  let projectID: UUID
+  var root: ProjectPaneNode
+  var focusedPaneID: UUID
+  var maximizedPaneID: UUID?
+  var selectedNodeID: String?
+  var expandedNodeIDs: [String]
+
+  static func empty(for projectID: UUID) -> ProjectSurfaceSnapshot {
+    let leaf = ProjectPaneLeaf()
+    return ProjectSurfaceSnapshot(
+      schemaVersion: currentSchemaVersion,
+      projectID: projectID,
+      root: .leaf(leaf),
+      focusedPaneID: leaf.id,
+      maximizedPaneID: nil,
+      selectedNodeID: nil,
+      expandedNodeIDs: []
+    )
+  }
+
+  func validated(for expectedProjectID: UUID) -> ProjectSurfaceSnapshot? {
+    guard schemaVersion == Self.currentSchemaVersion, projectID == expectedProjectID else {
+      return nil
+    }
+    var nodeIDs = Set<UUID>()
+    var tabIDs = Set<String>()
+    guard root.validate(nodeIDs: &nodeIDs, tabIDs: &tabIDs) else {
+      return nil
+    }
+    guard root.leafIDs.contains(focusedPaneID) else {
+      return nil
+    }
+    if let maximizedPaneID, !root.leafIDs.contains(maximizedPaneID) {
+      return nil
+    }
+    return self
+  }
+}
+
+struct ProjectWorkspaceStoreSnapshot: Codable, Equatable, Sendable {
+  static let currentSchemaVersion = 1
+
+  var schemaVersion: Int
+  var surfaces: [ProjectSurfaceSnapshot]
+
+  static var empty: ProjectWorkspaceStoreSnapshot {
+    ProjectWorkspaceStoreSnapshot(
+      schemaVersion: currentSchemaVersion,
+      surfaces: []
+    )
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case schemaVersion
+    case surfaces
+  }
+
+  init(
+    schemaVersion: Int,
+    surfaces: [ProjectSurfaceSnapshot]
+  ) {
+    self.schemaVersion = schemaVersion
+    self.surfaces = surfaces
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+    var surfaceContainer = try container.nestedUnkeyedContainer(forKey: .surfaces)
+    var decodedSurfaces: [ProjectSurfaceSnapshot] = []
+    while !surfaceContainer.isAtEnd {
+      let itemDecoder = try surfaceContainer.superDecoder()
+      if let surface = try? ProjectSurfaceSnapshot(from: itemDecoder) {
+        decodedSurfaces.append(surface)
+      }
+    }
+    surfaces = decodedSurfaces
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(schemaVersion, forKey: .schemaVersion)
+    try container.encode(surfaces, forKey: .surfaces)
+  }
+}
+
 enum ProjectFileTreeScanner {
   static func scan(
     rootURL: URL,
@@ -391,6 +650,10 @@ enum ProjectError: Error, Equatable, LocalizedError, Sendable {
   case storeIO(String)
   case unsupportedStoreVersion(Int)
   case malformedStore
+  case workspaceUnavailable
+  case workspaceIO(String)
+  case unsupportedWorkspaceVersion(Int)
+  case malformedWorkspaceStore
 
   var errorDescription: String? {
     switch self {
@@ -418,6 +681,14 @@ enum ProjectError: Error, Equatable, LocalizedError, Sendable {
       "Clair does not support Project store version \(version)."
     case .malformedStore:
       "Clair's local Project store is malformed."
+    case .workspaceUnavailable:
+      "Clair's local workspace store is unavailable."
+    case .workspaceIO(let message):
+      "Clair could not update the local workspace store: \(message)"
+    case .unsupportedWorkspaceVersion(let version):
+      "Clair does not support workspace store version \(version)."
+    case .malformedWorkspaceStore:
+      "Clair's local workspace store is malformed."
     }
   }
 }
