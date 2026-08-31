@@ -13,7 +13,9 @@ discussionや外部共有が必要な場合だけ使い、通常のPoC実装で�
 
 - `done`: code、functional checks、durable docsが統合済み。
 - `next`: dependency-readyで、次に着手するitem。
+- `active`: 現在実装・検証中のitem。未完了のまま別itemへ進まない。
 - `queued`: dependencyが揃えば着手できる。
+- `blocked`: 追加のproduct/architecture決定または外部状態が必要なitem。
 - `final-only`: dogfooding可能になるまで実行しない統合検証。
 
 通常のitemではtargeted build、lint、unit、integration、manual functional smokeだけを行う。

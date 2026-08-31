@@ -1,0 +1,4 @@
+interface:
+  display_name: "Clair Local Issue Executor"
+  short_description: "Implement one local Clair PoC item"
+  default_prompt: "Use $clair-issue-executor to implement one local Clair PoC queue item, verify it functionally, reconcile the queue, and stop before the next item."

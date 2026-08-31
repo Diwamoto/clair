@@ -27,6 +27,8 @@ handoff:
   returns a project code such as `p0012-editor-foundation`.
 - `$project-implementer <project code>` implements and verifies that documented
   project.
+- `$clair-issue-executor P01` or `$clair-issue-executor next` implements one
+  local PoC queue item and stops before the next item.
 - `$clair-session-commit` partitions finished work, validates each slice,
   commits exact path sets, and pushes the current branch when explicitly asked.
 
