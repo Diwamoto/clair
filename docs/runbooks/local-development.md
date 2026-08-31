@@ -60,6 +60,22 @@ reports a duplicate instead of adding a second row. Try a missing path, a regula
 file, and a folder without read access. Each command should report its local error
 while the already-open Projects and active selection remain intact.
 
+## Verify the workspace shell and file tree
+
+With an active Project, confirm that the Files panel shows nested directories and
+files. Expand a directory and select a file; Clair should open a read-only fixture
+tab showing the file path and content. Use **Reveal in Tree** from the tab to return
+the selection to the file tree. Open a second Project and confirm that its tree and
+tabs contain only its own files; switch back and confirm the first Project's selection
+and tabs return.
+
+While Clair is running, create, rename, and delete a file from another terminal. The
+file tree should refresh without reopening the Project. Delete the active Project
+root and recreate it; the Files panel should show **Folder Missing** and then return
+to the available tree when the root is restored. P02 fixture tabs are intentionally
+read-only; editing, saving, undo, and durable workspace-state restoration are later
+queue items.
+
 The catalog is stored per channel at
 `~/Library/Application Support/Clair Dev/projects-v1.json` (or `Clair` for Stable).
 Do not remove this file as part of normal recovery; it contains the local Project

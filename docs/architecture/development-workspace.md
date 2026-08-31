@@ -2,7 +2,7 @@
 
 ## Status
 
-Current as of local PoC item `P01 Project and command kernel`.
+Current as of local PoC item `P02 Workspace shell and file tree`.
 
 ## Workspace boundary
 
@@ -77,6 +77,30 @@ errors, fixed risk metadata, deterministic availability reasons, and `aiAvailabl
 metadata. The SwiftUI sidebar invokes the same `ClairCommand` execution path for open,
 switch, rename, color, reorder, and close. CLI/MCP adapters remain later slices.
 
+## Workspace shell and file tree
+
+Each open Project has a `ProjectSurfaceModel` keyed by its stable `ProjectID`. The
+surface owns the in-memory file tree, expanded directory IDs, selected node, and
+read-only fixture editor tabs. Switching Projects changes the observed surface, so
+tree selection, expansion, and tabs cannot leak between Projects. Surface state is
+currently memory-only; workspace persistence is a later P05 responsibility.
+
+`ProjectFileTreeScanner` recursively enumerates the active root and sorts directories
+before files using a stable localized name/path order. Node identity is the
+standardized absolute path. Directory symlinks are shown as leaf nodes and are not
+followed, and `.git` contents are omitted from the user-facing tree. A child directory
+that cannot be read is omitted while an unreadable root is represented by the existing
+Project availability state.
+
+`ProjectFileSystemWatcher` uses macOS directory file-system sources. It watches the
+root and every currently discovered child directory, rebuilding the watch set after a
+change so newly created directories are covered. If the root is missing, its nearest
+existing parent is watched; root recreation therefore returns the surface to the
+available state without a manual reopen. Events trigger a full tree rescan on the
+MainActor. The P02 fixture tab previews UTF-8-decoded file content and intentionally
+does not implement editing, saving, undo, or disk-wins reload; those behaviors belong
+to P04.
+
 ## Developer command boundary
 
 The root `Makefile` is the supported local and CI interface. Rust 1.98.0 is
@@ -97,13 +121,16 @@ are disposable and ignored. `THIRD_PARTY_NOTICES.md` is the tracked notice sourc
 
 `apple/ClairTests/ProjectKernelTests.swift` covers three folder types in one process,
 canonical-root duplicate rejection, invalid/file/unreadable-root isolation, stable ID
-reopen, metadata/order persistence, store versioning, and command risk/availability
-preflight. `make test-swift` runs these tests in the Dev host app.
+reopen, metadata/order persistence, store versioning, command risk/availability
+preflight, nested tree enumeration, fixture tab selection, external create/rename/
+delete refresh, missing-root recovery, and Project surface isolation. `make test-swift`
+runs these tests in the Dev host app.
 
 ## Current limitations
 
 - Builds are unsigned and App Sandbox is disabled.
 - `clair-ptyhost` is a process/smoke skeleton and does not own a PTY.
 - The C ABI is a link/lifecycle smoke path, not the future domain interface.
-- File tree, editor, terminal, pane layout, Git operations, and CLI/MCP adapters remain later queue items.
+- The editor is currently a read-only fixture tab; terminal, pane layout, Git operations,
+  and CLI/MCP adapters remain later queue items.
 - Formal app icons, signing, notarization, and update delivery are not present.

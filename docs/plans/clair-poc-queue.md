@@ -70,16 +70,31 @@ P01から最小kernelを育て、後から既存featureを別実装へ置き換�
 
 ### P02 Workspace shell and file tree
 
-- Status: `next`
+- Status: `done`
 - Depends on: P01。
 - Outcome: active Projectにsidebar/file treeとeditor tab hostが表示され、folder変更が追従する。
 - Scope: watcher-backed tree、expand/select/reveal、missing root state、fixture editor tab。
 - Functional checks: nested tree open、external create/rename/delete refresh、Project切替でstateが混線しない。
 - Legacy issue coverage: #10のfile navigation subset。
+- Validation (2026-08-31): `xcodebuild -project Clair.xcodeproj -scheme "Clair Dev" -configuration Debug
+  -derivedDataPath .build/xcode/tests CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO test` passed (15 Swift
+  tests, including nested enumeration, external create/rename/delete watcher refresh, missing-root recovery,
+  fixture tab selection, and Project surface isolation). `xcodebuild -project Clair.xcodeproj -scheme "Clair
+  Stable" ... build`, the equivalent Dev build, and Dev `analyze` passed. `cargo test --workspace --locked`,
+  `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `swift format
+  lint --recursive --parallel --strict apple`, Xcode project validation, FFI/app-link/bundle/artifact smoke all
+  passed. The repository's `make test-swift` wrapper could not use the existing minimal `Clair.xcworkspace` with
+  Xcode 26.6 (`not a workspace file`), so the equivalent project-scoped commands were used; the same wrapper
+  limitation remains an existing P01 environment issue.
+- Durable detail: [development workspace architecture](../architecture/development-workspace.md) and
+  [local development runbook](../runbooks/local-development.md) now document the Project surface, watcher,
+  fixture tab, and P02 manual checks.
+- Deferred: editable editor behavior, save/undo, disk-wins reload, durable workspace persistence, and search/history
+  remain in P04-P06; terminal, pane, Git, and CLI/MCP behavior remains in its downstream queue items.
 
 ### P03 Native terminal feasibility and live shell
 
-- Status: `queued`
+- Status: `next`
 - Depends on: P01。
 - Outcome: native terminal surfaceで実際のzshへinputし、resize、scrollback、selectionできる。
 - Scope: timeboxed libghostty embed feasibility、`clair-ptyhost` spawn/attach、raw bytes、IME/CJK/OSC smoke。

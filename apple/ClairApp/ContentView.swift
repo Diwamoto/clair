@@ -147,68 +147,8 @@ struct ContentView: View {
 
   @ViewBuilder
   private var projectDetail: some View {
-    if let project = workspace.activeProject {
-      ScrollView {
-        VStack(alignment: .leading, spacing: 24) {
-          HStack(spacing: 14) {
-            Image(systemName: "folder.fill")
-              .font(.system(size: 34, weight: .semibold))
-              .foregroundStyle(project.color.swiftUIColor)
-
-            VStack(alignment: .leading, spacing: 3) {
-              Text(project.name)
-                .font(.largeTitle.weight(.semibold))
-              Text("Project workspace")
-                .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            Text(project.availability.displayName)
-              .font(.caption.weight(.bold))
-              .foregroundStyle(project.availability.isAvailable ? .green : .orange)
-              .padding(.horizontal, 10)
-              .padding(.vertical, 5)
-              .background(.quaternary, in: Capsule())
-          }
-
-          GroupBox("Project") {
-            Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 12) {
-              detailRow(label: "ID", value: project.id.uuidString)
-              detailRow(label: "Root", value: project.rootURL.path)
-              detailRow(label: "Color", value: project.color.displayName)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .textSelection(.enabled)
-            .padding(.vertical, 4)
-          }
-
-          GroupBox("Runtime") {
-            Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 12) {
-              detailRow(label: "Channel", value: state.profile.channel.rawValue.uppercased())
-              detailRow(label: "Bundle", value: state.profile.bundleIdentifier)
-              detailRow(label: "Preferences", value: state.profile.preferencesDomain)
-              detailRow(label: "Data", value: state.applicationSupportURL?.path ?? "Unavailable")
-              detailRow(label: "Rust core", value: rustStatus)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .textSelection(.enabled)
-            .padding(.vertical, 4)
-          }
-
-          if let errorMessage = state.errorMessage {
-            Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-              .foregroundStyle(.red)
-              .fixedSize(horizontal: false, vertical: true)
-          } else {
-            Label("Swift → Rust smoke path is ready", systemImage: "checkmark.circle.fill")
-              .foregroundStyle(.green)
-          }
-
-          Spacer(minLength: 0)
-        }
-        .padding(32)
-      }
+    if let project = workspace.activeProject, let surface = workspace.activeSurface {
+      ProjectWorkspaceDetail(state: state, project: project, surface: surface)
     } else {
       VStack(spacing: 12) {
         Image(systemName: "folder.badge.plus")
@@ -282,6 +222,347 @@ struct ContentView: View {
       )
     )
     cancelRename()
+  }
+
+}
+
+private struct ProjectWorkspaceDetail: View {
+  let state: BootstrapState
+  let project: Project
+  @ObservedObject var surface: ProjectSurfaceModel
+
+  var body: some View {
+    VStack(spacing: 0) {
+      HStack(spacing: 12) {
+        Image(systemName: "folder.fill")
+          .font(.title2.weight(.semibold))
+          .foregroundStyle(project.color.swiftUIColor)
+
+        VStack(alignment: .leading, spacing: 2) {
+          Text(project.name)
+            .font(.headline)
+          Text(project.rootURL.path)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+        }
+
+        Spacer()
+
+        Text(surface.fileTree.availability.displayName)
+          .font(.caption.weight(.bold))
+          .foregroundStyle(surface.fileTree.isAvailable ? .green : .orange)
+          .padding(.horizontal, 9)
+          .padding(.vertical, 5)
+          .background(.quaternary, in: Capsule())
+      }
+      .padding(.horizontal, 16)
+      .padding(.vertical, 12)
+
+      Divider()
+
+      HStack(spacing: 0) {
+        ProjectFileTreeView(surface: surface)
+          .frame(minWidth: 220, idealWidth: 270, maxWidth: 360)
+
+        Divider()
+
+        ProjectEditorTabHost(state: state, project: project, surface: surface)
+      }
+    }
+  }
+}
+
+private struct ProjectFileTreeView: View {
+  @ObservedObject var surface: ProjectSurfaceModel
+
+  var body: some View {
+    VStack(spacing: 0) {
+      HStack {
+        Label("Files", systemImage: "folder")
+          .font(.headline)
+        Spacer()
+        Button {
+          surface.reload()
+        } label: {
+          Image(systemName: "arrow.clockwise")
+        }
+        .buttonStyle(.borderless)
+        .help("Refresh file tree")
+      }
+      .padding(.horizontal, 12)
+      .padding(.vertical, 9)
+
+      Divider()
+
+      if let root = surface.fileTree.root, surface.fileTree.isAvailable {
+        ScrollViewReader { proxy in
+          ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+              ProjectFileTreeRow(node: root, surface: surface, depth: 0)
+            }
+            .padding(.vertical, 4)
+          }
+          .onChange(of: surface.selectedNodeID, initial: false) { _, nodeID in
+            guard let nodeID else { return }
+            withAnimation(.easeInOut(duration: 0.15)) {
+              proxy.scrollTo(nodeID, anchor: .center)
+            }
+          }
+        }
+      } else {
+        ContentUnavailableView(
+          fileTreeTitle,
+          systemImage: fileTreeSystemImage,
+          description: Text(fileTreeMessage)
+        )
+        .padding(16)
+      }
+    }
+    .frame(maxHeight: .infinity)
+    .background(.background.secondary)
+  }
+
+  private var fileTreeTitle: String {
+    switch surface.fileTree.availability {
+    case .available:
+      "No Files"
+    case .missing:
+      "Folder Missing"
+    case .notDirectory:
+      "Not a Folder"
+    case .unreadable:
+      "Folder Unavailable"
+    }
+  }
+
+  private var fileTreeSystemImage: String {
+    surface.fileTree.availability == .available
+      ? "doc"
+      : "exclamationmark.triangle"
+  }
+
+  private var fileTreeMessage: String {
+    switch surface.fileTree.availability {
+    case .available:
+      "This Project folder is empty."
+    case .missing:
+      "The folder may have been moved or deleted. Clair will refresh when it returns."
+    case .notDirectory:
+      "The Project root is no longer a folder."
+    case .unreadable:
+      "Clair cannot read this Project folder."
+    }
+  }
+}
+
+private struct ProjectFileTreeRow: View {
+  let node: ProjectFileTreeNode
+  @ObservedObject var surface: ProjectSurfaceModel
+  let depth: Int
+
+  var body: some View {
+    VStack(spacing: 0) {
+      HStack(spacing: 5) {
+        if node.isDirectory {
+          Button {
+            surface.toggleExpansion(for: node.id)
+          } label: {
+            Image(
+              systemName: surface.isExpanded(node.id)
+                ? "chevron.down"
+                : "chevron.right"
+            )
+            .font(.caption2.weight(.bold))
+            .frame(width: 14, height: 18)
+          }
+          .buttonStyle(.plain)
+        } else {
+          Color.clear
+            .frame(width: 14, height: 18)
+        }
+
+        Image(systemName: node.isDirectory ? "folder" : "doc.text")
+          .foregroundStyle(node.isDirectory ? .secondary : .primary)
+        Text(node.name)
+          .lineLimit(1)
+        Spacer(minLength: 0)
+      }
+      .padding(.leading, CGFloat(depth * 14) + 8)
+      .padding(.trailing, 8)
+      .padding(.vertical, 3)
+      .background(
+        surface.selectedNodeID == node.id
+          ? Color.accentColor.opacity(0.2)
+          : Color.clear
+      )
+      .contentShape(Rectangle())
+      .onTapGesture {
+        surface.select(nodeID: node.id)
+      }
+      .id(node.id)
+
+      if node.isDirectory && surface.isExpanded(node.id) {
+        ForEach(node.children ?? []) { child in
+          ProjectFileTreeRow(node: child, surface: surface, depth: depth + 1)
+        }
+      }
+    }
+  }
+}
+
+private struct ProjectEditorTabHost: View {
+  let state: BootstrapState
+  let project: Project
+  @ObservedObject var surface: ProjectSurfaceModel
+
+  var body: some View {
+    VStack(spacing: 0) {
+      if surface.editorTabs.isEmpty {
+        ProjectWorkspaceOverview(state: state, project: project, surface: surface)
+      } else {
+        tabBar
+        Divider()
+        if let tab = surface.activeTab {
+          ProjectFixtureEditorTab(tab: tab, surface: surface)
+        } else {
+          ContentUnavailableView(
+            "No Active Tab",
+            systemImage: "rectangle.on.rectangle",
+            description: Text("Select a file tab to continue.")
+          )
+        }
+      }
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background(.background)
+  }
+
+  private var tabBar: some View {
+    ScrollView(.horizontal) {
+      HStack(spacing: 2) {
+        ForEach(surface.editorTabs) { tab in
+          HStack(spacing: 5) {
+            Button(tab.title) {
+              surface.activateTab(id: tab.id)
+            }
+            .buttonStyle(.plain)
+            .lineLimit(1)
+
+            Button {
+              surface.closeTab(id: tab.id)
+            } label: {
+              Image(systemName: "xmark")
+                .font(.caption2.weight(.bold))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close \(tab.title)")
+          }
+          .padding(.horizontal, 9)
+          .padding(.vertical, 6)
+          .background(
+            surface.activeTabID == tab.id
+              ? Color.accentColor.opacity(0.16)
+              : Color.clear,
+            in: RoundedRectangle(cornerRadius: 5)
+          )
+        }
+        Spacer(minLength: 0)
+      }
+      .padding(.horizontal, 8)
+      .padding(.vertical, 5)
+    }
+    .scrollIndicators(.hidden)
+  }
+}
+
+private struct ProjectFixtureEditorTab: View {
+  let tab: ProjectEditorTab
+  @ObservedObject var surface: ProjectSurfaceModel
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      HStack(spacing: 8) {
+        Image(systemName: "doc.text")
+          .foregroundStyle(.secondary)
+        Text(tab.url.path)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+        Spacer()
+        Button("Reveal in Tree") {
+          surface.reveal(nodeID: tab.id)
+        }
+        .buttonStyle(.borderless)
+      }
+      .padding(.horizontal, 16)
+      .padding(.vertical, 9)
+
+      Divider()
+
+      ScrollView {
+        Text(tab.content)
+          .font(.system(.body, design: .monospaced))
+          .textSelection(.enabled)
+          .frame(maxWidth: .infinity, alignment: .topLeading)
+          .padding(20)
+      }
+      .background(.background)
+    }
+  }
+}
+
+private struct ProjectWorkspaceOverview: View {
+  let state: BootstrapState
+  let project: Project
+  @ObservedObject var surface: ProjectSurfaceModel
+
+  var body: some View {
+    ScrollView {
+      VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 5) {
+          Text("Workspace shell")
+            .font(.largeTitle.weight(.semibold))
+          Text("Select a file in the tree to open a fixture editor tab.")
+            .foregroundStyle(.secondary)
+        }
+
+        GroupBox("Project") {
+          Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 10) {
+            detailRow(label: "ID", value: project.id.uuidString)
+            detailRow(label: "Root", value: project.rootURL.path)
+            detailRow(label: "Color", value: project.color.displayName)
+            detailRow(label: "Tree", value: surface.fileTree.availability.displayName)
+          }
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .textSelection(.enabled)
+          .padding(.vertical, 4)
+        }
+
+        GroupBox("Runtime") {
+          Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 10) {
+            detailRow(label: "Channel", value: state.profile.channel.rawValue.uppercased())
+            detailRow(label: "Bundle", value: state.profile.bundleIdentifier)
+            detailRow(label: "Preferences", value: state.profile.preferencesDomain)
+            detailRow(label: "Data", value: state.applicationSupportURL?.path ?? "Unavailable")
+            detailRow(label: "Rust core", value: rustStatus)
+          }
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .textSelection(.enabled)
+          .padding(.vertical, 4)
+        }
+
+        if let errorMessage = state.errorMessage {
+          Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+            .foregroundStyle(.red)
+            .fixedSize(horizontal: false, vertical: true)
+        } else {
+          Label("Swift → Rust smoke path is ready", systemImage: "checkmark.circle.fill")
+            .foregroundStyle(.green)
+        }
+      }
+      .padding(28)
+    }
   }
 
   private var rustStatus: String {

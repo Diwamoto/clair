@@ -171,6 +171,125 @@ final class ProjectKernelTests: XCTestCase {
     )
   }
 
+  func testFileTreeLoadsNestedFoldersAndOpensFixtureEditorTab() throws {
+    let fixture = try Fixture()
+    let root = try fixture.makeDirectory(named: "tree-project")
+    let sources = root.appendingPathComponent("Sources", isDirectory: true)
+    try FileManager.default.createDirectory(at: sources, withIntermediateDirectories: true)
+    let file = sources.appendingPathComponent("main.swift")
+    try Data("print(\"hello\")\n".utf8).write(to: file)
+    let workspace = fixture.makeWorkspace()
+
+    _ = workspace.execute(.openProject(OpenProjectCommand(rootURL: root)))
+    let surface = try XCTUnwrap(workspace.activeSurface)
+    let rootNode = try XCTUnwrap(surface.fileTree.root)
+    let sourcesNode = try XCTUnwrap(surface.fileTree.node(withID: sources.path))
+
+    XCTAssertEqual(surface.fileTree.availability, .available)
+    XCTAssertEqual(rootNode.name, root.lastPathComponent)
+    XCTAssertEqual(sourcesNode.children?.map(\.name), ["main.swift"])
+    XCTAssertFalse(surface.isExpanded(sources.path))
+
+    surface.toggleExpansion(for: sources.path)
+    XCTAssertTrue(surface.isExpanded(sources.path))
+    surface.select(nodeID: file.path)
+
+    XCTAssertEqual(surface.selectedNodeID, file.path)
+    XCTAssertEqual(surface.activeTab?.id, file.path)
+    XCTAssertEqual(surface.activeTab?.title, "main.swift")
+    XCTAssertEqual(surface.activeTab?.content, "print(\"hello\")\n")
+  }
+
+  func testFileTreeWatcherRefreshesExternalCreateRenameAndDelete() async throws {
+    let fixture = try Fixture()
+    let root = try fixture.makeDirectory(named: "watched-project")
+    let workspace = fixture.makeWorkspace()
+
+    _ = workspace.execute(.openProject(OpenProjectCommand(rootURL: root)))
+    let surface = try XCTUnwrap(workspace.activeSurface)
+    let nested = root.appendingPathComponent("Nested", isDirectory: true)
+    let created = nested.appendingPathComponent("created.txt")
+    let renamed = nested.appendingPathComponent("renamed.txt")
+
+    try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+    await waitForFileTree(surface) { snapshot in
+      snapshot.node(withID: nested.path) != nil
+    }
+
+    try Data("created".utf8).write(to: created)
+    await waitForFileTree(surface) { snapshot in
+      snapshot.node(withID: created.path) != nil
+    }
+
+    try FileManager.default.moveItem(at: created, to: renamed)
+    await waitForFileTree(surface) { snapshot in
+      snapshot.node(withID: created.path) == nil
+        && snapshot.node(withID: renamed.path) != nil
+    }
+
+    try FileManager.default.removeItem(at: renamed)
+    await waitForFileTree(surface) { snapshot in
+      snapshot.node(withID: renamed.path) == nil
+    }
+  }
+
+  func testFileTreeShowsMissingRootAndRecoversWhenRootReturns() async throws {
+    let fixture = try Fixture()
+    let root = try fixture.makeDirectory(named: "recoverable-project")
+    let workspace = fixture.makeWorkspace()
+
+    _ = workspace.execute(.openProject(OpenProjectCommand(rootURL: root)))
+    let surface = try XCTUnwrap(workspace.activeSurface)
+    try FileManager.default.removeItem(at: root)
+
+    await waitForFileTree(surface) { snapshot in
+      snapshot.availability == .missing
+    }
+
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    let restoredFile = root.appendingPathComponent("restored.txt")
+    try Data("restored".utf8).write(to: restoredFile)
+    await waitForFileTree(surface) { snapshot in
+      snapshot.availability == .available
+        && snapshot.node(withID: restoredFile.path) != nil
+    }
+  }
+
+  func testProjectSwitchKeepsFileTreeSelectionAndTabsIsolated() throws {
+    let fixture = try Fixture()
+    let firstRoot = try fixture.makeDirectory(named: "first-tree-project")
+    let secondRoot = try fixture.makeDirectory(named: "second-tree-project")
+    let firstFile = firstRoot.appendingPathComponent("first.txt")
+    let secondFile = secondRoot.appendingPathComponent("second.txt")
+    try Data("first".utf8).write(to: firstFile)
+    try Data("second".utf8).write(to: secondFile)
+    let workspace = fixture.makeWorkspace()
+
+    let first = try XCTUnwrap(
+      project(workspace.execute(.openProject(OpenProjectCommand(rootURL: firstRoot))))
+    )
+    let firstSurface = try XCTUnwrap(workspace.activeSurface)
+    firstSurface.select(nodeID: firstFile.path)
+
+    _ = try XCTUnwrap(
+      project(workspace.execute(.openProject(OpenProjectCommand(rootURL: secondRoot))))
+    )
+    let secondSurface = try XCTUnwrap(workspace.activeSurface)
+    XCTAssertFalse(secondSurface === firstSurface)
+    XCTAssertNil(secondSurface.selectedNodeID)
+    XCTAssertTrue(secondSurface.fileTree.node(withID: secondFile.path) != nil)
+    XCTAssertNil(secondSurface.fileTree.node(withID: firstFile.path))
+
+    _ = workspace.execute(
+      .switchProject(SwitchProjectCommand(projectID: first.id))
+    )
+    let restoredSurface = try XCTUnwrap(workspace.activeSurface)
+    XCTAssertTrue(restoredSurface === firstSurface)
+    XCTAssertEqual(restoredSurface.selectedNodeID, firstFile.path)
+    XCTAssertEqual(restoredSurface.activeTab?.id, firstFile.path)
+    XCTAssertNil(restoredSurface.fileTree.node(withID: secondFile.path))
+  }
+
   private func project(
     _ result: Result<ClairCommandResult, CommandError>,
     file: StaticString = #filePath,
@@ -193,6 +312,23 @@ final class ProjectKernelTests: XCTestCase {
       return XCTFail("Expected ProjectError, got \(result)", file: file, line: line)
     }
     XCTAssertEqual(actual, expected, file: file, line: line)
+  }
+
+  private func waitForFileTree(
+    _ surface: ProjectSurfaceModel,
+    timeout: TimeInterval = 3,
+    matching predicate: (ProjectFileTreeSnapshot) -> Bool,
+    file: StaticString = #filePath,
+    line: UInt = #line
+  ) async {
+    let deadline = Date().addingTimeInterval(timeout)
+    while Date() < deadline {
+      if predicate(surface.fileTree) {
+        return
+      }
+      try? await Task.sleep(nanoseconds: 50_000_000)
+    }
+    XCTFail("Timed out waiting for file tree refresh", file: file, line: line)
   }
 }
 

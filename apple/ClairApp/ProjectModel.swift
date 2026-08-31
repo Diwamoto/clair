@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 enum ProjectColor: String, CaseIterable, Codable, Hashable, Sendable {
@@ -49,6 +50,62 @@ struct Project: Identifiable, Equatable, Sendable {
   }
 }
 
+struct ProjectFileTreeNode: Identifiable, Equatable, Hashable {
+  let id: String
+  let url: URL
+  let name: String
+  let isDirectory: Bool
+  let children: [ProjectFileTreeNode]?
+
+  var path: String {
+    url.path
+  }
+
+  var allNodeIDs: Set<String> {
+    var result: Set<String> = [id]
+    for child in children ?? [] {
+      result.formUnion(child.allNodeIDs)
+    }
+    return result
+  }
+
+  func node(withID nodeID: String) -> ProjectFileTreeNode? {
+    if id == nodeID {
+      return self
+    }
+    for child in children ?? [] {
+      if let match = child.node(withID: nodeID) {
+        return match
+      }
+    }
+    return nil
+  }
+}
+
+struct ProjectFileTreeSnapshot: Equatable {
+  let root: ProjectFileTreeNode?
+  let availability: ProjectAvailability
+
+  var isAvailable: Bool {
+    availability.isAvailable && root != nil
+  }
+
+  static func empty(for availability: ProjectAvailability) -> ProjectFileTreeSnapshot {
+    ProjectFileTreeSnapshot(root: nil, availability: availability)
+  }
+
+  func node(withID nodeID: String) -> ProjectFileTreeNode? {
+    root?.node(withID: nodeID)
+  }
+}
+
+struct ProjectEditorTab: Identifiable, Equatable {
+  let id: String
+  let url: URL
+  let title: String
+  let content: String
+}
+
 struct ProjectRecord: Codable, Equatable, Sendable {
   let id: UUID
   var rootPath: String
@@ -71,6 +128,260 @@ struct ProjectStoreSnapshot: Codable, Equatable, Sendable {
       projects: [],
       activeProjectID: nil
     )
+  }
+}
+
+enum ProjectFileTreeScanner {
+  static func scan(
+    rootURL: URL,
+    rootChecker: any ProjectRootChecking,
+    fileManager: FileManager = .default
+  ) -> ProjectFileTreeSnapshot {
+    do {
+      let canonicalURL = try rootChecker.validate(rootURL)
+      let root = try node(at: canonicalURL, fileManager: fileManager, isRoot: true)
+      return ProjectFileTreeSnapshot(root: root, availability: .available)
+    } catch ProjectError.rootMissing {
+      return .empty(for: .missing)
+    } catch ProjectError.rootNotDirectory {
+      return .empty(for: .notDirectory)
+    } catch ProjectError.rootUnreadable {
+      return .empty(for: .unreadable)
+    } catch {
+      return .empty(for: .unreadable)
+    }
+  }
+
+  static func directoriesToWatch(
+    rootURL: URL,
+    fileManager: FileManager = .default
+  ) -> [URL] {
+    let watchRoot =
+      existingDirectory(for: rootURL, fileManager: fileManager)
+      ?? nearestExistingDirectory(
+        for: rootURL.deletingLastPathComponent(),
+        fileManager: fileManager
+      )
+
+    guard let watchRoot else {
+      return []
+    }
+
+    guard existingDirectory(for: rootURL, fileManager: fileManager) != nil else {
+      return [watchRoot]
+    }
+
+    var directories = [watchRoot]
+    guard
+      let enumerator = fileManager.enumerator(
+        at: watchRoot,
+        includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
+        options: [.skipsPackageDescendants]
+      )
+    else {
+      return directories
+    }
+
+    for case let url as URL in enumerator {
+      guard url.lastPathComponent != ".git" else {
+        enumerator.skipDescendants()
+        continue
+      }
+
+      guard
+        let values = try? url.resourceValues(
+          forKeys: [.isDirectoryKey, .isSymbolicLinkKey]
+        ), values.isDirectory == true, values.isSymbolicLink != true
+      else {
+        continue
+      }
+      directories.append(url)
+    }
+    return directories
+  }
+
+  private static func node(
+    at url: URL,
+    fileManager: FileManager,
+    isRoot: Bool
+  ) throws -> ProjectFileTreeNode {
+    let values = try url.resourceValues(
+      forKeys: [.isDirectoryKey, .isSymbolicLinkKey]
+    )
+    let isDirectory = values.isDirectory == true
+    let isSymbolicLink = values.isSymbolicLink == true
+    let name = isRoot && url.lastPathComponent.isEmpty ? url.path : url.lastPathComponent
+    let id = url.standardizedFileURL.path
+
+    guard isDirectory, !isSymbolicLink, name != ".git" else {
+      return ProjectFileTreeNode(
+        id: id,
+        url: url,
+        name: name,
+        isDirectory: isDirectory,
+        children: nil
+      )
+    }
+
+    let childURLs = try fileManager.contentsOfDirectory(
+      at: url,
+      includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
+      options: []
+    )
+    let children = childURLs.compactMap { childURL -> ProjectFileTreeNode? in
+      guard childURL.lastPathComponent != ".git" else {
+        return nil
+      }
+      do {
+        return try node(at: childURL, fileManager: fileManager, isRoot: false)
+      } catch {
+        return nil
+      }
+    }.sorted(by: sortNodes)
+
+    return ProjectFileTreeNode(
+      id: id,
+      url: url,
+      name: name,
+      isDirectory: true,
+      children: children
+    )
+  }
+
+  private static func sortNodes(
+    _ lhs: ProjectFileTreeNode,
+    _ rhs: ProjectFileTreeNode
+  ) -> Bool {
+    if lhs.isDirectory != rhs.isDirectory {
+      return lhs.isDirectory
+    }
+    let comparison = lhs.name.localizedStandardCompare(rhs.name)
+    if comparison != .orderedSame {
+      return comparison == .orderedAscending
+    }
+    return lhs.id < rhs.id
+  }
+
+  private static func existingDirectory(
+    for url: URL,
+    fileManager: FileManager
+  ) -> URL? {
+    var isDirectory = ObjCBool(false)
+    guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory),
+      isDirectory.boolValue
+    else {
+      return nil
+    }
+    return url.standardizedFileURL
+  }
+
+  private static func nearestExistingDirectory(
+    for url: URL,
+    fileManager: FileManager
+  ) -> URL? {
+    var candidate = url.standardizedFileURL
+    while candidate.path != candidate.deletingLastPathComponent().path {
+      if let existing = existingDirectory(for: candidate, fileManager: fileManager) {
+        return existing
+      }
+      candidate.deleteLastPathComponent()
+    }
+    return existingDirectory(for: candidate, fileManager: fileManager)
+  }
+}
+
+final class ProjectFileSystemWatcher: @unchecked Sendable {
+  private let rootURL: URL
+  private let fileManager: FileManager
+  private let queue: DispatchQueue
+  private let onChange: @Sendable () -> Void
+  private var sources: [String: DispatchSourceFileSystemObject] = [:]
+  private var isStarted = false
+
+  init(
+    rootURL: URL,
+    fileManager: FileManager = .default,
+    onChange: @escaping @Sendable () -> Void
+  ) {
+    self.rootURL = rootURL
+    self.fileManager = fileManager
+    self.queue = DispatchQueue(
+      label: "com.diwamoto.clair.file-tree.\(UUID().uuidString)",
+      qos: .utility
+    )
+    self.onChange = onChange
+  }
+
+  func start() {
+    queue.sync {
+      guard !isStarted else {
+        return
+      }
+      isStarted = true
+      rebuildSources()
+    }
+  }
+
+  func stop() {
+    queue.sync {
+      guard isStarted else {
+        return
+      }
+      isStarted = false
+      cancelSources()
+    }
+  }
+
+  private func handleEvent() {
+    rebuildSources()
+    onChange()
+  }
+
+  private func rebuildSources() {
+    guard isStarted else {
+      return
+    }
+
+    let desiredPaths = Set(
+      ProjectFileTreeScanner.directoriesToWatch(
+        rootURL: rootURL,
+        fileManager: fileManager
+      ).map(\.path)
+    )
+
+    let stalePaths = sources.keys.filter { !desiredPaths.contains($0) }
+    for path in stalePaths {
+      sources[path]?.cancel()
+      sources[path] = nil
+    }
+
+    for path in desiredPaths where sources[path] == nil {
+      let descriptor = open(path, O_EVTONLY)
+      guard descriptor >= 0 else {
+        continue
+      }
+
+      let source = DispatchSource.makeFileSystemObjectSource(
+        fileDescriptor: descriptor,
+        eventMask: [.write, .delete, .rename, .revoke],
+        queue: queue
+      )
+      source.setEventHandler { [weak self] in
+        self?.handleEvent()
+      }
+      source.setCancelHandler {
+        close(descriptor)
+      }
+      sources[path] = source
+      source.resume()
+    }
+  }
+
+  private func cancelSources() {
+    for source in sources.values {
+      source.cancel()
+    }
+    sources.removeAll()
   }
 }
 

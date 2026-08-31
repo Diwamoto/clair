@@ -9,9 +9,11 @@ final class ProjectWorkspaceModel: ObservableObject {
 
   @Published private(set) var projects: [Project] = []
   @Published private(set) var activeProjectID: UUID?
+  @Published private(set) var activeSurface: ProjectSurfaceModel?
   @Published private(set) var lastErrorMessage: String?
 
   private var records: [ProjectRecord] = []
+  private var surfaces: [UUID: ProjectSurfaceModel] = [:]
 
   init(
     store: ProjectStore,
@@ -265,9 +267,42 @@ final class ProjectWorkspaceModel: ObservableObject {
   private func refreshPublishedState() {
     projects = openRecords.map(makeProject(from:))
     if let activeProjectID, projects.contains(where: { $0.id == activeProjectID }) {
+      reconcileSurfaces()
       return
     }
     activeProjectID = projects.first?.id
+    reconcileSurfaces()
+  }
+
+  private func reconcileSurfaces() {
+    let openProjectIDs = Set(projects.map(\.id))
+    let closedProjectIDs = surfaces.keys.filter { !openProjectIDs.contains($0) }
+    for projectID in closedProjectIDs {
+      surfaces[projectID] = nil
+    }
+
+    guard let activeProjectID else {
+      activeSurface = nil
+      return
+    }
+
+    guard let project = projects.first(where: { $0.id == activeProjectID }) else {
+      activeSurface = nil
+      return
+    }
+
+    if let surface = surfaces[project.id] {
+      activeSurface = surface
+      return
+    }
+
+    let surface = ProjectSurfaceModel(
+      projectID: project.id,
+      rootURL: project.rootURL,
+      rootChecker: rootChecker
+    )
+    surfaces[project.id] = surface
+    activeSurface = surface
   }
 
   private func makeProject(from record: ProjectRecord) -> Project {
@@ -301,5 +336,184 @@ final class ProjectWorkspaceModel: ObservableObject {
       normalized[index].order = order
     }
     return normalized
+  }
+}
+
+@MainActor
+final class ProjectSurfaceModel: ObservableObject {
+  let projectID: UUID
+  let rootURL: URL
+
+  @Published private(set) var fileTree: ProjectFileTreeSnapshot
+  @Published private(set) var selectedNodeID: String?
+  @Published private(set) var editorTabs: [ProjectEditorTab] = []
+  @Published private(set) var activeTabID: String?
+
+  private let rootChecker: any ProjectRootChecking
+  private let fileManager: FileManager
+  private var expandedNodeIDs: Set<String> = []
+  private var watcher: ProjectFileSystemWatcher?
+
+  init(
+    projectID: UUID,
+    rootURL: URL,
+    rootChecker: any ProjectRootChecking = FileSystemProjectRootChecker(),
+    fileManager: FileManager = .default
+  ) {
+    self.projectID = projectID
+    self.rootURL = rootURL
+    self.rootChecker = rootChecker
+    self.fileManager = fileManager
+    self.fileTree = ProjectFileTreeSnapshot.empty(
+      for: rootChecker.availability(for: rootURL)
+    )
+
+    watcher = ProjectFileSystemWatcher(
+      rootURL: rootURL,
+      fileManager: fileManager
+    ) { [weak self] in
+      Task { @MainActor [weak self] in
+        self?.reload()
+      }
+    }
+    reload()
+    watcher?.start()
+  }
+
+  deinit {
+    watcher?.stop()
+  }
+
+  var activeTab: ProjectEditorTab? {
+    guard let activeTabID else {
+      return nil
+    }
+    return editorTabs.first { $0.id == activeTabID }
+  }
+
+  func reload() {
+    let nextTree = ProjectFileTreeScanner.scan(
+      rootURL: rootURL,
+      rootChecker: rootChecker,
+      fileManager: fileManager
+    )
+    fileTree = nextTree
+
+    guard let root = nextTree.root else {
+      expandedNodeIDs.removeAll()
+      selectedNodeID = nil
+      editorTabs.removeAll()
+      activeTabID = nil
+      return
+    }
+
+    expandedNodeIDs.formIntersection(root.allNodeIDs)
+    expandedNodeIDs.insert(root.id)
+
+    let availableNodeIDs = root.allNodeIDs
+    if let selectedNodeID, !availableNodeIDs.contains(selectedNodeID) {
+      self.selectedNodeID = nil
+    }
+
+    editorTabs = editorTabs.filter { availableNodeIDs.contains($0.id) }
+    if let activeTabID, !editorTabs.contains(where: { $0.id == activeTabID }) {
+      self.activeTabID = editorTabs.last?.id
+    }
+  }
+
+  func isExpanded(_ nodeID: String) -> Bool {
+    expandedNodeIDs.contains(nodeID)
+  }
+
+  func toggleExpansion(for nodeID: String) {
+    guard let node = fileTree.node(withID: nodeID), node.isDirectory else {
+      return
+    }
+    if isExpanded(nodeID) {
+      expandedNodeIDs.remove(nodeID)
+    } else {
+      expandedNodeIDs.insert(nodeID)
+    }
+  }
+
+  func select(nodeID: String) {
+    guard let node = fileTree.node(withID: nodeID) else {
+      return
+    }
+    selectedNodeID = node.id
+    if !node.isDirectory {
+      openEditorTab(for: node)
+    }
+  }
+
+  func reveal(nodeID: String) {
+    guard let node = fileTree.node(withID: nodeID) else {
+      return
+    }
+
+    var directory = node.url.deletingLastPathComponent()
+    while directory.path != rootURL.path {
+      expandedNodeIDs.insert(directory.standardizedFileURL.path)
+      let parent = directory.deletingLastPathComponent()
+      guard parent.path != directory.path else {
+        break
+      }
+      directory = parent
+    }
+    expandedNodeIDs.insert(rootURL.standardizedFileURL.path)
+    select(nodeID: nodeID)
+  }
+
+  func activateTab(id: String) {
+    guard editorTabs.contains(where: { $0.id == id }) else {
+      return
+    }
+    activeTabID = id
+    reveal(nodeID: id)
+  }
+
+  func closeTab(id: String) {
+    guard let index = editorTabs.firstIndex(where: { $0.id == id }) else {
+      return
+    }
+    editorTabs.remove(at: index)
+    guard activeTabID == id else {
+      return
+    }
+    activeTabID = editorTabs.last?.id
+    if let activeTabID {
+      selectedNodeID = activeTabID
+    } else {
+      selectedNodeID = nil
+    }
+  }
+
+  private func openEditorTab(for node: ProjectFileTreeNode) {
+    guard !node.isDirectory else {
+      return
+    }
+
+    if !editorTabs.contains(where: { $0.id == node.id }) {
+      editorTabs.append(
+        ProjectEditorTab(
+          id: node.id,
+          url: node.url,
+          title: node.name,
+          content: fixtureContent(for: node.url)
+        )
+      )
+    }
+    activeTabID = node.id
+  }
+
+  private func fixtureContent(for url: URL) -> String {
+    guard let data = try? Data(contentsOf: url) else {
+      return "This file cannot be previewed.\n\n\(url.path)"
+    }
+    let content = String(decoding: data, as: UTF8.self)
+    if content.isEmpty {
+      return "(empty file)"
+    }
+    return content
   }
 }

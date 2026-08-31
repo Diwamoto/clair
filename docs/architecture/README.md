@@ -14,6 +14,7 @@ Current architecture:
 
 - [Development workspace](development-workspace.md)
 
-Current implementation is the Stable/Dev native bootstrap only. IDE behavior
-shown in Interaction Lab is UX evidence in a separate prototype repository and
-must not be read as implemented production capability.
+Current implementation includes the Stable/Dev native bootstrap, the Project and
+command kernel, and the P02 workspace shell/file-tree slice. IDE behavior shown in
+Interaction Lab is UX evidence in a separate prototype repository and must not be
+read as implemented production capability.
