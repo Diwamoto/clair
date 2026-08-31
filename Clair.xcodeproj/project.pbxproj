@@ -40,6 +40,8 @@
 		A0000000000000000000007F /* ProjectNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000002C /* ProjectNavigation.swift */; };
 		A00000000000000000000080 /* ProjectNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000002C /* ProjectNavigation.swift */; };
 		A00000000000000000000081 /* ProjectNavigationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000002D /* ProjectNavigationTests.swift */; };
+		A00000000000000000000082 /* SessionBroker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000002E /* SessionBroker.swift */; };
+		A00000000000000000000083 /* SessionBroker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000002E /* SessionBroker.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -79,6 +81,7 @@
 		A0000000000000000000002B /* NativeEditorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeEditorTests.swift; sourceTree = "<group>"; };
 		A0000000000000000000002C /* ProjectNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectNavigation.swift; sourceTree = "<group>"; };
 		A0000000000000000000002D /* ProjectNavigationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectNavigationTests.swift; sourceTree = "<group>"; };
+		A0000000000000000000002E /* SessionBroker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionBroker.swift; sourceTree = "<group>"; };
 		A00000000000000000000021 /* Clair.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Clair.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A00000000000000000000022 /* Clair Dev.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Clair Dev.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A00000000000000000000023 /* ClairTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ClairTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -167,6 +170,7 @@
 				A00000000000000000000028 /* TerminalSurface.swift */,
 				A0000000000000000000002A /* NativeEditor.swift */,
 				A0000000000000000000002C /* ProjectNavigation.swift */,
+				A0000000000000000000002E /* SessionBroker.swift */,
 				A00000000000000000000016 /* Clair-Bridging-Header.h */,
 			);
 			path = ClairApp;
@@ -377,6 +381,7 @@
 				A00000000000000000000077 /* TerminalSurface.swift in Sources */,
 				A0000000000000000000007C /* NativeEditor.swift in Sources */,
 				A0000000000000000000007F /* ProjectNavigation.swift in Sources */,
+				A00000000000000000000082 /* SessionBroker.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -398,6 +403,7 @@
 				A0000000000000000000007A /* TerminalSurface.swift in Sources */,
 				A0000000000000000000007D /* NativeEditor.swift in Sources */,
 				A00000000000000000000080 /* ProjectNavigation.swift in Sources */,
+				A00000000000000000000083 /* SessionBroker.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

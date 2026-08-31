@@ -48,7 +48,9 @@ for channel in stable dev; do
         "$repo_root/apple/ClairApp/ProjectWorkspace.swift" \
         "$repo_root/apple/ClairApp/ContentView.swift" \
         "$repo_root/apple/ClairApp/NativeEditor.swift" \
+        "$repo_root/apple/ClairApp/ProjectNavigation.swift" \
         "$repo_root/apple/ClairApp/TerminalProtocol.swift" \
+        "$repo_root/apple/ClairApp/SessionBroker.swift" \
         "$repo_root/apple/ClairApp/TerminalSession.swift" \
         "$repo_root/apple/ClairApp/TerminalSurface.swift" \
         -o "$executable"

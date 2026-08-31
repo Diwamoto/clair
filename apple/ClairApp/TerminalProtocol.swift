@@ -254,6 +254,11 @@ struct TerminalTranscriptBuffer {
     data.count
   }
 
+  mutating func reset() {
+    data.removeAll(keepingCapacity: true)
+    sanitizer = TerminalOutputSanitizer()
+  }
+
   private mutating func trimIfNeeded() {
     guard data.count > maximumBytes else {
       return

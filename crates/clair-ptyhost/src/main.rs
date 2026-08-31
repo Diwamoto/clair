@@ -1,3 +1,4 @@
+mod broker;
 mod protocol;
 mod pty;
 
@@ -73,6 +74,10 @@ fn run(arguments: &[String]) -> Result<(), String> {
             let options = parse_spawn_options(&arguments[1..])?;
             run_spawn(&options)
         }
+        Some("--broker") => {
+            let options = parse_broker_options(&arguments[1..])?;
+            broker::run(&options)
+        }
         Some("--version") | None => {
             println!("clair-ptyhost {}", env!("CARGO_PKG_VERSION"));
             Ok(())
@@ -107,6 +112,39 @@ fn parse_spawn_options(arguments: &[String]) -> Result<SpawnOptions, String> {
         index += 1;
     }
     Ok(options)
+}
+
+fn parse_broker_options(arguments: &[String]) -> Result<broker::BrokerOptions, String> {
+    let mut socket = None;
+    let mut catalog = None;
+    let mut index = 0;
+    while index < arguments.len() {
+        let argument = arguments[index].as_str();
+        match argument {
+            "--socket" => {
+                socket = Some(PathBuf::from(required_value(
+                    arguments, &mut index, argument,
+                )?));
+            }
+            "--catalog" => {
+                catalog = Some(PathBuf::from(required_value(
+                    arguments, &mut index, argument,
+                )?));
+            }
+            "--help" | "-h" => return Err(usage_text().to_owned()),
+            other => {
+                return Err(format!(
+                    "unknown broker argument: {other}\n{}",
+                    usage_text()
+                ));
+            }
+        }
+        index += 1;
+    }
+    let socket = socket.ok_or_else(|| format!("--broker requires --socket\n{}", usage_text()))?;
+    let catalog =
+        catalog.ok_or_else(|| format!("--broker requires --catalog\n{}", usage_text()))?;
+    Ok(broker::BrokerOptions { socket, catalog })
 }
 
 fn required_value(
@@ -318,7 +356,7 @@ fn protocol_to_string(error: ProtocolError) -> String {
 }
 
 fn usage_text() -> &'static str {
-    "usage: clair-ptyhost [--smoke|--version|--spawn [--cwd PATH] [--shell PATH] [--rows N] [--cols N]]"
+    "usage: clair-ptyhost [--smoke|--version|--spawn [--cwd PATH] [--shell PATH] [--rows N] [--cols N]|--broker --socket PATH --catalog PATH]"
 }
 
 fn print_usage() {
@@ -326,14 +364,15 @@ fn print_usage() {
     println!(
         "  --spawn  start a login shell and exchange bounded binary PTY frames on stdin/stdout"
     );
+    println!("  --broker  own detached local PTY sessions behind a bounded Unix socket");
     println!("  --smoke  print the stable process smoke marker");
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_COLUMNS, DEFAULT_ROWS, SpawnOptions, parse_dimension, parse_spawn_options,
-        smoke_response,
+        DEFAULT_COLUMNS, DEFAULT_ROWS, SpawnOptions, parse_broker_options, parse_dimension,
+        parse_spawn_options, smoke_response,
     };
 
     #[test]
@@ -373,5 +412,21 @@ mod tests {
         assert_eq!(options.shell, std::path::Path::new("/bin/sh"));
         assert_eq!(options.rows, 40);
         assert_eq!(options.columns, 120);
+    }
+
+    #[test]
+    fn broker_options_require_explicit_socket_and_catalog_paths() {
+        let options = parse_broker_options(&[
+            "--socket".to_owned(),
+            "/tmp/clair.sock".to_owned(),
+            "--catalog".to_owned(),
+            "/tmp/clair.catalog".to_owned(),
+        ])
+        .unwrap();
+        assert_eq!(options.socket, std::path::Path::new("/tmp/clair.sock"));
+        assert_eq!(options.catalog, std::path::Path::new("/tmp/clair.catalog"));
+        assert!(
+            parse_broker_options(&["--socket".to_owned(), "/tmp/clair.sock".to_owned()]).is_err()
+        );
     }
 }

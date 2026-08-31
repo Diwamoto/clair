@@ -190,17 +190,31 @@ P01から最小kernelを育て、後から既存featureを別実装へ置き換�
 
 ### P07 Local session lifecycle and reattach
 
-- Status: `next`
+- Status: `done`
 - Depends on: P03。
 - Outcome: window closeとapp restartをまたいでlocal PTYへ再接続できる。
 - Scope: stable `SessionID`、same-user bounded/versioned local IPC、catalog、cursor/gap、backpressure、reattach。
 - Functional checks: app crash/restart reattach、bounded malformed frame、slow consumer、missing session recovery。
 - Deferred: mobile multi-client、semantic agent adapter、relay/E2EE。
 - Legacy issue coverage: #6、#18のlocal lifecycle subset。
+- Validation (2026-09-01): `cargo test -p clair-ptyhost --locked` passed all 22 Rust
+  tests, including the broker Unix-socket integration checks for client disconnect/reconnect,
+  malformed bounded frames, and missing sessions. `cargo clippy --workspace --all-targets
+  --locked`, `swift format lint --recursive --parallel --strict apple`,
+  `ruby scripts/validate-xcode-project.rb`, `scripts/smoke-app-link.sh` (Stable/Dev),
+  the project-scoped Clair Dev XCTest suite, the Stable build, and Dev static analysis
+  passed. The Swift suite covers broker frame bounds/decoding and stable terminal
+  SessionID persistence.
+- Durable detail: [development workspace architecture](../architecture/development-workspace.md) and
+  [local development runbook](../runbooks/local-development.md) document the detached
+  same-user broker, metadata-only catalog, bounded journal/queues, gap recovery, and
+  disposable app restart smoke.
+- Deferred: broker-process restart cannot restore live PTYs or transcript bytes; remote
+  multi-client, semantic agent adapters, and relay/E2EE remain outside this local slice.
 
 ### P08 Git working-tree loop
 
-- Status: `queued`
+- Status: `next`
 - Depends on: P04。
 - Outcome: Projectのstatus/diffを確認し、stage/unstage/commit/branch switchできる。
 - Scope: staged/unstaged/untracked separation、safe error、editor/diff navigation。

@@ -2,7 +2,7 @@
 
 ## Status
 
-Current as of local PoC item `P06 Quick Open, search, replace, and file history`.
+Current as of local PoC item `P07 Local session lifecycle and reattach`.
 
 ## Workspace boundary
 
@@ -45,30 +45,45 @@ The bootstrap ABI contains one allocation-free function:
 uint32_t clair_core_smoke(void);
 ```
 
-It returns `0x434C4149`. The live terminal does not use this C ABI: the app starts
-`clair-ptyhost --spawn` as a child process and exchanges a bounded binary stream on
-its stdin/stdout. Later interfaces must document their own lifecycle and threading
-contracts rather than extending the bootstrap symbol implicitly.
+It returns `0x434C4149`. The live terminal does not use this C ABI. The app connects
+to a same-user local broker over a bounded Unix-socket protocol; the direct
+`clair-ptyhost --spawn` path remains a low-level smoke/compatibility path. Later
+interfaces must document their own lifecycle and threading contracts rather than
+extending the bootstrap symbol implicitly.
 
 ## Live terminal path
 
-Each visible Project terminal owns one `TerminalSession`. The session starts one
-`clair-ptyhost` process with the Project root, shell path, and current dimensions.
-The host uses macOS `forkpty`, starts a login shell with `TERM=xterm-256color`,
-applies `TIOCSWINSZ` on resize, forwards input bytes unchanged, and terminates the
-child process group when the session closes. The host waits for and reports the
-child exit status, so a normal shell exit cannot leave an unreaped local child.
+Each visible Project terminal owns one `TerminalSession` and one stable `SessionID`.
+The session connects to a per-channel local broker under the channel-specific
+Application Support directory. If the broker is unavailable, the app starts a
+detached `clair-ptyhost --broker` child with null standard streams; the broker then
+owns the PTY independently of the app process. The broker uses macOS `forkpty`,
+starts a login shell with `TERM=xterm-256color`, applies `TIOCSWINSZ` on resize,
+forwards input bytes unchanged, and terminates the child process group when asked.
+The host waits for and reports the child exit status, so a normal shell exit cannot
+leave an unreaped local child.
 
-The transport frame is version 1 and has this fixed header:
+The broker transport is version 1 and has this fixed header:
 
 ```text
-magic[2] = CP | version[1] | kind[1] | payload_length[4, big endian] | payload
+magic[2] = CB | version[1] | kind[1] | payload_length[4, big endian] | payload
 ```
 
-Payloads are capped at 64 KiB before allocation. Client frames are raw input,
-resize (`rows`, `columns` as big-endian `u16` values), and close. Host frames are
-raw output, one-byte exit status, and diagnostic error. Partial reads are buffered;
-malformed or oversized frames terminate the child and return a bounded diagnostic.
+Payloads are capped at 64 KiB before allocation. Client frames are attach/create or
+reattach, raw input, resize (`rows`, `columns` as big-endian `u16` values), detach,
+and terminate. Host frames include an attachment snapshot, output with a byte
+cursor, explicit gap, exit status, and bounded diagnostic error. Partial reads are
+buffered; malformed or oversized frames are rejected without allocating the claimed
+payload.
+
+The broker persists only a versioned metadata catalog at
+`sessions-v1.catalog`; the socket and catalog are owner-only (`0600`). The catalog
+contains session identity, shell, working directory, dimensions, and epoch, but no
+terminal bytes. Live output is retained in a bounded 256 KiB journal and each
+subscriber has a bounded 256 KiB queue. If a cursor or slow subscriber falls behind,
+the broker emits a gap and the plain-text client resets its transcript with an
+explicit recovery marker. This is a local single-user lifecycle slice; remote
+multi-client sessions, semantic agent adapters, and relay/E2EE remain deferred.
 
 `TerminalSurfaceView` is an AppKit-backed selectable and scrollable native surface,
 embedded in the SwiftUI Project shell. It forwards ordinary keys, control keys,
@@ -81,9 +96,8 @@ for a terminal grid renderer.
 The local checkout does not contain a public libghostty development header/library
 that can be built and linked reproducibly. Therefore P03 records the AppKit native
 fallback as the verified surface and leaves the libghostty embed as an explicit
-follow-up blocker. P07 owns stable session identity, persistence, reattach, and
-cross-process backpressure; P03's session is live only while its Project surface
-owns it.
+follow-up blocker. P07 owns stable session identity, metadata persistence, reattach,
+and cross-process backpressure; the terminal transcript remains an in-memory view.
 
 ## Project and command kernel
 
@@ -156,11 +170,13 @@ abnormal process restart.
 
 On restore, the surface rebuilds runtime objects from the descriptors. Editor tabs whose
 paths are outside the Project root, missing, or directories are filtered out; terminal
-descriptors return as a restart placeholder because P07 owns PTY reattach, and diff
-descriptors currently render the P08 navigation placeholder. A missing workspace file
-starts with one empty pane. A malformed or unsupported top-level snapshot leaves the
-Project catalog intact and starts the affected surface from the same default; malformed
-individual surface entries are discarded while valid Project surfaces remain available.
+descriptors carry their stable `SessionID` and attempt broker reattach from cursor zero,
+while diff descriptors currently render the P08 navigation placeholder. A missing or
+expired session is shown as unavailable and offers **Start New Session** without
+changing the workspace descriptor. A missing workspace file starts with one empty
+pane. A malformed or unsupported top-level snapshot leaves the Project catalog intact
+and starts the affected surface from the same default; malformed individual surface
+entries are discarded while valid Project surfaces remain available.
 
 ## Native editor and disk safety
 
@@ -239,10 +255,12 @@ wrapper remains the CI-facing path where the workspace is accepted; with the cur
 Xcode 26 environment, use the equivalent `xcodebuild -project Clair.xcodeproj ... test`
 command because the minimal committed workspace is rejected.
 
-`apple/ClairTests/TerminalTests.swift` covers partial/batched frame decoding, binary
-UTF-8 input, frame bounds, split escape-sequence sanitization, and transcript UTF-8
-trimming. Rust unit and integration tests cover PTY shell commands, resize, CJK/OSC
-bytes, output flood, malformed frames, and child reaping.
+`apple/ClairTests/TerminalTests.swift` covers partial/batched broker frame decoding,
+large complete batches, binary UTF-8 input, attachment/output/error/gap validation,
+stable terminal SessionID persistence, split escape-sequence sanitization, and
+transcript UTF-8 trimming. Rust unit and integration tests cover PTY shell commands,
+resize, CJK/OSC bytes, output flood, broker reattach after client disconnect, missing
+sessions, bounded malformed frames, slow-consumer gaps, and child reaping.
 
 `apple/ClairTests/NativeEditorTests.swift` covers explicit save and undo/redo, Unicode
 and combining text, marked-text IME commits, external rewrite disk-wins reload with
@@ -254,12 +272,13 @@ disk writes, project-scoped history ordering, and Project-root path validation.
 ## Current limitations
 
 - Builds are unsigned and App Sandbox is disabled.
-- `clair-ptyhost` owns one local PTY per live app session, but has no durable session
-  catalog, detached lifecycle, or restart reattach; those are P07.
+- `clair-ptyhost` provides a local detached broker and metadata catalog, but the
+  journal and transcript are memory-only. If the broker itself exits, its live PTYs
+  are not recoverable; the app reports a missing session and offers a new session.
 - The C ABI is a link/lifecycle smoke path, not the future domain interface.
 - The terminal surface is a selectable plain-text AppKit fallback, not a full ANSI/
   alternate-screen/cursor/colour terminal grid; a reproducible libghostty development
   artifact is still unavailable in this checkout. The editor does not yet provide
-  syntax highlighting, LSP, or multi-cursor editing; PTY reattach remains P07, while
-  Git-backed diff/operations and CLI/MCP adapters remain later queue items.
+  syntax highlighting, LSP, or multi-cursor editing; Git-backed diff/operations and
+  CLI/MCP adapters remain later queue items.
 - Formal app icons, signing, notarization, and update delivery are not present.

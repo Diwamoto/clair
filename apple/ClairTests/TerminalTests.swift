@@ -60,4 +60,104 @@ final class TerminalProtocolTests: XCTestCase {
     XCTAssertLessThanOrEqual(buffer.byteCount, 5)
     XCTAssertEqual(buffer.string, "bcd")
   }
+
+  func testSessionBrokerDecoderAcceptsPartialAndBatchedFrames() throws {
+    let sessionID = try XCTUnwrap(UUID(uuidString: "12345678-90ab-cdef-1234-567890abcdef"))
+    let attach = try SessionBrokerFrame.attach(
+      mode: .create,
+      sessionID: sessionID,
+      cursor: 17,
+      dimensions: TerminalDimensions(rows: 30, columns: 100),
+      cwd: "/tmp",
+      shell: "/bin/sh"
+    )
+    let input = try SessionBrokerFrame.input(Data([0x00, 0xff, 0x7f]))
+    var decoder = SessionBrokerFrameDecoder()
+
+    let encoded = attach.encoded + input.encoded
+    XCTAssertEqual(try decoder.append(Data(encoded.prefix(5))), [])
+    XCTAssertEqual(try decoder.append(Data(encoded.dropFirst(5))), [attach, input])
+  }
+
+  func testSessionBrokerDecoderAllowsLargeCompleteBatchesAndBoundsPayloads() throws {
+    let first = try SessionBrokerFrame.input(
+      Data(repeating: 0x61, count: SessionBrokerFrame.maxPayloadLength)
+    )
+    let second = try SessionBrokerFrame.input(
+      Data(repeating: 0x62, count: SessionBrokerFrame.maxPayloadLength)
+    )
+    var decoder = SessionBrokerFrameDecoder()
+    XCTAssertEqual(try decoder.append(first.encoded + second.encoded), [first, second])
+
+    XCTAssertThrowsError(
+      try SessionBrokerFrame.input(
+        Data(repeating: 0x63, count: SessionBrokerFrame.maxPayloadLength + 1)
+      )
+    ) { error in
+      XCTAssertEqual(
+        error as? SessionBrokerProtocolError,
+        .payloadTooLarge(SessionBrokerFrame.maxPayloadLength + 1)
+      )
+    }
+  }
+
+  func testSessionBrokerPayloadFramesDecodeAndRejectInvalidRanges() throws {
+    let sessionID = try XCTUnwrap(UUID(uuidString: "12345678-90ab-cdef-1234-567890abcdef"))
+    var attachedPayload = Data([UInt8(sessionID.uuidString.utf8.count)])
+    attachedPayload.append(contentsOf: sessionID.uuidString.utf8)
+    appendUInt64(3, to: &attachedPayload)
+    appendUInt64(12, to: &attachedPayload)
+    appendUInt64(4, to: &attachedPayload)
+    attachedPayload.append(0)
+    let attachment = try SessionBrokerAttachment(
+      frame: SessionBrokerFrame(kind: .attached, payload: attachedPayload)
+    )
+    XCTAssertEqual(attachment.sessionID, sessionID)
+    XCTAssertEqual(attachment.epoch, 3)
+    XCTAssertEqual(attachment.currentOffset, 12)
+    XCTAssertEqual(attachment.oldestOffset, 4)
+    XCTAssertFalse(attachment.isExited)
+
+    var outputPayload = Data()
+    appendUInt64(12, to: &outputPayload)
+    outputPayload.append(contentsOf: Data("output".utf8))
+    let output = try SessionBrokerOutput(
+      frame: SessionBrokerFrame(kind: .output, payload: outputPayload)
+    )
+    XCTAssertEqual(output.offset, 12)
+    XCTAssertEqual(output.data, Data("output".utf8))
+
+    var errorPayload = Data([SessionBrokerErrorCode.sessionMissing.rawValue])
+    errorPayload.append(contentsOf: Data("not found".utf8))
+    let brokerError = try SessionBrokerErrorFrame(
+      frame: SessionBrokerFrame(kind: .error, payload: errorPayload)
+    )
+    XCTAssertEqual(brokerError.code, .sessionMissing)
+    XCTAssertEqual(brokerError.message, "not found")
+
+    var invalidGap = Data()
+    appendUInt64(8, to: &invalidGap)
+    appendUInt64(8, to: &invalidGap)
+    XCTAssertThrowsError(
+      try SessionBrokerGap(frame: SessionBrokerFrame(kind: .gap, payload: invalidGap))
+    ) { error in
+      XCTAssertEqual(error as? SessionBrokerProtocolError, .invalidState)
+    }
+  }
+
+  func testTerminalTabPersistsStableSessionID() throws {
+    let sessionID = try XCTUnwrap(UUID(uuidString: "12345678-90ab-cdef-1234-567890abcdef"))
+    let tab = ProjectPaneTab.terminal(id: sessionID)
+    let encoded = try JSONEncoder().encode(tab)
+    let decoded = try JSONDecoder().decode(ProjectPaneTab.self, from: encoded)
+
+    XCTAssertEqual(decoded, tab)
+    XCTAssertEqual(decoded.sessionID, sessionID)
+  }
+
+  private func appendUInt64(_ value: UInt64, to data: inout Data) {
+    for shift in stride(from: 56, through: 0, by: -8) {
+      data.append(UInt8((value >> UInt64(shift)) & 0xff))
+    }
+  }
 }

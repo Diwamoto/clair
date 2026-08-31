@@ -673,11 +673,23 @@ final class ProjectSurfaceModel: ObservableObject {
     focusedPaneID = location.paneID
     setActiveTab(tabID, in: location.paneID, revealEditor: false)
     if terminalSessions[tabID] == nil {
-      let session = TerminalSession(projectRootURL: rootURL)
+      let session = TerminalSession(
+        projectRootURL: rootURL,
+        sessionID: location.tab.sessionID ?? UUID(),
+        startMode: .create
+      )
       terminalSessions[tabID] = session
       session.start()
     }
     notifySnapshotChanged()
+  }
+
+  func recoverTerminal(tabID: String) {
+    guard let session = terminalSessions[tabID] else {
+      startTerminal(tabID: tabID)
+      return
+    }
+    session.startNewSession()
   }
 
   func hideTerminal() {
@@ -1123,7 +1135,15 @@ final class ProjectSurfaceModel: ObservableObject {
           }
           editorDocuments[tab.id] = document
           restoredTabs.append(tab)
-        case .terminal, .diff:
+        case .terminal:
+          let session = TerminalSession(
+            projectRootURL: rootURL,
+            sessionID: tab.sessionID ?? UUID(),
+            startMode: .reattach
+          )
+          terminalSessions[tab.id] = session
+          restoredTabs.append(tab)
+        case .diff:
           restoredTabs.append(tab)
         }
       }

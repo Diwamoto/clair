@@ -140,13 +140,66 @@ struct ProjectPaneTab: Codable, Equatable, Identifiable, Sendable {
   let kind: ProjectPaneTabKind
   var title: String
   let filePath: String?
+  let sessionID: UUID?
+
+  private enum CodingKeys: String, CodingKey {
+    case id
+    case kind
+    case title
+    case filePath
+    case sessionID
+  }
+
+  init(
+    id: String,
+    kind: ProjectPaneTabKind,
+    title: String,
+    filePath: String?,
+    sessionID: UUID? = nil
+  ) {
+    self.id = id
+    self.kind = kind
+    self.title = title
+    self.filePath = filePath
+    self.sessionID = sessionID
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    id = try container.decode(String.self, forKey: .id)
+    kind = try container.decode(ProjectPaneTabKind.self, forKey: .kind)
+    title = try container.decode(String.self, forKey: .title)
+    filePath = try container.decodeIfPresent(String.self, forKey: .filePath)
+    if kind == .terminal {
+      let legacyID =
+        id.hasPrefix("terminal:")
+        ? String(id.dropFirst("terminal:".count))
+        : id
+      sessionID =
+        try container.decodeIfPresent(UUID.self, forKey: .sessionID)
+        ?? UUID(uuidString: legacyID)
+        ?? UUID()
+    } else {
+      sessionID = nil
+    }
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(id, forKey: .id)
+    try container.encode(kind, forKey: .kind)
+    try container.encode(title, forKey: .title)
+    try container.encodeIfPresent(filePath, forKey: .filePath)
+    try container.encodeIfPresent(sessionID, forKey: .sessionID)
+  }
 
   static func editor(path: String, title: String) -> ProjectPaneTab {
     ProjectPaneTab(
       id: path,
       kind: .editor,
       title: title,
-      filePath: path
+      filePath: path,
+      sessionID: nil
     )
   }
 
@@ -155,7 +208,8 @@ struct ProjectPaneTab: Codable, Equatable, Identifiable, Sendable {
       id: "terminal:\(id.uuidString)",
       kind: .terminal,
       title: "Terminal",
-      filePath: nil
+      filePath: nil,
+      sessionID: id
     )
   }
 
@@ -164,7 +218,8 @@ struct ProjectPaneTab: Codable, Equatable, Identifiable, Sendable {
       id: "diff:\(id.uuidString)",
       kind: .diff,
       title: "Diff Preview",
-      filePath: nil
+      filePath: nil,
+      sessionID: nil
     )
   }
 }
@@ -275,6 +330,9 @@ indirect enum ProjectPaneNode: Codable, Equatable, Sendable {
           }
         case .terminal, .diff:
           guard tab.filePath == nil else {
+            return false
+          }
+          if tab.kind == .terminal, tab.sessionID == nil {
             return false
           }
         }

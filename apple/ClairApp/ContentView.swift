@@ -385,6 +385,7 @@ private struct ProjectTerminalPanel: View {
   @ObservedObject var session: TerminalSession
   let onHide: () -> Void
   let onEnd: () -> Void
+  let onRecover: () -> Void
 
   var body: some View {
     VStack(spacing: 0) {
@@ -402,6 +403,11 @@ private struct ProjectTerminalPanel: View {
         Text("\(session.dimensions.columns) × \(session.dimensions.rows)")
           .font(.caption.monospacedDigit())
           .foregroundStyle(.secondary)
+        if case .missing = session.state {
+          Button("Start New Session", action: onRecover)
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+        }
         Button("Editor", action: onHide)
           .buttonStyle(.borderless)
         Button("End", action: onEnd)
@@ -431,6 +437,8 @@ private struct ProjectTerminalPanel: View {
       .secondary
     case .exited:
       .orange
+    case .missing:
+      .red
     case .failed:
       .red
     }
@@ -661,7 +669,8 @@ private struct ProjectPaneView: View {
             project: project,
             session: session,
             onHide: surface.hideTerminal,
-            onEnd: surface.endTerminal
+            onEnd: surface.endTerminal,
+            onRecover: { surface.recoverTerminal(tabID: tab.id) }
           )
         } else {
           ProjectRestoredTerminalView {

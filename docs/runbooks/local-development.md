@@ -102,10 +102,11 @@ the split ratios, and close a non-final pane. Switch to two other Projects and c
 their layouts, file selections, and editor tabs remain independent.
 
 Quit normally, relaunch, and confirm that the tree selection, pane structure, active
-tabs, focus, and maximize state return for each Project. A terminal tab restores only
-as a placeholder: start a new terminal before using it, and do not expect the old
-transcript or PTY session to return. The diff tab is a navigation placeholder until
-P08 supplies Git-backed content.
+tabs, focus, and maximize state return for each Project. A terminal tab keeps its
+stable local SessionID and attempts to reattach to the broker-owned PTY; if that
+session is unavailable, the tab shows **Start New Session**. The terminal transcript
+is intentionally not part of the workspace snapshot. The diff tab is a navigation
+placeholder until P08 supplies Git-backed content.
 
 For an abnormal-restart smoke check, use only disposable fixture Projects: force-quit
 the app after a completed layout action, relaunch, and confirm that the last atomically
@@ -139,8 +140,11 @@ instead of displaying replacement characters.
 
 Recovery data is channel-separated and kept outside the repository at
 `~/Library/Application Support/Clair Dev/editor-history-v1.json` (or `Clair` for
-Stable). P05 persists pane/tab descriptors and workspace state separately; it does not
-persist editor buffers, terminal transcripts, or live PTY sessions.
+Stable). P05 persists pane/tab descriptors and workspace state separately. P07 keeps
+the live PTY in the detached local broker and persists only session metadata at
+`~/Library/Application Support/Clair Dev/sessions-v1.catalog` (or `Clair` for Stable);
+terminal bytes remain in memory and are not written to disk. If the broker itself is
+also terminated, the app reports the session as missing and allows a new one.
 Build outputs are:
 
 - `.build/xcode/stable/Build/Products/Debug/Clair.app`
@@ -221,11 +225,53 @@ Open a Project, choose **Open Terminal**, and verify the same live session can:
 5. Generate a bounded flood, for example `for i in $(seq 1 100); do echo line-$i; done`,
    and confirm the app remains responsive and the shell can still accept input.
 
-Click **End** before closing the Project. P03 keeps the visible transcript in memory
-only; it does not persist or reattach the PTY. The verified implementation is an
-AppKit selectable plain-text fallback while a reproducible libghostty development
-artifact is unavailable; full terminal-grid behavior and reattach are later queue
-items.
+Click **End** before closing the Project. P03's verified implementation is an AppKit
+selectable plain-text fallback while a reproducible libghostty development artifact
+is unavailable. The app now routes the session through the P07 local broker; the
+direct `clair-ptyhost --spawn` command remains the low-level protocol smoke path.
+
+## Verify local session reattach (P07)
+
+Build and launch Dev with the project-scoped command used by the current Xcode
+environment:
+
+```sh
+xcodebuild -project Clair.xcodeproj -scheme "Clair Dev" -configuration Debug \
+  -derivedDataPath .build/xcode/p07-manual CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGNING_REQUIRED=NO build
+open -n ".build/xcode/p07-manual/Build/Products/Debug/Clair Dev.app"
+```
+
+In a disposable fixture Project, open a terminal and run a command that prints a
+marker, waits for input, and prints a second marker. Force-quit only the Dev app
+while the shell is waiting, relaunch it, and confirm that the same terminal tab
+reattaches, accepts the waiting input, and shows the second marker without replaying
+the first marker twice. A normal terminal exit should show its exit status.
+
+The broker uses these channel-local paths:
+
+- `~/Library/Application Support/Clair Dev/session-broker-v1.sock`
+- `~/Library/Application Support/Clair Dev/sessions-v1.catalog`
+
+The socket and catalog should be owner-only (`0600`). The catalog contains session
+metadata and epoch only; it does not contain terminal transcript bytes. Output replay
+is bounded to a 256 KiB journal and 256 KiB per-client queue. If a cursor falls
+behind, the terminal shows an explicit output-gap marker and continues from the
+retained stream.
+
+The automated P07 checks are:
+
+```sh
+cargo test -p clair-ptyhost --locked
+cargo clippy --workspace --all-targets --locked
+swift format lint --recursive --parallel --strict apple
+ruby scripts/validate-xcode-project.rb
+```
+
+The Rust broker integration test covers a bounded malformed frame, typed missing
+session recovery, and a client disconnect/reconnect while the PTY remains alive. A
+broker restart is intentionally outside this slice: it is a missing-session recovery
+case, not transcript restoration.
 
 ## Run the PTY host smoke path
 

@@ -3,57 +3,61 @@ import Foundation
 
 @MainActor
 final class TerminalSession: ObservableObject {
+  enum StartMode: Equatable, Sendable {
+    case create
+    case reattach
+  }
+
   enum State: Equatable {
     case idle
     case starting
     case running
     case stopping
     case exited(Int)
+    case missing(String)
     case failed(String)
   }
 
   let projectRootURL: URL
   let shellURL: URL
   let ptyHostURL: URL?
+  let sessionID: UUID
 
   @Published private(set) var transcript = ""
   @Published private(set) var state: State = .idle
   @Published private(set) var dimensions = TerminalDimensions.defaultDimensions
 
-  private var process: Process?
-  private var inputPipe: Pipe?
-  private var outputPipe: Pipe?
-  private var errorPipe: Pipe?
-  private var frameDecoder = TerminalFrameDecoder()
+  private let brokerPaths: SessionBrokerPaths?
+  private var startMode: StartMode
+  private var brokerClient: SessionBrokerClient?
+  private var outputCursor: UInt64 = 0
+  private var sessionEpoch: UInt64?
   private var transcriptBuffer = TerminalTranscriptBuffer()
   private var transcriptObservers: [UUID: (String) -> Void] = [:]
 
   init(
     projectRootURL: URL,
+    sessionID: UUID = UUID(),
+    startMode: StartMode = .create,
     shellURL: URL = URL(
       fileURLWithPath: ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
     ),
-    ptyHostURL: URL? = PtyHostLocator.defaultURL()
+    ptyHostURL: URL? = PtyHostLocator.defaultURL(),
+    brokerPaths: SessionBrokerPaths? = SessionBrokerPaths.makeDefault(for: .current)
   ) {
     self.projectRootURL = projectRootURL
+    self.sessionID = sessionID
+    self.startMode = startMode
     self.shellURL = shellURL
     self.ptyHostURL = ptyHostURL
-  }
-
-  deinit {
-    outputPipe?.fileHandleForReading.readabilityHandler = nil
-    errorPipe?.fileHandleForReading.readabilityHandler = nil
-    process?.terminationHandler = nil
-    if let process, process.isRunning {
-      process.terminate()
-    }
+    self.brokerPaths = brokerPaths
   }
 
   var isRunning: Bool {
     switch state {
     case .starting, .running, .stopping:
       true
-    case .idle, .exited, .failed:
+    case .idle, .exited, .missing, .failed:
       false
     }
   }
@@ -70,78 +74,76 @@ final class TerminalSession: ObservableObject {
       "Stopping"
     case .exited(let status):
       status == 0 ? "Exited" : "Exited (\(status))"
+    case .missing(let message):
+      "Session unavailable: \(message)"
     case .failed(let message):
       "Failed: \(message)"
     }
   }
 
   func start() {
-    guard process == nil else {
+    guard case .idle = state else {
       return
     }
     guard let ptyHostURL else {
       fail("clair-ptyhost was not found. Build the Rust workspace first.")
       return
     }
-
-    state = .starting
-    let input = Pipe()
-    let output = Pipe()
-    let error = Pipe()
-    let nextProcess = Process()
-    nextProcess.executableURL = ptyHostURL
-    nextProcess.arguments = [
-      "--spawn",
-      "--cwd",
-      projectRootURL.path,
-      "--shell",
-      shellURL.path,
-      "--rows",
-      String(dimensions.rows),
-      "--cols",
-      String(dimensions.columns),
-    ]
-    nextProcess.currentDirectoryURL = projectRootURL
-    nextProcess.standardInput = input
-    nextProcess.standardOutput = output
-    nextProcess.standardError = error
-    nextProcess.terminationHandler = { [weak self] process in
-      let status = process.terminationStatus
-      Task { @MainActor [weak self] in
-        self?.handleTermination(status: status)
-      }
+    guard let brokerPaths else {
+      fail("Clair's local session broker path is unavailable.")
+      return
     }
 
-    inputPipe = input
-    outputPipe = output
-    errorPipe = error
-    process = nextProcess
-    installOutputHandler(output.fileHandleForReading)
-    installErrorHandler(error.fileHandleForReading)
+    state = .starting
+    let client = SessionBrokerClient(paths: brokerPaths, ptyHostURL: ptyHostURL)
+    client.onFrame = { [weak self] frame in
+      self?.receive(frame)
+    }
+    client.onDisconnect = { [weak self] in
+      self?.handleDisconnect()
+    }
+    brokerClient = client
 
     do {
-      try nextProcess.run()
-      state = .running
+      try client.start(
+        mode: startMode == .create ? .create : .reattach,
+        sessionID: sessionID,
+        cursor: outputCursor,
+        dimensions: dimensions,
+        cwd: projectRootURL.path,
+        shell: shellURL.path
+      )
     } catch {
-      clearPipeHandlers()
-      process = nil
-      inputPipe = nil
-      outputPipe = nil
-      errorPipe = nil
-      fail("Could not start clair-ptyhost: \(error.localizedDescription)")
+      brokerClient = nil
+      fail("Could not connect to the local session broker: \(error.localizedDescription)")
     }
   }
 
   func stop() {
-    guard let process, process.isRunning else {
+    guard brokerClient != nil, isRunning else {
       return
     }
     state = .stopping
     do {
-      try inputPipe?.fileHandleForWriting.write(contentsOf: TerminalFrame.close.encoded)
+      try brokerClient?.send(.terminate)
     } catch {
-      process.terminate()
+      fail("Could not terminate terminal session: \(error.localizedDescription)")
     }
+  }
+
+  func startNewSession() {
+    guard case .missing = state else {
+      return
+    }
+    brokerClient?.close()
+    brokerClient = nil
+    startMode = .create
+    outputCursor = 0
+    sessionEpoch = nil
+    transcriptBuffer.reset()
+    transcript = ""
+    state = .idle
+    start()
   }
 
   func sendText(_ text: String) {
@@ -156,9 +158,9 @@ final class TerminalSession: ObservableObject {
       return
     }
     do {
-      try inputPipe?.fileHandleForWriting.write(contentsOf: try TerminalFrame.input(data).encoded)
+      try brokerClient?.send(try SessionBrokerFrame.input(data))
     } catch {
-      fail("Could not write to PTY: \(error.localizedDescription)")
+      fail("Could not write to terminal session: \(error.localizedDescription)")
     }
   }
 
@@ -175,11 +177,9 @@ final class TerminalSession: ObservableObject {
       return
     }
     do {
-      try inputPipe?.fileHandleForWriting.write(
-        contentsOf: try TerminalFrame.resize(rows: rows, columns: columns).encoded
-      )
+      try brokerClient?.send(try SessionBrokerFrame.resize(rows: rows, columns: columns))
     } catch {
-      fail("Could not resize PTY: \(error.localizedDescription)")
+      fail("Could not resize terminal session: \(error.localizedDescription)")
     }
   }
 
@@ -194,95 +194,120 @@ final class TerminalSession: ObservableObject {
     transcriptObservers[id] = nil
   }
 
-  private func installOutputHandler(_ handle: FileHandle) {
-    handle.readabilityHandler = { [weak self] handle in
-      let data = handle.availableData
-      guard !data.isEmpty else {
-        return
-      }
-      Task { @MainActor [weak self] in
-        self?.receive(data)
-      }
-    }
-  }
-
-  private func installErrorHandler(_ handle: FileHandle) {
-    handle.readabilityHandler = { [weak self] handle in
-      let data = handle.availableData
-      guard !data.isEmpty else {
-        return
-      }
-      let message = String(decoding: data, as: UTF8.self)
-      Task { @MainActor [weak self] in
-        self?.receiveDiagnostic(message)
-      }
-    }
-  }
-
-  private func receive(_ data: Data) {
-    do {
-      for frame in try frameDecoder.append(data) {
-        receive(frame)
-      }
-    } catch {
-      fail("PTY protocol error: \(error)")
-    }
-  }
-
-  private func receive(_ frame: TerminalFrame) {
+  private func receive(_ frame: SessionBrokerFrame) {
     switch frame.kind {
+    case .attached:
+      do {
+        let attachment = try SessionBrokerAttachment(frame: frame)
+        guard attachment.sessionID == sessionID, attachment.epoch > 0 else {
+          fail("Session broker returned an invalid attachment.")
+          return
+        }
+        sessionEpoch = attachment.epoch
+        if attachment.isExited {
+          return
+        }
+        state = .running
+      } catch {
+        fail("Session broker attachment error: \(error)")
+      }
     case .output:
-      transcriptBuffer.append(frame.payload)
-      transcript = transcriptBuffer.string
-      for observer in transcriptObservers.values {
-        observer(transcript)
+      do {
+        let output = try SessionBrokerOutput(frame: frame)
+        guard output.offset >= outputCursor else {
+          return
+        }
+        if output.offset > outputCursor {
+          receiveGap(start: outputCursor, end: output.offset)
+        }
+        transcriptBuffer.append(output.data)
+        outputCursor = output.offset + UInt64(output.data.count)
+      } catch {
+        fail("Session broker output error: \(error)")
+        return
+      }
+      publishTranscript()
+    case .gap:
+      do {
+        let gap = try SessionBrokerGap(frame: frame)
+        receiveGap(start: gap.start, end: gap.end)
+      } catch {
+        fail("Session broker gap error: \(error)")
       }
     case .exit:
-      if let status = frame.payload.first {
-        state = .exited(Int(status))
+      do {
+        let exit = try SessionBrokerExit(frame: frame)
+        outputCursor = exit.offset
+        state = .exited(Int(exit.status))
+        brokerClient?.close()
+        brokerClient = nil
+      } catch {
+        fail("Session broker exit error: \(error)")
       }
     case .error:
-      fail(String(decoding: frame.payload, as: UTF8.self))
-    case .input, .resize, .close:
-      fail("PTY host returned a client-only frame.")
+      do {
+        let errorFrame = try SessionBrokerErrorFrame(frame: frame)
+        if errorFrame.code == .sessionMissing {
+          state = .missing(
+            errorFrame.message.isEmpty ? "session is not available" : errorFrame.message
+          )
+          brokerClient?.close()
+          brokerClient = nil
+        } else {
+          fail(
+            errorFrame.message.isEmpty
+              ? "Session broker returned an error."
+              : errorFrame.message
+          )
+        }
+      } catch {
+        fail("Session broker error frame is malformed: \(error)")
+      }
+    case .attach, .input, .resize, .detach, .terminate:
+      fail("Session broker returned a client-only frame.")
     }
   }
 
-  private func receiveDiagnostic(_ message: String) {
-    guard !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+  private func receiveGap(start: UInt64, end: UInt64) {
+    guard start < end else {
+      fail("Session broker returned an invalid output gap.")
       return
     }
-    fail(message.trimmingCharacters(in: .whitespacesAndNewlines))
+    outputCursor = end
+    transcriptBuffer.reset()
+    transcriptBuffer.append(
+      Data("[terminal output gap: offsets \(start)..<\(end) were not retained]\n".utf8)
+    )
+    publishTranscript()
   }
 
-  private func handleTermination(status: Int32) {
-    clearPipeHandlers()
+  private func publishTranscript() {
+    transcript = transcriptBuffer.string
+    for observer in transcriptObservers.values {
+      observer(transcript)
+    }
+  }
+
+  private func handleDisconnect() {
     if case .failed = state {
+      return
+    }
+    if case .missing = state {
       return
     }
     if case .exited = state {
       return
     }
-    state = .exited(Int(status))
+    state = .failed("The local session broker connection closed.")
   }
 
   private func fail(_ message: String) {
     state = .failed(message)
-    clearPipeHandlers()
-    if let process, process.isRunning {
-      do {
-        try inputPipe?.fileHandleForWriting.write(contentsOf: TerminalFrame.close.encoded)
-      } catch {
-        process.terminate()
-      }
-    }
-  }
-
-  private func clearPipeHandlers() {
-    outputPipe?.fileHandleForReading.readabilityHandler = nil
-    errorPipe?.fileHandleForReading.readabilityHandler = nil
+    brokerClient?.close()
+    brokerClient = nil
   }
 }
+
 struct PtyHostLocator {
   static func defaultURL(
     filePath: String = #filePath,
