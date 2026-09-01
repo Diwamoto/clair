@@ -378,6 +378,63 @@ decoding, mute/notification policy, and terminal bell effects. The Rust suite co
 the unchanged local PTY/broker boundary; the broker integration tests require a local
 macOS process environment because they create Unix sockets.
 
+## Verify managed worktrees and optional agent roots (P10)
+
+Build and launch Dev with the project-scoped command used by the current Xcode
+environment:
+
+```sh
+xcodebuild -project Clair.xcodeproj -scheme "Clair Dev" -configuration Debug \
+  -derivedDataPath .build/xcode/p10-manual CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGNING_REQUIRED=NO build
+open -n ".build/xcode/p10-manual/Build/Products/Debug/Clair Dev.app"
+```
+
+Open a Git repository as a Project and choose **Agents**. In **Managed worktrees**,
+create a branch and folder name. The displayed managed root must be outside the
+repository, and the row should report **Available** with the expected branch. Launch
+one profile with **Project root** selected and another with the managed worktree
+selected. Confirm that they use separate terminal tabs, that `pwd` in each terminal
+matches its selected root, and that the managed launch exports the row's stable
+`WorktreeID` as `CLAIR_WORKTREE_ID` while a Project-root launch does not export it.
+
+Close and relaunch Dev, reopen the same Project, and confirm that the managed row has
+the same branch and path and can be selected for a new agent launch. Remove the
+managed target through Git or move it aside and refresh; Clair should retain the
+catalog record as **Missing** or **Detached** rather than retargeting it. A detached
+HEAD is not a launchable managed root.
+
+Exercise cleanup from the row. Create an untracked file in the managed root and
+confirm that **Clean Up** shows the dirty guard with no destructive confirmation.
+Launch an agent from that worktree and confirm that an active terminal/agent guard
+also refuses cleanup. After the file is removed and the session exits, choose
+**Clean Up** again and confirm the target directory is removed while its Git branch
+remains. The automated tests also cover a wrong expected target, changed cleanup
+fingerprint, and a catalog record outside the managed root; each must be refused.
+
+The managed-worktree metadata is stored outside the repository at
+`~/Library/Application Support/Clair Dev/worktrees-v1.json` (or `Clair` for Stable),
+and targets are under the adjacent `worktrees/<ProjectID>/` directory. The catalog
+does not contain terminal transcript bytes. Do not delete the catalog as part of a
+normal cleanup; inspect the displayed error and repair the Git/catalog state first.
+
+The automated P10 checks are:
+
+```sh
+swift format lint --recursive --parallel --strict apple
+ruby scripts/validate-xcode-project.rb
+xcodebuild -project Clair.xcodeproj -scheme "Clair Dev" \
+  -destination 'platform=macOS,arch=arm64' -configuration Debug \
+  -derivedDataPath .build/xcode/p10-tests CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGNING_REQUIRED=NO -only-testing:ClairTests/ManagedWorktreeTests test
+```
+
+With the current Xcode 26 environment, the last command may require execution
+outside the restricted shell because XCTest's `testmanagerd` service is unavailable
+inside the sandbox. The suite covers external managed roots, stable identity and
+restart discovery, missing/detached states, root persistence, dirty/active/wrong-
+target cleanup refusal, cleanup fingerprint checks, and catalog path validation.
+
 ## Run the PTY host smoke path
 
 ```sh

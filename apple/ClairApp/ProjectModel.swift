@@ -142,6 +142,8 @@ struct ProjectPaneTab: Codable, Equatable, Identifiable, Sendable {
   let filePath: String?
   let sessionID: UUID?
   let agentProfileID: String?
+  let executionRootPath: String?
+  let worktreeID: WorktreeID?
 
   private enum CodingKeys: String, CodingKey {
     case id
@@ -150,6 +152,8 @@ struct ProjectPaneTab: Codable, Equatable, Identifiable, Sendable {
     case filePath
     case sessionID
     case agentProfileID
+    case executionRootPath
+    case worktreeID
   }
 
   init(
@@ -158,7 +162,9 @@ struct ProjectPaneTab: Codable, Equatable, Identifiable, Sendable {
     title: String,
     filePath: String?,
     sessionID: UUID? = nil,
-    agentProfileID: String? = nil
+    agentProfileID: String? = nil,
+    executionRootURL: URL? = nil,
+    worktreeID: WorktreeID? = nil
   ) {
     self.id = id
     self.kind = kind
@@ -166,6 +172,8 @@ struct ProjectPaneTab: Codable, Equatable, Identifiable, Sendable {
     self.filePath = filePath
     self.sessionID = sessionID
     self.agentProfileID = kind == .terminal ? agentProfileID : nil
+    self.executionRootPath = kind == .terminal ? executionRootURL?.standardizedFileURL.path : nil
+    self.worktreeID = kind == .terminal ? worktreeID : nil
   }
 
   init(from decoder: Decoder) throws {
@@ -177,6 +185,14 @@ struct ProjectPaneTab: Codable, Equatable, Identifiable, Sendable {
     agentProfileID =
       kind == .terminal
       ? try container.decodeIfPresent(String.self, forKey: .agentProfileID)
+      : nil
+    executionRootPath =
+      kind == .terminal
+      ? try container.decodeIfPresent(String.self, forKey: .executionRootPath)
+      : nil
+    worktreeID =
+      kind == .terminal
+      ? try container.decodeIfPresent(WorktreeID.self, forKey: .worktreeID)
       : nil
     if kind == .terminal {
       let legacyID =
@@ -200,6 +216,8 @@ struct ProjectPaneTab: Codable, Equatable, Identifiable, Sendable {
     try container.encodeIfPresent(filePath, forKey: .filePath)
     try container.encodeIfPresent(sessionID, forKey: .sessionID)
     try container.encodeIfPresent(agentProfileID, forKey: .agentProfileID)
+    try container.encodeIfPresent(executionRootPath, forKey: .executionRootPath)
+    try container.encodeIfPresent(worktreeID, forKey: .worktreeID)
   }
 
   static func editor(path: String, title: String) -> ProjectPaneTab {
@@ -215,7 +233,9 @@ struct ProjectPaneTab: Codable, Equatable, Identifiable, Sendable {
   static func terminal(
     id: UUID = UUID(),
     title: String = "Terminal",
-    agentProfileID: String? = nil
+    agentProfileID: String? = nil,
+    executionRootURL: URL? = nil,
+    worktreeID: WorktreeID? = nil
   ) -> ProjectPaneTab {
     ProjectPaneTab(
       id: "terminal:\(id.uuidString)",
@@ -223,8 +243,17 @@ struct ProjectPaneTab: Codable, Equatable, Identifiable, Sendable {
       title: title,
       filePath: nil,
       sessionID: id,
-      agentProfileID: agentProfileID
+      agentProfileID: agentProfileID,
+      executionRootURL: executionRootURL,
+      worktreeID: worktreeID
     )
+  }
+
+  var executionRootURL: URL? {
+    guard let executionRootPath else {
+      return nil
+    }
+    return URL(fileURLWithPath: executionRootPath, isDirectory: true)
   }
 
   static func diff(id: UUID = UUID()) -> ProjectPaneTab {
@@ -339,11 +368,22 @@ indirect enum ProjectPaneNode: Codable, Equatable, Sendable {
         }
         switch tab.kind {
         case .editor:
-          guard let filePath = tab.filePath, !filePath.isEmpty else {
+          guard
+            let filePath = tab.filePath,
+            !filePath.isEmpty,
+            tab.executionRootPath == nil,
+            tab.worktreeID == nil
+          else {
             return false
           }
         case .terminal, .diff:
           guard tab.filePath == nil else {
+            return false
+          }
+          if tab.kind == .diff && (tab.executionRootPath != nil || tab.worktreeID != nil) {
+            return false
+          }
+          if tab.kind == .terminal, tab.worktreeID != nil, tab.executionRootPath == nil {
             return false
           }
           if tab.kind == .terminal, tab.sessionID == nil {

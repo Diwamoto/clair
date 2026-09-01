@@ -177,18 +177,21 @@ struct AgentSession: Codable, Equatable, Identifiable, Sendable {
   let id: UUID
   let profileID: String
   let projectRoot: URL
+  let worktreeID: WorktreeID?
   var lifecycle: AgentSessionLifecycle
 
   init(
     id: UUID = UUID(),
     profile: AgentLaunchProfile,
     projectRoot: URL,
+    worktreeID: WorktreeID? = nil,
     lifecycle: AgentSessionLifecycle = .starting
   ) {
     self.init(
       id: id,
       profileID: profile.stableID,
       projectRoot: projectRoot,
+      worktreeID: worktreeID,
       lifecycle: lifecycle
     )
   }
@@ -197,11 +200,13 @@ struct AgentSession: Codable, Equatable, Identifiable, Sendable {
     id: UUID = UUID(),
     profileID: String,
     projectRoot: URL,
+    worktreeID: WorktreeID? = nil,
     lifecycle: AgentSessionLifecycle = .starting
   ) {
     self.id = id
     self.profileID = profileID
     self.projectRoot = projectRoot.standardizedFileURL
+    self.worktreeID = worktreeID
     self.lifecycle = lifecycle
   }
 

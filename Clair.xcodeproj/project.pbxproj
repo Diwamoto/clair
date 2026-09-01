@@ -55,6 +55,9 @@
 		A0000000000000000000008E /* AgentWorkflowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000094 /* AgentWorkflowTests.swift */; };
 		A0000000000000000000008F /* agent-hook.sh in Resources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000096 /* agent-hook.sh */; };
 		A00000000000000000000090 /* agent-hook.sh in Resources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000096 /* agent-hook.sh */; };
+		A0000000000000000000009A /* ProjectWorktree.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000097 /* ProjectWorktree.swift */; };
+		A0000000000000000000009B /* ProjectWorktree.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000097 /* ProjectWorktree.swift */; };
+		A0000000000000000000009C /* ManagedWorktreeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000098 /* ManagedWorktreeTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -103,6 +106,8 @@
 		A00000000000000000000094 /* AgentWorkflowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentWorkflowTests.swift; sourceTree = "<group>"; };
 		A00000000000000000000095 /* AgentActivityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActivityTests.swift; sourceTree = "<group>"; };
 		A00000000000000000000096 /* agent-hook.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = scripts/agent-hook.sh; sourceTree = "<group>"; };
+		A00000000000000000000097 /* ProjectWorktree.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectWorktree.swift; sourceTree = "<group>"; };
+		A00000000000000000000098 /* ManagedWorktreeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagedWorktreeTests.swift; sourceTree = "<group>"; };
 		A00000000000000000000021 /* Clair.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Clair.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A00000000000000000000022 /* Clair Dev.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Clair Dev.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A00000000000000000000023 /* ClairTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ClairTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -196,6 +201,7 @@
 				A00000000000000000000091 /* AgentWorkflow.swift */,
 				A00000000000000000000092 /* AgentActivity.swift */,
 				A00000000000000000000093 /* AgentCoordinator.swift */,
+				A00000000000000000000097 /* ProjectWorktree.swift */,
 				A00000000000000000000016 /* Clair-Bridging-Header.h */,
 			);
 			path = ClairApp;
@@ -212,6 +218,7 @@
 				A00000000000000000000030 /* ProjectGitTests.swift */,
 				A00000000000000000000094 /* AgentWorkflowTests.swift */,
 				A00000000000000000000095 /* AgentActivityTests.swift */,
+				A00000000000000000000098 /* ManagedWorktreeTests.swift */,
 			);
 			path = ClairTests;
 			sourceTree = "<group>";
@@ -416,6 +423,7 @@
 				A00000000000000000000087 /* AgentWorkflow.swift in Sources */,
 				A00000000000000000000088 /* AgentActivity.swift in Sources */,
 				A00000000000000000000089 /* AgentCoordinator.swift in Sources */,
+				A0000000000000000000009A /* ProjectWorktree.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -442,6 +450,7 @@
 				A0000000000000000000008A /* AgentWorkflow.swift in Sources */,
 				A0000000000000000000008B /* AgentActivity.swift in Sources */,
 				A0000000000000000000008C /* AgentCoordinator.swift in Sources */,
+				A0000000000000000000009B /* ProjectWorktree.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -457,6 +466,7 @@
 				A00000000000000000000086 /* ProjectGitTests.swift in Sources */,
 				A0000000000000000000008D /* AgentActivityTests.swift in Sources */,
 				A0000000000000000000008E /* AgentWorkflowTests.swift in Sources */,
+				A0000000000000000000009C /* ManagedWorktreeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

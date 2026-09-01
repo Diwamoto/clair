@@ -28,6 +28,10 @@ struct AgentWorkflowSession: Equatable, Identifiable, Sendable {
   var exitCode: Int32? {
     agent.exitCode
   }
+
+  var worktreeID: WorktreeID? {
+    agent.worktreeID
+  }
 }
 
 final class MacOSAgentActivityNotifier: AgentActivityNotifier, @unchecked Sendable {
@@ -212,12 +216,33 @@ final class AgentWorkflowCoordinator: ObservableObject {
     profile: AgentLaunchProfile,
     projectID: UUID,
     projectRoot: URL,
-    surface: ProjectSurfaceModel
+    surface: ProjectSurfaceModel,
+    worktree: ManagedWorktree? = nil
   ) -> AgentWorkflowSession? {
+    let executionRoot: URL
+    let worktreeID: WorktreeID?
+    if let worktree {
+      guard
+        worktree.projectID == projectID,
+        worktree.state == .available,
+        Self.canonicalURL(for: projectRoot).path == Self.canonicalURL(for: worktree.rootURL).path
+      else {
+        lastErrorMessage = "The selected managed worktree is no longer available."
+        return nil
+      }
+      executionRoot = worktree.rootURL
+      worktreeID = worktree.id
+    } else {
+      executionRoot = projectRoot
+      worktreeID = nil
+    }
+
     guard
       let terminalTabID = surface.openNewTerminal(
         title: profile.displayName,
-        agentProfileID: profile.stableID
+        agentProfileID: profile.stableID,
+        executionRootURL: worktree == nil ? nil : executionRoot,
+        worktreeID: worktreeID
       ),
       let terminal = surface.terminalSession(tabID: terminalTabID)
     else {
@@ -228,7 +253,8 @@ final class AgentWorkflowCoordinator: ObservableObject {
     let agent = AgentSession(
       id: terminal.sessionID,
       profile: profile,
-      projectRoot: projectRoot,
+      projectRoot: executionRoot,
+      worktreeID: worktreeID,
       lifecycle: .starting
     )
     let workflowSession = AgentWorkflowSession(
@@ -244,9 +270,10 @@ final class AgentWorkflowCoordinator: ObservableObject {
     terminal.sendCommandWhenReady(
       launchCommand(
         profile: profile,
-        projectRoot: projectRoot,
+        projectRoot: executionRoot,
         projectID: projectID,
-        sessionID: workflowSession.id
+        sessionID: workflowSession.id,
+        worktreeID: worktreeID
       )
     )
     return workflowSession
@@ -256,13 +283,17 @@ final class AgentWorkflowCoordinator: ObservableObject {
     profile: AgentLaunchProfile,
     projectRoot: URL,
     projectID: UUID,
-    sessionID: UUID
+    sessionID: UUID,
+    worktreeID: WorktreeID? = nil
   ) -> String {
     var exports = [
       ("CLAIR_AGENT_SESSION_ID", sessionID.uuidString),
       ("CLAIR_AGENT_PROFILE", profile.stableID),
       ("CLAIR_PROJECT_ID", projectID.uuidString),
     ]
+    if let worktreeID {
+      exports.append(("CLAIR_WORKTREE_ID", worktreeID.uuidString))
+    }
     if let hookReceiverURL, let hookFileURL = hookFileURL(for: sessionID) {
       exports.append(("CLAIR_AGENT_HOOK_RECEIVER", hookReceiverURL.path))
       exports.append(("CLAIR_AGENT_HOOK_FILE", hookFileURL.path))
@@ -275,12 +306,24 @@ final class AgentWorkflowCoordinator: ObservableObject {
     return exportCommand.isEmpty ? agentCommand : "\(exportCommand); \(agentCommand)"
   }
 
+  private static func canonicalURL(for url: URL) -> URL {
+    url.standardizedFileURL.resolvingSymlinksInPath().standardizedFileURL
+  }
+
   func hookFileURL(for sessionID: UUID) -> URL? {
     hookDirectory?.appendingPathComponent("\(sessionID.uuidString).jsonl", isDirectory: false)
   }
 
   func activities(for projectID: UUID) -> [AgentActivity] {
     activities.filter { $0.projectID == projectID }
+  }
+
+  func activeSessionIDs(for worktreeID: WorktreeID) -> Set<UUID> {
+    Set(
+      sessions
+        .filter { $0.worktreeID == worktreeID && $0.isActive }
+        .map(\.id)
+    )
   }
 
   func isMuted(projectID: UUID, sessionID: UUID? = nil) -> Bool {

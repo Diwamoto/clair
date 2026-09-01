@@ -248,22 +248,37 @@ P01から最小kernelを育て、後から既存featureを別実装へ置き換�
   and [local development runbook](../runbooks/local-development.md) document fixed launch profiles,
   Project-root execution, shell quoting, bounded Activity/history/mute/notification behavior,
   transient hook inbox handling, and manual checks.
-- Deferred: vendor-specific semantic adapters/config rewriting, managed worktrees, CLI/MCP adapters,
+- Deferred: vendor-specific semantic adapters/config rewriting, CLI/MCP adapters,
   transcript persistence, and remote/E2EE delivery remain outside this local slice.
 - Legacy issue coverage: #15。
 
 ### P10 Managed worktrees
 
-- Status: `queued`
+- Status: `done`
+- Completed: `Codex agent — P10 managed worktrees (2026-09-01)`
 - Depends on: P08、P09。
 - Outcome: agent起動時だけ任意のmanaged worktreeをexecution rootとして選べる。
 - Scope: repository外管理root、stable `WorktreeID`、create/list/inspect、dirty/active-session guard、cleanup confirmation。
 - Functional checks: direct rootとmanaged rootの並行agent、restart discovery、wrong-target/dirty cleanup refusal。
+- Validation (2026-09-01): project-scoped macOS XCTest `ManagedWorktreeTests` passed all 9
+  cases, including external managed roots, stable identity and restart discovery,
+  missing/detached states, direct-versus-managed agent launch roots and environment,
+  terminal identity persistence, catalog path-boundary rejection, dirty/active/
+  wrong-target cleanup refusal, and stale HEAD fingerprint rejection. The full
+  `ClairTests` suite also passed. `swift format lint --recursive --parallel --strict apple`,
+  `ruby scripts/validate-xcode-project.rb`, and `git diff --check` passed.
+- Durable detail: [development workspace architecture](../architecture/development-workspace.md)
+  and [local development runbook](../runbooks/local-development.md) document the
+  repository-external catalog/managed-root layout, stable identity propagation,
+  restart discovery, launch selection, and cleanup guards.
+- Deferred: branch review/adoption, merge/conflict handling, and review comments remain P11;
+  CLI/MCP command surfaces remain P12/P13. Catalog/Git crash journaling and semantic
+  vendor adapters are outside this local vertical slice.
 - Legacy issue coverage: #22のoptional worktree subset。
 
 ### P11 Branch review and adoption
 
-- Status: `queued`
+- Status: `next`
 - Depends on: P10。
 - Outcome: baseからbranch全体の成果をreviewし、clean commitからmerge commitで採用できる。
 - Scope: committed/uncommitted separation、commit gate、merge、native three-way conflict surfaceまたはowning agent handoff、branch/worktree個別cleanup確認。

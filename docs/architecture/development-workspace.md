@@ -2,7 +2,7 @@
 
 ## Status
 
-Current as of local PoC item `P09 Raw agent workflow and attention`.
+Current as of local PoC item `P10 Managed worktrees`.
 
 ## Workspace boundary
 
@@ -144,7 +144,9 @@ metadata is never treated as a user file. Stage, unstage, and commit are explici
 commands; commit delegates to Git's staged index and never includes unstaged bytes.
 Branch switching validates the ref and requires a clean working tree, including no
 untracked files. The current P08 boundary intentionally excludes discard, blame,
-review comments, AI briefs, merge/conflict adoption, and managed worktrees.
+review comments, AI briefs, and merge/conflict adoption. P10 adds an optional
+managed-worktree execution context without changing the Project root or Git
+ownership boundary.
 
 ## Workspace shell and file tree
 
@@ -208,8 +210,8 @@ profile creates a new terminal tab on the selected Project surface, records the 
 profile ID in the workspace descriptor, and sends a shell-quoted command that changes
 to the Project root before `exec`-ing the profile. Each launch uses the terminal's
 stable `SessionID`, so multiple agents can share one Project without sharing a tab or
-mixing activity scopes. Managed worktrees and semantic vendor adapters remain outside
-this item.
+mixing activity scopes. P09 itself remains a Project-root PTY slice; the optional
+managed-worktree extension is described below.
 
 `TerminalSession` publishes lifecycle, output, exit, and failure events to the agent
 coordinator. The transcript sanitizer exposes only ground-state BEL bytes as attention
@@ -235,6 +237,43 @@ or claim that a CLI is installed. If a profile executable is unavailable, its te
 shows the normal shell failure and records the resulting exit status. App-window and
 PTY continuity across app restart remain the P07 broker boundary; a broker restart
 still requires the existing terminal recovery path.
+
+## Managed worktrees and optional agent roots
+
+P10 keeps the Project as Clair's owning context and makes a Git worktree an optional
+execution root selected only when launching an agent. `ProjectWorktreeCoordinator`
+uses `/usr/bin/git` through a Project-scoped service. The catalog is stored at
+`worktrees-v1.json` in the channel-specific Application Support directory, while
+each Project's managed worktrees live under the repository-external directory
+`worktrees/<ProjectID>/`. The catalog is versioned, written atomically, and kept
+owner-only (`0600`); its parent and newly created managed directories are
+owner-only (`0700`). The managed root is rejected when it is the repository itself
+or any path below the repository.
+
+Each catalog record has a stable UUID `WorktreeID`, Project ID, canonical repository
+root, managed target path, branch, base revision, and creation time. Listing and
+inspection revalidate the record against Git and report `available`, `missing`, or
+`detached`. A missing Git registration, a detached HEAD, a non-repository target,
+or a catalog target outside the Project's managed root is never treated as a usable
+execution root. Catalog paths are not trusted as cleanup targets without the same
+managed-root boundary check.
+
+Terminal descriptors carry an optional execution-root path and `WorktreeID` without
+changing the version-1 workspace schema. Agent sessions carry the same identity and
+export `CLAIR_WORKTREE_ID`; a Project-root launch leaves that field absent. Restored
+terminal descriptors retain their managed root so the existing broker reattach path
+can use the same working directory. The workspace surface also reports terminal
+descriptors that are active or awaiting reattach to the cleanup guard, while the
+agent coordinator contributes its in-memory active sessions.
+
+Cleanup is a two-step operation. Clair first creates a fresh confirmation plan and
+refuses it when the worktree is dirty, missing, detached, or used by a terminal or
+agent. Confirmation rechecks the canonical target, state, branch, and HEAD
+fingerprint before invoking `git worktree remove` without `--force`; the branch is
+kept. A stale plan, changed target, changed branch, or changed HEAD must be prepared
+again. P10 does not review, merge, adopt, or resolve worktree branches; those actions
+belong to P11. PTY transcript persistence, semantic vendor adapters, and CLI/MCP
+command surfaces remain outside this slice.
 
 ## Native editor and disk safety
 
@@ -344,7 +383,7 @@ disk writes, project-scoped history ordering, and Project-root path validation.
 - The terminal surface is a selectable plain-text AppKit fallback, not a full ANSI/
   alternate-screen/cursor/colour terminal grid; a reproducible libghostty development
   artifact is still unavailable in this checkout. The editor does not yet provide
-  syntax highlighting, LSP, or multi-cursor editing. The P08 Git loop currently uses
-  the local `/usr/bin/git` bridge; discard, blame, review comments, AI briefs, merge/
-  conflict adoption, managed worktrees, and CLI/MCP adapters remain later queue items.
+  syntax highlighting, LSP, or multi-cursor editing. The P08/P10 Git loop currently
+  uses the local `/usr/bin/git` bridge; discard, blame, review comments, AI briefs,
+  merge/conflict adoption, and CLI/MCP adapters remain later queue items.
 - Formal app icons, signing, notarization, and update delivery are not present.

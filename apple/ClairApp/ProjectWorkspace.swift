@@ -594,6 +594,27 @@ final class ProjectSurfaceModel: ObservableObject {
     terminalSessions[tabID]
   }
 
+  func sessionIDsInUse(for worktreeID: WorktreeID) -> Set<UUID> {
+    Set(
+      layout.leaves.flatMap(\.tabs).compactMap { tab in
+        guard
+          tab.kind == .terminal,
+          tab.worktreeID == worktreeID,
+          let sessionID = tab.sessionID,
+          let session = terminalSessions[tab.id]
+        else {
+          return nil
+        }
+        switch session.state {
+        case .idle, .starting, .running, .stopping:
+          return sessionID
+        case .exited, .missing, .failed:
+          return nil
+        }
+      }
+    )
+  }
+
   func isFocusedPane(_ paneID: UUID) -> Bool {
     focusedPaneID == paneID
   }
@@ -703,6 +724,8 @@ final class ProjectSurfaceModel: ObservableObject {
   func openNewTerminal(
     title: String = "Terminal",
     agentProfileID: String? = nil,
+    executionRootURL: URL? = nil,
+    worktreeID: WorktreeID? = nil,
     in paneID: UUID? = nil
   ) -> String? {
     let targetPaneID = paneID ?? focusedPaneID
@@ -712,7 +735,9 @@ final class ProjectSurfaceModel: ObservableObject {
     let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
     let newTab = ProjectPaneTab.terminal(
       title: normalizedTitle.isEmpty ? "Terminal" : normalizedTitle,
-      agentProfileID: agentProfileID
+      agentProfileID: agentProfileID,
+      executionRootURL: executionRootURL,
+      worktreeID: worktreeID
     )
     layout = updatingLeaf(in: layout, leafID: targetPaneID) { leaf in
       var next = leaf
@@ -756,7 +781,7 @@ final class ProjectSurfaceModel: ObservableObject {
     setActiveTab(tabID, in: location.paneID, revealEditor: false)
     if terminalSessions[tabID] == nil {
       let session = TerminalSession(
-        projectRootURL: rootURL,
+        projectRootURL: location.tab.executionRootURL ?? rootURL,
         sessionID: location.tab.sessionID ?? UUID(),
         startMode: .create
       )
@@ -1353,7 +1378,7 @@ final class ProjectSurfaceModel: ObservableObject {
           restoredTabs.append(tab)
         case .terminal:
           let session = TerminalSession(
-            projectRootURL: rootURL,
+            projectRootURL: tab.executionRootURL ?? rootURL,
             sessionID: tab.sessionID ?? UUID(),
             startMode: .reattach
           )

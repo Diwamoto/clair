@@ -5,6 +5,7 @@ struct ContentView: View {
   let state: BootstrapState
   @ObservedObject var workspace: ProjectWorkspaceModel
   @ObservedObject var agentWorkflow: AgentWorkflowCoordinator
+  @ObservedObject var worktreeCoordinator: ProjectWorktreeCoordinator
 
   @State private var renameProjectID: UUID?
   @State private var renameValue = ""
@@ -154,7 +155,8 @@ struct ContentView: View {
         project: project,
         workspace: workspace,
         surface: surface,
-        agentWorkflow: agentWorkflow
+        agentWorkflow: agentWorkflow,
+        worktreeCoordinator: worktreeCoordinator
       )
     } else {
       VStack(spacing: 12) {
@@ -251,6 +253,7 @@ private struct ProjectWorkspaceDetail: View {
   @ObservedObject var workspace: ProjectWorkspaceModel
   @ObservedObject var surface: ProjectSurfaceModel
   @ObservedObject var agentWorkflow: AgentWorkflowCoordinator
+  @ObservedObject var worktreeCoordinator: ProjectWorktreeCoordinator
   @State private var navigationSheet: ProjectNavigationSheet?
 
   var body: some View {
@@ -399,7 +402,8 @@ private struct ProjectWorkspaceDetail: View {
           project: project,
           workspace: workspace,
           surface: surface,
-          agentWorkflow: agentWorkflow
+          agentWorkflow: agentWorkflow,
+          worktreeCoordinator: worktreeCoordinator
         )
       }
     }
@@ -455,7 +459,12 @@ private struct ProjectAgentView: View {
   @ObservedObject var workspace: ProjectWorkspaceModel
   @ObservedObject var surface: ProjectSurfaceModel
   @ObservedObject var agentWorkflow: AgentWorkflowCoordinator
+  @ObservedObject var worktreeCoordinator: ProjectWorktreeCoordinator
   @Environment(\.dismiss) private var dismiss
+  @State private var selectedWorktreeID: WorktreeID?
+  @State private var newWorktreeBranch = ""
+  @State private var newWorktreeTargetName = ""
+  @State private var cleanupPlan: ManagedWorktreeCleanupPlan?
 
   private var projectSessions: [AgentWorkflowSession] {
     agentWorkflow.sessions.filter { $0.projectID == project.id }
@@ -463,6 +472,24 @@ private struct ProjectAgentView: View {
 
   private var projectActivities: [AgentActivity] {
     agentWorkflow.activities(for: project.id)
+  }
+
+  private var projectWorktrees: [ManagedWorktree] {
+    worktreeCoordinator.worktrees(for: project.id)
+  }
+
+  private var selectedWorktree: ManagedWorktree? {
+    guard let selectedWorktreeID else {
+      return nil
+    }
+    return projectWorktrees.first { $0.id == selectedWorktreeID }
+  }
+
+  private var selectedExecutionRoot: URL {
+    guard let selectedWorktree, selectedWorktree.state == .available else {
+      return project.rootURL
+    }
+    return selectedWorktree.rootURL
   }
 
   var body: some View {
@@ -484,6 +511,7 @@ private struct ProjectAgentView: View {
       ScrollView {
         VStack(alignment: .leading, spacing: 16) {
           launchSection
+          worktreeSection
           projectMuteSection
           sessionsSection
           activitySection
@@ -493,26 +521,64 @@ private struct ProjectAgentView: View {
       }
     }
     .frame(minWidth: 680, minHeight: 560)
+    .onAppear {
+      worktreeCoordinator.refresh(project: project)
+    }
+    .alert("Managed worktree failed", isPresented: worktreeErrorIsPresented) {
+      Button("OK") {
+        worktreeCoordinator.clearError()
+      }
+    } message: {
+      Text(worktreeCoordinator.lastErrorMessage ?? "Unknown managed worktree error.")
+    }
+    .alert("Remove managed worktree", isPresented: cleanupAlertIsPresented) {
+      Button("Cancel", role: .cancel) {
+        cleanupPlan = nil
+      }
+      if cleanupPlan?.canConfirm == true {
+        Button("Remove", role: .destructive) {
+          confirmCleanup()
+        }
+      }
+    } message: {
+      if let cleanupPlan {
+        if cleanupPlan.canConfirm {
+          Text(
+            "Remove branch \(cleanupPlan.branch) at \(cleanupPlan.rootURL.path)? The branch itself will be kept."
+          )
+        } else {
+          Text(
+            "Cleanup is refused because of \(cleanupPlan.blockers.map { $0.displayName }.joined(separator: ", "))."
+          )
+        }
+      }
+    }
   }
 
   private var launchSection: some View {
     VStack(alignment: .leading, spacing: 8) {
-      Text("Launch in Project root")
+      Text(selectedWorktree == nil ? "Launch in Project root" : "Launch in managed worktree")
         .font(.headline)
-      Text(project.rootURL.path)
+      Text(selectedExecutionRoot.path)
         .font(.caption.monospaced())
         .foregroundStyle(.secondary)
         .textSelection(.enabled)
 
+      Picker("Execution root", selection: $selectedWorktreeID) {
+        Text("Project root").tag(nil as WorktreeID?)
+        ForEach(projectWorktrees.filter { $0.state == .available }) { worktree in
+          Text(
+            "\(worktree.branch) — \(worktree.state.displayName)"
+          )
+          .tag(worktree.id as WorktreeID?)
+        }
+      }
+      .pickerStyle(.menu)
+
       HStack(spacing: 8) {
         ForEach(AgentLaunchProfile.all) { profile in
           Button {
-            _ = agentWorkflow.launch(
-              profile: profile,
-              projectID: project.id,
-              projectRoot: project.rootURL,
-              surface: surface
-            )
+            launch(profile: profile)
           } label: {
             Label(profile.displayName, systemImage: "terminal")
           }
@@ -520,6 +586,195 @@ private struct ProjectAgentView: View {
         }
       }
     }
+  }
+
+  private var worktreeSection: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      HStack {
+        Text("Managed worktrees")
+          .font(.headline)
+        Spacer()
+        Button("Refresh") {
+          worktreeCoordinator.refresh(project: project)
+        }
+        .buttonStyle(.borderless)
+      }
+
+      if surface.gitStatus?.isRepository != true {
+        Text("Managed worktrees require a Git repository at the Project root.")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      } else {
+        Text(
+          "Clair stores these worktrees outside the repository at \(worktreeCoordinator.managementRootURL?.path ?? "Unavailable")."
+        )
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .textSelection(.enabled)
+
+        HStack(spacing: 8) {
+          TextField("Branch", text: $newWorktreeBranch)
+          TextField("Folder name", text: $newWorktreeTargetName)
+          Button("Create") {
+            createWorktree()
+          }
+          .buttonStyle(.bordered)
+          .disabled(
+            newWorktreeBranch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+              || newWorktreeTargetName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+          )
+        }
+
+        if projectWorktrees.isEmpty {
+          Text("No managed worktrees have been created for this Project.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        } else {
+          ForEach(projectWorktrees) { worktree in
+            managedWorktreeRow(worktree)
+          }
+        }
+      }
+    }
+  }
+
+  private func managedWorktreeRow(_ worktree: ManagedWorktree) -> some View {
+    HStack(spacing: 8) {
+      Image(
+        systemName: worktree.state == .available
+          ? "arrow.triangle.branch" : "exclamationmark.triangle"
+      )
+      .foregroundStyle(worktree.state == .available ? .green : .orange)
+      VStack(alignment: .leading, spacing: 2) {
+        Text(worktree.branch)
+          .font(.body.weight(.medium))
+        Text(worktree.rootURL.path)
+          .font(.caption2.monospaced())
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+        Text(worktreeStatusDescription(worktree))
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+      }
+      Spacer(minLength: 0)
+      if worktree.state == .available {
+        Button("Use") {
+          selectedWorktreeID = worktree.id
+        }
+        .buttonStyle(.borderless)
+      }
+      Button("Clean Up", role: .destructive) {
+        cleanupPlan = worktreeCoordinator.prepareCleanup(
+          project: project,
+          worktreeID: worktree.id,
+          activeSessionIDs: sessionIDsInUse(for: worktree.id),
+          expectedRootURL: worktree.rootURL
+        )
+      }
+      .buttonStyle(.borderless)
+    }
+    .padding(8)
+    .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 6))
+  }
+
+  private var worktreeErrorIsPresented: Binding<Bool> {
+    Binding(
+      get: { worktreeCoordinator.lastErrorMessage != nil },
+      set: { isPresented in
+        if !isPresented {
+          worktreeCoordinator.clearError()
+        }
+      }
+    )
+  }
+
+  private var cleanupAlertIsPresented: Binding<Bool> {
+    Binding(
+      get: { cleanupPlan != nil },
+      set: { isPresented in
+        if !isPresented {
+          cleanupPlan = nil
+        }
+      }
+    )
+  }
+
+  private func createWorktree() {
+    let branch = newWorktreeBranch.trimmingCharacters(in: .whitespacesAndNewlines)
+    let targetName = newWorktreeTargetName.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard
+      !branch.isEmpty,
+      !targetName.isEmpty,
+      let worktree = worktreeCoordinator.create(
+        project: project,
+        branch: branch,
+        targetName: targetName
+      )
+    else {
+      return
+    }
+    selectedWorktreeID = worktree.id
+    newWorktreeBranch = ""
+    newWorktreeTargetName = ""
+  }
+
+  private func confirmCleanup() {
+    guard let cleanupPlan else {
+      return
+    }
+    let didRemove = worktreeCoordinator.confirmCleanup(
+      project: project,
+      plan: cleanupPlan,
+      activeSessionIDs: sessionIDsInUse(for: cleanupPlan.worktreeID)
+    )
+    if didRemove, selectedWorktreeID == cleanupPlan.worktreeID {
+      selectedWorktreeID = nil
+    }
+    self.cleanupPlan = nil
+  }
+
+  private func sessionIDsInUse(for worktreeID: WorktreeID) -> Set<UUID> {
+    agentWorkflow.activeSessionIDs(for: worktreeID)
+      .union(surface.sessionIDsInUse(for: worktreeID))
+  }
+
+  private func worktreeStatusDescription(_ worktree: ManagedWorktree) -> String {
+    switch worktree.state {
+    case .available:
+      if worktree.isDirty {
+        return "Available — uncommitted changes"
+      }
+      return "Available — clean"
+    case .missing:
+      return "Missing — execution is unavailable"
+    case .detached:
+      return "Detached — Git registration is missing or HEAD is detached"
+    }
+  }
+
+  private func launch(profile: AgentLaunchProfile) {
+    let worktree: ManagedWorktree?
+    if let selectedWorktreeID {
+      guard
+        let resolved = worktreeCoordinator.availableWorktree(
+          project: project,
+          id: selectedWorktreeID
+        )
+      else {
+        return
+      }
+      worktree = resolved
+    } else {
+      worktree = nil
+    }
+
+    _ = agentWorkflow.launch(
+      profile: profile,
+      projectID: project.id,
+      projectRoot: worktree?.rootURL ?? project.rootURL,
+      surface: surface,
+      worktree: worktree
+    )
   }
 
   private var projectMuteSection: some View {
