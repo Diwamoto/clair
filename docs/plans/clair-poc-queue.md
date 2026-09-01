@@ -436,7 +436,7 @@ P14はADR-0009でdecision blockerを解消して完了した。P15Dはdecision b
 
 ### P15B Repository-scale file navigation
 
-- Status: `queued`
+- Status: `done`
 - Depends on: P06。
 - Outcome: Clair自身のrepositoryを開いてもfile tree、Quick Open、search、watcherがUIを占有せず、
   editor/terminal操作を継続できる。
@@ -446,6 +446,37 @@ P14はADR-0009でdecision blockerを解消して完了した。P15Dはdecision b
   close/reopenを行い、sustained UI stallとwatcherの無制限増加がないことを確認する。
 - Audit evidence (2026-09-01): 現実装は`.git`だけを除外してdirectory/fileを同期再帰し、audit用にClair
   repositoryを開いたprocessが約99% CPUを継続した。これはformal benchmarkではなくdogfood correctness blockerである。
+- Validation (2026-09-02): `swift format lint --recursive --parallel --strict apple`,
+  `ruby scripts/validate-xcode-project.rb Clair.xcodeproj`, and `scripts/smoke-app-link.sh`
+  (Stable/Dev) passed. Project-scoped Clair Dev XCTest passed all 26 `ProjectKernelTests` /
+  `ProjectNavigationTests`, including lazy bounded enumeration, generated/vendor exclusion,
+  bounded watcher graph, external create/rename/delete refresh, Project isolation, Quick Open,
+  and search. The full Clair Dev XCTest suite and `xcodebuild ... analyze` also passed.
+- Revalidation after P15A integration (2026-09-03): rebased onto post-P15A master (4b883e5).
+  Merge conflicts were limited to `TerminalSurface.swift` (resolved by keeping the master
+  libvterm text-stack `init`; the P15B initializer refactor is fully subsumed) and
+  `ProjectWorkspace.swift` (resolved by combining the P15B URL-based `openEditorTab(for:title:)`
+  overload with the master non-throwing `ProjectEditorTab` initializer; load failures remain
+  inline via `loadError`). `git range-diff` confirmed no unintended content drift for all other
+  files. Fresh evidence on the rebased snapshot: `swift format lint --recursive --parallel
+  --strict apple` passed, `ruby scripts/validate-xcode-project.rb Clair.xcodeproj` passed
+  (153 objects, 3 targets, 2 shared schemes), `git diff --check 4b883e5..HEAD` passed,
+  `make test-swift` passed all 105 tests in 0 failures (including the 26 ProjectKernel/
+  ProjectNavigation tests and the 14 libvterm TerminalProtocolTests), and `make analyze`
+  (`xcodebuild ... analyze`) succeeded. `scripts/smoke-app-link.sh` fails with undefined
+  `clair_vterm_*` symbols on both master (4b883e5) and this branch; that is a pre-existing
+  P15A integration gap (libvterm is not linked by the standalone swiftc harness), not a
+  P15B regression, and is left for a separate fix.
+- Manual smoke (2026-09-02): Clair Dev opened the P15B worktree itself; the initial tree showed
+  root entries only, expanding `apple` loaded its children on demand, generated directories were
+  absent, Quick Open found `ProjectNavigation.swift`, and Search returned the expected scanner
+  references without blocking the UI.
+- Durable detail: [development workspace architecture](../architecture/development-workspace.md) and
+  [local development runbook](../runbooks/local-development.md) document lazy loading, traversal
+  and watcher bounds, generated-directory policy, cancellation/reopen behavior, and the manual
+  Clair-repository dogfood check.
+- Deferred: Formal throughput/frame-time comparison and frozen-corpus load measurement remain L01;
+  P15B records functional boundedness and interactive usability only.
 
 ### P15C Interaction Lab UI convergence
 

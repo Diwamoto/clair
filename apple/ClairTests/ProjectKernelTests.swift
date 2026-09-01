@@ -319,7 +319,7 @@ final class ProjectKernelTests: XCTestCase {
     XCTAssertNil(surface.shortcuts[.gitRefresh])
   }
 
-  func testFileTreeLoadsNestedFoldersAndOpensFixtureEditorTab() throws {
+  func testFileTreeLoadsNestedFoldersAndOpensFixtureEditorTab() async throws {
     let fixture = try Fixture()
     let root = try fixture.makeDirectory(named: "tree-project")
     let sources = root.appendingPathComponent("Sources", isDirectory: true)
@@ -335,10 +335,15 @@ final class ProjectKernelTests: XCTestCase {
 
     XCTAssertEqual(surface.fileTree.availability, .available)
     XCTAssertEqual(rootNode.name, root.lastPathComponent)
-    XCTAssertEqual(sourcesNode.children?.map(\.name), ["main.swift"])
+    XCTAssertNil(sourcesNode.children)
     XCTAssertFalse(surface.isExpanded(sources.path))
 
     surface.toggleExpansion(for: sources.path)
+    await waitForFileTree(surface) { snapshot in
+      !snapshot.isLoading && snapshot.node(withID: file.path) != nil
+    }
+    let loadedSourcesNode = try XCTUnwrap(surface.fileTree.node(withID: sources.path))
+    XCTAssertEqual(loadedSourcesNode.children?.map(\.name), ["main.swift"])
     XCTAssertTrue(surface.isExpanded(sources.path))
     surface.select(nodeID: file.path)
 
@@ -362,6 +367,11 @@ final class ProjectKernelTests: XCTestCase {
     try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
     await waitForFileTree(surface) { snapshot in
       snapshot.node(withID: nested.path) != nil
+    }
+
+    surface.toggleExpansion(for: nested.path)
+    await waitForFileTree(surface) { snapshot in
+      !snapshot.isLoading && snapshot.node(withID: nested.path)?.children != nil
     }
 
     try Data("created".utf8).write(to: created)
@@ -631,29 +641,36 @@ final class ProjectKernelTests: XCTestCase {
     XCTAssertEqual(surface.searchResults.first?.relativePath, "watched.txt")
   }
 
-  func testProjectHistoryBrowserRestoresAnEntryIntoDirtyBuffer() throws {
+  func testProjectHistoryBrowserRestoresNestedEntryIntoDirtyBuffer() throws {
     let fixture = try Fixture()
     let root = try fixture.makeDirectory(named: "history-browser-project")
-    let file = root.appendingPathComponent("history.txt")
-    try Data("before\n".utf8).write(to: file)
-    let surface = ProjectSurfaceModel(
-      projectID: UUID(),
-      rootURL: root,
-      historyStore: ProjectLocalHistoryStore(
-        fileURL: fixture.root.appendingPathComponent("history-browser.json")
-      )
+    let sources = root.appendingPathComponent("Sources", isDirectory: true)
+    try FileManager.default.createDirectory(at: sources, withIntermediateDirectories: true)
+    let file = sources.appendingPathComponent("history.txt")
+    try Data("after\n".utf8).write(to: file)
+    let projectID = UUID()
+    let historyStore = ProjectLocalHistoryStore(
+      fileURL: fixture.root.appendingPathComponent("history-browser.json")
     )
+    let surface = ProjectSurfaceModel(
+      projectID: projectID,
+      rootURL: root,
+      historyStore: historyStore
+    )
+    XCTAssertNil(surface.fileTree.node(withID: file.path))
 
-    surface.select(nodeID: file.path)
-    let document = try XCTUnwrap(surface.activeTab)
-    document.replaceContent("after\n")
-    surface.save(tabID: document.id)
-    let entry = try XCTUnwrap(surface.historyEntries.first)
+    let entry = try historyStore.record(
+      projectID: projectID,
+      fileURL: file,
+      rootURL: root,
+      content: "before\n",
+      reason: .save
+    )
 
     surface.restoreHistoryEntry(entry)
 
-    XCTAssertEqual(document.content, "before\n")
-    XCTAssertTrue(document.isDirty)
+    XCTAssertEqual(surface.activeTab?.content, "before\n")
+    XCTAssertTrue(surface.activeTab?.isDirty == true)
     XCTAssertEqual(try String(contentsOf: file), "after\n")
     XCTAssertTrue(surface.lastNavigationStatusMessage?.contains("history.txt") == true)
   }

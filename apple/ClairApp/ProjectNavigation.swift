@@ -56,6 +56,12 @@ enum ProjectNavigationError: Error, Equatable, LocalizedError, Sendable {
   }
 }
 
+enum ProjectNavigationLimits {
+  static let maximumFiles = 50_000
+  static let maximumMatches = 20_000
+  static let maximumQuickOpenResults = 200
+}
+
 enum ProjectNavigation {
   static func quickOpenItems(
     from root: ProjectFileTreeNode,
@@ -83,7 +89,48 @@ enum ProjectNavigation {
         }
         return lhs.1.filePath < rhs.1.filePath
       }
+      .prefix(ProjectNavigationLimits.maximumQuickOpenResults)
       .map(\.1)
+  }
+
+  static func quickOpenItems(
+    query: String,
+    rootURL: URL,
+    fileManager: FileManager = .default
+  ) -> [ProjectQuickOpenItem] {
+    let items = projectFiles(
+      rootURL: rootURL,
+      fileManager: fileManager,
+      maximumFiles: ProjectNavigationLimits.maximumFiles
+    ).map { file in
+      ProjectQuickOpenItem(
+        id: file.url.path,
+        filePath: file.url.path,
+        relativePath: file.relativePath,
+        title: file.url.lastPathComponent
+      )
+    }
+    return rankedQuickOpenItems(items, query: query)
+  }
+
+  static func quickOpenItemsAsync(
+    query: String,
+    rootURL: URL
+  ) async -> [ProjectQuickOpenItem] {
+    let task = Task.detached(priority: .userInitiated) {
+      quickOpenItems(
+        query: query,
+        rootURL: rootURL,
+        fileManager: FileManager()
+      )
+    }
+    return await withTaskCancellationHandler(
+      operation: {
+        await task.value
+      },
+      onCancel: {
+        task.cancel()
+      })
   }
 
   static func search(
@@ -95,21 +142,51 @@ enum ProjectNavigation {
       return []
     }
 
-    return projectFiles(rootURL: rootURL, fileManager: fileManager).flatMap {
-      file -> [ProjectSearchMatch] in
+    var results: [ProjectSearchMatch] = []
+    for file in projectFiles(
+      rootURL: rootURL,
+      fileManager: fileManager,
+      maximumFiles: ProjectNavigationLimits.maximumFiles
+    ) {
+      if Task.isCancelled || results.count >= ProjectNavigationLimits.maximumMatches {
+        break
+      }
       guard
         let data = try? Data(contentsOf: file.url),
         let content = String(data: data, encoding: .utf8)
       else {
-        return []
+        continue
       }
-      return matches(
-        in: content,
+      results.append(
+        contentsOf: matches(
+          in: content,
+          query: query,
+          filePath: file.url.path,
+          relativePath: file.relativePath,
+          maximumResults: ProjectNavigationLimits.maximumMatches - results.count
+        ))
+    }
+    return results
+  }
+
+  static func searchAsync(
+    query: String,
+    rootURL: URL
+  ) async -> [ProjectSearchMatch] {
+    let task = Task.detached(priority: .userInitiated) {
+      search(
         query: query,
-        filePath: file.url.path,
-        relativePath: file.relativePath
+        rootURL: rootURL,
+        fileManager: FileManager()
       )
     }
+    return await withTaskCancellationHandler(
+      operation: {
+        await task.value
+      },
+      onCancel: {
+        task.cancel()
+      })
   }
 
   static func previewReplacement(
@@ -125,7 +202,14 @@ enum ProjectNavigation {
     var allMatches: [ProjectSearchMatch] = []
     var files: [ProjectSearchFileReplacement] = []
 
-    for file in projectFiles(rootURL: rootURL, fileManager: fileManager) {
+    for file in projectFiles(
+      rootURL: rootURL,
+      fileManager: fileManager,
+      maximumFiles: ProjectNavigationLimits.maximumFiles
+    ) {
+      if Task.isCancelled || allMatches.count >= ProjectNavigationLimits.maximumMatches {
+        break
+      }
       let data: Data
       do {
         data = try Data(contentsOf: file.url)
@@ -140,7 +224,8 @@ enum ProjectNavigation {
         in: content,
         query: query,
         filePath: file.url.path,
-        relativePath: file.relativePath
+        relativePath: file.relativePath,
+        maximumResults: ProjectNavigationLimits.maximumMatches - allMatches.count
       )
       guard !fileMatches.isEmpty else {
         continue
@@ -151,7 +236,8 @@ enum ProjectNavigation {
         query: query,
         with: replacement
       )
-      allMatches.append(contentsOf: fileMatches)
+      let remainingMatches = ProjectNavigationLimits.maximumMatches - allMatches.count
+      allMatches.append(contentsOf: fileMatches.prefix(remainingMatches))
       files.append(
         ProjectSearchFileReplacement(
           id: file.url.path,
@@ -169,6 +255,28 @@ enum ProjectNavigation {
       matches: allMatches,
       files: files
     )
+  }
+
+  static func previewReplacementAsync(
+    query: String,
+    replacement: String,
+    rootURL: URL
+  ) async throws -> ProjectSearchReplacementPreview {
+    let task = Task.detached(priority: .userInitiated) {
+      try previewReplacement(
+        query: query,
+        replacement: replacement,
+        rootURL: rootURL,
+        fileManager: FileManager()
+      )
+    }
+    return try await withTaskCancellationHandler(
+      operation: {
+        try await task.value
+      },
+      onCancel: {
+        task.cancel()
+      })
   }
 
   static func fileURL(for relativePath: String, rootURL: URL) -> URL? {
@@ -210,6 +318,32 @@ enum ProjectNavigation {
         title: node.name
       )
     )
+  }
+
+  private static func rankedQuickOpenItems(
+    _ items: [ProjectQuickOpenItem],
+    query: String
+  ) -> [ProjectQuickOpenItem] {
+    let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    let scoredItems: [(score: Int, item: ProjectQuickOpenItem)] = items.compactMap { item in
+      guard let score = quickOpenScore(for: item, query: normalizedQuery) else {
+        return nil
+      }
+      return (score, item)
+    }
+    return
+      scoredItems
+      .sorted { lhs, rhs in
+        if lhs.0 != rhs.0 {
+          return lhs.0 < rhs.0
+        }
+        if lhs.1.relativePath != rhs.1.relativePath {
+          return lhs.1.relativePath < rhs.1.relativePath
+        }
+        return lhs.1.filePath < rhs.1.filePath
+      }
+      .prefix(ProjectNavigationLimits.maximumQuickOpenResults)
+      .map(\.1)
   }
 
   private static func quickOpenScore(
@@ -268,7 +402,8 @@ enum ProjectNavigation {
 
   private static func projectFiles(
     rootURL: URL,
-    fileManager: FileManager
+    fileManager: FileManager,
+    maximumFiles: Int
   ) -> [(url: URL, relativePath: String)] {
     let root = rootURL.standardizedFileURL
     var isDirectory = ObjCBool(false)
@@ -286,9 +421,8 @@ enum ProjectNavigation {
 
     var files: [(url: URL, relativePath: String)] = []
     for case let url as URL in enumerator {
-      if url.lastPathComponent == ".git" {
-        enumerator.skipDescendants()
-        continue
+      if Task.isCancelled {
+        break
       }
 
       guard
@@ -296,6 +430,13 @@ enum ProjectNavigation {
           forKeys: [.isDirectoryKey, .isSymbolicLinkKey, .isRegularFileKey]
         )
       else {
+        continue
+      }
+
+      if values.isDirectory == true,
+        ProjectFileTreeScanner.shouldIgnoreDirectory(named: url.lastPathComponent)
+      {
+        enumerator.skipDescendants()
         continue
       }
 
@@ -310,6 +451,10 @@ enum ProjectNavigation {
       }
       guard values.isRegularFile == true else {
         continue
+      }
+
+      if files.count >= maximumFiles {
+        break
       }
 
       let standardizedURL = url.standardizedFileURL
@@ -337,7 +482,8 @@ enum ProjectNavigation {
     in content: String,
     query: String,
     filePath: String,
-    relativePath: String
+    relativePath: String,
+    maximumResults: Int = ProjectNavigationLimits.maximumMatches
   ) -> [ProjectSearchMatch] {
     guard !query.isEmpty else {
       return []
@@ -347,12 +493,17 @@ enum ProjectNavigation {
     var lineStart = content.startIndex
     var lineNumber = 1
 
-    while lineStart < content.endIndex {
+    while lineStart < content.endIndex,
+      results.count < maximumResults,
+      !Task.isCancelled
+    {
       let lineEnd = content[lineStart...].firstIndex(of: "\n") ?? content.endIndex
       let line = String(content[lineStart..<lineEnd])
       var searchStart = line.startIndex
 
       while searchStart < line.endIndex,
+        results.count < maximumResults,
+        !Task.isCancelled,
         let range = line.range(
           of: query,
           options: [.caseInsensitive],
@@ -398,6 +549,7 @@ enum ProjectNavigation {
     var searchStart = content.startIndex
 
     while searchStart < content.endIndex,
+      !Task.isCancelled,
       let range = content.range(
         of: query,
         options: [.caseInsensitive],

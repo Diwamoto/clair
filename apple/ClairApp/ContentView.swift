@@ -2075,6 +2075,11 @@ private struct ProjectFileTreeView: View {
         Label("Files", systemImage: "folder")
           .font(.headline)
         Spacer()
+        if surface.fileTree.isLoading {
+          ProgressView()
+            .controlSize(.small)
+            .accessibilityLabel("Loading files")
+        }
         Button {
           surface.reload()
         } label: {
@@ -2103,6 +2108,9 @@ private struct ProjectFileTreeView: View {
             }
           }
         }
+      } else if surface.fileTree.isLoading {
+        ProgressView("Loading files…")
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
       } else {
         ContentUnavailableView(
           fileTreeTitle,
@@ -2169,7 +2177,10 @@ private struct ProjectQuickOpenView: View {
 
       Divider()
 
-      if items.isEmpty {
+      if surface.quickOpenIsLoading {
+        ProgressView("Searching files…")
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+      } else if items.isEmpty {
         ContentUnavailableView(
           query.isEmpty ? "No Files" : "No Matching Files",
           systemImage: "doc.text.magnifyingglass",
@@ -2203,10 +2214,13 @@ private struct ProjectQuickOpenView: View {
       }
     }
     .frame(minWidth: 480, minHeight: 360)
+    .onChange(of: query, initial: true) { _, newValue in
+      surface.requestQuickOpenItems(matching: newValue)
+    }
   }
 
   private var items: [ProjectQuickOpenItem] {
-    surface.quickOpenItems(matching: query)
+    surface.quickOpenResults
   }
 
   private func openFirstResult() {
@@ -2235,7 +2249,7 @@ private struct ProjectSearchView: View {
           TextField("Find text in this Project", text: $query)
             .textFieldStyle(.roundedBorder)
             .onSubmit {
-              surface.search(query: query)
+              surface.requestSearch(query: query)
             }
         }
 
@@ -2243,11 +2257,11 @@ private struct ProjectSearchView: View {
           TextField("Replace with", text: $replacement)
             .textFieldStyle(.roundedBorder)
           Button("Search") {
-            surface.search(query: query)
+            surface.requestSearch(query: query)
           }
           .disabled(query.isEmpty)
           Button("Preview Replacement") {
-            surface.previewReplacement(query: query, replacement: replacement)
+            surface.requestReplacementPreview(query: query, replacement: replacement)
           }
           .disabled(query.isEmpty)
         }
@@ -2317,6 +2331,9 @@ private struct ProjectSearchView: View {
           systemImage: "text.magnifyingglass",
           description: Text("Enter text above to search and preview replacements.")
         )
+      } else if surface.searchIsLoading || surface.replacementIsLoading {
+        ProgressView("Searching files…")
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
       } else if surface.searchResults.isEmpty {
         ContentUnavailableView(
           "No Matches",
@@ -2355,7 +2372,7 @@ private struct ProjectSearchView: View {
     }
     .frame(minWidth: 620, minHeight: 440)
     .onChange(of: query, initial: true) { _, newValue in
-      surface.search(query: newValue)
+      surface.requestSearch(query: newValue)
     }
   }
 }
@@ -2466,8 +2483,28 @@ private struct ProjectFileTreeRow: View {
       .id(node.id)
 
       if node.isDirectory && surface.isExpanded(node.id) {
-        ForEach(node.children ?? []) { child in
-          ProjectFileTreeRow(node: child, surface: surface, depth: depth + 1)
+        if let children = node.children {
+          ForEach(children) { child in
+            ProjectFileTreeRow(node: child, surface: surface, depth: depth + 1)
+          }
+          if node.hasMoreChildren {
+            Button {
+              surface.loadMoreChildren(for: node.id)
+            } label: {
+              Label("Load more…", systemImage: "ellipsis")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .padding(.leading, CGFloat((depth + 1) * 14) + 8)
+            .padding(.vertical, 4)
+          }
+        } else {
+          ProgressView("Loading…")
+            .controlSize(.small)
+            .font(.caption)
+            .padding(.leading, CGFloat((depth + 1) * 14) + 8)
+            .padding(.vertical, 4)
         }
       }
     }

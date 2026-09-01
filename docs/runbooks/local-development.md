@@ -184,6 +184,31 @@ buffer while the on-disk file remains unchanged; use **Save** only when the rest
 content should replace the disk version. The existing per-file History menu remains
 available in each editor tab for the same recovery store.
 
+## Verify repository-scale file navigation (P15B)
+
+Open the Clair repository itself. The initial Files view should render only its root
+entries; expand a source directory to load it on demand. Directories such as `.build`,
+`target`, `node_modules`, and `vendor` must not appear. Create a directory containing more
+than 256 files in a disposable fixture, expand it, and use **Load more** to reveal the
+next bounded page without loading the whole Project tree.
+
+Use Quick Open and Search while expanding directories, then create, rename, and delete a
+file from another terminal. The tree and active search should refresh, while the editor
+and terminal remain operable. Switch to another Project, close and reopen the Clair
+Project, and repeat a Quick Open/search query; stale results must not replace the reopened
+Project state. The automated checks cover the bounded lazy tree, ignore policy, bounded
+watcher graph, external filesystem refresh, Project switching, and navigation results:
+
+```sh
+swift format lint --recursive --parallel --strict apple
+ruby scripts/validate-xcode-project.rb Clair.xcodeproj
+xcodebuild -project Clair.xcodeproj -scheme "Clair Dev" \
+  -destination 'platform=macOS,arch=arm64' -configuration Debug \
+  -derivedDataPath .build/xcode/p15b-tests CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGNING_REQUIRED=NO -only-testing:ClairTests/ProjectKernelTests \
+  -only-testing:ClairTests/ProjectNavigationTests test
+```
+
 ## Run Stable and Dev together
 
 ```sh

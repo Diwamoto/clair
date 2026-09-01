@@ -469,6 +469,10 @@ final class ProjectSurfaceModel: ObservableObject {
   @Published private(set) var lastEditorErrorMessage: String?
   @Published private(set) var historyEntries: [ProjectLocalHistoryEntry] = []
   @Published private(set) var searchResults: [ProjectSearchMatch] = []
+  @Published private(set) var quickOpenResults: [ProjectQuickOpenItem] = []
+  @Published private(set) var quickOpenIsLoading = false
+  @Published private(set) var searchIsLoading = false
+  @Published private(set) var replacementIsLoading = false
   @Published private(set) var replacementPreview: ProjectSearchReplacementPreview?
   @Published private(set) var lastNavigationErrorMessage: String?
   @Published private(set) var lastNavigationStatusMessage: String?
@@ -482,9 +486,19 @@ final class ProjectSurfaceModel: ObservableObject {
   private let onSnapshotChange: ((ProjectSurfaceSnapshot) -> Void)?
   private var activeSearchQuery = ""
   private var expandedNodeIDs: Set<String> = []
+  private var loadedDirectoryPaths: Set<String> = []
+  private var directoryEntryLimits: [String: Int] = [:]
   private var editorDocuments: [String: ProjectEditorTab] = [:]
   private var terminalSessions: [String: TerminalSession] = [:]
   private var watcher: ProjectFileSystemWatcher?
+  private var treeLoadTask: Task<Void, Never>?
+  private var quickOpenTask: Task<Void, Never>?
+  private var searchTask: Task<Void, Never>?
+  private var replacementTask: Task<Void, Never>?
+  private var treeLoadGeneration = 0
+  private var quickOpenGeneration = 0
+  private var searchGeneration = 0
+  private var replacementGeneration = 0
 
   init(
     projectID: UUID,
@@ -511,12 +525,29 @@ final class ProjectSurfaceModel: ObservableObject {
     self.maximizedPaneID = initialSnapshot.maximizedPaneID
     self.selectedNodeID = initialSnapshot.selectedNodeID
     self.expandedNodeIDs = Set(initialSnapshot.expandedNodeIDs)
+    let canonicalRootURL = rootChecker.canonicalURL(for: rootURL)
+    self.loadedDirectoryPaths = [canonicalRootURL.path]
     self.fileTree = ProjectFileTreeSnapshot.empty(
-      for: rootChecker.availability(for: rootURL)
+      for: rootChecker.availability(for: rootURL),
+      isLoading: true
     )
 
     restoreRuntimeTabs()
     refreshHistoryEntries()
+
+    if rootChecker.availability(for: rootURL) == .available {
+      let initialTree = ProjectFileTreeScanner.scanLoaded(
+        rootURL: canonicalRootURL,
+        loadedDirectoryPaths: loadedDirectoryPaths,
+        directoryEntryLimits: directoryEntryLimits,
+        fileManager: fileManager
+      )
+      applyTreeSnapshot(initialTree)
+    } else {
+      fileTree = ProjectFileTreeSnapshot.empty(
+        for: rootChecker.availability(for: rootURL)
+      )
+    }
 
     watcher = ProjectFileSystemWatcher(
       rootURL: rootURL,
@@ -526,11 +557,15 @@ final class ProjectSurfaceModel: ObservableObject {
         self?.reload()
       }
     }
-    reload()
+    watcher?.updateWatchedDirectories(loadedDirectoryURLs())
     watcher?.start()
   }
 
   deinit {
+    treeLoadTask?.cancel()
+    quickOpenTask?.cancel()
+    searchTask?.cancel()
+    replacementTask?.cancel()
     watcher?.stop()
   }
 
@@ -975,15 +1010,22 @@ final class ProjectSurfaceModel: ObservableObject {
   func revealGitChange(relativePath: String) {
     guard
       let fileURL = ProjectNavigation.fileURL(for: relativePath, rootURL: rootURL),
-      let node = fileTree.node(withID: fileURL.path),
-      !node.isDirectory
+      isRegularFile(fileURL)
     else {
       lastNavigationErrorMessage =
         "The changed file is unavailable in the Project tree: \(relativePath)"
       return
     }
     lastNavigationErrorMessage = nil
-    select(nodeID: node.id)
+    if let node = fileTree.node(withID: fileURL.path) {
+      select(nodeID: node.id)
+      return
+    }
+
+    revealPathWithoutOpening(fileURL)
+    selectedNodeID = fileURL.path
+    _ = openEditorTab(for: fileURL, title: fileURL.lastPathComponent)
+    notifySnapshotChanged()
   }
 
   private func currentGitChange(relativePath: String) throws -> ProjectGitChange {
@@ -1003,30 +1045,62 @@ final class ProjectSurfaceModel: ObservableObject {
   }
 
   func quickOpenItems(matching query: String) -> [ProjectQuickOpenItem] {
-    guard let root = fileTree.root else {
-      return []
-    }
     return ProjectNavigation.quickOpenItems(
-      from: root,
+      query: query,
       rootURL: rootURL,
-      query: query
+      fileManager: fileManager
     )
+  }
+
+  func requestQuickOpenItems(matching query: String) {
+    quickOpenGeneration += 1
+    let generation = quickOpenGeneration
+    quickOpenTask?.cancel()
+    quickOpenIsLoading = true
+
+    let rootURL = self.rootURL
+    quickOpenTask = Task { [weak self] in
+      let items = await ProjectNavigation.quickOpenItemsAsync(
+        query: query,
+        rootURL: rootURL
+      )
+      guard !Task.isCancelled, let self, generation == self.quickOpenGeneration else {
+        return
+      }
+      self.quickOpenResults = items
+      self.quickOpenIsLoading = false
+      self.quickOpenTask = nil
+    }
   }
 
   func openQuickOpenItem(_ item: ProjectQuickOpenItem) {
     guard
       let fileURL = ProjectNavigation.fileURL(for: item.relativePath, rootURL: rootURL),
       fileURL.path == item.filePath,
-      let node = fileTree.node(withID: item.filePath)
+      isRegularFile(fileURL)
     else {
       lastNavigationErrorMessage = "The Quick Open result is no longer available."
       return
     }
     lastNavigationErrorMessage = nil
-    select(nodeID: node.id)
+    if let node = fileTree.node(withID: item.filePath) {
+      select(nodeID: node.id)
+      return
+    }
+
+    revealPathWithoutOpening(fileURL)
+    selectedNodeID = fileURL.path
+    _ = openEditorTab(for: fileURL, title: item.title)
+    notifySnapshotChanged()
   }
 
   func search(query: String) {
+    searchGeneration += 1
+    searchTask?.cancel()
+    searchIsLoading = false
+    replacementGeneration += 1
+    replacementTask?.cancel()
+    replacementIsLoading = false
     activeSearchQuery = query
     replacementPreview = nil
     lastNavigationErrorMessage = nil
@@ -1038,7 +1112,52 @@ final class ProjectSurfaceModel: ObservableObject {
     )
   }
 
+  func requestSearch(query: String) {
+    replacementGeneration += 1
+    replacementTask?.cancel()
+    replacementIsLoading = false
+    activeSearchQuery = query
+    replacementPreview = nil
+    lastNavigationErrorMessage = nil
+    lastNavigationStatusMessage = nil
+    requestSearchRefresh()
+  }
+
+  private func requestSearchRefresh() {
+    searchGeneration += 1
+    let generation = searchGeneration
+    searchTask?.cancel()
+
+    guard !activeSearchQuery.isEmpty else {
+      searchResults = []
+      searchIsLoading = false
+      return
+    }
+
+    searchIsLoading = true
+    let query = activeSearchQuery
+    let rootURL = self.rootURL
+    searchTask = Task { [weak self] in
+      let results = await ProjectNavigation.searchAsync(
+        query: query,
+        rootURL: rootURL
+      )
+      guard !Task.isCancelled, let self, generation == self.searchGeneration else {
+        return
+      }
+      self.searchResults = results
+      self.searchIsLoading = false
+      self.searchTask = nil
+    }
+  }
+
   func previewReplacement(query: String, replacement: String) {
+    replacementGeneration += 1
+    replacementTask?.cancel()
+    replacementIsLoading = false
+    searchGeneration += 1
+    searchTask?.cancel()
+    searchIsLoading = false
     activeSearchQuery = query
     lastNavigationErrorMessage = nil
     lastNavigationStatusMessage = nil
@@ -1057,9 +1176,47 @@ final class ProjectSurfaceModel: ObservableObject {
     }
   }
 
+  func requestReplacementPreview(query: String, replacement: String) {
+    replacementGeneration += 1
+    let generation = replacementGeneration
+    replacementTask?.cancel()
+    searchGeneration += 1
+    searchTask?.cancel()
+    searchIsLoading = false
+    activeSearchQuery = query
+    lastNavigationErrorMessage = nil
+    lastNavigationStatusMessage = nil
+    replacementIsLoading = true
+    let rootURL = self.rootURL
+    replacementTask = Task { [weak self] in
+      do {
+        let preview = try await ProjectNavigation.previewReplacementAsync(
+          query: query,
+          replacement: replacement,
+          rootURL: rootURL
+        )
+        guard !Task.isCancelled, let self, generation == self.replacementGeneration else {
+          return
+        }
+        self.replacementPreview = preview
+        self.searchResults = preview.matches
+        self.replacementIsLoading = false
+        self.replacementTask = nil
+      } catch {
+        guard !Task.isCancelled, let self, generation == self.replacementGeneration else {
+          return
+        }
+        self.replacementPreview = nil
+        self.replacementIsLoading = false
+        self.replacementTask = nil
+        self.lastNavigationErrorMessage = error.localizedDescription
+      }
+    }
+  }
+
   func applyReplacement(_ preview: ProjectSearchReplacementPreview) {
     struct ReplacementTarget {
-      let node: ProjectFileTreeNode
+      let fileURL: URL
       let content: String
     }
 
@@ -1070,7 +1227,6 @@ final class ProjectSurfaceModel: ObservableObject {
           for: file.relativePath,
           rootURL: rootURL
         ),
-        let node = fileTree.node(withID: fileURL.path),
         let currentData = try? Data(contentsOf: fileURL),
         currentData == file.originalData,
         let replacementContent = String(data: file.replacementData, encoding: .utf8)
@@ -1081,7 +1237,7 @@ final class ProjectSurfaceModel: ObservableObject {
       }
       targets.append(
         ReplacementTarget(
-          node: node,
+          fileURL: fileURL,
           content: replacementContent
         )
       )
@@ -1089,9 +1245,14 @@ final class ProjectSurfaceModel: ObservableObject {
 
     var changedFiles = 0
     for target in targets {
-      guard let document = openEditorTab(for: target.node) else {
+      guard
+        let document = openEditorTab(
+          for: target.fileURL,
+          title: target.fileURL.lastPathComponent
+        )
+      else {
         lastNavigationErrorMessage =
-          "The replacement target is no longer available: \(target.node.name)"
+          "The replacement target is no longer available: \(target.fileURL.lastPathComponent)"
         return
       }
       document.replaceContent(target.content, actionName: "Replace All")
@@ -1110,14 +1271,21 @@ final class ProjectSurfaceModel: ObservableObject {
     guard
       let fileURL = ProjectNavigation.fileURL(for: match.relativePath, rootURL: rootURL),
       fileURL.path == match.filePath,
-      let node = fileTree.node(withID: match.filePath)
+      isRegularFile(fileURL)
     else {
       lastNavigationErrorMessage = "The search result is no longer available."
       return
     }
     lastNavigationErrorMessage = nil
-    select(nodeID: node.id)
-    editorDocuments[node.id]?.requestSelection(
+    if let node = fileTree.node(withID: match.filePath) {
+      select(nodeID: node.id)
+    } else {
+      revealPathWithoutOpening(fileURL)
+      selectedNodeID = fileURL.path
+      _ = openEditorTab(for: fileURL, title: fileURL.lastPathComponent)
+      notifySnapshotChanged()
+    }
+    editorDocuments[match.filePath]?.requestSelection(
       line: match.line,
       column: match.column,
       length: match.matchLength
@@ -1140,8 +1308,7 @@ final class ProjectSurfaceModel: ObservableObject {
     }
     guard
       let fileURL = ProjectNavigation.fileURL(for: entry.filePath, rootURL: rootURL),
-      let node = fileTree.node(withID: fileURL.path),
-      let document = openEditorTab(for: node)
+      let document = openEditorTab(for: fileURL, title: fileURL.lastPathComponent)
     else {
       lastNavigationErrorMessage =
         "The history file is no longer available: \(entry.filePath)"
@@ -1196,30 +1363,77 @@ final class ProjectSurfaceModel: ObservableObject {
 
   func reload() {
     refreshEditorDocumentsFromDisk()
-
-    let nextTree = ProjectFileTreeScanner.scan(
-      rootURL: rootURL,
-      rootChecker: rootChecker,
-      fileManager: fileManager
-    )
-    fileTree = nextTree
+    scheduleTreeReload()
 
     if activeSearchQuery.isEmpty {
+      searchTask?.cancel()
       searchResults = []
+      searchIsLoading = false
     } else {
-      searchResults = ProjectNavigation.search(
-        query: activeSearchQuery,
-        rootURL: rootURL,
-        fileManager: fileManager
-      )
+      requestSearchRefresh()
     }
     replacementPreview = nil
+    replacementGeneration += 1
+    replacementTask?.cancel()
+    replacementIsLoading = false
     refreshHistoryEntries()
     refreshGitStatus()
+  }
 
-    guard let root = nextTree.root else {
+  private func scheduleTreeReload() {
+    treeLoadGeneration += 1
+    let generation = treeLoadGeneration
+    treeLoadTask?.cancel()
+
+    let rootURL = rootChecker.canonicalURL(for: self.rootURL)
+    let loadedDirectoryPaths = self.loadedDirectoryPaths
+    let directoryEntryLimits = self.directoryEntryLimits
+    fileTree = ProjectFileTreeSnapshot(
+      root: fileTree.root,
+      availability: fileTree.availability,
+      isLoading: true
+    )
+
+    treeLoadTask = Task { [weak self] in
+      let scanTask = Task.detached(priority: .utility) {
+        ProjectFileTreeScanner.scanLoaded(
+          rootURL: rootURL,
+          loadedDirectoryPaths: loadedDirectoryPaths,
+          directoryEntryLimits: directoryEntryLimits
+        )
+      }
+      let snapshot = await withTaskCancellationHandler(
+        operation: {
+          await scanTask.value
+        },
+        onCancel: {
+          scanTask.cancel()
+        })
+      guard !Task.isCancelled, let self, generation == self.treeLoadGeneration else {
+        return
+      }
+      self.applyTreeSnapshot(snapshot)
+    }
+  }
+
+  private func loadedDirectoryURLs() -> [URL] {
+    loadedDirectoryPaths.sorted().map {
+      URL(fileURLWithPath: $0, isDirectory: true)
+    }
+  }
+
+  private func applyTreeSnapshot(_ snapshot: ProjectFileTreeSnapshot) {
+    treeLoadTask = nil
+    fileTree = ProjectFileTreeSnapshot(
+      root: snapshot.root,
+      availability: snapshot.availability,
+      isLoading: false
+    )
+
+    guard let root = snapshot.root else {
       expandedNodeIDs.removeAll()
       selectedNodeID = nil
+      watcher?.updateWatchedDirectories(loadedDirectoryURLs())
       return
     }
 
@@ -1228,8 +1442,20 @@ final class ProjectSurfaceModel: ObservableObject {
 
     let availableNodeIDs = root.allNodeIDs
     if let selectedNodeID, !availableNodeIDs.contains(selectedNodeID) {
-      self.selectedNodeID = nil
+      var isDirectory = ObjCBool(false)
+      if !fileManager.fileExists(atPath: selectedNodeID, isDirectory: &isDirectory) {
+        self.selectedNodeID = nil
+      }
     }
+
+    let rootPath = rootURL.standardizedFileURL.path
+    loadedDirectoryPaths = Set(
+      loadedDirectoryPaths.filter { path in
+        path == rootPath || root.node(withID: path)?.isDirectory == true
+      }
+    )
+    directoryEntryLimits = directoryEntryLimits.filter { loadedDirectoryPaths.contains($0.key) }
+    watcher?.updateWatchedDirectories(loadedDirectoryURLs())
 
     let nextLayout = filteringUnavailableEditorTabs(in: layout)
     if nextLayout != layout {
@@ -1252,8 +1478,30 @@ final class ProjectSurfaceModel: ObservableObject {
       expandedNodeIDs.remove(nodeID)
     } else {
       expandedNodeIDs.insert(nodeID)
+      if node.children == nil {
+        loadedDirectoryPaths.insert(node.id)
+        directoryEntryLimits[node.id] = max(
+          directoryEntryLimits[node.id] ?? 0,
+          ProjectFileTreeScanner.maxChildrenPerDirectory
+        )
+        scheduleTreeReload()
+      }
     }
     notifySnapshotChanged()
+  }
+
+  func loadMoreChildren(for nodeID: String) {
+    guard let node = fileTree.node(withID: nodeID), node.isDirectory, node.hasMoreChildren else {
+      return
+    }
+    loadedDirectoryPaths.insert(nodeID)
+    let currentLimit =
+      directoryEntryLimits[nodeID] ?? ProjectFileTreeScanner.maxChildrenPerDirectory
+    directoryEntryLimits[nodeID] = min(
+      currentLimit + ProjectFileTreeScanner.maxChildrenPerDirectory,
+      ProjectFileTreeScanner.maxDirectoryEntriesPerRefresh
+    )
+    scheduleTreeReload()
   }
 
   func select(nodeID: String) {
@@ -1320,27 +1568,48 @@ final class ProjectSurfaceModel: ObservableObject {
       return nil
     }
 
-    if editorDocuments[node.id] == nil {
-      editorDocuments[node.id] = ProjectEditorTab(
+    return openEditorTab(for: node.url, title: node.name)
+  }
+
+  @discardableResult
+  private func openEditorTab(for fileURL: URL, title: String) -> ProjectEditorTab? {
+    let fileURL = fileURL.standardizedFileURL
+    guard isRegularFile(fileURL) else {
+      return nil
+    }
+
+    if editorDocuments[fileURL.path] == nil {
+      editorDocuments[fileURL.path] = ProjectEditorTab(
         projectID: projectID,
         rootURL: rootURL,
-        url: node.url,
+        url: fileURL,
         historyStore: historyStore,
         fileManager: fileManager
       )
     }
-    if let existingLocation = tabLocation(for: node.id) {
-      setActiveTab(node.id, in: existingLocation.paneID, revealEditor: false)
-      return editorDocuments[node.id]
+    if let existingLocation = tabLocation(for: fileURL.path) {
+      setActiveTab(fileURL.path, in: existingLocation.paneID, revealEditor: false)
+      return editorDocuments[fileURL.path]
     }
-    let tab = ProjectPaneTab.editor(path: node.id, title: node.name)
+    let tab = ProjectPaneTab.editor(path: fileURL.path, title: title)
     layout = updatingLeaf(in: layout, leafID: focusedPaneID) { leaf in
       var next = leaf
       next.tabs.append(tab)
       next.activeTabID = tab.id
       return next
     }
-    return editorDocuments[node.id]
+    return editorDocuments[fileURL.path]
+  }
+
+  private func isRegularFile(_ fileURL: URL) -> Bool {
+    var isDirectory = ObjCBool(false)
+    guard fileManager.fileExists(atPath: fileURL.path, isDirectory: &isDirectory),
+      !isDirectory.boolValue
+    else {
+      return false
+    }
+    let values = try? fileURL.resourceValues(forKeys: [.isSymbolicLinkKey, .isRegularFileKey])
+    return values?.isSymbolicLink != true && values?.isRegularFile == true
   }
 
   private func editorTab(withID tabID: String?) -> ProjectEditorTab? {
@@ -1449,10 +1718,20 @@ final class ProjectSurfaceModel: ObservableObject {
   }
 
   private func revealNodeWithoutOpening(_ node: ProjectFileTreeNode) {
-    var directory = node.url.deletingLastPathComponent()
+    revealPathWithoutOpening(node.url)
+  }
+
+  private func revealPathWithoutOpening(_ fileURL: URL) {
+    var directory = fileURL.standardizedFileURL.deletingLastPathComponent()
     let rootPath = rootURL.standardizedFileURL.path
+    var changed = false
     while directory.standardizedFileURL.path != rootPath {
-      expandedNodeIDs.insert(directory.standardizedFileURL.path)
+      let path = directory.standardizedFileURL.path
+      expandedNodeIDs.insert(path)
+      if loadedDirectoryPaths.insert(path).inserted {
+        directoryEntryLimits[path] = ProjectFileTreeScanner.maxChildrenPerDirectory
+        changed = true
+      }
       let parent = directory.deletingLastPathComponent()
       guard parent.path != directory.path else {
         break
@@ -1460,6 +1739,9 @@ final class ProjectSurfaceModel: ObservableObject {
       directory = parent
     }
     expandedNodeIDs.insert(rootPath)
+    if changed {
+      scheduleTreeReload()
+    }
   }
 
   private func setActiveTab(
@@ -1476,9 +1758,14 @@ final class ProjectSurfaceModel: ObservableObject {
       next.activeTabID = tabID
       return next
     }
-    if revealEditor, let filePath = tab.filePath, let node = fileTree.node(withID: filePath) {
-      selectedNodeID = node.id
-      revealNodeWithoutOpening(node)
+    if revealEditor, let filePath = tab.filePath {
+      let fileURL = URL(fileURLWithPath: filePath).standardizedFileURL
+      guard isRegularFile(fileURL) else {
+        notifySnapshotChanged()
+        return
+      }
+      selectedNodeID = fileURL.path
+      revealPathWithoutOpening(fileURL)
     }
     notifySnapshotChanged()
   }

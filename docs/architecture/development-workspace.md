@@ -201,23 +201,30 @@ surface owns the file tree, expanded directory IDs, selected node, and a mixed p
 layout. Switching Projects changes the observed surface, so tree selection, expansion,
 and tabs cannot leak between Projects. Durable layout restoration is described below.
 
-`ProjectFileTreeScanner` recursively enumerates the active root and sorts directories
-before files using a stable localized name/path order. Node identity is the
-standardized absolute path. Directory symlinks are shown as leaf nodes and are not
-followed, and `.git` contents are omitted from the user-facing tree. A child directory
+`ProjectFileTreeScanner` loads the root and expanded directories lazily, rather than
+recursively scanning a Project at open. Each directory initially exposes at most 256
+children; **Load more** raises that directory's displayed limit in the same increments
+up to 4,096. Nodes are sorted directories-first with a stable localized name/path order,
+and node identity is the standardized absolute path. Directory symlinks are shown as
+leaf nodes and never followed. `.git` plus generated/dependency directories including
+`.build`, `DerivedData`, `node_modules`, `Pods`, `target`, and `vendor` are excluded from
+the user-facing tree, Quick Open, search, and replacement traversals. A child directory
 that cannot be read is omitted while an unreadable root is represented by the existing
 Project availability state.
 
-`ProjectFileSystemWatcher` uses macOS file-system sources for the root, every currently
-discovered child directory, and every regular file in the active Project. It rebuilds
-the watch set after a change so newly created directories and files are covered. If the
-root is missing, its nearest existing parent is watched; root recreation therefore
-returns the surface to the available state without a manual reopen. Events are lightly
-debounced and trigger a full tree and active-search rescan on the MainActor. Git Projects
-additionally watch the repository metadata paths needed for status refresh (`.git`,
-`HEAD`, `index`, packed refs, refs, and `logs/HEAD`) while continuing to omit `.git`
-contents from the user-facing tree. Git status is refreshed on the MainActor alongside
-the tree and active search. The native editor behavior is described below.
+Tree reload, Quick Open, search, and replacement enumeration run outside the MainActor;
+new queries, refreshes, closing, and reopening cancel obsolete work before its result can
+replace newer Project state. Quick Open/search traversal is bounded to 50,000 eligible
+files, with 200 Quick Open results and 20,000 text matches retained at most. The watcher
+graph contains the root and loaded directories only (at most 256 directories and 512
+regular files), then rebuilds after an event. If the root is missing, its nearest existing
+parent is watched; root recreation therefore returns the surface to the available tree
+without a manual reopen. Events are lightly debounced and schedule a fresh tree and
+active-search refresh without occupying the UI actor. Git Projects additionally watch a
+fixed set of repository metadata paths needed for status refresh (`.git`, `HEAD`, `index`,
+packed refs, refs, and `logs/HEAD`) while continuing to omit `.git` contents from the
+user-facing tree. Git status is refreshed on the MainActor alongside application of the
+completed tree/search results. The native editor behavior is described below.
 
 ## Mixed pane/tab model and workspace persistence
 

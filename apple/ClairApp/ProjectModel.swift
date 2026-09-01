@@ -56,6 +56,7 @@ struct ProjectFileTreeNode: Identifiable, Equatable, Hashable {
   let name: String
   let isDirectory: Bool
   let children: [ProjectFileTreeNode]?
+  let hasMoreChildren: Bool
 
   var path: String {
     url.path
@@ -85,13 +86,27 @@ struct ProjectFileTreeNode: Identifiable, Equatable, Hashable {
 struct ProjectFileTreeSnapshot: Equatable {
   let root: ProjectFileTreeNode?
   let availability: ProjectAvailability
+  let isLoading: Bool
+
+  init(
+    root: ProjectFileTreeNode?,
+    availability: ProjectAvailability,
+    isLoading: Bool = false
+  ) {
+    self.root = root
+    self.availability = availability
+    self.isLoading = isLoading
+  }
 
   var isAvailable: Bool {
     availability.isAvailable && root != nil
   }
 
-  static func empty(for availability: ProjectAvailability) -> ProjectFileTreeSnapshot {
-    ProjectFileTreeSnapshot(root: nil, availability: availability)
+  static func empty(
+    for availability: ProjectAvailability,
+    isLoading: Bool = false
+  ) -> ProjectFileTreeSnapshot {
+    ProjectFileTreeSnapshot(root: nil, availability: availability, isLoading: isLoading)
   }
 
   func node(withID nodeID: String) -> ProjectFileTreeNode? {
@@ -496,6 +511,37 @@ struct ProjectWorkspaceStoreSnapshot: Codable, Equatable, Sendable {
 }
 
 enum ProjectFileTreeScanner {
+  static let maxChildrenPerDirectory = 256
+  static let maxDirectoryEntriesPerRefresh = 4_096
+  static let maxWatchedDirectories = 256
+  static let maxWatchedFiles = 512
+
+  private static let ignoredDirectoryNames: Set<String> = [
+    ".build",
+    ".cache",
+    ".git",
+    ".next",
+    ".swiftpm",
+    ".venv",
+    "Build",
+    "DerivedData",
+    "Pods",
+    "__pycache__",
+    "build",
+    "coverage",
+    "dist",
+    "node_modules",
+    "out",
+    "target",
+    "tmp",
+    "vendor",
+    "venv",
+  ]
+
+  static func shouldIgnoreDirectory(named name: String) -> Bool {
+    ignoredDirectoryNames.contains(name)
+  }
+
   static func scan(
     rootURL: URL,
     rootChecker: any ProjectRootChecking,
@@ -503,8 +549,11 @@ enum ProjectFileTreeScanner {
   ) -> ProjectFileTreeSnapshot {
     do {
       let canonicalURL = try rootChecker.validate(rootURL)
-      let root = try node(at: canonicalURL, fileManager: fileManager, isRoot: true)
-      return ProjectFileTreeSnapshot(root: root, availability: .available)
+      return scanLoaded(
+        rootURL: canonicalURL,
+        loadedDirectoryPaths: [canonicalURL.path],
+        fileManager: fileManager
+      )
     } catch ProjectError.rootMissing {
       return .empty(for: .missing)
     } catch ProjectError.rootNotDirectory {
@@ -516,14 +565,58 @@ enum ProjectFileTreeScanner {
     }
   }
 
+  static func scanLoaded(
+    rootURL: URL,
+    loadedDirectoryPaths: Set<String>,
+    directoryEntryLimits: [String: Int] = [:],
+    fileManager: FileManager = .default
+  ) -> ProjectFileTreeSnapshot {
+    let rootURL = rootURL.standardizedFileURL
+    var isDirectory = ObjCBool(false)
+    guard fileManager.fileExists(atPath: rootURL.path, isDirectory: &isDirectory) else {
+      return .empty(for: .missing)
+    }
+    guard isDirectory.boolValue else {
+      return .empty(for: .notDirectory)
+    }
+    guard fileManager.isReadableFile(atPath: rootURL.path) else {
+      return .empty(for: .unreadable)
+    }
+
+    let rootPath = rootURL.path
+    let loadedPaths = Set(
+      loadedDirectoryPaths.map {
+        URL(fileURLWithPath: $0, isDirectory: true).standardizedFileURL.path
+      }
+    ).filter { path in
+      path == rootPath || path.hasPrefix(rootPath + "/")
+    }
+
+    do {
+      let root = try loadedNode(
+        at: rootURL,
+        loadedDirectoryPaths: loadedPaths,
+        directoryEntryLimits: directoryEntryLimits,
+        fileManager: fileManager,
+        isRoot: true
+      )
+      return ProjectFileTreeSnapshot(root: root, availability: .available)
+    } catch {
+      return .empty(for: .unreadable)
+    }
+  }
+
   static func directoriesToWatch(
     rootURL: URL,
+    loadedDirectoryPaths: Set<String> = [],
     fileManager: FileManager = .default
   ) -> [URL] {
+    let normalizedRoot = rootURL.standardizedFileURL
+    let existingRoot = existingDirectory(for: normalizedRoot, fileManager: fileManager)
     let watchRoot =
-      existingDirectory(for: rootURL, fileManager: fileManager)
+      existingRoot
       ?? nearestExistingDirectory(
-        for: rootURL.deletingLastPathComponent(),
+        for: normalizedRoot.deletingLastPathComponent(),
         fileManager: fileManager
       )
 
@@ -531,32 +624,27 @@ enum ProjectFileTreeScanner {
       return []
     }
 
-    guard existingDirectory(for: rootURL, fileManager: fileManager) != nil else {
+    guard existingRoot != nil else {
       return [watchRoot]
     }
 
-    var directories = [watchRoot]
-    guard
-      let enumerator = fileManager.enumerator(
-        at: watchRoot,
-        includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
-        options: [.skipsPackageDescendants]
-      )
-    else {
-      return directories
-    }
-
-    for case let url as URL in enumerator {
-      guard url.lastPathComponent != ".git" else {
-        enumerator.skipDescendants()
-        continue
+    var directories = [normalizedRoot]
+    let rootPath = normalizedRoot.path
+    let normalizedLoadedPaths =
+      loadedDirectoryPaths
+      .map { URL(fileURLWithPath: $0, isDirectory: true).standardizedFileURL }
+      .filter { url in
+        url.path != rootPath
+          && url.path.hasPrefix(rootPath + "/")
+          && !shouldIgnoreDirectory(named: url.lastPathComponent)
       }
+      .sorted { $0.path < $1.path }
 
-      guard
-        let values = try? url.resourceValues(
-          forKeys: [.isDirectoryKey, .isSymbolicLinkKey]
-        ), values.isDirectory == true, values.isSymbolicLink != true
-      else {
+    for url in normalizedLoadedPaths {
+      guard directories.count < maxWatchedDirectories else {
+        break
+      }
+      guard existingDirectory(for: url, fileManager: fileManager) != nil else {
         continue
       }
       directories.append(url)
@@ -566,38 +654,69 @@ enum ProjectFileTreeScanner {
 
   static func pathsToWatch(
     rootURL: URL,
+    loadedDirectoryPaths: Set<String> = [],
     fileManager: FileManager = .default
   ) -> [URL] {
-    let directories = directoriesToWatch(rootURL: rootURL, fileManager: fileManager)
-    guard existingDirectory(for: rootURL, fileManager: fileManager) != nil else {
-      return directories
-    }
-
+    let directories = directoriesToWatch(
+      rootURL: rootURL,
+      loadedDirectoryPaths: loadedDirectoryPaths,
+      fileManager: fileManager
+    )
     var paths = directories
-    if let enumerator = fileManager.enumerator(
-      at: rootURL.standardizedFileURL,
-      includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey, .isRegularFileKey],
-      options: [.skipsPackageDescendants]
-    ) {
-      for case let url as URL in enumerator {
-        guard url.lastPathComponent != ".git" else {
-          enumerator.skipDescendants()
-          continue
+    paths.append(
+      contentsOf: regularFilesToWatch(
+        in: directories,
+        fileManager: fileManager
+      )
+    )
+    paths.append(contentsOf: gitMetadataPaths(rootURL: rootURL, fileManager: fileManager))
+    return Array(Set(paths.map(\.path))).sorted().map { path in
+      var isDirectory = ObjCBool(false)
+      _ = fileManager.fileExists(atPath: path, isDirectory: &isDirectory)
+      return URL(fileURLWithPath: path, isDirectory: isDirectory.boolValue)
+    }
+  }
+
+  private static func regularFilesToWatch(
+    in directories: [URL],
+    fileManager: FileManager
+  ) -> [URL] {
+    var files: [URL] = []
+    for directory in directories {
+      guard
+        let enumerator = fileManager.enumerator(
+          at: directory,
+          includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey, .isRegularFileKey],
+          options: [.skipsSubdirectoryDescendants, .skipsPackageDescendants]
+        )
+      else {
+        continue
+      }
+
+      while let url = enumerator.nextObject() as? URL {
+        if files.count >= maxWatchedFiles {
+          return files
         }
         guard
           let values = try? url.resourceValues(
             forKeys: [.isDirectoryKey, .isSymbolicLinkKey, .isRegularFileKey]
-          ),
-          values.isSymbolicLink != true,
-          values.isRegularFile == true
+          )
         else {
           continue
         }
-        paths.append(url.standardizedFileURL)
+        if values.isDirectory == true {
+          if values.isSymbolicLink == true || shouldIgnoreDirectory(named: url.lastPathComponent) {
+            enumerator.skipDescendants()
+          }
+          continue
+        }
+        guard values.isSymbolicLink != true, values.isRegularFile == true else {
+          continue
+        }
+        files.append(url.standardizedFileURL)
       }
     }
-    paths.append(contentsOf: gitMetadataPaths(rootURL: rootURL, fileManager: fileManager))
-    return paths
+    return files
   }
 
   private static func gitMetadataPaths(
@@ -625,52 +744,114 @@ enum ProjectFileTreeScanner {
     return candidates.filter { fileManager.fileExists(atPath: $0.path) }
   }
 
-  private static func node(
+  private static func loadedNode(
     at url: URL,
+    loadedDirectoryPaths: Set<String>,
+    directoryEntryLimits: [String: Int],
     fileManager: FileManager,
     isRoot: Bool
   ) throws -> ProjectFileTreeNode {
     let values = try url.resourceValues(
-      forKeys: [.isDirectoryKey, .isSymbolicLinkKey]
+      forKeys: [.isDirectoryKey, .isSymbolicLinkKey, .isRegularFileKey]
     )
     let isDirectory = values.isDirectory == true
     let isSymbolicLink = values.isSymbolicLink == true
     let name = isRoot && url.lastPathComponent.isEmpty ? url.path : url.lastPathComponent
-    let id = url.standardizedFileURL.path
+    let standardizedURL = url.standardizedFileURL
+    let id = standardizedURL.path
 
-    guard isDirectory, !isSymbolicLink, name != ".git" else {
+    guard isDirectory, !isSymbolicLink else {
       return ProjectFileTreeNode(
         id: id,
-        url: url,
+        url: standardizedURL,
         name: name,
-        isDirectory: isDirectory,
-        children: nil
+        isDirectory: false,
+        children: nil,
+        hasMoreChildren: false
       )
     }
 
-    let childURLs = try fileManager.contentsOfDirectory(
-      at: url,
-      includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
-      options: []
+    guard loadedDirectoryPaths.contains(id) else {
+      return ProjectFileTreeNode(
+        id: id,
+        url: standardizedURL,
+        name: name,
+        isDirectory: true,
+        children: nil,
+        hasMoreChildren: false
+      )
+    }
+
+    let requestedLimit = directoryEntryLimits[id] ?? maxChildrenPerDirectory
+    let limit = min(
+      max(requestedLimit, maxChildrenPerDirectory),
+      maxDirectoryEntriesPerRefresh
     )
+    guard
+      let (childURLs, hasMoreChildren) = immediateChildURLs(
+        at: standardizedURL,
+        limit: limit,
+        fileManager: fileManager
+      )
+    else {
+      if isRoot {
+        throw ProjectError.rootUnreadable(path: standardizedURL.path)
+      }
+      return ProjectFileTreeNode(
+        id: id,
+        url: standardizedURL,
+        name: name,
+        isDirectory: true,
+        children: [],
+        hasMoreChildren: false
+      )
+    }
     let children = childURLs.compactMap { childURL -> ProjectFileTreeNode? in
-      guard childURL.lastPathComponent != ".git" else {
+      guard !shouldIgnoreDirectory(named: childURL.lastPathComponent) else {
         return nil
       }
-      do {
-        return try node(at: childURL, fileManager: fileManager, isRoot: false)
-      } catch {
-        return nil
-      }
+      return try? loadedNode(
+        at: childURL,
+        loadedDirectoryPaths: loadedDirectoryPaths,
+        directoryEntryLimits: directoryEntryLimits,
+        fileManager: fileManager,
+        isRoot: false
+      )
     }.sorted(by: sortNodes)
 
     return ProjectFileTreeNode(
       id: id,
-      url: url,
+      url: standardizedURL,
       name: name,
       isDirectory: true,
-      children: children
+      children: children,
+      hasMoreChildren: hasMoreChildren
     )
+  }
+
+  private static func immediateChildURLs(
+    at directoryURL: URL,
+    limit: Int,
+    fileManager: FileManager
+  ) -> (urls: [URL], hasMore: Bool)? {
+    guard
+      let enumerator = fileManager.enumerator(
+        at: directoryURL,
+        includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey, .isRegularFileKey],
+        options: [.skipsSubdirectoryDescendants, .skipsPackageDescendants]
+      )
+    else {
+      return nil
+    }
+
+    var urls: [URL] = []
+    while let url = enumerator.nextObject() as? URL {
+      urls.append(url.standardizedFileURL)
+      if urls.count >= limit {
+        return (urls, enumerator.nextObject() != nil)
+      }
+    }
+    return (urls, false)
   }
 
   private static func sortNodes(
@@ -722,6 +903,7 @@ final class ProjectFileSystemWatcher: @unchecked Sendable {
   private let onChange: @Sendable () -> Void
   private var sources: [String: DispatchSourceFileSystemObject] = [:]
   private var pendingEventWorkItem: DispatchWorkItem?
+  private var loadedDirectoryPaths: Set<String> = []
   private var isStarted = false
 
   init(
@@ -746,6 +928,19 @@ final class ProjectFileSystemWatcher: @unchecked Sendable {
       isStarted = true
       rebuildSources()
     }
+  }
+
+  func updateWatchedDirectories(_ directories: [URL]) {
+    queue.sync {
+      loadedDirectoryPaths = Set(directories.map { $0.standardizedFileURL.path })
+      if isStarted {
+        rebuildSources()
+      }
+    }
+  }
+
+  var watchedPathCount: Int {
+    queue.sync { sources.count }
   }
 
   func stop() {
@@ -782,6 +977,7 @@ final class ProjectFileSystemWatcher: @unchecked Sendable {
     let desiredPaths = Set(
       ProjectFileTreeScanner.pathsToWatch(
         rootURL: rootURL,
+        loadedDirectoryPaths: loadedDirectoryPaths,
         fileManager: fileManager
       ).map(\.path)
     )
@@ -906,16 +1102,6 @@ struct FileSystemProjectRootChecker: ProjectRootChecking {
       throw ProjectError.rootNotDirectory(path: canonicalURL.path)
     }
     guard fileManager.isReadableFile(atPath: canonicalURL.path) else {
-      throw ProjectError.rootUnreadable(path: canonicalURL.path)
-    }
-
-    do {
-      _ = try fileManager.contentsOfDirectory(
-        at: canonicalURL,
-        includingPropertiesForKeys: nil,
-        options: []
-      )
-    } catch {
       throw ProjectError.rootUnreadable(path: canonicalURL.path)
     }
 
