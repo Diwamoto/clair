@@ -1,0 +1,323 @@
+#!/usr/bin/env python3
+"""Local CLI and MCP adapter for the running Clair GUI."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import socket
+import subprocess
+import sys
+import time
+import uuid
+from pathlib import Path
+from typing import Any
+
+
+MAX_MESSAGE_BYTES = 1024 * 1024
+DEFAULT_TIMEOUT_SECONDS = 3.0
+
+
+def socket_path(channel: str) -> Path:
+    override = os.environ.get("CLAIR_COMMAND_SOCKET")
+    if override:
+        return Path(override).expanduser()
+    app_support = Path.home() / "Library" / "Application Support"
+    directory = "Clair Dev" if channel == "dev" else "Clair"
+    return app_support / directory / "command-v1.sock"
+
+
+def application_path(channel: str) -> Path:
+    override = os.environ.get("CLAIR_APP_PATH")
+    if override:
+        return Path(override).expanduser()
+    repo_root = Path(__file__).resolve().parents[1]
+    product = "Clair Dev.app" if channel == "dev" else "Clair.app"
+    candidates = [
+        repo_root / ".build" / "xcode" / channel / "Build" / "Products" / "Debug" / product,
+        repo_root / ".build" / "xcode" / "p13" / "Build" / "Products" / "Debug" / product,
+        repo_root / ".build" / "xcode" / "p13-build" / "Build" / "Products" / "Debug" / product,
+        repo_root / ".build" / "xcode" / "p12-manual" / "Build" / "Products" / "Debug" / product,
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
+
+def send_request(channel: str, request: dict[str, Any], timeout: float = DEFAULT_TIMEOUT_SECONDS) -> dict[str, Any]:
+    encoded = (json.dumps(request, separators=(",", ":"), sort_keys=True) + "\n").encode("utf-8")
+    if len(encoded) > MAX_MESSAGE_BYTES:
+        raise RuntimeError(f"command request is too large ({len(encoded)} bytes)")
+    path = socket_path(channel)
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+        client.settimeout(timeout)
+        client.connect(str(path))
+        client.sendall(encoded)
+        client.shutdown(socket.SHUT_WR)
+        data = bytearray()
+        while len(data) <= MAX_MESSAGE_BYTES:
+            chunk = client.recv(65536)
+            if not chunk:
+                break
+            data.extend(chunk)
+            if b"\n" in chunk:
+                break
+    if len(data) > MAX_MESSAGE_BYTES:
+        raise RuntimeError(f"command response is too large ({len(data)} bytes)")
+    line = bytes(data).split(b"\n", 1)[0]
+    if not line:
+        raise RuntimeError("Clair returned an empty command response")
+    try:
+        response = json.loads(line.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise RuntimeError("Clair returned malformed command JSON") from error
+    if not isinstance(response, dict):
+        raise RuntimeError("Clair returned a non-object command response")
+    return response
+
+
+def ensure_running(channel: str, no_launch: bool) -> None:
+    probe = {
+        "requestID": str(uuid.uuid4()),
+        "operation": "list",
+        "source": "cli",
+    }
+    try:
+        send_request(channel, probe, timeout=0.35)
+        return
+    except OSError as first_error:
+        if no_launch:
+            raise RuntimeError(f"Clair is not running: {first_error}") from first_error
+
+    app = application_path(channel)
+    if not app.exists():
+        raise RuntimeError(f"Clair is not running and the app was not found: {app}")
+    try:
+        subprocess.Popen(
+            ["open", "-n", str(app)],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError as error:
+        raise RuntimeError(f"could not launch Clair: {error}") from error
+
+    last_error: BaseException | None = None
+    deadline = time.monotonic() + 8.0
+    while time.monotonic() < deadline:
+        try:
+            send_request(channel, probe, timeout=0.5)
+            return
+        except (OSError, RuntimeError) as error:
+            last_error = error
+            time.sleep(0.1)
+    raise RuntimeError(f"Clair did not become ready: {last_error}")
+
+
+def request(
+    channel: str,
+    operation: str,
+    command_id: str | None = None,
+    params: dict[str, Any] | None = None,
+    source: str = "cli",
+    no_launch: bool = False,
+) -> dict[str, Any]:
+    ensure_running(channel, no_launch)
+    payload: dict[str, Any] = {
+        "requestID": str(uuid.uuid4()),
+        "operation": operation,
+        "source": source,
+    }
+    if command_id is not None:
+        payload["commandID"] = command_id.removeprefix("clair.")
+    if params is not None:
+        payload["params"] = params
+    return send_request(channel, payload)
+
+
+def parse_location(value: str) -> tuple[str, int | None, int | None]:
+    pieces = value.rsplit(":", 2)
+    if len(pieces) == 3:
+        try:
+            line = int(pieces[1])
+            column = int(pieces[2])
+        except ValueError:
+            pass
+        else:
+            return pieces[0], line, column
+    if len(pieces) == 2:
+        try:
+            line = int(pieces[1])
+        except ValueError:
+            pass
+        else:
+            return pieces[0], line, None
+    return value, None, None
+
+
+def print_response(response: dict[str, Any]) -> int:
+    if response.get("ok"):
+        json.dump(response.get("result"), sys.stdout, ensure_ascii=False, sort_keys=True)
+        sys.stdout.write("\n")
+        return 0
+    error = response.get("error")
+    json.dump(error, sys.stderr, ensure_ascii=False, sort_keys=True)
+    sys.stderr.write("\n")
+    return 1
+
+
+def handle_cli(args: argparse.Namespace) -> int:
+    if args.action == "open":
+        path, line, column = parse_location(args.location)
+        expanded = Path(path).expanduser()
+        if not expanded.is_absolute():
+            expanded = Path.cwd() / expanded
+        params: dict[str, Any] = {"path": str(expanded.resolve(strict=False))}
+        if line is not None:
+            params["line"] = line
+        if column is not None:
+            params["column"] = column
+        response = request(
+            args.channel,
+            "call",
+            "navigation.openFile",
+            params,
+            no_launch=args.no_launch,
+        )
+        return print_response(response)
+    if args.action == "list":
+        response = request(args.channel, "list", no_launch=args.no_launch)
+        return print_response(response)
+    if args.action == "command":
+        try:
+            params = json.loads(args.params)
+        except json.JSONDecodeError as error:
+            print(f"invalid --params JSON: {error}", file=sys.stderr)
+            return 2
+        if not isinstance(params, dict):
+            print("--params must contain a JSON object", file=sys.stderr)
+            return 2
+        response = request(
+            args.channel,
+            "call",
+            args.command_id,
+            params,
+            no_launch=args.no_launch,
+        )
+        return print_response(response)
+    raise RuntimeError(f"unsupported CLI action: {args.action}")
+
+
+def mcp_response(message_id: Any, result: Any) -> dict[str, Any]:
+    return {"jsonrpc": "2.0", "id": message_id, "result": result}
+
+
+def mcp_error(message_id: Any, code: int, message: str) -> dict[str, Any]:
+    return {"jsonrpc": "2.0", "id": message_id, "error": {"code": code, "message": message}}
+
+
+def handle_mcp(args: argparse.Namespace) -> int:
+    for raw_line in sys.stdin:
+        if not raw_line.strip():
+            continue
+        try:
+            message = json.loads(raw_line)
+        except json.JSONDecodeError as error:
+            print(json.dumps(mcp_error(None, -32700, str(error))), flush=True)
+            continue
+        if not isinstance(message, dict):
+            print(json.dumps(mcp_error(None, -32600, "MCP request must be an object")), flush=True)
+            continue
+        message_id = message.get("id")
+        method = message.get("method")
+        try:
+            if method == "initialize":
+                response = mcp_response(
+                    message_id,
+                    {
+                        "protocolVersion": "2024-11-05",
+                        "capabilities": {"tools": {}},
+                        "serverInfo": {"name": "clair", "version": "1"},
+                    },
+                )
+            elif method == "notifications/initialized":
+                continue
+            elif method == "tools/list":
+                raw = request(args.channel, "list", source="mcp", no_launch=args.no_launch)
+                if not raw.get("ok"):
+                    raise RuntimeError(json.dumps(raw.get("error"), ensure_ascii=False))
+                commands = raw.get("result", {}).get("commands", [])
+                tools = [
+                    {
+                        "name": command["name"],
+                        "description": command.get("description", command["title"]),
+                        "inputSchema": command["inputSchema"],
+                    }
+                    for command in commands
+                ]
+                response = mcp_response(message_id, {"tools": tools})
+            elif method == "tools/call":
+                raw_params = message.get("params")
+                if not isinstance(raw_params, dict):
+                    raise ValueError("tools/call requires an object params value")
+                arguments = raw_params.get("arguments", {})
+                name = raw_params.get("name")
+                if not isinstance(name, str) or not isinstance(arguments, dict):
+                    raise ValueError("tools/call requires a name and object arguments")
+                raw = request(
+                    args.channel,
+                    "call",
+                    name,
+                    arguments,
+                    source="mcp",
+                    no_launch=args.no_launch,
+                )
+                if raw.get("ok"):
+                    content = [{"type": "text", "text": json.dumps(raw.get("result"), ensure_ascii=False, sort_keys=True)}]
+                    response = mcp_response(message_id, {"content": content, "isError": False})
+                else:
+                    content = [{"type": "text", "text": json.dumps(raw.get("error"), ensure_ascii=False, sort_keys=True)}]
+                    response = mcp_response(message_id, {"content": content, "isError": True})
+            else:
+                response = mcp_error(message_id, -32601, f"Method not found: {method}")
+        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError) as error:
+            response = mcp_error(message_id, -32000, str(error))
+        print(json.dumps(response, ensure_ascii=False, separators=(",", ":")), flush=True)
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Send typed commands to the local Clair GUI")
+    parser.add_argument("--channel", choices=("stable", "dev"), default=os.environ.get("CLAIR_CHANNEL", "dev"))
+    parser.add_argument("--no-launch", action="store_true", help="fail instead of launching the built app")
+    subparsers = parser.add_subparsers(dest="action", required=True)
+
+    open_parser = subparsers.add_parser("open", help="open a file, optionally at path:line:column")
+    open_parser.add_argument("location")
+
+    subparsers.add_parser("list", help="list registered commands")
+
+    command_parser = subparsers.add_parser("command", help="call any registered CLI command")
+    command_parser.add_argument("command_id")
+    command_parser.add_argument("--params", default="{}")
+
+    mcp_parser = subparsers.add_parser("mcp", help="run the MCP stdio adapter")
+    mcp_parser.add_argument("serve", choices=("serve",))
+    return parser
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+    try:
+        if args.action == "mcp":
+            return handle_mcp(args)
+        return handle_cli(args)
+    except (OSError, RuntimeError) as error:
+        print(str(error), file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

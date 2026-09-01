@@ -45,11 +45,18 @@ for channel in stable dev; do
         "$repo_root/apple/ClairApp/ProjectModel.swift" \
         "$repo_root/apple/ClairApp/ProjectStore.swift" \
         "$repo_root/apple/ClairApp/CommandRegistry.swift" \
+        "$repo_root/apple/ClairApp/CommandAdapters.swift" \
+        "$repo_root/apple/ClairApp/CommandIPC.swift" \
         "$repo_root/apple/ClairApp/ProjectWorkspace.swift" \
         "$repo_root/apple/ClairApp/ContentView.swift" \
         "$repo_root/apple/ClairApp/NativeEditor.swift" \
         "$repo_root/apple/ClairApp/ProjectNavigation.swift" \
         "$repo_root/apple/ClairApp/ProjectGit.swift" \
+        "$repo_root/apple/ClairApp/AgentWorkflow.swift" \
+        "$repo_root/apple/ClairApp/AgentActivity.swift" \
+        "$repo_root/apple/ClairApp/AgentCoordinator.swift" \
+        "$repo_root/apple/ClairApp/ProjectWorktree.swift" \
+        "$repo_root/apple/ClairApp/CommandSurfaces.swift" \
         "$repo_root/apple/ClairApp/TerminalProtocol.swift" \
         "$repo_root/apple/ClairApp/SessionBroker.swift" \
         "$repo_root/apple/ClairApp/TerminalSession.swift" \

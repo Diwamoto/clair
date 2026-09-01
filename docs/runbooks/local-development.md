@@ -498,6 +498,82 @@ cover the same dispatch, reason, rejection, persistence, and clear-mapping cases
 With the current Xcode 26 environment, XCTest may require execution outside the
 restricted shell because its `testmanagerd` service is unavailable inside the sandbox.
 
+## Verify CLI and MCP adapters (P13)
+
+Build Dev and keep the built app path available to the CLI cold-start path:
+
+```sh
+xcodebuild -project Clair.xcodeproj -scheme "Clair Dev" \
+  -destination 'platform=macOS,arch=arm64' -configuration Debug \
+  -derivedDataPath .build/xcode/p13-manual CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGNING_REQUIRED=NO build
+export CLAIR_APP_PATH="$PWD/.build/xcode/p13-manual/Build/Products/Debug/Clair Dev.app"
+```
+
+The adapter is the checked-in `scripts/clair` executable. It talks to the Dev socket
+at `~/Library/Application Support/Clair Dev/command-v1.sock`; Stable uses the same
+relative path below `Clair`. The socket directory must be owner-only (`0700`) and the
+socket itself owner-only (`0600`). Verify the registry projection while Dev is running:
+
+```sh
+./scripts/clair --channel dev list
+./scripts/clair --channel dev command git.refresh \
+  --params '{"projectID":"<OPEN_PROJECT_ID>"}'
+```
+
+Open a file from a path inside an already-open nested Project and confirm that the
+longest matching Project root is selected, the file is revealed, and the requested
+1-based line/column is selected:
+
+```sh
+./scripts/clair --channel dev open "/absolute/path/to/file.swift:12:4"
+```
+
+Quit Dev, then run the same `list` command. The CLI should launch the configured Dev
+app and retry the warm socket probe until the GUI command server is ready. With Dev
+stopped, `--no-launch` must return a structured local-server error rather than opening
+the app. Call an additive or write command and exercise both **Allow** and **Deny** in
+the GUI approval dialog; denial must return `approval_denied` and must not mutate GUI
+state. A command targeting a closed/missing Project must return `unavailable` before
+the approval dialog or execution.
+
+The stdio MCP adapter maps the MCP tool list and calls to the same command IDs and
+typed input schemas. Only descriptors with `aiAvailable` are exposed:
+
+```sh
+printf '%s\n' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize"}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+  | ./scripts/clair --channel dev mcp serve
+```
+
+Use `tools/call` with a listed command and confirm its typed result. Calling a command
+that is not `aiAvailable` must return a tool result with `isError: true` and the
+structured `not_ai_available` error. Unknown IDs, malformed parameters, unavailable
+Projects, oversized requests, and malformed JSON must remain bounded errors; no
+terminal transcript or request history is persisted.
+
+The automated P13 checks are:
+
+```sh
+swift format lint --recursive --parallel --strict apple
+ruby scripts/validate-xcode-project.rb
+swiftc -typecheck -parse-as-library -swift-version 6 -warnings-as-errors \
+  -D CLAIR_DEV -module-cache-path .build/swift-module-cache \
+  -import-objc-header apple/ClairApp/Clair-Bridging-Header.h -Xcc -Iinclude \
+  apple/ClairApp/*.swift
+python3 -m py_compile scripts/clair
+xcodebuild -project Clair.xcodeproj -scheme "Clair Dev" \
+  -destination 'platform=macOS,arch=arm64' -configuration Debug \
+  -derivedDataPath .build/xcode/p13-tests CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGNING_REQUIRED=NO -only-testing:ClairTests/CommandAdapterTests test
+```
+
+With the current Xcode 26 environment, the last command may require execution outside
+the restricted shell because XCTest's `testmanagerd` service is unavailable inside the
+sandbox. The focused suite covers registry/codec coverage, longest-prefix routing,
+MCP `aiAvailable` filtering, and GUI approval allow/deny dispatch.
+
 ## Run the PTY host smoke path
 
 ```sh

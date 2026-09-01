@@ -60,6 +60,11 @@
 		A0000000000000000000009C /* ManagedWorktreeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000098 /* ManagedWorktreeTests.swift */; };
 		A0000000000000000000009D /* CommandSurfaces.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000A0 /* CommandSurfaces.swift */; };
 		A0000000000000000000009E /* CommandSurfaces.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000A0 /* CommandSurfaces.swift */; };
+		A000000000000000000000A4 /* CommandAdapters.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000A1 /* CommandAdapters.swift */; };
+		A000000000000000000000A5 /* CommandIPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000A2 /* CommandIPC.swift */; };
+		A000000000000000000000A6 /* CommandAdapters.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000A1 /* CommandAdapters.swift */; };
+		A000000000000000000000A7 /* CommandIPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000A2 /* CommandIPC.swift */; };
+		A000000000000000000000A8 /* CommandAdapterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000A3 /* CommandAdapterTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -111,6 +116,9 @@
 		A00000000000000000000097 /* ProjectWorktree.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectWorktree.swift; sourceTree = "<group>"; };
 		A00000000000000000000098 /* ManagedWorktreeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagedWorktreeTests.swift; sourceTree = "<group>"; };
 		A000000000000000000000A0 /* CommandSurfaces.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandSurfaces.swift; sourceTree = "<group>"; };
+		A000000000000000000000A1 /* CommandAdapters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandAdapters.swift; sourceTree = "<group>"; };
+		A000000000000000000000A2 /* CommandIPC.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandIPC.swift; sourceTree = "<group>"; };
+		A000000000000000000000A3 /* CommandAdapterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandAdapterTests.swift; sourceTree = "<group>"; };
 		A00000000000000000000021 /* Clair.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Clair.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A00000000000000000000022 /* Clair Dev.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Clair Dev.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A00000000000000000000023 /* ClairTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ClairTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -206,6 +214,8 @@
 				A00000000000000000000093 /* AgentCoordinator.swift */,
 				A00000000000000000000097 /* ProjectWorktree.swift */,
 				A000000000000000000000A0 /* CommandSurfaces.swift */,
+				A000000000000000000000A1 /* CommandAdapters.swift */,
+				A000000000000000000000A2 /* CommandIPC.swift */,
 				A00000000000000000000016 /* Clair-Bridging-Header.h */,
 			);
 			path = ClairApp;
@@ -223,6 +233,7 @@
 				A00000000000000000000094 /* AgentWorkflowTests.swift */,
 				A00000000000000000000095 /* AgentActivityTests.swift */,
 				A00000000000000000000098 /* ManagedWorktreeTests.swift */,
+				A000000000000000000000A3 /* CommandAdapterTests.swift */,
 			);
 			path = ClairTests;
 			sourceTree = "<group>";
@@ -429,6 +440,8 @@
 				A00000000000000000000089 /* AgentCoordinator.swift in Sources */,
 				A0000000000000000000009A /* ProjectWorktree.swift in Sources */,
 				A0000000000000000000009D /* CommandSurfaces.swift in Sources */,
+				A000000000000000000000A4 /* CommandAdapters.swift in Sources */,
+				A000000000000000000000A5 /* CommandIPC.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -457,6 +470,8 @@
 				A0000000000000000000008C /* AgentCoordinator.swift in Sources */,
 				A0000000000000000000009B /* ProjectWorktree.swift in Sources */,
 				A0000000000000000000009E /* CommandSurfaces.swift in Sources */,
+				A000000000000000000000A6 /* CommandAdapters.swift in Sources */,
+				A000000000000000000000A7 /* CommandIPC.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -473,6 +488,7 @@
 				A0000000000000000000008D /* AgentActivityTests.swift in Sources */,
 				A0000000000000000000008E /* AgentWorkflowTests.swift in Sources */,
 				A0000000000000000000009C /* ManagedWorktreeTests.swift in Sources */,
+				A000000000000000000000A8 /* CommandAdapterTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

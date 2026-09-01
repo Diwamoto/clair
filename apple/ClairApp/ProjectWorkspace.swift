@@ -21,12 +21,12 @@ final class ProjectWorkspaceModel: ObservableObject {
     store: ProjectStore,
     rootChecker: any ProjectRootChecking = FileSystemProjectRootChecker(),
     commandRegistry: CommandRegistry = CommandRegistry(),
-    historyStore: ProjectLocalHistoryStore = .makeDefault(for: .current)
+    historyStore: ProjectLocalHistoryStore? = nil
   ) {
     self.store = store
     self.rootChecker = rootChecker
     self.commandRegistry = commandRegistry
-    self.historyStore = historyStore
+    self.historyStore = historyStore ?? .makeDefault(for: .current)
 
     do {
       let snapshot = try store.load()
@@ -89,6 +89,9 @@ final class ProjectWorkspaceModel: ObservableObject {
       let result = try apply(command)
       lastErrorMessage = nil
       return .success(result)
+    } catch let error as CommandError {
+      lastErrorMessage = error.localizedDescription
+      return .failure(error)
     } catch let error as ProjectError {
       lastErrorMessage = error.localizedDescription
       return .failure(.project(error))
@@ -178,6 +181,10 @@ final class ProjectWorkspaceModel: ObservableObject {
     case .gitSwitchBranch(let input):
       return .gitStatus(
         try activeGitSurface(for: input.projectID).switchGitBranch(input.branch)
+      )
+    default:
+      throw CommandError.adapter(
+        "The command is routed through the CLI/MCP adapter rather than the Project workspace."
       )
     }
   }

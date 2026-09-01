@@ -2,7 +2,7 @@
 
 ## Status
 
-Current as of local PoC item `P12 Human command surfaces`.
+Current as of local PoC item `P13 CLI and MCP adapters`.
 
 ## Workspace boundary
 
@@ -135,8 +135,8 @@ unavailable rows remain disabled with their deterministic reason. The command wi
 uses Command-Shift-K, while configurable command shortcuts are persisted as the
 versioned `clair.command-keymap.v1` payload in the channel-specific standard
 `UserDefaults` store. Assignment validates normalized keys, reserved editor shortcuts,
-and one-to-one conflicts before replacing the saved mapping. CLI/MCP adapters remain
-later slices.
+and one-to-one conflicts before replacing the saved mapping. P13 adds local CLI/MCP
+adapters without moving state ownership out of the GUI process.
 
 P08 extends that same seam with `git.refresh`, `git.showDiff`, `git.stage`,
 `git.unstage`, `git.commit`, and `git.switchBranch`. `ProjectGitService` is a
@@ -283,8 +283,8 @@ agent. Confirmation rechecks the canonical target, state, branch, and HEAD
 fingerprint before invoking `git worktree remove` without `--force`; the branch is
 kept. A stale plan, changed target, changed branch, or changed HEAD must be prepared
 again. P10 does not review, merge, adopt, or resolve worktree branches; those actions
-belong to P11. PTY transcript persistence, semantic vendor adapters, and CLI/MCP
-command adapters remain outside this slice.
+belong to P11. PTY transcript persistence and semantic vendor adapters remain outside
+this slice.
 
 ## Branch review and adoption
 
@@ -311,6 +311,58 @@ leaves the target merge state intact. The Branch Review surface shows the target
 conflicted paths, and the owning-agent/native-editor resolution handoff. P10 cleanup
 remains an independent two-step operation: cancelling cleanup leaves the worktree
 and its branch in place, and normal worktree cleanup never deletes the branch.
+
+## CLI and MCP adapters
+
+P13 exposes the complete P00-P12 user-invokable operation inventory through the same
+`CommandRegistry`. The stable command IDs are grouped as follows:
+
+| Surface | Registered IDs |
+|---|---|
+| Project | `project.open`, `project.switch`, `project.rename`, `project.setColor`, `project.reorder`, `project.close` |
+| Navigation/editor | `navigation.openFile`, `navigation.quickOpen`, `navigation.search`, `editor.save`, `editor.undo`, `editor.redo` |
+| Pane | `pane.split`, `pane.focus`, `pane.moveTab`, `pane.close`, `pane.toggleMaximize`, `pane.equalize` |
+| Terminal/agent | `terminal.open`, `terminal.stop`, `terminal.recover`, `agent.launch`, `agent.reveal` |
+| Worktree | `worktree.list`, `worktree.create`, `worktree.prepareCleanup` |
+| Git/review | `git.refresh`, `git.showDiff`, `git.stage`, `git.unstage`, `git.commit`, `git.switchBranch`, `git.review`, `git.prepareAdoption`, `git.adopt` |
+| Notification | `notification.list`, `notification.setMute` |
+
+Each descriptor carries the stable ID, typed input schema, fixed risk, and
+`aiAvailable` flag. GUI surfaces continue to dispatch the typed `ClairCommand` through
+the workspace; the adapters use the same registry for decoding, preflight, approval,
+execution, and structured result/error encoding. Read commands do not prompt, while
+additive, write, destructive, and external commands require an in-app GUI approval.
+`navigation.openFile` is additive because an unmatched path can create a new Project;
+opening a file inside an existing Project therefore uses the same conservative gate.
+The approval dialog never changes the registry's risk or bypasses runtime preflight.
+
+The local adapter transport is a version-1, newline-delimited JSON protocol over the
+channel-specific owner-only Unix socket:
+
+| Channel | Socket |
+|---|---|
+| Stable | `~/Library/Application Support/Clair/command-v1.sock` |
+| Dev | `~/Library/Application Support/Clair Dev/command-v1.sock` |
+
+The containing directory is `0700`, the socket is `0600`, and requests/responses are
+capped at 1 MiB. A request has `requestID`, `operation` (`list` or `call`), optional
+`commandID`/`params`, and `source` (`cli` or `mcp`). A failed response preserves the
+request ID and returns a machine-readable `code`, message, command ID, risk, and
+reason. The socket is same-user local IPC only; no transcript or remote session data
+is persisted.
+
+`scripts/clair` is the user-facing adapter. `open path:line:column` canonicalizes the
+path, routes it to the longest matching open Project root, and opens the containing
+directory as a Project when there is no match. A warm call probes the existing socket;
+when it is absent, the CLI cold-launches the channel's built app and retries until the
+server is ready. `--no-launch` makes a missing server a deterministic error. The
+stdio MCP mode (`mcp serve`) maps `initialize`, `tools/list`, and `tools/call` onto
+the same socket. MCP lists and calls only descriptors with `aiAvailable == true`, and
+command failures are returned as MCP tool results with `isError: true`.
+
+The adapter intentionally stops at the local GUI boundary. Remote multi-client
+transport, vendor-specific agent semantics, transcript streaming, relay/E2EE, and
+benchmark/performance comparisons remain deferred to later queue items.
 
 ## Native editor and disk safety
 
@@ -424,7 +476,7 @@ disk writes, project-scoped history ordering, and Project-root path validation.
 - The terminal surface is a selectable plain-text AppKit fallback, not a full ANSI/
   alternate-screen/cursor/colour terminal grid; a reproducible libghostty development
   artifact is still unavailable in this checkout. The editor does not yet provide
-  syntax highlighting, LSP, or multi-cursor editing. The P08/P10/P11/P12 Git and
+  syntax highlighting, LSP, or multi-cursor editing. The P08/P10/P11/P12/P13 Git and
   command loop currently uses the local `/usr/bin/git` bridge; discard, blame, review
-  comments, AI briefs, and CLI/MCP adapters remain later queue items.
+  comments, and AI briefs remain later queue items.
 - Formal app icons, signing, notarization, and update delivery are not present.

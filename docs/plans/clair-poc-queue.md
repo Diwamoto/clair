@@ -339,7 +339,7 @@ P15Cへ進む。P15CはP15A/P15B、P15はP13/P14/P15Cの統合後にだけ開始
 
 ### P13 CLI and MCP adapters
 
-- Status: `next`
+- Status: `done`
 - Depends on: P06、P11、P12。
 - Outcome: `clair open path:line:column`とstdio MCPがGUIと同じCommandを呼ぶ。
 - Scope: adapter実装前にP00-P12のuser-invokable operationを棚卸しし、Project、navigation/editor、
@@ -349,6 +349,23 @@ P15Cへ進む。P15CはP15A/P15B、P15はP13/P14/P15Cの統合後にだけ開始
 - Functional checks: human surface/CLI/MCPのcommand coverage matrix、同じID/typed result/errorのdispatch、
   warm/cold open、line/column routing、MCP list/call、allow/deny/unavailable matrix。
 - Legacy issue coverage: #36、#37。
+- Validation (2026-09-01): `swift format lint --recursive --parallel --strict apple`、
+  `ruby scripts/validate-xcode-project.rb`、Swift 6 strict typecheck、
+  `python3 -m py_compile scripts/clair`、`scripts/smoke-app-link.sh` (Stable/Dev)、
+  and project-scoped Dev `xcodebuild ... build` passed. The focused
+  `CommandAdapterTests` passed all 5 cases, and all 91 Swift tests passed in serial
+  mode. A parallel full-suite attempt hit
+  `NativeEditorTests.testWatcherReloadsAnExternalRewrite` `signal pipe`; the same test
+  and the complete suite passed when run serially. The real Dev cold/warm CLI smoke
+  returned protocol 1 with 37 registered commands; stdio MCP returned 27
+  `aiAvailable` tools, excluded `git.commit`, and returned structured unknown-command
+  and `not_ai_available` errors.
+- Durable detail: [development workspace architecture](../architecture/development-workspace.md)
+  and [local development runbook](../runbooks/local-development.md) document the
+  command coverage matrix, version-1 owner-only socket, typed JSON contract,
+  warm/cold launch, routing, MCP projection, approval, and recovery boundaries.
+- Deferred: remote multi-client transport, background service ownership, vendor-specific
+  semantic agent adapters, transcript streaming, relay/E2EE, and performance benchmarks.
 
 ### P14 Release, update, and restart handoff
 

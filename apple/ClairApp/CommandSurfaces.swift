@@ -535,6 +535,10 @@ final class CommandSurfaceModel: ObservableObject {
           ? "Switch Git Branch needs a branch and is available from the Git view."
           : "No alternate Git branch is available."
       )
+    default:
+      return .unavailable(
+        "This command is available through the typed CLI/MCP adapter or a contextual surface."
+      )
     }
   }
 
@@ -577,6 +581,13 @@ final class CommandSurfaceModel: ObservableObject {
       status.message ?? "Git status refreshed."
     case .gitDiff(let diff):
       "Showing \(diff.change.displayPath)."
+    case .adapter(let result):
+      switch result {
+      case .status(let message):
+        message
+      default:
+        "Command completed."
+      }
     case .none:
       "Command completed."
     }

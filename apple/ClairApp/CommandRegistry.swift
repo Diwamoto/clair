@@ -7,12 +7,37 @@ enum ClairCommandID: String, CaseIterable, Codable, Hashable, Sendable {
   case setProjectColor = "project.setColor"
   case reorderProject = "project.reorder"
   case closeProject = "project.close"
+  case navigationOpenFile = "navigation.openFile"
+  case navigationQuickOpen = "navigation.quickOpen"
+  case navigationSearch = "navigation.search"
+  case editorSave = "editor.save"
+  case editorUndo = "editor.undo"
+  case editorRedo = "editor.redo"
+  case paneSplit = "pane.split"
+  case paneFocus = "pane.focus"
+  case paneMoveTab = "pane.moveTab"
+  case paneClose = "pane.close"
+  case paneToggleMaximize = "pane.toggleMaximize"
+  case paneEqualize = "pane.equalize"
+  case terminalOpen = "terminal.open"
+  case terminalStop = "terminal.stop"
+  case terminalRecover = "terminal.recover"
+  case agentLaunch = "agent.launch"
+  case agentReveal = "agent.reveal"
+  case worktreeList = "worktree.list"
+  case worktreeCreate = "worktree.create"
+  case worktreePrepareCleanup = "worktree.prepareCleanup"
   case gitRefresh = "git.refresh"
   case gitShowDiff = "git.showDiff"
   case gitStage = "git.stage"
   case gitUnstage = "git.unstage"
   case gitCommit = "git.commit"
   case gitSwitchBranch = "git.switchBranch"
+  case gitReview = "git.review"
+  case gitPrepareAdoption = "git.prepareAdoption"
+  case gitAdopt = "git.adopt"
+  case notificationList = "notification.list"
+  case notificationSetMute = "notification.setMute"
 }
 
 enum CommandRisk: String, Codable, Equatable, Sendable {
@@ -107,6 +132,91 @@ struct GitSwitchBranchCommand: Sendable {
   let branch: String
 }
 
+struct NavigationOpenFileCommand: Sendable {
+  let path: String
+  let line: Int?
+  let column: Int?
+}
+
+struct NavigationQuickOpenCommand: Sendable {
+  let projectID: UUID
+  let query: String
+}
+
+struct NavigationSearchCommand: Sendable {
+  let projectID: UUID
+  let query: String
+}
+
+struct EditorCommand: Sendable {
+  let projectID: UUID
+  let tabID: String?
+}
+
+struct PaneSplitCommand: Sendable {
+  let projectID: UUID
+  let orientation: ProjectPaneOrientation
+}
+
+struct PaneTargetCommand: Sendable {
+  let projectID: UUID
+  let paneID: UUID
+}
+
+struct TerminalCommand: Sendable {
+  let projectID: UUID
+  let tabID: String?
+}
+
+struct LaunchAgentCommand: Sendable {
+  let projectID: UUID
+  let profileID: String
+  let worktreeID: WorktreeID?
+}
+
+struct RevealAgentCommand: Sendable {
+  let projectID: UUID
+  let sessionID: UUID
+}
+
+struct WorktreeListCommand: Sendable {
+  let projectID: UUID
+}
+
+struct WorktreeCreateCommand: Sendable {
+  let projectID: UUID
+  let branch: String
+  let baseRevision: String
+  let targetName: String
+}
+
+struct WorktreeCleanupCommand: Sendable {
+  let projectID: UUID
+  let worktreeID: WorktreeID
+}
+
+struct GitReviewCommand: Sendable {
+  let projectID: UUID
+  let worktreeID: WorktreeID
+}
+
+struct GitAdoptCommand: Sendable {
+  let projectID: UUID
+  let worktreeID: WorktreeID
+  let confirmationID: UUID
+}
+
+struct NotificationListCommand: Sendable {
+  let projectID: UUID
+  let sessionID: UUID?
+}
+
+struct NotificationMuteCommand: Sendable {
+  let projectID: UUID
+  let sessionID: UUID?
+  let muted: Bool
+}
+
 enum ClairCommand: Sendable {
   case openProject(OpenProjectCommand)
   case switchProject(SwitchProjectCommand)
@@ -114,12 +224,37 @@ enum ClairCommand: Sendable {
   case setProjectColor(SetProjectColorCommand)
   case reorderProject(ReorderProjectCommand)
   case closeProject(CloseProjectCommand)
+  case navigationOpenFile(NavigationOpenFileCommand)
+  case navigationQuickOpen(NavigationQuickOpenCommand)
+  case navigationSearch(NavigationSearchCommand)
+  case editorSave(EditorCommand)
+  case editorUndo(EditorCommand)
+  case editorRedo(EditorCommand)
+  case paneSplit(PaneSplitCommand)
+  case paneFocus(PaneTargetCommand)
+  case paneMoveTab(PaneTargetCommand)
+  case paneClose(PaneTargetCommand)
+  case paneToggleMaximize(ProjectTargetCommand)
+  case paneEqualize(ProjectTargetCommand)
+  case terminalOpen(ProjectTargetCommand)
+  case terminalStop(TerminalCommand)
+  case terminalRecover(TerminalCommand)
+  case agentLaunch(LaunchAgentCommand)
+  case agentReveal(RevealAgentCommand)
+  case worktreeList(WorktreeListCommand)
+  case worktreeCreate(WorktreeCreateCommand)
+  case worktreePrepareCleanup(WorktreeCleanupCommand)
   case gitRefresh(GitRefreshCommand)
   case gitShowDiff(GitShowDiffCommand)
   case gitStage(GitStageCommand)
   case gitUnstage(GitUnstageCommand)
   case gitCommit(GitCommitCommand)
   case gitSwitchBranch(GitSwitchBranchCommand)
+  case gitReview(GitReviewCommand)
+  case gitPrepareAdoption(GitReviewCommand)
+  case gitAdopt(GitAdoptCommand)
+  case notificationList(NotificationListCommand)
+  case notificationSetMute(NotificationMuteCommand)
 
   var id: ClairCommandID {
     switch self {
@@ -135,6 +270,46 @@ enum ClairCommand: Sendable {
       .reorderProject
     case .closeProject:
       .closeProject
+    case .navigationOpenFile:
+      .navigationOpenFile
+    case .navigationQuickOpen:
+      .navigationQuickOpen
+    case .navigationSearch:
+      .navigationSearch
+    case .editorSave:
+      .editorSave
+    case .editorUndo:
+      .editorUndo
+    case .editorRedo:
+      .editorRedo
+    case .paneSplit:
+      .paneSplit
+    case .paneFocus:
+      .paneFocus
+    case .paneMoveTab:
+      .paneMoveTab
+    case .paneClose:
+      .paneClose
+    case .paneToggleMaximize:
+      .paneToggleMaximize
+    case .paneEqualize:
+      .paneEqualize
+    case .terminalOpen:
+      .terminalOpen
+    case .terminalStop:
+      .terminalStop
+    case .terminalRecover:
+      .terminalRecover
+    case .agentLaunch:
+      .agentLaunch
+    case .agentReveal:
+      .agentReveal
+    case .worktreeList:
+      .worktreeList
+    case .worktreeCreate:
+      .worktreeCreate
+    case .worktreePrepareCleanup:
+      .worktreePrepareCleanup
     case .gitRefresh:
       .gitRefresh
     case .gitShowDiff:
@@ -147,14 +322,29 @@ enum ClairCommand: Sendable {
       .gitCommit
     case .gitSwitchBranch:
       .gitSwitchBranch
+    case .gitReview:
+      .gitReview
+    case .gitPrepareAdoption:
+      .gitPrepareAdoption
+    case .gitAdopt:
+      .gitAdopt
+    case .notificationList:
+      .notificationList
+    case .notificationSetMute:
+      .notificationSetMute
     }
   }
+}
+
+struct ProjectTargetCommand: Sendable {
+  let projectID: UUID
 }
 
 enum ClairCommandResult: Equatable, Sendable {
   case project(Project)
   case gitStatus(ProjectGitSnapshot)
   case gitDiff(ProjectGitDiff)
+  case adapter(CommandAdapterResult)
   case none
 }
 
@@ -168,6 +358,11 @@ enum CommandError: Error, Equatable, LocalizedError, Sendable {
   case unavailable(commandID: ClairCommandID, reason: String)
   case project(ProjectError)
   case git(ProjectGitError)
+  case navigation(ProjectNavigationError)
+  case editor(ProjectEditorError)
+  case worktree(ManagedWorktreeError)
+  case review(ProjectBranchReviewError)
+  case adapter(String)
 
   var errorDescription: String? {
     switch self {
@@ -177,6 +372,16 @@ enum CommandError: Error, Equatable, LocalizedError, Sendable {
       error.localizedDescription
     case .git(let error):
       error.localizedDescription
+    case .navigation(let error):
+      error.localizedDescription
+    case .editor(let error):
+      error.localizedDescription
+    case .worktree(let error):
+      error.localizedDescription
+    case .review(let error):
+      error.localizedDescription
+    case .adapter(let message):
+      message
     }
   }
 }
@@ -223,6 +428,126 @@ struct CommandRegistry: Sendable {
         aiAvailable: false
       ),
       CommandDescriptor(
+        id: .navigationOpenFile,
+        title: "Open File at Location",
+        risk: .additive,
+        aiAvailable: true
+      ),
+      CommandDescriptor(
+        id: .navigationQuickOpen,
+        title: "Quick Open File",
+        risk: .read,
+        aiAvailable: true
+      ),
+      CommandDescriptor(
+        id: .navigationSearch,
+        title: "Search Project Files",
+        risk: .read,
+        aiAvailable: true
+      ),
+      CommandDescriptor(
+        id: .editorSave,
+        title: "Save Editor Buffer",
+        risk: .write,
+        aiAvailable: true
+      ),
+      CommandDescriptor(
+        id: .editorUndo,
+        title: "Undo Editor Change",
+        risk: .write,
+        aiAvailable: true
+      ),
+      CommandDescriptor(
+        id: .editorRedo,
+        title: "Redo Editor Change",
+        risk: .write,
+        aiAvailable: true
+      ),
+      CommandDescriptor(
+        id: .paneSplit,
+        title: "Split Pane",
+        risk: .write,
+        aiAvailable: true
+      ),
+      CommandDescriptor(
+        id: .paneFocus,
+        title: "Focus Pane",
+        risk: .read,
+        aiAvailable: true
+      ),
+      CommandDescriptor(
+        id: .paneMoveTab,
+        title: "Move Active Tab",
+        risk: .write,
+        aiAvailable: true
+      ),
+      CommandDescriptor(
+        id: .paneClose,
+        title: "Close Pane",
+        risk: .destructive,
+        aiAvailable: false
+      ),
+      CommandDescriptor(
+        id: .paneToggleMaximize,
+        title: "Toggle Pane Maximize",
+        risk: .write,
+        aiAvailable: true
+      ),
+      CommandDescriptor(
+        id: .paneEqualize,
+        title: "Equalize Pane Splits",
+        risk: .write,
+        aiAvailable: true
+      ),
+      CommandDescriptor(
+        id: .terminalOpen,
+        title: "Open Terminal",
+        risk: .additive,
+        aiAvailable: true
+      ),
+      CommandDescriptor(
+        id: .terminalStop,
+        title: "Stop Terminal",
+        risk: .destructive,
+        aiAvailable: false
+      ),
+      CommandDescriptor(
+        id: .terminalRecover,
+        title: "Recover Terminal Session",
+        risk: .write,
+        aiAvailable: true
+      ),
+      CommandDescriptor(
+        id: .agentLaunch,
+        title: "Launch Agent",
+        risk: .external,
+        aiAvailable: true
+      ),
+      CommandDescriptor(
+        id: .agentReveal,
+        title: "Reveal Agent Session",
+        risk: .read,
+        aiAvailable: true
+      ),
+      CommandDescriptor(
+        id: .worktreeList,
+        title: "List Managed Worktrees",
+        risk: .read,
+        aiAvailable: true
+      ),
+      CommandDescriptor(
+        id: .worktreeCreate,
+        title: "Create Managed Worktree",
+        risk: .external,
+        aiAvailable: true
+      ),
+      CommandDescriptor(
+        id: .worktreePrepareCleanup,
+        title: "Prepare Worktree Cleanup",
+        risk: .destructive,
+        aiAvailable: false
+      ),
+      CommandDescriptor(
         id: .gitRefresh,
         title: "Refresh Git Status",
         risk: .read,
@@ -257,6 +582,36 @@ struct CommandRegistry: Sendable {
         title: "Switch Git Branch",
         risk: .write,
         aiAvailable: false
+      ),
+      CommandDescriptor(
+        id: .gitReview,
+        title: "Review Git Worktree Branch",
+        risk: .read,
+        aiAvailable: true
+      ),
+      CommandDescriptor(
+        id: .gitPrepareAdoption,
+        title: "Prepare Git Branch Adoption",
+        risk: .destructive,
+        aiAvailable: false
+      ),
+      CommandDescriptor(
+        id: .gitAdopt,
+        title: "Adopt Git Worktree Branch",
+        risk: .destructive,
+        aiAvailable: false
+      ),
+      CommandDescriptor(
+        id: .notificationList,
+        title: "List Project Notifications",
+        risk: .read,
+        aiAvailable: true
+      ),
+      CommandDescriptor(
+        id: .notificationSetMute,
+        title: "Set Notification Mute",
+        risk: .write,
+        aiAvailable: true
       ),
     ]
   }
@@ -314,6 +669,86 @@ struct CommandRegistry: Sendable {
         in: state,
         action: "close"
       )
+    case .navigationOpenFile(let input):
+      availability = pathAvailability(input.path, action: "open")
+    case .navigationQuickOpen(let input):
+      availability = projectAvailability(
+        for: input.projectID,
+        in: state,
+        action: "quick open a file in"
+      )
+    case .navigationSearch(let input):
+      availability = projectValueAvailability(
+        projectID: input.projectID,
+        value: input.query,
+        valueName: "search query",
+        in: state,
+        action: "search"
+      )
+    case .editorSave(let input), .editorUndo(let input), .editorRedo(let input):
+      availability = projectAvailability(
+        for: input.projectID,
+        in: state,
+        action: "edit"
+      )
+    case .paneSplit(let input):
+      availability = projectAvailability(
+        for: input.projectID,
+        in: state,
+        action: "split"
+      )
+    case .paneFocus(let input), .paneMoveTab(let input), .paneClose(let input):
+      availability = projectAvailability(
+        for: input.projectID,
+        in: state,
+        action: "change the pane layout of"
+      )
+    case .paneToggleMaximize(let input), .paneEqualize(let input), .terminalOpen(let input):
+      availability = projectAvailability(
+        for: input.projectID,
+        in: state,
+        action: "change"
+      )
+    case .terminalStop(let input), .terminalRecover(let input):
+      availability = projectAvailability(
+        for: input.projectID,
+        in: state,
+        action: "change"
+      )
+    case .agentLaunch(let input):
+      availability = projectValueAvailability(
+        projectID: input.projectID,
+        value: input.profileID,
+        valueName: "agent profile",
+        in: state,
+        action: "launch an agent in"
+      )
+    case .agentReveal(let input):
+      availability = projectAvailability(
+        for: input.projectID,
+        in: state,
+        action: "reveal an agent session in"
+      )
+    case .worktreeList(let input):
+      availability = projectAvailability(
+        for: input.projectID,
+        in: state,
+        action: "list worktrees in"
+      )
+    case .worktreeCreate(let input):
+      availability = projectValueAvailability(
+        projectID: input.projectID,
+        value: input.branch,
+        valueName: "worktree branch",
+        in: state,
+        action: "create a worktree in"
+      )
+    case .worktreePrepareCleanup(let input):
+      availability = projectAvailability(
+        for: input.projectID,
+        in: state,
+        action: "prepare worktree cleanup in"
+      )
     case .gitRefresh(let input):
       availability = gitProjectAvailability(
         for: input.projectID,
@@ -360,6 +795,30 @@ struct CommandRegistry: Sendable {
         requiredValue: input.branch,
         valueName: "branch"
       )
+    case .gitReview(let input), .gitPrepareAdoption(let input):
+      availability = gitProjectAvailability(
+        for: input.projectID,
+        in: state,
+        action: "review Git worktrees"
+      )
+    case .gitAdopt(let input):
+      availability = gitProjectAvailability(
+        for: input.projectID,
+        in: state,
+        action: "adopt a Git worktree branch"
+      )
+    case .notificationList(let input):
+      availability = projectAvailability(
+        for: input.projectID,
+        in: state,
+        action: "list notifications for"
+      )
+    case .notificationSetMute(let input):
+      availability = projectAvailability(
+        for: input.projectID,
+        in: state,
+        action: "change notification settings for"
+      )
     }
 
     return CommandPreflight(
@@ -378,6 +837,42 @@ struct CommandRegistry: Sendable {
       return .unavailable("Cannot \(action) a Project that is not open.")
     }
     return .available
+  }
+
+  private func projectValueAvailability(
+    projectID: UUID,
+    value: String,
+    valueName: String,
+    in state: ProjectCommandState,
+    action: String
+  ) -> CommandAvailability {
+    let projectState = projectAvailability(for: projectID, in: state, action: action)
+    guard projectState.isAvailable else {
+      return projectState
+    }
+    guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+      return .unavailable("The \(valueName) cannot be empty.")
+    }
+    return .available
+  }
+
+  private func pathAvailability(_ path: String, action: String) -> CommandAvailability {
+    guard !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+      return .unavailable("The path to \(action) cannot be empty.")
+    }
+    return .available
+  }
+
+  func requiresApproval(for commandID: ClairCommandID) -> Bool {
+    guard let descriptor = descriptor(for: commandID) else {
+      return true
+    }
+    switch descriptor.risk {
+    case .read:
+      return false
+    case .additive, .write, .destructive, .external:
+      return true
+    }
   }
 
   private func gitProjectAvailability(

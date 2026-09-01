@@ -46,4 +46,14 @@ struct ClairRuntimeProfile: Equatable, Sendable {
   func applicationSupportURL(baseDirectory: URL) -> URL {
     baseDirectory.appendingPathComponent(applicationSupportDirectoryName, isDirectory: true)
   }
+
+  var commandSocketURL: URL {
+    let baseDirectory =
+      FileManager.default.urls(
+        for: .applicationSupportDirectory,
+        in: .userDomainMask
+      ).first ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+    return applicationSupportURL(baseDirectory: baseDirectory)
+      .appendingPathComponent("command-v1.sock", isDirectory: false)
+  }
 }

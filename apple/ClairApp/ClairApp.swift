@@ -7,6 +7,7 @@ struct ClairApplication: App {
   @StateObject private var agentWorkflow: AgentWorkflowCoordinator
   @StateObject private var worktreeCoordinator: ProjectWorktreeCoordinator
   @StateObject private var commandSurface: CommandSurfaceModel
+  @StateObject private var commandServer: CommandIPCServer
 
   init() {
     let profile = ClairRuntimeProfile.current
@@ -17,15 +18,21 @@ struct ClairApplication: App {
     _projectWorkspace = StateObject(
       wrappedValue: workspace
     )
-    _agentWorkflow = StateObject(
-      wrappedValue: AgentWorkflowCoordinator(profile: profile)
-    )
-    _worktreeCoordinator = StateObject(
-      wrappedValue: ProjectWorktreeCoordinator.makeDefault(for: profile)
-    )
+    let agentWorkflow = AgentWorkflowCoordinator(profile: profile)
+    let worktreeCoordinator = ProjectWorktreeCoordinator.makeDefault(for: profile)
+    _agentWorkflow = StateObject(wrappedValue: agentWorkflow)
+    _worktreeCoordinator = StateObject(wrappedValue: worktreeCoordinator)
     _commandSurface = StateObject(
       wrappedValue: CommandSurfaceModel(workspace: workspace)
     )
+    let router = CommandAdapterRouter(
+      workspace: workspace,
+      agentWorkflow: agentWorkflow,
+      worktreeCoordinator: worktreeCoordinator
+    )
+    let commandServer = CommandIPCServer(profile: profile, router: router)
+    _commandServer = StateObject(wrappedValue: commandServer)
+    commandServer.start()
   }
 
   var body: some Scene {
