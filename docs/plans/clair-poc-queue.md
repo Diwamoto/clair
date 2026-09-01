@@ -443,6 +443,17 @@ P14はADR-0009でdecision blockerを解消して完了した。P15Dはdecision b
   feedback速度から有効なpatternだけを抽出する。利用者がOrcaで感じた「もう少しこうしたい」を、P15C開始前に
   `adopt`、`avoid`、`surpass`のevidence matrixへ落とし、少なくとも一つのsurpass behaviorを明示する。
   Browser/Design Mode、remote worktree等のM1外機能をUI比較だけを理由にP15Cへ追加しない。
+- Orca comparison seed (利用者評価、2026-09-02): 次の4点はP15Cで再確認するだけの未決事項ではなく、
+  Interaction Labとnative acceptanceへ引き継ぐ初期matrixとする。
+  - `surpass / navigation`: file treeは右へ移さず、Clairの左Project navigatorを維持する。初見でもactive Projectと
+    treeの関係が判読でき、editor/terminalを開いてもnavigatorの位置が変わらないこと。
+  - `avoid / visual system`: editorとterminalを別themeに見せない。同一One Dark workspace token、chrome、
+    border hierarchyを共有し、syntax colorやprocess statusだけを意味のあるaccentとして使うこと。
+  - `surpass / tabs`: tabはProject ownership、surface kind、active/dirty/attention stateをcompactに判読できる
+    titlebar内の一段へ収める。pane下へ重複tab rowを追加せず、選択面がworkspaceへ視覚的につながること。
+  - `avoid + surpass / complexity`: Files、Search、Git、Review、Notifications/Historyを常設のcore navigationとし、
+    advanced toolは必要時のCommand Windowまたは明示的なoverflowから開く。M1外機能を常設して初見の選択肢を
+    増やさず、機能数ではなく「現在のProject、surface、attention、次の操作が一目で分かる」ことを優先する。
 - Scope: traffic lightsと同じtitlebar rowのcolored Project groups、expanded group内のactive file/terminal、
   Project切替時のroot/active surface/split/ratio restore、Files/Search/Git/Review/Notifications-Historyの
   first-class activity bar、右titlebarのCommand Window/Settings、compact One Dark styling、status bar、
@@ -452,6 +463,8 @@ P14はADR-0009でdecision blockerを解消して完了した。P15Dはdecision b
   active surface切替、Command Window/Settings、activity viewのfilter/search/resume、badge/mute、restart restore、
   narrow/wide window、keyboard/accessibility navigation。固定したOrca比較taskを利用者とside-by-sideで実行し、
   `adopt`項目がClairのownership modelを壊さず機能し、`surpass`項目が再現可能な操作として確認できる。
+  さらに、左navigatorの位置不変、editor/terminalのshared workspace token、single titlebar tab row、advanced toolを
+  閉じたdefault stateをwide/narrow双方で確認し、core taskがoverflowを開かず完了できることを記録する。
 - Audit evidence (2026-09-01): native appはvertical Projects sidebar、separate Files sidebar、top button row、
   pane-local toolbarとsecond tab row、modal sheets、system dark appearanceであり、Interaction Labのtitlebar groups、
   activity hierarchy、right actions、One Dark density、status/attention presentationと一致していない。
