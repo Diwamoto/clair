@@ -240,6 +240,7 @@ private enum ProjectNavigationSheet: String, Identifiable {
   case search
   case history
   case git
+  case review
   case agents
 
   var id: String {
@@ -299,6 +300,13 @@ private struct ProjectWorkspaceDetail: View {
           navigationSheet = .git
         } label: {
           Label("Git", systemImage: "arrow.triangle.branch")
+        }
+        .buttonStyle(.bordered)
+
+        Button {
+          navigationSheet = .review
+        } label: {
+          Label("Review", systemImage: "checkmark.shield")
         }
         .buttonStyle(.bordered)
 
@@ -396,7 +404,18 @@ private struct ProjectWorkspaceDetail: View {
       case .history:
         ProjectHistoryView(surface: surface)
       case .git:
-        ProjectGitView(workspace: workspace, projectID: project.id, surface: surface)
+        ProjectGitView(
+          workspace: workspace,
+          projectID: project.id,
+          surface: surface
+        )
+      case .review:
+        ProjectBranchReviewView(
+          project: project,
+          surface: surface,
+          agentWorkflow: agentWorkflow,
+          worktreeCoordinator: worktreeCoordinator
+        )
       case .agents:
         ProjectAgentView(
           project: project,
@@ -1541,6 +1560,447 @@ private struct ProjectGitView: View {
         GitSwitchBranchCommand(projectID: projectID, branch: branch)
       )
     )
+  }
+}
+
+private struct ProjectBranchReviewView: View {
+  let project: Project
+  @ObservedObject var surface: ProjectSurfaceModel
+  @ObservedObject var agentWorkflow: AgentWorkflowCoordinator
+  @ObservedObject var worktreeCoordinator: ProjectWorktreeCoordinator
+  @Environment(\.dismiss) private var dismiss
+
+  @State private var selectedWorktreeID: WorktreeID?
+  @State private var reviewService: ProjectBranchReviewService?
+  @State private var branchReview: ProjectBranchReviewSnapshot?
+  @State private var adoptionPlan: ProjectBranchAdoptionPlan?
+  @State private var conflict: ProjectBranchConflict?
+  @State private var statusMessage: String?
+  @State private var errorMessage: String?
+  @State private var cleanupPlan: ManagedWorktreeCleanupPlan?
+
+  private var projectWorktrees: [ManagedWorktree] {
+    worktreeCoordinator.worktrees(for: project.id)
+  }
+
+  private var availableWorktrees: [ManagedWorktree] {
+    projectWorktrees.filter { $0.state == .available }
+  }
+
+  private var selectedWorktree: ManagedWorktree? {
+    guard let selectedWorktreeID else {
+      return nil
+    }
+    return availableWorktrees.first { $0.id == selectedWorktreeID }
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      HStack(spacing: 10) {
+        Label("Branch Review", systemImage: "checkmark.shield")
+          .font(.title3.weight(.semibold))
+        Text(project.name)
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+        Spacer()
+        Button("Close", action: dismiss.callAsFunction)
+          .buttonStyle(.borderless)
+      }
+      .padding(12)
+
+      Divider()
+
+      ScrollView {
+        VStack(alignment: .leading, spacing: 14) {
+          sourceSection
+          if let branchReview {
+            reviewSection(branchReview)
+          }
+          if let adoptionPlan {
+            adoptionSection(adoptionPlan)
+          }
+          if let conflict {
+            conflictSection(conflict)
+          }
+          if let statusMessage {
+            Label(statusMessage, systemImage: "checkmark.circle.fill")
+              .font(.caption)
+              .foregroundStyle(.green)
+              .fixedSize(horizontal: false, vertical: true)
+          }
+        }
+        .padding(16)
+      }
+    }
+    .frame(minWidth: 720, minHeight: 580)
+    .onAppear {
+      worktreeCoordinator.refresh(project: project)
+      if selectedWorktreeID == nil, let first = availableWorktrees.first {
+        selectedWorktreeID = first.id
+        reviewService = makeReviewService(for: first)
+      }
+    }
+    .onChange(of: selectedWorktreeID) { _, worktreeID in
+      reviewService = worktreeID.flatMap { id in
+        availableWorktrees.first { $0.id == id }
+      }.map { makeReviewService(for: $0) }
+      branchReview = nil
+      adoptionPlan = nil
+      conflict = nil
+      statusMessage = nil
+    }
+    .alert("Branch review failed", isPresented: errorAlertIsPresented) {
+      Button("OK") {
+        errorMessage = nil
+      }
+    } message: {
+      Text(errorMessage ?? "Unknown branch review error.")
+    }
+    .alert("Remove managed worktree", isPresented: cleanupAlertIsPresented) {
+      Button("Cancel", role: .cancel) {
+        cleanupPlan = nil
+      }
+      if cleanupPlan?.canConfirm == true {
+        Button("Remove", role: .destructive) {
+          confirmCleanup()
+        }
+      }
+    } message: {
+      if let cleanupPlan {
+        if cleanupPlan.canConfirm {
+          Text(
+            "Remove branch \(cleanupPlan.branch) at \(cleanupPlan.rootURL.path)? The branch itself will be kept."
+          )
+        } else {
+          Text(
+            "Cleanup is refused because of \(cleanupPlan.blockers.map { $0.displayName }.joined(separator: ", "))."
+          )
+        }
+      }
+    }
+  }
+
+  private var sourceSection: some View {
+    GroupBox("Source worktree") {
+      VStack(alignment: .leading, spacing: 10) {
+        Picker("Branch", selection: $selectedWorktreeID) {
+          Text("Select a managed worktree").tag(nil as WorktreeID?)
+          ForEach(projectWorktrees) { worktree in
+            Text("\(worktree.branch) — \(worktree.state.displayName)")
+              .tag(worktree.id as WorktreeID?)
+          }
+        }
+        .pickerStyle(.menu)
+
+        if let selectedWorktree {
+          Text(selectedWorktree.rootURL.path)
+            .font(.caption.monospaced())
+            .foregroundStyle(.secondary)
+            .textSelection(.enabled)
+          Text(
+            "Base \(selectedWorktree.baseRevision.prefix(8)) · current \(selectedWorktree.headRevision?.prefix(8) ?? "unknown")"
+          )
+          .font(.caption.monospaced())
+          .foregroundStyle(.secondary)
+        } else {
+          Text(
+            projectWorktrees.isEmpty
+              ? "Create a managed worktree from the Agents panel before reviewing a branch."
+              : "Only an available managed worktree can be reviewed."
+          )
+          .font(.caption)
+          .foregroundStyle(.secondary)
+        }
+
+        Text("Target Project root: \(project.rootURL.path)")
+          .font(.caption.monospaced())
+          .foregroundStyle(.secondary)
+          .textSelection(.enabled)
+
+        HStack(spacing: 8) {
+          Button("Review Branch") {
+            reviewBranch()
+          }
+          .buttonStyle(.borderedProminent)
+          .disabled(reviewService == nil)
+
+          Button("Prepare Adoption") {
+            prepareAdoption()
+          }
+          .buttonStyle(.bordered)
+          .disabled(reviewService == nil)
+
+          Spacer()
+
+          if let selectedWorktree {
+            Button("Clean Up", role: .destructive) {
+              prepareCleanup(for: selectedWorktree)
+            }
+            .buttonStyle(.borderless)
+          }
+        }
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+    }
+  }
+
+  private func reviewSection(_ review: ProjectBranchReviewSnapshot) -> some View {
+    GroupBox("Branch-wide review") {
+      VStack(alignment: .leading, spacing: 10) {
+        HStack {
+          Label(review.sourceBranch ?? "Detached HEAD", systemImage: "arrow.triangle.branch")
+            .font(.headline)
+          Spacer()
+          Text("\(review.commits.count) commit\(review.commits.count == 1 ? "" : "s")")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        Text(
+          "Base \(review.baseRevision.prefix(8)) → HEAD \(review.headRevision.prefix(8))"
+        )
+        .font(.caption.monospaced())
+        .foregroundStyle(.secondary)
+
+        if review.sourceStatus.changes.isEmpty {
+          Label("Source worktree is clean", systemImage: "checkmark.circle")
+            .font(.caption)
+            .foregroundStyle(.green)
+        } else {
+          Label(
+            "Source has \(review.uncommittedChanges.count) uncommitted change\(review.uncommittedChanges.count == 1 ? "" : "s")",
+            systemImage: "exclamationmark.triangle"
+          )
+          .font(.caption)
+          .foregroundStyle(.orange)
+          ForEach(review.uncommittedChanges) { change in
+            Text("• \(change.displayPath)")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+          }
+        }
+
+        if review.committedChanges.isEmpty {
+          Text("No committed file changes after the base revision.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        } else {
+          Text("Committed changes")
+            .font(.subheadline.weight(.semibold))
+          ForEach(review.committedChanges) { change in
+            HStack(spacing: 8) {
+              Text(change.displayPath)
+                .lineLimit(1)
+              Spacer()
+              Text(change.kind.displayName)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+          }
+        }
+
+        if !review.commits.isEmpty {
+          Text("Commits")
+            .font(.subheadline.weight(.semibold))
+          ForEach(review.commits) { commit in
+            HStack(alignment: .top, spacing: 8) {
+              Text(commit.shortRevision)
+                .font(.caption.monospaced())
+                .foregroundStyle(.secondary)
+              VStack(alignment: .leading, spacing: 2) {
+                Text(commit.subject)
+                Text("\(commit.author) · \(commit.authoredAt)")
+                  .font(.caption2)
+                  .foregroundStyle(.secondary)
+              }
+            }
+          }
+        }
+
+        DisclosureGroup("Committed diff") {
+          Text(
+            review.committedDiff.isEmpty
+              ? "No committed diff is available for this base and HEAD."
+              : review.committedDiff
+          )
+          .font(.system(.caption, design: .monospaced))
+          .textSelection(.enabled)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(8)
+          .background(.background.secondary, in: RoundedRectangle(cornerRadius: 5))
+        }
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+    }
+  }
+
+  private func adoptionSection(_ plan: ProjectBranchAdoptionPlan) -> some View {
+    GroupBox("Adoption gate") {
+      VStack(alignment: .leading, spacing: 8) {
+        Text(
+          "Merge \(plan.review.expectedSourceBranch) into \(plan.targetBranch ?? "Detached HEAD") with a merge commit."
+        )
+        .font(.subheadline)
+
+        if plan.blockers.isEmpty {
+          Label(
+            "Source and target are clean and ready to adopt.",
+            systemImage: "checkmark.circle.fill"
+          )
+          .foregroundStyle(.green)
+          Button("Adopt with Merge Commit") {
+            adopt(plan)
+          }
+          .buttonStyle(.borderedProminent)
+        } else {
+          Label(
+            "Adoption is refused until these guards clear:",
+            systemImage: "exclamationmark.triangle.fill"
+          )
+          .foregroundStyle(.orange)
+          ForEach(plan.blockers, id: \.self) { blocker in
+            Text("• \(blocker.displayName)")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+          }
+        }
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+    }
+  }
+
+  private func conflictSection(_ conflict: ProjectBranchConflict) -> some View {
+    GroupBox("Conflict requires resolution") {
+      VStack(alignment: .leading, spacing: 8) {
+        Label(
+          "Git left the target in a merge state for the owning agent or native merge surface.",
+          systemImage: "exclamationmark.octagon"
+        )
+        .foregroundStyle(.orange)
+        Text("Target: \(conflict.targetRootURL.path)")
+          .font(.caption.monospaced())
+          .textSelection(.enabled)
+        ForEach(conflict.paths, id: \.self) { path in
+          Text("• \(path)")
+            .font(.caption)
+        }
+        Text("Resolve these paths, then refresh the Project Git status before continuing.")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+    }
+  }
+
+  private var errorAlertIsPresented: Binding<Bool> {
+    Binding(
+      get: { errorMessage != nil },
+      set: { isPresented in
+        if !isPresented {
+          errorMessage = nil
+        }
+      }
+    )
+  }
+
+  private var cleanupAlertIsPresented: Binding<Bool> {
+    Binding(
+      get: { cleanupPlan != nil },
+      set: { isPresented in
+        if !isPresented {
+          cleanupPlan = nil
+        }
+      }
+    )
+  }
+
+  private func makeReviewService(for worktree: ManagedWorktree) -> ProjectBranchReviewService {
+    ProjectBranchReviewService(
+      source: worktree,
+      targetRootURL: project.rootURL
+    )
+  }
+
+  private func reviewBranch() {
+    guard let reviewService else {
+      return
+    }
+    do {
+      branchReview = try reviewService.review()
+      adoptionPlan = nil
+      conflict = nil
+      statusMessage = nil
+    } catch {
+      errorMessage = error.localizedDescription
+    }
+  }
+
+  private func prepareAdoption() {
+    guard let reviewService else {
+      return
+    }
+    do {
+      let plan = try reviewService.prepareAdoption()
+      branchReview = plan.review
+      adoptionPlan = plan
+      conflict = nil
+      statusMessage = nil
+    } catch {
+      errorMessage = error.localizedDescription
+    }
+  }
+
+  private func adopt(_ plan: ProjectBranchAdoptionPlan) {
+    guard let reviewService else {
+      return
+    }
+    do {
+      switch try reviewService.adopt(plan) {
+      case .adopted(let mergeRevision):
+        adoptionPlan = nil
+        conflict = nil
+        statusMessage = "Adopted with merge commit \(mergeRevision.prefix(8))."
+        surface.reload()
+        worktreeCoordinator.refresh(project: project)
+      case .conflict(let conflict):
+        adoptionPlan = nil
+        self.conflict = conflict
+        statusMessage = nil
+      }
+    } catch {
+      adoptionPlan = nil
+      errorMessage = error.localizedDescription
+    }
+  }
+
+  private func prepareCleanup(for worktree: ManagedWorktree) {
+    let activeSessionIDs = agentWorkflow.activeSessionIDs(for: worktree.id)
+      .union(surface.sessionIDsInUse(for: worktree.id))
+    cleanupPlan = worktreeCoordinator.prepareCleanup(
+      project: project,
+      worktreeID: worktree.id,
+      activeSessionIDs: activeSessionIDs,
+      expectedRootURL: worktree.rootURL
+    )
+  }
+
+  private func confirmCleanup() {
+    guard let cleanupPlan else {
+      return
+    }
+    let activeSessionIDs = agentWorkflow.activeSessionIDs(for: cleanupPlan.worktreeID)
+      .union(surface.sessionIDsInUse(for: cleanupPlan.worktreeID))
+    let didRemove = worktreeCoordinator.confirmCleanup(
+      project: project,
+      plan: cleanupPlan,
+      activeSessionIDs: activeSessionIDs
+    )
+    if didRemove, selectedWorktreeID == cleanupPlan.worktreeID {
+      selectedWorktreeID = nil
+      reviewService = nil
+      branchReview = nil
+      adoptionPlan = nil
+    }
+    self.cleanupPlan = nil
   }
 }
 

@@ -152,6 +152,666 @@ struct ProjectGitDiff: Identifiable, Equatable, Sendable {
   }
 }
 
+enum ProjectBranchReviewChangeKind: String, CaseIterable, Codable, Equatable, Sendable {
+  case added
+  case modified
+  case deleted
+  case renamed
+  case copied
+  case typeChanged
+
+  var displayName: String {
+    switch self {
+    case .added:
+      "Added"
+    case .modified:
+      "Modified"
+    case .deleted:
+      "Deleted"
+    case .renamed:
+      "Renamed"
+    case .copied:
+      "Copied"
+    case .typeChanged:
+      "Type changed"
+    }
+  }
+}
+
+struct ProjectBranchReviewChange: Identifiable, Equatable, Sendable {
+  let path: String
+  let originalPath: String?
+  let kind: ProjectBranchReviewChangeKind
+
+  var id: String {
+    "\(kind.rawValue):\(path)"
+  }
+
+  var displayPath: String {
+    guard let originalPath else {
+      return path
+    }
+    return "\(originalPath) → \(path)"
+  }
+}
+
+struct ProjectBranchCommit: Identifiable, Equatable, Sendable {
+  let revision: String
+  let author: String
+  let authoredAt: String
+  let subject: String
+
+  var id: String {
+    revision
+  }
+
+  var shortRevision: String {
+    String(revision.prefix(8))
+  }
+}
+
+struct ProjectBranchReviewSnapshot: Equatable, Sendable {
+  let projectID: UUID
+  let sourceWorktreeID: WorktreeID
+  let repositoryRootURL: URL
+  let sourceRootURL: URL
+  let expectedSourceBranch: String
+  let sourceBranch: String?
+  let baseRevision: String
+  let headRevision: String
+  let commits: [ProjectBranchCommit]
+  let committedChanges: [ProjectBranchReviewChange]
+  let committedDiff: String
+  let sourceStatus: ProjectGitSnapshot
+  let targetStatus: ProjectGitSnapshot
+  let targetHeadRevision: String
+
+  var uncommittedChanges: [ProjectGitChange] {
+    sourceStatus.changes
+  }
+
+  var isSourceClean: Bool {
+    sourceStatus.changes.isEmpty
+  }
+
+  var isTargetClean: Bool {
+    targetStatus.changes.isEmpty
+  }
+}
+
+enum ProjectBranchAdoptionBlocker: String, CaseIterable, Codable, Equatable, Hashable, Sendable {
+  case sourceDirty
+  case targetDirty
+  case sourceDetached
+  case targetDetached
+  case sourceBranchChanged
+  case noCommits
+  case sourceIsTarget
+  case repositoryMismatch
+  case mergeInProgress
+
+  var displayName: String {
+    switch self {
+    case .sourceDirty:
+      "the source worktree has uncommitted changes"
+    case .targetDirty:
+      "the Project root has uncommitted changes"
+    case .sourceDetached:
+      "the source worktree is detached"
+    case .targetDetached:
+      "the Project root is detached"
+    case .sourceBranchChanged:
+      "the source worktree is no longer on its recorded branch"
+    case .noCommits:
+      "the branch has no commits after its base"
+    case .sourceIsTarget:
+      "the source and target roots are the same"
+    case .repositoryMismatch:
+      "the source belongs to a different repository than the target Project"
+    case .mergeInProgress:
+      "the target already has a merge in progress"
+    }
+  }
+}
+
+struct ProjectBranchAdoptionPlan: Identifiable, Equatable, Sendable {
+  let confirmationID: UUID
+  let review: ProjectBranchReviewSnapshot
+  let targetRootURL: URL
+  let targetBranch: String?
+  let targetHeadRevision: String
+  let blockers: [ProjectBranchAdoptionBlocker]
+
+  var id: UUID {
+    confirmationID
+  }
+
+  var canAdopt: Bool {
+    blockers.isEmpty
+  }
+}
+
+struct ProjectBranchConflict: Equatable, Sendable {
+  let sourceWorktreeID: WorktreeID
+  let sourceBranch: String
+  let targetBranch: String
+  let targetRootURL: URL
+  let paths: [String]
+  let commandMessage: String
+}
+
+enum ProjectBranchAdoptionResult: Equatable, Sendable {
+  case adopted(mergeRevision: String)
+  case conflict(ProjectBranchConflict)
+}
+
+enum ProjectBranchReviewError: Error, Equatable, LocalizedError, Sendable {
+  case git(ProjectGitError)
+  case invalidRevision(String)
+  case baseRevisionNotAncestor(base: String, head: String)
+  case confirmationRequired(UUID)
+  case adoptionBlocked([ProjectBranchAdoptionBlocker])
+  case stalePlan
+
+  var errorDescription: String? {
+    switch self {
+    case .git(let error):
+      return error.localizedDescription
+    case .invalidRevision(let revision):
+      return "The branch review revision is invalid: \(revision)"
+    case .baseRevisionNotAncestor(let base, let head):
+      return
+        "The recorded branch base \(base.prefix(8)) is not an ancestor of HEAD \(head.prefix(8))."
+    case .confirmationRequired(let id):
+      return "Branch adoption requires a fresh confirmation (\(id.uuidString))."
+    case .adoptionBlocked(let blockers):
+      let detail = blockers.map(\.displayName).joined(separator: ", ")
+      return "Branch adoption was refused because of \(detail)."
+    case .stalePlan:
+      return "The branch review changed; prepare adoption again before merging."
+    }
+  }
+}
+
+final class ProjectBranchReviewService {
+  let source: ManagedWorktree
+  let targetRootURL: URL
+
+  private let fileManager: FileManager
+  private let gitURL = URL(fileURLWithPath: "/usr/bin/git")
+  private var pendingPlans: [UUID: ProjectBranchAdoptionPlan] = [:]
+
+  init(
+    source: ManagedWorktree,
+    targetRootURL: URL,
+    fileManager: FileManager = .default
+  ) {
+    self.source = source
+    self.targetRootURL = targetRootURL.standardizedFileURL
+    self.fileManager = fileManager
+  }
+
+  func review() throws -> ProjectBranchReviewSnapshot {
+    let sourceRootURL = source.rootURL.standardizedFileURL
+    let normalizedTargetRootURL = targetRootURL.standardizedFileURL
+    let sourceStatus = try repositoryStatus(at: sourceRootURL)
+    let targetStatus = try repositoryStatus(at: normalizedTargetRootURL)
+    let baseRevision = try resolveRevision(source.baseRevision, at: sourceRootURL)
+    let headRevision = try resolveRevision("HEAD", at: sourceRootURL)
+    guard try isAncestor(baseRevision, of: headRevision, at: sourceRootURL) else {
+      throw ProjectBranchReviewError.baseRevisionNotAncestor(
+        base: baseRevision,
+        head: headRevision
+      )
+    }
+    let targetHeadRevision = try resolveRevision("HEAD", at: normalizedTargetRootURL)
+    let commits = try branchCommits(
+      baseRevision: baseRevision,
+      headRevision: headRevision,
+      rootURL: sourceRootURL
+    )
+    let committedChanges = try branchChanges(
+      baseRevision: baseRevision,
+      headRevision: headRevision,
+      rootURL: sourceRootURL
+    )
+    let committedDiff = try branchDiff(
+      baseRevision: baseRevision,
+      headRevision: headRevision,
+      rootURL: sourceRootURL
+    )
+
+    return ProjectBranchReviewSnapshot(
+      projectID: source.projectID,
+      sourceWorktreeID: source.id,
+      repositoryRootURL: source.repositoryRootURL.standardizedFileURL,
+      sourceRootURL: sourceRootURL,
+      expectedSourceBranch: source.branch,
+      sourceBranch: sourceStatus.branch,
+      baseRevision: baseRevision,
+      headRevision: headRevision,
+      commits: commits,
+      committedChanges: committedChanges,
+      committedDiff: committedDiff,
+      sourceStatus: sourceStatus,
+      targetStatus: targetStatus,
+      targetHeadRevision: targetHeadRevision
+    )
+  }
+
+  func prepareAdoption() throws -> ProjectBranchAdoptionPlan {
+    let review = try review()
+    let plan = try makePlan(review: review)
+    pendingPlans[plan.confirmationID] = plan
+    return plan
+  }
+
+  func adopt(_ plan: ProjectBranchAdoptionPlan) throws -> ProjectBranchAdoptionResult {
+    guard pendingPlans.removeValue(forKey: plan.confirmationID) == plan else {
+      throw ProjectBranchReviewError.confirmationRequired(plan.confirmationID)
+    }
+    guard plan.canAdopt else {
+      throw ProjectBranchReviewError.adoptionBlocked(plan.blockers)
+    }
+
+    let currentReview = try review()
+    guard matches(plan: plan, currentReview: currentReview) else {
+      throw ProjectBranchReviewError.stalePlan
+    }
+    let currentPlan = try makePlan(review: currentReview, confirmationID: plan.confirmationID)
+    guard currentPlan.canAdopt else {
+      throw ProjectBranchReviewError.adoptionBlocked(currentPlan.blockers)
+    }
+
+    let mergeOutput = try runGit(
+      ["merge", "--no-ff", "--no-edit", plan.review.headRevision],
+      rootURL: targetRootURL,
+      operation: "adopt branch",
+      allowedExitStatuses: [0, 1]
+    )
+    if mergeOutput.status == 0 {
+      let mergeRevision = try resolveRevision("HEAD", at: targetRootURL)
+      let parents = try revisionParents(at: targetRootURL)
+      guard parents.count == 2 else {
+        throw ProjectBranchReviewError.git(
+          .commandFailed(
+            operation: "adopt branch",
+            status: mergeOutput.status,
+            message: "Git did not create a two-parent merge commit."
+          )
+        )
+      }
+      return .adopted(mergeRevision: mergeRevision)
+    }
+
+    let targetStatus = try repositoryStatus(at: targetRootURL)
+    let conflictPaths = targetStatus.changes
+      .filter { $0.kind == .conflicted }
+      .map(\.path)
+      .sorted()
+    guard !conflictPaths.isEmpty else {
+      throw ProjectBranchReviewError.git(
+        .commandFailed(
+          operation: "adopt branch",
+          status: mergeOutput.status,
+          message: mergeOutput.text
+        )
+      )
+    }
+
+    return .conflict(
+      ProjectBranchConflict(
+        sourceWorktreeID: plan.review.sourceWorktreeID,
+        sourceBranch: plan.review.expectedSourceBranch,
+        targetBranch: plan.targetBranch ?? "<detached>",
+        targetRootURL: targetRootURL,
+        paths: conflictPaths,
+        commandMessage: mergeOutput.text
+      )
+    )
+  }
+
+  private func makePlan(
+    review: ProjectBranchReviewSnapshot,
+    confirmationID: UUID = UUID()
+  ) throws -> ProjectBranchAdoptionPlan {
+    var blockers: [ProjectBranchAdoptionBlocker] = []
+    if review.sourceRootURL.path == targetRootURL.path {
+      blockers.append(.sourceIsTarget)
+    }
+    if review.repositoryRootURL != targetRootURL.standardizedFileURL {
+      blockers.append(.repositoryMismatch)
+    }
+    if review.sourceBranch == nil {
+      blockers.append(.sourceDetached)
+    } else if review.sourceBranch != review.expectedSourceBranch {
+      blockers.append(.sourceBranchChanged)
+    }
+    if review.targetStatus.branch == nil {
+      blockers.append(.targetDetached)
+    }
+    if !review.sourceStatus.changes.isEmpty {
+      blockers.append(.sourceDirty)
+    }
+    if !review.targetStatus.changes.isEmpty {
+      blockers.append(.targetDirty)
+    }
+    if review.commits.isEmpty {
+      blockers.append(.noCommits)
+    }
+    if try hasMergeInProgress(at: targetRootURL) {
+      blockers.append(.mergeInProgress)
+    }
+
+    return ProjectBranchAdoptionPlan(
+      confirmationID: confirmationID,
+      review: review,
+      targetRootURL: targetRootURL,
+      targetBranch: review.targetStatus.branch,
+      targetHeadRevision: review.targetHeadRevision,
+      blockers: blockers
+    )
+  }
+
+  private func revisionParents(at rootURL: URL) throws -> [String] {
+    let output = try runGit(
+      ["rev-list", "--parents", "-n", "1", "HEAD"],
+      rootURL: rootURL,
+      operation: "inspect merge revision"
+    )
+    let revisions = output.text
+      .split(whereSeparator: \.isWhitespace)
+      .map(String.init)
+    guard revisions.count >= 1 else {
+      throw ProjectBranchReviewError.git(
+        .unreadableOutput(operation: "inspect merge revision")
+      )
+    }
+    return Array(revisions.dropFirst())
+  }
+
+  private func matches(
+    plan: ProjectBranchAdoptionPlan,
+    currentReview: ProjectBranchReviewSnapshot
+  ) -> Bool {
+    plan.review.sourceWorktreeID == currentReview.sourceWorktreeID
+      && plan.review.projectID == currentReview.projectID
+      && plan.review.repositoryRootURL == currentReview.repositoryRootURL
+      && plan.review.sourceRootURL == currentReview.sourceRootURL
+      && plan.review.expectedSourceBranch == currentReview.expectedSourceBranch
+      && plan.review.sourceBranch == currentReview.sourceBranch
+      && plan.review.baseRevision == currentReview.baseRevision
+      && plan.review.headRevision == currentReview.headRevision
+      && plan.review.sourceStatus == currentReview.sourceStatus
+      && plan.review.targetStatus == currentReview.targetStatus
+      && plan.targetRootURL == targetRootURL
+      && plan.targetBranch == currentReview.targetStatus.branch
+      && plan.targetHeadRevision == currentReview.targetHeadRevision
+  }
+
+  private func repositoryStatus(at rootURL: URL) throws -> ProjectGitSnapshot {
+    let status = try ProjectGitService(rootURL: rootURL, fileManager: fileManager).status()
+    guard status.isRepository else {
+      throw ProjectBranchReviewError.git(.notRepository(path: rootURL.path))
+    }
+    return status
+  }
+
+  private func resolveRevision(_ revision: String, at rootURL: URL) throws -> String {
+    let normalized = revision.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard
+      !normalized.isEmpty,
+      !normalized.hasPrefix("-"),
+      !normalized.contains("\0"),
+      !normalized.contains(where: \.isWhitespace)
+    else {
+      throw ProjectBranchReviewError.invalidRevision(revision)
+    }
+    do {
+      let output = try runGit(
+        ["rev-parse", "--verify", "--end-of-options", "\(normalized)^{commit}"],
+        rootURL: rootURL,
+        operation: "resolve branch revision"
+      )
+      let resolved = output.text.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !resolved.isEmpty else {
+        throw ProjectBranchReviewError.invalidRevision(revision)
+      }
+      return resolved
+    } catch let error as ProjectBranchReviewError {
+      throw error
+    } catch let error as ProjectGitError {
+      throw ProjectBranchReviewError.git(error)
+    }
+  }
+
+  private func branchCommits(
+    baseRevision: String,
+    headRevision: String,
+    rootURL: URL
+  ) throws -> [ProjectBranchCommit] {
+    let output = try runGit(
+      [
+        "log",
+        "--reverse",
+        "--format=%H%x00%an%x00%aI%x00%s",
+        "\(baseRevision)..\(headRevision)",
+        "--",
+      ],
+      rootURL: rootURL,
+      operation: "list branch commits"
+    )
+    guard let text = String(data: output.data, encoding: .utf8) else {
+      throw ProjectBranchReviewError.git(.unreadableOutput(operation: "list branch commits"))
+    }
+    let records = text.split(whereSeparator: \.isNewline)
+    return try records.map { record in
+      let fields =
+        record
+        .split(separator: "\0", omittingEmptySubsequences: false)
+        .map(String.init)
+      guard fields.count == 4, fields.allSatisfy({ !$0.isEmpty }) else {
+        throw ProjectBranchReviewError.git(.unreadableOutput(operation: "list branch commits"))
+      }
+      return ProjectBranchCommit(
+        revision: fields[0],
+        author: fields[1],
+        authoredAt: fields[2],
+        subject: fields[3]
+      )
+    }
+  }
+
+  private func isAncestor(
+    _ ancestorRevision: String,
+    of descendantRevision: String,
+    at rootURL: URL
+  ) throws -> Bool {
+    let output = try runGit(
+      ["merge-base", "--is-ancestor", ancestorRevision, descendantRevision],
+      rootURL: rootURL,
+      operation: "validate branch base",
+      allowedExitStatuses: [0, 1]
+    )
+    return output.status == 0
+  }
+
+  private func branchChanges(
+    baseRevision: String,
+    headRevision: String,
+    rootURL: URL
+  ) throws -> [ProjectBranchReviewChange] {
+    let output = try runGit(
+      [
+        "diff",
+        "--name-status",
+        "--find-renames",
+        "-z",
+        "\(baseRevision)...\(headRevision)",
+        "--",
+      ],
+      rootURL: rootURL,
+      operation: "list branch changes"
+    )
+    let fields = try nulFields(output.data, operation: "list branch changes")
+    var changes: [ProjectBranchReviewChange] = []
+    var index = 0
+    while index < fields.count {
+      let status = fields[index]
+      index += 1
+      guard let code = status.first else {
+        throw ProjectBranchReviewError.git(.unreadableOutput(operation: "list branch changes"))
+      }
+      let kind = branchChangeKind(for: code)
+      if kind == .renamed || kind == .copied {
+        guard index + 1 < fields.count else {
+          throw ProjectBranchReviewError.git(.unreadableOutput(operation: "list branch changes"))
+        }
+        changes.append(
+          ProjectBranchReviewChange(
+            path: fields[index + 1],
+            originalPath: fields[index],
+            kind: kind
+          )
+        )
+        index += 2
+      } else {
+        guard index < fields.count else {
+          throw ProjectBranchReviewError.git(.unreadableOutput(operation: "list branch changes"))
+        }
+        changes.append(
+          ProjectBranchReviewChange(
+            path: fields[index],
+            originalPath: nil,
+            kind: kind
+          )
+        )
+        index += 1
+      }
+    }
+    return changes.sorted { $0.id < $1.id }
+  }
+
+  private func branchDiff(
+    baseRevision: String,
+    headRevision: String,
+    rootURL: URL
+  ) throws -> String {
+    let output = try runGit(
+      [
+        "diff",
+        "--no-ext-diff",
+        "--no-color",
+        "--find-renames",
+        "\(baseRevision)...\(headRevision)",
+        "--",
+      ],
+      rootURL: rootURL,
+      operation: "read branch diff"
+    )
+    return output.text
+  }
+
+  private func branchChangeKind(for code: Character) -> ProjectBranchReviewChangeKind {
+    switch code {
+    case "A":
+      .added
+    case "D":
+      .deleted
+    case "R":
+      .renamed
+    case "C":
+      .copied
+    case "T":
+      .typeChanged
+    default:
+      .modified
+    }
+  }
+
+  private func nulFields(_ data: Data, operation: String) throws -> [String] {
+    guard String(data: data, encoding: .utf8) != nil else {
+      throw ProjectBranchReviewError.git(.unreadableOutput(operation: operation))
+    }
+
+    return
+      data
+      .split(separator: 0, omittingEmptySubsequences: true)
+      .map { String(decoding: $0, as: UTF8.self) }
+  }
+
+  private func hasMergeInProgress(at rootURL: URL) throws -> Bool {
+    let output = try runGit(
+      ["rev-parse", "--git-path", "MERGE_HEAD"],
+      rootURL: rootURL,
+      operation: "inspect merge state"
+    )
+    let path = output.text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !path.isEmpty else {
+      throw ProjectBranchReviewError.git(.unreadableOutput(operation: "inspect merge state"))
+    }
+    let mergeHeadURL = URL(fileURLWithPath: path, relativeTo: rootURL).standardizedFileURL
+    return fileManager.fileExists(atPath: mergeHeadURL.path)
+  }
+
+  private func runGit(
+    _ arguments: [String],
+    rootURL: URL,
+    operation: String,
+    allowedExitStatuses: Set<Int32> = [0]
+  ) throws -> GitCommandOutput {
+    guard fileManager.isExecutableFile(atPath: gitURL.path) else {
+      throw ProjectBranchReviewError.git(.gitUnavailable)
+    }
+
+    let process = Process()
+    let pipe = Pipe()
+    process.executableURL = gitURL
+    process.arguments = arguments
+    process.currentDirectoryURL = rootURL
+    process.environment = ProcessInfo.processInfo.environment.merging(
+      ["LC_ALL": "C", "LANG": "C"],
+      uniquingKeysWith: { _, new in new }
+    )
+    process.standardOutput = pipe
+    process.standardError = pipe
+
+    do {
+      try process.run()
+    } catch {
+      throw ProjectBranchReviewError.git(
+        .commandFailed(
+          operation: operation,
+          status: -1,
+          message: error.localizedDescription
+        )
+      )
+    }
+
+    let data = pipe.fileHandleForReading.readDataToEndOfFile()
+    process.waitUntilExit()
+    guard allowedExitStatuses.contains(process.terminationStatus) else {
+      throw ProjectBranchReviewError.git(
+        .commandFailed(
+          operation: operation,
+          status: process.terminationStatus,
+          message: String(decoding: data, as: UTF8.self)
+        )
+      )
+    }
+    return GitCommandOutput(status: process.terminationStatus, data: data)
+  }
+
+  private struct GitCommandOutput {
+    let status: Int32
+    let data: Data
+
+    var text: String {
+      String(decoding: data, as: UTF8.self)
+    }
+  }
+}
+
 enum ProjectGitError: Error, Equatable, LocalizedError, Sendable {
   case gitUnavailable
   case notRepository(path: String)

@@ -161,6 +161,248 @@ final class ProjectGitTests: XCTestCase {
     XCTAssertEqual(snapshot, .notRepository)
   }
 
+  func testBranchWideReviewSeparatesCommittedAndUncommittedChangesAndGatesAdoption() throws {
+    let fixture = try GitFixture()
+    var source = try fixture.makeManagedWorktree(
+      branch: "agent/review",
+      targetName: "review"
+    )
+
+    try fixture.write(
+      "tracked.txt",
+      in: source.rootURL,
+      contents: "committed source change\n"
+    )
+    let committedRevision = try fixture.commit(
+      in: source.rootURL,
+      message: "committed source change"
+    )
+    try fixture.write(
+      "untracked.txt",
+      in: source.rootURL,
+      contents: "uncommitted source change\n"
+    )
+    source = try fixture.makeWorktreeService().inspect(source.id)
+
+    let service = ProjectBranchReviewService(
+      source: source,
+      targetRootURL: fixture.root
+    )
+    let snapshot = try service.review()
+
+    XCTAssertEqual(snapshot.sourceWorktreeID, source.id)
+    XCTAssertEqual(snapshot.sourceRootURL.path, source.rootURL.standardizedFileURL.path)
+    XCTAssertEqual(snapshot.expectedSourceBranch, source.branch)
+    XCTAssertEqual(snapshot.sourceBranch, source.branch)
+    XCTAssertEqual(snapshot.baseRevision, source.baseRevision)
+    XCTAssertEqual(snapshot.headRevision, committedRevision)
+    XCTAssertEqual(snapshot.commits.map(\.revision), [committedRevision])
+    XCTAssertEqual(snapshot.committedChanges.map(\.path), ["tracked.txt"])
+    XCTAssertTrue(snapshot.committedDiff.contains("+committed source change"))
+    XCTAssertFalse(snapshot.committedDiff.contains("+uncommitted source change"))
+    XCTAssertEqual(snapshot.uncommittedChanges.map(\.path), ["untracked.txt"])
+    XCTAssertEqual(snapshot.uncommittedChanges, snapshot.sourceStatus.changes)
+    XCTAssertFalse(snapshot.isSourceClean)
+    XCTAssertTrue(snapshot.isTargetClean)
+
+    let dirtyPlan = try service.prepareAdoption()
+    XCTAssertFalse(dirtyPlan.canAdopt)
+    XCTAssertEqual(dirtyPlan.blockers, [.sourceDirty])
+    XCTAssertThrowsError(try service.adopt(dirtyPlan)) { error in
+      XCTAssertEqual(
+        error as? ProjectBranchReviewError,
+        .adoptionBlocked([.sourceDirty])
+      )
+    }
+
+    _ = try fixture.commit(in: source.rootURL, message: "commit remaining source change")
+    let cleanPlan = try service.prepareAdoption()
+    XCTAssertTrue(cleanPlan.canAdopt)
+    XCTAssertTrue(cleanPlan.blockers.isEmpty)
+
+    try fixture.write("target-untracked.txt", contents: "target dirty\n")
+    let targetDirtyPlan = try service.prepareAdoption()
+    XCTAssertFalse(targetDirtyPlan.canAdopt)
+    XCTAssertEqual(targetDirtyPlan.blockers, [.targetDirty])
+    XCTAssertThrowsError(try service.adopt(targetDirtyPlan)) { error in
+      XCTAssertEqual(
+        error as? ProjectBranchReviewError,
+        .adoptionBlocked([.targetDirty])
+      )
+    }
+    try fixture.remove("target-untracked.txt")
+  }
+
+  func testCleanAdoptionCreatesTwoParentMergeCommitAndPreservesSourceAndTargetState() throws {
+    let fixture = try GitFixture()
+    var source = try fixture.makeManagedWorktree(
+      branch: "agent/adopt",
+      targetName: "adopt"
+    )
+
+    try fixture.write(
+      "feature.txt",
+      in: source.rootURL,
+      contents: "feature branch\n"
+    )
+    let sourceHead = try fixture.commit(
+      in: source.rootURL,
+      message: "add feature"
+    )
+    source = try fixture.makeWorktreeService().inspect(source.id)
+
+    let service = ProjectBranchReviewService(
+      source: source,
+      targetRootURL: fixture.root
+    )
+    let plan = try service.prepareAdoption()
+    XCTAssertTrue(plan.canAdopt)
+    XCTAssertEqual(plan.targetBranch, "main")
+    XCTAssertEqual(plan.targetHeadRevision, try fixture.headRevision(in: fixture.root))
+
+    let result = try service.adopt(plan)
+    let mergeRevision: String
+    guard case .adopted(let revision) = result else {
+      return XCTFail("Expected a clean adoption result, got \(result)")
+    }
+    mergeRevision = revision
+
+    XCTAssertEqual(mergeRevision, try fixture.headRevision(in: fixture.root))
+    XCTAssertNotEqual(mergeRevision, sourceHead)
+    let parentRevisions = try fixture.runGit(
+      ["rev-list", "--parents", "-n", "1", "HEAD"]
+    )
+    .split(whereSeparator: \.isWhitespace)
+    .map(String.init)
+    XCTAssertEqual(parentRevisions.count, 3)
+    XCTAssertEqual(Array(parentRevisions.dropFirst()), [plan.targetHeadRevision, sourceHead])
+
+    let sourceStatus = try ProjectGitService(rootURL: source.rootURL).status()
+    let targetStatus = try ProjectGitService(rootURL: fixture.root).status()
+    XCTAssertEqual(sourceStatus.branch, source.branch)
+    XCTAssertTrue(sourceStatus.changes.isEmpty)
+    XCTAssertEqual(try fixture.headRevision(in: source.rootURL), sourceHead)
+    XCTAssertEqual(targetStatus.branch, "main")
+    XCTAssertTrue(targetStatus.changes.isEmpty)
+    XCTAssertEqual(
+      try String(contentsOf: fixture.root.appendingPathComponent("feature.txt")),
+      "feature branch\n"
+    )
+  }
+
+  func testDivergentAdoptionReturnsConflictAndLeavesTargetMergeInProgress() throws {
+    let fixture = try GitFixture()
+    var source = try fixture.makeManagedWorktree(
+      branch: "agent/conflict",
+      targetName: "conflict"
+    )
+
+    try fixture.write(
+      "tracked.txt",
+      in: source.rootURL,
+      contents: "source conflict\n"
+    )
+    let sourceHead = try fixture.commit(
+      in: source.rootURL,
+      message: "source conflicting change"
+    )
+    source = try fixture.makeWorktreeService().inspect(source.id)
+
+    try fixture.write("tracked.txt", contents: "target conflict\n")
+    let targetHead = try fixture.commit(in: fixture.root, message: "target conflicting change")
+
+    let service = ProjectBranchReviewService(
+      source: source,
+      targetRootURL: fixture.root
+    )
+    let plan = try service.prepareAdoption()
+    XCTAssertTrue(plan.canAdopt)
+    XCTAssertEqual(plan.targetHeadRevision, targetHead)
+
+    defer {
+      _ = try? fixture.runGit(["merge", "--abort"])
+    }
+
+    let result = try service.adopt(plan)
+    guard case .conflict(let conflict) = result else {
+      return XCTFail("Expected a conflict result, got \(result)")
+    }
+    XCTAssertEqual(conflict.sourceWorktreeID, source.id)
+    XCTAssertEqual(conflict.sourceBranch, source.branch)
+    XCTAssertEqual(conflict.targetBranch, "main")
+    XCTAssertEqual(conflict.targetRootURL.path, fixture.root.standardizedFileURL.path)
+    XCTAssertEqual(conflict.paths, ["tracked.txt"])
+    XCTAssertFalse(conflict.commandMessage.isEmpty)
+    XCTAssertEqual(try fixture.headRevision(in: fixture.root), targetHead)
+    XCTAssertEqual(
+      try fixture.runGit(["rev-parse", "--verify", "MERGE_HEAD"])
+        .trimmingCharacters(in: .whitespacesAndNewlines),
+      sourceHead
+    )
+
+    let targetStatus = try ProjectGitService(rootURL: fixture.root).status()
+    XCTAssertEqual(targetStatus.branch, "main")
+    XCTAssertTrue(
+      targetStatus.changes.contains {
+        $0.path == "tracked.txt" && $0.kind == .conflicted
+      }
+    )
+  }
+
+  func testAdoptionRejectsStalePlanAfterSourceHeadAdvances() throws {
+    let fixture = try GitFixture()
+    var source = try fixture.makeManagedWorktree(
+      branch: "agent/stale",
+      targetName: "stale"
+    )
+
+    try fixture.write("first.txt", in: source.rootURL, contents: "first\n")
+    let firstHead = try fixture.commit(in: source.rootURL, message: "first source change")
+    source = try fixture.makeWorktreeService().inspect(source.id)
+
+    let service = ProjectBranchReviewService(
+      source: source,
+      targetRootURL: fixture.root
+    )
+    let plan = try service.prepareAdoption()
+    let targetHead = try fixture.headRevision(in: fixture.root)
+
+    try fixture.write("second.txt", in: source.rootURL, contents: "second\n")
+    let secondHead = try fixture.commit(in: source.rootURL, message: "second source change")
+    XCTAssertNotEqual(firstHead, secondHead)
+
+    XCTAssertThrowsError(try service.adopt(plan)) { error in
+      XCTAssertEqual(error as? ProjectBranchReviewError, .stalePlan)
+    }
+    XCTAssertEqual(try fixture.headRevision(in: fixture.root), targetHead)
+    XCTAssertTrue(try ProjectGitService(rootURL: fixture.root).status().changes.isEmpty)
+    XCTAssertEqual(
+      try fixture.runGit(["rev-list", "--parents", "-n", "1", "HEAD"])
+        .split(whereSeparator: \.isWhitespace)
+        .count,
+      1
+    )
+  }
+
+  func testCleanupCancellationLeavesManagedWorktreeInPlace() throws {
+    let fixture = try GitFixture()
+    let worktree = try fixture.makeManagedWorktree(
+      branch: "agent/keep",
+      targetName: "keep"
+    )
+    let service = fixture.makeWorktreeService()
+    let plan = try service.prepareCleanup(
+      worktree.id,
+      expectedRootURL: worktree.rootURL
+    )
+
+    XCTAssertTrue(plan.canConfirm)
+    XCTAssertTrue(FileManager.default.fileExists(atPath: worktree.rootURL.path))
+    XCTAssertEqual(try service.inspect(worktree.id).rootURL.path, worktree.rootURL.path)
+    XCTAssertEqual(try service.list().map(\.id), [worktree.id])
+    // Deliberately do not call confirmCleanup: cancellation leaves the worktree intact.
+  }
+
   private func project(
     _ result: Result<ClairCommandResult, CommandError>,
     file: StaticString = #filePath,
@@ -195,13 +437,25 @@ final class ProjectGitTests: XCTestCase {
 private final class GitFixture {
   let container: URL
   let root: URL
+  let managementRoot: URL
+  let worktreeStore: ManagedWorktreeStore
+  let projectID: UUID
 
   init(createRepository: Bool = true) throws {
     container = FileManager.default.temporaryDirectory
       .appendingPathComponent("clair-project-git-\(UUID().uuidString)", isDirectory: true)
     root = container.appendingPathComponent("repo", isDirectory: true)
+    managementRoot = container.appendingPathComponent("managed", isDirectory: true)
+    worktreeStore = ManagedWorktreeStore(
+      fileURL: container.appendingPathComponent("state/worktrees-v1.json")
+    )
+    projectID = UUID(uuidString: "12345678-90AB-CDEF-1234-567890ABCDEF")!
     try FileManager.default.createDirectory(
       at: root,
+      withIntermediateDirectories: true
+    )
+    try FileManager.default.createDirectory(
+      at: managementRoot,
       withIntermediateDirectories: true
     )
 
@@ -219,12 +473,45 @@ private final class GitFixture {
   }
 
   func write(_ path: String, contents: String) throws {
-    let url = root.appendingPathComponent(path)
+    try write(path, in: root, contents: contents)
+  }
+
+  func write(_ path: String, in directory: URL, contents: String) throws {
+    let url = directory.appendingPathComponent(path)
     try FileManager.default.createDirectory(
       at: url.deletingLastPathComponent(),
       withIntermediateDirectories: true
     )
     try Data(contents.utf8).write(to: url)
+  }
+
+  func makeWorktreeService() -> ProjectWorktreeService {
+    ProjectWorktreeService(
+      projectID: projectID,
+      repositoryRootURL: root,
+      managementRootURL: managementRoot,
+      store: worktreeStore
+    )
+  }
+
+  func makeManagedWorktree(branch: String, targetName: String) throws -> ManagedWorktree {
+    try makeWorktreeService().create(
+      branch: branch,
+      baseRevision: "HEAD",
+      targetName: targetName
+    )
+  }
+
+  func headRevision(in directory: URL) throws -> String {
+    try runGit(["-C", directory.path, "rev-parse", "HEAD"])
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  @discardableResult
+  func commit(in directory: URL, message: String) throws -> String {
+    _ = try runGit(["-C", directory.path, "add", "--all"])
+    _ = try runGit(["-C", directory.path, "commit", "--quiet", "-m", message])
+    return try headRevision(in: directory)
   }
 
   func remove(_ path: String) throws {
