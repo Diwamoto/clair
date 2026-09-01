@@ -92,6 +92,9 @@ final class ProjectWorkspaceModel: ObservableObject {
     } catch let error as ProjectError {
       lastErrorMessage = error.localizedDescription
       return .failure(.project(error))
+    } catch let error as ProjectGitError {
+      lastErrorMessage = error.localizedDescription
+      return .failure(.git(error))
     } catch {
       let projectError = ProjectError.storeIO(error.localizedDescription)
       lastErrorMessage = projectError.localizedDescription
@@ -135,7 +138,41 @@ final class ProjectWorkspaceModel: ObservableObject {
     case .closeProject(let input):
       try closeProject(id: input.projectID)
       return .none
+    case .gitRefresh(let input):
+      return .gitStatus(try activeGitSurface(for: input.projectID).refreshGitStatusThrowing())
+    case .gitShowDiff(let input):
+      return .gitDiff(
+        try activeGitSurface(for: input.projectID).showGitDiff(
+          relativePath: input.relativePath,
+          basis: input.basis
+        )
+      )
+    case .gitStage(let input):
+      return .gitStatus(
+        try activeGitSurface(for: input.projectID).stageGitChange(relativePath: input.relativePath)
+      )
+    case .gitUnstage(let input):
+      return .gitStatus(
+        try activeGitSurface(for: input.projectID).unstageGitChange(
+          relativePath: input.relativePath
+        )
+      )
+    case .gitCommit(let input):
+      return .gitStatus(
+        try activeGitSurface(for: input.projectID).commitGitChanges(message: input.message)
+      )
+    case .gitSwitchBranch(let input):
+      return .gitStatus(
+        try activeGitSurface(for: input.projectID).switchGitBranch(input.branch)
+      )
     }
+  }
+
+  private func activeGitSurface(for projectID: UUID) throws -> ProjectSurfaceModel {
+    guard activeProjectID == projectID, let activeSurface else {
+      throw ProjectError.projectNotOpen(projectID)
+    }
+    return activeSurface
   }
 
   private func openProject(at rootURL: URL) throws -> Project {
@@ -402,9 +439,13 @@ final class ProjectSurfaceModel: ObservableObject {
   @Published private(set) var replacementPreview: ProjectSearchReplacementPreview?
   @Published private(set) var lastNavigationErrorMessage: String?
   @Published private(set) var lastNavigationStatusMessage: String?
+  @Published private(set) var gitStatus: ProjectGitSnapshot?
+  @Published private(set) var selectedGitDiff: ProjectGitDiff?
+  @Published private(set) var lastGitErrorMessage: String?
 
   private let rootChecker: any ProjectRootChecking
   private let fileManager: FileManager
+  private let gitService: ProjectGitService
   private let onSnapshotChange: ((ProjectSurfaceSnapshot) -> Void)?
   private var activeSearchQuery = ""
   private var expandedNodeIDs: Set<String> = []
@@ -425,6 +466,7 @@ final class ProjectSurfaceModel: ObservableObject {
     self.rootURL = rootURL
     self.rootChecker = rootChecker
     self.fileManager = fileManager
+    self.gitService = ProjectGitService(rootURL: rootURL, fileManager: fileManager)
     self.historyStore = historyStore
     self.onSnapshotChange = onSnapshotChange
 
@@ -743,6 +785,139 @@ final class ProjectSurfaceModel: ObservableObject {
     lastNavigationErrorMessage = nil
   }
 
+  func dismissGitError() {
+    lastGitErrorMessage = nil
+  }
+
+  func refreshGitStatus() {
+    _ = try? refreshGitStatusThrowing()
+  }
+
+  @discardableResult
+  func refreshGitStatusThrowing() throws -> ProjectGitSnapshot {
+    do {
+      let snapshot = try gitService.status()
+      gitStatus = snapshot
+      lastGitErrorMessage = nil
+      if let selectedGitDiff,
+        !snapshot.changes.contains(where: { $0.id == selectedGitDiff.change.id })
+      {
+        self.selectedGitDiff = nil
+      }
+      return snapshot
+    } catch {
+      lastGitErrorMessage = error.localizedDescription
+      throw error
+    }
+  }
+
+  @discardableResult
+  func showGitDiff(
+    relativePath: String,
+    basis: ProjectGitDiffBasis
+  ) throws -> ProjectGitDiff {
+    do {
+      let change = try currentGitChange(relativePath: relativePath)
+      let diff = try gitService.diff(for: change, basis: basis)
+      selectedGitDiff = diff
+      lastGitErrorMessage = nil
+      openDiff()
+      return diff
+    } catch {
+      lastGitErrorMessage = error.localizedDescription
+      throw error
+    }
+  }
+
+  @discardableResult
+  func stageGitChange(relativePath: String) throws -> ProjectGitSnapshot {
+    do {
+      _ = try currentGitChange(relativePath: relativePath)
+      let snapshot = try gitService.stage(path: relativePath)
+      gitStatus = snapshot
+      selectedGitDiff = nil
+      lastGitErrorMessage = nil
+      return snapshot
+    } catch {
+      lastGitErrorMessage = error.localizedDescription
+      throw error
+    }
+  }
+
+  @discardableResult
+  func unstageGitChange(relativePath: String) throws -> ProjectGitSnapshot {
+    do {
+      _ = try currentGitChange(relativePath: relativePath)
+      let snapshot = try gitService.unstage(path: relativePath)
+      gitStatus = snapshot
+      selectedGitDiff = nil
+      lastGitErrorMessage = nil
+      return snapshot
+    } catch {
+      lastGitErrorMessage = error.localizedDescription
+      throw error
+    }
+  }
+
+  @discardableResult
+  func commitGitChanges(message: String) throws -> ProjectGitSnapshot {
+    do {
+      let snapshot = try gitService.commit(message: message)
+      gitStatus = snapshot
+      selectedGitDiff = nil
+      lastGitErrorMessage = nil
+      return snapshot
+    } catch {
+      lastGitErrorMessage = error.localizedDescription
+      throw error
+    }
+  }
+
+  @discardableResult
+  func switchGitBranch(_ branch: String) throws -> ProjectGitSnapshot {
+    do {
+      let snapshot = try gitService.switchBranch(branch)
+      gitStatus = snapshot
+      selectedGitDiff = nil
+      lastGitErrorMessage = nil
+      reload()
+      return snapshot
+    } catch {
+      lastGitErrorMessage = error.localizedDescription
+      throw error
+    }
+  }
+
+  func revealGitChange(relativePath: String) {
+    guard
+      let fileURL = ProjectNavigation.fileURL(for: relativePath, rootURL: rootURL),
+      let node = fileTree.node(withID: fileURL.path),
+      !node.isDirectory
+    else {
+      lastNavigationErrorMessage =
+        "The changed file is unavailable in the Project tree: \(relativePath)"
+      return
+    }
+    lastNavigationErrorMessage = nil
+    select(nodeID: node.id)
+  }
+
+  private func currentGitChange(relativePath: String) throws -> ProjectGitChange {
+    let snapshot: ProjectGitSnapshot
+    if let gitStatus, gitStatus.isRepository {
+      snapshot = gitStatus
+    } else {
+      snapshot = try refreshGitStatusThrowing()
+    }
+    guard snapshot.isRepository else {
+      throw ProjectGitError.notRepository(path: rootURL.path)
+    }
+    guard let change = snapshot.changes.first(where: { $0.path == relativePath }) else {
+      throw ProjectGitError.changeNotFound(relativePath)
+    }
+    return change
+  }
+
   func quickOpenItems(matching query: String) -> [ProjectQuickOpenItem] {
     guard let root = fileTree.root else {
       return []
@@ -956,6 +1131,7 @@ final class ProjectSurfaceModel: ObservableObject {
     }
     replacementPreview = nil
     refreshHistoryEntries()
+    refreshGitStatus()
 
     guard let root = nextTree.root else {
       expandedNodeIDs.removeAll()

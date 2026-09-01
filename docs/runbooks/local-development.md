@@ -105,8 +105,8 @@ Quit normally, relaunch, and confirm that the tree selection, pane structure, ac
 tabs, focus, and maximize state return for each Project. A terminal tab keeps its
 stable local SessionID and attempts to reattach to the broker-owned PTY; if that
 session is unavailable, the tab shows **Start New Session**. The terminal transcript
-is intentionally not part of the workspace snapshot. The diff tab is a navigation
-placeholder until P08 supplies Git-backed content.
+is intentionally not part of the workspace snapshot. The diff tab is populated when a
+Git change is selected from the P08 Git panel.
 
 For an abnormal-restart smoke check, use only disposable fixture Projects: force-quit
 the app after a completed layout action, relaunch, and confirm that the last atomically
@@ -272,6 +272,51 @@ The Rust broker integration test covers a bounded malformed frame, typed missing
 session recovery, and a client disconnect/reconnect while the PTY remains alive. A
 broker restart is intentionally outside this slice: it is a missing-session recovery
 case, not transcript restoration.
+
+## Verify the Git working-tree loop (P08)
+
+Use a disposable fixture repository for commit and branch-switch checks. Build and
+launch Dev with the project-scoped command used by the current Xcode environment:
+
+```sh
+xcodebuild -project Clair.xcodeproj -scheme "Clair Dev" -configuration Debug \
+  -derivedDataPath .build/xcode/p08-manual CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGNING_REQUIRED=NO build
+open -n ".build/xcode/p08-manual/Build/Products/Debug/Clair Dev.app"
+```
+
+Open the fixture repository itself as a Project and choose **Git** in the Project
+header. Confirm that the panel separates staged, unstaged, and untracked changes and
+shows the current branch plus ahead/behind information when available. Edit a tracked
+file and create an untracked file from another terminal. Select **Diff** for each
+change, use **Open in Editor**, stage one path, and verify that the staged and working-
+tree diffs remain separate. Unstage it again, then stage only the intended file and
+commit; confirm that the commit contains only the staged bytes and that the panel
+refreshes to a clean state.
+
+Run `git add` or edit a file from another terminal while the panel is open. The `.git`
+metadata watcher should refresh the status without reopening the Project. A branch
+switch with any modified, staged, deleted, renamed, or untracked path must be refused
+with a typed clean-working-tree error; after the fixture is clean, switching to an
+existing branch should update the branch label. Invalid paths, an empty commit
+message, an invalid branch, and a non-Git Project must show a local error or
+availability state without changing another Project.
+
+The automated P08 checks are:
+
+```sh
+swift format lint --recursive --parallel --strict apple
+ruby scripts/validate-xcode-project.rb
+scripts/smoke-app-link.sh
+xcodebuild -project Clair.xcodeproj -scheme "Clair Dev" \
+  -destination 'platform=macOS,arch=arm64' -configuration Debug \
+  -derivedDataPath .build/xcode/p08-tests CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGNING_REQUIRED=NO -only-testing:ClairTests/ProjectGitTests test
+```
+
+The repository's `make test-swift` wrapper remains the CI-facing path where the
+minimal committed workspace is accepted; with the current Xcode 26 environment, use
+the equivalent project-scoped command above because that workspace is rejected.
 
 ## Run the PTY host smoke path
 

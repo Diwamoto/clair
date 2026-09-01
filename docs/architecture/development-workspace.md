@@ -2,7 +2,7 @@
 
 ## Status
 
-Current as of local PoC item `P07 Local session lifecycle and reattach`.
+Current as of local PoC item `P08 Git working-tree loop`.
 
 ## Workspace boundary
 
@@ -127,6 +127,25 @@ errors, fixed risk metadata, deterministic availability reasons, and `aiAvailabl
 metadata. The SwiftUI sidebar invokes the same `ClairCommand` execution path for open,
 switch, rename, color, reorder, and close. CLI/MCP adapters remain later slices.
 
+P08 extends that same seam with `git.refresh`, `git.showDiff`, `git.stage`,
+`git.unstage`, `git.commit`, and `git.switchBranch`. `ProjectGitService` is a
+Project-scoped domain boundary that invokes `/usr/bin/git` through `Foundation.Process`
+without a shell. This is a deliberate reversible bridge: the current Rust C ABI is
+still only the scalar bootstrap smoke path, so Git status and diff are not exposed
+through a new unversioned FFI interface. A Git operation is allowed only when the
+canonical Project root is exactly `git rev-parse --show-toplevel`; opening a nested
+folder inside a repository therefore reports the repository-outside-Project error
+instead of mutating a broader checkout.
+
+The status snapshot uses Git porcelain v2 records and keeps branch, upstream,
+ahead/behind, and typed staged/unstaged/untracked changes on the active
+`ProjectSurfaceModel`. Relative paths are validated against the Project root and `.git`
+metadata is never treated as a user file. Stage, unstage, and commit are explicit
+commands; commit delegates to Git's staged index and never includes unstaged bytes.
+Branch switching validates the ref and requires a clean working tree, including no
+untracked files. The current P08 boundary intentionally excludes discard, blame,
+review comments, AI briefs, merge/conflict adoption, and managed worktrees.
+
 ## Workspace shell and file tree
 
 Each open Project has a `ProjectSurfaceModel` keyed by its stable `ProjectID`. The
@@ -146,8 +165,11 @@ discovered child directory, and every regular file in the active Project. It reb
 the watch set after a change so newly created directories and files are covered. If the
 root is missing, its nearest existing parent is watched; root recreation therefore
 returns the surface to the available state without a manual reopen. Events are lightly
-debounced and trigger a full tree and active-search rescan on the MainActor. The native
-editor behavior is described below.
+debounced and trigger a full tree and active-search rescan on the MainActor. Git Projects
+additionally watch the repository metadata paths needed for status refresh (`.git`,
+`HEAD`, `index`, packed refs, refs, and `logs/HEAD`) while continuing to omit `.git`
+contents from the user-facing tree. Git status is refreshed on the MainActor alongside
+the tree and active search. The native editor behavior is described below.
 
 ## Mixed pane/tab model and workspace persistence
 
@@ -171,7 +193,7 @@ abnormal process restart.
 On restore, the surface rebuilds runtime objects from the descriptors. Editor tabs whose
 paths are outside the Project root, missing, or directories are filtered out; terminal
 descriptors carry their stable `SessionID` and attempt broker reattach from cursor zero,
-while diff descriptors currently render the P08 navigation placeholder. A missing or
+while diff descriptors render the selected Git diff when a P08 Git change is active. A missing or
 expired session is shown as unavailable and offers **Start New Session** without
 changing the workspace descriptor. A missing workspace file starts with one empty
 pane. A malformed or unsupported top-level snapshot leaves the Project catalog intact
@@ -250,7 +272,10 @@ delete refresh, missing-root recovery, Project surface isolation, nested mixed-p
 operations, three-Project layout isolation across restart, and corrupt/missing workspace
 fallback, Quick Open and search result navigation, buffer-only replacement, active-search
 refresh after an external file change, and Project History restore. The project-scoped
-Dev XCTest target runs these tests. The `make test-swift`
+Dev XCTest target runs these tests. `ProjectGitTests` covers porcelain status separation,
+staged-boundary diff/stage/unstage/commit behavior, untracked/rename/delete parsing,
+typed invalid-operation errors, Project-scoped command execution, external index refresh,
+and non-Git availability. The `make test-swift`
 wrapper remains the CI-facing path where the workspace is accepted; with the current
 Xcode 26 environment, use the equivalent `xcodebuild -project Clair.xcodeproj ... test`
 command because the minimal committed workspace is rejected.
@@ -279,6 +304,7 @@ disk writes, project-scoped history ordering, and Project-root path validation.
 - The terminal surface is a selectable plain-text AppKit fallback, not a full ANSI/
   alternate-screen/cursor/colour terminal grid; a reproducible libghostty development
   artifact is still unavailable in this checkout. The editor does not yet provide
-  syntax highlighting, LSP, or multi-cursor editing; Git-backed diff/operations and
-  CLI/MCP adapters remain later queue items.
+  syntax highlighting, LSP, or multi-cursor editing. The P08 Git loop currently uses
+  the local `/usr/bin/git` bridge; discard, blame, review comments, AI briefs, merge/
+  conflict adoption, managed worktrees, and CLI/MCP adapters remain later queue items.
 - Formal app icons, signing, notarization, and update delivery are not present.

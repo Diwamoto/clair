@@ -7,6 +7,12 @@ enum ClairCommandID: String, CaseIterable, Codable, Hashable, Sendable {
   case setProjectColor = "project.setColor"
   case reorderProject = "project.reorder"
   case closeProject = "project.close"
+  case gitRefresh = "git.refresh"
+  case gitShowDiff = "git.showDiff"
+  case gitStage = "git.stage"
+  case gitUnstage = "git.unstage"
+  case gitCommit = "git.commit"
+  case gitSwitchBranch = "git.switchBranch"
 }
 
 enum CommandRisk: String, Codable, Equatable, Sendable {
@@ -71,6 +77,36 @@ struct CloseProjectCommand: Sendable {
   let projectID: UUID
 }
 
+struct GitRefreshCommand: Sendable {
+  let projectID: UUID
+}
+
+struct GitShowDiffCommand: Sendable {
+  let projectID: UUID
+  let relativePath: String
+  let basis: ProjectGitDiffBasis
+}
+
+struct GitStageCommand: Sendable {
+  let projectID: UUID
+  let relativePath: String
+}
+
+struct GitUnstageCommand: Sendable {
+  let projectID: UUID
+  let relativePath: String
+}
+
+struct GitCommitCommand: Sendable {
+  let projectID: UUID
+  let message: String
+}
+
+struct GitSwitchBranchCommand: Sendable {
+  let projectID: UUID
+  let branch: String
+}
+
 enum ClairCommand: Sendable {
   case openProject(OpenProjectCommand)
   case switchProject(SwitchProjectCommand)
@@ -78,6 +114,12 @@ enum ClairCommand: Sendable {
   case setProjectColor(SetProjectColorCommand)
   case reorderProject(ReorderProjectCommand)
   case closeProject(CloseProjectCommand)
+  case gitRefresh(GitRefreshCommand)
+  case gitShowDiff(GitShowDiffCommand)
+  case gitStage(GitStageCommand)
+  case gitUnstage(GitUnstageCommand)
+  case gitCommit(GitCommitCommand)
+  case gitSwitchBranch(GitSwitchBranchCommand)
 
   var id: ClairCommandID {
     switch self {
@@ -93,12 +135,26 @@ enum ClairCommand: Sendable {
       .reorderProject
     case .closeProject:
       .closeProject
+    case .gitRefresh:
+      .gitRefresh
+    case .gitShowDiff:
+      .gitShowDiff
+    case .gitStage:
+      .gitStage
+    case .gitUnstage:
+      .gitUnstage
+    case .gitCommit:
+      .gitCommit
+    case .gitSwitchBranch:
+      .gitSwitchBranch
     }
   }
 }
 
 enum ClairCommandResult: Equatable, Sendable {
   case project(Project)
+  case gitStatus(ProjectGitSnapshot)
+  case gitDiff(ProjectGitDiff)
   case none
 }
 
@@ -111,12 +167,15 @@ struct CommandPreflight: Equatable, Sendable {
 enum CommandError: Error, Equatable, LocalizedError, Sendable {
   case unavailable(commandID: ClairCommandID, reason: String)
   case project(ProjectError)
+  case git(ProjectGitError)
 
   var errorDescription: String? {
     switch self {
     case .unavailable(let commandID, let reason):
       "Command \(commandID.rawValue) is unavailable: \(reason)"
     case .project(let error):
+      error.localizedDescription
+    case .git(let error):
       error.localizedDescription
     }
   }
@@ -160,6 +219,42 @@ struct CommandRegistry: Sendable {
       CommandDescriptor(
         id: .closeProject,
         title: "Close Project",
+        risk: .write,
+        aiAvailable: false
+      ),
+      CommandDescriptor(
+        id: .gitRefresh,
+        title: "Refresh Git Status",
+        risk: .read,
+        aiAvailable: true
+      ),
+      CommandDescriptor(
+        id: .gitShowDiff,
+        title: "Show Git Diff",
+        risk: .read,
+        aiAvailable: true
+      ),
+      CommandDescriptor(
+        id: .gitStage,
+        title: "Stage Git Change",
+        risk: .write,
+        aiAvailable: false
+      ),
+      CommandDescriptor(
+        id: .gitUnstage,
+        title: "Unstage Git Change",
+        risk: .write,
+        aiAvailable: false
+      ),
+      CommandDescriptor(
+        id: .gitCommit,
+        title: "Commit Git Changes",
+        risk: .write,
+        aiAvailable: false
+      ),
+      CommandDescriptor(
+        id: .gitSwitchBranch,
+        title: "Switch Git Branch",
         risk: .write,
         aiAvailable: false
       ),
@@ -219,6 +314,52 @@ struct CommandRegistry: Sendable {
         in: state,
         action: "close"
       )
+    case .gitRefresh(let input):
+      availability = gitProjectAvailability(
+        for: input.projectID,
+        in: state,
+        action: "refresh Git status"
+      )
+    case .gitShowDiff(let input):
+      availability = gitProjectAvailability(
+        for: input.projectID,
+        in: state,
+        action: "show a Git diff",
+        requiredValue: input.relativePath,
+        valueName: "path"
+      )
+    case .gitStage(let input):
+      availability = gitProjectAvailability(
+        for: input.projectID,
+        in: state,
+        action: "stage a Git change",
+        requiredValue: input.relativePath,
+        valueName: "path"
+      )
+    case .gitUnstage(let input):
+      availability = gitProjectAvailability(
+        for: input.projectID,
+        in: state,
+        action: "unstage a Git change",
+        requiredValue: input.relativePath,
+        valueName: "path"
+      )
+    case .gitCommit(let input):
+      availability = gitProjectAvailability(
+        for: input.projectID,
+        in: state,
+        action: "commit Git changes",
+        requiredValue: input.message,
+        valueName: "commit message"
+      )
+    case .gitSwitchBranch(let input):
+      availability = gitProjectAvailability(
+        for: input.projectID,
+        in: state,
+        action: "switch Git branches",
+        requiredValue: input.branch,
+        valueName: "branch"
+      )
     }
 
     return CommandPreflight(
@@ -235,6 +376,28 @@ struct CommandRegistry: Sendable {
   ) -> CommandAvailability {
     guard state.openProjectIDs.contains(projectID) else {
       return .unavailable("Cannot \(action) a Project that is not open.")
+    }
+    return .available
+  }
+
+  private func gitProjectAvailability(
+    for projectID: UUID,
+    in state: ProjectCommandState,
+    action: String,
+    requiredValue: String? = nil,
+    valueName: String? = nil
+  ) -> CommandAvailability {
+    guard state.openProjectIDs.contains(projectID) else {
+      return .unavailable("Cannot \(action) a Project that is not open.")
+    }
+    guard state.activeProjectID == projectID else {
+      return .unavailable("Git operations require the Project to be active.")
+    }
+    if let requiredValue,
+      requiredValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+      let valueName
+    {
+      return .unavailable("The Git \(valueName) cannot be empty.")
     }
     return .available
   }

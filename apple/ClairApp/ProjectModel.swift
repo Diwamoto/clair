@@ -520,33 +520,55 @@ enum ProjectFileTreeScanner {
     }
 
     var paths = directories
-    guard
-      let enumerator = fileManager.enumerator(
-        at: rootURL.standardizedFileURL,
-        includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey, .isRegularFileKey],
-        options: [.skipsPackageDescendants]
-      )
-    else {
-      return paths
+    if let enumerator = fileManager.enumerator(
+      at: rootURL.standardizedFileURL,
+      includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey, .isRegularFileKey],
+      options: [.skipsPackageDescendants]
+    ) {
+      for case let url as URL in enumerator {
+        guard url.lastPathComponent != ".git" else {
+          enumerator.skipDescendants()
+          continue
+        }
+        guard
+          let values = try? url.resourceValues(
+            forKeys: [.isDirectoryKey, .isSymbolicLinkKey, .isRegularFileKey]
+          ),
+          values.isSymbolicLink != true,
+          values.isRegularFile == true
+        else {
+          continue
+        }
+        paths.append(url.standardizedFileURL)
+      }
+    }
+    paths.append(contentsOf: gitMetadataPaths(rootURL: rootURL, fileManager: fileManager))
+    return paths
+  }
+
+  private static func gitMetadataPaths(
+    rootURL: URL,
+    fileManager: FileManager
+  ) -> [URL] {
+    let gitURL = rootURL.standardizedFileURL.appendingPathComponent(".git", isDirectory: true)
+    var isDirectory = ObjCBool(false)
+    guard fileManager.fileExists(atPath: gitURL.path, isDirectory: &isDirectory) else {
+      return []
     }
 
-    for case let url as URL in enumerator {
-      guard url.lastPathComponent != ".git" else {
-        enumerator.skipDescendants()
-        continue
-      }
-      guard
-        let values = try? url.resourceValues(
-          forKeys: [.isDirectoryKey, .isSymbolicLinkKey, .isRegularFileKey]
-        ),
-        values.isSymbolicLink != true,
-        values.isRegularFile == true
-      else {
-        continue
-      }
-      paths.append(url.standardizedFileURL)
+    guard isDirectory.boolValue else {
+      return [gitURL]
     }
-    return paths
+
+    let candidates = [
+      gitURL,
+      gitURL.appendingPathComponent("HEAD"),
+      gitURL.appendingPathComponent("index"),
+      gitURL.appendingPathComponent("packed-refs"),
+      gitURL.appendingPathComponent("refs", isDirectory: true),
+      gitURL.appendingPathComponent("logs/HEAD"),
+    ]
+    return candidates.filter { fileManager.fileExists(atPath: $0.path) }
   }
 
   private static func node(

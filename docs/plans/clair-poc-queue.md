@@ -214,12 +214,22 @@ P01から最小kernelを育て、後から既存featureを別実装へ置き換�
 
 ### P08 Git working-tree loop
 
-- Status: `next`
+- Status: `done`
 - Depends on: P04。
 - Outcome: Projectのstatus/diffを確認し、stage/unstage/commit/branch switchできる。
 - Scope: staged/unstaged/untracked separation、safe error、editor/diff navigation。
 - Functional checks: fixture repositoryで一連のworking-tree操作、external Git change refresh、invalid operation error。
-- Deferred: blame、review comments、AI brief。
+- Validation (2026-09-01): project-scoped macOS XCTest `ProjectGitTests` passed the
+  repository fixture checks for status separation, working-tree/staged diff boundaries,
+  stage/unstage/commit, untracked/rename/delete parsing, typed invalid operations,
+  non-Git availability, Project command dispatch, and external index refresh. Swift
+  format lint, Xcode project validation, and Stable/Dev app-link smoke also passed.
+- Durable detail: [development workspace architecture](../architecture/development-workspace.md)
+  and [local development runbook](../runbooks/local-development.md) document the
+  Project-scoped Git service, typed commands, metadata watcher, clean branch-switch
+  guard, and manual checks.
+- Deferred: discard, blame, review comments, AI brief, merge/conflict adoption, managed
+  worktrees, and CLI/MCP adapters.
 - Legacy issue coverage: #14のdaily Git subset。
 
 ### P09 Raw agent workflow and attention

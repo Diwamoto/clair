@@ -148,7 +148,12 @@ struct ContentView: View {
   @ViewBuilder
   private var projectDetail: some View {
     if let project = workspace.activeProject, let surface = workspace.activeSurface {
-      ProjectWorkspaceDetail(state: state, project: project, surface: surface)
+      ProjectWorkspaceDetail(
+        state: state,
+        project: project,
+        workspace: workspace,
+        surface: surface
+      )
     } else {
       VStack(spacing: 12) {
         Image(systemName: "folder.badge.plus")
@@ -230,6 +235,7 @@ private enum ProjectNavigationSheet: String, Identifiable {
   case quickOpen
   case search
   case history
+  case git
 
   var id: String {
     rawValue
@@ -239,6 +245,7 @@ private enum ProjectNavigationSheet: String, Identifiable {
 private struct ProjectWorkspaceDetail: View {
   let state: BootstrapState
   let project: Project
+  @ObservedObject var workspace: ProjectWorkspaceModel
   @ObservedObject var surface: ProjectSurfaceModel
   @State private var navigationSheet: ProjectNavigationSheet?
 
@@ -278,6 +285,13 @@ private struct ProjectWorkspaceDetail: View {
           navigationSheet = .history
         } label: {
           Label("History", systemImage: "clock.arrow.circlepath")
+        }
+        .buttonStyle(.bordered)
+
+        Button {
+          navigationSheet = .git
+        } label: {
+          Label("Git", systemImage: "arrow.triangle.branch")
         }
         .buttonStyle(.bordered)
 
@@ -345,6 +359,13 @@ private struct ProjectWorkspaceDetail: View {
     } message: {
       Text(surface.lastNavigationErrorMessage ?? "Unknown navigation error.")
     }
+    .alert("Git operation failed", isPresented: gitErrorIsPresented) {
+      Button("OK") {
+        surface.dismissGitError()
+      }
+    } message: {
+      Text(surface.lastGitErrorMessage ?? "Unknown Git error.")
+    }
     .sheet(item: $navigationSheet) { sheet in
       switch sheet {
       case .quickOpen:
@@ -353,6 +374,8 @@ private struct ProjectWorkspaceDetail: View {
         ProjectSearchView(surface: surface)
       case .history:
         ProjectHistoryView(surface: surface)
+      case .git:
+        ProjectGitView(workspace: workspace, projectID: project.id, surface: surface)
       }
     }
   }
@@ -374,6 +397,17 @@ private struct ProjectWorkspaceDetail: View {
       set: { isPresented in
         if !isPresented {
           surface.dismissNavigationError()
+        }
+      }
+    )
+  }
+
+  private var gitErrorIsPresented: Binding<Bool> {
+    Binding(
+      get: { surface.lastGitErrorMessage != nil && workspace.lastErrorMessage == nil },
+      set: { isPresented in
+        if !isPresented {
+          surface.dismissGitError()
         }
       }
     )
@@ -678,7 +712,7 @@ private struct ProjectPaneView: View {
           }
         }
       case .diff:
-        ProjectDiffPreview()
+        ProjectDiffPreview(surface: surface)
       }
     } else {
       VStack(spacing: 8) {
@@ -749,24 +783,285 @@ private struct ProjectRestoredTerminalView: View {
   }
 }
 
-private struct ProjectDiffPreview: View {
+private struct ProjectGitView: View {
+  @ObservedObject var workspace: ProjectWorkspaceModel
+  let projectID: UUID
+  @ObservedObject var surface: ProjectSurfaceModel
+  @Environment(\.dismiss) private var dismiss
+  @State private var commitMessage = ""
+
   var body: some View {
-    VStack(spacing: 12) {
-      Image(systemName: "doc.on.doc")
-        .font(.system(size: 34))
-        .foregroundStyle(.secondary)
-      Text("Diff preview")
-        .font(.headline)
-      Text(
-        "This pane is ready for Project diffs. Git status and change navigation arrive in the Git working-tree slice."
-      )
-      .font(.caption)
-      .foregroundStyle(.secondary)
-      .multilineTextAlignment(.center)
-      .frame(maxWidth: 420)
+    VStack(alignment: .leading, spacing: 0) {
+      header
+      Divider()
+
+      if let status = surface.gitStatus, status.isRepository {
+        branchSummary(status)
+        Divider()
+        changeList(status)
+        Divider()
+        commitBar(status)
+      } else if let status = surface.gitStatus {
+        ContentUnavailableView(
+          "Git Unavailable",
+          systemImage: "arrow.triangle.branch",
+          description: Text(status.message ?? "This Project is not a Git repository.")
+        )
+      } else {
+        ContentUnavailableView(
+          "Git Status Unavailable",
+          systemImage: "arrow.triangle.branch",
+          description: Text("Refresh Git status to inspect this Project.")
+        )
+      }
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .padding(24)
+    .frame(minWidth: 680, minHeight: 500)
+    .onAppear {
+      refresh()
+    }
+  }
+
+  private var header: some View {
+    HStack(spacing: 10) {
+      Label("Git Working Tree", systemImage: "arrow.triangle.branch")
+        .font(.title3.weight(.semibold))
+      Spacer()
+      Button {
+        refresh()
+      } label: {
+        Label("Refresh", systemImage: "arrow.clockwise")
+      }
+      .buttonStyle(.borderless)
+      Button("Close", action: dismiss.callAsFunction)
+        .buttonStyle(.borderless)
+    }
+    .padding(12)
+  }
+
+  private func branchSummary(_ status: ProjectGitSnapshot) -> some View {
+    HStack(spacing: 12) {
+      Menu {
+        if status.branches.isEmpty {
+          Text("No local branches")
+        } else {
+          ForEach(status.branches, id: \.self) { branch in
+            Button {
+              switchBranch(branch)
+            } label: {
+              HStack {
+                Text(branch)
+                if branch == status.branch {
+                  Image(systemName: "checkmark")
+                }
+              }
+            }
+          }
+        }
+      } label: {
+        Label(status.branch ?? "Detached HEAD", systemImage: "arrow.triangle.branch")
+      }
+      .buttonStyle(.bordered)
+
+      if let upstream = status.upstream {
+        Text(upstream)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+      if status.ahead != 0 || status.behind != 0 {
+        Text("ahead \(status.ahead), behind \(status.behind)")
+          .font(.caption.monospacedDigit())
+          .foregroundStyle(.secondary)
+      }
+      Spacer()
+      Text("\(status.changes.count) change\(status.changes.count == 1 ? "" : "s")")
+        .font(.caption)
+        .foregroundStyle(.secondary)
+    }
+    .padding(12)
+  }
+
+  @ViewBuilder
+  private func changeList(_ status: ProjectGitSnapshot) -> some View {
+    if status.changes.isEmpty {
+      ContentUnavailableView(
+        "Working Tree Clean",
+        systemImage: "checkmark.circle",
+        description: Text("There are no staged, unstaged, or untracked changes.")
+      )
+    } else {
+      List {
+        if !status.stagedChanges.isEmpty {
+          Section("Staged (\(status.stagedCount))") {
+            ForEach(status.stagedChanges) { change in
+              changeRow(change, basis: .staged, mutationTitle: "Unstage") {
+                unstage(change)
+              }
+            }
+          }
+        }
+        if !status.unstagedChanges.isEmpty {
+          Section("Unstaged (\(status.unstagedCount))") {
+            ForEach(status.unstagedChanges) { change in
+              changeRow(change, basis: .workingTree, mutationTitle: "Stage") {
+                stage(change)
+              }
+            }
+          }
+        }
+        if !status.untrackedChanges.isEmpty {
+          Section("Untracked (\(status.untrackedCount))") {
+            ForEach(status.untrackedChanges) { change in
+              changeRow(change, basis: .workingTree, mutationTitle: "Stage") {
+                stage(change)
+              }
+            }
+          }
+        }
+      }
+      .listStyle(.inset)
+    }
+  }
+
+  private func changeRow(
+    _ change: ProjectGitChange,
+    basis: ProjectGitDiffBasis,
+    mutationTitle: String,
+    mutation: @escaping () -> Void
+  ) -> some View {
+    HStack(spacing: 8) {
+      Button {
+        surface.revealGitChange(relativePath: change.path)
+      } label: {
+        VStack(alignment: .leading, spacing: 2) {
+          Text(change.displayPath)
+            .lineLimit(1)
+          Text(change.kind.displayName)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+      }
+      .buttonStyle(.plain)
+
+      Button("Diff") {
+        _ = workspace.execute(
+          .gitShowDiff(
+            GitShowDiffCommand(
+              projectID: projectID,
+              relativePath: change.path,
+              basis: basis
+            )
+          )
+        )
+      }
+      .buttonStyle(.borderless)
+
+      Button(mutationTitle, action: mutation)
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+    }
+    .padding(.vertical, 2)
+  }
+
+  private func commitBar(_ status: ProjectGitSnapshot) -> some View {
+    HStack(spacing: 8) {
+      TextField("Commit message", text: $commitMessage)
+        .textFieldStyle(.roundedBorder)
+      Button("Commit") {
+        _ = workspace.execute(
+          .gitCommit(
+            GitCommitCommand(projectID: projectID, message: commitMessage)
+          )
+        )
+        if workspace.lastErrorMessage == nil {
+          commitMessage = ""
+        }
+      }
+      .buttonStyle(.borderedProminent)
+      .disabled(
+        status.stagedChanges.isEmpty
+          || commitMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+      )
+    }
+    .padding(12)
+  }
+
+  private func refresh() {
+    _ = workspace.execute(.gitRefresh(GitRefreshCommand(projectID: projectID)))
+  }
+
+  private func stage(_ change: ProjectGitChange) {
+    _ = workspace.execute(
+      .gitStage(GitStageCommand(projectID: projectID, relativePath: change.path))
+    )
+  }
+
+  private func unstage(_ change: ProjectGitChange) {
+    _ = workspace.execute(
+      .gitUnstage(GitUnstageCommand(projectID: projectID, relativePath: change.path))
+    )
+  }
+
+  private func switchBranch(_ branch: String) {
+    _ = workspace.execute(
+      .gitSwitchBranch(
+        GitSwitchBranchCommand(projectID: projectID, branch: branch)
+      )
+    )
+  }
+}
+
+private struct ProjectDiffPreview: View {
+  @ObservedObject var surface: ProjectSurfaceModel
+
+  var body: some View {
+    Group {
+      if let diff = surface.selectedGitDiff {
+        VStack(alignment: .leading, spacing: 0) {
+          HStack(spacing: 8) {
+            Image(systemName: "doc.on.doc")
+              .foregroundStyle(.secondary)
+            Text(diff.change.displayPath)
+              .font(.headline)
+              .lineLimit(1)
+            Text(diff.basis.displayName)
+              .font(.caption)
+              .foregroundStyle(.secondary)
+            Spacer()
+            Button("Open in Editor") {
+              surface.revealGitChange(relativePath: diff.change.path)
+            }
+            .buttonStyle(.borderless)
+          }
+          .padding(12)
+          Divider()
+          ScrollView {
+            Text(diff.text.isEmpty ? "No diff is available for this state." : diff.text)
+              .font(.system(.body, design: .monospaced))
+              .textSelection(.enabled)
+              .frame(maxWidth: .infinity, alignment: .leading)
+              .padding(16)
+          }
+        }
+      } else {
+        VStack(spacing: 12) {
+          Image(systemName: "doc.on.doc")
+            .font(.system(size: 34))
+            .foregroundStyle(.secondary)
+          Text("Git diff")
+            .font(.headline)
+          Text(
+            "Select Diff from the Git panel to inspect a staged, working-tree, or untracked change."
+          )
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .multilineTextAlignment(.center)
+          .frame(maxWidth: 420)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(24)
+      }
+    }
   }
 }
 
