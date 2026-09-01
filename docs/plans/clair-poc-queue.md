@@ -288,11 +288,23 @@ P01から最小kernelを育て、後から既存featureを別実装へ置き換�
 
 ### P12 Human command surfaces
 
-- Status: `queued`
+- Status: `done`
+- Completed: `Codex agent — P12 human command surfaces (2026-09-01)`
 - Depends on: P01。RegistryはP01以降の各itemと一緒に拡張する。
 - Outcome: Command Window、menu、configurable shortcutが同じcommand IDを実行する。
 - Scope: search、availability reason、result/error display、shortcut conflict。
-- Functional checks: same-command dispatch、unavailable reason、invalid/conflicting mapping。
+- Functional checks: same-command dispatch、unavailable reason、invalid/conflicting mapping、
+  valid shortcut persistence and clear mapping.
+- Validation (2026-09-01): project-scoped `Clair Dev` XCTest
+  `ProjectKernelTests` passed all 18 cases, including the three P12 human-surface cases;
+  `swift format lint --strict` passed for the P12 Swift files,
+  `ruby scripts/validate-xcode-project.rb Clair.xcodeproj`, and `git diff --check` passed.
+- Durable detail: [development workspace architecture](../architecture/development-workspace.md)
+  and [local development runbook](../runbooks/local-development.md) document the
+  Command Window/menu projections, deterministic availability/error display, and
+  versioned shortcut storage and conflict guards.
+- Deferred: argument-heavy rename/color/close/commit/branch actions remain contextual
+  view flows; CLI/MCP command adapters remain P13.
 - Legacy issue coverage: #29、#33。
 
 ### P13 CLI and MCP adapters

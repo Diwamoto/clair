@@ -435,6 +435,37 @@ inside the sandbox. The suite covers external managed roots, stable identity and
 restart discovery, missing/detached states, root persistence, dirty/active/wrong-
 target cleanup refusal, cleanup fingerprint checks, and catalog path validation.
 
+## Verify human command surfaces (P12)
+
+Build and test Dev with the project-scoped command used by the current Xcode
+environment:
+
+```sh
+swift format lint --recursive --parallel --strict apple
+ruby scripts/validate-xcode-project.rb
+xcodebuild -project Clair.xcodeproj -scheme "Clair Dev" \
+  -destination 'platform=macOS,arch=arm64' -configuration Debug \
+  -derivedDataPath .build/xcode/p12-tests CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGNING_REQUIRED=NO -only-testing:ClairTests/ProjectKernelTests test
+```
+
+Launch the built app and open **Commands > Command Window** (or Command-Shift-K).
+Search by a command title and by a stable ID such as `git.refresh`. Select a command
+to inspect its risk, shortcut, and availability reason. With no open Project, verify
+that an unavailable command is disabled and its reason is visible. Open two disposable
+Projects and invoke **Switch Project** from the Command Window and the Commands menu;
+each path should change the active Project through the same command ID and show its
+result in the command window.
+
+Select a command and use **Configurable shortcut** to save a valid mapping, then
+reopen the Command Window and confirm the mapping remains. Try a whitespace key,
+Command-S, and a key already assigned to another command; each must show a typed
+validation/conflict error and leave the prior mapping unchanged. The automated tests
+cover the same dispatch, reason, rejection, persistence, and clear-mapping cases.
+
+With the current Xcode 26 environment, XCTest may require execution outside the
+restricted shell because its `testmanagerd` service is unavailable inside the sandbox.
+
 ## Run the PTY host smoke path
 
 ```sh

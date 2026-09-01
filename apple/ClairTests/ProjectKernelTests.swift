@@ -171,6 +171,154 @@ final class ProjectKernelTests: XCTestCase {
     )
   }
 
+  func testHumanCommandSurfacesDispatchTheSameCommandID() throws {
+    let fixture = try Fixture()
+    let firstRoot = try fixture.makeDirectory(named: "command-first")
+    let secondRoot = try fixture.makeDirectory(named: "command-second")
+    let workspace = fixture.makeWorkspace()
+    let first = try XCTUnwrap(
+      project(workspace.execute(.openProject(OpenProjectCommand(rootURL: firstRoot))))
+    )
+    let second = try XCTUnwrap(
+      project(workspace.execute(.openProject(OpenProjectCommand(rootURL: secondRoot))))
+    )
+    XCTAssertEqual(workspace.activeProjectID, second.id)
+
+    let suiteName = "clair-command-surface-\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let surface = CommandSurfaceModel(
+      workspace: workspace,
+      shortcutStore: CommandShortcutStore(defaults: defaults)
+    )
+
+    let sources: [CommandSurfaceSource] = [.commandWindow, .menu, .shortcut]
+    for source in sources {
+      let result = surface.invoke(commandID: .switchProject, source: source)
+      guard case .success(.none) = result else {
+        return XCTFail("Expected switch command to succeed from \(source), got \(result)")
+      }
+      XCTAssertEqual(surface.lastExecution?.commandID, .switchProject)
+      XCTAssertEqual(surface.lastExecution?.source, source)
+      XCTAssertEqual(surface.lastExecution?.outcome.isSuccess, true)
+    }
+
+    XCTAssertEqual(workspace.activeProjectID, first.id)
+    XCTAssertNotEqual(first.id, second.id)
+  }
+
+  func testHumanCommandSurfacePreservesUnavailableReasonAndDisplaysError() throws {
+    let fixture = try Fixture()
+    let workspace = fixture.makeWorkspace()
+    let surface = CommandSurfaceModel(workspace: workspace)
+    let missingID = UUID()
+    let command = ClairCommand.switchProject(
+      SwitchProjectCommand(projectID: missingID)
+    )
+
+    let preflight = workspace.preflight(command)
+    XCTAssertEqual(
+      preflight.availability.reason,
+      "Cannot switch a Project that is not open."
+    )
+    let result = surface.dispatch(command, source: .commandWindow)
+
+    guard case .failure(.unavailable(let commandID, let reason)) = result else {
+      return XCTFail("Expected an unavailable command error, got \(result)")
+    }
+    XCTAssertEqual(commandID, .switchProject)
+    XCTAssertEqual(reason, preflight.availability.reason)
+    XCTAssertEqual(
+      surface.lastExecution?.outcome,
+      .failure(
+        "Command project.switch is unavailable: Cannot switch a Project that is not open."
+      )
+    )
+    let match = try XCTUnwrap(surface.matches(for: "project.switch").first)
+    XCTAssertFalse(match.availability.isAvailable)
+    XCTAssertEqual(match.availability.reason, reason)
+  }
+
+  func testConfigurableShortcutRejectsInvalidAndConflictingMappings() throws {
+    let fixture = try Fixture()
+    let workspace = fixture.makeWorkspace()
+    let suiteName = "clair-command-shortcuts-\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let surface = CommandSurfaceModel(
+      workspace: workspace,
+      shortcutStore: CommandShortcutStore(defaults: defaults)
+    )
+    let originalRefreshShortcut = surface.shortcuts[.gitRefresh]
+
+    let invalid = surface.setShortcut(
+      CommandShortcut(key: " ", modifiers: [.command]),
+      for: .gitRefresh
+    )
+    guard case .failure(.invalidKey) = invalid else {
+      return XCTFail("Expected an invalid shortcut key error, got \(invalid)")
+    }
+    XCTAssertEqual(surface.shortcuts[.gitRefresh], originalRefreshShortcut)
+
+    let openShortcut = try XCTUnwrap(surface.shortcuts[.openProject])
+    let conflict = surface.setShortcut(openShortcut, for: .gitRefresh)
+    guard
+      case .failure(
+        .conflict(
+          existing: .openProject,
+          requested: .gitRefresh,
+          shortcut: openShortcut
+        )
+      ) = conflict
+    else {
+      return XCTFail("Expected a conflicting shortcut error, got \(conflict)")
+    }
+    XCTAssertEqual(surface.shortcuts[.gitRefresh], originalRefreshShortcut)
+
+    let reserved = surface.setShortcut(
+      CommandShortcut(key: "s", modifiers: [.command]),
+      for: .gitRefresh
+    )
+    guard case .failure(.reserved(CommandShortcut(key: "s", modifiers: [.command]))) = reserved
+    else {
+      return XCTFail("Expected a reserved shortcut error, got \(reserved)")
+    }
+    XCTAssertEqual(surface.shortcuts[.gitRefresh], originalRefreshShortcut)
+
+    let commandWindowShortcut = surface.setShortcut(
+      CommandShortcutStore.commandWindowShortcut,
+      for: .gitRefresh
+    )
+    guard
+      case .failure(.reserved(CommandShortcutStore.commandWindowShortcut)) = commandWindowShortcut
+    else {
+      return XCTFail(
+        "Expected the Command Window shortcut to be reserved, got \(commandWindowShortcut)")
+    }
+    XCTAssertEqual(surface.shortcuts[.gitRefresh], originalRefreshShortcut)
+
+    let configured = CommandShortcut(key: "x", modifiers: [.command, .option])
+    let configuredResult = surface.setShortcut(configured, for: .gitRefresh)
+    guard case .success = configuredResult else {
+      return XCTFail("Expected a valid shortcut assignment, got \(configuredResult)")
+    }
+    XCTAssertEqual(surface.shortcuts[.gitRefresh], configured)
+    XCTAssertEqual(
+      try XCTUnwrap(surface.matches(for: "git.refresh").first).shortcut,
+      configured
+    )
+    XCTAssertEqual(
+      CommandShortcutStore(defaults: defaults).load()[.gitRefresh],
+      configured
+    )
+
+    let clearedResult = surface.setShortcut(nil, for: .gitRefresh)
+    guard case .success = clearedResult else {
+      return XCTFail("Expected clearing a shortcut to succeed, got \(clearedResult)")
+    }
+    XCTAssertNil(surface.shortcuts[.gitRefresh])
+  }
+
   func testFileTreeLoadsNestedFoldersAndOpensFixtureEditorTab() throws {
     let fixture = try Fixture()
     let root = try fixture.makeDirectory(named: "tree-project")

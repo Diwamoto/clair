@@ -2,7 +2,7 @@
 
 ## Status
 
-Current as of local PoC item `P10 Managed worktrees`.
+Current as of local PoC item `P12 Human command surfaces`.
 
 ## Workspace boundary
 
@@ -125,7 +125,18 @@ is surfaced as a bootstrap diagnostic.
 commands use stable `project.*` IDs, typed input structs, a typed result, structured
 errors, fixed risk metadata, deterministic availability reasons, and `aiAvailable`
 metadata. The SwiftUI sidebar invokes the same `ClairCommand` execution path for open,
-switch, rename, color, reorder, and close. CLI/MCP adapters remain later slices.
+switch, rename, color, reorder, and close.
+
+P12 projects that registry through `CommandSurfaceModel`. `CommandWindowView` searches
+command titles and stable IDs, shows the fixed risk and current availability reason,
+and renders the same typed result or error after dispatch. `ClairCommandMenu` is the
+menu projection; available rows call the same `ProjectWorkspaceModel.execute` path and
+unavailable rows remain disabled with their deterministic reason. The command window
+uses Command-Shift-K, while configurable command shortcuts are persisted as the
+versioned `clair.command-keymap.v1` payload in the channel-specific standard
+`UserDefaults` store. Assignment validates normalized keys, reserved editor shortcuts,
+and one-to-one conflicts before replacing the saved mapping. CLI/MCP adapters remain
+later slices.
 
 P08 extends that same seam with `git.refresh`, `git.showDiff`, `git.stage`,
 `git.unstage`, `git.commit`, and `git.switchBranch`. `ProjectGitService` is a
@@ -273,7 +284,7 @@ fingerprint before invoking `git worktree remove` without `--force`; the branch 
 kept. A stale plan, changed target, changed branch, or changed HEAD must be prepared
 again. P10 does not review, merge, adopt, or resolve worktree branches; those actions
 belong to P11. PTY transcript persistence, semantic vendor adapters, and CLI/MCP
-command surfaces remain outside this slice.
+command adapters remain outside this slice.
 
 ## Native editor and disk safety
 
@@ -342,8 +353,9 @@ are disposable and ignored. `THIRD_PARTY_NOTICES.md` is the tracked notice sourc
 `apple/ClairTests/ProjectKernelTests.swift` covers three folder types in one process,
 canonical-root duplicate rejection, invalid/file/unreadable-root isolation, stable ID
 reopen, metadata/order persistence, store versioning, command risk/availability
-preflight, nested tree enumeration, fixture tab selection, external create/rename/
-delete refresh, missing-root recovery, Project surface isolation, nested mixed-pane
+preflight, human command-surface dispatch, unavailable-reason propagation, and shortcut
+validation/persistence, nested tree enumeration, fixture tab selection, external
+create/rename/delete refresh, missing-root recovery, Project surface isolation, nested mixed-pane
 operations, three-Project layout isolation across restart, and corrupt/missing workspace
 fallback, Quick Open and search result navigation, buffer-only replacement, active-search
 refresh after an external file change, and Project History restore. The project-scoped
@@ -383,7 +395,7 @@ disk writes, project-scoped history ordering, and Project-root path validation.
 - The terminal surface is a selectable plain-text AppKit fallback, not a full ANSI/
   alternate-screen/cursor/colour terminal grid; a reproducible libghostty development
   artifact is still unavailable in this checkout. The editor does not yet provide
-  syntax highlighting, LSP, or multi-cursor editing. The P08/P10 Git loop currently
+  syntax highlighting, LSP, or multi-cursor editing. The P08/P10/P12 Git loop currently
   uses the local `/usr/bin/git` bridge; discard, blame, review comments, AI briefs,
   merge/conflict adoption, and CLI/MCP adapters remain later queue items.
 - Formal app icons, signing, notarization, and update delivery are not present.
