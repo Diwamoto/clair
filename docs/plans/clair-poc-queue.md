@@ -49,16 +49,17 @@ P07 -> P14
 {P03, P07, P09} -> P15A
 P06 -> P15B
 {P05, P06, P09, P11, P12, P15A, P15B} -> P15C
-{P13, P14, P15C} -> P15 -> L01
+P13 -> P15D
+{P14, P15C, P15D} -> P15 -> L01
 ```
 
 P02とP03、P06/P07/P08は独立agentまたは別worktreeで並列実装できる。P12のCommand Registryは
 P01から最小kernelを育て、後から既存featureを別実装へ置き換えない。
 
-現在の次waveではP13、P14、P15A、P15Bを明示IDごとのlinked worktreeで並列実装できる。
+現在の実装waveではP15AとP15Bを明示IDごとのlinked worktreeで並列実装できる。
 各workerは`clair-issue-executor`のleaseを取得し、自itemだけをcommitしてpush/merge/next昇格を行わない。
-統合はP13を先にしたserial stepとし、shared Command Registry seamのadditive conflictを解消してから
-P15Cへ進む。P15CはP15A/P15B、P15はP13/P14/P15Cの統合後にだけ開始する。
+P14とP15Dはそれぞれのdecision blockerが解消されるまでworkerへ割り当てない。P15CはP15A/P15Bの
+統合後、P15はP14/P15C/P15Dの統合後にだけ開始する。
 
 ## Active queue
 
@@ -369,7 +370,7 @@ P15Cへ進む。P15CはP15A/P15B、P15はP13/P14/P15Cの統合後にだけ開始
 
 ### P14 Release, update, and restart handoff
 
-- Status: `blocked`
+- Status: `queued`
 - Depends on: P07。
 - Outcome: signed personal buildを配布し、click update後にsessionへreattachできる。
 - Scope: signing/notarization、verified feed、Stable/Dev channel、download/restart、retry/rollbackに加え、
@@ -377,12 +378,15 @@ P15Cへ進む。P15CはP15A/P15B、P15はP13/P14/P15Cの統合後にだけ開始
   explicit Quitは通常sessionを終了し、crash/update restartはbrokerを維持してreattachする。
 - Functional checks: update success/failure/rollback、window closeとexplicit Quitの終了差、crash/update
   session handoff、channel isolation。
-- Blocker (2026-09-01): P14 requires a signed/notarized personal build and a verified update feed, while
+- Blocker (resolved 2026-09-01): P14 requires a signed/notarized personal build and a verified update feed, while
   accepted [ADR-0008](../decisions/0008-stable-dev-runtime-identity.md) intentionally fixes local/CI builds as
   unsigned and defers the signing identity, Team ID, notarization, and distribution boundary. Before
   implementation, decide the Developer ID/signing and credential boundary, the trusted feed/artifact/rollback
-  contract for Stable and Dev, and how update eligibility is authorized. No P14 production implementation is
-  started until this product/security decision is accepted.
+  contract for Stable and Dev, and how update eligibility is authorized.
+- Resolution (2026-09-01): [ADR-0009](../decisions/0009-stable-github-update-distribution.md) accepts public
+  GitHub Releases for Stable only, local-only Dev, signed update artifacts without Apple Developer ID/notarization,
+  startup check with user-triggered apply/restart, `/Applications/Clair.app` as the Stable install target, and
+  backup/restore rollback. The update restart keeps the channel-local broker alive for session reattach.
 - Legacy issue coverage: #18。
 
 ### P15A Production terminal surface
@@ -429,10 +433,27 @@ P15Cへ進む。P15CはP15A/P15B、P15はP13/P14/P15Cの統合後にだけ開始
   pane-local toolbarとsecond tab row、modal sheets、system dark appearanceであり、Interaction Labのtitlebar groups、
   activity hierarchy、right actions、One Dark density、status/attention presentationと一致していない。
 
+### P15D Rust control-plane boundary reconciliation
+
+- Status: `blocked`
+- Depends on: P13。
+- Outcome: Rust core再利用を要求するproduct docs/ADRと、Swiftが現在のProject、Git、search/history、
+  Command control planeを所有する実装を、cutover前に一つのaccepted architectureへ揃える。
+- Scope: M1 operationのownership inventoryを固定し、(a) Tauri非依存Rust domainとversioned Swift bridgeへ
+  必要なoperationを移す、または(b) Rust ownershipをPTY等へ狭めるsuperseding ADRとproduct docsをacceptする。
+  選択後の実装が一agentで安全に完了しない場合は、typed interface単位のimplementation-ready itemへ分割する。
+- Functional checks: product docs、accepted ADR、architecture、実装ownershipに矛盾がないこと。Rust control planeを
+  維持する場合はTauriをlinkしないbuild/test、versioned request/result/error、panic containment、threading、
+  cancellation、handle/callback lifecycleのcontract testを行う。
+- Blocker (2026-09-01): [ADR-0001](../decisions/0001-adopt-swiftui-appkit-frontend.md)とproduct visionは
+  ccedit Rust domainの再利用とversioned Swift bridgeを要求する一方、現実装のRust C ABIはbootstrap smokeだけで、
+  M1 control planeはSwiftに実装されている。どちらをcutover architectureとするかaccepted decisionが必要である。
+- Legacy issue coverage: #7、#8。
+
 ### P15 Clair-on-Clair dogfood cutover
 
 - Status: `queued`
-- Depends on: P13、P14、P15C。
+- Depends on: P14、P15C、P15D。
 - Outcome: Clair StableだけでClair sourceを編集し、terminal/agentでDevをbuild・runし、Git/worktree/review loopを完結できる。
 - Scope: 実地利用で発見したcutover blockerだけを修正し、cceditへ戻らず開発を継続する。
 - Functional checks: real repositoryで一つのfeatureを実装、review、commit、Dev確認、adoptするend-to-end session。
@@ -453,6 +474,46 @@ P15Cへ進む。P15CはP15A/P15B、P15はP13/P14/P15Cの統合後にだけ開始
 Go LSP、mobile terminal、DAP/Delve、mobile review、Dev Container、API Testerは
 [roadmap](clair-v2-roadmap.md)のM2以降で扱う。Semantic agent adapters、remote multi-client protocol、
 relay/E2EEもlocal terminal/session実装をblockしない。
+
+## Legacy GitHub issue archive mapping
+
+GitHub issueは2026-09-01以降のtask source of truthとして使わない。完了済みissueは`completed`、
+未完了または元の分割が現在のqueue/roadmapへ置き換わったissueは「中止ではなくlocal trackingへ移管」と
+明記して`not planned`でcloseする。closed issue本文はhistorical contextであり、実装順序やstatusを更新しない。
+
+| Legacy issue | Local authority | Archive disposition |
+|---|---|---|
+| #1 | roadmap全体とこのqueue | superseded by local roadmap |
+| #2 | product docs、ADR-0008、P14 blocker | remaining release boundary moved to P14 |
+| #3 | P00 | completed |
+| #4 | `docs/benchmarks` contract/tooling、実計測はL01 | contract completed; measurement remains L01 |
+| #5 | P03、P15A | feasibility completed; production renderer remains P15A |
+| #6 | P03、P07、P14、L01 | local transport/reattach completed; lifecycle/recovery gates remain local |
+| #7、#8 | P15D | architecture mismatch moved to blocked reconciliation |
+| #9 | P01、P05、P15C | model/persistence completed; Interaction Lab UI remains P15C |
+| #10 | P02、P06、P15B、P15C | functional slice completed; scale/UI convergence remains local |
+| #11 | P04、P06 | completed |
+| #12 | P04、L01 | up-front comparison replaced by reversible MVP and final-only measurement |
+| #13 | P04、P06、P15B、P15C、M2 | cutover slice split across local items |
+| #14 | P08、P11 | completed vertical workflow; deferred extras remain documented in those items |
+| #15 | P09、P10 | completed |
+| #16 | P13 | completed |
+| #17 | L01 | final-only |
+| #18 | P07、P14 | release/update work remains blocked in P14 |
+| #19 | P15 | queued cutover |
+| #20 | roadmap M3A | deferred beyond M1 |
+| #21 | roadmap Optional later additions | deferred beyond M1 |
+| #22 | P10、P11 | completed |
+| #23 | roadmap M5 | deferred beyond M1 |
+| #24 | roadmap M4 | deferred beyond M1 |
+| #25 | P01、P12、P13 | completed |
+| #26 | roadmap M2 | deferred beyond M1 |
+| #27 | roadmap M3B | deferred beyond M1 |
+| #28 | P01 | completed |
+| #29 | P12 | completed |
+| #33 | P01、P12 | completed |
+| #34、#35 | P05 | completed |
+| #36、#37 | P13 | completed |
 
 ## Quarantined legacy bundles
 
