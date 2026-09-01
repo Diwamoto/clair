@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Functional tests for item_lease.py using disposable linked worktrees."""
+"""Functional tests for item_lease.py using disposable repositories and worktrees."""
 
 from __future__ import annotations
 
@@ -105,9 +105,9 @@ class ItemLeaseTests(unittest.TestCase):
             cwd=self.root,
         )
 
-        primary_refusal = self.helper(self.root, "acquire", "P02", check=False)
-        self.assertEqual(primary_refusal.returncode, 2)
-        self.assertIn("requires a linked worktree", primary_refusal.stderr)
+        primary = json.loads(self.helper(self.root, "acquire", "P01").stdout)
+        self.assertTrue(primary["acquired"])
+        self.assertFalse(primary["linked_worktree"])
 
         first = json.loads(self.helper(worker_one, "acquire", "P02").stdout)
         self.assertTrue(first["acquired"])
@@ -130,6 +130,8 @@ class ItemLeaseTests(unittest.TestCase):
         self.assertTrue(peer_acquired["acquired"])
         peer_released = json.loads(self.helper(worker_two, "release", "P02").stdout)
         self.assertTrue(peer_released["released"])
+        primary_released = json.loads(self.helper(self.root, "release", "P01").stdout)
+        self.assertTrue(primary_released["released"])
 
     def test_independent_items_can_be_leased_in_parallel(self) -> None:
         worker_one = Path(self.temporary.name) / "parallel-one"

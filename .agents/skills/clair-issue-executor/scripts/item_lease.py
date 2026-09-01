@@ -225,11 +225,6 @@ def details(root: Path, selector: str) -> tuple[QueueItem, dict[str, Any]]:
 
 def acquire(root: Path, selector: str) -> dict[str, Any]:
     item, payload = details(root, selector)
-    if selector.strip().lower() != "next" and not payload["linked_worktree"]:
-        raise ItemLeaseError(
-            "explicit item execution requires a linked worktree; "
-            "the primary checkout is reserved for serial next work and integration"
-        )
     identity = current_identity(root)
     with locked_lease_root(root) as leases:
         existing_leases = all_leases(root)

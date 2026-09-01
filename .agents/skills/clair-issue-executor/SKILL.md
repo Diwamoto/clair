@@ -22,8 +22,10 @@ deployment, release, or a second queue item. Read and follow
 its delegated single-item mode applies.
 
 Accept an explicit item ID such as `P13`, `P15A`, or `L01`. Accept `next` only for
-serial work. Parallel workers must receive explicit, different IDs; never let two
-workers independently resolve `next`.
+serial work. Explicit IDs may also run from the primary checkout when the worker
+is serial and owns no other lease. Parallel workers must receive explicit,
+different IDs in separate worktrees; never let two workers independently resolve
+`next`.
 
 ## User-facing language
 
@@ -52,10 +54,11 @@ For `next`, run `inspect next`, then use the returned exact `item_id` for
 `acquire`, all queue edits, commit reporting, and `release`. The helper validates
 every dependency, reports whether the checkout is a linked worktree and lists
 other leases, then atomically leases the item in the Git common directory shared
-by all worktrees. An explicit ID can be acquired only from a linked worktree;
-the primary checkout is reserved for serial `next` work and integration. Do not
-implement unless `acquire` succeeds. Any existing item lease or any other lease
-owned by the same worktree is a hard stop; one checkout cannot run two workers.
+by all worktrees. An explicit ID can be acquired from either the primary
+checkout or a linked worktree. A primary checkout is valid for one serial
+worker; concurrent workers still require separate worktrees. Do not implement
+unless `acquire` succeeds. Any existing item lease or any other lease owned by
+the same worktree is a hard stop; one checkout cannot run two workers.
 
 Release the lease after the item commit or a terminal blocked/handoff report:
 
@@ -71,9 +74,11 @@ resume, remove, or assume ownership automatically.
 
 These rules are mandatory when more than one agent works at once:
 
-1. Use one item, branch, linked Git worktree, working directory, and index per
-   agent. If the caller put parallel agents in the same checkout, stop before
-   editing and request isolated worktrees; do not create hidden stashes.
+1. Use one item, branch, working directory, and index per agent. Linked Git
+   worktrees are required when agents run in parallel. If the caller put
+   parallel agents in the same checkout, stop before editing and request
+   isolated worktrees; do not create hidden stashes. A single serial worker may
+   use the primary checkout.
 2. Start only explicit items whose queue dependencies are all `done` at the
    worker's base commit. Parent/child items never run in the same parallel wave.
 3. Capture the starting HEAD and complete `git status --short
