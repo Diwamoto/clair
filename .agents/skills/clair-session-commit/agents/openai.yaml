@@ -1,4 +1,4 @@
 interface:
   display_name: "Clair Session Commit"
-  short_description: "Split, verify, commit, and push Clair work safely"
-  default_prompt: "Use $clair-session-commit to inspect the current Clair changes, split them into coherent commits, verify each slice, commit them, and push the current branch."
+  short_description: "Partition, verify, and commit Clair work safely"
+  default_prompt: "Use $clair-session-commit to inspect the current Clair changes, partition and verify the finished outcomes, commit only safe slices, and push only if I explicitly request it."
