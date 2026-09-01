@@ -369,7 +369,7 @@ P15Cへ進む。P15CはP15A/P15B、P15はP13/P14/P15Cの統合後にだけ開始
 
 ### P14 Release, update, and restart handoff
 
-- Status: `queued`
+- Status: `blocked`
 - Depends on: P07。
 - Outcome: signed personal buildを配布し、click update後にsessionへreattachできる。
 - Scope: signing/notarization、verified feed、Stable/Dev channel、download/restart、retry/rollbackに加え、
@@ -377,6 +377,12 @@ P15Cへ進む。P15CはP15A/P15B、P15はP13/P14/P15Cの統合後にだけ開始
   explicit Quitは通常sessionを終了し、crash/update restartはbrokerを維持してreattachする。
 - Functional checks: update success/failure/rollback、window closeとexplicit Quitの終了差、crash/update
   session handoff、channel isolation。
+- Blocker (2026-09-01): P14 requires a signed/notarized personal build and a verified update feed, while
+  accepted [ADR-0008](../decisions/0008-stable-dev-runtime-identity.md) intentionally fixes local/CI builds as
+  unsigned and defers the signing identity, Team ID, notarization, and distribution boundary. Before
+  implementation, decide the Developer ID/signing and credential boundary, the trusted feed/artifact/rollback
+  contract for Stable and Dev, and how update eligibility is authorized. No P14 production implementation is
+  started until this product/security decision is accepted.
 - Legacy issue coverage: #18。
 
 ### P15A Production terminal surface
