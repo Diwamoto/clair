@@ -3,6 +3,14 @@ import Foundation
 
 @MainActor
 final class TerminalSession: ObservableObject {
+  enum Event: Sendable {
+    case attached
+    case output(Data)
+    case bell(count: Int)
+    case exited(Int)
+    case failed(String)
+  }
+
   enum StartMode: Equatable, Sendable {
     case create
     case reattach
@@ -34,6 +42,8 @@ final class TerminalSession: ObservableObject {
   private var sessionEpoch: UInt64?
   private var transcriptBuffer = TerminalTranscriptBuffer()
   private var transcriptObservers: [UUID: (String) -> Void] = [:]
+  private var eventObservers: [UUID: (Event) -> Void] = [:]
+  private var pendingCommands: [Data] = []
 
   init(
     projectRootURL: URL,
@@ -142,6 +152,7 @@ final class TerminalSession: ObservableObject {
     sessionEpoch = nil
     transcriptBuffer.reset()
     transcript = ""
+    pendingCommands.removeAll()
     state = .idle
     start()
   }
@@ -151,6 +162,21 @@ final class TerminalSession: ObservableObject {
       return
     }
     sendInput(Data(text.utf8))
+  }
+
+  func sendCommandWhenReady(_ command: String) {
+    guard !command.isEmpty else {
+      return
+    }
+    let data = Data((command + "\n").utf8)
+    switch state {
+    case .idle, .starting:
+      pendingCommands.append(data)
+    case .running:
+      sendInput(data)
+    case .stopping, .exited, .missing, .failed:
+      return
+    }
   }
 
   func sendInput(_ data: Data) {
@@ -194,6 +220,16 @@ final class TerminalSession: ObservableObject {
     transcriptObservers[id] = nil
   }
 
+  func addEventObserver(_ observer: @escaping (Event) -> Void) -> UUID {
+    let id = UUID()
+    eventObservers[id] = observer
+    return id
+  }
+
+  func removeEventObserver(_ id: UUID) {
+    eventObservers[id] = nil
+  }
+
   private func receive(_ frame: SessionBrokerFrame) {
     switch frame.kind {
     case .attached:
@@ -208,6 +244,8 @@ final class TerminalSession: ObservableObject {
           return
         }
         state = .running
+        publishEvent(.attached)
+        flushPendingCommands()
       } catch {
         fail("Session broker attachment error: \(error)")
       }
@@ -220,7 +258,11 @@ final class TerminalSession: ObservableObject {
         if output.offset > outputCursor {
           receiveGap(start: outputCursor, end: output.offset)
         }
-        transcriptBuffer.append(output.data)
+        let effects = transcriptBuffer.append(output.data)
+        publishEvent(.output(output.data))
+        if effects.bellCount > 0 {
+          publishEvent(.bell(count: effects.bellCount))
+        }
         outputCursor = output.offset + UInt64(output.data.count)
       } catch {
         fail("Session broker output error: \(error)")
@@ -239,6 +281,7 @@ final class TerminalSession: ObservableObject {
         let exit = try SessionBrokerExit(frame: frame)
         outputCursor = exit.offset
         state = .exited(Int(exit.status))
+        publishEvent(.exited(Int(exit.status)))
         brokerClient?.close()
         brokerClient = nil
       } catch {
@@ -248,9 +291,9 @@ final class TerminalSession: ObservableObject {
       do {
         let errorFrame = try SessionBrokerErrorFrame(frame: frame)
         if errorFrame.code == .sessionMissing {
-          state = .missing(
-            errorFrame.message.isEmpty ? "session is not available" : errorFrame.message
-          )
+          let message = errorFrame.message.isEmpty ? "session is not available" : errorFrame.message
+          state = .missing(message)
+          publishEvent(.failed(message))
           brokerClient?.close()
           brokerClient = nil
         } else {
@@ -288,6 +331,23 @@ final class TerminalSession: ObservableObject {
     }
   }
 
+  private func publishEvent(_ event: Event) {
+    for observer in eventObservers.values {
+      observer(event)
+    }
+  }
+
+  private func flushPendingCommands() {
+    guard case .running = state else {
+      return
+    }
+    let commands = pendingCommands
+    pendingCommands.removeAll()
+    for command in commands {
+      sendInput(command)
+    }
+  }
+
   private func handleDisconnect() {
     if case .failed = state {
       return
@@ -298,11 +358,14 @@ final class TerminalSession: ObservableObject {
     if case .exited = state {
       return
     }
-    state = .failed("The local session broker connection closed.")
+    let message = "The local session broker connection closed."
+    state = .failed(message)
+    publishEvent(.failed(message))
   }
 
   private func fail(_ message: String) {
     state = .failed(message)
+    publishEvent(.failed(message))
     brokerClient?.close()
     brokerClient = nil
   }

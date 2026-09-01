@@ -4,6 +4,7 @@ import SwiftUI
 struct ContentView: View {
   let state: BootstrapState
   @ObservedObject var workspace: ProjectWorkspaceModel
+  @ObservedObject var agentWorkflow: AgentWorkflowCoordinator
 
   @State private var renameProjectID: UUID?
   @State private var renameValue = ""
@@ -152,7 +153,8 @@ struct ContentView: View {
         state: state,
         project: project,
         workspace: workspace,
-        surface: surface
+        surface: surface,
+        agentWorkflow: agentWorkflow
       )
     } else {
       VStack(spacing: 12) {
@@ -236,6 +238,7 @@ private enum ProjectNavigationSheet: String, Identifiable {
   case search
   case history
   case git
+  case agents
 
   var id: String {
     rawValue
@@ -247,6 +250,7 @@ private struct ProjectWorkspaceDetail: View {
   let project: Project
   @ObservedObject var workspace: ProjectWorkspaceModel
   @ObservedObject var surface: ProjectSurfaceModel
+  @ObservedObject var agentWorkflow: AgentWorkflowCoordinator
   @State private var navigationSheet: ProjectNavigationSheet?
 
   var body: some View {
@@ -292,6 +296,13 @@ private struct ProjectWorkspaceDetail: View {
           navigationSheet = .git
         } label: {
           Label("Git", systemImage: "arrow.triangle.branch")
+        }
+        .buttonStyle(.bordered)
+
+        Button {
+          navigationSheet = .agents
+        } label: {
+          Label("Agents", systemImage: "person.2")
         }
         .buttonStyle(.bordered)
 
@@ -366,6 +377,13 @@ private struct ProjectWorkspaceDetail: View {
     } message: {
       Text(surface.lastGitErrorMessage ?? "Unknown Git error.")
     }
+    .alert("Agent workflow failed", isPresented: agentErrorIsPresented) {
+      Button("OK") {
+        agentWorkflow.clearError()
+      }
+    } message: {
+      Text(agentWorkflow.lastErrorMessage ?? "Unknown agent workflow error.")
+    }
     .sheet(item: $navigationSheet) { sheet in
       switch sheet {
       case .quickOpen:
@@ -376,6 +394,13 @@ private struct ProjectWorkspaceDetail: View {
         ProjectHistoryView(surface: surface)
       case .git:
         ProjectGitView(workspace: workspace, projectID: project.id, surface: surface)
+      case .agents:
+        ProjectAgentView(
+          project: project,
+          workspace: workspace,
+          surface: surface,
+          agentWorkflow: agentWorkflow
+        )
       }
     }
   }
@@ -411,6 +436,259 @@ private struct ProjectWorkspaceDetail: View {
         }
       }
     )
+  }
+
+  private var agentErrorIsPresented: Binding<Bool> {
+    Binding(
+      get: { agentWorkflow.lastErrorMessage != nil && workspace.lastErrorMessage == nil },
+      set: { isPresented in
+        if !isPresented {
+          agentWorkflow.clearError()
+        }
+      }
+    )
+  }
+}
+
+private struct ProjectAgentView: View {
+  let project: Project
+  @ObservedObject var workspace: ProjectWorkspaceModel
+  @ObservedObject var surface: ProjectSurfaceModel
+  @ObservedObject var agentWorkflow: AgentWorkflowCoordinator
+  @Environment(\.dismiss) private var dismiss
+
+  private var projectSessions: [AgentWorkflowSession] {
+    agentWorkflow.sessions.filter { $0.projectID == project.id }
+  }
+
+  private var projectActivities: [AgentActivity] {
+    agentWorkflow.activities(for: project.id)
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      HStack(spacing: 10) {
+        Label("Agent Workflow", systemImage: "person.2")
+          .font(.title3.weight(.semibold))
+        Text(project.name)
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+        Spacer()
+        Button("Close", action: dismiss.callAsFunction)
+          .buttonStyle(.borderless)
+      }
+      .padding(12)
+
+      Divider()
+
+      ScrollView {
+        VStack(alignment: .leading, spacing: 16) {
+          launchSection
+          projectMuteSection
+          sessionsSection
+          activitySection
+          hookSection
+        }
+        .padding(16)
+      }
+    }
+    .frame(minWidth: 680, minHeight: 560)
+  }
+
+  private var launchSection: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Launch in Project root")
+        .font(.headline)
+      Text(project.rootURL.path)
+        .font(.caption.monospaced())
+        .foregroundStyle(.secondary)
+        .textSelection(.enabled)
+
+      HStack(spacing: 8) {
+        ForEach(AgentLaunchProfile.all) { profile in
+          Button {
+            _ = agentWorkflow.launch(
+              profile: profile,
+              projectID: project.id,
+              projectRoot: project.rootURL,
+              surface: surface
+            )
+          } label: {
+            Label(profile.displayName, systemImage: "terminal")
+          }
+          .buttonStyle(.borderedProminent)
+        }
+      }
+    }
+  }
+
+  private var projectMuteSection: some View {
+    HStack(spacing: 10) {
+      Image(systemName: agentWorkflow.isMuted(projectID: project.id) ? "bell.slash" : "bell")
+        .foregroundStyle(.secondary)
+      Text("Project notifications")
+      Spacer()
+      Button(
+        agentWorkflow.isMuted(projectID: project.id) ? "Unmute Project" : "Mute Project"
+      ) {
+        agentWorkflow.setMuted(
+          !agentWorkflow.isMuted(projectID: project.id),
+          projectID: project.id
+        )
+      }
+      .buttonStyle(.bordered)
+    }
+  }
+
+  @ViewBuilder
+  private var sessionsSection: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Sessions")
+        .font(.headline)
+      if projectSessions.isEmpty {
+        Text("No agents have been launched in this Project.")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      } else {
+        ForEach(projectSessions) { session in
+          agentSessionRow(session)
+        }
+      }
+    }
+  }
+
+  private func agentSessionRow(_ session: AgentWorkflowSession) -> some View {
+    HStack(spacing: 10) {
+      Image(systemName: session.isActive ? "circle.fill" : "circle")
+        .foregroundStyle(session.isActive ? .green : .secondary)
+        .font(.caption)
+      VStack(alignment: .leading, spacing: 2) {
+        Text(session.profile?.displayName ?? "Unknown agent")
+          .font(.body.weight(.medium))
+        Text(lifecycleDescription(for: session))
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+      Spacer()
+      Button("Reveal") {
+        workspace.revealTerminal(
+          projectID: session.projectID,
+          tabID: session.terminalTabID
+        )
+        dismiss()
+      }
+      .buttonStyle(.borderless)
+      Button(
+        agentWorkflow.isMuted(projectID: session.projectID, sessionID: session.id)
+          ? "Unmute"
+          : "Mute"
+      ) {
+        agentWorkflow.setMuted(
+          !agentWorkflow.isMuted(projectID: session.projectID, sessionID: session.id),
+          projectID: session.projectID,
+          sessionID: session.id
+        )
+      }
+      .buttonStyle(.borderless)
+    }
+    .padding(8)
+    .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 6))
+  }
+
+  @ViewBuilder
+  private var activitySection: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Activity history")
+        .font(.headline)
+      if projectActivities.isEmpty {
+        Text("Bell, exit, and official hook activity will appear here.")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      } else {
+        ForEach(Array(projectActivities.reversed())) { activity in
+          HStack(spacing: 8) {
+            Image(systemName: activityIcon(for: activity))
+              .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+              Text(activityTitle(for: activity))
+              Text(activity.occurredAt.formatted(date: .omitted, time: .shortened))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+              if let summary = activity.summary {
+                Text(summary)
+                  .font(.caption)
+                  .foregroundStyle(.secondary)
+                  .lineLimit(2)
+              }
+            }
+            Spacer()
+            if let session = projectSessions.first(where: { $0.id == activity.sessionID }) {
+              Button("Reveal") {
+                workspace.revealTerminal(
+                  projectID: session.projectID,
+                  tabID: session.terminalTabID
+                )
+                dismiss()
+              }
+              .buttonStyle(.borderless)
+            }
+          }
+          .padding(.vertical, 3)
+        }
+      }
+    }
+  }
+
+  @ViewBuilder
+  private var hookSection: some View {
+    if let hookReceiverURL = agentWorkflow.hookReceiverURL {
+      VStack(alignment: .leading, spacing: 4) {
+        Text("Official hook receiver")
+          .font(.headline)
+        Text("Configure the agent's documented hook command as:")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+        Text("sh \"$CLAIR_AGENT_HOOK_RECEIVER\"")
+          .font(.caption.monospaced())
+        Text(hookReceiverURL.path)
+          .font(.caption2.monospaced())
+          .foregroundStyle(.secondary)
+          .textSelection(.enabled)
+      }
+    }
+  }
+
+  private func lifecycleDescription(for session: AgentWorkflowSession) -> String {
+    switch session.lifecycle {
+    case .starting:
+      "Starting in \(session.agent.cwd)"
+    case .running:
+      "Running in \(session.agent.cwd)"
+    case .exited(let code):
+      "Exited with status \(code)"
+    }
+  }
+
+  private func activityTitle(for activity: AgentActivity) -> String {
+    switch activity.source {
+    case .bell:
+      "Terminal attention bell"
+    case .exit:
+      activity.exitStatus == 0 ? "Agent exited normally" : "Agent exited with an error"
+    case .officialHook:
+      "Official hook: \(activity.kind.rawValue)"
+    }
+  }
+
+  private func activityIcon(for activity: AgentActivity) -> String {
+    switch activity.source {
+    case .bell:
+      "bell"
+    case .exit:
+      activity.exitStatus == 0 ? "checkmark.circle" : "xmark.circle"
+    case .officialHook:
+      "link"
+    }
   }
 }
 

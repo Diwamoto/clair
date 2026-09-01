@@ -114,6 +114,20 @@ final class ProjectWorkspaceModel: ObservableObject {
     )
   }
 
+  func revealTerminal(projectID: UUID, tabID: String) {
+    guard projects.contains(where: { $0.id == projectID }) else {
+      return
+    }
+    if activeProjectID != projectID {
+      _ = execute(.switchProject(SwitchProjectCommand(projectID: projectID)))
+    }
+    guard let surface = surfaces[projectID] else {
+      return
+    }
+    surface.activateTab(id: tabID)
+    activeSurface = surface
+  }
+
   private var commandState: ProjectCommandState {
     ProjectCommandState(
       openProjectIDs: Set(projects.map(\.id)),
@@ -683,6 +697,32 @@ final class ProjectSurfaceModel: ObservableObject {
 
   func showTerminal() {
     showTerminal(in: focusedPaneID)
+  }
+
+  @discardableResult
+  func openNewTerminal(
+    title: String = "Terminal",
+    agentProfileID: String? = nil,
+    in paneID: UUID? = nil
+  ) -> String? {
+    let targetPaneID = paneID ?? focusedPaneID
+    guard layout.leaf(withID: targetPaneID) != nil else {
+      return nil
+    }
+    let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+    let newTab = ProjectPaneTab.terminal(
+      title: normalizedTitle.isEmpty ? "Terminal" : normalizedTitle,
+      agentProfileID: agentProfileID
+    )
+    layout = updatingLeaf(in: layout, leafID: targetPaneID) { leaf in
+      var next = leaf
+      next.tabs.append(newTab)
+      next.activeTabID = newTab.id
+      return next
+    }
+    focusedPaneID = targetPaneID
+    startTerminal(tabID: newTab.id)
+    return newTab.id
   }
 
   func showTerminal(in paneID: UUID) {

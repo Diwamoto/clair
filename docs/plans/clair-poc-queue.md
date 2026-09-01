@@ -234,11 +234,22 @@ P01から最小kernelを育て、後から既存featureを別実装へ置き換�
 
 ### P09 Raw agent workflow and attention
 
-- Status: `queued`
+- Status: `done`
 - Depends on: P05、P07。
 - Outcome: Claude Code、Codex、OpenCodeをProject rootで複数起動し、terminalへrevealできる。
 - Scope: launch profiles、cwd、process lifecycle、bell/exit/official hook由来Activity、history、mute、macOS notification。
 - Functional checks: multiple agents、background Project継続、reveal、mute、exit/attention notification。
+- Validation (2026-09-01): project-scoped full Clair Dev XCTest, Clair Dev/Stable builds,
+  `swift format lint --recursive --parallel --strict apple`, Xcode project validation,
+  `sh -n scripts/agent-hook.sh`, and a mode-600 JSONL hook receiver smoke passed. Rust
+  `cargo test --workspace --locked` passed all workspace tests, including broker and live-shell
+  integration checks.
+- Durable detail: [development workspace architecture](../architecture/development-workspace.md)
+  and [local development runbook](../runbooks/local-development.md) document fixed launch profiles,
+  Project-root execution, shell quoting, bounded Activity/history/mute/notification behavior,
+  transient hook inbox handling, and manual checks.
+- Deferred: vendor-specific semantic adapters/config rewriting, managed worktrees, CLI/MCP adapters,
+  transcript persistence, and remote/E2EE delivery remain outside this local slice.
 - Legacy issue coverage: #15。
 
 ### P10 Managed worktrees

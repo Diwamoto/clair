@@ -141,6 +141,7 @@ struct ProjectPaneTab: Codable, Equatable, Identifiable, Sendable {
   var title: String
   let filePath: String?
   let sessionID: UUID?
+  let agentProfileID: String?
 
   private enum CodingKeys: String, CodingKey {
     case id
@@ -148,6 +149,7 @@ struct ProjectPaneTab: Codable, Equatable, Identifiable, Sendable {
     case title
     case filePath
     case sessionID
+    case agentProfileID
   }
 
   init(
@@ -155,13 +157,15 @@ struct ProjectPaneTab: Codable, Equatable, Identifiable, Sendable {
     kind: ProjectPaneTabKind,
     title: String,
     filePath: String?,
-    sessionID: UUID? = nil
+    sessionID: UUID? = nil,
+    agentProfileID: String? = nil
   ) {
     self.id = id
     self.kind = kind
     self.title = title
     self.filePath = filePath
     self.sessionID = sessionID
+    self.agentProfileID = kind == .terminal ? agentProfileID : nil
   }
 
   init(from decoder: Decoder) throws {
@@ -170,6 +174,10 @@ struct ProjectPaneTab: Codable, Equatable, Identifiable, Sendable {
     kind = try container.decode(ProjectPaneTabKind.self, forKey: .kind)
     title = try container.decode(String.self, forKey: .title)
     filePath = try container.decodeIfPresent(String.self, forKey: .filePath)
+    agentProfileID =
+      kind == .terminal
+      ? try container.decodeIfPresent(String.self, forKey: .agentProfileID)
+      : nil
     if kind == .terminal {
       let legacyID =
         id.hasPrefix("terminal:")
@@ -191,6 +199,7 @@ struct ProjectPaneTab: Codable, Equatable, Identifiable, Sendable {
     try container.encode(title, forKey: .title)
     try container.encodeIfPresent(filePath, forKey: .filePath)
     try container.encodeIfPresent(sessionID, forKey: .sessionID)
+    try container.encodeIfPresent(agentProfileID, forKey: .agentProfileID)
   }
 
   static func editor(path: String, title: String) -> ProjectPaneTab {
@@ -203,13 +212,18 @@ struct ProjectPaneTab: Codable, Equatable, Identifiable, Sendable {
     )
   }
 
-  static func terminal(id: UUID = UUID()) -> ProjectPaneTab {
+  static func terminal(
+    id: UUID = UUID(),
+    title: String = "Terminal",
+    agentProfileID: String? = nil
+  ) -> ProjectPaneTab {
     ProjectPaneTab(
       id: "terminal:\(id.uuidString)",
       kind: .terminal,
-      title: "Terminal",
+      title: title,
       filePath: nil,
-      sessionID: id
+      sessionID: id,
+      agentProfileID: agentProfileID
     )
   }
 

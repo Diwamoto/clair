@@ -53,6 +53,21 @@ final class TerminalProtocolTests: XCTestCase {
     XCTAssertEqual(String(decoding: sanitizer.filter(secondChunk), as: UTF8.self), "visible\n")
   }
 
+  func testSanitizerReportsGroundBellButNotOscTerminator() {
+    var groundSanitizer = TerminalOutputSanitizer()
+    let groundEffects = groundSanitizer.filterWithEffects(Data([0x07]))
+    XCTAssertEqual(groundEffects.bellCount, 1)
+    XCTAssertTrue(groundEffects.filtered.isEmpty)
+
+    var oscSanitizer = TerminalOutputSanitizer()
+    var osc = Data([0x1b, 0x5d])
+    osc.append(contentsOf: Data("window title".utf8))
+    osc.append(0x07)
+    let oscEffects = oscSanitizer.filterWithEffects(osc)
+    XCTAssertEqual(oscEffects.bellCount, 0)
+    XCTAssertTrue(oscEffects.filtered.isEmpty)
+  }
+
   func testTranscriptBufferCapsAtUtf8Boundary() {
     var buffer = TerminalTranscriptBuffer(maximumBytes: 5)
     buffer.append(Data("a🙂bcd".utf8))
@@ -153,6 +168,22 @@ final class TerminalProtocolTests: XCTestCase {
 
     XCTAssertEqual(decoded, tab)
     XCTAssertEqual(decoded.sessionID, sessionID)
+  }
+
+  func testAgentTerminalTabPersistsProfileMetadata() throws {
+    let sessionID = try XCTUnwrap(UUID(uuidString: "12345678-90ab-cdef-1234-567890abcdef"))
+    let tab = ProjectPaneTab.terminal(
+      id: sessionID,
+      title: "Codex",
+      agentProfileID: AgentLaunchProfile.codex.stableID
+    )
+    let decoded = try JSONDecoder().decode(
+      ProjectPaneTab.self,
+      from: JSONEncoder().encode(tab)
+    )
+
+    XCTAssertEqual(decoded, tab)
+    XCTAssertEqual(decoded.agentProfileID, "codex")
   }
 
   private func appendUInt64(_ value: UInt64, to data: inout Data) {

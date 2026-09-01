@@ -318,6 +318,66 @@ The repository's `make test-swift` wrapper remains the CI-facing path where the
 minimal committed workspace is accepted; with the current Xcode 26 environment, use
 the equivalent project-scoped command above because that workspace is rejected.
 
+## Verify the raw agent workflow and attention (P09)
+
+Build and launch Dev with the project-scoped command used by the current Xcode
+environment:
+
+```sh
+xcodebuild -project Clair.xcodeproj -scheme "Clair Dev" -configuration Debug \
+  -derivedDataPath .build/xcode/p09-manual CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGNING_REQUIRED=NO build
+open -n ".build/xcode/p09-manual/Build/Products/Debug/Clair Dev.app"
+```
+
+Open a disposable fixture folder as a Project and choose **Agents**. Launch two or
+more installed profiles from the Project root, including different profiles when
+available. Each click should create a separate terminal tab titled for that profile;
+the displayed working directory must be the Project root. Switch to another Project
+while those terminals are active, switch back, and use **Reveal** from the Agents
+panel to return to the correct terminal. A missing CLI should remain a local terminal
+failure rather than affecting another Project.
+
+Run `printf '\a'` in a launched agent terminal and confirm that Activity history shows
+one terminal attention event and macOS delivers a notification when notifications are
+allowed and the Project/session is unmuted. Run
+`printf '\033]0;title\007'` and confirm its OSC terminator does not add another
+attention event. Exit one terminal normally and one with a non-zero status; both exits
+should appear with their status. Mute the Project, repeat the bell/exit checks, and
+confirm history continues to update without notifications. Unmute the Project and
+verify a session mute can be toggled independently.
+
+For the optional documented hook path, configure the agent hook command shown in the
+panel as `sh "$CLAIR_AGENT_HOOK_RECEIVER"`, then send a small JSON event through that
+command, for example:
+
+```sh
+printf '%s\n' '{"hook_event_name":"Notification","message":"permission requested"}' \
+  | sh "$CLAIR_AGENT_HOOK_RECEIVER"
+```
+
+The event should appear in Activity history without exposing unrelated fields from the
+payload. The receiver's inbox and the channel-local history file are outside the
+Project repository and should be owner-only. The coordinator ignores unknown or
+oversized JSONL entries.
+
+The automated P09 checks are:
+
+```sh
+swift format lint --recursive --parallel --strict apple
+ruby scripts/validate-xcode-project.rb
+xcodebuild -project Clair.xcodeproj -scheme "Clair Dev" \
+  -destination 'platform=macOS,arch=arm64' -configuration Debug \
+  -derivedDataPath .build/xcode/p09-tests CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGNING_REQUIRED=NO test
+cargo test --workspace --locked
+```
+
+The XCTest suite covers profile commands, lifecycle/history persistence, hook
+decoding, mute/notification policy, and terminal bell effects. The Rust suite covers
+the unchanged local PTY/broker boundary; the broker integration tests require a local
+macOS process environment because they create Unix sockets.
+
 ## Run the PTY host smoke path
 
 ```sh

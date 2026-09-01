@@ -2,7 +2,7 @@
 
 ## Status
 
-Current as of local PoC item `P08 Git working-tree loop`.
+Current as of local PoC item `P09 Raw agent workflow and attention`.
 
 ## Workspace boundary
 
@@ -193,12 +193,48 @@ abnormal process restart.
 On restore, the surface rebuilds runtime objects from the descriptors. Editor tabs whose
 paths are outside the Project root, missing, or directories are filtered out; terminal
 descriptors carry their stable `SessionID` and attempt broker reattach from cursor zero,
-while diff descriptors render the selected Git diff when a P08 Git change is active. A missing or
-expired session is shown as unavailable and offers **Start New Session** without
+while diff descriptors render the selected Git diff when a P08 Git change is active. A
+missing or expired session is shown as unavailable and offers **Start New Session** without
 changing the workspace descriptor. A missing workspace file starts with one empty
 pane. A malformed or unsupported top-level snapshot leaves the Project catalog intact
 and starts the affected surface from the same default; malformed individual surface
 entries are discarded while valid Project surfaces remain available.
+
+## Raw agent workflow and attention
+
+P09 keeps agent execution inside the existing local PTY path. The fixed launch profiles
+are Claude Code (`claude`), Codex (`codex`), and OpenCode (`opencode`). Launching a
+profile creates a new terminal tab on the selected Project surface, records the stable
+profile ID in the workspace descriptor, and sends a shell-quoted command that changes
+to the Project root before `exec`-ing the profile. Each launch uses the terminal's
+stable `SessionID`, so multiple agents can share one Project without sharing a tab or
+mixing activity scopes. Managed worktrees and semantic vendor adapters remain outside
+this item.
+
+`TerminalSession` publishes lifecycle, output, exit, and failure events to the agent
+coordinator. The transcript sanitizer exposes only ground-state BEL bytes as attention
+effects; the BEL or ST terminator of an OSC sequence is discarded and cannot create a
+false attention event. The coordinator records bounded Project/session-scoped Activity
+entries for terminal bells and exits, persists them in the channel-local
+`agent-activity-v1.json`, and applies optional Project or session mute state before
+calling the macOS UserNotifications adapter. Agent history contains normalized,
+bounded summaries only; raw hook payloads are not retained in Activity history and the transient inbox is drained and truncated.
+
+An optional `scripts/agent-hook.sh` resource is exposed to a launched agent through
+`CLAIR_AGENT_HOOK_RECEIVER` and `CLAIR_AGENT_HOOK_FILE`. It accepts the agent's
+documented JSON hook payload on stdin and appends one compact JSONL record to a
+0700 per-channel inbox. The coordinator bounds, decodes, and drains known event kinds
+(`session start`, `stop`, `permission/attention`, `notification`, and `failure`) while
+ignoring malformed, unknown, oversized, and secret-looking summaries. The Agents panel
+can reveal a running or completed session's terminal and configure Project/session
+mute state. Project surfaces remain cached while switching Projects, so a launched
+agent continues in the background of the selected app process.
+
+P09 deliberately does not persist PTY transcript bytes, rewrite vendor configuration,
+or claim that a CLI is installed. If a profile executable is unavailable, its terminal
+shows the normal shell failure and records the resulting exit status. App-window and
+PTY continuity across app restart remain the P07 broker boundary; a broker restart
+still requires the existing terminal recovery path.
 
 ## Native editor and disk safety
 
@@ -283,7 +319,11 @@ command because the minimal committed workspace is rejected.
 `apple/ClairTests/TerminalTests.swift` covers partial/batched broker frame decoding,
 large complete batches, binary UTF-8 input, attachment/output/error/gap validation,
 stable terminal SessionID persistence, split escape-sequence sanitization, and
-transcript UTF-8 trimming. Rust unit and integration tests cover PTY shell commands,
+transcript UTF-8 trimming, and ground BEL versus OSC-terminator activity effects.
+`apple/ClairTests/AgentWorkflowTests.swift` and `AgentActivityTests.swift` cover fixed
+profile identity, shell quoting, lifecycle persistence, bounded activity history,
+mute precedence, hook decoding/redaction, and notification dispatch. Rust unit and
+integration tests cover PTY shell commands,
 resize, CJK/OSC bytes, output flood, broker reattach after client disconnect, missing
 sessions, bounded malformed frames, slow-consumer gaps, and child reaping.
 

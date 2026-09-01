@@ -161,6 +161,11 @@ struct TerminalDimensions: Equatable, Sendable {
   let columns: UInt16
 }
 
+struct TerminalOutputEffects: Equatable, Sendable {
+  let filtered: Data
+  let bellCount: Int
+}
+
 struct TerminalOutputSanitizer {
   private enum State {
     case ground
@@ -173,11 +178,16 @@ struct TerminalOutputSanitizer {
   private var state: State = .ground
 
   mutating func filter(_ data: Data) -> Data {
+    filterWithEffects(data).filtered
+  }
+
+  mutating func filterWithEffects(_ data: Data) -> TerminalOutputEffects {
     var filtered = Data()
+    var bellCount = 0
     for byte in data {
       switch state {
       case .ground:
-        consumeGround(byte, into: &filtered)
+        consumeGround(byte, into: &filtered, bellCount: &bellCount)
       case .escape:
         consumeEscape(byte)
       case .csi:
@@ -198,17 +208,23 @@ struct TerminalOutputSanitizer {
         }
       }
     }
-    return filtered
+    return TerminalOutputEffects(filtered: filtered, bellCount: bellCount)
   }
 
-  private mutating func consumeGround(_ byte: UInt8, into filtered: inout Data) {
+  private mutating func consumeGround(
+    _ byte: UInt8,
+    into filtered: inout Data,
+    bellCount: inout Int
+  ) {
     switch byte {
     case 0x1b:
       state = .escape
-    case 0x08, 0x0d, 0x07:
+    case 0x08, 0x0d:
       // A plain transcript cannot faithfully redraw a cursor position. Drop
       // these controls while retaining the following line feed and text.
       break
+    case 0x07:
+      bellCount += 1
     case 0x09, 0x0a:
       filtered.append(byte)
     case 0x20...0x7e, 0x80...0xff:
@@ -241,9 +257,12 @@ struct TerminalTranscriptBuffer {
     self.maximumBytes = max(1, maximumBytes)
   }
 
-  mutating func append(_ output: Data) {
-    data.append(sanitizer.filter(output))
+  @discardableResult
+  mutating func append(_ output: Data) -> TerminalOutputEffects {
+    let effects = sanitizer.filterWithEffects(output)
+    data.append(effects.filtered)
     trimIfNeeded()
+    return effects
   }
 
   var string: String {
