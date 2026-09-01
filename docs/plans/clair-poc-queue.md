@@ -435,6 +435,14 @@ P14はADR-0009でdecision blockerを解消して完了した。P15Dはdecision b
 - Depends on: P05、P06、P09、P11、P12、P15A、P15B。
 - Outcome: native SwiftUI/AppKit appをInteraction Labのproject-first ccedit contractへ収束させ、
   WebViewなしでM1のdaily-driver hierarchyとdensityを実現する。
+- Competitive reference (2026-09-02): [Orca ADE](https://www.onorca.dev/)の現行desktop UIを、
+  modern agent IDEのquality barとして参照する。P15C着手時に参照version/dateとscreen/flow evidenceを固定し、
+  Project/worktree/session overview、active agent attention、editor/terminal split、search/command、diff/review、
+  narrow/wide windowの同一taskをInteraction Lab・Orca・native Clairで比較する。
+- Competitive rule: Orcaのsource、asset、visual identityを模倣せず、情報階層、状態の判読性、直接操作、
+  feedback速度から有効なpatternだけを抽出する。利用者がOrcaで感じた「もう少しこうしたい」を、P15C開始前に
+  `adopt`、`avoid`、`surpass`のevidence matrixへ落とし、少なくとも一つのsurpass behaviorを明示する。
+  Browser/Design Mode、remote worktree等のM1外機能をUI比較だけを理由にP15Cへ追加しない。
 - Scope: traffic lightsと同じtitlebar rowのcolored Project groups、expanded group内のactive file/terminal、
   Project切替時のroot/active surface/split/ratio restore、Files/Search/Git/Review/Notifications-Historyの
   first-class activity bar、右titlebarのCommand Window/Settings、compact One Dark styling、status bar、
@@ -442,7 +450,8 @@ P14はADR-0009でdecision blockerを解消して完了した。P15Dはdecision b
   terminalのままとし、semantic Agent paneや終了済みterminal transcript storeを導入しない。
 - Functional checks: 3 Projects、editor-only、terminal below/right、mixed nested split、group collapse/expand、
   active surface切替、Command Window/Settings、activity viewのfilter/search/resume、badge/mute、restart restore、
-  narrow/wide window、keyboard/accessibility navigation。
+  narrow/wide window、keyboard/accessibility navigation。固定したOrca比較taskを利用者とside-by-sideで実行し、
+  `adopt`項目がClairのownership modelを壊さず機能し、`surpass`項目が再現可能な操作として確認できる。
 - Audit evidence (2026-09-01): native appはvertical Projects sidebar、separate Files sidebar、top button row、
   pane-local toolbarとsecond tab row、modal sheets、system dark appearanceであり、Interaction Labのtitlebar groups、
   activity hierarchy、right actions、One Dark density、status/attention presentationと一致していない。
