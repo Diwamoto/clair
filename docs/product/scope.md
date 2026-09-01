@@ -71,7 +71,8 @@
 
 - Clair StableとClair Devを別bundle ID、別settings領域で並行起動する。
 - StableからClair sourceを開き、terminal/agentでDevをbuild・起動し、変更を確認できる。
-- GitHub Actionsで署名・notarizeしたMac buildを発行する。
+- GitHub ActionsでStable artifactにClair updater署名を付け、公開GitHub Releaseへ発行する。
+  Apple Developer ID signingとnotarizationは、正式な一般配布が必要になるまで後続判断とする。
 - cceditと同様にapp内でupdateを表示し、利用者のclickでdownload・reattach・restartする。
 - cceditより明確に快適だと利用者が体感できる。
 

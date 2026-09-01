@@ -1,0 +1,113 @@
+name: Stable release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: stable-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: macos-14
+    timeout-minutes: 30
+
+    env:
+      CARGO_TERM_COLOR: always
+      CLAIR_UPDATE_PRIVATE_KEY: ${{ secrets.CLAIR_UPDATE_PRIVATE_KEY }}
+      CLAIR_UPDATE_PUBLIC_KEY: ${{ vars.CLAIR_UPDATE_PUBLIC_KEY }}
+
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v7
+
+      - name: Select repository Rust toolchain
+        run: |
+          rustup toolchain install 1.98.0 --profile minimal
+          rustup show active-toolchain
+
+      - name: Validate release inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          if [[ ! "$version" =~ ^[0-9]+(\.[0-9]+){0,3}$ ]]; then
+            printf 'Stable release tags must be v<major>[.<minor>[.<patch>[.<revision>]]].\n' >&2
+            exit 1
+          fi
+          if [[ -z "$CLAIR_UPDATE_PRIVATE_KEY" || -z "$CLAIR_UPDATE_PUBLIC_KEY" ]]; then
+            printf 'Configure CLAIR_UPDATE_PRIVATE_KEY (secret) and CLAIR_UPDATE_PUBLIC_KEY (variable).\n' >&2
+            exit 1
+          fi
+          printf 'Preparing Stable v%s.\n' "$version"
+
+      - name: Build unsigned Stable app
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          derived_data="$RUNNER_TEMP/clair-stable-derived-data"
+          xcodebuild \
+            -project Clair.xcodeproj \
+            -scheme "Clair Stable" \
+            -configuration Release \
+            -derivedDataPath "$derived_data" \
+            MARKETING_VERSION="$version" \
+            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
+            CLAIR_UPDATE_PUBLIC_KEY="$CLAIR_UPDATE_PUBLIC_KEY" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+
+          app_path="$derived_data/Build/Products/Release/Clair.app"
+          test -d "$app_path"
+          install -m 0755 target/release/clair-ptyhost "$app_path/Contents/Resources/clair-ptyhost"
+          test -x "$app_path/Contents/Resources/clair-ptyhost"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$app_path/Contents/Info.plist" | grep -Fx "$version"
+          /usr/libexec/PlistBuddy -c "Print :ClairUpdatePublicKey" "$app_path/Contents/Info.plist" | grep -Fx "$CLAIR_UPDATE_PUBLIC_KEY"
+
+      - name: Package and sign update manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          derived_data="$RUNNER_TEMP/clair-stable-derived-data"
+          app_path="$derived_data/Build/Products/Release/Clair.app"
+          asset_name="Clair-${version}-macos-arm64.zip"
+          archive_path="$RUNNER_TEMP/$asset_name"
+          manifest_path="$RUNNER_TEMP/latest.json"
+          asset_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${version}/${asset_name}"
+
+          ditto -c -k --sequesterRsrc --keepParent "$app_path" "$archive_path"
+          xcrun swift scripts/generate-update-manifest.swift \
+            --version "$version" \
+            --private-key-env CLAIR_UPDATE_PRIVATE_KEY \
+            --public-key "$CLAIR_UPDATE_PUBLIC_KEY" \
+            --output "$manifest_path" \
+            --notes "Stable release v${version}" \
+            --artifact arm64 "$asset_url" "$archive_path"
+
+          test -s "$archive_path"
+          test -s "$manifest_path"
+          printf 'CLAIR_ARCHIVE_PATH=%s\n' "$archive_path" >> "$GITHUB_ENV"
+          printf 'CLAIR_MANIFEST_PATH=%s\n' "$manifest_path" >> "$GITHUB_ENV"
+
+      - name: Publish GitHub Release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" \
+            "$CLAIR_ARCHIVE_PATH" \
+            "$CLAIR_MANIFEST_PATH" \
+            --title "Clair v${version}" \
+            --generate-notes \
+            --latest

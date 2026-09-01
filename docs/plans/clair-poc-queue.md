@@ -58,8 +58,8 @@ P01から最小kernelを育て、後から既存featureを別実装へ置き換�
 
 現在の実装waveではP15AとP15Bを明示IDごとのlinked worktreeで並列実装できる。
 各workerは`clair-issue-executor`のleaseを取得し、自itemだけをcommitしてpush/merge/next昇格を行わない。
-P14とP15Dはそれぞれのdecision blockerが解消されるまでworkerへ割り当てない。P15CはP15A/P15Bの
-統合後、P15はP14/P15C/P15Dの統合後にだけ開始する。
+P14はADR-0009でdecision blockerを解消して完了した。P15Dはdecision blockerが解消されるまでworkerへ
+割り当てない。P15CはP15A/P15Bの統合後、P15はP14/P15C/P15Dの統合後にだけ開始する。
 
 ## Active queue
 
@@ -370,9 +370,10 @@ P14とP15Dはそれぞれのdecision blockerが解消されるまでworkerへ割
 
 ### P14 Release, update, and restart handoff
 
-- Status: `queued`
+- Status: `done`
+- Completed: `Codex agent — P14 Stable GitHub update distribution and restart handoff (2026-09-01)`
 - Depends on: P07。
-- Outcome: signed personal buildを配布し、click update後にsessionへreattachできる。
+- Outcome: Stableを公開GitHub Releaseへ配布し、署名/hash検証後のclick updateでsessionへreattachできる。
 - Scope: signing/notarization、verified feed、Stable/Dev channel、download/restart、retry/rollbackに加え、
   window close、explicit app Quit、crash、update restartのlifecycleを区別する。Window closeはsessionを継続し、
   explicit Quitは通常sessionを終了し、crash/update restartはbrokerを維持してreattachする。
@@ -387,6 +388,19 @@ P14とP15Dはそれぞれのdecision blockerが解消されるまでworkerへ割
   GitHub Releases for Stable only, local-only Dev, signed update artifacts without Apple Developer ID/notarization,
   startup check with user-triggered apply/restart, `/Applications/Clair.app` as the Stable install target, and
   backup/restore rollback. The update restart keeps the channel-local broker alive for session reattach.
+- Validation (2026-09-01): `swift format lint --recursive --parallel --strict apple` and the two release
+  Swift-script format/type checks passed. `ruby scripts/validate-xcode-project.rb`, `plutil -lint
+  Config/Info.plist`, `git diff --check`, and `scripts/smoke-app-link.sh` passed. Project-scoped
+  `Clair Dev` and `Clair Stable` Debug builds passed, the Stable Release build passed with an injected
+  public key/version and verified those Info.plist values, the P14-focused update tests passed, and
+  the full `ClairTests` suite passed. A packaged app generated `latest.json` through the release
+  script using the environment-backed private key path; the signed Stable manifest smoke passed.
+- Durable detail: [ADR-0009](../decisions/0009-stable-github-update-distribution.md), [development workspace
+  architecture](../architecture/development-workspace.md), and [Stable release runbook](../runbooks/stable-release.md)
+  document the Stable-only feed, Ed25519 artifact contract, release secret boundary, `/Applications/Clair.app`
+  install guard, backup/restore helper, and broker/session lifecycle.
+- Deferred: Apple Developer ID signing, Team ID/notarization, Gatekeeper-friendly general distribution,
+  x86_64/universal assets, and additional update channels remain outside this personal Stable slice.
 - Legacy issue coverage: #18。
 
 ### P15A Production terminal surface
@@ -484,11 +498,11 @@ GitHub issueは2026-09-01以降のtask source of truthとして使わない。�
 | Legacy issue | Local authority | Archive disposition |
 |---|---|---|
 | #1 | roadmap全体とこのqueue | superseded by local roadmap |
-| #2 | product docs、ADR-0008、P14 blocker | remaining release boundary moved to P14 |
+| #2 | product docs、ADR-0008、ADR-0009 | release boundary resolved in P14; Apple distribution remains deferred |
 | #3 | P00 | completed |
 | #4 | `docs/benchmarks` contract/tooling、実計測はL01 | contract completed; measurement remains L01 |
 | #5 | P03、P15A | feasibility completed; production renderer remains P15A |
-| #6 | P03、P07、P14、L01 | local transport/reattach completed; lifecycle/recovery gates remain local |
+| #6 | P03、P07、P14、L01 | local transport/reattach/lifecycle completed; load testing remains L01 |
 | #7、#8 | P15D | architecture mismatch moved to blocked reconciliation |
 | #9 | P01、P05、P15C | model/persistence completed; Interaction Lab UI remains P15C |
 | #10 | P02、P06、P15B、P15C | functional slice completed; scale/UI convergence remains local |
@@ -499,7 +513,7 @@ GitHub issueは2026-09-01以降のtask source of truthとして使わない。�
 | #15 | P09、P10 | completed |
 | #16 | P13 | completed |
 | #17 | L01 | final-only |
-| #18 | P07、P14 | release/update work remains blocked in P14 |
+| #18 | P07、P14 | local session lifecycle and Stable release/update slice completed; Apple distribution remains deferred |
 | #19 | P15 | queued cutover |
 | #20 | roadmap M3A | deferred beyond M1 |
 | #21 | roadmap Optional later additions | deferred beyond M1 |

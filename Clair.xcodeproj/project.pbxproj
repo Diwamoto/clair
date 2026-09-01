@@ -65,6 +65,11 @@
 		A000000000000000000000A6 /* CommandAdapters.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000A1 /* CommandAdapters.swift */; };
 		A000000000000000000000A7 /* CommandIPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000A2 /* CommandIPC.swift */; };
 		A000000000000000000000A8 /* CommandAdapterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000A3 /* CommandAdapterTests.swift */; };
+		A000000000000000000000B0 /* ClairUpdate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B5 /* ClairUpdate.swift */; };
+		A000000000000000000000B1 /* ClairLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B6 /* ClairLifecycle.swift */; };
+		A000000000000000000000B2 /* ClairUpdate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B5 /* ClairUpdate.swift */; };
+		A000000000000000000000B3 /* ClairLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B6 /* ClairLifecycle.swift */; };
+		A000000000000000000000B4 /* ClairUpdateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B7 /* ClairUpdateTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -119,6 +124,10 @@
 		A000000000000000000000A1 /* CommandAdapters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandAdapters.swift; sourceTree = "<group>"; };
 		A000000000000000000000A2 /* CommandIPC.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandIPC.swift; sourceTree = "<group>"; };
 		A000000000000000000000A3 /* CommandAdapterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandAdapterTests.swift; sourceTree = "<group>"; };
+		A000000000000000000000B5 /* ClairUpdate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClairUpdate.swift; sourceTree = "<group>"; };
+		A000000000000000000000B6 /* ClairLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClairLifecycle.swift; sourceTree = "<group>"; };
+		A000000000000000000000B7 /* ClairUpdateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClairUpdateTests.swift; sourceTree = "<group>"; };
+		A000000000000000000000B8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A00000000000000000000021 /* Clair.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Clair.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A00000000000000000000022 /* Clair Dev.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Clair Dev.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A00000000000000000000023 /* ClairTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ClairTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -172,6 +181,7 @@
 		A00000000000000000000004 /* Config */ = {
 			isa = PBXGroup;
 			children = (
+				A000000000000000000000B8 /* Info.plist */,
 				A00000000000000000000019 /* Base.xcconfig */,
 				A0000000000000000000001A /* App.xcconfig */,
 				A0000000000000000000001B /* Stable.xcconfig */,
@@ -216,6 +226,8 @@
 				A000000000000000000000A0 /* CommandSurfaces.swift */,
 				A000000000000000000000A1 /* CommandAdapters.swift */,
 				A000000000000000000000A2 /* CommandIPC.swift */,
+				A000000000000000000000B5 /* ClairUpdate.swift */,
+				A000000000000000000000B6 /* ClairLifecycle.swift */,
 				A00000000000000000000016 /* Clair-Bridging-Header.h */,
 			);
 			path = ClairApp;
@@ -234,6 +246,7 @@
 				A00000000000000000000095 /* AgentActivityTests.swift */,
 				A00000000000000000000098 /* ManagedWorktreeTests.swift */,
 				A000000000000000000000A3 /* CommandAdapterTests.swift */,
+				A000000000000000000000B7 /* ClairUpdateTests.swift */,
 			);
 			path = ClairTests;
 			sourceTree = "<group>";
@@ -442,6 +455,8 @@
 				A0000000000000000000009D /* CommandSurfaces.swift in Sources */,
 				A000000000000000000000A4 /* CommandAdapters.swift in Sources */,
 				A000000000000000000000A5 /* CommandIPC.swift in Sources */,
+				A000000000000000000000B0 /* ClairUpdate.swift in Sources */,
+				A000000000000000000000B1 /* ClairLifecycle.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -472,6 +487,8 @@
 				A0000000000000000000009E /* CommandSurfaces.swift in Sources */,
 				A000000000000000000000A6 /* CommandAdapters.swift in Sources */,
 				A000000000000000000000A7 /* CommandIPC.swift in Sources */,
+				A000000000000000000000B2 /* ClairUpdate.swift in Sources */,
+				A000000000000000000000B3 /* ClairLifecycle.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -489,6 +506,7 @@
 				A0000000000000000000008E /* AgentWorkflowTests.swift in Sources */,
 				A0000000000000000000009C /* ManagedWorktreeTests.swift in Sources */,
 				A000000000000000000000A8 /* CommandAdapterTests.swift in Sources */,
+				A000000000000000000000B4 /* ClairUpdateTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

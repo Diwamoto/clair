@@ -1,6 +1,6 @@
 import Foundation
 
-enum ClairChannel: String, CaseIterable, Sendable {
+enum ClairChannel: String, CaseIterable, Codable, Sendable {
   case stable
   case dev
 }

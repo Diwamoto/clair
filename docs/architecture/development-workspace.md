@@ -2,7 +2,7 @@
 
 ## Status
 
-Current as of local PoC item `P13 CLI and MCP adapters`.
+Current as of local PoC item `P14 Release, update, and restart handoff`.
 
 ## Workspace boundary
 
@@ -98,6 +98,36 @@ that can be built and linked reproducibly. Therefore P03 records the AppKit nati
 fallback as the verified surface and leaves the libghostty embed as an explicit
 follow-up blocker. P07 owns stable session identity, metadata persistence, reattach,
 and cross-process backpressure; the terminal transcript remains an in-memory view.
+
+## Stable release, update, and lifecycle handoff
+
+The Stable target is the only public distribution channel. The `Stable release`
+workflow builds an unsigned `Clair.app` in Release configuration, embeds the release
+`clair-ptyhost` resource, packages an arm64 zip, and publishes the zip plus a signed
+`latest.json` to a GitHub Release. A release artifact is authenticated separately from
+Apple code signing: the manifest contains an Ed25519 signature over its channel,
+version, platform, architecture, URL, and SHA-256. The public key is injected into the
+Stable Info.plist at release build time; the private key exists only in the Actions
+secret boundary. The manifest generator and app verifier share the version-1 canonical
+payload contract. See [ADR-0009](../decisions/0009-stable-github-update-distribution.md)
+and the [Stable release runbook](../runbooks/stable-release.md).
+
+Stable checks the public feed five seconds after launch and hourly thereafter, but a
+check only changes the UI state. The user must select **Restart and install** before
+download, hash/signature verification, staging, or replacement begins. Dev has no feed,
+public key, or update checks and remains local-only. Stable updates are accepted only
+when the running bundle is `/Applications/Clair.app`; local Debug and Dev bundles are
+never replaced.
+
+The update installer downloads into channel-local Application Support, validates the
+archive bundle identity/version, records a pending version, and starts a detached
+helper. The helper waits for the current process, moves the installed app to a backup,
+places the staged app, and waits for the new process to write a matching startup
+success marker. Any timeout or mismatch restores the backup and relaunches it. Update
+restart is a distinct termination reason: it leaves the detached broker and PTY
+sessions alive, while the new process reattaches terminal descriptors by stable
+`SessionID`. Closing a window has the same continuity behavior. Only an explicit app
+Quit invokes normal session termination.
 
 ## Project and command kernel
 
@@ -479,4 +509,6 @@ disk writes, project-scoped history ordering, and Project-root path validation.
   syntax highlighting, LSP, or multi-cursor editing. The P08/P10/P11/P12/P13 Git and
   command loop currently uses the local `/usr/bin/git` bridge; discard, blame, review
   comments, and AI briefs remain later queue items.
-- Formal app icons, signing, notarization, and update delivery are not present.
+- Formal app icons, Apple Developer ID signing, and notarization are not present.
+  Stable update delivery is available through the unsigned GitHub Release workflow;
+  Gatekeeper-friendly public distribution and additional architectures remain deferred.

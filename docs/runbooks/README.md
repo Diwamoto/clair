@@ -16,3 +16,4 @@ development、release、migration、rollback、recoveryなど、人またはagen
 Current runbooks:
 
 - [Local development](local-development.md)
+- [Stable release and update](stable-release.md)

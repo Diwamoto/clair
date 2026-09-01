@@ -71,6 +71,18 @@ final class ProjectWorkspaceModel: ObservableObject {
     lastErrorMessage = nil
   }
 
+  func reattachRuntimeSessions() {
+    for surface in surfaces.values {
+      surface.reattachRuntimeSessions()
+    }
+  }
+
+  func terminateAllTerminalSessions() {
+    for surface in surfaces.values {
+      surface.terminateAllTerminalSessions()
+    }
+  }
+
   func preflight(_ command: ClairCommand) -> CommandPreflight {
     commandRegistry.preflight(command, state: commandState)
   }
@@ -1483,6 +1495,19 @@ final class ProjectSurfaceModel: ObservableObject {
       }
     }
     return nil
+  }
+
+  func reattachRuntimeSessions() {
+    for session in terminalSessions.values {
+      session.start()
+    }
+  }
+
+  func terminateAllTerminalSessions() {
+    for session in terminalSessions.values {
+      session.stop()
+    }
+    terminalSessions.removeAll()
   }
 
   private func stopTerminalSessions(in leaf: ProjectPaneLeaf) {

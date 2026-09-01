@@ -6,6 +6,7 @@ struct ContentView: View {
   @ObservedObject var workspace: ProjectWorkspaceModel
   @ObservedObject var agentWorkflow: AgentWorkflowCoordinator
   @ObservedObject var worktreeCoordinator: ProjectWorktreeCoordinator
+  @ObservedObject var updater: ClairUpdateCoordinator
 
   @State private var renameProjectID: UUID?
   @State private var renameValue = ""
@@ -34,6 +35,13 @@ struct ContentView: View {
       }
     } message: {
       Text(workspace.lastErrorMessage ?? "Unknown Project error.")
+    }
+    .onAppear {
+      workspace.reattachRuntimeSessions()
+    }
+    .overlay(alignment: .bottomTrailing) {
+      ClairUpdateNotice(updater: updater)
+        .padding(12)
     }
   }
 

@@ -39,6 +39,8 @@ for channel in stable dev; do
         -L "$repo_root/target/debug" \
         -lclair_core \
         "$repo_root/apple/ClairApp/ClairApp.swift" \
+        "$repo_root/apple/ClairApp/ClairUpdate.swift" \
+        "$repo_root/apple/ClairApp/ClairLifecycle.swift" \
         "$repo_root/apple/ClairApp/ClairRuntimeProfile.swift" \
         "$repo_root/apple/ClairApp/RustCore.swift" \
         "$repo_root/apple/ClairApp/BootstrapState.swift" \
