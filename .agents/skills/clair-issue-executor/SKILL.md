@@ -25,6 +25,20 @@ Accept an explicit item ID such as `P13`, `P15A`, or `L01`. Accept `next` only f
 serial work. Parallel workers must receive explicit, different IDs; never let two
 workers independently resolve `next`.
 
+## User-facing language
+
+Use Japanese for every user-facing commentary update, plan/status explanation,
+clarifying or decision question, warning, blocker, error summary, and final
+report. Do not switch to English merely because the source code or durable docs
+are written in English.
+
+Keep item IDs, code identifiers, commands, paths, API/type names, commit subjects,
+and raw tool/test output in their original form when translation would reduce
+accuracy. When raw output is English, summarize its outcome and required action
+in Japanese; do not leave an untranslated log as the only explanation. Preserve
+the existing language and style of repository files instead of translating
+unrelated durable documentation.
+
 ## Deterministic selection and lease
 
 Run the bundled helper from the repository root before changing files:
