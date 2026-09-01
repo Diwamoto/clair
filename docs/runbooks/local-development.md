@@ -435,6 +435,38 @@ inside the sandbox. The suite covers external managed roots, stable identity and
 restart discovery, missing/detached states, root persistence, dirty/active/wrong-
 target cleanup refusal, cleanup fingerprint checks, and catalog path validation.
 
+## Verify branch review and adoption (P11)
+
+Run the focused validation for the branch-wide review and adoption boundary:
+
+```sh
+swift format lint --strict apple/ClairApp/ProjectGit.swift \
+  apple/ClairApp/ContentView.swift apple/ClairTests/ProjectGitTests.swift
+ruby scripts/validate-xcode-project.rb
+xcodebuild -project Clair.xcodeproj -scheme "Clair Dev" \
+  -destination 'platform=macOS,arch=arm64' -configuration Debug \
+  -derivedDataPath .build/xcode/p11-tests CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGNING_REQUIRED=NO -only-testing:ClairTests/ProjectGitTests test
+```
+
+Open a Git Project and create a disposable managed worktree from **Agents**. In
+**Branch Review**, confirm that the base-to-HEAD commit list and committed diff are
+shown separately from source uncommitted changes. Add a source untracked file and
+verify that **Prepare Adoption** reports the source-dirty guard; make the Project root
+dirty as well and verify the target-dirty guard. Cancel **Clean Up** and confirm that
+the managed path, catalog entry, and branch remain.
+
+After both roots are clean, prepare adoption and confirm **Adopt with Merge Commit**.
+The Project root should remain clean and its new HEAD should have two parents; the
+source worktree and branch should remain unchanged. For a disposable divergent change,
+adoption should report the conflicted paths and leave the target in a merge state for
+resolution by the owning agent or native editor. Refresh Git status after resolving or
+aborting that merge before attempting another adoption. A plan made before a source or
+target HEAD changes must be rejected as stale and prepared again.
+
+With the current Xcode 26 environment, XCTest may require execution outside the
+restricted shell because its `testmanagerd` service is unavailable inside the sandbox.
+
 ## Verify human command surfaces (P12)
 
 Build and test Dev with the project-scoped command used by the current Xcode

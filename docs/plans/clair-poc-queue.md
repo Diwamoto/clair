@@ -22,6 +22,17 @@ discussionや外部共有が必要な場合だけ使い、通常のPoC実装で�
 Benchmark corpus、反復timing、Instruments、percentile、ccedit V1比較は行わない。Crash、data loss、
 corrupt state fallback、protocol/frame boundは安全性のcorrectness testとして通常itemに含める。
 
+P12以降は、利用者が起動できるoperationをview固有callbackだけで実装しない。各operationはstableな
+command ID、typed parameter/result/error、static risk、`aiAvailable`、deterministic runtime preflightを持つ。
+後続itemは同じregistryを拡張し、P13のCLI/MCPへ自動的に投影できる状態で完了する。
+
+Interaction LabはM1 UIのacceptance evidenceとして扱う。native実装の正本はこのqueue、product docs、
+accepted ADRだが、明示的に変更されない限り、次をUI contractとする: One Darkを基調にしたcompactな
+desktop-native appearance、traffic lightsと同じtitlebar rowのProject group、Projectごとのroot/active
+surface/terminal layout restore、group内のfile/terminal item、右端のCommand Window/Settings、first-classな
+Notifications/History activity。Clairは終了済みterminal transcriptを保存せず、保持したsession metadataから
+live terminalまたは所有Projectへ戻す。
+
 ## Dependency map
 
 ```text
@@ -33,13 +44,21 @@ P03 -> P07
 {P05, P07} -> P09
 {P08, P09} -> P10 -> P11
 P01 -> P12
-{P04, P12} -> P13
+{P06, P11, P12} -> P13
 P07 -> P14
-{P06, P11, P13, P14} -> P15 -> L01
+{P03, P07, P09} -> P15A
+P06 -> P15B
+{P05, P06, P09, P11, P12, P15A, P15B} -> P15C
+{P13, P14, P15C} -> P15 -> L01
 ```
 
 P02とP03、P06/P07/P08は独立agentまたは別worktreeで並列実装できる。P12のCommand Registryは
 P01から最小kernelを育て、後から既存featureを別実装へ置き換えない。
+
+現在の次waveではP13、P14、P15A、P15Bを明示IDごとのlinked worktreeで並列実装できる。
+各workerは`clair-issue-executor`のleaseを取得し、自itemだけをcommitしてpush/merge/next昇格を行わない。
+統合はP13を先にしたserial stepとし、shared Command Registry seamのadditive conflictを解消してから
+P15Cへ進む。P15CはP15A/P15B、P15はP13/P14/P15Cの統合後にだけ開始する。
 
 ## Active queue
 
@@ -271,18 +290,29 @@ P01から最小kernelを育て、後から既存featureを別実装へ置き換�
   and [local development runbook](../runbooks/local-development.md) document the
   repository-external catalog/managed-root layout, stable identity propagation,
   restart discovery, launch selection, and cleanup guards.
-- Deferred: branch review/adoption, merge/conflict handling, and review comments remain P11;
-  CLI/MCP command surfaces remain P12/P13. Catalog/Git crash journaling and semantic
+- Deferred: review comments, blame, and AI briefs remain outside this local slice;
+  CLI/MCP command adapters remain P13. Catalog/Git crash journaling and semantic
   vendor adapters are outside this local vertical slice.
 - Legacy issue coverage: #22のoptional worktree subset。
 
 ### P11 Branch review and adoption
 
-- Status: `next`
+- Status: `done`
+- Completed: `Codex agent — P11 branch review and adoption (2026-09-01)`
 - Depends on: P10。
 - Outcome: baseからbranch全体の成果をreviewし、clean commitからmerge commitで採用できる。
 - Scope: committed/uncommitted separation、commit gate、merge、native three-way conflict surfaceまたはowning agent handoff、branch/worktree個別cleanup確認。
 - Functional checks: clean adoption、dirty refusal、conflict resolution path、cleanup cancellation。
+- Validation (2026-09-01): project-scoped macOS XCTest `ProjectGitTests` passed all 11
+  cases, including committed/uncommitted separation, source and target dirty gates,
+  clean two-parent adoption, conflict-state preservation, stale-plan refusal, and
+  cleanup cancellation. Focused `swift format lint --strict` passed for the P11 Swift
+  files, `ruby scripts/validate-xcode-project.rb Clair.xcodeproj`, and `git diff --check`
+  passed.
+- Durable detail: [development workspace architecture](../architecture/development-workspace.md)
+  and [local development runbook](../runbooks/local-development.md) document the
+  branch-wide review snapshot, confirmation gates, merge/conflict handoff, and
+  independent worktree cleanup.
 - Deferred: review comments、blame、AI brief。
 - Legacy issue coverage: #14、#22のadoption subset。
 
@@ -309,11 +339,15 @@ P01から最小kernelを育て、後から既存featureを別実装へ置き換�
 
 ### P13 CLI and MCP adapters
 
-- Status: `queued`
-- Depends on: P04、P12。
+- Status: `next`
+- Depends on: P06、P11、P12。
 - Outcome: `clair open path:line:column`とstdio MCPがGUIと同じCommandを呼ぶ。
-- Scope: warm/cold local IPC、longest-prefix Project routing、JSON error、`aiAvailable` filter、static risk、runtime preflight、GUI approval。
-- Functional checks: warm/cold open、line/column routing、MCP list/call、allow/deny/unavailable matrix。
+- Scope: adapter実装前にP00-P12のuser-invokable operationを棚卸しし、Project、navigation/editor、
+  pane、terminal、agent、worktree、Git/review、notificationを共通Registryへ登録する。その上でwarm/cold
+  local IPC、longest-prefix Project routing、JSON error、`aiAvailable` filter、static risk、runtime
+  preflight、GUI approvalを実装する。
+- Functional checks: human surface/CLI/MCPのcommand coverage matrix、同じID/typed result/errorのdispatch、
+  warm/cold open、line/column routing、MCP list/call、allow/deny/unavailable matrix。
 - Legacy issue coverage: #36、#37。
 
 ### P14 Release, update, and restart handoff
@@ -321,14 +355,61 @@ P01から最小kernelを育て、後から既存featureを別実装へ置き換�
 - Status: `queued`
 - Depends on: P07。
 - Outcome: signed personal buildを配布し、click update後にsessionへreattachできる。
-- Scope: signing/notarization、verified feed、Stable/Dev channel、download/restart、retry/rollback。
-- Functional checks: update success/failure/rollback、session handoff、channel isolation。
+- Scope: signing/notarization、verified feed、Stable/Dev channel、download/restart、retry/rollbackに加え、
+  window close、explicit app Quit、crash、update restartのlifecycleを区別する。Window closeはsessionを継続し、
+  explicit Quitは通常sessionを終了し、crash/update restartはbrokerを維持してreattachする。
+- Functional checks: update success/failure/rollback、window closeとexplicit Quitの終了差、crash/update
+  session handoff、channel isolation。
 - Legacy issue coverage: #18。
+
+### P15A Production terminal surface
+
+- Status: `queued`
+- Depends on: P03、P07、P09。
+- Outcome: 現在のselectable plain-text AppKit fallbackを、Claude Code、Codex、OpenCodeのraw TUIを
+  daily useできるnative terminal surfaceへ置き換える。
+- Scope: ANSI/VT state、alternate screen、cursor、color/style、IME/CJK、selection、resize、scrollback、
+  terminal flood recovery。libghosttyを再現可能に統合するか、同等rendererを明示的なarchitecture decisionで
+  採用する。plain-text fallbackをcutover terminalとして暗黙に残さない。
+- Functional checks: shell/TUIのcursor navigation、color、alternate-screen enter/exit、IME/CJK、resize、
+  selection/scrollback、複数raw agent terminal、reattach後のlive rendering。
+- Rule: formal performance comparisonはL01に残し、このitemではfunctional correctnessとinteractive usabilityを確認する。
+
+### P15B Repository-scale file navigation
+
+- Status: `queued`
+- Depends on: P06。
+- Outcome: Clair自身のrepositoryを開いてもfile tree、Quick Open、search、watcherがUIを占有せず、
+  editor/terminal操作を継続できる。
+- Scope: asynchronous/lazyかつboundedなenumeration、generated/vendor directoryのignore policy、
+  bounded watcher graph、incremental refresh、cancel/reopen。fileごとの無制限watcherとmain-thread recursive scanを残さない。
+- Functional checks: Clair repositoryでopen/expand/Quick Open/search、external create/rename/delete、Project switch、
+  close/reopenを行い、sustained UI stallとwatcherの無制限増加がないことを確認する。
+- Audit evidence (2026-09-01): 現実装は`.git`だけを除外してdirectory/fileを同期再帰し、audit用にClair
+  repositoryを開いたprocessが約99% CPUを継続した。これはformal benchmarkではなくdogfood correctness blockerである。
+
+### P15C Interaction Lab UI convergence
+
+- Status: `queued`
+- Depends on: P05、P06、P09、P11、P12、P15A、P15B。
+- Outcome: native SwiftUI/AppKit appをInteraction Labのproject-first ccedit contractへ収束させ、
+  WebViewなしでM1のdaily-driver hierarchyとdensityを実現する。
+- Scope: traffic lightsと同じtitlebar rowのcolored Project groups、expanded group内のactive file/terminal、
+  Project切替時のroot/active surface/split/ratio restore、Files/Search/Git/Review/Notifications-Historyの
+  first-class activity bar、右titlebarのCommand Window/Settings、compact One Dark styling、status bar、
+  Project attention badge/mute、live process/session metadataから所有terminal/Projectへのresume。Agentはraw
+  terminalのままとし、semantic Agent paneや終了済みterminal transcript storeを導入しない。
+- Functional checks: 3 Projects、editor-only、terminal below/right、mixed nested split、group collapse/expand、
+  active surface切替、Command Window/Settings、activity viewのfilter/search/resume、badge/mute、restart restore、
+  narrow/wide window、keyboard/accessibility navigation。
+- Audit evidence (2026-09-01): native appはvertical Projects sidebar、separate Files sidebar、top button row、
+  pane-local toolbarとsecond tab row、modal sheets、system dark appearanceであり、Interaction Labのtitlebar groups、
+  activity hierarchy、right actions、One Dark density、status/attention presentationと一致していない。
 
 ### P15 Clair-on-Clair dogfood cutover
 
 - Status: `queued`
-- Depends on: P06、P11、P13、P14。
+- Depends on: P13、P14、P15C。
 - Outcome: Clair StableだけでClair sourceを編集し、terminal/agentでDevをbuild・runし、Git/worktree/review loopを完結できる。
 - Scope: 実地利用で発見したcutover blockerだけを修正し、cceditへ戻らず開発を継続する。
 - Functional checks: real repositoryで一つのfeatureを実装、review、commit、Dev確認、adoptするend-to-end session。

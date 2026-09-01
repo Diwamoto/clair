@@ -286,6 +286,32 @@ again. P10 does not review, merge, adopt, or resolve worktree branches; those ac
 belong to P11. PTY transcript persistence, semantic vendor adapters, and CLI/MCP
 command adapters remain outside this slice.
 
+## Branch review and adoption
+
+P11 adds `ProjectBranchReviewService` on top of the managed-worktree identity and
+cleanup boundaries. A review resolves the recorded `baseRevision`, the source
+worktree's current `HEAD`, and the target Project `HEAD`. It lists the commits in
+`base..HEAD` and computes a branch-wide `base...HEAD` name-status list and patch.
+The committed change list and patch are kept separate from the source's current
+porcelain status, so an uncommitted modification, staged change, or untracked file
+cannot be mistaken for reviewed branch work.
+
+Adoption is a one-shot confirmation flow. The plan records the Project/worktree
+identity, canonical source and repository paths, expected source branch, base and
+source HEAD revisions, target branch and target HEAD, and both status snapshots.
+Preparation and confirmation refuse a source or target that is dirty, detached, has
+changed identity or HEAD, has no commits after its base, belongs to another
+repository, or already has a merge in progress. Confirmation refreshes the review
+before invoking `git merge --no-ff --no-edit` in the Project root; a successful result
+is accepted only when the new `HEAD` has exactly two parents. A stale plan is consumed
+and must be prepared again rather than being replayed.
+
+When Git reports a three-way conflict, adoption returns the typed conflict paths and
+leaves the target merge state intact. The Branch Review surface shows the target,
+conflicted paths, and the owning-agent/native-editor resolution handoff. P10 cleanup
+remains an independent two-step operation: cancelling cleanup leaves the worktree
+and its branch in place, and normal worktree cleanup never deletes the branch.
+
 ## Native editor and disk safety
 
 `ProjectEditorTab` is an AppKit/TextKit-backed, UTF-8 editor document embedded through
@@ -355,14 +381,17 @@ canonical-root duplicate rejection, invalid/file/unreadable-root isolation, stab
 reopen, metadata/order persistence, store versioning, command risk/availability
 preflight, human command-surface dispatch, unavailable-reason propagation, and shortcut
 validation/persistence, nested tree enumeration, fixture tab selection, external
-create/rename/delete refresh, missing-root recovery, Project surface isolation, nested mixed-pane
-operations, three-Project layout isolation across restart, and corrupt/missing workspace
-fallback, Quick Open and search result navigation, buffer-only replacement, active-search
-refresh after an external file change, and Project History restore. The project-scoped
-Dev XCTest target runs these tests. `ProjectGitTests` covers porcelain status separation,
+create/rename/delete refresh, missing-root recovery, Project surface isolation, nested
+mixed-pane operations, three-Project layout isolation across restart, and corrupt/missing
+workspace fallback, Quick Open and search result navigation, buffer-only replacement,
+active-search refresh after an external file change, and Project History restore. The
+project-scoped Dev XCTest target runs these tests. `ProjectGitTests` covers porcelain
+status separation,
 staged-boundary diff/stage/unstage/commit behavior, untracked/rename/delete parsing,
 typed invalid-operation errors, Project-scoped command execution, external index refresh,
-and non-Git availability. The `make test-swift`
+and non-Git availability. Branch review tests cover committed/uncommitted separation,
+dirty adoption refusal, clean two-parent adoption, conflict-state handoff, stale-plan
+refusal, and cleanup cancellation. The `make test-swift`
 wrapper remains the CI-facing path where the workspace is accepted; with the current
 Xcode 26 environment, use the equivalent `xcodebuild -project Clair.xcodeproj ... test`
 command because the minimal committed workspace is rejected.
@@ -395,7 +424,7 @@ disk writes, project-scoped history ordering, and Project-root path validation.
 - The terminal surface is a selectable plain-text AppKit fallback, not a full ANSI/
   alternate-screen/cursor/colour terminal grid; a reproducible libghostty development
   artifact is still unavailable in this checkout. The editor does not yet provide
-  syntax highlighting, LSP, or multi-cursor editing. The P08/P10/P12 Git loop currently
-  uses the local `/usr/bin/git` bridge; discard, blame, review comments, AI briefs,
-  merge/conflict adoption, and CLI/MCP adapters remain later queue items.
+  syntax highlighting, LSP, or multi-cursor editing. The P08/P10/P11/P12 Git and
+  command loop currently uses the local `/usr/bin/git` bridge; discard, blame, review
+  comments, AI briefs, and CLI/MCP adapters remain later queue items.
 - Formal app icons, signing, notarization, and update delivery are not present.
