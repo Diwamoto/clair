@@ -191,8 +191,10 @@ make run-stable
 make run-dev
 ```
 
-Both commands use `open -n`, so macOS starts a new process even when the other
-channel is running. Confirm that:
+Both commands use `open -n` when no instance of the target channel is running,
+so macOS starts a new process even when the other channel is running. Running the
+same channel twice reactivates the existing process instead of spawning a
+duplicate. Confirm that:
 
 1. Dock and window names show `Clair` and `Clair Dev`.
 2. The bootstrap windows show bundle IDs `com.diwamoto.clair` and
@@ -204,7 +206,7 @@ channel is running. Confirm that:
 Quit both apps normally after the check. The build scripts never remove their
 preferences or Application Support directories.
 
-## Verify the live terminal (P03)
+## Verify the production terminal surface (P03 + P15A)
 
 Build and launch Dev:
 
@@ -215,20 +217,25 @@ make run-dev
 
 Open a Project, choose **Open Terminal**, and verify the same live session can:
 
-1. Run a shell command such as `printf 'CLAIR_SHELL_OK\n'` and show its output.
+1. Run a shell command such as `printf 'CLAIR_SHELL_OK\n'` and show its output through
+   the libvterm-backed grid renderer.
 2. Run `stty size`, resize the window, and run it again; the reported rows/columns
-   should follow the surface.
+   should follow the surface and the grid should re-flow.
 3. Type and execute CJK text, select output with the mouse, copy it, and scroll
-   through earlier output without losing the active shell.
-4. Run `printf '\033]0;title\007'` and confirm control bytes do not corrupt the
-   plain transcript.
-5. Generate a bounded flood, for example `for i in $(seq 1 100); do echo line-$i; done`,
+   through earlier output without losing the active shell. Wide glyphs occupy two
+   cells in the grid.
+4. Run `printf '\033]0;title\007'` and confirm control bytes do not corrupt the grid.
+5. Launch `claude`, `codex`, or another raw agent and confirm the alternate-screen,
+   cursor, and color attributes render correctly.
+6. Generate a bounded flood, for example `for i in $(seq 1 100); do echo line-$i; done`,
    and confirm the app remains responsive and the shell can still accept input.
 
-Click **End** before closing the Project. P03's verified implementation is an AppKit
-selectable plain-text fallback while a reproducible libghostty development artifact
-is unavailable. The app now routes the session through the P07 local broker; the
-direct `clair-ptyhost --spawn` command remains the low-level protocol smoke path.
+Click **End** before closing the Project. P15A replaces the AppKit plain-text fallback
+with the libvterm grid renderer; the broker reattach path stays the same. libvterm
+0.3.3 is fetched, hash-verified, and statically linked by `scripts/build-vterm.sh`,
+which the Xcode target runs as a build phase; the project no longer depends on a
+reproducible libghostty development artifact. The direct `clair-ptyhost --spawn`
+command remains the low-level protocol smoke path.
 
 ## Verify local session reattach (P07)
 

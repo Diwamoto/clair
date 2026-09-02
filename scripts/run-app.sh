@@ -7,9 +7,11 @@ channel="${1:?usage: run-app.sh <stable|dev>}"
 case "$channel" in
     stable)
         app_path="$repo_root/.build/xcode/stable/Build/Products/Debug/Clair.app"
+        process_name="Clair"
         ;;
     dev)
         app_path="$repo_root/.build/xcode/dev/Build/Products/Debug/Clair Dev.app"
+        process_name="Clair Dev"
         ;;
     *)
         printf 'run-app: unknown channel: %s\n' "$channel" >&2
@@ -22,4 +24,13 @@ if [[ ! -d "$app_path" ]]; then
     exit 1
 fi
 
+# Reuse an already-running instance of the same channel. Stable and Dev have
+# different process names, so they can still run side-by-side.
+if pgrep -x "$process_name" >/dev/null 2>&1; then
+    running_pid=$(pgrep -x "$process_name" | head -n 1)
+    printf 'run-app: %s is already running (pid %s); activating it.\n' "$channel" "$running_pid"
+    exec osascript -e "tell application \"$process_name\" to activate"
+fi
+
+printf 'run-app: launching new %s process...\n' "$channel"
 exec open -n "$app_path"

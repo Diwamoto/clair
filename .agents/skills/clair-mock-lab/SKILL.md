@@ -37,7 +37,7 @@ When an attached image or document is supplied, use it as visual evidence only. 
 1. Read the user’s feedback and inspect the current prototype before deciding the smallest coherent change.
 2. Reuse the current component and visual language. Make interactions functional enough to evaluate the requested behavior; do not leave important controls as unexplained decoration.
 3. Preserve saved browser data where practical. Migrate or normalize existing `localStorage` state when changing its schema rather than breaking old sessions.
-4. Make a meaningful first slice, start the local dev server, verify an HTTP 200 response, and open the preview in Codex. Then refine the full request.
+4. Make a meaningful first slice, start or reuse the local dev server with `scripts/dev-server.sh start prototypes/clair-interaction-lab 5173`, verify an HTTP 200 response, and open the preview in Codex. Then refine the full request. Capture the returned `PID=...` so you can stop the server at the end if you started it.
 5. Run `npm run build` and `git diff --check`. Check the relevant interaction states, especially project switching, editor-only state, terminal placement, overlays, and history.
 6. Unless the user asks for local-only work, publish to the same private Sites project:
    - confirm with `get_site` that the current user is owner and access is still owner-only/custom;
@@ -45,7 +45,7 @@ When an attached image or document is supplied, use it as visual evidence only. 
    - commit the exact source state in the nested repository;
    - obtain a short-lived source write credential and push that commit without printing the token;
    - package the successful build with the Sites packaging helper, save a new version, deploy it privately, and wait for success;
-   - reopen the stable live URL and stop the local server.
+   - reopen the stable live URL and stop the local server with `scripts/dev-server.sh stop <pid>` using the PID captured earlier. If the server was reused (`PID=existing`), do not stop it.
 7. Report the visible changes, verification performed, published URL, and whether access remained private.
 
 Use the available Sites building/hosting and frontend-design guidance when present. Do not install Figma or another design service for this workflow; the HTML/CSS prototype is the source of truth.

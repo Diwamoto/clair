@@ -17,7 +17,7 @@ The project code is an identifier, not automatic permission to create or switch 
 
 Before changing production code:
 
-1. Read repository instructions and `docs/README.md`.
+1. Read repository instructions (`AGENTS.md`) and `docs/README.md`.
 2. Read the project's `README.md`, `requirements.md`, `design.md`, and `plan.md` completely.
 3. Follow links to accepted ADRs and only the architecture, investigations, benchmarks, plans, or runbooks needed to understand the project.
 4. Inspect the relevant code, tests, dependencies, and current worktree. Treat existing changes as user-owned.
