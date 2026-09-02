@@ -2587,7 +2587,11 @@ private struct ProjectNativeEditorTab: View {
           .foregroundStyle(.secondary)
           .lineLimit(1)
         Spacer()
-        if tab.isMissing {
+        if tab.loadError != nil {
+          Label("Open Failed", systemImage: "exclamationmark.triangle")
+            .font(.caption)
+            .foregroundStyle(.orange)
+        } else if tab.isMissing {
           Label("Missing", systemImage: "exclamationmark.triangle")
             .font(.caption)
             .foregroundStyle(.orange)
@@ -2621,7 +2625,7 @@ private struct ProjectNativeEditorTab: View {
           surface.save(tabID: tab.id)
         }
         .buttonStyle(.borderedProminent)
-        .disabled(!tab.isDirty || tab.isMissing)
+        .disabled(!tab.isDirty || tab.isMissing || tab.isReadOnly)
         Button("Reveal in Tree") {
           surface.reveal(nodeID: tab.id)
         }
@@ -2632,8 +2636,24 @@ private struct ProjectNativeEditorTab: View {
 
       Divider()
 
-      ProjectSourceEditorView(document: tab, selection: tab.selectionRequest) {
-        surface.save(tabID: tab.id)
+      if let loadError = tab.loadError {
+        VStack(spacing: 20) {
+          Image(systemName: "exclamationmark.triangle.fill")
+            .font(.system(size: 48))
+            .foregroundStyle(.orange)
+          Text("The file could not be opened.")
+            .font(.title3.weight(.semibold))
+          Text(loadError.errorDescription ?? "Unknown error.")
+            .font(.body)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: 480)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+      } else {
+        ProjectSourceEditorView(document: tab, selection: tab.selectionRequest) {
+          surface.save(tabID: tab.id)
+        }
       }
     }
     .alert("Editor update failed", isPresented: editorErrorIsPresented) {

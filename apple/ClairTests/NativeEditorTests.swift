@@ -9,7 +9,7 @@ final class NativeEditorTests: XCTestCase {
   func testEditorSavesOnlyAfterExplicitSaveAndUndoRestoresCleanState() throws {
     let fixture = try EditorFixture()
     let fileURL = try fixture.makeFile(named: "notes.txt", content: "before\n")
-    let document = try fixture.makeDocument(at: fileURL)
+    let document = fixture.makeDocument(at: fileURL)
 
     document.replaceContent("after\n")
 
@@ -34,7 +34,7 @@ final class NativeEditorTests: XCTestCase {
   func testEditorPreservesUnicodeEmojiAndCombiningTextAsUTF8() throws {
     let fixture = try EditorFixture()
     let fileURL = try fixture.makeFile(named: "unicode.txt", content: "")
-    let document = try fixture.makeDocument(at: fileURL)
+    let document = fixture.makeDocument(at: fileURL)
     let unicodeContent = "日本語🙂 🧑🏽‍💻 e\u{301} と é\n"
 
     document.replaceContent(unicodeContent)
@@ -48,7 +48,7 @@ final class NativeEditorTests: XCTestCase {
   func testMarkedTextCommitUpdatesTheDocumentOnce() throws {
     let fixture = try EditorFixture()
     let fileURL = try fixture.makeFile(named: "ime.txt", content: "")
-    let document = try fixture.makeDocument(at: fileURL)
+    let document = fixture.makeDocument(at: fileURL)
     let coordinator = ProjectSourceEditorView.Coordinator(document: document)
     let textView = NSTextView(frame: .zero)
     coordinator.textView = textView
@@ -73,7 +73,7 @@ final class NativeEditorTests: XCTestCase {
   func testSearchSelectionConvertsLineAndCharacterColumnToUTF16Range() throws {
     let fixture = try EditorFixture()
     let fileURL = try fixture.makeFile(named: "selection.txt", content: "one\n日本Hello\nlast\n")
-    let document = try fixture.makeDocument(at: fileURL)
+    let document = fixture.makeDocument(at: fileURL)
 
     let range = document.selectionRange(
       for: ProjectEditorSelection(line: 2, column: 3, length: 5)
@@ -85,7 +85,7 @@ final class NativeEditorTests: XCTestCase {
   func testExternalRewriteWinsAndCapturesUnsavedBufferForRecovery() throws {
     let fixture = try EditorFixture()
     let fileURL = try fixture.makeFile(named: "agent.txt", content: "disk-v1\n")
-    let document = try fixture.makeDocument(at: fileURL)
+    let document = fixture.makeDocument(at: fileURL)
     document.replaceContent("unsaved-v2 日本語\n")
 
     try Data("disk-v3 from agent\n".utf8).write(to: fileURL)
@@ -108,7 +108,7 @@ final class NativeEditorTests: XCTestCase {
   func testSaveRefusesToOverwriteAnExternalChange() throws {
     let fixture = try EditorFixture()
     let fileURL = try fixture.makeFile(named: "conflict.txt", content: "disk-v1\n")
-    let document = try fixture.makeDocument(at: fileURL)
+    let document = fixture.makeDocument(at: fileURL)
     document.replaceContent("unsaved-v2\n")
 
     try Data("disk-v3 from agent\n".utf8).write(to: fileURL)
@@ -132,7 +132,7 @@ final class NativeEditorTests: XCTestCase {
   func testExternalDeletionRetainsTheTabForRecovery() throws {
     let fixture = try EditorFixture()
     let fileURL = try fixture.makeFile(named: "deleted.txt", content: "keep me\n")
-    let document = try fixture.makeDocument(at: fileURL)
+    let document = fixture.makeDocument(at: fileURL)
 
     try FileManager.default.removeItem(at: fileURL)
     XCTAssertTrue(try document.refreshFromDisk())
@@ -192,7 +192,7 @@ final class NativeEditorTests: XCTestCase {
     )
   }
 
-  func testNonUTF8FileIsRejectedWithoutReplacementCharacters() throws {
+  func testNonUTF8FileOpensReadOnlyErrorTab() throws {
     let fixture = try EditorFixture()
     let fileURL = fixture.root.appendingPathComponent("binary.bin")
     try Data([0xFF, 0xFE, 0x00]).write(to: fileURL)
@@ -204,8 +204,26 @@ final class NativeEditorTests: XCTestCase {
 
     surface.select(nodeID: fileURL.standardizedFileURL.path)
 
-    XCTAssertNil(surface.activeTab)
-    XCTAssertNotNil(surface.lastEditorErrorMessage)
+    let tab = try XCTUnwrap(surface.activeTab)
+    XCTAssertTrue(tab.isReadOnly)
+    XCTAssertNotNil(tab.loadError)
+    XCTAssertNil(surface.lastEditorErrorMessage)
+  }
+
+  func testMissingFileOpensEmptyEditableTab() throws {
+    let fixture = try EditorFixture()
+    let fileURL = fixture.root.appendingPathComponent("missing.txt")
+    let tab = ProjectEditorTab(
+      projectID: fixture.projectID,
+      rootURL: fixture.root,
+      url: fileURL,
+      historyStore: fixture.historyStore
+    )
+
+    XCTAssertTrue(tab.isMissing)
+    XCTAssertFalse(tab.isReadOnly)
+    XCTAssertNil(tab.loadError)
+    XCTAssertEqual(tab.content, "")
   }
 
   private func waitForDocument(
@@ -250,8 +268,8 @@ private final class EditorFixture {
     return url
   }
 
-  func makeDocument(at url: URL) throws -> ProjectEditorTab {
-    try ProjectEditorTab(
+  func makeDocument(at url: URL) -> ProjectEditorTab {
+    ProjectEditorTab(
       projectID: projectID,
       rootURL: root,
       url: url,
