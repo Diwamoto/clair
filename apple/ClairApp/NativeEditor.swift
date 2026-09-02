@@ -327,10 +327,12 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
   @Published private(set) var content: String
   @Published private(set) var isDirty = false
   @Published private(set) var isMissing = false
+  @Published private(set) var isReadOnly = false
   @Published private(set) var canUndo = false
   @Published private(set) var canRedo = false
   @Published private(set) var historyEntries: [ProjectLocalHistoryEntry] = []
   @Published private(set) var lastErrorMessage: String?
+  @Published private(set) var loadError: ProjectEditorError?
   @Published private(set) var selectionRequest: ProjectEditorSelection?
 
   let projectID: UUID
@@ -349,23 +351,8 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
     url: URL,
     historyStore: ProjectLocalHistoryStore,
     fileManager: FileManager = .default
-  ) throws {
+  ) {
     let canonicalURL = url.standardizedFileURL
-    let data: Data
-    do {
-      data = try Data(contentsOf: canonicalURL)
-    } catch CocoaError.fileReadNoSuchFile {
-      throw ProjectEditorError.fileMissing(path: canonicalURL.path)
-    } catch {
-      throw ProjectEditorError.readFailed(
-        path: canonicalURL.path,
-        message: error.localizedDescription
-      )
-    }
-    guard let content = String(data: data, encoding: .utf8) else {
-      throw ProjectEditorError.invalidUTF8(path: canonicalURL.path)
-    }
-
     self.id = canonicalURL.path
     self.url = canonicalURL
     self.title = canonicalURL.lastPathComponent
@@ -373,31 +360,72 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
     self.rootURL = rootURL.standardizedFileURL
     self.fileManager = fileManager
     self.historyStore = historyStore
-    self.content = content
-    self.baselineContent = content
-    self.diskData = data
-    self.historyEntries =
-      (try? historyStore.entries(
-        for: projectID,
-        fileURL: canonicalURL,
-        rootURL: rootURL
-      )) ?? []
 
-    let fileWatcher = ProjectEditorFileWatcher(fileURL: canonicalURL) {
-      [weak self] in
-      Task { @MainActor [weak self] in
-        guard let self else {
-          return
-        }
-        do {
-          _ = try self.refreshFromDisk()
-        } catch {
-          self.lastErrorMessage = error.localizedDescription
+    let loadResult: Result<(content: String, data: Data), ProjectEditorError>
+    do {
+      let data = try Data(contentsOf: canonicalURL)
+      if let content = String(data: data, encoding: .utf8) {
+        loadResult = .success((content, data))
+      } else {
+        loadResult = .failure(.invalidUTF8(path: canonicalURL.path))
+      }
+    } catch CocoaError.fileReadNoSuchFile {
+      loadResult = .failure(.fileMissing(path: canonicalURL.path))
+    } catch {
+      loadResult = .failure(
+        .readFailed(path: canonicalURL.path, message: error.localizedDescription)
+      )
+    }
+
+    switch loadResult {
+    case .success((let content, let data)):
+      self.content = content
+      self.baselineContent = content
+      self.diskData = data
+      self.loadError = nil
+      self.isReadOnly = false
+      self.isMissing = false
+      self.historyEntries =
+        (try? historyStore.entries(
+          for: projectID,
+          fileURL: canonicalURL,
+          rootURL: rootURL
+        )) ?? []
+
+      let fileWatcher = ProjectEditorFileWatcher(fileURL: canonicalURL) { [weak self] in
+        Task { @MainActor [weak self] in
+          guard let self else {
+            return
+          }
+          do {
+            _ = try self.refreshFromDisk()
+          } catch {
+            self.lastErrorMessage = error.localizedDescription
+          }
         }
       }
+      self.fileWatcher = fileWatcher
+      fileWatcher.start()
+    case .failure(.fileMissing):
+      self.content = ""
+      self.baselineContent = ""
+      self.diskData = nil
+      self.loadError = nil
+      self.isReadOnly = false
+      self.isMissing = true
+      self.historyEntries = []
+      self.fileWatcher = nil
+    case .failure(let error):
+      let errorContent = Self.errorContent(for: error)
+      self.content = errorContent
+      self.baselineContent = errorContent
+      self.diskData = nil
+      self.loadError = error
+      self.isReadOnly = true
+      self.isMissing = false
+      self.historyEntries = []
+      self.fileWatcher = nil
     }
-    self.fileWatcher = fileWatcher
-    fileWatcher.start()
   }
 
   deinit {
@@ -479,8 +507,17 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
     undoManager
   }
 
+  private static func errorContent(for error: ProjectEditorError) -> String {
+    let message = error.localizedDescription
+    return """
+      The editor could not open this file.
+
+      \(message)
+      """
+  }
+
   func updateFromEditor(_ newContent: String) {
-    guard newContent != content else {
+    guard !isReadOnly, newContent != content else {
       refreshUndoState()
       return
     }
@@ -490,7 +527,7 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
   }
 
   func replaceContent(_ newContent: String, actionName: String = "Edit") {
-    guard newContent != content else {
+    guard !isReadOnly, newContent != content else {
       return
     }
     applyContent(newContent, registerUndo: true, actionName: actionName)
@@ -513,6 +550,12 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
   }
 
   func save() throws {
+    guard loadError == nil else {
+      throw ProjectEditorError.readFailed(
+        path: url.path,
+        message: "The file could not be saved because it failed to open."
+      )
+    }
     lastErrorMessage = nil
     let currentDiskData = try readDiskData()
     if currentDiskData != diskData {
@@ -547,6 +590,9 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
 
   @discardableResult
   func refreshFromDisk() throws -> Bool {
+    guard loadError == nil else {
+      return false
+    }
     lastErrorMessage = nil
     let currentDiskData = try readDiskData()
     guard currentDiskData != diskData else {
@@ -675,7 +721,7 @@ struct ProjectSourceEditorView: NSViewRepresentable {
     textView.onSave = onSave
     textView.string = document.content
     textView.allowsUndo = true
-    textView.isEditable = !document.isMissing
+    textView.isEditable = !document.isMissing && !document.isReadOnly
     textView.isSelectable = true
     textView.isRichText = false
     textView.isAutomaticQuoteSubstitutionEnabled = false
@@ -713,7 +759,7 @@ struct ProjectSourceEditorView: NSViewRepresentable {
     }
 
     textView.onSave = onSave
-    textView.isEditable = !document.isMissing
+    textView.isEditable = !document.isMissing && !document.isReadOnly
     if textView.string != document.content {
       let selectedRange = textView.selectedRange()
       context.coordinator.isUpdatingFromModel = true

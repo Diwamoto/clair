@@ -1321,18 +1321,13 @@ final class ProjectSurfaceModel: ObservableObject {
     }
 
     if editorDocuments[node.id] == nil {
-      do {
-        editorDocuments[node.id] = try ProjectEditorTab(
-          projectID: projectID,
-          rootURL: rootURL,
-          url: node.url,
-          historyStore: historyStore,
-          fileManager: fileManager
-        )
-      } catch {
-        lastEditorErrorMessage = error.localizedDescription
-        return nil
-      }
+      editorDocuments[node.id] = ProjectEditorTab(
+        projectID: projectID,
+        rootURL: rootURL,
+        url: node.url,
+        historyStore: historyStore,
+        fileManager: fileManager
+      )
     }
     if let existingLocation = tabLocation(for: node.id) {
       setActiveTab(node.id, in: existingLocation.paneID, revealEditor: false)
@@ -1382,17 +1377,17 @@ final class ProjectSurfaceModel: ObservableObject {
           guard
             let filePath = tab.filePath,
             let fileURL = restorableFileURL(for: filePath),
-            editorDocuments[tab.id] == nil,
-            let document = try? ProjectEditorTab(
-              projectID: projectID,
-              rootURL: rootURL,
-              url: fileURL,
-              historyStore: historyStore,
-              fileManager: fileManager
-            )
+            editorDocuments[tab.id] == nil
           else {
             continue
           }
+          let document = ProjectEditorTab(
+            projectID: projectID,
+            rootURL: rootURL,
+            url: fileURL,
+            historyStore: historyStore,
+            fileManager: fileManager
+          )
           editorDocuments[tab.id] = document
           restoredTabs.append(tab)
         case .terminal:
