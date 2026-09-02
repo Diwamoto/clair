@@ -85,19 +85,20 @@ the broker emits a gap and the plain-text client resets its transcript with an
 explicit recovery marker. This is a local single-user lifecycle slice; remote
 multi-client sessions, semantic agent adapters, and relay/E2EE remain deferred.
 
-`TerminalSurfaceView` is an AppKit-backed selectable and scrollable native surface,
-embedded in the SwiftUI Project shell. It forwards ordinary keys, control keys,
-navigation sequences, and UTF-8 text to the PTY. The current surface keeps a bounded
-2 MiB sanitized transcript for rendering and selection; split ANSI CSI/OSC-like
-sequences are removed from this plain-text fallback, while CJK UTF-8 bytes are
-retained. This is deliberately a reversible feasibility slice, not a replacement
-for a terminal grid renderer.
-
-The local checkout does not contain a public libghostty development header/library
-that can be built and linked reproducibly. Therefore P03 records the AppKit native
-fallback as the verified surface and leaves the libghostty embed as an explicit
-follow-up blocker. P07 owns stable session identity, metadata persistence, reattach,
-and cross-process backpressure; the terminal transcript remains an in-memory view.
+`TerminalSurfaceView` is an AppKit-backed native terminal grid renderer, embedded in
+the SwiftUI Project shell. Each `TerminalSession` owns a `TerminalGrid` that wraps a
+reproducibly-built libvterm state and exposes per-cell codepoint, width, attribute
+bits, RGB foreground/background, and cursor/scrollback accessors. The grid is fed
+from the same `output` events the P07 broker already publishes; `screenReset` events
+reseed the grid with an explicit recovery marker instead of leaving stale cells on
+screen. The renderer draws scrollback plus the live grid with monospace cells,
+honours reverse-video/underline/strikethrough, supports mouse-driven grid selection,
+copy, control/navigation/IME input, and reattaches through the existing same-user
+broker without keeping a separate plain-text transcript. libvterm 0.3.3 is fetched,
+hash-verified, and statically linked via `scripts/build-vterm.sh`, which the Xcode
+target runs as a build phase. P15A ships this surface; libghostty remains a
+documented but unverified alternative that is no longer required to meet the
+production renderer bar.
 
 ## Stable release, update, and lifecycle handoff
 
@@ -503,10 +504,10 @@ disk writes, project-scoped history ordering, and Project-root path validation.
   journal and transcript are memory-only. If the broker itself exits, its live PTYs
   are not recoverable; the app reports a missing session and offers a new session.
 - The C ABI is a link/lifecycle smoke path, not the future domain interface.
-- The terminal surface is a selectable plain-text AppKit fallback, not a full ANSI/
-  alternate-screen/cursor/colour terminal grid; a reproducible libghostty development
-  artifact is still unavailable in this checkout. The editor does not yet provide
-  syntax highlighting, LSP, or multi-cursor editing. The P08/P10/P11/P12/P13 Git and
+- The terminal surface renders through libvterm on the same broker; reattach, frame
+  bounds, and slow-consumer backpressure continue to be correctness-tested, while
+  formal terminal benchmarks remain L01. The editor does not yet provide syntax
+  highlighting, LSP, or multi-cursor editing. The P08/P10/P11/P12/P13 Git and
   command loop currently uses the local `/usr/bin/git` bridge; discard, blame, review
   comments, and AI briefs remain later queue items.
 - Formal app icons, Apple Developer ID signing, and notarization are not present.

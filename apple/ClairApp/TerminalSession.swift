@@ -6,6 +6,7 @@ final class TerminalSession: ObservableObject {
   enum Event: Sendable {
     case attached
     case output(Data)
+    case screenReset(Data)
     case bell(count: Int)
     case exited(Int)
     case failed(String)
@@ -41,6 +42,7 @@ final class TerminalSession: ObservableObject {
   private var outputCursor: UInt64 = 0
   private var sessionEpoch: UInt64?
   private var transcriptBuffer = TerminalTranscriptBuffer()
+  private var renderReplayBuffer = TerminalRenderReplayBuffer()
   private var transcriptObservers: [UUID: (String) -> Void] = [:]
   private var eventObservers: [UUID: (Event) -> Void] = [:]
   private var pendingCommands: [Data] = []
@@ -151,6 +153,7 @@ final class TerminalSession: ObservableObject {
     outputCursor = 0
     sessionEpoch = nil
     transcriptBuffer.reset()
+    renderReplayBuffer.reset()
     transcript = ""
     pendingCommands.removeAll()
     state = .idle
@@ -223,6 +226,10 @@ final class TerminalSession: ObservableObject {
   func addEventObserver(_ observer: @escaping (Event) -> Void) -> UUID {
     let id = UUID()
     eventObservers[id] = observer
+    let replay = renderReplayBuffer.snapshot
+    if !replay.isEmpty {
+      observer(.output(replay))
+    }
     return id
   }
 
@@ -259,6 +266,7 @@ final class TerminalSession: ObservableObject {
           receiveGap(start: outputCursor, end: output.offset)
         }
         let effects = transcriptBuffer.append(output.data)
+        renderReplayBuffer.append(output.data)
         publishEvent(.output(output.data))
         if effects.bellCount > 0 {
           publishEvent(.bell(count: effects.bellCount))
@@ -318,9 +326,11 @@ final class TerminalSession: ObservableObject {
     }
     outputCursor = end
     transcriptBuffer.reset()
-    transcriptBuffer.append(
-      Data("[terminal output gap: offsets \(start)..<\(end) were not retained]\n".utf8)
-    )
+    let marker = Data("[terminal output gap: offsets \(start)..<\(end) were not retained]\n".utf8)
+    transcriptBuffer.append(marker)
+    renderReplayBuffer.reset()
+    renderReplayBuffer.append(marker)
+    publishEvent(.screenReset(marker))
     publishTranscript()
   }
 

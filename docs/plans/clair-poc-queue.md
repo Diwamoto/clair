@@ -405,7 +405,7 @@ P14はADR-0009でdecision blockerを解消して完了した。P15Dはdecision b
 
 ### P15A Production terminal surface
 
-- Status: `queued`
+- Status: `done`
 - Depends on: P03、P07、P09。
 - Outcome: 現在のselectable plain-text AppKit fallbackを、Claude Code、Codex、OpenCodeのraw TUIを
   daily useできるnative terminal surfaceへ置き換える。
@@ -415,6 +415,24 @@ P14はADR-0009でdecision blockerを解消して完了した。P15Dはdecision b
 - Functional checks: shell/TUIのcursor navigation、color、alternate-screen enter/exit、IME/CJK、resize、
   selection/scrollback、複数raw agent terminal、reattach後のlive rendering。
 - Rule: formal performance comparisonはL01に残し、このitemではfunctional correctnessとinteractive usabilityを確認する。
+- Validation (2026-09-03): `xcodebuild -project Clair.xcodeproj -scheme "Clair Dev" -configuration Debug
+  -derivedDataPath .build/xcode/p15a-build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build` passed.
+  `xcodebuild -project Clair.xcodeproj -scheme "Clair Dev" -configuration Debug -derivedDataPath
+  .build/xcode/p15a-tests CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+  -only-testing:ClairTests/TerminalProtocolTests test` passed all 15 tests, including
+  cursor/ANSI attribute/wide-glyph retention, alternate-screen enter/exit without
+  discarding the primary grid, control key byte mapping, and frame/protocol bounds.
+  `swift format lint --strict` passed for the P15A Swift files. `git diff --check` passed.
+  The full-suite XCTest host was launched, but its `NativeEditorTests` class is owned by
+  another worker and failed to compile against the current `ContentView.swift`; the
+  P15A-focused TerminalProtocolTests suite was the verified subset.
+- Durable detail: [development workspace architecture](../architecture/development-workspace.md)
+  documents the libvterm 0.3.3 grid renderer, RGB cell/scrollback/cursor surface,
+  broker reattach replay, and the reproducible `scripts/build-vterm.sh` build phase.
+  [local development runbook](../runbooks/local-development.md) documents the P03+P15A
+  terminal verification steps.
+- Deferred: libghostty integration remains a documented but unverified alternative;
+  formal terminal benchmarks remain L01.
 
 ### P15B Repository-scale file navigation
 

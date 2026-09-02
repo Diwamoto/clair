@@ -410,6 +410,8 @@ final class AgentWorkflowCoordinator: ObservableObject {
       sessions[index].agent.markRunning()
     case .output:
       break
+    case .screenReset:
+      break
     case .bell(let count):
       guard count > 0 else {
         return

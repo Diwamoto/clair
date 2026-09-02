@@ -70,6 +70,8 @@
 		A000000000000000000000B2 /* ClairUpdate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B5 /* ClairUpdate.swift */; };
 		A000000000000000000000B3 /* ClairLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B6 /* ClairLifecycle.swift */; };
 		A000000000000000000000B4 /* ClairUpdateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B7 /* ClairUpdateTests.swift */; };
+		A000000000000000000000C1 /* TerminalVTerm.c in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000C2 /* TerminalVTerm.c */; };
+		A000000000000000000000C3 /* TerminalVTerm.c in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000C2 /* TerminalVTerm.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -128,6 +130,8 @@
 		A000000000000000000000B6 /* ClairLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClairLifecycle.swift; sourceTree = "<group>"; };
 		A000000000000000000000B7 /* ClairUpdateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClairUpdateTests.swift; sourceTree = "<group>"; };
 		A000000000000000000000B8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A000000000000000000000C2 /* TerminalVTerm.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = TerminalVTerm.c; sourceTree = "<group>"; };
+		A000000000000000000000C4 /* TerminalVTerm.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = TerminalVTerm.h; sourceTree = "<group>"; };
 		A00000000000000000000021 /* Clair.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Clair.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A00000000000000000000022 /* Clair Dev.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Clair Dev.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A00000000000000000000023 /* ClairTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ClairTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -215,6 +219,8 @@
 				A00000000000000000000026 /* TerminalProtocol.swift */,
 				A00000000000000000000027 /* TerminalSession.swift */,
 				A00000000000000000000028 /* TerminalSurface.swift */,
+				A000000000000000000000C2 /* TerminalVTerm.c */,
+				A000000000000000000000C4 /* TerminalVTerm.h */,
 				A0000000000000000000002A /* NativeEditor.swift */,
 				A0000000000000000000002C /* ProjectNavigation.swift */,
 				A0000000000000000000002E /* SessionBroker.swift */,
@@ -266,6 +272,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = A00000000000000000000072 /* Build configuration list for PBXNativeTarget "ClairStable" */;
 			buildPhases = (
+				A000000000000000000000C5 /* Build libvterm */,
 				A00000000000000000000041 /* Build Rust Core */,
 				A00000000000000000000042 /* Sources */,
 				A00000000000000000000043 /* Frameworks */,
@@ -284,6 +291,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = A00000000000000000000073 /* Build configuration list for PBXNativeTarget "ClairDev" */;
 			buildPhases = (
+				A000000000000000000000C6 /* Build libvterm */,
 				A00000000000000000000045 /* Build Rust Core */,
 				A00000000000000000000046 /* Sources */,
 				A00000000000000000000047 /* Frameworks */,
@@ -425,6 +433,38 @@
 			shellScript = "\"$PROJECT_DIR/scripts/build-rust.sh\" \"$CONFIGURATION\"";
 			showEnvVarsInLog = 0;
 		};
+		A000000000000000000000C5 /* Build libvterm */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Build libvterm";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"$PROJECT_DIR/scripts/build-vterm.sh\"";
+			showEnvVarsInLog = 0;
+		};
+		A000000000000000000000C6 /* Build libvterm */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Build libvterm";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"$PROJECT_DIR/scripts/build-vterm.sh\"";
+			showEnvVarsInLog = 0;
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -457,6 +497,7 @@
 				A000000000000000000000A5 /* CommandIPC.swift in Sources */,
 				A000000000000000000000B0 /* ClairUpdate.swift in Sources */,
 				A000000000000000000000B1 /* ClairLifecycle.swift in Sources */,
+				A000000000000000000000C1 /* TerminalVTerm.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -489,6 +530,7 @@
 				A000000000000000000000A7 /* CommandIPC.swift in Sources */,
 				A000000000000000000000B2 /* ClairUpdate.swift in Sources */,
 				A000000000000000000000B3 /* ClairLifecycle.swift in Sources */,
+				A000000000000000000000C3 /* TerminalVTerm.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -289,6 +289,33 @@ struct TerminalTranscriptBuffer {
   }
 }
 
+struct TerminalRenderReplayBuffer {
+  static let defaultMaximumBytes = 8 * 1024 * 1024
+
+  private let maximumBytes: Int
+  private var data = Data()
+
+  init(maximumBytes: Int = Self.defaultMaximumBytes) {
+    self.maximumBytes = max(1, maximumBytes)
+  }
+
+  var snapshot: Data {
+    data
+  }
+
+  mutating func append(_ output: Data) {
+    data.append(output)
+    guard data.count > maximumBytes else {
+      return
+    }
+    data.removeFirst(data.count - maximumBytes)
+  }
+
+  mutating func reset() {
+    data.removeAll(keepingCapacity: true)
+  }
+}
+
 extension UInt16 {
   fileprivate var bigEndianBytes: [UInt8] {
     [UInt8(self >> 8), UInt8(self & 0xff)]

@@ -1,9 +1,54 @@
+import AppKit
 import Foundation
 import XCTest
 
 @testable import ClairApp
 
+@MainActor
 final class TerminalProtocolTests: XCTestCase {
+  func testTerminalTextViewInitializesAndAcceptsTranscript() {
+    let textView = TerminalTextView(frame: .zero)
+    textView.string = "Terminal ready"
+
+    XCTAssertEqual(textView.string, "Terminal ready")
+    XCTAssertFalse(textView.isEditable)
+    XCTAssertTrue(textView.isSelectable)
+  }
+
+  func testTerminalGridRetainsCursorMovesAnsiAttributesAndWideGlyphs() throws {
+    let grid = try XCTUnwrap(TerminalGrid(rows: 4, columns: 12))
+    grid.feed(Data("abc\u{1b}[2DZ\u{1b}[1;31m!\u{1b}[0m\u{1b}[2;3H日本".utf8))
+
+    XCTAssertEqual(
+      grid.cell(row: 0, column: 0)?.codepoint, Character("a").unicodeScalars.first?.value)
+    XCTAssertEqual(
+      grid.cell(row: 0, column: 1)?.codepoint, Character("Z").unicodeScalars.first?.value)
+    XCTAssertEqual(
+      grid.cell(row: 0, column: 2)?.codepoint, Character("!").unicodeScalars.first?.value)
+    XCTAssertNotEqual(grid.cell(row: 0, column: 2)?.attributes ?? 0 & 1, 0)
+    XCTAssertEqual(
+      grid.cell(row: 1, column: 2)?.codepoint, Character("日").unicodeScalars.first?.value)
+    XCTAssertEqual(grid.cell(row: 1, column: 2)?.width, 2)
+    XCTAssertEqual(
+      grid.cell(row: 1, column: 4)?.codepoint, Character("本").unicodeScalars.first?.value)
+    XCTAssertEqual(grid.cell(row: 1, column: 4)?.width, 2)
+  }
+
+  func testTerminalGridSwitchesAlternateScreenWithoutDiscardingPrimaryGrid() throws {
+    let grid = try XCTUnwrap(TerminalGrid(rows: 3, columns: 10))
+    grid.feed(Data("primary\u{1b}[?1049halt\u{1b}[?1049l".utf8))
+
+    XCTAssertEqual(
+      grid.cell(row: 0, column: 0)?.codepoint, Character("p").unicodeScalars.first?.value)
+  }
+
+  func testTerminalControlKeyMappingSendsRawPtyBytes() {
+    XCTAssertEqual(TerminalKeySequence.controlByte(forKeyCode: 0), 0x01)
+    XCTAssertEqual(TerminalKeySequence.controlByte(forKeyCode: 8), 0x03)
+    XCTAssertEqual(TerminalKeySequence.controlByte(forKeyCode: 6), 0x1A)
+    XCTAssertEqual(TerminalKeySequence.controlByte(forKeyCode: 33), 0x1B)
+  }
+
   func testDecoderAcceptsPartialFramesAndPreservesBinaryInput() throws {
     let input = try TerminalFrame.input("printf '日本語\\n'\n")
     let resize = try TerminalFrame.resize(rows: 40, columns: 120)

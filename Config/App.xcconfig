@@ -5,12 +5,12 @@ COMBINE_HIDPI_IMAGES = YES
 CURRENT_PROJECT_VERSION = 1
 GENERATE_INFOPLIST_FILE = NO
 INFOPLIST_FILE = $(PROJECT_DIR)/Config/Info.plist
-HEADER_SEARCH_PATHS = $(inherited) $(PROJECT_DIR)/include
+HEADER_SEARCH_PATHS = $(inherited) $(PROJECT_DIR)/include $(PROJECT_DIR)/.build/vendor/libvterm-0.3.3/install/include
 LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/../Frameworks
 LIBRARY_SEARCH_PATHS[config=Debug] = $(inherited) $(PROJECT_DIR)/target/debug
 LIBRARY_SEARCH_PATHS[config=Release] = $(inherited) $(PROJECT_DIR)/target/release
 MARKETING_VERSION = 0.1.0
-OTHER_LDFLAGS = $(inherited) -lclair_core
+OTHER_LDFLAGS = $(inherited) -lclair_core $(PROJECT_DIR)/.build/vendor/libvterm-0.3.3/install/lib/libvterm.a
 CLAIR_UPDATE_MANIFEST_URL = https://github.com/Diwamoto/clair/releases/latest/download/latest.json
 CLAIR_UPDATE_PUBLIC_KEY =
 PRODUCT_MODULE_NAME = ClairApp
