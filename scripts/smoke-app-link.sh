@@ -8,6 +8,15 @@ target_triple="$(uname -m)-apple-macosx14.0"
 
 "$repo_root/scripts/doctor.sh" rust
 "$repo_root/scripts/build-rust.sh" Debug
+PROJECT_DIR="$repo_root" sh "$repo_root/scripts/build-vterm.sh"
+vterm_root="$repo_root/.build/vendor/libvterm-0.3.3/install"
+vterm_object="$repo_root/.build/app-link/TerminalVTerm.c.o"
+
+mkdir -p "$repo_root/.build/app-link"
+"${CC:-clang}" -c "$repo_root/apple/ClairApp/TerminalVTerm.c" \
+    -I"$vterm_root/include" \
+    -mmacosx-version-min=14.0 \
+    -o "$vterm_object"
 
 if ! command -v swiftc >/dev/null 2>&1; then
     printf 'app-link: swiftc was not found.\n' >&2
@@ -36,8 +45,11 @@ for channel in stable dev; do
         -module-cache-path "$module_cache" \
         -import-objc-header "$repo_root/apple/ClairApp/Clair-Bridging-Header.h" \
         -Xcc "-I$repo_root/include" \
+        "$vterm_object" \
         -L "$repo_root/target/debug" \
         -lclair_core \
+        -L "$vterm_root/lib" \
+        -lvterm \
         "$repo_root/apple/ClairApp/ClairApp.swift" \
         "$repo_root/apple/ClairApp/ClairUpdate.swift" \
         "$repo_root/apple/ClairApp/ClairLifecycle.swift" \
