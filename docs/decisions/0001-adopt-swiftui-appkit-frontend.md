@@ -8,7 +8,10 @@ deciders:
 related_projects: []
 related_issues: []
 supersedes: []
-superseded_by: []
+superseded_by:
+  - ADR-0010
+
+<!-- ADR-0010は「Rust core再利用」条項の解釈のみを置き換える。本ADRのfrontend選択（SwiftUI + AppKit）は引き続きaccepted。 -->
 ---
 
 # ADR-0001: macOS frontendにSwiftUIとAppKitを採用する

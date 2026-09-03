@@ -51,6 +51,10 @@ to a same-user local broker over a bounded Unix-socket protocol; the direct
 interfaces must document their own lifecycle and threading contracts rather than
 extending the bootstrap symbol implicitly.
 
+M1 control-plane ownership is Swift-native. Rust domain migration is selective and
+evidence-driven per [ADR-0010](../decisions/0010-m1-control-plane-swift-with-selective-rust-migration.md);
+the `clair-core` C ABI remains a link/lifecycle smoke path, not a domain interface.
+
 ## Live terminal path
 
 Each visible Project terminal owns one `TerminalSession` and one stable `SessionID`.

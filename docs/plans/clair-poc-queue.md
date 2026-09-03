@@ -489,7 +489,7 @@ P14はADR-0009でdecision blockerを解消して完了した。P15Dはdecision b
 
 ### P15D Rust control-plane boundary reconciliation
 
-- Status: `blocked`
+- Status: `done`
 - Depends on: P13。
 - Outcome: Rust core再利用を要求するproduct docs/ADRと、Swiftが現在のProject、Git、search/history、
   Command control planeを所有する実装を、cutover前に一つのaccepted architectureへ揃える。
@@ -499,9 +499,18 @@ P14はADR-0009でdecision blockerを解消して完了した。P15Dはdecision b
 - Functional checks: product docs、accepted ADR、architecture、実装ownershipに矛盾がないこと。Rust control planeを
   維持する場合はTauriをlinkしないbuild/test、versioned request/result/error、panic containment、threading、
   cancellation、handle/callback lifecycleのcontract testを行う。
-- Blocker (2026-09-01): [ADR-0001](../decisions/0001-adopt-swiftui-appkit-frontend.md)とproduct visionは
+- Blocker (resolved 2026-09-03): [ADR-0001](../decisions/0001-adopt-swiftui-appkit-frontend.md)とproduct visionは
   ccedit Rust domainの再利用とversioned Swift bridgeを要求する一方、現実装のRust C ABIはbootstrap smokeだけで、
   M1 control planeはSwiftに実装されている。どちらをcutover architectureとするかaccepted decisionが必要である。
+- Resolution (2026-09-03): Swift / Rust / Goの3言語比較調査（fsnotify kqueue fd消費、Gitalyのgo-git離脱、
+  pure Go ripgrep再実装ベンチマーク、gitoxide benchmarks）を行い、[ADR-0010](../decisions/0010-m1-control-plane-swift-with-selective-rust-migration.md)
+  でM1 control planeのSwift所有を確定し、Rustの恒常的所有範囲を`clair-ptyhost`に、選択的Rust移行の基準を
+  実測/ライブラリ成熟度の証拠駆動で定めた。ADR-0001の「Rust core再利用」条項は本ADRで解釈を更新し、
+  frontend選択は維持する。product visionとqueueの整合更新を行った。
+- Validation (2026-09-03): doc-only change。product docs（vision.md）、accepted ADR（ADR-0001 front matter、
+  ADR-0010作成）、architecture（development-workspace.mdのSwift/Rust boundary節）、このqueueの整合を
+  確認した。選択的Rust移行のcontract testは将来の移行itemで実施する。Swift control plane確定のため、
+  Rust control plane維持時のcontract testは本itemでは不要。
 - Legacy issue coverage: #7、#8。
 
 ### P15 Clair-on-Clair dogfood cutover

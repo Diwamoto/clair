@@ -18,7 +18,7 @@ Clairの全操作はtyped Command Registryに定義される。人間はcommand 
 
 ## cceditとの関係
 
-Clairはcceditの別frontendではなく、ccedit v2として製品を置き換える後継である。cceditのRust coreとterminal基盤はClairへ移管して再利用し、SwiftUI/AppKitのnative macOS frontendへ置き換える。ClairでClairを日常的に開発できた時点でcceditを廃止する。
+Clairはcceditの別frontendではなく、ccedit v2として製品を置き換える後継である。terminal基盤は`clair-ptyhost`として移管済みである。cceditのRust coreの各ドメインは、[ADR-0010](../decisions/0010-m1-control-plane-swift-with-selective-rust-migration.md)の選択基準を満たすものだけをClairへ移管し、M1のcontrol planeはSwift所有とする。frontendはSwiftUI/AppKitのnative macOS実装へ置き換える。ClairでClairを日常的に開発できた時点でcceditを廃止する。
 
 ## 成功の判断
 
