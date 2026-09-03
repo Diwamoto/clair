@@ -318,6 +318,94 @@ final class AgentWorkflowCoordinator: ObservableObject {
     activities.filter { $0.projectID == projectID }
   }
 
+  /// Registers agent tabs restored from the workspace snapshot before the UI
+  /// reattaches their PTYs. The control plane must know about these sessions
+  /// even when they were created in an earlier Clair process.
+  func registerExistingSessions(in workspace: ProjectWorkspaceModel) {
+    for project in workspace.projects {
+      guard let surface = workspace.materializeSurface(for: project.id) else {
+        continue
+      }
+      for workspaceTab in surface.workspaceTabs {
+        let tab = workspaceTab.tab
+        guard
+          tab.kind == .terminal,
+          let sessionID = tab.sessionID,
+          let profileID = tab.agentProfileID,
+          !sessions.contains(where: { $0.id == sessionID }),
+          let terminal = surface.terminalSession(tabID: tab.id)
+        else {
+          continue
+        }
+
+        let workflowSession = AgentWorkflowSession(
+          agent: AgentSession(
+            id: sessionID,
+            profileID: profileID,
+            projectRoot: tab.executionRootURL ?? project.rootURL,
+            worktreeID: tab.worktreeID,
+            lifecycle: .starting
+          ),
+          projectID: project.id,
+          terminalTabID: tab.id,
+          startedAt: Date(),
+          finishedAt: nil
+        )
+        sessions.append(workflowSession)
+        observe(terminal, for: sessionID)
+        synchronizeInitialState(of: terminal, for: sessionID)
+      }
+    }
+  }
+
+  func controlSnapshots(for projectID: UUID? = nil) -> [AgentControlSnapshot] {
+    sessions
+      .filter { projectID == nil || $0.projectID == projectID }
+      .map { session in
+        AgentControlSnapshot(
+          session: session,
+          lastActivity: activities.last(where: { $0.sessionID == session.id })
+        )
+      }
+  }
+
+  func controlSnapshot(sessionID: UUID) -> AgentControlSnapshot? {
+    controlSnapshots().first(where: { $0.id == sessionID })
+  }
+
+  @discardableResult
+  func sendInput(sessionID: UUID, data: Data) throws -> AgentControlReceipt {
+    try sendInput(
+      sessionID: sessionID,
+      data: data,
+      operation: .input
+    )
+  }
+
+  @discardableResult
+  func interrupt(sessionID: UUID) throws -> AgentControlReceipt {
+    try sendInput(
+      sessionID: sessionID,
+      data: Data([0x03]),
+      operation: .interrupt
+    )
+  }
+
+  @discardableResult
+  func stop(sessionID: UUID) throws -> AgentControlReceipt {
+    guard let session = sessions.first(where: { $0.id == sessionID }) else {
+      throw AgentControlError.sessionNotFound(sessionID)
+    }
+    guard session.isActive else {
+      throw AgentControlError.sessionNotRunning(sessionID)
+    }
+    guard let terminal = terminal(for: sessionID) else {
+      throw AgentControlError.terminalUnavailable(sessionID)
+    }
+    terminal.stop()
+    return AgentControlReceipt(operation: .stop, sessionID: sessionID, accepted: true)
+  }
+
   func activeSessionIDs(for worktreeID: WorktreeID) -> Set<UUID> {
     Set(
       sessions
@@ -378,6 +466,34 @@ final class AgentWorkflowCoordinator: ObservableObject {
 
   func clearError() {
     lastErrorMessage = nil
+  }
+
+  private func sendInput(
+    sessionID: UUID,
+    data: Data,
+    operation: AgentControlOperation
+  ) throws -> AgentControlReceipt {
+    guard !data.isEmpty else {
+      throw AgentControlError.emptyInput
+    }
+    guard let session = sessions.first(where: { $0.id == sessionID }) else {
+      throw AgentControlError.sessionNotFound(sessionID)
+    }
+    guard session.isActive else {
+      throw AgentControlError.sessionNotRunning(sessionID)
+    }
+    guard let terminal = terminal(for: sessionID) else {
+      throw AgentControlError.terminalUnavailable(sessionID)
+    }
+    guard case .running = terminal.state else {
+      throw AgentControlError.sessionNotRunning(sessionID)
+    }
+    terminal.sendInput(data)
+    return AgentControlReceipt(operation: operation, sessionID: sessionID, accepted: true)
+  }
+
+  private func terminal(for sessionID: UUID) -> TerminalSession? {
+    terminalEventObservers[sessionID]?.session
   }
 
   private func observe(_ terminal: TerminalSession, for sessionID: UUID) {

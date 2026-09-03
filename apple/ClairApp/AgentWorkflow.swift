@@ -234,3 +234,107 @@ struct AgentSession: Codable, Equatable, Identifiable, Sendable {
     lifecycle = .exited(code)
   }
 }
+
+enum AgentControlState: String, Codable, CaseIterable, Sendable {
+  case starting
+  case running
+  case attention
+  case exited
+}
+
+enum AgentControlCapability: String, Codable, CaseIterable, Hashable, Sendable {
+  case observe
+  case terminalInput = "terminal_input"
+  case interrupt
+  case terminate
+}
+
+struct AgentControlSnapshot: Codable, Equatable, Identifiable, Sendable {
+  let id: UUID
+  let projectID: UUID
+  let profileID: String
+  let title: String
+  let projectRoot: URL
+  let worktreeID: WorktreeID?
+  let terminalTabID: String
+  let lifecycle: AgentSessionLifecycle
+  let state: AgentControlState
+  let startedAt: Date
+  let finishedAt: Date?
+  let lastActivity: AgentActivity?
+  let capabilities: Set<AgentControlCapability>
+
+  init(session: AgentWorkflowSession, lastActivity: AgentActivity?) {
+    id = session.id
+    projectID = session.projectID
+    profileID = session.agent.profileID
+    title = session.profile?.displayName ?? session.agent.profileID
+    projectRoot = session.agent.projectRoot
+    worktreeID = session.worktreeID
+    terminalTabID = session.terminalTabID
+    lifecycle = session.lifecycle
+    state = Self.state(for: session.lifecycle, lastActivity: lastActivity)
+    startedAt = session.startedAt
+    finishedAt = session.finishedAt
+    self.lastActivity = lastActivity
+    switch session.lifecycle {
+    case .starting:
+      capabilities = [.observe, .terminate]
+    case .running:
+      capabilities = [.observe, .terminalInput, .interrupt, .terminate]
+    case .exited:
+      capabilities = [.observe]
+    }
+  }
+
+  private static func state(
+    for lifecycle: AgentSessionLifecycle,
+    lastActivity: AgentActivity?
+  ) -> AgentControlState {
+    switch lifecycle {
+    case .starting:
+      .starting
+    case .exited:
+      .exited
+    case .running:
+      switch lastActivity?.kind {
+      case .attention, .notification, .failed:
+        .attention
+      case .none, .started, .completed, .unknown:
+        .running
+      }
+    }
+  }
+}
+
+enum AgentControlOperation: String, Codable, Sendable {
+  case input
+  case interrupt
+  case stop
+}
+
+struct AgentControlReceipt: Codable, Equatable, Sendable {
+  let operation: AgentControlOperation
+  let sessionID: UUID
+  let accepted: Bool
+}
+
+enum AgentControlError: Error, Equatable, LocalizedError, Sendable {
+  case sessionNotFound(UUID)
+  case terminalUnavailable(UUID)
+  case sessionNotRunning(UUID)
+  case emptyInput
+
+  var errorDescription: String? {
+    switch self {
+    case .sessionNotFound(let sessionID):
+      "Agent session \(sessionID.uuidString) was not found."
+    case .terminalUnavailable(let sessionID):
+      "The terminal for agent session \(sessionID.uuidString) is unavailable."
+    case .sessionNotRunning(let sessionID):
+      "Agent session \(sessionID.uuidString) is not running."
+    case .emptyInput:
+      "Agent input must not be empty."
+    }
+  }
+}

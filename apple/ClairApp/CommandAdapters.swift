@@ -8,6 +8,9 @@ enum CommandAdapterResult: Equatable, Sendable {
   case pane(projectID: UUID, focusedPaneID: UUID, paneCount: Int)
   case terminal(projectID: UUID, tabID: String?)
   case agent(AgentWorkflowSession)
+  case agents([AgentControlSnapshot])
+  case agentStatus(AgentControlSnapshot)
+  case agentControl(AgentControlReceipt)
   case worktrees(projectID: UUID, worktrees: [ManagedWorktree])
   case cleanupPlan(ManagedWorktreeCleanupPlan)
   case review(ProjectBranchReviewSnapshot)
@@ -100,6 +103,7 @@ enum CommandIPCOperation: String, Codable, Sendable {
 enum CommandIPCSource: String, Codable, Sendable {
   case cli
   case mcp
+  case mobile
 }
 
 struct CommandIPCRequest: Codable, Sendable {
@@ -108,19 +112,22 @@ struct CommandIPCRequest: Codable, Sendable {
   let commandID: String?
   let params: CommandJSONValue?
   let source: CommandIPCSource
+  let confirmed: Bool
 
   init(
     requestID: String = UUID().uuidString,
     operation: CommandIPCOperation,
     commandID: String? = nil,
     params: CommandJSONValue? = nil,
-    source: CommandIPCSource = .cli
+    source: CommandIPCSource = .cli,
+    confirmed: Bool = false
   ) {
     self.requestID = requestID
     self.operation = operation
     self.commandID = commandID
     self.params = params
     self.source = source
+    self.confirmed = confirmed
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -129,6 +136,7 @@ struct CommandIPCRequest: Codable, Sendable {
     case commandID
     case params
     case source
+    case confirmed
   }
 
   init(from decoder: Decoder) throws {
@@ -138,6 +146,7 @@ struct CommandIPCRequest: Codable, Sendable {
     commandID = try container.decodeIfPresent(String.self, forKey: .commandID)
     params = try container.decodeIfPresent(CommandJSONValue.self, forKey: .params)
     source = try container.decodeIfPresent(CommandIPCSource.self, forKey: .source) ?? .cli
+    confirmed = try container.decodeIfPresent(Bool.self, forKey: .confirmed) ?? false
   }
 }
 
@@ -428,6 +437,14 @@ enum ClairCommandCodec {
         tabID: try reader.string("tabID", required: false)
       )
       return id == .terminalStop ? .terminalStop(input) : .terminalRecover(input)
+    case .agentList:
+      return .agentList(
+        ListAgentsCommand(projectID: try reader.uuid("projectID", required: false))
+      )
+    case .agentStatus:
+      return .agentStatus(
+        AgentSessionCommand(sessionID: try reader.uuid("sessionID") ?? UUID())
+      )
     case .agentLaunch:
       return .agentLaunch(
         LaunchAgentCommand(
@@ -442,6 +459,21 @@ enum ClairCommandCodec {
           projectID: try reader.uuid("projectID") ?? UUID(),
           sessionID: try reader.uuid("sessionID") ?? UUID()
         )
+      )
+    case .agentInput:
+      return .agentInput(
+        AgentInputCommand(
+          sessionID: try reader.uuid("sessionID") ?? UUID(),
+          text: try reader.string("text") ?? ""
+        )
+      )
+    case .agentInterrupt:
+      return .agentInterrupt(
+        AgentSessionCommand(sessionID: try reader.uuid("sessionID") ?? UUID())
+      )
+    case .agentStop:
+      return .agentStop(
+        AgentSessionCommand(sessionID: try reader.uuid("sessionID") ?? UUID())
       )
     case .worktreeList:
       return .worktreeList(
@@ -609,6 +641,16 @@ enum ClairCommandCodec {
         properties: ["projectID": projectID, "tabID": optionalString],
         required: ["projectID"]
       )
+    case .agentList:
+      return objectSchema(
+        properties: ["projectID": optionalUUID],
+        required: []
+      )
+    case .agentStatus, .agentInterrupt, .agentStop:
+      return objectSchema(
+        properties: ["sessionID": projectID],
+        required: ["sessionID"]
+      )
     case .agentLaunch:
       return objectSchema(
         properties: [
@@ -622,6 +664,11 @@ enum ClairCommandCodec {
       return objectSchema(
         properties: ["projectID": projectID, "sessionID": projectID],
         required: ["projectID", "sessionID"]
+      )
+    case .agentInput:
+      return objectSchema(
+        properties: ["sessionID": projectID, "text": stringSchema()],
+        required: ["sessionID", "text"]
       )
     case .worktreeList:
       return objectSchema(properties: ["projectID": projectID], required: ["projectID"])
@@ -895,7 +942,9 @@ final class CommandAdapterRouter {
       )
     }
 
+    let explicitlyConfirmedByCLI = request.source == .cli && request.confirmed
     if registry.requiresApproval(for: commandID),
+      !explicitlyConfirmedByCLI,
       !approvalHandler.approve(
         commandID: commandID,
         title: descriptor.title,
@@ -1087,6 +1136,13 @@ final class CommandAdapterRouter {
       }
       surface.recoverTerminal(tabID: tabID)
       return .adapter(.terminal(projectID: input.projectID, tabID: tabID))
+    case .agentList(let input):
+      guard let agentWorkflow else {
+        throw CommandError.adapter("Agent workflow is unavailable.")
+      }
+      return .adapter(.agents(agentWorkflow.controlSnapshots(for: input.projectID)))
+    case .agentStatus(let input):
+      return .adapter(.agentStatus(try agentSnapshot(sessionID: input.sessionID)))
     case .agentLaunch(let input):
       return try launchAgent(input)
     case .agentReveal(let input):
@@ -1102,6 +1158,40 @@ final class CommandAdapterRouter {
       }
       workspace.revealTerminal(projectID: input.projectID, tabID: session.terminalTabID)
       return .adapter(.status("Revealed agent session \(input.sessionID.uuidString)."))
+    case .agentInput(let input):
+      guard let agentWorkflow else {
+        throw CommandError.adapter("Agent workflow is unavailable.")
+      }
+      do {
+        return .adapter(
+          .agentControl(
+            try agentWorkflow.sendInput(
+              sessionID: input.sessionID,
+              data: Data(input.text.utf8)
+            )
+          )
+        )
+      } catch let error as AgentControlError {
+        throw CommandError.agent(error)
+      }
+    case .agentInterrupt(let input):
+      guard let agentWorkflow else {
+        throw CommandError.adapter("Agent workflow is unavailable.")
+      }
+      do {
+        return .adapter(.agentControl(try agentWorkflow.interrupt(sessionID: input.sessionID)))
+      } catch let error as AgentControlError {
+        throw CommandError.agent(error)
+      }
+    case .agentStop(let input):
+      guard let agentWorkflow else {
+        throw CommandError.adapter("Agent workflow is unavailable.")
+      }
+      do {
+        return .adapter(.agentControl(try agentWorkflow.stop(sessionID: input.sessionID)))
+      } catch let error as AgentControlError {
+        throw CommandError.agent(error)
+      }
     case .worktreeList(let input):
       let project = try project(for: input.projectID)
       guard let worktreeCoordinator else {
@@ -1275,6 +1365,16 @@ final class CommandAdapterRouter {
     return .adapter(.agent(session))
   }
 
+  private func agentSnapshot(sessionID: UUID) throws -> AgentControlSnapshot {
+    guard let agentWorkflow else {
+      throw CommandError.adapter("Agent workflow is unavailable.")
+    }
+    guard let snapshot = agentWorkflow.controlSnapshot(sessionID: sessionID) else {
+      throw CommandError.agent(.sessionNotFound(sessionID))
+    }
+    return snapshot
+  }
+
   private func project(for projectID: UUID) throws -> Project {
     guard let project = workspace.projects.first(where: { $0.id == projectID }) else {
       throw CommandError.project(.projectNotOpen(projectID))
@@ -1355,7 +1455,7 @@ final class CommandAdapterRouter {
     case .unavailable(_, let message):
       code = "unavailable"
       reason = message
-    case .project, .git, .navigation, .editor, .worktree, .review:
+    case .project, .git, .navigation, .editor, .worktree, .review, .agent:
       code = "execution_failed"
       reason = "The typed command reached the GUI but could not complete."
     case .adapter(let message):
@@ -1465,14 +1565,23 @@ final class CommandAdapterRouter {
         "tabID": tabID.map(CommandJSONValue.string) ?? .null,
       ])
     case .agent(let session):
+      return encode(
+        agent: AgentControlSnapshot(session: session, lastActivity: nil)
+      )
+    case .agents(let agents):
       return .object([
-        "kind": .string("agent"),
-        "sessionID": .string(session.id.uuidString),
-        "projectID": .string(session.projectID.uuidString),
-        "profileID": .string(session.agent.profileID),
-        "terminalTabID": .string(session.terminalTabID),
-        "worktreeID": session.worktreeID.map { .string($0.uuidString) } ?? .null,
-        "lifecycle": .string(lifecycleDescription(session.lifecycle)),
+        "kind": .string("agents"),
+        "agents": .array(agents.map { encode(agent: $0) }),
+        "profiles": .array(AgentLaunchProfile.all.map(encode(profile:))),
+      ])
+    case .agentStatus(let agent):
+      return encode(agent: agent)
+    case .agentControl(let receipt):
+      return .object([
+        "kind": .string("agentControl"),
+        "operation": .string(receipt.operation.rawValue),
+        "sessionID": .string(receipt.sessionID.uuidString),
+        "accepted": .bool(receipt.accepted),
       ])
     case .worktrees(let projectID, let worktrees):
       return .object([
@@ -1638,16 +1747,75 @@ final class CommandAdapterRouter {
     ])
   }
 
-  private func lifecycleDescription(_ lifecycle: AgentSessionLifecycle) -> String {
+  private func encode(agent: AgentControlSnapshot) -> CommandJSONValue {
+    .object([
+      "kind": .string("agent"),
+      "id": .string(agent.id.uuidString),
+      "sessionID": .string(agent.id.uuidString),
+      "projectID": .string(agent.projectID.uuidString),
+      "profileID": .string(agent.profileID),
+      "title": .string(agent.title),
+      "projectRoot": .string(agent.projectRoot.path),
+      "cwd": .string(agent.projectRoot.path),
+      "terminalTabID": .string(agent.terminalTabID),
+      "worktreeID": agent.worktreeID.map { .string($0.uuidString) } ?? .null,
+      "lifecycle": .string(lifecycleStateDescription(agent.lifecycle)),
+      "state": .string(agent.state.rawValue),
+      "attention": .bool(agent.state == .attention),
+      "startedAt": .string(ISO8601DateFormatter().string(from: agent.startedAt)),
+      "finishedAt": agent.finishedAt.map {
+        .string(ISO8601DateFormatter().string(from: $0))
+      } ?? .null,
+      "exitCode": agent.lifecycle.exitCode.map { .number(Double($0)) } ?? .null,
+      "capabilities": .array(
+        mobileCapabilities(for: agent)
+      ),
+      "controlCapabilities": .array(
+        agent.capabilities
+          .sorted { $0.rawValue < $1.rawValue }
+          .map { .string($0.rawValue) }
+      ),
+      "lastActivity": agent.lastActivity.map(encode(activity:)) ?? .null,
+      "lastActivityAt": agent.lastActivity.map {
+        .string(ISO8601DateFormatter().string(from: $0.occurredAt))
+      } ?? .null,
+    ])
+  }
+
+  private func mobileCapabilities(for agent: AgentControlSnapshot) -> [CommandJSONValue] {
+    var capabilities: Set<String> = ["agent_catalog", "agent_status"]
+    if agent.capabilities.contains(.terminalInput) {
+      capabilities.insert("terminal_input")
+    }
+    if agent.capabilities.contains(.interrupt) {
+      capabilities.insert("terminal_interrupt")
+    }
+    if agent.capabilities.contains(.terminate) {
+      capabilities.insert("agent_control")
+    }
+    return capabilities.sorted().map(CommandJSONValue.string)
+  }
+
+  private func encode(profile: AgentLaunchProfile) -> CommandJSONValue {
+    .object([
+      "id": .string(profile.stableID),
+      "title": .string(profile.displayName),
+      "executable": .string(profile.executable),
+      "capabilities": .array([.string("agent_launch")]),
+    ])
+  }
+
+  private func lifecycleStateDescription(_ lifecycle: AgentSessionLifecycle) -> String {
     switch lifecycle {
     case .starting:
       "starting"
     case .running:
       "running"
-    case .exited(let code):
-      "exited:\(code)"
+    case .exited:
+      "exited"
     }
   }
+
 }
 
 enum CommandProjectRouter {

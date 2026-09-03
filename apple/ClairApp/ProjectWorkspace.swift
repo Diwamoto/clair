@@ -67,6 +67,37 @@ final class ProjectWorkspaceModel: ObservableObject {
     return projects.first { $0.id == activeProjectID }
   }
 
+  /// Returns the already-restored surface for a Project, when it has been
+  /// materialized. Non-active Projects are created lazily when first opened.
+  func surface(for projectID: UUID) -> ProjectSurfaceModel? {
+    surfaces[projectID]
+  }
+
+  /// Materializes a non-active Project surface for control-plane consumers.
+  /// The normal UI path remains lazy, while agent discovery can inspect and
+  /// reattach every persisted agent tab without depending on the visible pane.
+  func materializeSurface(for projectID: UUID) -> ProjectSurfaceModel? {
+    guard let project = projects.first(where: { $0.id == projectID }) else {
+      return nil
+    }
+    if let surface = surfaces[projectID] {
+      return surface
+    }
+
+    let surface = ProjectSurfaceModel(
+      projectID: project.id,
+      rootURL: project.rootURL,
+      rootChecker: rootChecker,
+      historyStore: historyStore,
+      snapshot: surfaceSnapshots[project.id],
+      onSnapshotChange: { [weak self] snapshot in
+        self?.persistSurfaceSnapshot(snapshot)
+      }
+    )
+    surfaces[project.id] = surface
+    return surface
+  }
+
   func dismissError() {
     lastErrorMessage = nil
   }
@@ -604,6 +635,14 @@ final class ProjectSurfaceModel: ObservableObject {
 
   var paneIDs: [UUID] {
     layout.leafIDs
+  }
+
+  /// All tabs in document order, retaining their owning pane for the global
+  /// workspace tab strip.
+  var workspaceTabs: [ProjectWorkspaceTab] {
+    layout.leaves.flatMap { leaf in
+      leaf.tabs.map { ProjectWorkspaceTab(paneID: leaf.id, tab: $0) }
+    }
   }
 
   var visibleLayout: ProjectPaneNode {

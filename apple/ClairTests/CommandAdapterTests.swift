@@ -51,6 +51,56 @@ final class CommandAdapterTests: XCTestCase {
     )
     XCTAssertEqual(optionalCommand.id, .editorSave)
     XCTAssertEqual(CommandRegistry().descriptor(for: .navigationOpenFile)?.risk, .additive)
+
+    let agentList = try ClairCommandCodec.makeCommand(
+      id: .agentList,
+      parameters: .object([:])
+    )
+    XCTAssertEqual(agentList.id, .agentList)
+
+    let agentInput = try ClairCommandCodec.makeCommand(
+      id: .agentInput,
+      parameters: .object([
+        "sessionID": .string(UUID().uuidString),
+        "text": .string("continue"),
+      ])
+    )
+    XCTAssertEqual(agentInput.id, .agentInput)
+  }
+
+  func testAgentListAndStatusAreExposedThroughTheSameIPCAdapter() {
+    let workspace = ProjectWorkspaceModel(store: ProjectStore(fileURL: nil))
+    let agentWorkflow = AgentWorkflowCoordinator(startHookMonitoring: false)
+    let router = CommandAdapterRouter(
+      workspace: workspace,
+      agentWorkflow: agentWorkflow
+    )
+
+    let listResponse = router.handle(
+      CommandIPCRequest(
+        operation: .call,
+        commandID: ClairCommandID.agentList.rawValue,
+        params: .object([:]),
+        source: .cli
+      )
+    )
+    XCTAssertTrue(listResponse.ok)
+    guard case .object(let result)? = listResponse.result else {
+      return XCTFail("Agent list did not return a structured result.")
+    }
+    XCTAssertEqual(result["kind"], .string("agents"))
+    XCTAssertEqual(result["agents"], .array([]))
+
+    let missingStatus = router.handle(
+      CommandIPCRequest(
+        operation: .call,
+        commandID: ClairCommandID.agentStatus.rawValue,
+        params: .object(["sessionID": .string(UUID().uuidString)]),
+        source: .cli
+      )
+    )
+    XCTAssertFalse(missingStatus.ok)
+    XCTAssertEqual(missingStatus.error?.code, "execution_failed")
   }
 
   func testLongestPrefixRoutingChoosesNestedProject() {
@@ -185,5 +235,40 @@ final class CommandAdapterTests: XCTestCase {
     XCTAssertFalse(response.ok)
     XCTAssertEqual(response.error?.code, "approval_denied")
     XCTAssertEqual(workspace.projects.count, 0)
+  }
+
+  func testExplicitCLIConfirmationBypassesGUIApprovalForHeadlessTesting() throws {
+    let rootURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent(
+        "clair-command-adapter-confirmed-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(
+      at: rootURL,
+      withIntermediateDirectories: false
+    )
+    defer {
+      try? FileManager.default.removeItem(at: rootURL)
+    }
+
+    let workspace = ProjectWorkspaceModel(
+      store: ProjectStore(fileURL: rootURL.appendingPathComponent("store.json"))
+    )
+    let approvals = CommandAdapterApprovalSpy(decision: false)
+    let router = CommandAdapterRouter(
+      workspace: workspace,
+      approvalHandler: approvals
+    )
+    let response = router.handle(
+      CommandIPCRequest(
+        operation: .call,
+        commandID: ClairCommandID.openProject.rawValue,
+        params: .object(["rootPath": .string(rootURL.path)]),
+        source: .cli,
+        confirmed: true
+      )
+    )
+
+    XCTAssertTrue(response.ok)
+    XCTAssertTrue(approvals.approvedCommandIDs.isEmpty)
+    XCTAssertEqual(workspace.projects.count, 1)
   }
 }

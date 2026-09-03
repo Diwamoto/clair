@@ -108,4 +108,36 @@ final class AgentWorkflowTests: XCTestCase {
     )
     XCTAssertEqual(decoded, session)
   }
+
+  func testAgentControlSnapshotSeparatesFactualAttentionFromLifecycle() {
+    let projectID = UUID()
+    let sessionID = UUID()
+    let workflow = AgentWorkflowSession(
+      agent: AgentSession(
+        id: sessionID,
+        profile: .codex,
+        projectRoot: URL(fileURLWithPath: "/tmp/agent-project"),
+        lifecycle: .running
+      ),
+      projectID: projectID,
+      terminalTabID: "terminal:\(sessionID.uuidString)",
+      startedAt: Date(timeIntervalSince1970: 1),
+      finishedAt: nil
+    )
+    let attention = AgentActivity.officialHook(
+      projectID: projectID,
+      sessionID: sessionID,
+      kind: .attention,
+      occurredAt: Date(timeIntervalSince1970: 2),
+      summary: "Needs input"
+    )
+
+    let snapshot = AgentControlSnapshot(session: workflow, lastActivity: attention)
+
+    XCTAssertEqual(snapshot.id, sessionID)
+    XCTAssertEqual(snapshot.state, .attention)
+    XCTAssertEqual(snapshot.lastActivity?.kind, .attention)
+    XCTAssertTrue(snapshot.capabilities.contains(.terminalInput))
+    XCTAssertTrue(snapshot.capabilities.contains(.interrupt))
+  }
 }

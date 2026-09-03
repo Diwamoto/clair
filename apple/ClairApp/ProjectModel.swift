@@ -463,6 +463,19 @@ struct ProjectSurfaceSnapshot: Codable, Equatable, Sendable {
   }
 }
 
+/// A tab together with the pane that currently owns it.
+///
+/// The native shell renders these in one workspace-level titlebar strip so a
+/// tab never loses its Project/surface ownership when panes are split.
+struct ProjectWorkspaceTab: Identifiable, Equatable, Sendable {
+  let paneID: UUID
+  let tab: ProjectPaneTab
+
+  var id: String {
+    tab.id
+  }
+}
+
 struct ProjectWorkspaceStoreSnapshot: Codable, Equatable, Sendable {
   static let currentSchemaVersion = 1
 

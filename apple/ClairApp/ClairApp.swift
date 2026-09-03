@@ -27,6 +27,8 @@ struct ClairApplication: App {
       wrappedValue: workspace
     )
     let agentWorkflow = AgentWorkflowCoordinator(profile: profile)
+    agentWorkflow.registerExistingSessions(in: workspace)
+    workspace.reattachRuntimeSessions()
     let worktreeCoordinator = ProjectWorktreeCoordinator.makeDefault(for: profile)
     _agentWorkflow = StateObject(wrappedValue: agentWorkflow)
     _worktreeCoordinator = StateObject(wrappedValue: worktreeCoordinator)

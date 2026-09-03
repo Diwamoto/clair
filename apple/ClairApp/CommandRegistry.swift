@@ -22,8 +22,13 @@ enum ClairCommandID: String, CaseIterable, Codable, Hashable, Sendable {
   case terminalOpen = "terminal.open"
   case terminalStop = "terminal.stop"
   case terminalRecover = "terminal.recover"
+  case agentList = "agent.list"
+  case agentStatus = "agent.status"
   case agentLaunch = "agent.launch"
   case agentReveal = "agent.reveal"
+  case agentInput = "agent.input"
+  case agentInterrupt = "agent.interrupt"
+  case agentStop = "agent.stop"
   case worktreeList = "worktree.list"
   case worktreeCreate = "worktree.create"
   case worktreePrepareCleanup = "worktree.prepareCleanup"
@@ -174,6 +179,19 @@ struct LaunchAgentCommand: Sendable {
   let worktreeID: WorktreeID?
 }
 
+struct ListAgentsCommand: Sendable {
+  let projectID: UUID?
+}
+
+struct AgentSessionCommand: Sendable {
+  let sessionID: UUID
+}
+
+struct AgentInputCommand: Sendable {
+  let sessionID: UUID
+  let text: String
+}
+
 struct RevealAgentCommand: Sendable {
   let projectID: UUID
   let sessionID: UUID
@@ -239,8 +257,13 @@ enum ClairCommand: Sendable {
   case terminalOpen(ProjectTargetCommand)
   case terminalStop(TerminalCommand)
   case terminalRecover(TerminalCommand)
+  case agentList(ListAgentsCommand)
+  case agentStatus(AgentSessionCommand)
   case agentLaunch(LaunchAgentCommand)
   case agentReveal(RevealAgentCommand)
+  case agentInput(AgentInputCommand)
+  case agentInterrupt(AgentSessionCommand)
+  case agentStop(AgentSessionCommand)
   case worktreeList(WorktreeListCommand)
   case worktreeCreate(WorktreeCreateCommand)
   case worktreePrepareCleanup(WorktreeCleanupCommand)
@@ -300,10 +323,20 @@ enum ClairCommand: Sendable {
       .terminalStop
     case .terminalRecover:
       .terminalRecover
+    case .agentList:
+      .agentList
+    case .agentStatus:
+      .agentStatus
     case .agentLaunch:
       .agentLaunch
     case .agentReveal:
       .agentReveal
+    case .agentInput:
+      .agentInput
+    case .agentInterrupt:
+      .agentInterrupt
+    case .agentStop:
+      .agentStop
     case .worktreeList:
       .worktreeList
     case .worktreeCreate:
@@ -362,6 +395,7 @@ enum CommandError: Error, Equatable, LocalizedError, Sendable {
   case editor(ProjectEditorError)
   case worktree(ManagedWorktreeError)
   case review(ProjectBranchReviewError)
+  case agent(AgentControlError)
   case adapter(String)
 
   var errorDescription: String? {
@@ -379,6 +413,8 @@ enum CommandError: Error, Equatable, LocalizedError, Sendable {
     case .worktree(let error):
       error.localizedDescription
     case .review(let error):
+      error.localizedDescription
+    case .agent(let error):
       error.localizedDescription
     case .adapter(let message):
       message
@@ -518,6 +554,18 @@ struct CommandRegistry: Sendable {
         aiAvailable: true
       ),
       CommandDescriptor(
+        id: .agentList,
+        title: "List Agent Sessions",
+        risk: .read,
+        aiAvailable: true
+      ),
+      CommandDescriptor(
+        id: .agentStatus,
+        title: "Show Agent Status",
+        risk: .read,
+        aiAvailable: true
+      ),
+      CommandDescriptor(
         id: .agentLaunch,
         title: "Launch Agent",
         risk: .external,
@@ -528,6 +576,24 @@ struct CommandRegistry: Sendable {
         title: "Reveal Agent Session",
         risk: .read,
         aiAvailable: true
+      ),
+      CommandDescriptor(
+        id: .agentInput,
+        title: "Send Agent Input",
+        risk: .write,
+        aiAvailable: true
+      ),
+      CommandDescriptor(
+        id: .agentInterrupt,
+        title: "Interrupt Agent",
+        risk: .write,
+        aiAvailable: true
+      ),
+      CommandDescriptor(
+        id: .agentStop,
+        title: "Stop Agent",
+        risk: .destructive,
+        aiAvailable: false
       ),
       CommandDescriptor(
         id: .worktreeList,
@@ -715,6 +781,8 @@ struct CommandRegistry: Sendable {
         in: state,
         action: "change"
       )
+    case .agentList, .agentStatus, .agentInput, .agentInterrupt, .agentStop:
+      availability = .available
     case .agentLaunch(let input):
       availability = projectValueAvailability(
         projectID: input.projectID,
