@@ -67,6 +67,9 @@ jobs:
 
           app_path="$derived_data/Build/Products/Release/Clair.app"
           test -d "$app_path"
+          install -m 0755 target/release/clair "$app_path/Contents/MacOS/clair"
+          test -x "$app_path/Contents/MacOS/clair"
+          "$app_path/Contents/MacOS/clair" --version
           install -m 0755 target/release/clair-ptyhost "$app_path/Contents/Resources/clair-ptyhost"
           test -x "$app_path/Contents/Resources/clair-ptyhost"
           /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$app_path/Contents/Info.plist" | grep -Fx "$version"

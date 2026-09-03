@@ -123,6 +123,7 @@ def request(
     params: dict[str, Any] | None = None,
     source: str = "cli",
     no_launch: bool = False,
+    confirmed: bool = False,
 ) -> dict[str, Any]:
     ensure_running(channel, no_launch)
     payload: dict[str, Any] = {
@@ -134,6 +135,8 @@ def request(
         payload["commandID"] = command_id.removeprefix("clair.")
     if params is not None:
         payload["params"] = params
+    if confirmed:
+        payload["confirmed"] = True
     return send_request(channel, payload)
 
 
@@ -190,6 +193,84 @@ def handle_cli(args: argparse.Namespace) -> int:
     if args.action == "list":
         response = request(args.channel, "list", no_launch=args.no_launch)
         return print_response(response)
+    if args.action == "agent":
+        if args.agent_action == "list":
+            params = {}
+            if args.project_id is not None:
+                params["projectID"] = args.project_id
+            response = request(
+                args.channel,
+                "call",
+                "agent.list",
+                params,
+                no_launch=args.no_launch,
+            )
+            return print_response(response)
+        if args.agent_action == "status":
+            response = request(
+                args.channel,
+                "call",
+                "agent.status",
+                {"sessionID": args.session_id},
+                no_launch=args.no_launch,
+            )
+            return print_response(response)
+        if args.agent_action == "launch":
+            params = {
+                "projectID": args.project_id,
+                "profileID": args.profile_id,
+            }
+            if args.worktree_id is not None:
+                params["worktreeID"] = args.worktree_id
+            response = request(
+                args.channel,
+                "call",
+                "agent.launch",
+                params,
+                no_launch=args.no_launch,
+                confirmed=args.yes,
+            )
+            return print_response(response)
+        if args.agent_action == "reveal":
+            response = request(
+                args.channel,
+                "call",
+                "agent.reveal",
+                {"projectID": args.project_id, "sessionID": args.session_id},
+                no_launch=args.no_launch,
+            )
+            return print_response(response)
+        if args.agent_action == "input":
+            response = request(
+                args.channel,
+                "call",
+                "agent.input",
+                {"sessionID": args.session_id, "text": args.text},
+                no_launch=args.no_launch,
+                confirmed=args.yes,
+            )
+            return print_response(response)
+        if args.agent_action == "interrupt":
+            response = request(
+                args.channel,
+                "call",
+                "agent.interrupt",
+                {"sessionID": args.session_id},
+                no_launch=args.no_launch,
+                confirmed=args.yes,
+            )
+            return print_response(response)
+        if args.agent_action == "stop":
+            response = request(
+                args.channel,
+                "call",
+                "agent.stop",
+                {"sessionID": args.session_id},
+                no_launch=args.no_launch,
+                confirmed=args.yes,
+            )
+            return print_response(response)
+        raise RuntimeError(f"unsupported agent action: {args.agent_action}")
     if args.action == "command":
         try:
             params = json.loads(args.params)
@@ -205,6 +286,7 @@ def handle_cli(args: argparse.Namespace) -> int:
             args.command_id,
             params,
             no_launch=args.no_launch,
+            confirmed=args.yes,
         )
         return print_response(response)
     raise RuntimeError(f"unsupported CLI action: {args.action}")
@@ -289,7 +371,7 @@ def handle_mcp(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Send typed commands to the local Clair GUI")
+    parser = argparse.ArgumentParser(description="Send typed commands to the local Clair command server")
     parser.add_argument("--channel", choices=("stable", "dev"), default=os.environ.get("CLAIR_CHANNEL", "dev"))
     parser.add_argument("--no-launch", action="store_true", help="fail instead of launching the built app")
     subparsers = parser.add_subparsers(dest="action", required=True)
@@ -299,9 +381,42 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("list", help="list registered commands")
 
+    agent_parser = subparsers.add_parser("agent", help="inspect and control Clair agent sessions")
+    agent_subparsers = agent_parser.add_subparsers(dest="agent_action", required=True)
+
+    agent_list_parser = agent_subparsers.add_parser("list", help="list known agent sessions")
+    agent_list_parser.add_argument("--project-id", help="only list agents in this Project")
+
+    agent_status_parser = agent_subparsers.add_parser("status", help="show one agent session")
+    agent_status_parser.add_argument("session_id")
+
+    agent_launch_parser = agent_subparsers.add_parser("launch", help="launch a registered agent profile")
+    agent_launch_parser.add_argument("project_id")
+    agent_launch_parser.add_argument("profile_id")
+    agent_launch_parser.add_argument("--worktree-id")
+    agent_launch_parser.add_argument("--yes", action="store_true", help="confirm the external agent launch")
+
+    agent_reveal_parser = agent_subparsers.add_parser("reveal", help="reveal an agent session in Clair")
+    agent_reveal_parser.add_argument("project_id")
+    agent_reveal_parser.add_argument("session_id")
+
+    agent_input_parser = agent_subparsers.add_parser("input", help="send UTF-8 input to an agent PTY")
+    agent_input_parser.add_argument("session_id")
+    agent_input_parser.add_argument("--text", required=True)
+    agent_input_parser.add_argument("--yes", action="store_true", help="confirm the terminal write")
+
+    agent_interrupt_parser = agent_subparsers.add_parser("interrupt", help="send Ctrl-C to an agent PTY")
+    agent_interrupt_parser.add_argument("session_id")
+    agent_interrupt_parser.add_argument("--yes", action="store_true", help="confirm the interrupt")
+
+    agent_stop_parser = agent_subparsers.add_parser("stop", help="stop an agent session")
+    agent_stop_parser.add_argument("session_id")
+    agent_stop_parser.add_argument("--yes", action="store_true", help="confirm stopping the agent")
+
     command_parser = subparsers.add_parser("command", help="call any registered CLI command")
     command_parser.add_argument("command_id")
     command_parser.add_argument("--params", default="{}")
+    command_parser.add_argument("--yes", action="store_true", help="confirm a write, destructive, or external command")
 
     mcp_parser = subparsers.add_parser("mcp", help="run the MCP stdio adapter")
     mcp_parser.add_argument("serve", choices=("serve",))

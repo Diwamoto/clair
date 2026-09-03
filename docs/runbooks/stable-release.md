@@ -37,7 +37,8 @@ xcrun swift scripts/generate-update-key.swift
    ```
 
 3. `Stable release` workflowが`Clair.app`をRelease configurationでbuildする。
-   workflowはApple signing/notarizationを行わず、`clair-ptyhost`をapp resourceへ含める。
+   workflowはApple signing/notarizationを行わず、Rust製`clair` CLIをapp executableへ、
+   `clair-ptyhost`をapp resourceへ含める。CLIは`Clair.app/Contents/MacOS/clair`から利用できる。
 4. workflowが`Clair-<version>-macos-arm64.zip`と`latest.json`を同じGitHub Releaseへpublishする。
    `latest.json`はartifactのversion、channel、platform、architecture、download URL、SHA-256をEd25519で署名する。
 

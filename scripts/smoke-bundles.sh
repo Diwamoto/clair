@@ -10,6 +10,7 @@ verify_bundle() {
     local info_plist="$app_path/Contents/Info.plist"
     local executable="$app_path/Contents/MacOS/$expected_display_name"
     local debug_dylib="$app_path/Contents/MacOS/$expected_display_name.debug.dylib"
+    local cli="$app_path/Contents/MacOS/clair"
 
     if [[ ! -f "$info_plist" ]]; then
         printf 'bundle-smoke: missing Info.plist: %s\n' "$info_plist" >&2
@@ -19,6 +20,11 @@ verify_bundle() {
         printf 'bundle-smoke: missing executable: %s\n' "$executable" >&2
         return 1
     fi
+    if [[ ! -x "$cli" ]]; then
+        printf 'bundle-smoke: missing native CLI: %s\n' "$cli" >&2
+        return 1
+    fi
+    "$cli" --version >/dev/null
 
     local actual_bundle_id
     local actual_display_name

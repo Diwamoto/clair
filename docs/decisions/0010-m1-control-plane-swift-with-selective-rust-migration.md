@@ -123,7 +123,10 @@ Swift / Rust / Goの3言語を比較調査した。
    threading、cancellation、handle/callback lifecycleのcontract testを伴わない移行を
    行わない。Command Registryのstable command ID、typed parameter/result/error、
    `aiAvailable`、static riskの外部契約は言語境界に関わらず維持する。Tauriをlinkしない
-   build/testであること。
+   build/testであること。リリースに同梱する`clair` CLIはRust製の薄いlocal IPC client
+   として実装してよいが、これはadapterのprocess boundaryを選ぶものであり、commandの
+   semantics、agent state、authorizationのownershipをRustへ移すdomain migrationではない。
+   CLIはこのversioned external contractを維持する。
 5. cceditのRust資産の「移管」は上記の選択基準に従う個別移行として扱い、M1のcutover
    条件から外す。terminal基盤の移管は`clair-ptyhost`で完了と見なす。
 

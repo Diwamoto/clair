@@ -11,10 +11,10 @@ fi
 
 case "$configuration" in
     Debug)
-        cargo_args=(build -p clair-core -p clair-ptyhost --locked)
+        cargo_args=(build -p clair-core -p clair-cli -p clair-ptyhost --locked)
         ;;
     Release)
-        cargo_args=(build -p clair-core -p clair-ptyhost --locked --release)
+        cargo_args=(build -p clair-core -p clair-cli -p clair-ptyhost --locked --release)
         ;;
     *)
         printf 'build-rust: unsupported Xcode configuration: %s\n' "$configuration" >&2

@@ -1,0 +1,17 @@
+[package]
+name = "clair-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "clair"
+path = "src/main.rs"
+
+[dependencies]
+serde_json = "1.0.149"
+
+[lints]
+workspace = true

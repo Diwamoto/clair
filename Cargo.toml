@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/clair-core",
+    "crates/clair-cli",
     "crates/clair-ptyhost",
 ]
 resolver = "2"
