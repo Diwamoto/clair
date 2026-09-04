@@ -23,6 +23,19 @@
 - P13 typed Command Registry for registered agent launch projection.
 - Accepted product scope and [ADR-0011](../../decisions/0011-early-mobile-agent-control.md).
 
+## Current execution status (2026-09-04)
+
+- [x] `MobileControlHost`がhost identity、one-time pairing、P-256 challenge、opaque token digest、device revoke、
+  scope/worktree visibility、remote disableを一元管理する。
+- [x] localhost-only framed listenerとNetwork.framework clientが同じRPC/terminal envelopeを利用する。
+- [x] session journal、per-subscriber bounded queue、epoch/cursor gap、arrival-order input、操作配送handlerを共有する。
+- [x] iOS/macOS共有client stateがlocal viewport、bounded raw scrollback、duplicate/gap/exitを扱う。
+- [x] APNs向けcontent-free attention payloadを定義する。
+- [ ] macOS app runtimeへのhost/PTY/agent bridge、QR/deep-link UI、native iOS UI、Cloudflare/Tailscale実運用、
+  APNs送信、private TestFlight CIを実装・検証する。
+
+この状態ではP16のキュー項目を`active`に保つ。host coreの検証済み範囲を先に固定し、未実装の運用経路を完了扱いにしない。
+
 ## Slice 0: Shared protocol foundation — complete
 
 ### Changes

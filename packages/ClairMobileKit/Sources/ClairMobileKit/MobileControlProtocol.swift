@@ -177,6 +177,9 @@ public enum MobileProtocolNegotiator {
 
 public enum MobileControlMethod: String, CaseIterable, Codable, Sendable {
   case initialize
+  case pair = "device/pair"
+  case challenge = "device/challenge"
+  case authenticate = "device/authenticate"
   case sessionList = "session/list"
   case sessionSubscribe = "session/subscribe"
   case sessionUnsubscribe = "session/unsubscribe"
@@ -758,19 +761,25 @@ public struct MobileTerminalInputOperation: Codable, Equatable, Identifiable, Se
   }
 }
 
-public struct MobileAcceptedInput: Equatable, Sendable {
+public struct MobileAcceptedInput: Codable, Equatable, Sendable {
   public let operationID: UUID
+  public let deviceID: UUID
+  public let sessionID: UUID
   public let arrivalSequence: UInt64
   public let isDuplicate: Bool
   public let payload: Data
 
   public init(
     operationID: UUID,
+    deviceID: UUID,
+    sessionID: UUID,
     arrivalSequence: UInt64,
     isDuplicate: Bool,
     payload: Data
   ) {
     self.operationID = operationID
+    self.deviceID = deviceID
+    self.sessionID = sessionID
     self.arrivalSequence = arrivalSequence
     self.isDuplicate = isDuplicate
     self.payload = payload
@@ -800,16 +809,17 @@ public struct MobileInputSequencer: Sendable {
   public mutating func accept(
     _ operation: MobileTerminalInputOperation,
     grant: MobileDeviceGrant,
-    visibleSessionIDs: Set<UUID>
+    visibleSessionIDs: Set<UUID>,
+    requiredScope: MobileControlScope = .writeTerminal
   ) throws -> MobileAcceptedInput {
     guard !grant.isRevoked else {
       throw MobileProtocolError.revokedDevice
     }
     guard grant.deviceID == operation.deviceID else {
-      throw MobileProtocolError.invalidScope(.writeTerminal)
+      throw MobileProtocolError.invalidScope(requiredScope)
     }
-    guard grant.scopes.contains(.writeTerminal) else {
-      throw MobileProtocolError.invalidScope(.writeTerminal)
+    guard grant.scopes.contains(requiredScope) else {
+      throw MobileProtocolError.invalidScope(requiredScope)
     }
     guard visibleSessionIDs.contains(operation.sessionID) else {
       throw MobileProtocolError.sessionNotVisible(operation.sessionID)
@@ -828,6 +838,8 @@ public struct MobileInputSequencer: Sendable {
       }
       return MobileAcceptedInput(
         operationID: previous.acceptance.operationID,
+        deviceID: previous.acceptance.deviceID,
+        sessionID: previous.acceptance.sessionID,
         arrivalSequence: previous.acceptance.arrivalSequence,
         isDuplicate: true,
         payload: previous.acceptance.payload
@@ -837,6 +849,8 @@ public struct MobileInputSequencer: Sendable {
     nextArrivalSequence = nextArrivalSequence == UInt64.max ? 1 : nextArrivalSequence + 1
     let acceptance = MobileAcceptedInput(
       operationID: operation.id,
+      deviceID: operation.deviceID,
+      sessionID: operation.sessionID,
       arrivalSequence: nextArrivalSequence,
       isDuplicate: false,
       payload: operation.payload

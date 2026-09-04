@@ -63,19 +63,25 @@ private TestFlight CIも含む。
 - [x] protocol foundationの実装とテストを開始した
 - [x] Clair-owned agent control planeと復元済みagent session discoveryを実装した
 - [x] 同じagent commandをlocal CLIからJSONで実行できるようにした
+- [x] host identity、one-time pairing、device challenge/revoke、bounded stream hostを実装した
+- [x] localhost-only listener、共有Network client、client-side gap/scrollback stateを実装した
+- [x] APNsへ渡せるcontent-free attention payloadを実装した
+- [ ] Clair macOS runtimeへのhost bridge、pairing UI、iOS UI、vendor private-route運用を完了する
 
 ## Completion summary
 
-Slice 0 の共有 `ClairMobileKit` に加え、Clair本体へ agent control plane を追加した。復元済みを含む agent
-sessionをstable IDでカタログ化し、factual lifecycle/attention/capabilityを返し、input、interrupt、stopを
-PTYへ安全に適用する。登録済みprofile launchと、同じ `CommandRegistry` を使う native Rust `clair`
-CLI（JSON出力、明示的な `--yes` headless confirmation）まで実装済み。`scripts/clair`はsource-tree
-compatibility adapterとして残る。Hostのremote bridge、iOS UI、
-private transport adapter（Cloudflare/Tailscale）、QR/APNs、TestFlight CIは後続sliceとして未完了。
+Slice 0/1A の共有 protocol と agent control plane に加え、今回のP16実装で `ClairMobileKit` に host core、
+localhost-only framed listener、Network.framework client、client-local bounded scrollback、操作配送handlerを
+追加した。hostはone-time pairing、P-256 challenge、opaque token digest、per-device revoke、session epoch/cursor/gap、
+broker到着順のraw inputを正本として持つ。APNs向け通知はopaque wake IDだけを含む。`clair-ptyhost`を直接公開せず、
+private routeは同じTCP endpointへproxyする境界に固定した。
+
+まだP16を完了扱いにはしない。macOSアプリのruntimeへhostを組み込むadapter、QR/deep-link UI、native iOS UI、
+Cloudflare/Tailscaleの実運用設定、APNs送信、private TestFlight CIは次のSlice 3/4で残っている。
 
 ## Validation evidence
 
-- 2026-09-03: `CLANG_MODULE_CACHE_PATH=/private/tmp/clair-mobile-clang-cache SWIFT_MODULECACHE_PATH=/private/tmp/clair-mobile-swift-cache swift test --package-path packages/ClairMobileKit` — 12 tests passed.
+- 2026-09-04: `CLANG_MODULE_CACHE_PATH=/private/tmp/clair-mobile-clang-cache SWIFT_MODULECACHE_PATH=/private/tmp/clair-mobile-swift-cache swift test --package-path packages/ClairMobileKit` — 26 tests passed。host/store、pair/revoke、stream gap、ordered input、RPC、loopback listener/client、client scrollback、APNs payload redaction、disable fallback、multi-connection isolationを確認。
 - 2026-09-03: `make test-swift` — 109 tests passed.
 - 2026-09-03: `python3 -m py_compile scripts/clair`, `./scripts/clair --help`, `./scripts/clair agent --help`, `git diff --check`, and `./scripts/validate-xcode-project.rb` passed.
 - 2026-09-03: 現行product scope、P07/P09のlocal foundation、既存ADRを確認し、raw-terminal firstのpriorityをADR-0011へ記録。

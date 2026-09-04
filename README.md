@@ -124,7 +124,7 @@ target/debug/clair --channel dev agent input <SESSION_ID> --text $'continue\n' -
 
 ```text
 apple/       SwiftUI/AppKitのmacOSアプリとSwiftテスト
-packages/    iOS/macOS共有Swift package（mobile protocol）
+packages/    iOS/macOS共有Swift package（mobile control/host/client）
 crates/      Rust core、native CLI、local PTY host
 scripts/     build、run、test、smoke用の補助スクリプト
 docs/        product、architecture、decision、roadmap、runbook

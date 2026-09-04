@@ -556,7 +556,7 @@ dependencyとする独立したhigh-priority itemで、現在のactive item完�
 
 ### P16 Early mobile agent control
 
-- Status: `queued`
+- Status: `active`
 - Priority: `high`
 - Depends on: P07、P09、P10、P13。P15のcutover完了はdependencyにしない。
 - Outcome: 自所有Macで動くClairのregistered agentを、private network上のiPhone/iPadから確認・raw操作・起動できる。
@@ -566,6 +566,12 @@ dependencyとする独立したhigh-priority itemで、現在のactive item完�
   agent launch、agent attention、Mac GUI close後のhost継続、remote disable時のlocal fallback。
 - Durable detail: [p0020-mobile-agent-remote-control](../projects/p0020-mobile-agent-remote-control/README.md) and
   [ADR-0011](../decisions/0011-early-mobile-agent-control.md)。
+- Progress (2026-09-04): `ClairMobileKit`にhost identity/pairing/challenge/revoke、session journalとsubscriber gap、
+  localhost-only framed listener、Network.framework client、client-local bounded scrollback、操作配送handler、
+  APNs content-free payloadを追加した。host coreとlistener/clientのloopback統合、disable fallback、
+  multi-connection isolationを26テストで確認した。
+- Remaining: macOS runtimeへのPTY/agent bridge、QR/deep-link UI、native iOS UI、Cloudflare/Tailscale実経路、APNs送信、
+  private TestFlight CI。これらが未完了のためstatusは`active`を維持する。
 - Deferred: semantic approval/status、vendor adapter、public relay/E2EE、branch review、mobile source editor、team identity。
 
 ### P15 Clair-on-Clair dogfood cutover

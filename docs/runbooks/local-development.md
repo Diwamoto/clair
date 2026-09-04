@@ -619,9 +619,14 @@ The mobile contract checks are:
 swift test --package-path packages/ClairMobileKit
 ~~~
 
-The mobile package currently provides the versioned control/data contract and
-authorization rules. Its network host bridge, pairing UI, and iOS client remain
-later P0020 slices; use the CLI projection for screen-free local control-plane tests.
+The mobile package provides the versioned control/data contract, authorization rules,
+host core, localhost-only framed listener, Network.framework client, client-local
+scrollback/gap state, and content-free attention payload. The focused package tests
+exercise pair/revoke, RPC authentication, loopback listener/client, bounded streams,
+ordered input, and payload redaction. The macOS runtime bridge, pairing UI, native iOS
+UI, Cloudflare/Tailscale operations, APNs sender, and TestFlight CI remain later P0020
+slices. Use the package test command for the transport-neutral local checks and the CLI
+projection for the existing screen-free control-plane checks.
 
 The automated P13 checks are:
 

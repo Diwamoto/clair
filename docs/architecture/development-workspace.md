@@ -89,7 +89,12 @@ subscriber has a bounded 256 KiB queue. If a cursor or slow subscriber falls beh
 the broker emits a gap and the plain-text client resets its transcript with an
 explicit recovery marker. This is the current local single-user lifecycle slice.
 The early mobile layer is being added separately in P16; the current broker is
-not yet a public or Cloudflare-facing endpoint.
+not a public or Cloudflare-facing endpoint. `ClairMobileKit` now provides the
+transport-neutral host core plus a localhost-only framed listener and a shared
+Network.framework client. Private-network products may proxy to that one
+listener, while pairing, device grants, session gaps, and raw input remain
+owned by the host core. The macOS application runtime bridge and iOS UI are
+still later P16 slices.
 
 `TerminalSurfaceView` is an AppKit-backed native terminal grid renderer, embedded in
 the SwiftUI Project shell. Each `TerminalSession` owns a `TerminalGrid` that wraps a
@@ -421,10 +426,12 @@ command failures are returned as MCP tool results with `isError: true`. The chec
 same protocol.
 
 The adapter intentionally stops at the local GUI boundary. The mobile protocol package
-defines the corresponding `agent/*` operations and authorization contracts; P16 adds the first
-remote multi-client/session-stream contract without changing this owner-only
-local command socket. Vendor-specific agent semantics, public relay/E2EE, and
-benchmark/performance comparisons remain later queue items.
+defines the corresponding `agent/*` operations and authorization contracts, and its host
+core exposes accepted operations through an application-owned handler boundary. P16's
+localhost listener is the only intended mobile endpoint; it does not expose the owner-only
+command socket or `clair-ptyhost` directly. The macOS runtime wiring, vendor-specific
+agent semantics, public relay/E2EE, and benchmark/performance comparisons remain later
+queue items.
 
 ## Native editor and disk safety
 
