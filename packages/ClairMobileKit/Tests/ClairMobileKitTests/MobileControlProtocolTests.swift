@@ -781,6 +781,70 @@ func mobileClientKeepsViewportLocalAndRecoversFromStreamGaps() throws {
 }
 
 @Test
+func mobileClientCanAttachBeforeInitialReplayArrives() throws {
+  let descriptor = session(worktreeID: nil, title: "Replay race")
+  let streamID: UInt32 = 12
+  let frame = try MobileTerminalFrame(
+    kind: .output,
+    streamID: streamID,
+    sessionEpoch: 4,
+    startOffset: 0,
+    payload: Data("hello".utf8)
+  )
+  let receipt = MobileSubscriptionReceipt(
+    subscriptionID: UUID(),
+    streamID: streamID,
+    session: MobileSessionStreamSnapshot(
+      sessionID: descriptor.id,
+      epoch: 4,
+      currentOffset: 5,
+      oldestOffset: 0,
+      isExited: false
+    ),
+    events: []
+  )
+  let model = MobileControlClientModel()
+
+  let attached = try model.attach(
+    descriptor: descriptor,
+    receipt: receipt,
+    initialCursor: 0
+  )
+  #expect(attached.cursor == 0)
+  _ = try model.apply(.output(frame), sessionID: descriptor.id)
+  #expect(model.state(for: descriptor.id)?.scrollback == Data("hello".utf8))
+  #expect(model.state(for: descriptor.id)?.cursor == 5)
+}
+
+@Test
+func mobilePairingLinkDeepLinkRoundTripsIdentityAndTransport() throws {
+  let link = MobilePairingLink(
+    id: UUID(),
+    endpoint: "https://clair.example.test:47831",
+    hostIdentity: MobileHostIdentity(
+      hostID: UUID(),
+      fingerprint: "AA:BB:CC:DD",
+      protocolVersion: .init(major: 1, minor: 4)
+    ),
+    bootstrapSecret: "bootstrap-only",
+    expiresAt: Date(timeIntervalSince1970: 1_800_000_000),
+    transport: .cloudflarePrivateRoute
+  )
+  guard let url = link.deepLinkURL else {
+    Issue.record("Pairing link did not produce a deep link URL.")
+    return
+  }
+
+  let decoded = try MobilePairingLink(deepLink: url)
+
+  #expect(decoded == link)
+  #expect(url.scheme == "clair")
+  #expect(url.host == "pair")
+  #expect(!url.absoluteString.contains("device_token"))
+  #expect(!url.absoluteString.contains("private_key"))
+}
+
+@Test
 func mobileAttentionPayloadContainsOnlyOpaqueWakeMetadata() throws {
   let hostID = UUID()
   let sessionID = UUID()

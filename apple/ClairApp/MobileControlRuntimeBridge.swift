@@ -151,22 +151,7 @@ final class MobileControlRuntimeBridge: ObservableObject {
   }
 
   var pairingURLString: String? {
-    guard let pairingLink else {
-      return nil
-    }
-    var components = URLComponents()
-    components.scheme = "clair"
-    components.host = "pair"
-    components.queryItems = [
-      URLQueryItem(name: "host_id", value: pairingLink.hostIdentity.hostID.uuidString),
-      URLQueryItem(name: "endpoint", value: pairingLink.endpoint),
-      URLQueryItem(name: "fingerprint", value: pairingLink.hostIdentity.fingerprint),
-      URLQueryItem(name: "major", value: String(pairingLink.hostIdentity.protocolVersion.major)),
-      URLQueryItem(name: "minor", value: String(pairingLink.hostIdentity.protocolVersion.minor)),
-      URLQueryItem(name: "bootstrap", value: pairingLink.bootstrapSecret),
-      URLQueryItem(name: "expires_at", value: pairingLink.expiresAt.ISO8601Format()),
-    ]
-    return components.url?.absoluteString
+    pairingLink?.deepLinkURL?.absoluteString
   }
 
   func setEnabled(_ enabled: Bool) {

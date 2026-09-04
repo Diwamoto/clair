@@ -1,9 +1,13 @@
 import Foundation
 
-public struct MobileClientHostRecord: Codable, Equatable, Sendable {
+public struct MobileClientHostRecord: Codable, Equatable, Identifiable, Sendable {
   public let endpoint: MobileControlEndpoint
   public let hostIdentity: MobileHostIdentity
   public let credential: MobileDeviceCredential
+
+  public var id: UUID {
+    hostIdentity.hostID
+  }
 
   public init(
     endpoint: MobileControlEndpoint,
@@ -16,6 +20,82 @@ public struct MobileClientHostRecord: Codable, Equatable, Sendable {
     self.endpoint = endpoint
     self.hostIdentity = hostIdentity
     self.credential = credential
+  }
+}
+
+public extension MobilePairingLink {
+  /// The URL shared by the macOS pairing surface and the native mobile app.
+  ///
+  /// The bootstrap secret is intentionally present only in this short-lived
+  /// link. Issued device tokens and private keys never appear in a deep link.
+  var deepLinkURL: URL? {
+    var components = URLComponents()
+    components.scheme = "clair"
+    components.host = "pair"
+    components.queryItems = [
+      URLQueryItem(name: "id", value: id.uuidString),
+      URLQueryItem(name: "host_id", value: hostIdentity.hostID.uuidString),
+      URLQueryItem(name: "endpoint", value: endpoint),
+      URLQueryItem(name: "fingerprint", value: hostIdentity.fingerprint),
+      URLQueryItem(name: "transport", value: transport.rawValue),
+      URLQueryItem(name: "major", value: String(hostIdentity.protocolVersion.major)),
+      URLQueryItem(name: "minor", value: String(hostIdentity.protocolVersion.minor)),
+      URLQueryItem(name: "bootstrap", value: bootstrapSecret),
+      URLQueryItem(name: "expires_at", value: expiresAt.ISO8601Format()),
+    ]
+    return components.url
+  }
+
+  init(deepLink url: URL) throws {
+    guard
+      url.scheme?.lowercased() == "clair",
+      url.host?.lowercased() == "pair",
+      let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+    else {
+      throw MobileHostError.invalidPairingLink
+    }
+
+    var values: [String: String] = [:]
+    for item in components.queryItems ?? [] {
+      if let value = item.value {
+        values[item.name] = value
+      }
+    }
+    guard
+      let id = UUID(uuidString: values["id"] ?? ""),
+      let hostID = UUID(uuidString: values["host_id"] ?? ""),
+      let endpoint = values["endpoint"],
+      let fingerprint = values["fingerprint"],
+      let major = UInt8(values["major"] ?? ""),
+      let minor = UInt8(values["minor"] ?? ""),
+      let bootstrapSecret = values["bootstrap"],
+      let expiresAt = Self.parseISO8601(values["expires_at"] ?? "")
+    else {
+      throw MobileHostError.invalidPairingLink
+    }
+
+    let transport = MobilePrivateTransportKind(rawValue: values["transport"] ?? "") ?? .loopback
+    self.init(
+      id: id,
+      endpoint: endpoint,
+      hostIdentity: MobileHostIdentity(
+        hostID: hostID,
+        fingerprint: fingerprint,
+        protocolVersion: .init(major: major, minor: minor)
+      ),
+      bootstrapSecret: bootstrapSecret,
+      expiresAt: expiresAt,
+      transport: transport
+    )
+  }
+
+  private static func parseISO8601(_ value: String) -> Date? {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return formatter.date(from: value) ?? {
+      formatter.formatOptions = [.withInternetDateTime]
+      return formatter.date(from: value)
+    }()
   }
 }
 
@@ -175,23 +255,23 @@ public final class MobileControlClientModel: @unchecked Sendable {
   @discardableResult
   public func attach(
     descriptor: MobileSessionDescriptor,
-    receipt: MobileSubscriptionReceipt
+    receipt: MobileSubscriptionReceipt,
+    initialCursor requestedCursor: UInt64? = nil
   ) throws -> MobileClientSessionState {
     guard receipt.session.sessionID == descriptor.id else {
       throw MobileHostError.sessionNotFound(receipt.session.sessionID)
     }
     let state = try lock.withLock {
-      let initialCursor =
-        receipt.events.compactMap { event -> UInt64? in
-          switch event {
-          case .output(let frame):
-            return frame.startOffset
-          case .gap(let gap):
-            return gap.startOffset
-          case .exit:
-            return nil
-          }
-        }.first ?? receipt.session.currentOffset
+      let initialCursor = requestedCursor ?? receipt.events.compactMap { event -> UInt64? in
+        switch event {
+        case .output(let frame):
+          return frame.startOffset
+        case .gap(let gap):
+          return gap.startOffset
+        case .exit:
+          return nil
+        }
+      }.first ?? receipt.session.currentOffset
       var state = MobileClientSessionState(
         descriptor: descriptor,
         subscriptionID: receipt.subscriptionID,

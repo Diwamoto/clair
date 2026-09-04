@@ -33,10 +33,11 @@
 - [x] APNs向けcontent-free attention payloadを定義する。
 - [x] macOS app runtimeへhost/PTY/agent bridgeを接続し、復元済みProject/sessionとAgent状態をhostへ投影する。
 - [x] macOS settingsへhost fingerprint、one-time QR/deep-link表示、device list/revoke UIを接続する。
-- [ ] native iOS UI、Cloudflare/Tailscale実運用、APNs送信、private TestFlight CIを実装・検証する。
+- [x] native iOS UI、deep link pairing、Keychain credential store、raw session/agent controlsを実装する。
+- [ ] Cloudflare/Tailscale実運用、APNs送信、private TestFlight CIを実装・検証する。
 
-localhost endpointまでのmacOS sliceは検証済みだが、モバイルの実クライアントとprivate routeが未実装である。この状態では
-P16のキュー項目を`active`に保つ。host coreとruntime projectionの検証済み範囲を固定し、未実装の運用経路を完了扱いにしない。
+localhost endpointまでのmacOS sliceとnative iOS client foundationは検証済みだが、private route、APNs、TestFlightが未実装である。
+この状態ではP16のキュー項目を`active`に保つ。host coreとruntime projectionの検証済み範囲を固定し、未実装の運用経路を完了扱いにしない。
 
 ## Slice 0: Shared protocol foundation — complete
 
@@ -101,7 +102,7 @@ P16のキュー項目を`active`に保つ。host coreとruntime projectionの検
   `TerminalSession`の事実を共有hostへ投影した。accepted terminal/agent operationsは既存のMainActor所有者へ戻す。
 - Mac settingsからremote kill switch、host fingerprint、one-time QR/deep link、paired device revokeを操作できる。
 - 最後のworkspace windowを閉じてもapplication delegateは終了せず、明示的なQuitだけが通常のPTY cleanupを行う。
-- native iOS UIと実ネットワーク経路は残課題のため、Slice 1/2は完了扱いにせずSlice 3へ引き継ぐ。
+- 実ネットワーク経路は残課題のため、Slice 1/2は完了扱いにせずSlice 3へ引き継ぐ。
 
 ### Validation
 
@@ -141,6 +142,16 @@ P16のキュー項目を`active`に保つ。host coreとruntime projectionの検
 - Tailscale Serveをself-owned/dev transportとして実装または検証し、localhostの`clair-mobile-host`だけを公開する。
 - APNsはopaque wake identifierのみを送り、foregroundでsecure channelを再開する。
 - GitHub Actionsでmain/manual/30日scheduleのprivate TestFlight internal buildを作る。
+
+### Implementation progress (2026-09-05)
+
+- `Clair Mobile` iOS 17 targetとURL scheme付きInfo.plistを追加した。
+- SwiftUIで概要、session catalog、bounded raw terminal、local cursor/gap/exit、input/interrupt、attention、
+  registered profile launch、pairing/settingsを実装した。
+- pairing deep linkのdecode、host fingerprint確認、P-256 device keyとcredentialのKeychain保存、challenge認証、
+  session subscribeの初期replay race処理を`ClairMobileKit`と接続した。
+- iOS SDK型チェックは通過したが、作業環境にiOS runtimeがないため実機/Simulatorのdestination smokeとvendor private
+  route canaryは未実施である。
 
 ### Validation
 

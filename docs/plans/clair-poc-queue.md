@@ -569,10 +569,12 @@ dependencyとする独立したhigh-priority itemで、現在のactive item完�
 - Progress (2026-09-05): `ClairMobileKit`にhost identity/pairing/challenge/revoke、session journalとsubscriber gap、
   localhost-only framed listener、Network.framework client、client-local bounded scrollback、操作配送handler、
   APNs content-free payloadを追加した。さらにmacOS `MobileControlRuntimeBridge`を既存のProject/session/Agent/PTYへ
-  接続し、設定画面のhost fingerprint、one-time QR/deep-link、端末revoke、GUI close後のhost継続を実装した。host coreの
-  session projection更新を含む27テスト、Swift 6 native build、Interaction Labのmobile control UIを確認した。
-- Remaining: native iOS UI、Cloudflare/Tailscale実経路、APNs送信、private TestFlight CI。これらが未完了のためstatusは
-  `active`を維持する。
+  接続し、設定画面のhost fingerprint、one-time QR/deep-link、端末revoke、GUI close後のhost継続を実装した。さらに
+  `Clair Mobile` iOS targetへSwiftUIの概要/session/raw terminal/activity/settings、Keychain credential store、
+  pairing確認、再接続、agent launch UIを追加した。host coreのsession projection更新を含む29テスト、Swift 6 macOS
+  scheme build、iOS SDK型チェック、Interaction Labのmobile control UIを確認した。
+- Remaining: Cloudflare/Tailscale実経路、APNs送信、private TestFlight CI。iOS runtimeが未導入のため実機/Simulator
+  destination smokeは未実施であり、これらが未完了のためstatusは`active`を維持する。
 - Deferred: semantic approval/status、vendor adapter、public relay/E2EE、branch review、mobile source editor、team identity。
 
 ### P15 Clair-on-Clair dogfood cutover

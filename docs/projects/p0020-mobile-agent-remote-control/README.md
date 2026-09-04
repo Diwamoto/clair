@@ -67,7 +67,8 @@ private TestFlight CIも含む。
 - [x] localhost-only listener、共有Network client、client-side gap/scrollback stateを実装した
 - [x] APNsへ渡せるcontent-free attention payloadを実装した
 - [x] Clair macOS runtimeへhost/PTY/agent bridgeとMac側のpairing UIを接続する（localhost endpointまで）
-- [ ] native iOS UI、vendor private-route運用、APNs送信、private TestFlight CIを完了する
+- [x] native iOS UI、deep link pairing、Keychain credential store、raw session/agent controlsを追加した
+- [ ] vendor private-route運用、APNs送信、private TestFlight CIを完了する
 
 ## Completion summary
 
@@ -77,16 +78,19 @@ localhost-only framed listener、Network.framework client、client-local bounded
 raw output/input/interrupt/launchをhostへ投影する。設定画面にはhost fingerprint、one-time QR/deep link、端末一覧と
 revokeを追加し、最後のworkspace windowを閉じてもユーザーがQuitするまでhost/PTYを残す。hostはone-time pairing、
 P-256 challenge、opaque token digest、per-device revoke、session epoch/cursor/gap、broker到着順のraw inputを正本として
-持つ。APNs向け通知はopaque wake IDだけを含む。`clair-ptyhost`を直接公開せず、private routeは同じTCP endpointへ
-proxyする境界に固定した。
+持つ。さらに `Clair Mobile` iOS targetへSwiftUIの概要・session catalog・bounded raw terminal・入力/interrupt・
+registered profile launch・attention・settingsを追加し、短命link以外のcredentialとdevice keyをiOS Keychainへ保存する。
+APNs向け通知はopaque wake IDだけを含む。`clair-ptyhost`を直接公開せず、private routeは同じTCP endpointへproxyする
+境界に固定した。
 
-まだP16を完了扱いにはしない。native iOS UI、Cloudflare/Tailscaleの実運用設定、APNs送信、private TestFlight CIは
-次のSlice 3/4で残っている。モバイル情報設計の確認用Interaction Labは[private preview](https://clair-interaction-lab.daiki-work-0118.chatgpt.site)
+まだP16を完了扱いにはしない。Cloudflare/Tailscaleの実運用設定、APNs送信、private TestFlight CIは
+次のSlice 3/4で残っている。iOS runtimeが未導入のため実機/Simulator smokeは未実施である。モバイル情報設計の確認用Interaction Labは[private preview](https://clair-interaction-lab.daiki-work-0118.chatgpt.site)
 で、Project/session catalog、bounded raw terminal、入力/割り込み、pairing状態を確認できる。
 
 ## Validation evidence
 
-- 2026-09-05: `swift test`（`packages/ClairMobileKit`）— 27 tests passed。host/store、pair/revoke、session projection更新、stream gap、ordered input、RPC、loopback listener/client、client scrollback、APNs payload redaction、disable fallback、multi-connection isolationを確認。
+- 2026-09-05: `swift test`（`packages/ClairMobileKit`）— 29 tests passed。host/store、pair/revoke、session projection更新、stream gap、ordered input、RPC、loopback listener/client、client scrollback、APNs payload redaction、disable fallback、multi-connection isolation、deep-link round trip、subscribe replay raceを確認。
+- 2026-09-05: `xcrun --sdk iphonesimulator swiftc -typecheck -target arm64-apple-ios17.0-simulator`で`ClairMobileKit`と`apple/ClairMobileApp`を型チェックし、`Clair Mobile` targetのiOS 17 build settingsとURL scheme用Info.plistを確認。実行先runtime未導入のためiOS destination buildは未実施。
 - 2026-09-05: `xcodebuild -project Clair.xcodeproj -scheme 'Clair Dev' -configuration Debug -destination 'platform=macOS' build CODE_SIGNING_ALLOWED=NO` — Swift 6 native build passed。`ClairMobileKit` local package、macOS runtime bridge、設定画面のQR生成、GUI close後のlifecycle変更を含む。
 - 2026-09-05: Interaction Labで`npm run build`、`npm run lint`、`git diff --check`を通過し、モバイルの概要→セッション一覧→raw terminal入力→設定→QR/deep link sheetをブラウザで確認した。
 - 2026-09-03: `make test-swift` — 109 tests passed.

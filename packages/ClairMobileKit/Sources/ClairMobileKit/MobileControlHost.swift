@@ -31,6 +31,12 @@ public struct MobileDeviceKeyPair: Sendable {
     privateKeyRepresentation = rawRepresentation
   }
 
+  /// The private key bytes are only for protected local storage.
+  /// They must never be put in a pairing link, log, or network payload.
+  public var rawRepresentation: Data {
+    privateKeyRepresentation
+  }
+
   public var publicKeyRepresentation: Data {
     (try? P256.Signing.PrivateKey(rawRepresentation: privateKeyRepresentation).publicKey
       .rawRepresentation) ?? Data()
@@ -42,25 +48,28 @@ public struct MobileDeviceKeyPair: Sendable {
   }
 }
 
-public struct MobilePairingLink: Codable, Equatable, Sendable {
+public struct MobilePairingLink: Codable, Equatable, Identifiable, Sendable {
   public let id: UUID
   public let endpoint: String
   public let hostIdentity: MobileHostIdentity
   public let bootstrapSecret: String
   public let expiresAt: Date
+  public let transport: MobilePrivateTransportKind
 
   public init(
     id: UUID,
     endpoint: String,
     hostIdentity: MobileHostIdentity,
     bootstrapSecret: String,
-    expiresAt: Date
+    expiresAt: Date,
+    transport: MobilePrivateTransportKind = .loopback
   ) {
     self.id = id
     self.endpoint = endpoint
     self.hostIdentity = hostIdentity
     self.bootstrapSecret = bootstrapSecret
     self.expiresAt = expiresAt
+    self.transport = transport
   }
 }
 
