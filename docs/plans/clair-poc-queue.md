@@ -566,12 +566,13 @@ dependencyとする独立したhigh-priority itemで、現在のactive item完�
   agent launch、agent attention、Mac GUI close後のhost継続、remote disable時のlocal fallback。
 - Durable detail: [p0020-mobile-agent-remote-control](../projects/p0020-mobile-agent-remote-control/README.md) and
   [ADR-0011](../decisions/0011-early-mobile-agent-control.md)。
-- Progress (2026-09-04): `ClairMobileKit`にhost identity/pairing/challenge/revoke、session journalとsubscriber gap、
+- Progress (2026-09-05): `ClairMobileKit`にhost identity/pairing/challenge/revoke、session journalとsubscriber gap、
   localhost-only framed listener、Network.framework client、client-local bounded scrollback、操作配送handler、
-  APNs content-free payloadを追加した。host coreとlistener/clientのloopback統合、disable fallback、
-  multi-connection isolationを26テストで確認した。
-- Remaining: macOS runtimeへのPTY/agent bridge、QR/deep-link UI、native iOS UI、Cloudflare/Tailscale実経路、APNs送信、
-  private TestFlight CI。これらが未完了のためstatusは`active`を維持する。
+  APNs content-free payloadを追加した。さらにmacOS `MobileControlRuntimeBridge`を既存のProject/session/Agent/PTYへ
+  接続し、設定画面のhost fingerprint、one-time QR/deep-link、端末revoke、GUI close後のhost継続を実装した。host coreの
+  session projection更新を含む27テスト、Swift 6 native build、Interaction Labのmobile control UIを確認した。
+- Remaining: native iOS UI、Cloudflare/Tailscale実経路、APNs送信、private TestFlight CI。これらが未完了のためstatusは
+  `active`を維持する。
 - Deferred: semantic approval/status、vendor adapter、public relay/E2EE、branch review、mobile source editor、team identity。
 
 ### P15 Clair-on-Clair dogfood cutover

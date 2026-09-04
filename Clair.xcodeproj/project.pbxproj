@@ -78,6 +78,10 @@
 		A000000000000000000000B4 /* ClairUpdateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B7 /* ClairUpdateTests.swift */; };
 		A000000000000000000000C1 /* TerminalVTerm.c in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000C2 /* TerminalVTerm.c */; };
 		A000000000000000000000C3 /* TerminalVTerm.c in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000C2 /* TerminalVTerm.c */; };
+		A000000000000000000000D5 /* ClairMobileKit in Frameworks */ = {isa = PBXBuildFile; productRef = A000000000000000000000D4 /* ClairMobileKit */; };
+		A000000000000000000000D6 /* ClairMobileKit in Frameworks */ = {isa = PBXBuildFile; productRef = A000000000000000000000D4 /* ClairMobileKit */; };
+		A000000000000000000000D8 /* MobileControlRuntimeBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000D7 /* MobileControlRuntimeBridge.swift */; };
+		A000000000000000000000D9 /* MobileControlRuntimeBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000D7 /* MobileControlRuntimeBridge.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -144,13 +148,30 @@
 		A00000000000000000000021 /* Clair.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Clair.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A00000000000000000000022 /* Clair Dev.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Clair Dev.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A00000000000000000000023 /* ClairTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ClairTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A000000000000000000000D7 /* MobileControlRuntimeBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileControlRuntimeBridge.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		A000000000000000000000D3 /* XCLocalSwiftPackageReference "ClairMobileKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = packages/ClairMobileKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A000000000000000000000D4 /* ClairMobileKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A000000000000000000000D3 /* XCLocalSwiftPackageReference "ClairMobileKit" */;
+			productName = ClairMobileKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		A00000000000000000000043 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A000000000000000000000D5 /* ClairMobileKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -158,6 +179,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A000000000000000000000D6 /* ClairMobileKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -247,6 +269,7 @@
 				A00000000000000000000016 /* Clair-Bridging-Header.h */,
 				A000000000000000000000C7 /* WorkspaceActivity.swift */,
 				A000000000000000000000CA /* WorkspaceChrome.swift */,
+				A000000000000000000000D7 /* MobileControlRuntimeBridge.swift */,
 			);
 			path = ClairApp;
 			sourceTree = "<group>";
@@ -294,6 +317,9 @@
 			);
 			dependencies = (
 			);
+			packageProductDependencies = (
+				A000000000000000000000D4 /* ClairMobileKit */,
+			);
 			name = ClairStable;
 			productName = Clair;
 			productReference = A00000000000000000000021 /* Clair.app */;
@@ -312,6 +338,9 @@
 			buildRules = (
 			);
 			dependencies = (
+			);
+			packageProductDependencies = (
+				A000000000000000000000D4 /* ClairMobileKit */,
 			);
 			name = ClairDev;
 			productName = "Clair Dev";
@@ -367,6 +396,9 @@
 				Base,
 			);
 			mainGroup = A00000000000000000000002;
+			packageReferences = (
+				A000000000000000000000D3 /* XCLocalSwiftPackageReference "ClairMobileKit" */,
+			);
 			productRefGroup = A00000000000000000000003 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -514,6 +546,7 @@
 				A000000000000000000000C1 /* TerminalVTerm.c in Sources */,
 				A000000000000000000000C8 /* WorkspaceActivity.swift in Sources */,
 				A000000000000000000000CB /* WorkspaceChrome.swift in Sources */,
+				A000000000000000000000D8 /* MobileControlRuntimeBridge.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -549,6 +582,7 @@
 				A000000000000000000000C3 /* TerminalVTerm.c in Sources */,
 				A000000000000000000000C9 /* WorkspaceActivity.swift in Sources */,
 				A000000000000000000000CC /* WorkspaceChrome.swift in Sources */,
+				A000000000000000000000D9 /* MobileControlRuntimeBridge.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

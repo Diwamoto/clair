@@ -1,4 +1,5 @@
 import AppKit
+import CoreImage
 import SwiftUI
 
 enum WorkspaceOverlayKind: String, Identifiable {
@@ -17,6 +18,7 @@ struct ContentView: View {
   @ObservedObject var workspace: ProjectWorkspaceModel
   @ObservedObject var agentWorkflow: AgentWorkflowCoordinator
   @ObservedObject var worktreeCoordinator: ProjectWorktreeCoordinator
+  @ObservedObject var mobileBridge: MobileControlRuntimeBridge
   @ObservedObject var updater: ClairUpdateCoordinator
   @ObservedObject var commandSurface: CommandSurfaceModel
 
@@ -323,6 +325,7 @@ struct ContentView: View {
         WorkspaceSettingsPanel(
           fontSize: $editorFontSize,
           wordWrap: $editorWordWrap,
+          mobileBridge: mobileBridge,
           onDismiss: dismissOverlay
         )
         .frame(maxWidth: 430)
@@ -4425,6 +4428,7 @@ private struct ProjectWorkspaceOverview: View {
 private struct WorkspaceSettingsPanel: View {
   @Binding var fontSize: Double
   @Binding var wordWrap: Bool
+  @ObservedObject var mobileBridge: MobileControlRuntimeBridge
   let onDismiss: () -> Void
 
   var body: some View {
@@ -4487,6 +4491,12 @@ private struct WorkspaceSettingsPanel: View {
       Divider()
         .background(WorkspaceChrome.border)
 
+      MobileControlSettingsSection(mobileBridge: mobileBridge)
+        .padding(16)
+
+      Divider()
+        .background(WorkspaceChrome.border)
+
       HStack {
         Text("変更はすぐに反映されます")
           .font(WorkspaceChrome.chromeFont(size: 9))
@@ -4520,5 +4530,187 @@ private struct WorkspaceSettingsPanel: View {
       control()
     }
     .frame(minHeight: 58)
+  }
+}
+
+private struct MobileControlSettingsSection: View {
+  @ObservedObject var mobileBridge: MobileControlRuntimeBridge
+  @State private var didCopyPairingLink = false
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      HStack(alignment: .firstTextBaseline, spacing: 8) {
+        Circle()
+          .fill(mobileBridge.isEnabled ? Color.green : WorkspaceChrome.textQuaternary)
+          .frame(width: 7, height: 7)
+        VStack(alignment: .leading, spacing: 2) {
+          Text("モバイル操作")
+            .font(WorkspaceChrome.chromeFont(size: 12, weight: .semibold))
+          Text(
+            mobileBridge.isEnabled
+              ? "このMacの作業をプライベート接続から操作できます。"
+              : "Macを閉じてもセッションを残す接続を準備します。"
+          )
+          .font(WorkspaceChrome.chromeFont(size: 10))
+          .foregroundStyle(WorkspaceChrome.textTertiary)
+        }
+        Spacer()
+        Button(mobileBridge.isEnabled ? "無効化" : "有効化") {
+          mobileBridge.setEnabled(!mobileBridge.isEnabled)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+      }
+
+      if mobileBridge.isEnabled {
+        VStack(alignment: .leading, spacing: 8) {
+          settingValueRow(title: "ローカル endpoint", value: mobileBridge.endpointDescription)
+          settingValueRow(
+            title: "ホスト fingerprint",
+            value: mobileBridge.hostIdentity?.fingerprint ?? "未生成"
+          )
+
+          Text("Cloudflare / Tailscale の private route をこの endpoint に向けてから、モバイルと接続してください。")
+            .font(WorkspaceChrome.chromeFont(size: 9))
+            .foregroundStyle(WorkspaceChrome.textQuaternary)
+
+          HStack(spacing: 8) {
+            Button("QRリンクを生成") {
+              mobileBridge.createPairingLink()
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            if mobileBridge.pairingLink != nil {
+              Button("閉じる") {
+                mobileBridge.clearPairingLink()
+              }
+              .buttonStyle(.bordered)
+              .controlSize(.small)
+            }
+          }
+
+          if let pairingURL = mobileBridge.pairingURLString {
+            HStack(alignment: .top, spacing: 12) {
+              MobilePairingCodeView(payload: pairingURL)
+                .frame(width: 116, height: 116)
+                .background(.white, in: RoundedRectangle(cornerRadius: 6))
+
+              VStack(alignment: .leading, spacing: 7) {
+                Text("1回限りのペアリングリンク")
+                  .font(WorkspaceChrome.chromeFont(size: 10, weight: .medium))
+                Text(pairingURL)
+                  .font(.system(size: 8, design: .monospaced))
+                  .foregroundStyle(WorkspaceChrome.textTertiary)
+                  .lineLimit(4)
+                  .truncationMode(.middle)
+                  .textSelection(.enabled)
+                Button(didCopyPairingLink ? "コピーしました" : "リンクをコピー") {
+                  NSPasteboard.general.clearContents()
+                  NSPasteboard.general.setString(pairingURL, forType: .string)
+                  didCopyPairingLink = true
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+              }
+              .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(8)
+            .background(WorkspaceChrome.surface, in: RoundedRectangle(cornerRadius: 7))
+          }
+
+          if !mobileBridge.devices.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+              Text("ペアリング済み端末")
+                .font(WorkspaceChrome.chromeFont(size: 10, weight: .medium))
+              ForEach(mobileBridge.devices) { device in
+                HStack(spacing: 8) {
+                  Image(systemName: "iphone")
+                    .foregroundStyle(WorkspaceChrome.textTertiary)
+                  VStack(alignment: .leading, spacing: 1) {
+                    Text(device.displayName)
+                      .font(WorkspaceChrome.chromeFont(size: 10))
+                    Text(device.scopes.map(\.rawValue).sorted().joined(separator: " / "))
+                      .font(WorkspaceChrome.chromeFont(size: 8))
+                      .foregroundStyle(WorkspaceChrome.textQuaternary)
+                  }
+                  Spacer()
+                  Button("解除") {
+                    mobileBridge.revoke(device)
+                  }
+                  .buttonStyle(.borderless)
+                  .controlSize(.small)
+                  .foregroundStyle(.red.opacity(0.8))
+                }
+              }
+            }
+            .padding(.top, 2)
+          }
+        }
+      }
+
+      if let error = mobileBridge.lastErrorMessage {
+        Text(error)
+          .font(WorkspaceChrome.chromeFont(size: 9))
+          .foregroundStyle(.orange)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+    }
+    .onChange(of: mobileBridge.pairingLink) { _, newValue in
+      if newValue == nil {
+        didCopyPairingLink = false
+      }
+    }
+  }
+
+  private func settingValueRow(title: String, value: String) -> some View {
+    HStack(alignment: .firstTextBaseline, spacing: 8) {
+      Text(title)
+        .font(WorkspaceChrome.chromeFont(size: 9))
+        .foregroundStyle(WorkspaceChrome.textQuaternary)
+      Spacer(minLength: 8)
+      Text(value)
+        .font(.system(size: 9, design: .monospaced))
+        .foregroundStyle(WorkspaceChrome.textTertiary)
+        .lineLimit(1)
+        .truncationMode(.middle)
+    }
+  }
+}
+
+private struct MobilePairingCodeView: View {
+  let payload: String
+
+  var body: some View {
+    if let image = Self.makeImage(payload: payload) {
+      Image(nsImage: image)
+        .resizable()
+        .interpolation(.none)
+        .antialiased(false)
+        .scaledToFit()
+        .padding(8)
+    } else {
+      Image(systemName: "qrcode")
+        .font(.system(size: 42))
+        .foregroundStyle(.black)
+    }
+  }
+
+  private static func makeImage(payload: String) -> NSImage? {
+    guard
+      let data = payload.data(using: .utf8),
+      let filter = CIFilter(name: "CIQRCodeGenerator")
+    else {
+      return nil
+    }
+    filter.setValue(data, forKey: "inputMessage")
+    filter.setValue("M", forKey: "inputCorrectionLevel")
+    guard let output = filter.outputImage else {
+      return nil
+    }
+    let scaled = output.transformed(by: CGAffineTransform(scaleX: 8, y: 8))
+    let representation = NSCIImageRep(ciImage: scaled)
+    let image = NSImage(size: representation.size)
+    image.addRepresentation(representation)
+    return image
   }
 }

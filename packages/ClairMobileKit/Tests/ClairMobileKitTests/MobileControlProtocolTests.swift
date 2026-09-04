@@ -557,6 +557,51 @@ func mobileHostKeepsSubscriberCursorsIndependentAndReportsGaps() throws {
 }
 
 @Test
+func mobileHostUpdatesSessionProjectionWithoutResettingStream() throws {
+  let host = try makeEnabledHost()
+  let keyPair = MobileDeviceKeyPair()
+  let link = try host.createPairingLink(endpoint: "loopback://clair/update")
+  let credential = try host.pair(
+    link: link,
+    displayName: "Projection viewer",
+    devicePublicKey: keyPair.publicKeyRepresentation
+  )
+  let session = session(worktreeID: nil, title: "Running shell")
+  try host.registerSession(session, epoch: 3)
+  let subscription = try host.subscribe(
+    deviceID: credential.deviceID,
+    sessionID: session.id,
+    epoch: 3,
+    cursor: 0
+  )
+  try host.publishOutput(
+    sessionID: session.id,
+    epoch: 3,
+    data: Data("hello".utf8)
+  )
+
+  let updated = MobileSessionDescriptor(
+    id: session.id,
+    projectID: session.projectID,
+    title: "Exited shell",
+    cwd: session.cwd,
+    lifecycle: .exited,
+    capabilities: [.rawTerminal]
+  )
+  try host.updateSession(updated, isExited: true)
+
+  #expect(try host.visibleSessions(for: credential.deviceID) == [updated])
+  #expect(try host.streamSnapshot(sessionID: session.id).currentOffset == 5)
+  let events = try host.poll(subscriptionID: subscription.subscriptionID)
+  #expect(events.count == 1)
+  if case .output(let frame) = events[0] {
+    #expect(frame.payload == Data("hello".utf8))
+  } else {
+    Issue.record("Updating a session projection reset the existing stream.")
+  }
+}
+
+@Test
 func mobileHostAppliesInputInArrivalOrderAndDoesNotResizeFromViewport() throws {
   let host = try makeEnabledHost()
   let keyPair = MobileDeviceKeyPair()

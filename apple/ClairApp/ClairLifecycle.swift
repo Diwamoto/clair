@@ -39,8 +39,10 @@ final class ClairApplicationDelegate: NSObject, NSApplicationDelegate {
   }
 
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-    // Keep the test host alive even after its windows are hidden.
-    isRunningTests ? false : true
+    // Closing the workspace window must not stop the local mobile host or
+    // terminate agent-backed PTYs. A user-initiated Quit still flows through
+    // applicationShouldTerminate and performs the normal cleanup.
+    false
   }
 
   func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

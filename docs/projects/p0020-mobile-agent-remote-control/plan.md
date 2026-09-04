@@ -23,7 +23,7 @@
 - P13 typed Command Registry for registered agent launch projection.
 - Accepted product scope and [ADR-0011](../../decisions/0011-early-mobile-agent-control.md).
 
-## Current execution status (2026-09-04)
+## Current execution status (2026-09-05)
 
 - [x] `MobileControlHost`がhost identity、one-time pairing、P-256 challenge、opaque token digest、device revoke、
   scope/worktree visibility、remote disableを一元管理する。
@@ -31,10 +31,12 @@
 - [x] session journal、per-subscriber bounded queue、epoch/cursor gap、arrival-order input、操作配送handlerを共有する。
 - [x] iOS/macOS共有client stateがlocal viewport、bounded raw scrollback、duplicate/gap/exitを扱う。
 - [x] APNs向けcontent-free attention payloadを定義する。
-- [ ] macOS app runtimeへのhost/PTY/agent bridge、QR/deep-link UI、native iOS UI、Cloudflare/Tailscale実運用、
-  APNs送信、private TestFlight CIを実装・検証する。
+- [x] macOS app runtimeへhost/PTY/agent bridgeを接続し、復元済みProject/sessionとAgent状態をhostへ投影する。
+- [x] macOS settingsへhost fingerprint、one-time QR/deep-link表示、device list/revoke UIを接続する。
+- [ ] native iOS UI、Cloudflare/Tailscale実運用、APNs送信、private TestFlight CIを実装・検証する。
 
-この状態ではP16のキュー項目を`active`に保つ。host coreの検証済み範囲を先に固定し、未実装の運用経路を完了扱いにしない。
+localhost endpointまでのmacOS sliceは検証済みだが、モバイルの実クライアントとprivate routeが未実装である。この状態では
+P16のキュー項目を`active`に保つ。host coreとruntime projectionの検証済み範囲を固定し、未実装の運用経路を完了扱いにしない。
 
 ## Slice 0: Shared protocol foundation — complete
 
@@ -92,6 +94,14 @@
 - `MobileControlTransport`を導入し、WebSocket/binary protocolの上にTailscale Serve、Cloudflare private route、
   将来relayを差し替えられるようにする。transport adapterへscopeやdevice tokenの判断を漏らさない。
 - mobile viewportをPTY resizeへ流さず、local brokerのsame-user boundaryを維持する。
+
+### Implementation progress (2026-09-05)
+
+- `MobileControlRuntimeBridge`をmacOS appへ組み込み、`ProjectWorkspaceModel`、`AgentWorkflowCoordinator`、
+  `TerminalSession`の事実を共有hostへ投影した。accepted terminal/agent operationsは既存のMainActor所有者へ戻す。
+- Mac settingsからremote kill switch、host fingerprint、one-time QR/deep link、paired device revokeを操作できる。
+- 最後のworkspace windowを閉じてもapplication delegateは終了せず、明示的なQuitだけが通常のPTY cleanupを行う。
+- native iOS UIと実ネットワーク経路は残課題のため、Slice 1/2は完了扱いにせずSlice 3へ引き継ぐ。
 
 ### Validation
 

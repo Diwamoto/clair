@@ -444,7 +444,7 @@ private struct MobileJournalChunk: Equatable, Sendable {
 }
 
 private struct MobileHostSessionState: Sendable {
-  let descriptor: MobileSessionDescriptor
+  var descriptor: MobileSessionDescriptor
   let epoch: UInt64
   var chunks: [MobileJournalChunk]
   var journalBytes: Int
@@ -830,6 +830,31 @@ public final class MobileControlHost: @unchecked Sendable {
         isExited: isExited,
         exitStatus: nil
       )
+    }
+  }
+
+  /// Updates the factual session projection without resetting its journal or
+  /// active subscriptions. Runtime bridges call this when a terminal changes
+  /// lifecycle or gains/loses an operation capability.
+  public func updateSession(
+    _ descriptor: MobileSessionDescriptor,
+    isExited: Bool? = nil
+  ) throws {
+    try lock.withLock {
+      guard var session = sessions[descriptor.id] else {
+        throw MobileHostError.sessionNotFound(descriptor.id)
+      }
+      guard descriptor.projectID == session.descriptor.projectID,
+        descriptor.worktreeID == session.descriptor.worktreeID,
+        descriptor.cwd == session.descriptor.cwd
+      else {
+        throw MobileHostError.invalidOperation
+      }
+      session.descriptor = descriptor
+      if let isExited {
+        session.isExited = isExited
+      }
+      sessions[descriptor.id] = session
     }
   }
 

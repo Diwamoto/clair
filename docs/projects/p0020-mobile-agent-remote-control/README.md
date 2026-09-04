@@ -5,7 +5,7 @@ status: in-progress
 source_issue: "https://github.com/Diwamoto/clair/issues/20"
 suggested_branch: "project/p0020-mobile-agent-remote-control"
 created: 2026-08-27
-updated: 2026-09-04
+updated: 2026-09-05
 owners:
   - "Daiki"
 related_adrs:
@@ -66,22 +66,29 @@ private TestFlight CIも含む。
 - [x] host identity、one-time pairing、device challenge/revoke、bounded stream hostを実装した
 - [x] localhost-only listener、共有Network client、client-side gap/scrollback stateを実装した
 - [x] APNsへ渡せるcontent-free attention payloadを実装した
-- [ ] Clair macOS runtimeへのhost bridge、pairing UI、iOS UI、vendor private-route運用を完了する
+- [x] Clair macOS runtimeへhost/PTY/agent bridgeとMac側のpairing UIを接続する（localhost endpointまで）
+- [ ] native iOS UI、vendor private-route運用、APNs送信、private TestFlight CIを完了する
 
 ## Completion summary
 
 Slice 0/1A の共有 protocol と agent control plane に加え、今回のP16実装で `ClairMobileKit` に host core、
 localhost-only framed listener、Network.framework client、client-local bounded scrollback、操作配送handlerを
-追加した。hostはone-time pairing、P-256 challenge、opaque token digest、per-device revoke、session epoch/cursor/gap、
-broker到着順のraw inputを正本として持つ。APNs向け通知はopaque wake IDだけを含む。`clair-ptyhost`を直接公開せず、
-private routeは同じTCP endpointへproxyする境界に固定した。
+追加した。さらにClair macOS runtimeへ `MobileControlRuntimeBridge` を接続し、復元済みProject/session、Agent状態、
+raw output/input/interrupt/launchをhostへ投影する。設定画面にはhost fingerprint、one-time QR/deep link、端末一覧と
+revokeを追加し、最後のworkspace windowを閉じてもユーザーがQuitするまでhost/PTYを残す。hostはone-time pairing、
+P-256 challenge、opaque token digest、per-device revoke、session epoch/cursor/gap、broker到着順のraw inputを正本として
+持つ。APNs向け通知はopaque wake IDだけを含む。`clair-ptyhost`を直接公開せず、private routeは同じTCP endpointへ
+proxyする境界に固定した。
 
-まだP16を完了扱いにはしない。macOSアプリのruntimeへhostを組み込むadapter、QR/deep-link UI、native iOS UI、
-Cloudflare/Tailscaleの実運用設定、APNs送信、private TestFlight CIは次のSlice 3/4で残っている。
+まだP16を完了扱いにはしない。native iOS UI、Cloudflare/Tailscaleの実運用設定、APNs送信、private TestFlight CIは
+次のSlice 3/4で残っている。モバイル情報設計の確認用Interaction Labは[private preview](https://clair-interaction-lab.daiki-work-0118.chatgpt.site)
+で、Project/session catalog、bounded raw terminal、入力/割り込み、pairing状態を確認できる。
 
 ## Validation evidence
 
-- 2026-09-04: `CLANG_MODULE_CACHE_PATH=/private/tmp/clair-mobile-clang-cache SWIFT_MODULECACHE_PATH=/private/tmp/clair-mobile-swift-cache swift test --package-path packages/ClairMobileKit` — 26 tests passed。host/store、pair/revoke、stream gap、ordered input、RPC、loopback listener/client、client scrollback、APNs payload redaction、disable fallback、multi-connection isolationを確認。
+- 2026-09-05: `swift test`（`packages/ClairMobileKit`）— 27 tests passed。host/store、pair/revoke、session projection更新、stream gap、ordered input、RPC、loopback listener/client、client scrollback、APNs payload redaction、disable fallback、multi-connection isolationを確認。
+- 2026-09-05: `xcodebuild -project Clair.xcodeproj -scheme 'Clair Dev' -configuration Debug -destination 'platform=macOS' build CODE_SIGNING_ALLOWED=NO` — Swift 6 native build passed。`ClairMobileKit` local package、macOS runtime bridge、設定画面のQR生成、GUI close後のlifecycle変更を含む。
+- 2026-09-05: Interaction Labで`npm run build`、`npm run lint`、`git diff --check`を通過し、モバイルの概要→セッション一覧→raw terminal入力→設定→QR/deep link sheetをブラウザで確認した。
 - 2026-09-03: `make test-swift` — 109 tests passed.
 - 2026-09-03: `python3 -m py_compile scripts/clair`, `./scripts/clair --help`, `./scripts/clair agent --help`, `git diff --check`, and `./scripts/validate-xcode-project.rb` passed.
 - 2026-09-03: 現行product scope、P07/P09のlocal foundation、既存ADRを確認し、raw-terminal firstのpriorityをADR-0011へ記録。

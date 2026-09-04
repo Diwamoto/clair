@@ -8,6 +8,7 @@ struct ClairApplication: App {
   @StateObject private var projectWorkspace: ProjectWorkspaceModel
   @StateObject private var agentWorkflow: AgentWorkflowCoordinator
   @StateObject private var worktreeCoordinator: ProjectWorktreeCoordinator
+  @StateObject private var mobileBridge: MobileControlRuntimeBridge
   @StateObject private var commandSurface: CommandSurfaceModel
   @StateObject private var commandServer: CommandIPCServer
   @StateObject private var updater: ClairUpdateCoordinator
@@ -32,6 +33,13 @@ struct ClairApplication: App {
     let worktreeCoordinator = ProjectWorktreeCoordinator.makeDefault(for: profile)
     _agentWorkflow = StateObject(wrappedValue: agentWorkflow)
     _worktreeCoordinator = StateObject(wrappedValue: worktreeCoordinator)
+    let mobileBridge = MobileControlRuntimeBridge(
+      profile: profile,
+      workspace: workspace,
+      agentWorkflow: agentWorkflow,
+      worktreeCoordinator: worktreeCoordinator
+    )
+    _mobileBridge = StateObject(wrappedValue: mobileBridge)
     _commandSurface = StateObject(
       wrappedValue: CommandSurfaceModel(workspace: workspace)
     )
@@ -66,6 +74,7 @@ struct ClairApplication: App {
         workspace: projectWorkspace,
         agentWorkflow: agentWorkflow,
         worktreeCoordinator: worktreeCoordinator,
+        mobileBridge: mobileBridge,
         updater: updater,
         commandSurface: commandSurface
       )
