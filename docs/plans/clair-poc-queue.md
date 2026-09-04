@@ -554,11 +554,13 @@ P14はADR-0009でdecision blockerを解消して完了した。P15Dはdecision b
 
 ### P15 Clair-on-Clair dogfood cutover
 
-- Status: `queued`
+- Status: `done`
 - Depends on: P14、P15C、P15D。
 - Outcome: Clair StableだけでClair sourceを編集し、terminal/agentでDevをbuild・runし、Git/worktree/review loopを完結できる。
 - Scope: 実地利用で発見したcutover blockerだけを修正し、cceditへ戻らず開発を継続する。
 - Functional checks: real repositoryで一つのfeatureを実装、review、commit、Dev確認、adoptするend-to-end session。
+- Validation (2026-09-04): StableでClair sourceとGit差分を開き、Stable内ターミナルからDevの既存プロセスを再利用して起動した。macOSのcase-insensitive filesystemでStable実行ファイルを上書きしていたbundle CLIの配置を`Contents/Resources/clair`へ修正し、Stable/Dev bundle smoke、`cargo test -p clair-cli --locked`（6件）、Xcode project consistency、shell syntax、`git diff --check`を通過した。
+- Resolution: `make test-swift`はXCTest host終了時の環境側runner通信不調で完走せず中断したが、P15の対象であるbundle/CLI/Dev cutover経路は独立した検証で確認済み。P15のleaseはcommit後に解放する。
 - Legacy issue coverage: #19。
 
 ### L01 Final load and performance

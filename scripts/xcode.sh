@@ -44,7 +44,7 @@ if [[ "$action" == "build" ]]; then
     esac
 
     cli_path="$repo_root/target/debug/clair"
-    bundle_cli_path="$repo_root/.build/xcode/$derived_data_key/Build/Products/Debug/$product_name/Contents/MacOS/clair"
+    bundle_cli_path="$repo_root/.build/xcode/$derived_data_key/Build/Products/Debug/$product_name/Contents/Resources/clair"
     if [[ ! -x "$cli_path" ]]; then
         printf 'xcode: native CLI is missing: %s\n' "$cli_path" >&2
         exit 1

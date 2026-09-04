@@ -1164,7 +1164,7 @@ mod tests {
 
     #[test]
     fn discovers_an_enclosing_app_bundle() {
-        let path = Path::new("/Applications/Clair.app/Contents/MacOS/clair");
+        let path = Path::new("/Applications/Clair.app/Contents/Resources/clair");
         assert_eq!(
             enclosing_app_bundle(path),
             Some(Path::new("/Applications/Clair.app").to_path_buf())
