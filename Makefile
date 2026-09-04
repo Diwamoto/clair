@@ -1,8 +1,8 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-.PHONY: help doctor workspace-check build-stable build-dev run-stable run-dev
-.PHONY: test test-rust test-swift lint lint-rust lint-swift analyze
+.PHONY: help doctor workspace-check build-stable build-dev run-stable run-dev watch-dev
+.PHONY: test test-rust test-swift test-mobile lint lint-rust lint-swift analyze
 .PHONY: smoke smoke-ffi smoke-app-link smoke-bundles artifact-check ci clean-artifacts
 
 help: ## Show the supported development commands.
@@ -23,8 +23,10 @@ build-dev: ## Build the unsigned Clair Dev app.
 run-stable: build-stable ## Build and launch a new Clair Stable process.
 	@./scripts/run-app.sh stable
 
-run-dev: build-dev ## Build and launch a new Clair Dev process.
-	@./scripts/run-app.sh dev
+run-dev: ## Watch native sources and hot-restart Clair Dev after changes.
+	@./scripts/watch-dev.sh
+
+watch-dev: run-dev ## Backward-compatible alias for run-dev.
 
 test-rust: ## Run all Rust workspace unit tests.
 	@./scripts/doctor.sh rust
@@ -33,7 +35,10 @@ test-rust: ## Run all Rust workspace unit tests.
 test-swift: ## Run Swift unit tests through the Clair Dev host app.
 	@./scripts/xcode.sh test "Clair Dev" tests
 
-test: test-rust test-swift ## Run Rust and Swift unit tests.
+test-mobile: ## Run the cross-platform mobile protocol package tests.
+	@swift test --package-path packages/ClairMobileKit
+
+test: test-rust test-swift test-mobile ## Run Rust, desktop Swift, and mobile protocol tests.
 
 lint-rust: ## Check Rust formatting and run Clippy with warnings denied.
 	@./scripts/doctor.sh rust

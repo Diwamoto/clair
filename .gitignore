@@ -6,6 +6,7 @@
 
 # Xcode and local Swift state
 /.build/
+/packages/*/.build/
 /DerivedData/
 *.xcresult
 *.xcuserstate
