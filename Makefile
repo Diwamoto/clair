@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-.PHONY: help doctor workspace-check build-stable build-dev run-stable run-dev watch-dev
+.PHONY: help doctor workspace-check build-editor-web build-stable build-dev run-stable run-dev watch-dev
 .PHONY: test test-rust test-swift test-mobile lint lint-rust lint-swift analyze
 .PHONY: smoke smoke-ffi smoke-app-link smoke-bundles artifact-check ci clean-artifacts
 
@@ -13,6 +13,9 @@ doctor: ## Check full Xcode, Swift format, Rust, rustfmt, and Clippy.
 
 workspace-check: ## Validate committed Xcode metadata and channel configuration.
 	@./scripts/check-workspace.sh
+
+build-editor-web: ## Build and embed the local CodeMirror editor bundle.
+	@./scripts/build-editor-web.sh
 
 build-stable: ## Build the unsigned Clair Stable app.
 	@./scripts/xcode.sh build "Clair Stable" stable

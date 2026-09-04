@@ -344,6 +344,7 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
   private var baselineContent: String
   private var diskData: Data?
   private var fileWatcher: ProjectEditorFileWatcher?
+  private var editorCommandHandler: ((ProjectEditorCommand) -> Void)?
 
   init(
     projectID: UUID,
@@ -507,6 +508,15 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
     undoManager
   }
 
+  func setEditorCommandHandler(_ handler: ((ProjectEditorCommand) -> Void)?) {
+    editorCommandHandler = handler
+  }
+
+  func detachEditorCommandHandler() {
+    editorCommandHandler = nil
+    refreshUndoState()
+  }
+
   private static func errorContent(for error: ProjectEditorError) -> String {
     let message = error.localizedDescription
     return """
@@ -516,14 +526,31 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
       """
   }
 
-  func updateFromEditor(_ newContent: String) {
-    guard !isReadOnly, newContent != content else {
-      refreshUndoState()
+  func updateFromEditor(
+    _ newContent: String,
+    canUndo embeddedCanUndo: Bool? = nil,
+    canRedo embeddedCanRedo: Bool? = nil
+  ) {
+    guard !isReadOnly else {
+      return
+    }
+    if newContent == content {
+      if let embeddedCanUndo, let embeddedCanRedo {
+        canUndo = embeddedCanUndo
+        canRedo = embeddedCanRedo
+      } else {
+        refreshUndoState()
+      }
       return
     }
     content = newContent
     isDirty = newContent != baselineContent || isMissing
-    refreshUndoState()
+    if let embeddedCanUndo, let embeddedCanRedo {
+      canUndo = embeddedCanUndo
+      canRedo = embeddedCanRedo
+    } else {
+      refreshUndoState()
+    }
   }
 
   func replaceContent(_ newContent: String, actionName: String = "Edit") {
@@ -534,6 +561,10 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
   }
 
   func undo() {
+    if let editorCommandHandler {
+      editorCommandHandler(.undo)
+      return
+    }
     guard undoManager.canUndo else {
       return
     }
@@ -542,6 +573,10 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
   }
 
   func redo() {
+    if let editorCommandHandler {
+      editorCommandHandler(.redo)
+      return
+    }
     guard undoManager.canRedo else {
       return
     }
@@ -584,8 +619,10 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
     baselineContent = content
     isDirty = false
     isMissing = false
-    undoManager.removeAllActions()
-    refreshUndoState()
+    if editorCommandHandler == nil {
+      undoManager.removeAllActions()
+      refreshUndoState()
+    }
   }
 
   @discardableResult
@@ -1194,6 +1231,7 @@ struct ProjectSourceEditorView: NSViewRepresentable {
     scrollView.drawsBackground = true
     scrollView.backgroundColor = WorkspaceChrome.nsCanvas
     scrollView.documentView = textView
+    WorkspaceChrome.configureThinScrollbars(in: scrollView)
     context.coordinator.textView = textView
     return scrollView
   }
@@ -1228,7 +1266,6 @@ struct ProjectSourceEditorView: NSViewRepresentable {
   private func configure(_ textView: ProjectSourceTextView) {
     textView.drawsBackground = true
     textView.backgroundColor = WorkspaceChrome.nsCanvas
-    textView.textColor = WorkspaceChrome.nsTextPrimary
     textView.insertionPointColor = WorkspaceChrome.nsTextPrimary
     let font = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
     textView.font = font

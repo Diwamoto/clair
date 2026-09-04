@@ -1,0 +1,51 @@
+:root {
+  color-scheme: dark;
+  background: #121416;
+}
+
+html,
+body,
+#editor {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #121416;
+}
+
+.cm-editor {
+  height: 100%;
+}
+
+.cm-scroller {
+  overflow: auto;
+}
+
+.cm-gutters {
+  border-right: 1px solid rgba(242, 244, 238, 0.08);
+}
+
+.cm-lineNumbers .cm-gutterElement {
+  min-width: 4ch;
+  padding: 0 8px 0 6px;
+  color: #707871;
+}
+
+.cm-foldGutter .cm-gutterElement {
+  padding: 0 3px;
+  color: #9ba19b;
+}
+
+.cm-activeLineGutter {
+  background: rgba(91, 136, 247, 0.08);
+}
+
+.cm-selectionBackground,
+.cm-content ::selection {
+  background: rgba(91, 136, 247, 0.34) !important;
+}
+
+.cm-tooltip {
+  border: 1px solid rgba(242, 244, 238, 0.16);
+  background: #1e2227;
+}

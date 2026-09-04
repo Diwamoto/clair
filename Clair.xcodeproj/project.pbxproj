@@ -82,6 +82,10 @@
 		A000000000000000000000D6 /* ClairMobileKit in Frameworks */ = {isa = PBXBuildFile; productRef = A000000000000000000000D4 /* ClairMobileKit */; };
 		A000000000000000000000D8 /* MobileControlRuntimeBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000D7 /* MobileControlRuntimeBridge.swift */; };
 		A000000000000000000000D9 /* MobileControlRuntimeBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000D7 /* MobileControlRuntimeBridge.swift */; };
+		A00000000000000000000102 /* CodeMirrorEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000100 /* CodeMirrorEditor.swift */; };
+		A00000000000000000000103 /* CodeMirrorEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000100 /* CodeMirrorEditor.swift */; };
+		A00000000000000000000104 /* EditorWeb in Resources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000101 /* EditorWeb */; };
+		A00000000000000000000105 /* EditorWeb in Resources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000101 /* EditorWeb */; };
 		A000000000000000000000DA /* MobileClientSecureStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000E0 /* MobileClientSecureStore.swift */; };
 		A000000000000000000000DB /* MobileControlAppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000E1 /* MobileControlAppModel.swift */; };
 		A000000000000000000000DC /* MobileControlAppView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000E2 /* MobileControlAppView.swift */; };
@@ -154,6 +158,8 @@
 		A00000000000000000000022 /* Clair Dev.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Clair Dev.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A00000000000000000000023 /* ClairTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ClairTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A000000000000000000000D7 /* MobileControlRuntimeBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileControlRuntimeBridge.swift; sourceTree = "<group>"; };
+		A00000000000000000000100 /* CodeMirrorEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeMirrorEditor.swift; sourceTree = "<group>"; };
+		A00000000000000000000101 /* EditorWeb */ = {isa = PBXFileReference; lastKnownFileType = folder; path = EditorWeb; sourceTree = "<group>"; };
 		A000000000000000000000E0 /* MobileClientSecureStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileClientSecureStore.swift; sourceTree = "<group>"; };
 		A000000000000000000000E1 /* MobileControlAppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileControlAppModel.swift; sourceTree = "<group>"; };
 		A000000000000000000000E2 /* MobileControlAppView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileControlAppView.swift; sourceTree = "<group>"; };
@@ -291,6 +297,8 @@
 				A000000000000000000000C7 /* WorkspaceActivity.swift */,
 				A000000000000000000000CA /* WorkspaceChrome.swift */,
 				A000000000000000000000D7 /* MobileControlRuntimeBridge.swift */,
+				A00000000000000000000100 /* CodeMirrorEditor.swift */,
+				A00000000000000000000101 /* EditorWeb */,
 			);
 			path = ClairApp;
 			sourceTree = "<group>";
@@ -474,6 +482,7 @@
 			files = (
 				A000000000000000000000D0 /* Assets.xcassets in Resources */,
 				A0000000000000000000008F /* agent-hook.sh in Resources */,
+				A00000000000000000000104 /* EditorWeb in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -483,6 +492,7 @@
 			files = (
 				A000000000000000000000D1 /* Assets.xcassets in Resources */,
 				A00000000000000000000090 /* agent-hook.sh in Resources */,
+				A00000000000000000000105 /* EditorWeb in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -611,6 +621,7 @@
 				A000000000000000000000C8 /* WorkspaceActivity.swift in Sources */,
 				A000000000000000000000CB /* WorkspaceChrome.swift in Sources */,
 				A000000000000000000000D8 /* MobileControlRuntimeBridge.swift in Sources */,
+				A00000000000000000000102 /* CodeMirrorEditor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -647,6 +658,7 @@
 				A000000000000000000000C9 /* WorkspaceActivity.swift in Sources */,
 				A000000000000000000000CC /* WorkspaceChrome.swift in Sources */,
 				A000000000000000000000D9 /* MobileControlRuntimeBridge.swift in Sources */,
+				A00000000000000000000103 /* CodeMirrorEditor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
