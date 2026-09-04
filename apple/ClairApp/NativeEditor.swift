@@ -694,6 +694,447 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
   }
 }
 
+enum ProjectSourceSyntaxTokenKind: Equatable {
+  case comment
+  case string
+  case number
+  case keyword
+  case type
+  case function
+  case attribute
+  case constant
+}
+
+struct ProjectSourceSyntaxToken: Equatable {
+  let range: NSRange
+  let kind: ProjectSourceSyntaxTokenKind
+}
+
+@MainActor
+enum ProjectSourceSyntaxHighlighter {
+  static func tokens(
+    in source: String,
+    fileExtension: String
+  ) -> [ProjectSourceSyntaxToken] {
+    let language = Language(fileExtension: fileExtension)
+    guard language != .plain else {
+      return []
+    }
+
+    let text = source as NSString
+    let length = text.length
+    var result: [ProjectSourceSyntaxToken] = []
+    var index = 0
+
+    func code(at position: Int) -> unichar {
+      text.character(at: position)
+    }
+
+    func isWhitespace(_ value: unichar) -> Bool {
+      value == 9 || value == 10 || value == 11 || value == 12 || value == 13 || value == 32
+    }
+
+    func isDigit(_ value: unichar) -> Bool {
+      value >= 48 && value <= 57
+    }
+
+    func isIdentifierStart(_ value: unichar) -> Bool {
+      (value >= 65 && value <= 90)
+        || (value >= 97 && value <= 122)
+        || value == 95
+        || value == 36
+        || value >= 128
+    }
+
+    func isIdentifierContinuation(_ value: unichar) -> Bool {
+      isIdentifierStart(value) || isDigit(value)
+    }
+
+    func nextNonWhitespaceCode(after position: Int) -> unichar? {
+      var cursor = position
+      while cursor < length && isWhitespace(code(at: cursor)) {
+        cursor += 1
+      }
+      return cursor < length ? code(at: cursor) : nil
+    }
+
+    func append(_ kind: ProjectSourceSyntaxTokenKind, start: Int, end: Int) {
+      guard end > start else {
+        return
+      }
+      result.append(
+        ProjectSourceSyntaxToken(
+          range: NSRange(location: start, length: end - start),
+          kind: kind
+        )
+      )
+    }
+
+    while index < length {
+      let current = code(at: index)
+      let next = index + 1 < length ? code(at: index + 1) : 0
+
+      if current == 47, next == 47 {
+        let start = index
+        index += 2
+        while index < length, code(at: index) != 10 {
+          index += 1
+        }
+        append(.comment, start: start, end: index)
+        continue
+      }
+
+      if current == 47, next == 42 {
+        let start = index
+        index += 2
+        var depth = 1
+        while index < length, depth > 0 {
+          let character = code(at: index)
+          let following = index + 1 < length ? code(at: index + 1) : 0
+          if character == 47, following == 42 {
+            depth += 1
+            index += 2
+          } else if character == 42, following == 47 {
+            depth -= 1
+            index += 2
+          } else {
+            index += 1
+          }
+        }
+        append(.comment, start: start, end: index)
+        continue
+      }
+
+      if language.treatsHashAsComment, current == 35 {
+        let start = index
+        index += 1
+        while index < length, code(at: index) != 10 {
+          index += 1
+        }
+        append(.comment, start: start, end: index)
+        continue
+      }
+
+      if language == .swift, current == 35, next == 34 {
+        let start = index
+        index += 2
+        while index < length {
+          let character = code(at: index)
+          let following = index + 1 < length ? code(at: index + 1) : 0
+          if character == 34, following == 35 {
+            index += 2
+            break
+          }
+          index += 1
+        }
+        append(.string, start: start, end: index)
+        continue
+      }
+
+      if language.supportsDirectives, current == 35, isIdentifierStart(next) {
+        let start = index
+        index += 1
+        while index < length, isIdentifierContinuation(code(at: index)) {
+          index += 1
+        }
+        append(.keyword, start: start, end: index)
+        continue
+      }
+
+      if language == .swift, current == 64, isIdentifierStart(next) {
+        let start = index
+        index += 1
+        while index < length, isIdentifierContinuation(code(at: index)) {
+          index += 1
+        }
+        append(.attribute, start: start, end: index)
+        continue
+      }
+
+      if current == 34
+        || (current == 39 && language.allowsSingleQuotedStrings)
+        || (current == 96 && language.allowsBacktickStrings)
+      {
+        let start = index
+        let quote = current
+        let isTripleQuote =
+          quote == 34
+          && index + 2 < length
+          && code(at: index + 1) == 34
+          && code(at: index + 2) == 34
+        index += isTripleQuote ? 3 : 1
+        var escaped = false
+        while index < length {
+          let character = code(at: index)
+          if isTripleQuote {
+            if character == 34,
+              index + 2 < length,
+              code(at: index + 1) == 34,
+              code(at: index + 2) == 34
+            {
+              index += 3
+              break
+            }
+            index += 1
+            continue
+          }
+          if escaped {
+            escaped = false
+            index += 1
+          } else if character == 92 {
+            escaped = true
+            index += 1
+          } else if character == quote {
+            index += 1
+            break
+          } else {
+            index += 1
+          }
+        }
+        append(.string, start: start, end: index)
+        continue
+      }
+
+      if isDigit(current) || (current == 46 && isDigit(next)) {
+        let start = index
+        index += 1
+        while index < length {
+          let character = code(at: index)
+          let isNumberCharacter =
+            isDigit(character)
+            || (character >= 65 && character <= 70)
+            || (character >= 97 && character <= 102)
+            || character == 46
+            || character == 95
+          if isNumberCharacter {
+            index += 1
+          } else if (character == 43 || character == 45)
+            && index > start
+            && (code(at: index - 1) == 69 || code(at: index - 1) == 101)
+          {
+            index += 1
+          } else {
+            break
+          }
+        }
+        append(.number, start: start, end: index)
+        continue
+      }
+
+      if isIdentifierStart(current) {
+        let start = index
+        index += 1
+        while index < length, isIdentifierContinuation(code(at: index)) {
+          index += 1
+        }
+        let word = text.substring(with: NSRange(location: start, length: index - start))
+        let kind: ProjectSourceSyntaxTokenKind?
+        if language.constants.contains(word) {
+          kind = .constant
+        } else if language.keywords.contains(word) {
+          kind = .keyword
+        } else if language.types.contains(word)
+          || word.first.map({ $0.isUppercase }) == true
+        {
+          kind = .type
+        } else if nextNonWhitespaceCode(after: index) == 40 {
+          kind = .function
+        } else {
+          kind = nil
+        }
+        if let kind {
+          append(kind, start: start, end: index)
+        }
+        continue
+      }
+
+      index += 1
+    }
+
+    return result
+  }
+
+  static func apply(
+    to textStorage: NSTextStorage,
+    fileExtension: String,
+    baseFont: NSFont
+  ) {
+    let fullRange = NSRange(location: 0, length: textStorage.length)
+    textStorage.beginEditing()
+    if fullRange.length > 0 {
+      textStorage.setAttributes(
+        [
+          .font: baseFont,
+          .foregroundColor: WorkspaceChrome.nsTextPrimary,
+        ],
+        range: fullRange
+      )
+    }
+
+    for token in tokens(in: textStorage.string, fileExtension: fileExtension) {
+      guard NSMaxRange(token.range) <= textStorage.length else {
+        continue
+      }
+      textStorage.addAttribute(
+        .foregroundColor,
+        value: color(for: token.kind),
+        range: token.range
+      )
+    }
+    textStorage.endEditing()
+  }
+
+  private static func color(for kind: ProjectSourceSyntaxTokenKind) -> NSColor {
+    switch kind {
+    case .comment:
+      WorkspaceChrome.nsRGB(104, 117, 110)
+    case .string:
+      WorkspaceChrome.nsRGB(152, 195, 121)
+    case .number:
+      WorkspaceChrome.nsRGB(209, 154, 102)
+    case .keyword:
+      WorkspaceChrome.nsRGB(199, 131, 218)
+    case .type:
+      WorkspaceChrome.nsRGB(97, 175, 239)
+    case .function:
+      WorkspaceChrome.nsRGB(229, 192, 123)
+    case .attribute:
+      WorkspaceChrome.nsRGB(229, 192, 123)
+    case .constant:
+      WorkspaceChrome.nsRGB(224, 108, 117)
+    }
+  }
+
+  private enum Language: Equatable {
+    case swift
+    case rust
+    case cLike
+    case script
+    case json
+    case plain
+
+    init(fileExtension: String) {
+      switch fileExtension.lowercased() {
+      case "swift":
+        self = .swift
+      case "rs":
+        self = .rust
+      case "c", "cc", "cpp", "h", "hh", "hpp", "java", "go", "kt", "kts", "js", "jsx", "ts", "tsx",
+        "css", "scss":
+        self = .cLike
+      case "json":
+        self = .json
+      case "py", "rb", "sh", "bash", "zsh", "fish", "yaml", "yml", "toml":
+        self = .script
+      default:
+        self = .plain
+      }
+    }
+
+    var keywords: Set<String> {
+      switch self {
+      case .swift:
+        [
+          "actor", "any", "as", "associatedtype", "async", "await", "break", "case", "catch",
+          "class", "continue", "convenience", "default", "defer", "deinit", "didSet", "do", "else",
+          "enum", "extension", "fallthrough", "fileprivate", "final", "for", "func", "get", "guard",
+          "if", "import", "indirect", "init", "inout", "internal", "is", "lazy", "let", "macro",
+          "mutating",
+          "nil", "nonisolated", "open", "operator", "override", "package", "private", "protocol",
+          "public",
+          "repeat", "required", "rethrows", "return", "self", "set", "some", "static", "struct",
+          "subscript",
+          "super", "switch", "throw", "throws", "try", "typealias", "unowned", "var", "weak",
+          "where",
+          "while", "willSet",
+        ]
+      case .rust:
+        [
+          "as", "async", "await", "break", "const", "continue", "crate", "dyn", "else", "enum",
+          "extern",
+          "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub",
+          "ref",
+          "return", "self", "Self", "static", "struct", "super", "trait", "type", "unsafe", "use",
+          "where",
+          "while",
+        ]
+      case .cLike:
+        [
+          "async", "await", "auto", "bool", "break", "case", "catch", "char", "class", "const",
+          "continue",
+          "default", "delete", "do", "double", "else", "enum", "export", "extends", "false",
+          "final", "float",
+          "for", "from", "function", "if", "implements", "import", "in", "interface", "int", "let",
+          "namespace",
+          "new", "null", "private", "protected", "public", "return", "static", "struct", "switch",
+          "template",
+          "this", "throw", "try", "true", "type", "typeof", "typename", "using", "var", "virtual",
+          "void", "while",
+        ]
+      case .script:
+        [
+          "and", "as", "async", "await", "class", "def", "elif", "else", "except", "finally", "for",
+          "from",
+          "function", "if", "import", "in", "is", "lambda", "let", "not", "or", "pass", "raise",
+          "return",
+          "try", "var", "while", "with", "yield",
+        ]
+      case .json, .plain:
+        []
+      }
+    }
+
+    var types: Set<String> {
+      switch self {
+      case .swift:
+        [
+          "AppKit", "Array", "Bool", "CGFloat", "ClairApp", "Color", "Combine", "Data", "Date",
+          "Dictionary",
+          "Double", "Error", "Font", "Foundation", "Int", "NSColor", "NSFont", "NSView", "Optional",
+          "Result",
+          "Set", "String", "SwiftUI", "Task", "URL", "UUID", "View", "XCTest",
+        ]
+      case .rust:
+        [
+          "Option", "Result", "String", "Vec", "bool", "char", "f32", "f64", "i8", "i16", "i32",
+          "i64", "isize", "str", "u8", "u16", "u32", "u64", "usize",
+        ]
+      case .cLike, .script, .json, .plain:
+        []
+      }
+    }
+
+    var constants: Set<String> {
+      switch self {
+      case .swift, .rust:
+        ["false", "nil", "None", "Some", "true"]
+      case .cLike, .script:
+        ["false", "None", "null", "true", "undefined"]
+      case .json:
+        ["false", "null", "true"]
+      case .plain:
+        []
+      }
+    }
+
+    var treatsHashAsComment: Bool {
+      self == .script
+    }
+
+    var supportsDirectives: Bool {
+      self == .swift || self == .rust || self == .cLike
+    }
+
+    var allowsSingleQuotedStrings: Bool {
+      self != .swift && self != .json
+    }
+
+    var allowsBacktickStrings: Bool {
+      self == .cLike
+    }
+  }
+}
+
 @MainActor
 struct ProjectSourceEditorView: NSViewRepresentable {
   @ObservedObject var document: ProjectEditorTab
@@ -734,6 +1175,7 @@ struct ProjectSourceEditorView: NSViewRepresentable {
     textView.isAutomaticDashSubstitutionEnabled = false
     textView.drawsBackground = true
     configure(textView)
+    textView.applySyntaxHighlighting(for: document.url.pathExtension)
     textView.textContainerInset = NSSize(width: 12, height: 12)
     textView.minSize = NSSize(width: 0, height: 0)
     textView.maxSize = NSSize(
@@ -779,6 +1221,7 @@ struct ProjectSourceEditorView: NSViewRepresentable {
         textView.setSelectedRange(NSRange(location: location, length: length))
       }
     }
+    textView.applySyntaxHighlighting(for: document.url.pathExtension)
     applySelectionIfNeeded(to: textView, context: context)
   }
 
@@ -787,7 +1230,12 @@ struct ProjectSourceEditorView: NSViewRepresentable {
     textView.backgroundColor = WorkspaceChrome.nsCanvas
     textView.textColor = WorkspaceChrome.nsTextPrimary
     textView.insertionPointColor = WorkspaceChrome.nsTextPrimary
-    textView.font = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+    let font = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+    textView.font = font
+    textView.typingAttributes = [
+      .font: font,
+      .foregroundColor: WorkspaceChrome.nsTextPrimary,
+    ]
     textView.isHorizontallyResizable = !wordWrap
     textView.textContainer?.widthTracksTextView = wordWrap
     textView.textContainer?.lineBreakMode = wordWrap ? .byCharWrapping : .byClipping
@@ -818,6 +1266,12 @@ struct ProjectSourceEditorView: NSViewRepresentable {
         return
       }
       document.updateFromEditor(textView.string)
+      guard !textView.hasMarkedText() else {
+        return
+      }
+      (textView as? ProjectSourceTextView)?.applySyntaxHighlighting(
+        for: document.url.pathExtension
+      )
     }
 
     func undoManager(for textView: NSTextView) -> UndoManager? {
@@ -855,9 +1309,46 @@ struct ProjectSourceEditorView: NSViewRepresentable {
 @MainActor
 private final class ProjectSourceTextView: NSTextView {
   var onSave: (() -> Void)?
+  private var highlightedContent: String?
+  private var highlightedFileExtension: String?
+  private var highlightedFontSize: CGFloat?
 
   override var acceptsFirstResponder: Bool {
     true
+  }
+
+  func applySyntaxHighlighting(for fileExtension: String) {
+    guard let baseFont = font else {
+      return
+    }
+    let normalizedExtension = fileExtension.lowercased()
+    let needsUpdate =
+      highlightedContent != string
+      || highlightedFileExtension != normalizedExtension
+      || highlightedFontSize != baseFont.pointSize
+    guard needsUpdate else {
+      typingAttributes = [
+        .font: baseFont,
+        .foregroundColor: WorkspaceChrome.nsTextPrimary,
+      ]
+      return
+    }
+    guard let textStorage else {
+      return
+    }
+
+    ProjectSourceSyntaxHighlighter.apply(
+      to: textStorage,
+      fileExtension: normalizedExtension,
+      baseFont: baseFont
+    )
+    typingAttributes = [
+      .font: baseFont,
+      .foregroundColor: WorkspaceChrome.nsTextPrimary,
+    ]
+    highlightedContent = string
+    highlightedFileExtension = normalizedExtension
+    highlightedFontSize = baseFont.pointSize
   }
 
   override func performKeyEquivalent(with event: NSEvent) -> Bool {

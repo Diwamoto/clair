@@ -82,6 +82,80 @@ final class NativeEditorTests: XCTestCase {
     XCTAssertEqual(range, NSRange(location: 6, length: 5))
   }
 
+  func testSyntaxHighlighterRecognizesSwiftTokensWithoutHighlightingStringContents() {
+    let source = """
+      import SwiftUI
+      // note
+      @MainActor
+      struct Demo: View {
+        let title = "return is only text here"
+        func run(value: Int) -> String {
+          return "done"
+        }
+      }
+      """
+
+    let tokens = ProjectSourceSyntaxHighlighter.tokens(
+      in: source,
+      fileExtension: "swift"
+    )
+    let text = source as NSString
+    func tokenTexts(_ kind: ProjectSourceSyntaxTokenKind) -> [String] {
+      tokens
+        .filter { $0.kind == kind }
+        .map { text.substring(with: $0.range) }
+    }
+
+    XCTAssertEqual(tokenTexts(.keyword), ["import", "struct", "let", "func", "return"])
+    XCTAssertEqual(tokenTexts(.comment), ["// note"])
+    XCTAssertEqual(tokenTexts(.attribute), ["@MainActor"])
+    XCTAssertEqual(tokenTexts(.string), ["\"return is only text here\"", "\"done\""])
+    XCTAssertEqual(tokenTexts(.function), ["run"])
+    XCTAssertTrue(tokenTexts(.type).contains("SwiftUI"))
+    XCTAssertTrue(tokenTexts(.type).contains("Demo"))
+    XCTAssertTrue(tokenTexts(.type).contains("View"))
+    XCTAssertTrue(tokenTexts(.type).contains("Int"))
+    XCTAssertTrue(tokenTexts(.type).contains("String"))
+  }
+
+  func testSyntaxHighlighterAppliesOneDarkColorsToTextStorage() {
+    let source = "let value = \"ok\" // note\n"
+    let storage = NSTextStorage(string: source)
+    let font = NSFont.monospacedSystemFont(ofSize: 14.5, weight: .regular)
+
+    ProjectSourceSyntaxHighlighter.apply(
+      to: storage,
+      fileExtension: "swift",
+      baseFont: font
+    )
+
+    let keywordColor =
+      storage.attribute(
+        .foregroundColor,
+        at: 0,
+        effectiveRange: nil
+      ) as? NSColor
+    let stringStart = (source as NSString).range(of: "\"ok\"").location
+    let stringColor =
+      storage.attribute(
+        .foregroundColor,
+        at: stringStart,
+        effectiveRange: nil
+      ) as? NSColor
+    let commentStart = (source as NSString).range(of: "// note").location
+    let commentColor =
+      storage.attribute(
+        .foregroundColor,
+        at: commentStart,
+        effectiveRange: nil
+      ) as? NSColor
+
+    XCTAssertTrue(keywordColor?.isEqual(WorkspaceChrome.nsRGB(199, 131, 218)) == true)
+    XCTAssertTrue(stringColor?.isEqual(WorkspaceChrome.nsRGB(152, 195, 121)) == true)
+    XCTAssertTrue(commentColor?.isEqual(WorkspaceChrome.nsRGB(104, 117, 110)) == true)
+    XCTAssertEqual(storage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont, font)
+  }
+
   func testExternalRewriteWinsAndCapturesUnsavedBufferForRecovery() throws {
     let fixture = try EditorFixture()
     let fileURL = try fixture.makeFile(named: "agent.txt", content: "disk-v1\n")
