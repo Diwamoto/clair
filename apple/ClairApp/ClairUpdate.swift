@@ -959,19 +959,19 @@ struct ClairUpdateNotice: View {
         }
       }
     }
-    .frame(width: 340)
-    .padding(12)
-    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-    .overlay {
-      RoundedRectangle(cornerRadius: 10)
-        .stroke(.quaternary)
-    }
-    .shadow(radius: 10)
   }
 
   @ViewBuilder
   private func card<Content: View>(@ViewBuilder content: () -> Content) -> some View {
     VStack(alignment: .leading, spacing: 8, content: content)
+      .frame(width: 340)
+      .padding(12)
+      .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+      .overlay {
+        RoundedRectangle(cornerRadius: 10)
+          .stroke(.quaternary)
+      }
+      .shadow(radius: 10)
   }
 }
 
