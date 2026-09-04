@@ -15,10 +15,17 @@ body,
 
 .cm-editor {
   height: 100%;
+  color: #f1f3ef !important;
+  background: #121416;
 }
 
 .cm-scroller {
   overflow: auto;
+}
+
+.cm-content,
+.cm-line {
+  color: #f1f3ef !important;
 }
 
 .cm-gutters {
