@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A000000000000000000000D0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000D2 /* Assets.xcassets */; };
+		A000000000000000000000D1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000D2 /* Assets.xcassets */; };
 		A00000000000000000000031 /* ClairApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000011 /* ClairApp.swift */; };
 		A00000000000000000000032 /* ClairRuntimeProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000012 /* ClairRuntimeProfile.swift */; };
 		A00000000000000000000033 /* RustCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000013 /* RustCore.swift */; };
@@ -85,6 +87,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		A000000000000000000000D2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A00000000000000000000011 /* ClairApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClairApp.swift; sourceTree = "<group>"; };
 		A00000000000000000000012 /* ClairRuntimeProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClairRuntimeProfile.swift; sourceTree = "<group>"; };
 		A00000000000000000000013 /* RustCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RustCore.swift; sourceTree = "<group>"; };
@@ -207,6 +210,7 @@
 		A00000000000000000000006 /* ClairApp */ = {
 			isa = PBXGroup;
 			children = (
+				A000000000000000000000D2 /* Assets.xcassets */,
 				A00000000000000000000011 /* ClairApp.swift */,
 				A00000000000000000000012 /* ClairRuntimeProfile.swift */,
 				A00000000000000000000013 /* RustCore.swift */,
@@ -371,6 +375,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A000000000000000000000D0 /* Assets.xcassets in Resources */,
 				A0000000000000000000008F /* agent-hook.sh in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -379,6 +384,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A000000000000000000000D1 /* Assets.xcassets in Resources */,
 				A00000000000000000000090 /* agent-hook.sh in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
