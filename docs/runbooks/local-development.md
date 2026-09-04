@@ -46,10 +46,11 @@ make smoke
 
 ## Verify the Project kernel
 
-After building Dev, use `make run-dev` and select **Open Folder** in the Projects
-sidebar. Open one Git repository, one ordinary non-Git folder, and one temporary
-folder. Confirm that all three appear in the same process and that selecting a row
-changes the active Project and displayed root.
+Start the Dev watcher with `make run-dev`; it performs the initial build and launch
+and keeps watching native sources in the foreground. Select **Open Folder** in the
+Projects sidebar. Open one Git repository, one ordinary non-Git folder, and one
+temporary folder. Confirm that all three appear in the same process and that
+selecting a row changes the active Project and displayed root.
 
 Use a Project row's context menu to rename it, set a color, move it, and close it.
 Rename is display metadata only; it does not rename the folder on disk. Reopen the
@@ -121,7 +122,6 @@ surface appears, then restore the backup before continuing.
 Build and launch Dev:
 
 ```sh
-make build-dev
 make run-dev
 ```
 
@@ -157,7 +157,6 @@ Build outputs are:
 Build and launch Dev:
 
 ```sh
-make build-dev
 make run-dev
 ```
 
@@ -236,7 +235,6 @@ preferences or Application Support directories.
 Build and launch Dev:
 
 ```sh
-make build-dev
 make run-dev
 ```
 
@@ -346,9 +344,9 @@ xcodebuild -project Clair.xcodeproj -scheme "Clair Dev" \
   CODE_SIGNING_REQUIRED=NO -only-testing:ClairTests/ProjectGitTests test
 ```
 
-The repository's `make test-swift` wrapper remains the CI-facing path where the
-minimal committed workspace is accepted; with the current Xcode 26 environment, use
-the equivalent project-scoped command above because that workspace is rejected.
+The repository's `make test-swift` wrapper uses the project-scoped build path above.
+The minimal committed workspace is still available for opening the project in Xcode,
+but direct project invocation is the supported command-line path.
 
 ## Verify the raw agent workflow and attention (P09)
 
@@ -542,23 +540,53 @@ xcodebuild -project Clair.xcodeproj -scheme "Clair Dev" \
 export CLAIR_APP_PATH="$PWD/.build/xcode/p13-manual/Build/Products/Debug/Clair Dev.app"
 ```
 
-The adapter is the checked-in `scripts/clair` executable. It talks to the Dev socket
-at `~/Library/Application Support/Clair Dev/command-v1.sock`; Stable uses the same
-relative path below `Clair`. The socket directory must be owner-only (`0700`) and the
-socket itself owner-only (`0600`). Verify the registry projection while Dev is running:
+The release-compatible adapter is the native Rust `clair` executable. A source Debug
+build emits it at `target/debug/clair`; an app bundle contains it at
+`Contents/Resources/clair`. It talks to the Dev socket at
+`~/Library/Application Support/Clair Dev/command-v1.sock`; Stable uses the same relative
+path below `Clair`. The socket directory must be owner-only (`0700`) and the socket
+itself owner-only (`0600`). Verify the registry projection while Dev is running:
 
 ```sh
-./scripts/clair --channel dev list
-./scripts/clair --channel dev command git.refresh \
+./target/debug/clair --channel dev --app "$CLAIR_APP_PATH" list
+./target/debug/clair --channel dev --app "$CLAIR_APP_PATH" command git.refresh \
   --params '{"projectID":"<OPEN_PROJECT_ID>"}'
 ```
+
+The checked-in `scripts/clair` adapter remains useful before the Rust CLI has been built
+and uses the same command protocol.
+
+Verify the Clair-owned agent control plane through the same local adapter. The list
+response contains stable session IDs, factual lifecycle/attention state, capabilities,
+and the registered launch profiles:
+
+~~~sh
+./target/debug/clair --channel dev --app "$CLAIR_APP_PATH" agent list
+./target/debug/clair --channel dev --app "$CLAIR_APP_PATH" agent status <SESSION_ID>
+~~~
+
+Agent input and control are explicit mutations. Use --yes for a headless test; without
+it the normal GUI approval gate must deny or prompt according to the command risk:
+
+~~~sh
+./target/debug/clair --channel dev --app "$CLAIR_APP_PATH" agent input <SESSION_ID> --text $'continue\n' --yes
+./target/debug/clair --channel dev --app "$CLAIR_APP_PATH" agent interrupt <SESSION_ID> --yes
+./target/debug/clair --channel dev --app "$CLAIR_APP_PATH" agent stop <SESSION_ID> --yes
+~~~
+
+Launch is restricted to Clair's registered profiles (claude-code, codex, or opencode);
+the CLI never accepts an arbitrary executable:
+
+~~~sh
+./target/debug/clair --channel dev --app "$CLAIR_APP_PATH" agent launch <PROJECT_ID> codex --yes
+~~~
 
 Open a file from a path inside an already-open nested Project and confirm that the
 longest matching Project root is selected, the file is revealed, and the requested
 1-based line/column is selected:
 
 ```sh
-./scripts/clair --channel dev open "/absolute/path/to/file.swift:12:4"
+./target/debug/clair --channel dev --app "$CLAIR_APP_PATH" open "/absolute/path/to/file.swift:12:4"
 ```
 
 Quit Dev, then run the same `list` command. The CLI should launch the configured Dev
@@ -576,7 +604,7 @@ typed input schemas. Only descriptors with `aiAvailable` are exposed:
 printf '%s\n' \
   '{"jsonrpc":"2.0","id":1,"method":"initialize"}' \
   '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
-  | ./scripts/clair --channel dev mcp serve
+  | ./target/debug/clair --channel dev --app "$CLAIR_APP_PATH" mcp serve
 ```
 
 Use `tools/call` with a listed command and confirm its typed result. Calling a command
@@ -584,6 +612,16 @@ that is not `aiAvailable` must return a tool result with `isError: true` and the
 structured `not_ai_available` error. Unknown IDs, malformed parameters, unavailable
 Projects, oversized requests, and malformed JSON must remain bounded errors; no
 terminal transcript or request history is persisted.
+
+The mobile contract checks are:
+
+~~~sh
+swift test --package-path packages/ClairMobileKit
+~~~
+
+The mobile package currently provides the versioned control/data contract and
+authorization rules. Its network host bridge, pairing UI, and iOS client remain
+later P0020 slices; use the CLI projection for screen-free local control-plane tests.
 
 The automated P13 checks are:
 
@@ -595,6 +633,7 @@ swiftc -typecheck -parse-as-library -swift-version 6 -warnings-as-errors \
   -import-objc-header apple/ClairApp/Clair-Bridging-Header.h -Xcc -Iinclude \
   apple/ClairApp/*.swift
 python3 -m py_compile scripts/clair
+cargo test -p clair-cli --locked
 xcodebuild -project Clair.xcodeproj -scheme "Clair Dev" \
   -destination 'platform=macOS,arch=arm64' -configuration Debug \
   -derivedDataPath .build/xcode/p13-tests CODE_SIGNING_ALLOWED=NO \

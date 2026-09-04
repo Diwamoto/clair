@@ -17,6 +17,7 @@ Clair.xcworkspace
 
 Cargo.toml
 ├── clair-core (Rust library + static library)
+├── clair-cli (bundled native command client)
 └── clair-ptyhost (local PTY host)
 ```
 
@@ -86,8 +87,9 @@ contains session identity, shell, working directory, dimensions, and epoch, but 
 terminal bytes. Live output is retained in a bounded 256 KiB journal and each
 subscriber has a bounded 256 KiB queue. If a cursor or slow subscriber falls behind,
 the broker emits a gap and the plain-text client resets its transcript with an
-explicit recovery marker. This is a local single-user lifecycle slice; remote
-multi-client sessions, semantic agent adapters, and relay/E2EE remain deferred.
+explicit recovery marker. This is the current local single-user lifecycle slice.
+The early mobile layer is being added separately in P16; the current broker is
+not yet a public or Cloudflare-facing endpoint.
 
 `TerminalSurfaceView` is an AppKit-backed native terminal grid renderer, embedded in
 the SwiftUI Project shell. Each `TerminalSession` owns a `TerminalGrid` that wraps a
@@ -108,8 +110,9 @@ production renderer bar.
 
 The Stable target is the only public distribution channel. The `Stable release`
 workflow builds an unsigned `Clair.app` in Release configuration, embeds the release
-`clair-ptyhost` resource, packages an arm64 zip, and publishes the zip plus a signed
-`latest.json` to a GitHub Release. A release artifact is authenticated separately from
+`clair` native CLI and the `clair-ptyhost` resource,
+packages an arm64 zip, and publishes the zip plus a signed `latest.json` to a GitHub
+Release. A release artifact is authenticated separately from
 Apple code signing: the manifest contains an Ed25519 signature over its channel,
 version, platform, architecture, URL, and SHA-256. The public key is injected into the
 Stable Info.plist at release build time; the private key exists only in the Actions
@@ -285,6 +288,13 @@ can reveal a running or completed session's terminal and configure Project/sessi
 mute state. Project surfaces remain cached while switching Projects, so a launched
 agent continues in the background of the selected app process.
 
+The agent control plane registers both newly launched and restored agent tabs by stable
+session ID. It exposes the Project/worktree/profile, factual lifecycle, latest attention
+activity, and state-dependent capabilities to the command adapters. Input and interrupt
+are sent only after the owning PTY is actually running; stop is a separate destructive
+operation. This keeps Clair as the agent authority without inferring semantic status from
+TUI screen text.
+
 P09 deliberately does not persist PTY transcript bytes, rewrite vendor configuration,
 or claim that a CLI is installed. If a profile executable is unavailable, its terminal
 shows the normal shell failure and records the resulting exit status. App-window and
@@ -364,7 +374,7 @@ P13 exposes the complete P00-P12 user-invokable operation inventory through the 
 | Project | `project.open`, `project.switch`, `project.rename`, `project.setColor`, `project.reorder`, `project.close` |
 | Navigation/editor | `navigation.openFile`, `navigation.quickOpen`, `navigation.search`, `editor.save`, `editor.undo`, `editor.redo` |
 | Pane | `pane.split`, `pane.focus`, `pane.moveTab`, `pane.close`, `pane.toggleMaximize`, `pane.equalize` |
-| Terminal/agent | `terminal.open`, `terminal.stop`, `terminal.recover`, `agent.launch`, `agent.reveal` |
+| Terminal/agent | `terminal.open`, `terminal.stop`, `terminal.recover`, `agent.list`, `agent.status`, `agent.launch`, `agent.reveal`, `agent.input`, `agent.interrupt`, `agent.stop` |
 | Worktree | `worktree.list`, `worktree.create`, `worktree.prepareCleanup` |
 | Git/review | `git.refresh`, `git.showDiff`, `git.stage`, `git.unstage`, `git.commit`, `git.switchBranch`, `git.review`, `git.prepareAdoption`, `git.adopt` |
 | Notification | `notification.list`, `notification.setMute` |
@@ -388,23 +398,33 @@ channel-specific owner-only Unix socket:
 
 The containing directory is `0700`, the socket is `0600`, and requests/responses are
 capped at 1 MiB. A request has `requestID`, `operation` (`list` or `call`), optional
-`commandID`/`params`, and `source` (`cli` or `mcp`). A failed response preserves the
+`commandID`/`params`, and `source` (`cli`, `mcp`, or `mobile`). A failed response preserves the
 request ID and returns a machine-readable `code`, message, command ID, risk, and
 reason. The socket is same-user local IPC only; no transcript or remote session data
 is persisted.
 
-`scripts/clair` is the user-facing adapter. `open path:line:column` canonicalizes the
+The native `clair` executable is built from `crates/clair-cli` and is a thin client for
+the same owner-only command socket; command semantics and agent state remain owned by
+the Swift `CommandRegistry`/agent control plane. Release bundles expose it at
+`Clair.app/Contents/Resources/clair`, while a source Debug build emits `target/debug/clair`.
+`agent list/status/launch/reveal/input/interrupt/stop` provides the same agent operations
+in JSON, and mutating commands accept an explicit `--yes` for headless test execution.
+`open path:line:column` canonicalizes the
 path, routes it to the longest matching open Project root, and opens the containing
 directory as a Project when there is no match. A warm call probes the existing socket;
 when it is absent, the CLI cold-launches the channel's built app and retries until the
 server is ready. `--no-launch` makes a missing server a deterministic error. The
 stdio MCP mode (`mcp serve`) maps `initialize`, `tools/list`, and `tools/call` onto
 the same socket. MCP lists and calls only descriptors with `aiAvailable == true`, and
-command failures are returned as MCP tool results with `isError: true`.
+command failures are returned as MCP tool results with `isError: true`. The checked-in
+`scripts/clair` adapter remains available for source-tree compatibility and speaks the
+same protocol.
 
-The adapter intentionally stops at the local GUI boundary. Remote multi-client
-transport, vendor-specific agent semantics, transcript streaming, relay/E2EE, and
-benchmark/performance comparisons remain deferred to later queue items.
+The adapter intentionally stops at the local GUI boundary. The mobile protocol package
+defines the corresponding `agent/*` operations and authorization contracts; P16 adds the first
+remote multi-client/session-stream contract without changing this owner-only
+local command socket. Vendor-specific agent semantics, public relay/E2EE, and
+benchmark/performance comparisons remain later queue items.
 
 ## Native editor and disk safety
 
@@ -461,7 +481,11 @@ Rust static library, so the language boundary can be verified before a full Xcod
 application build. `make smoke-app-link` links the complete shared SwiftUI source
 graph, including the terminal surface, for both channel compile conditions and
 verifies the Rust symbol in each Mach-O executable. The Rust build also emits
-`target/debug/clair-ptyhost` for local app discovery. Bundle smoke follows Xcode
+`target/debug/clair` and `target/debug/clair-ptyhost` for local app discovery; the
+Xcode command-line wrapper copies the native CLI into each Debug app bundle, and the
+release workflow copies the optimized CLI into the Release bundle. The Xcode command-line
+wrapper builds the project directly; the checked-in workspace remains available
+for opening the project in Xcode. Bundle smoke follows Xcode
 26's Debug `*.debug.dylib` image when the app's main executable is a generated
 debug stub.
 
@@ -485,10 +509,9 @@ staged-boundary diff/stage/unstage/commit behavior, untracked/rename/delete pars
 typed invalid-operation errors, Project-scoped command execution, external index refresh,
 and non-Git availability. Branch review tests cover committed/uncommitted separation,
 dirty adoption refusal, clean two-parent adoption, conflict-state handoff, stale-plan
-refusal, and cleanup cancellation. The `make test-swift`
-wrapper remains the CI-facing path where the workspace is accepted; with the current
-Xcode 26 environment, use the equivalent `xcodebuild -project Clair.xcodeproj ... test`
-command because the minimal committed workspace is rejected.
+refusal, and cleanup cancellation. The `make test-swift` wrapper uses the same
+project-scoped build path as the focused `xcodebuild -project Clair.xcodeproj ... test`
+commands below.
 
 `apple/ClairTests/TerminalTests.swift` covers partial/batched broker frame decoding,
 large complete batches, binary UTF-8 input, attachment/output/error/gap validation,
