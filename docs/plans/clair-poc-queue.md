@@ -480,7 +480,7 @@ P14はADR-0009でdecision blockerを解消して完了した。P15Dはdecision b
 
 ### P15C Interaction Lab UI convergence
 
-- Status: `queued`
+- Status: `done`
 - Depends on: P05、P06、P09、P11、P12、P15A、P15B。
 - Outcome: native SwiftUI/AppKit appをInteraction Labのproject-first ccedit contractへ収束させ、
   WebViewなしでM1のdaily-driver hierarchyとdensityを実現する。
@@ -517,6 +517,14 @@ P14はADR-0009でdecision blockerを解消して完了した。P15Dはdecision b
 - Audit evidence (2026-09-01): native appはvertical Projects sidebar、separate Files sidebar、top button row、
   pane-local toolbarとsecond tab row、modal sheets、system dark appearanceであり、Interaction Labのtitlebar groups、
   activity hierarchy、right actions、One Dark density、status/attention presentationと一致していない。
+- Validation (2026-09-04, copy and layout reconciliation): latest Interaction Lab commit `6c73d8e` and its
+  uncommitted review changes in `app/page.tsx`/`app/globals.css` were read and reconciled into the native
+  visible surfaces without changing the nested mock; `npm run build` passed in the mock. Native `make build-dev`、
+  `make lint-swift`、`make workspace-check`、および `git diff --check` passed; `make test-swift` passed all 109
+  tests with 0 failures. Manual `Clair Dev` smoke confirmed the Japanese project-first shell, compact grouped
+  titlebar with editor/terminal surfaces, command palette, settings, Search, Git, Activity/History, and stable
+  One Dark navigation hierarchy. The empty command/settings sheet regression found during smoke was fixed before
+  completion.
 
 ### P15D Rust control-plane boundary reconciliation
 

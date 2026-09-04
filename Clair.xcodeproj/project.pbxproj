@@ -9,6 +9,10 @@
 /* Begin PBXBuildFile section */
 		A000000000000000000000D0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000D2 /* Assets.xcassets */; };
 		A000000000000000000000D1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000D2 /* Assets.xcassets */; };
+		A000000000000000000000C8 /* WorkspaceActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000C7 /* WorkspaceActivity.swift */; };
+		A000000000000000000000C9 /* WorkspaceActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000C7 /* WorkspaceActivity.swift */; };
+		A000000000000000000000CB /* WorkspaceChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000CA /* WorkspaceChrome.swift */; };
+		A000000000000000000000CC /* WorkspaceChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000CA /* WorkspaceChrome.swift */; };
 		A00000000000000000000031 /* ClairApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000011 /* ClairApp.swift */; };
 		A00000000000000000000032 /* ClairRuntimeProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000012 /* ClairRuntimeProfile.swift */; };
 		A00000000000000000000033 /* RustCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000013 /* RustCore.swift */; };
@@ -88,6 +92,8 @@
 
 /* Begin PBXFileReference section */
 		A000000000000000000000D2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A000000000000000000000C7 /* WorkspaceActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceActivity.swift; sourceTree = "<group>"; };
+		A000000000000000000000CA /* WorkspaceChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceChrome.swift; sourceTree = "<group>"; };
 		A00000000000000000000011 /* ClairApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClairApp.swift; sourceTree = "<group>"; };
 		A00000000000000000000012 /* ClairRuntimeProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClairRuntimeProfile.swift; sourceTree = "<group>"; };
 		A00000000000000000000013 /* RustCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RustCore.swift; sourceTree = "<group>"; };
@@ -239,6 +245,8 @@
 				A000000000000000000000B5 /* ClairUpdate.swift */,
 				A000000000000000000000B6 /* ClairLifecycle.swift */,
 				A00000000000000000000016 /* Clair-Bridging-Header.h */,
+				A000000000000000000000C7 /* WorkspaceActivity.swift */,
+				A000000000000000000000CA /* WorkspaceChrome.swift */,
 			);
 			path = ClairApp;
 			sourceTree = "<group>";
@@ -504,6 +512,8 @@
 				A000000000000000000000B0 /* ClairUpdate.swift in Sources */,
 				A000000000000000000000B1 /* ClairLifecycle.swift in Sources */,
 				A000000000000000000000C1 /* TerminalVTerm.c in Sources */,
+				A000000000000000000000C8 /* WorkspaceActivity.swift in Sources */,
+				A000000000000000000000CB /* WorkspaceChrome.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -537,6 +547,8 @@
 				A000000000000000000000B2 /* ClairUpdate.swift in Sources */,
 				A000000000000000000000B3 /* ClairLifecycle.swift in Sources */,
 				A000000000000000000000C3 /* TerminalVTerm.c in Sources */,
+				A000000000000000000000C9 /* WorkspaceActivity.swift in Sources */,
+				A000000000000000000000CC /* WorkspaceChrome.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

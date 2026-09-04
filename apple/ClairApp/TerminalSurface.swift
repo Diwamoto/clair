@@ -123,7 +123,7 @@ final class NativeTerminalView: NSView {
     super.init(frame: .zero)
 
     wantsLayer = true
-    layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
+    layer?.backgroundColor = WorkspaceChrome.nsCanvas.cgColor
 
     textView.inputHandler = { [weak self] data in
       self?.session.sendInput(data)
@@ -133,7 +133,7 @@ final class NativeTerminalView: NSView {
     scrollView.hasHorizontalScroller = true
     scrollView.autohidesScrollers = true
     scrollView.drawsBackground = true
-    scrollView.backgroundColor = .textBackgroundColor
+    scrollView.backgroundColor = WorkspaceChrome.nsCanvas
     scrollView.documentView = textView
     addSubview(scrollView)
 
@@ -251,9 +251,9 @@ final class TerminalTextView: NSTextView {
     isAutomaticDashSubstitutionEnabled = false
     allowsUndo = false
     drawsBackground = true
-    backgroundColor = .textBackgroundColor
-    textColor = .textColor
-    insertionPointColor = .textColor
+    backgroundColor = WorkspaceChrome.nsCanvas
+    textColor = WorkspaceChrome.nsTextPrimary
+    insertionPointColor = WorkspaceChrome.nsTextPrimary
     font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
     textContainerInset = NSSize(width: 12, height: 12)
     minSize = NSSize(width: 0, height: 0)
@@ -393,7 +393,7 @@ final class TerminalTextView: NSTextView {
   }
 
   override func draw(_ dirtyRect: NSRect) {
-    NSColor.textBackgroundColor.setFill()
+    WorkspaceChrome.nsCanvas.setFill()
     dirtyRect.fill()
     if let grid {
       draw(grid: grid)
@@ -403,7 +403,7 @@ final class TerminalTextView: NSTextView {
     }
     let attributes: [NSAttributedString.Key: Any] = [
       .font: font ?? NSFont.monospacedSystemFont(ofSize: 13, weight: .regular),
-      .foregroundColor: NSColor.controlAccentColor,
+      .foregroundColor: WorkspaceChrome.nsAccent,
       .underlineStyle: NSUnderlineStyle.single.rawValue,
     ]
     let cursor = grid?.cursor ?? (row: 0, column: 0, visible: false)
@@ -450,21 +450,21 @@ final class TerminalTextView: NSTextView {
           green: cell.foreground_green,
           blue: cell.foreground_blue,
           isDefault: cell.uses_default_foreground,
-          fallback: .textColor
+          fallback: WorkspaceChrome.nsTextPrimary
         )
         var background = color(
           red: cell.background_red,
           green: cell.background_green,
           blue: cell.background_blue,
           isDefault: cell.uses_default_background,
-          fallback: .textBackgroundColor
+          fallback: WorkspaceChrome.nsCanvas
         )
         if cell.attributes & (1 << 3) != 0 {
           swap(&foreground, &background)
         }
         if isSelected(row: row, column: column) || isCursor {
-          background = .selectedTextBackgroundColor
-          foreground = .selectedTextColor
+          background = WorkspaceChrome.nsSelectedTextBackground
+          foreground = WorkspaceChrome.nsSelectedText
         }
         background.setFill()
         rect.fill()

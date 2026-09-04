@@ -547,6 +547,42 @@ final class ProjectKernelTests: XCTestCase {
     }
   }
 
+  func testWorkspaceActivitySelectionPersistsPerProjectAcrossRestart() throws {
+    let fixture = try Fixture()
+    let roots = try ["first", "second"].map { name -> URL in
+      let root = try fixture.makeDirectory(named: "activity-\(name)")
+      try Data("fixture".utf8).write(to: root.appendingPathComponent("\(name).txt"))
+      return root
+    }
+    let workspace = fixture.makeWorkspace()
+    var projects: [Project] = []
+
+    for (index, root) in roots.enumerated() {
+      let project = try XCTUnwrap(
+        project(workspace.execute(.openProject(OpenProjectCommand(rootURL: root))))
+      )
+      projects.append(project)
+      let surface = try XCTUnwrap(workspace.activeSurface)
+      surface.workspaceActivity = index == 0 ? .search : .activity
+    }
+
+    let restored = fixture.makeWorkspace()
+    for expected in projects {
+      _ = restored.execute(
+        .switchProject(SwitchProjectCommand(projectID: expected.id))
+      )
+      let surface = try XCTUnwrap(restored.activeSurface)
+      XCTAssertEqual(
+        surface.workspaceActivity,
+        expected.id == projects[0].id ? .search : .activity
+      )
+      XCTAssertEqual(
+        surface.workspaceSnapshot.workspaceActivity,
+        surface.workspaceActivity.rawValue
+      )
+    }
+  }
+
   func testCorruptOrMissingWorkspaceSnapshotFallsBackWithoutReplacingCorruptData() throws {
     let fixture = try Fixture()
     let root = try fixture.makeDirectory(named: "recoverable-pane-project")

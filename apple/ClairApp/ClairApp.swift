@@ -66,10 +66,12 @@ struct ClairApplication: App {
         workspace: projectWorkspace,
         agentWorkflow: agentWorkflow,
         worktreeCoordinator: worktreeCoordinator,
-        updater: updater
+        updater: updater,
+        commandSurface: commandSurface
       )
     }
     .defaultSize(width: 980, height: 620)
+    .windowStyle(.hiddenTitleBar)
     .commands {
       ClairCommandMenu(surface: commandSurface)
       ClairUpdateCommands(updater: updater)

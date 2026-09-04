@@ -510,6 +510,7 @@ final class ProjectSurfaceModel: ObservableObject {
   @Published private(set) var gitStatus: ProjectGitSnapshot?
   @Published private(set) var selectedGitDiff: ProjectGitDiff?
   @Published private(set) var lastGitErrorMessage: String?
+  @Published var workspaceActivityRawValue: String
 
   private let rootChecker: any ProjectRootChecking
   private let fileManager: FileManager
@@ -556,6 +557,8 @@ final class ProjectSurfaceModel: ObservableObject {
     self.maximizedPaneID = initialSnapshot.maximizedPaneID
     self.selectedNodeID = initialSnapshot.selectedNodeID
     self.expandedNodeIDs = Set(initialSnapshot.expandedNodeIDs)
+    self.workspaceActivityRawValue =
+      initialSnapshot.workspaceActivity ?? WorkspaceActivity.files.rawValue
     let canonicalRootURL = rootChecker.canonicalURL(for: rootURL)
     self.loadedDirectoryPaths = [canonicalRootURL.path]
     self.fileTree = ProjectFileTreeSnapshot.empty(
@@ -645,6 +648,17 @@ final class ProjectSurfaceModel: ObservableObject {
     }
   }
 
+  /// A maximized pane hides the other panes, so its tabs are the only tabs
+  /// shown in the titlebar until the layout is restored.
+  var visibleWorkspaceTabs: [ProjectWorkspaceTab] {
+    guard let maximizedPaneID,
+      let leaf = layout.leaf(withID: maximizedPaneID)
+    else {
+      return workspaceTabs
+    }
+    return leaf.tabs.map { ProjectWorkspaceTab(paneID: leaf.id, tab: $0) }
+  }
+
   var visibleLayout: ProjectPaneNode {
     guard let maximizedPaneID, let leaf = layout.leaf(withID: maximizedPaneID) else {
       return layout
@@ -664,7 +678,8 @@ final class ProjectSurfaceModel: ObservableObject {
       focusedPaneID: focusedPaneID,
       maximizedPaneID: maximizedPaneID,
       selectedNodeID: selectedNodeID,
-      expandedNodeIDs: expandedNodeIDs.sorted()
+      expandedNodeIDs: expandedNodeIDs.sorted(),
+      workspaceActivity: workspaceActivityRawValue
     )
   }
 
@@ -815,7 +830,7 @@ final class ProjectSurfaceModel: ObservableObject {
 
   @discardableResult
   func openNewTerminal(
-    title: String = "Terminal",
+    title: String = "ターミナル",
     agentProfileID: String? = nil,
     executionRootURL: URL? = nil,
     worktreeID: WorktreeID? = nil,
@@ -827,7 +842,7 @@ final class ProjectSurfaceModel: ObservableObject {
     }
     let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
     let newTab = ProjectPaneTab.terminal(
-      title: normalizedTitle.isEmpty ? "Terminal" : normalizedTitle,
+      title: normalizedTitle.isEmpty ? "ターミナル" : normalizedTitle,
       agentProfileID: agentProfileID,
       executionRootURL: executionRootURL,
       worktreeID: worktreeID
@@ -1271,7 +1286,7 @@ final class ProjectSurfaceModel: ObservableObject {
         let replacementContent = String(data: file.replacementData, encoding: .utf8)
       else {
         lastNavigationErrorMessage =
-          "The replacement preview is stale for \(file.relativePath). Preview the replacement again."
+          "\(file.relativePath) の置換プレビューが古くなっています。もう一度プレビューしてください。"
         return
       }
       targets.append(
@@ -1291,10 +1306,10 @@ final class ProjectSurfaceModel: ObservableObject {
         )
       else {
         lastNavigationErrorMessage =
-          "The replacement target is no longer available: \(target.fileURL.lastPathComponent)"
+          "置換対象が利用できなくなりました: \(target.fileURL.lastPathComponent)"
         return
       }
-      document.replaceContent(target.content, actionName: "Replace All")
+      document.replaceContent(target.content, actionName: "全て置換")
       changedFiles += 1
     }
 
@@ -1303,7 +1318,7 @@ final class ProjectSurfaceModel: ObservableObject {
     searchResults = []
     lastNavigationErrorMessage = nil
     lastNavigationStatusMessage =
-      "Replacement applied to \(changedFiles) editor buffer\(changedFiles == 1 ? "" : "s"). Save the tab\(changedFiles == 1 ? "" : "s") to write to disk."
+      "エディタバッファ\(changedFiles)件に置換を適用しました。ディスクに書き込むにはタブを保存してください。"
   }
 
   func openSearchMatch(_ match: ProjectSearchMatch) {
@@ -1312,7 +1327,7 @@ final class ProjectSurfaceModel: ObservableObject {
       fileURL.path == match.filePath,
       isRegularFile(fileURL)
     else {
-      lastNavigationErrorMessage = "The search result is no longer available."
+      lastNavigationErrorMessage = "検索結果は利用できなくなりました。"
       return
     }
     lastNavigationErrorMessage = nil
@@ -1342,7 +1357,7 @@ final class ProjectSurfaceModel: ObservableObject {
 
   func restoreHistoryEntry(_ entry: ProjectLocalHistoryEntry) {
     guard entry.projectID == projectID else {
-      lastNavigationErrorMessage = "The history entry belongs to another Project."
+      lastNavigationErrorMessage = "この履歴エントリは別のProjectに属しています。"
       return
     }
     guard
@@ -1350,7 +1365,7 @@ final class ProjectSurfaceModel: ObservableObject {
       let document = openEditorTab(for: fileURL, title: fileURL.lastPathComponent)
     else {
       lastNavigationErrorMessage =
-        "The history file is no longer available: \(entry.filePath)"
+        "履歴ファイルは利用できなくなりました: \(entry.filePath)"
       return
     }
 
@@ -1358,7 +1373,7 @@ final class ProjectSurfaceModel: ObservableObject {
       try document.restoreHistoryEntry(id: entry.id)
       lastNavigationErrorMessage = nil
       lastNavigationStatusMessage =
-        "Restored \(entry.filePath) into the editor buffer. Save the tab to write it to disk."
+        "\(entry.filePath) をエディタバッファに復元しました。ディスクに書き込むにはタブを保存してください。"
     } catch {
       lastNavigationErrorMessage = error.localizedDescription
     }
@@ -1567,6 +1582,9 @@ final class ProjectSurfaceModel: ObservableObject {
     guard let location = tabLocation(for: id) else {
       return
     }
+    if maximizedPaneID != nil, maximizedPaneID != location.paneID {
+      maximizedPaneID = nil
+    }
     focusedPaneID = location.paneID
     setActiveTab(
       id,
@@ -1674,6 +1692,10 @@ final class ProjectSurfaceModel: ObservableObject {
 
   private func notifySnapshotChanged() {
     onSnapshotChange?(workspaceSnapshot)
+  }
+
+  func notifyWorkspaceActivityChanged() {
+    notifySnapshotChanged()
   }
 
   private func restoreRuntimeTabs() {
@@ -1932,6 +1954,34 @@ final class ProjectSurfaceModel: ObservableObject {
         first: equalizingSplits(in: first),
         second: equalizingSplits(in: second)
       )
+    }
+  }
+}
+
+extension ProjectSurfaceModel {
+  /// Live session of the focused pane active tab, used by the status bar.
+  var focusedPaneSession: TerminalSession? {
+    guard let leaf = layout.leaf(withID: focusedPaneID), let activeTabID = leaf.activeTabID else {
+      return nil
+    }
+    guard let tab = leaf.tabs.first(where: { $0.id == activeTabID }), tab.kind == .terminal else {
+      return nil
+    }
+    return terminalSessions[tab.id]
+  }
+
+  /// Compact ownership summary displayed inside the active Project group.
+  var activeTabSummary: String? {
+    guard let tab = activeTab(in: focusedPaneID) else {
+      return nil
+    }
+    switch tab.kind {
+    case .editor:
+      return "エディタ · \(tab.title)"
+    case .terminal:
+      return "ターミナル · \(tab.title)"
+    case .diff:
+      return "差分"
     }
   }
 }

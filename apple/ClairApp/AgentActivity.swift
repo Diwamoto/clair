@@ -8,6 +8,17 @@ enum AgentActivitySource: String, Codable, CaseIterable, Sendable {
   static var terminalBell: Self { .bell }
 
   static var processExit: Self { .exit }
+
+  var displayName: String {
+    switch self {
+    case .bell:
+      "ベル"
+    case .exit:
+      "終了"
+    case .officialHook:
+      "公式フック"
+    }
+  }
 }
 
 enum AgentActivityKind: String, Codable, CaseIterable, Sendable {
@@ -17,6 +28,23 @@ enum AgentActivityKind: String, Codable, CaseIterable, Sendable {
   case failed
   case notification
   case unknown
+
+  var displayName: String {
+    switch self {
+    case .attention:
+      "注意"
+    case .started:
+      "開始"
+    case .completed:
+      "完了"
+    case .failed:
+      "失敗"
+    case .notification:
+      "通知"
+    case .unknown:
+      "不明"
+    }
+  }
 }
 
 struct AgentActivityScope: Codable, Equatable, Hashable, Sendable {

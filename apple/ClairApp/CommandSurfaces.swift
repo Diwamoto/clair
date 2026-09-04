@@ -251,7 +251,7 @@ struct CommandSurfaceMatch: Identifiable, Equatable, Sendable {
   }
 
   var statusText: String {
-    availability.reason ?? "Available"
+    availability.reason ?? "利用可能"
   }
 }
 
@@ -332,7 +332,7 @@ final class CommandSurfaceModel: ObservableObject {
       panel.canChooseFiles = false
       panel.canChooseDirectories = true
       panel.allowsMultipleSelection = false
-      panel.prompt = "Open Project"
+      panel.prompt = "Projectを開く"
       guard panel.runModal() == .OK, let url = panel.url else {
         return recordCancellation(commandID: commandID, source: source)
       }

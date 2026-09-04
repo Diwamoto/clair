@@ -27,13 +27,13 @@ enum ProjectAvailability: String, Codable, Equatable, Sendable {
   var displayName: String {
     switch self {
     case .available:
-      "Available"
+      "利用可能"
     case .missing:
-      "Missing"
+      "見つかりません"
     case .notDirectory:
-      "Not a folder"
+      "フォルダではありません"
     case .unreadable:
-      "Permission denied"
+      "アクセス権がありません"
     }
   }
 }
@@ -247,7 +247,7 @@ struct ProjectPaneTab: Codable, Equatable, Identifiable, Sendable {
 
   static func terminal(
     id: UUID = UUID(),
-    title: String = "Terminal",
+    title: String = "ターミナル",
     agentProfileID: String? = nil,
     executionRootURL: URL? = nil,
     worktreeID: WorktreeID? = nil
@@ -275,7 +275,7 @@ struct ProjectPaneTab: Codable, Equatable, Identifiable, Sendable {
     ProjectPaneTab(
       id: "diff:\(id.uuidString)",
       kind: .diff,
-      title: "Diff Preview",
+      title: "差分プレビュー",
       filePath: nil,
       sessionID: nil
     )
@@ -430,6 +430,7 @@ struct ProjectSurfaceSnapshot: Codable, Equatable, Sendable {
   var maximizedPaneID: UUID?
   var selectedNodeID: String?
   var expandedNodeIDs: [String]
+  var workspaceActivity: String?
 
   static func empty(for projectID: UUID) -> ProjectSurfaceSnapshot {
     let leaf = ProjectPaneLeaf()
@@ -440,7 +441,8 @@ struct ProjectSurfaceSnapshot: Codable, Equatable, Sendable {
       focusedPaneID: leaf.id,
       maximizedPaneID: nil,
       selectedNodeID: nil,
-      expandedNodeIDs: []
+      expandedNodeIDs: [],
+      workspaceActivity: nil
     )
   }
 

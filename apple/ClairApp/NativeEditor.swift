@@ -53,11 +53,11 @@ enum ProjectLocalHistoryReason: String, Codable, CaseIterable, Sendable {
   var displayName: String {
     switch self {
     case .save:
-      "Before save"
+      "保存前"
     case .externalChange:
-      "Before disk reload"
+      "ディスク再読み込み前"
     case .externalDeletion:
-      "Before file deletion"
+      "ファイル削除前"
     }
   }
 }
@@ -698,15 +698,21 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
 struct ProjectSourceEditorView: NSViewRepresentable {
   @ObservedObject var document: ProjectEditorTab
   let selection: ProjectEditorSelection?
+  let fontSize: CGFloat
+  let wordWrap: Bool
   let onSave: () -> Void
 
   init(
     document: ProjectEditorTab,
     selection: ProjectEditorSelection? = nil,
+    fontSize: CGFloat = 13,
+    wordWrap: Bool = false,
     onSave: @escaping () -> Void
   ) {
     self.document = document
     self.selection = selection
+    self.fontSize = fontSize
+    self.wordWrap = wordWrap
     self.onSave = onSave
   }
 
@@ -727,10 +733,7 @@ struct ProjectSourceEditorView: NSViewRepresentable {
     textView.isAutomaticQuoteSubstitutionEnabled = false
     textView.isAutomaticDashSubstitutionEnabled = false
     textView.drawsBackground = true
-    textView.backgroundColor = .textBackgroundColor
-    textView.textColor = .textColor
-    textView.insertionPointColor = .textColor
-    textView.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+    configure(textView)
     textView.textContainerInset = NSSize(width: 12, height: 12)
     textView.minSize = NSSize(width: 0, height: 0)
     textView.maxSize = NSSize(
@@ -738,8 +741,8 @@ struct ProjectSourceEditorView: NSViewRepresentable {
       height: CGFloat.greatestFiniteMagnitude
     )
     textView.isVerticallyResizable = true
-    textView.isHorizontallyResizable = true
-    textView.textContainer?.widthTracksTextView = false
+    textView.isHorizontallyResizable = !wordWrap
+    textView.textContainer?.widthTracksTextView = wordWrap
     textView.textContainer?.heightTracksTextView = false
 
     scrollView.borderType = .noBorder
@@ -747,7 +750,7 @@ struct ProjectSourceEditorView: NSViewRepresentable {
     scrollView.hasHorizontalScroller = true
     scrollView.autohidesScrollers = true
     scrollView.drawsBackground = true
-    scrollView.backgroundColor = .textBackgroundColor
+    scrollView.backgroundColor = WorkspaceChrome.nsCanvas
     scrollView.documentView = textView
     context.coordinator.textView = textView
     return scrollView
@@ -759,6 +762,7 @@ struct ProjectSourceEditorView: NSViewRepresentable {
     }
 
     textView.onSave = onSave
+    configure(textView)
     textView.isEditable = !document.isMissing && !document.isReadOnly
     if textView.string != document.content {
       let selectedRange = textView.selectedRange()
@@ -776,6 +780,17 @@ struct ProjectSourceEditorView: NSViewRepresentable {
       }
     }
     applySelectionIfNeeded(to: textView, context: context)
+  }
+
+  private func configure(_ textView: ProjectSourceTextView) {
+    textView.drawsBackground = true
+    textView.backgroundColor = WorkspaceChrome.nsCanvas
+    textView.textColor = WorkspaceChrome.nsTextPrimary
+    textView.insertionPointColor = WorkspaceChrome.nsTextPrimary
+    textView.font = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+    textView.isHorizontallyResizable = !wordWrap
+    textView.textContainer?.widthTracksTextView = wordWrap
+    textView.textContainer?.lineBreakMode = wordWrap ? .byCharWrapping : .byClipping
   }
 
   static func dismantleNSView(_ nsView: NSScrollView, coordinator: Coordinator) {

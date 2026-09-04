@@ -13,21 +13,21 @@ enum ProjectGitChangeKind: String, CaseIterable, Codable, Equatable, Sendable {
   var displayName: String {
     switch self {
     case .added:
-      "Added"
+      "追加"
     case .modified:
-      "Modified"
+      "変更"
     case .deleted:
-      "Deleted"
+      "削除"
     case .renamed:
-      "Renamed"
+      "名前変更"
     case .copied:
-      "Copied"
+      "コピー"
     case .typeChanged:
-      "Type changed"
+      "種類変更"
     case .conflicted:
-      "Conflicted"
+      "コンフリクト"
     case .untracked:
-      "Untracked"
+      "未追跡"
     }
   }
 }
@@ -39,9 +39,9 @@ enum ProjectGitDiffBasis: String, CaseIterable, Codable, Equatable, Sendable {
   var displayName: String {
     switch self {
     case .workingTree:
-      "Working tree"
+      "ワークツリー"
     case .staged:
-      "Staged"
+      "ステージ済み"
     }
   }
 }

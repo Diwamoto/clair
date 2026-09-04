@@ -77,19 +77,19 @@ final class TerminalSession: ObservableObject {
   var statusDescription: String {
     switch state {
     case .idle:
-      "Not started"
+      "未開始"
     case .starting:
-      "Starting"
+      "起動中"
     case .running:
-      "Running"
+      "実行中"
     case .stopping:
-      "Stopping"
+      "停止中"
     case .exited(let status):
-      status == 0 ? "Exited" : "Exited (\(status))"
+      status == 0 ? "終了" : "終了 (\(status))"
     case .missing(let message):
-      "Session unavailable: \(message)"
+      "セッションを利用できません: \(message)"
     case .failed(let message):
-      "Failed: \(message)"
+      "失敗: \(message)"
     }
   }
 

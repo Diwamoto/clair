@@ -11,11 +11,11 @@ enum ManagedWorktreeState: String, Codable, Equatable, Sendable {
   var displayName: String {
     switch self {
     case .available:
-      "Available"
+      "利用可能"
     case .missing:
-      "Missing"
+      "見つかりません"
     case .detached:
-      "Detached"
+      "切り離し"
     }
   }
 }
@@ -195,15 +195,15 @@ enum ManagedWorktreeCleanupBlocker: String, Equatable, Sendable {
   var displayName: String {
     switch self {
     case .dirtyWorkingTree:
-      "uncommitted changes"
+      "未コミットの変更"
     case .activeSession:
-      "an active terminal or agent session"
+      "実行中のターミナルまたはAgentセッション"
     case .missingWorktree:
-      "a missing worktree"
+      "見つからないworktree"
     case .detachedWorktree:
-      "an unregistered or detached Git worktree"
+      "未登録または切り離されたGit worktree"
     case .targetMismatch:
-      "a different cleanup target"
+      "別のクリーンアップ対象"
     }
   }
 }

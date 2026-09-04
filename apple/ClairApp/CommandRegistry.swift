@@ -429,253 +429,253 @@ struct CommandRegistry: Sendable {
     descriptors = [
       CommandDescriptor(
         id: .openProject,
-        title: "Open Project Folder",
+        title: "Projectフォルダを開く",
         risk: .additive,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .switchProject,
-        title: "Switch Project",
+        title: "Projectを切り替え",
         risk: .read,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .renameProject,
-        title: "Rename Project",
+        title: "Project名を変更",
         risk: .write,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .setProjectColor,
-        title: "Set Project Color",
+        title: "Projectカラーを設定",
         risk: .write,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .reorderProject,
-        title: "Reorder Projects",
+        title: "Projectの順序を変更",
         risk: .write,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .closeProject,
-        title: "Close Project",
+        title: "Projectを閉じる",
         risk: .write,
         aiAvailable: false
       ),
       CommandDescriptor(
         id: .navigationOpenFile,
-        title: "Open File at Location",
+        title: "場所を指定してファイルを開く",
         risk: .additive,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .navigationQuickOpen,
-        title: "Quick Open File",
+        title: "ファイルをクイックオープン",
         risk: .read,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .navigationSearch,
-        title: "Search Project Files",
+        title: "Projectファイルを検索",
         risk: .read,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .editorSave,
-        title: "Save Editor Buffer",
+        title: "エディタバッファを保存",
         risk: .write,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .editorUndo,
-        title: "Undo Editor Change",
+        title: "エディタの変更を元に戻す",
         risk: .write,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .editorRedo,
-        title: "Redo Editor Change",
+        title: "エディタの変更をやり直す",
         risk: .write,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .paneSplit,
-        title: "Split Pane",
+        title: "ペインを分割",
         risk: .write,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .paneFocus,
-        title: "Focus Pane",
+        title: "ペインにフォーカス",
         risk: .read,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .paneMoveTab,
-        title: "Move Active Tab",
+        title: "アクティブなタブを移動",
         risk: .write,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .paneClose,
-        title: "Close Pane",
+        title: "ペインを閉じる",
         risk: .destructive,
         aiAvailable: false
       ),
       CommandDescriptor(
         id: .paneToggleMaximize,
-        title: "Toggle Pane Maximize",
+        title: "ペイン最大化を切り替え",
         risk: .write,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .paneEqualize,
-        title: "Equalize Pane Splits",
+        title: "ペイン分割を均等化",
         risk: .write,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .terminalOpen,
-        title: "Open Terminal",
+        title: "ターミナルを開く",
         risk: .additive,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .terminalStop,
-        title: "Stop Terminal",
+        title: "ターミナルを停止",
         risk: .destructive,
         aiAvailable: false
       ),
       CommandDescriptor(
         id: .terminalRecover,
-        title: "Recover Terminal Session",
+        title: "ターミナルセッションを復元",
         risk: .write,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .agentList,
-        title: "List Agent Sessions",
+        title: "Agentセッションを一覧表示",
         risk: .read,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .agentStatus,
-        title: "Show Agent Status",
+        title: "Agentの状態を表示",
         risk: .read,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .agentLaunch,
-        title: "Launch Agent",
+        title: "Agentを起動",
         risk: .external,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .agentReveal,
-        title: "Reveal Agent Session",
+        title: "Agentセッションを表示",
         risk: .read,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .agentInput,
-        title: "Send Agent Input",
+        title: "Agentに入力を送信",
         risk: .write,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .agentInterrupt,
-        title: "Interrupt Agent",
+        title: "Agentを中断",
         risk: .write,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .agentStop,
-        title: "Stop Agent",
+        title: "Agentを停止",
         risk: .destructive,
         aiAvailable: false
       ),
       CommandDescriptor(
         id: .worktreeList,
-        title: "List Managed Worktrees",
+        title: "管理対象worktreeを一覧表示",
         risk: .read,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .worktreeCreate,
-        title: "Create Managed Worktree",
+        title: "管理対象worktreeを作成",
         risk: .external,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .worktreePrepareCleanup,
-        title: "Prepare Worktree Cleanup",
+        title: "worktreeのクリーンアップを準備",
         risk: .destructive,
         aiAvailable: false
       ),
       CommandDescriptor(
         id: .gitRefresh,
-        title: "Refresh Git Status",
+        title: "Gitの状態を更新",
         risk: .read,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .gitShowDiff,
-        title: "Show Git Diff",
+        title: "Git差分を表示",
         risk: .read,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .gitStage,
-        title: "Stage Git Change",
+        title: "Git変更をステージ",
         risk: .write,
         aiAvailable: false
       ),
       CommandDescriptor(
         id: .gitUnstage,
-        title: "Unstage Git Change",
+        title: "Git変更のステージを解除",
         risk: .write,
         aiAvailable: false
       ),
       CommandDescriptor(
         id: .gitCommit,
-        title: "Commit Git Changes",
+        title: "Git変更をコミット",
         risk: .write,
         aiAvailable: false
       ),
       CommandDescriptor(
         id: .gitSwitchBranch,
-        title: "Switch Git Branch",
+        title: "Gitブランチを切り替え",
         risk: .write,
         aiAvailable: false
       ),
       CommandDescriptor(
         id: .gitReview,
-        title: "Review Git Worktree Branch",
+        title: "Git worktreeブランチを確認",
         risk: .read,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .gitPrepareAdoption,
-        title: "Prepare Git Branch Adoption",
+        title: "Gitブランチの取り込みを準備",
         risk: .destructive,
         aiAvailable: false
       ),
       CommandDescriptor(
         id: .gitAdopt,
-        title: "Adopt Git Worktree Branch",
+        title: "Git worktreeブランチを取り込む",
         risk: .destructive,
         aiAvailable: false
       ),
       CommandDescriptor(
         id: .notificationList,
-        title: "List Project Notifications",
+        title: "Project通知を一覧表示",
         risk: .read,
         aiAvailable: true
       ),
       CommandDescriptor(
         id: .notificationSetMute,
-        title: "Set Notification Mute",
+        title: "通知のミュートを設定",
         risk: .write,
         aiAvailable: true
       ),
