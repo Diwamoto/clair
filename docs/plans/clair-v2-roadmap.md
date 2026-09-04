@@ -49,9 +49,25 @@ Clair Stableだけを使ってClairをvibe codingし、別bundleのClair Devで�
 
 - Swift/Rust language intelligence。
 - Integrated debugger。
-- Mobile client。
 - Dev Container。
 - API tester。
+
+## Milestone 1.5: Early mobile agent control
+
+### Outcome
+
+Go editorやdebuggerを待たず、自宅Macで動くClairのagentをiPhone/iPadから安全に確認・操作・起動できる。
+
+### Exit criteria
+
+- Project/session catalog、current screen、bounded scrollback、raw terminal input、registered agent launchが動作する。
+- Cloudflare private-network transport、QR device-key pairing、device revoke、APNs opaque attention notificationが動作する。
+- Macとmobileの入力がbroker到着順で同じPTYへ適用され、mobileがPTY geometryを暗黙に変更しない。
+- GUIを閉じてもhost serviceが継続し、mobile feature flagで機能全体を無効化できる。
+- Private TestFlight internal buildと`main`/manual/30日scheduleのCIが動作する。
+
+Initial scopeはsingle-user・自所有device・raw terminalに限定する。semantic approval、vendor adapter、branch review、
+public relay/E2EEはこのmilestoneのexit criteriaに含めず、後続sliceで個別に判断する。
 
 ## Milestone 2: Go daily-driver editor
 
@@ -64,18 +80,17 @@ ClairをGo開発の日常editorとして利用できる。
 - generic LSP lifecycleとgopls integrationが動作する。
 - completion、diagnostics、definition、references、rename、code action、format、symbol searchが実用になる。
 
-## Milestone 3A: Mobile terminal MVP
+## Milestone 3A: Mobile terminal hardening and extensions
 
 ### Outcome
 
-自宅Macで動くClairのagentをiPhone/iPadから安全に確認・操作・起動できる。
+初期mobile controlを実利用で安定させ、必要なagent convenienceを追加する。
 
 ### Exit criteria
 
-- Private TestFlight CI、Cloudflare private-network transport、QR pairing、revoke、APNsが動作する。
-- Project/session catalog、screen+bounded scrollback replay、live terminal input、registered agent launchが動作する。
-- GUIを閉じてもhost serviceが継続し、電源接続時のidle system sleepを防げる。
-- Company Macではglobal mobile feature flagを無効化できる。
+- gap/resync、network switch、background/foreground、sleep/wake、resource boundを実用状態にする。
+- 対応agentのstructured prompt/interrupt/status等をcapability-basedに追加する。raw terminal fallbackを維持する。
+- 必要性が確認されたnotification actionやmobile branch reviewを追加する。
 
 ## Milestone 3B: Go debugger
 

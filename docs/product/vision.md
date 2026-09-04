@@ -12,7 +12,7 @@ ClairはVS CodeとGhosttyを並べて使うのではなく、それぞれの必�
 
 利用者は一つのClairで複数Projectを保持し、Projectごとのeditor、terminal、agent、Git状態、pane layoutを切り替えられる。任意数のraw-terminal agentを起動し、必要な場合だけmanaged worktreeで変更を隔離し、branch全体をreviewして採用できる。
 
-Clairはagent固有のchat UIを正本にしない。通常のshellと各CLIのraw terminalをそのまま使えることを保証し、その周囲にProject ownership、起動導線、通知、diff review、command automationを加える。
+Clairはagent固有のchat UIを正本にしない。通常のshellと各CLIのraw terminalをそのまま使えることを保証し、その周囲にProject ownership、起動導線、通知、diff review、command automationを加える。席を離れた後もagentを確認・操作できるよう、mobile raw-terminal controlを早期に提供する。
 
 Clairの全操作はtyped Command Registryに定義される。人間はcommand palette、menu、任意のkeyboard shortcut、`clair` CLIから同じ操作を実行できる。AIはMCPを通じて明示的に公開されたcommandを利用できる。
 
@@ -28,5 +28,7 @@ Clairはcceditの別frontendではなく、ccedit v2として製品を置き換�
 - editor、複数terminal、複数agent、任意worktree、branch reviewの開発loopがClair内で完結する。
 - 日常操作の体感がcceditより明確に快適である。
 - cceditへ戻らずClairの開発を継続できる。
+- mobileから自所有Macのregistered agentを選び、画面確認と必要なraw inputを安全に行える。
 
-Go language intelligence、mobile、debugger、Dev Containerは重要だが、ccedit廃止の条件にはしない。
+Go language intelligence、debugger、Dev Containerは重要だが、ccedit廃止の条件にはしない。Mobile controlは
+ccedit cutoverと並行して早期に進めるが、cutover完了そのものをblockしない。

@@ -76,13 +76,11 @@
 - cceditと同様にapp内でupdateを表示し、利用者のclickでdownload・reattach・restartする。
 - cceditより明確に快適だと利用者が体感できる。
 
-## After cutover
+## Early mobile agent control
 
-### Go editor support
-
-generic LSP基盤をgoplsで第一級にする。補完、診断、定義ジャンプ、参照検索、rename、code action、format、symbol検索を日常利用可能にする。Swift/Rustを第一級にすることはClair v2の約束に含めない。
-
-### Mobile MVP
+Mobileからagentの状態を確認し、必要な入力を返せることは、Clairのagent workflowの早期deliverableとする。
+M1のlocal session/agent基盤に依存するが、Go editorやdebuggerの完了を待たずに実装する。最初の対象は
+single-user・自所有device・private networkに限定する。
 
 - native iPhone/iPad appをprivate TestFlight internal buildとして配布する。
 - GitHub Actionsの`main`、manual、30日scheduleでbuildを自動発行する。
@@ -95,13 +93,23 @@ generic LSP基盤をgoplsで第一級にする。補完、診断、定義ジャ�
 - Mac GUIを閉じてもbackground serviceを継続する。
 - agent実行中は電源接続時にidle system sleepを標準で防ぎ、battery時の抑止は設定で選べる。
 
+Raw terminalをMVPの正本とし、agentのsemantic status/approval推測は行わない。agent-specific adapter、
+branch review、diff/source editingは後続のagent convenience sliceへ分割する。
+
+## Later roadmap
+
+### Go editor support
+
+generic LSP基盤をgoplsで第一級にする。補完、診断、定義ジャンプ、参照検索、rename、code action、format、symbol検索を日常利用可能にする。Swift/Rustを第一級にすることはClair v2の約束に含めない。
+
 ### Debugger
 
-DAPを共通基盤とし、Go/Delveを最初の第一級debuggerにする。Mobile MVPとの実装順序は固定しない。
+DAPを共通基盤とし、Go/Delveを最初の第一級debuggerにする。Early mobile agent controlとの実装順序は固定しない。
 
-### Mobile branch review
+### Mobile branch review and agent extensions
 
-Mobile MVPの後にbranch全体のdiff reviewとmerge承認を追加する。mobileへfull source editorやnative merge editorを移植することは必須にしない。
+Mobile controlの後にbranch全体のdiff review、merge承認、対応agentのstructured prompt/interrupt等を追加する。
+mobileへfull source editorやnative merge editorを移植することは必須にしない。
 
 ### Dev Container
 
@@ -118,7 +126,7 @@ API tester等はcutover後の密結合first-party機能として追加できる�
 - third-party plugin SDK、marketplace。
 - team workspace、共同編集、role、organization audit。
 - Clair account、設定同期、hosted agent、cloud/VM provisioning。
-- mobile full IDE、mobile source editor、汎用remote shellの新規起動。
+- mobile full IDE、mobile source editor、任意の汎用remote shellの新規起動。
 - Clair独自task runner。build/test/run/lintはterminalまたはagentが実行する。
 - agent TUIのscreen scrapingによるsemantic status/approval推測。
 - terminal transcriptのsession終了後保存。

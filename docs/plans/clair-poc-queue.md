@@ -2,7 +2,7 @@
 
 ## Purpose
 
-このqueueはM1 Clair-on-Clair cutoverまでの実装順序と状態の正本である。GitHub issueは
+このqueueはM1 Clair-on-Clair cutoverとearly mobile agent controlの実装順序と状態の正本である。GitHub issueは
 discussionや外部共有が必要な場合だけ使い、通常のPoC実装では作成・更新・queryを要求しない。
 
 一つのitemは「機能領域の文書」ではなく、利用者が確認できるvertical behaviorで終わる単位とする。
@@ -50,6 +50,7 @@ P07 -> P14
 P06 -> P15B
 {P05, P06, P09, P11, P12, P15A, P15B} -> P15C
 P13 -> P15D
+{P07, P09, P10, P13} -> P16
 {P14, P15C, P15D} -> P15 -> L01
 ```
 
@@ -59,7 +60,8 @@ P01から最小kernelを育て、後から既存featureを別実装へ置き換�
 現在の実装waveではP15AとP15Bを明示IDごとのlinked worktreeで並列実装できる。
 各workerは`clair-issue-executor`のleaseを取得し、自itemだけをcommitしてpush/merge/next昇格を行わない。
 P14はADR-0009でdecision blockerを解消して完了した。P15Dはdecision blockerが解消されるまでworkerへ
-割り当てない。P15CはP15A/P15Bの統合後、P15はP14/P15C/P15Dの統合後にだけ開始する。
+割り当てない。P15CはP15A/P15Bの統合後、P15はP14/P15C/P15Dの統合後にだけ開始する。P16はP07/P09/P10/P13を
+dependencyとする独立したhigh-priority itemで、現在のactive item完了後に着手する。
 
 ## Active queue
 
@@ -552,6 +554,20 @@ P14はADR-0009でdecision blockerを解消して完了した。P15Dはdecision b
   Rust control plane維持時のcontract testは本itemでは不要。
 - Legacy issue coverage: #7、#8。
 
+### P16 Early mobile agent control
+
+- Status: `queued`
+- Priority: `high`
+- Depends on: P07、P09、P10、P13。P15のcutover完了はdependencyにしない。
+- Outcome: 自所有Macで動くClairのregistered agentを、private network上のiPhone/iPadから確認・raw操作・起動できる。
+- Scope: shared mobile protocol、Project/session catalog、current screen/bounded scrollback、raw input/interrupt、
+  broker arrival-order input、Cloudflare private network、QR pairing/revoke、APNs opaque attention、private TestFlight CI。
+- Functional checks: desktop + mobile multi-subscriber、cursor/gap、concurrent input、viewport非resize、pair/revoke、
+  agent launch、agent attention、Mac GUI close後のhost継続、remote disable時のlocal fallback。
+- Durable detail: [p0020-mobile-agent-remote-control](../projects/p0020-mobile-agent-remote-control/README.md) and
+  [ADR-0011](../decisions/0011-early-mobile-agent-control.md)。
+- Deferred: semantic approval/status、vendor adapter、public relay/E2EE、branch review、mobile source editor、team identity。
+
 ### P15 Clair-on-Clair dogfood cutover
 
 - Status: `done`
@@ -573,11 +589,11 @@ P14はADR-0009でdecision blockerを解消して完了した。P15Dはdecision b
 - Rule: P15以前のfeature itemをbenchmark不足で止めない。
 - Legacy issue coverage: #4、#17。
 
-## Deferred beyond M1
+## Deferred beyond the early mobile slice
 
-Go LSP、mobile terminal、DAP/Delve、mobile review、Dev Container、API Testerは
-[roadmap](clair-v2-roadmap.md)のM2以降で扱う。Semantic agent adapters、remote multi-client protocol、
-relay/E2EEもlocal terminal/session実装をblockしない。
+Go LSP、DAP/Delve、mobile branch review、Dev Container、API Testerは
+[roadmap](clair-v2-roadmap.md)の後続milestoneで扱う。Semantic agent adapters、public relay/E2EE、
+team identity、mobile source editingはP16のlocal/raw valueをblockしない。
 
 ## Legacy GitHub issue archive mapping
 
@@ -605,7 +621,7 @@ GitHub issueは2026-09-01以降のtask source of truthとして使わない。�
 | #17 | L01 | final-only |
 | #18 | P07、P14 | local session lifecycle and Stable release/update slice completed; Apple distribution remains deferred |
 | #19 | P15 | queued cutover |
-| #20 | roadmap M3A | deferred beyond M1 |
+| #20 | P16 | early mobile agent control; semantic adapters and public relay remain deferred |
 | #21 | roadmap Optional later additions | deferred beyond M1 |
 | #22 | P10、P11 | completed |
 | #23 | roadmap M5 | deferred beyond M1 |
@@ -621,6 +637,6 @@ GitHub issueは2026-09-01以降のtask source of truthとして使わない。�
 
 ## Quarantined legacy bundles
 
-`p0014-git-review-workflow`、`p0020-mobile-agent-remote-control`、
-`p0022-worktree-agent-orchestration`は旧ownershipまたは旧remote設計を含むdraftであり、active queueの
-入力にしない。必要な機能へ到達した時に、このqueueとaccepted ADRから新しいdesignを作る。
+`p0014-git-review-workflow`、`p0022-worktree-agent-orchestration`は旧ownershipを含むdraftであり、active queueの
+入力にしない。`p0020-mobile-agent-remote-control`はADR-0011とこのqueueでraw-terminal MVPへ再定義したため、
+P16の実装入力として復帰させる。
