@@ -23,24 +23,50 @@ struct ContentView: View {
   @ObservedObject var commandSurface: CommandSurfaceModel
 
   @State private var overlay: WorkspaceOverlayKind?
-  @State private var collapsedProjectIDs: Set<UUID> = []
+  @State private var pendingTabClose: ProjectTabCloseRequest?
+  @State private var isLineJumpPresented = false
+  @State private var lineJumpValue = ""
   @State private var renameProjectID: UUID?
   @State private var renameValue = ""
-  @AppStorage("clair.editor.font-size-v1") private var editorFontSize = 14.5
+  @AppStorage("clair.workspace.sidebar-visible-v1") private var isSidebarVisible = true
+  @AppStorage("clair.editor.font-size-v2") private var editorFontSize = 13.0
   @AppStorage("clair.editor.word-wrap-v1") private var editorWordWrap = false
+  @AppStorage("clair.workspace.status-footer-v1") private var showStatusFooter = true
+  @FocusState private var lineJumpFocused: Bool
 
   var body: some View {
-    VStack(spacing: 0) {
+    VStack(alignment: .leading, spacing: 0) {
       workspaceTitlebar
 
-      HStack(spacing: 0) {
-        activityBar
-        contentBody
-      }
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      contentBody
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-    .frame(minWidth: 640, minHeight: 520)
+    .frame(
+      minWidth: 640,
+      maxWidth: .infinity,
+      minHeight: 520,
+      maxHeight: .infinity,
+      alignment: .topLeading
+    )
+    .ignoresSafeArea(.container, edges: .top)
+    .safeAreaInset(edge: .bottom, spacing: 0) {
+      if showStatusFooter,
+        let project = workspace.activeProject,
+        let surface = workspace.activeSurface
+      {
+        WorkspaceStatusBar(
+          workspace: workspace,
+          project: project,
+          surface: surface,
+          agentWorkflow: agentWorkflow,
+          onOpenAgents: { openOverlay(.agents) }
+        )
+      }
+    }
     .background(WorkspaceChrome.canvas)
+    .background {
+      ThinScrollbarsInstaller()
+    }
     .preferredColorScheme(.dark)
     .alert("Project名を変更", isPresented: renameAlertIsPresented) {
       TextField("Project名", text: $renameValue)
@@ -61,7 +87,49 @@ struct ContentView: View {
       Text(workspace.lastErrorMessage ?? "Projectで不明なエラーが発生しました。")
     }
     .onAppear {
+      migrateEditorFontSizePreference()
+      workspace.materializeOpenSurfacesForTabBar()
       workspace.reattachRuntimeSessions()
+      (NSApp.delegate as? ClairApplicationDelegate)?.disableWindowCloseShortcut()
+    }
+    .onReceive(
+      NotificationCenter.default.publisher(for: .clairRequestCloseActiveTab)
+    ) { _ in
+      requestCloseActiveTab()
+    }
+    .onReceive(
+      NotificationCenter.default.publisher(for: .clairKeyboardShortcut)
+    ) { notification in
+      guard
+        let rawAction = notification.userInfo?["action"] as? String,
+        let action = ClairKeyboardShortcutAction(rawValue: rawAction)
+      else {
+        return
+      }
+      handleKeyboardShortcut(
+        action,
+        value: notification.userInfo?["value"] as? String
+      )
+    }
+    .onChange(of: workspace.requestedTabClose) { _, _ in
+      guard let request = workspace.consumeRequestedTabClose() else {
+        return
+      }
+      handleTabCloseRequest(request)
+    }
+    .alert("未保存の変更を破棄しますか？", isPresented: pendingTabCloseIsPresented) {
+      Button("キャンセル", role: .cancel) {
+        pendingTabClose = nil
+      }
+      Button("破棄", role: .destructive) {
+        guard let request = pendingTabClose else {
+          return
+        }
+        pendingTabClose = nil
+        workspace.surface(for: request.projectID)?.closeTab(id: request.tabID)
+      }
+    } message: {
+      Text("エディタバッファにディスクへ保存していない変更があります。")
     }
     .overlay {
       if overlay == .command {
@@ -74,8 +142,8 @@ struct ContentView: View {
       }
     }
     .overlay {
-      if overlay == .settings {
-        settingsOverlay()
+      if isLineJumpPresented {
+        lineJumpOverlay
       }
     }
     .sheet(
@@ -111,7 +179,6 @@ struct ContentView: View {
       workspace: workspace,
       activeProjectID: workspace.activeProjectID,
       agentWorkflow: agentWorkflow,
-      collapsedProjectIDs: $collapsedProjectIDs,
       onOpenProject: openProject,
       onRenameProject: beginRename,
       onOpenCommand: { openOverlay(.command) },
@@ -143,26 +210,33 @@ struct ContentView: View {
 
   private var contentBody: some View {
     Group {
-      if let project = workspace.activeProject, let surface = workspace.activeSurface {
+      if overlay == .settings {
+        WorkspaceSettingsView(
+          workspace: workspace,
+          agentWorkflow: agentWorkflow,
+          mobileBridge: mobileBridge,
+          updater: updater,
+          onDismiss: dismissOverlay
+        )
+      } else if let project = workspace.activeProject, let surface = workspace.activeSurface {
         switch surface.workspaceActivity {
         case .files:
           workspacePane(project: project, surface: surface)
         case .search:
           WorkspaceActivityLayout(
-            workspace: workspace,
             project: project,
             surface: surface,
-            agentWorkflow: agentWorkflow,
+            navigation: activityBar,
+            showsNavigation: isSidebarVisible,
             context: ProjectSearchView(surface: surface, onDismiss: selectFilesActivity),
             main: editorPane(project: project, surface: surface),
-            onOpenAgents: { openOverlay(.agents) }
           )
         case .git:
           WorkspaceActivityLayout(
-            workspace: workspace,
             project: project,
             surface: surface,
-            agentWorkflow: agentWorkflow,
+            navigation: activityBar,
+            showsNavigation: isSidebarVisible,
             context: ProjectGitView(
               workspace: workspace,
               projectID: project.id,
@@ -172,15 +246,14 @@ struct ContentView: View {
             main: ProjectDiffPreview(
               surface: surface,
               onOpenInEditor: selectFilesActivity
-            ),
-            onOpenAgents: { openOverlay(.agents) }
+            )
           )
         case .review:
           WorkspaceActivityLayout(
-            workspace: workspace,
             project: project,
             surface: surface,
-            agentWorkflow: agentWorkflow,
+            navigation: activityBar,
+            showsNavigation: isSidebarVisible,
             context: ProjectBranchReviewView(
               project: project,
               surface: surface,
@@ -189,14 +262,13 @@ struct ContentView: View {
               onDismiss: selectFilesActivity
             ),
             main: editorPane(project: project, surface: surface),
-            onOpenAgents: { openOverlay(.agents) }
           )
         case .activity:
           WorkspaceActivityLayout(
-            workspace: workspace,
             project: project,
             surface: surface,
-            agentWorkflow: agentWorkflow,
+            navigation: activityBar,
+            showsNavigation: isSidebarVisible,
             context: ProjectActivityView(
               project: project,
               workspace: workspace,
@@ -211,7 +283,6 @@ struct ContentView: View {
               agentWorkflow: agentWorkflow,
               onOpenAgents: { openOverlay(.agents) }
             ),
-            onOpenAgents: { openOverlay(.agents) }
           )
         }
       } else {
@@ -225,11 +296,13 @@ struct ContentView: View {
       state: state,
       project: project,
       workspace: workspace,
-      surface: surface,
       agentWorkflow: agentWorkflow,
+      surface: surface,
+      navigation: activityBar,
+      showsNavigation: isSidebarVisible,
       fontSize: editorFontSize,
       wordWrap: editorWordWrap,
-      onOpenAgents: { openOverlay(.agents) }
+      onOpenProject: openProject
     )
   }
 
@@ -242,24 +315,6 @@ struct ContentView: View {
       fontSize: editorFontSize,
       wordWrap: editorWordWrap
     )
-  }
-
-  private func activityPanel<V: View>(_ content: V) -> some View {
-    VStack(spacing: 0) {
-      content
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-      if let project = workspace.activeProject, let surface = workspace.activeSurface {
-        WorkspaceStatusBar(
-          workspace: workspace,
-          project: project,
-          surface: surface,
-          agentWorkflow: agentWorkflow,
-          onOpenAgents: { openOverlay(.agents) }
-        )
-      }
-    }
-    .background(WorkspaceChrome.canvas)
   }
 
   private var activeAgentAttentionCount: Int {
@@ -313,28 +368,58 @@ struct ContentView: View {
       }
   }
 
-  // MARK: Helpers
-
-  private func settingsOverlay() -> some View {
+  private var lineJumpOverlay: some View {
     Color.black.opacity(0.45)
       .ignoresSafeArea()
       .onTapGesture {
-        overlay = nil
+        dismissLineJump()
       }
       .overlay {
-        WorkspaceSettingsPanel(
-          fontSize: $editorFontSize,
-          wordWrap: $editorWordWrap,
-          mobileBridge: mobileBridge,
-          onDismiss: dismissOverlay
-        )
-        .frame(maxWidth: 430)
+        VStack(alignment: .leading, spacing: 14) {
+          VStack(alignment: .leading, spacing: 4) {
+            Text("行へ移動")
+              .font(WorkspaceChrome.chromeFont(size: 15, weight: .semibold))
+            Text("行番号、または行番号:列番号を入力")
+              .font(WorkspaceChrome.chromeFont(size: 10))
+              .foregroundStyle(WorkspaceChrome.textTertiary)
+          }
+
+          TextField("例: 42 または 42:8", text: $lineJumpValue)
+            .textFieldStyle(.roundedBorder)
+            .focused($lineJumpFocused)
+            .onSubmit {
+              jumpToLine()
+            }
+
+          HStack {
+            Spacer()
+            Button("キャンセル") {
+              dismissLineJump()
+            }
+            .buttonStyle(.bordered)
+            Button("移動") {
+              jumpToLine()
+            }
+            .buttonStyle(.borderedProminent)
+            .keyboardShortcut(.defaultAction)
+          }
+        }
+        .padding(18)
+        .frame(width: 340)
         .background(WorkspaceChrome.chromeRaised)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+          RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .stroke(WorkspaceChrome.border, lineWidth: 1)
+        }
         .shadow(color: .black.opacity(0.5), radius: 24, y: 8)
-        .padding(.top, 90)
+      }
+      .onAppear {
+        lineJumpFocused = true
       }
   }
+
+  // MARK: Helpers
 
   private func openOverlay(_ kind: WorkspaceOverlayKind) {
     overlay = kind
@@ -342,6 +427,152 @@ struct ContentView: View {
 
   private func dismissOverlay() {
     overlay = nil
+  }
+
+  private func handleKeyboardShortcut(
+    _ action: ClairKeyboardShortcutAction,
+    value: String?
+  ) {
+    switch action {
+    case .quickOpen:
+      guard workspace.activeSurface != nil else {
+        openProject()
+        return
+      }
+      openOverlay(.quickOpen)
+    case .commandPalette:
+      openOverlay(.command)
+    case .find, .replace, .showSearch:
+      guard let surface = workspace.activeSurface else {
+        return
+      }
+      overlay = nil
+      surface.workspaceActivity = .search
+    case .goToLine:
+      guard workspace.activeSurface?.activeTab != nil else {
+        return
+      }
+      lineJumpValue = ""
+      isLineJumpPresented = true
+    case .toggleSidebar:
+      isSidebarVisible.toggle()
+    case .toggleTerminal:
+      guard let surface = workspace.activeSurface else {
+        return
+      }
+      if surface.isTerminalVisible {
+        surface.hideTerminal()
+      } else {
+        surface.showTerminal()
+      }
+    case .splitEditor:
+      workspace.activeSurface?.splitFocusedPane(orientation: .horizontal)
+    case .previousTab:
+      workspace.activeSurface?.activateAdjacentTab(direction: -1)
+    case .nextTab:
+      workspace.activeSurface?.activateAdjacentTab(direction: 1)
+    case .focusGroup:
+      guard let value, let group = Int(value), group > 0 else {
+        return
+      }
+      workspace.activeSurface?.focusPane(at: group - 1)
+    case .showExplorer:
+      workspace.activeSurface?.workspaceActivity = .files
+      overlay = nil
+    case .showSourceControl:
+      workspace.activeSurface?.workspaceActivity = .git
+      overlay = nil
+    case .toggleWordWrap:
+      editorWordWrap.toggle()
+    case .saveAll:
+      workspace.saveAll()
+    case .zoomIn:
+      editorFontSize = min(editorFontSize + 1, 48)
+    case .zoomOut:
+      editorFontSize = max(editorFontSize - 1, 8)
+    case .resetZoom:
+      editorFontSize = 13
+    case .openSettings:
+      openOverlay(.settings)
+    case .copyActiveFilePath:
+      guard let fileURL = workspace.activeSurface?.activeTab?.url else {
+        return
+      }
+      NSPasteboard.general.clearContents()
+      NSPasteboard.general.setString(fileURL.path, forType: .string)
+    case .revealActiveFile:
+      guard let fileURL = workspace.activeSurface?.activeTab?.url else {
+        return
+      }
+      NSWorkspace.shared.activateFileViewerSelecting([fileURL])
+    }
+  }
+
+  private func jumpToLine() {
+    let value = lineJumpValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    let components = value.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+    guard
+      let line = components.first.flatMap({ Int($0) }),
+      line > 0,
+      components.count <= 2
+    else {
+      return
+    }
+    let column = components.count == 2 ? Int(components[1]) ?? 0 : 1
+    guard column > 0, let document = workspace.activeSurface?.activeTab else {
+      return
+    }
+    document.requestSelection(line: line, column: column, length: 0)
+    dismissLineJump()
+  }
+
+  private func dismissLineJump() {
+    lineJumpFocused = false
+    isLineJumpPresented = false
+    lineJumpValue = ""
+  }
+
+  private func migrateEditorFontSizePreference() {
+    let defaults = UserDefaults.standard
+    let newKey = "clair.editor.font-size-v2"
+    guard defaults.object(forKey: newKey) == nil,
+      let legacyValue = defaults.object(forKey: "clair.editor.font-size-v1") as? NSNumber
+    else {
+      return
+    }
+
+    let value = legacyValue.doubleValue
+    editorFontSize = abs(value - 14.5) < 0.001 ? 13.0 : value
+  }
+
+  private var pendingTabCloseIsPresented: Binding<Bool> {
+    Binding(
+      get: { pendingTabClose != nil },
+      set: { isPresented in
+        if !isPresented {
+          pendingTabClose = nil
+        }
+      }
+    )
+  }
+
+  private func requestCloseActiveTab() {
+    workspace.requestCloseActiveTab()
+  }
+
+  private func handleTabCloseRequest(_ request: ProjectTabCloseRequest) {
+    guard
+      let surface = workspace.surface(for: request.projectID),
+      let tab = surface.workspaceTabs.first(where: { $0.tab.id == request.tabID })?.tab
+    else {
+      return
+    }
+
+    if tab.kind == .editor, surface.editorDocument(tabID: tab.id)?.isDirty == true {
+      pendingTabClose = request
+    } else {
+      surface.closeTab(id: tab.id)
+    }
   }
 
   private var welcomeView: some View {
@@ -418,18 +649,28 @@ struct ContentView: View {
     cancelRename()
   }
 }
-private struct WorkspaceActivityLayout<Context: View, Main: View>: View {
-  @ObservedObject var workspace: ProjectWorkspaceModel
+private struct WorkspaceActivityLayout<Context: View, Main: View, Navigation: View>: View {
   let project: Project
   @ObservedObject var surface: ProjectSurfaceModel
-  @ObservedObject var agentWorkflow: AgentWorkflowCoordinator
+  let navigation: Navigation
+  let showsNavigation: Bool
   let context: Context
   let main: Main
-  let onOpenAgents: () -> Void
 
   var body: some View {
     HStack(spacing: 0) {
-      context
+      if showsNavigation {
+        VStack(spacing: 0) {
+          navigation
+            .frame(maxWidth: .infinity, minHeight: 34, maxHeight: 34)
+
+          context
+            .frame(
+              maxWidth: .infinity,
+              maxHeight: .infinity,
+              alignment: .topLeading
+            )
+        }
         .frame(
           minWidth: 204,
           idealWidth: 286,
@@ -439,22 +680,12 @@ private struct WorkspaceActivityLayout<Context: View, Main: View>: View {
         )
         .background(WorkspaceChrome.surface)
 
-      Divider()
-        .background(WorkspaceChrome.border)
-
-      VStack(spacing: 0) {
-        main
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-        WorkspaceStatusBar(
-          workspace: workspace,
-          project: project,
-          surface: surface,
-          agentWorkflow: agentWorkflow,
-          onOpenAgents: onOpenAgents
-        )
+        Divider()
+          .background(WorkspaceChrome.border)
       }
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+      main
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(WorkspaceChrome.canvas)
@@ -656,44 +887,44 @@ private struct ProjectActivityDetailView: View {
 
 // MARK: - Project Workspace Detail
 
-private struct ProjectWorkspaceDetail: View {
+private struct ProjectWorkspaceDetail<Navigation: View>: View {
   let state: BootstrapState
   let project: Project
   @ObservedObject var workspace: ProjectWorkspaceModel
-  @ObservedObject var surface: ProjectSurfaceModel
   @ObservedObject var agentWorkflow: AgentWorkflowCoordinator
+  @ObservedObject var surface: ProjectSurfaceModel
+  let navigation: Navigation
+  let showsNavigation: Bool
   let fontSize: Double
   let wordWrap: Bool
-  let onOpenAgents: () -> Void
+  let onOpenProject: () -> Void
 
   var body: some View {
     HStack(spacing: 0) {
-      ProjectFileTreeView(surface: surface)
-        .frame(minWidth: 204, idealWidth: 286, maxWidth: 340)
+      if showsNavigation {
+        VStack(spacing: 0) {
+          navigation
+            .frame(maxWidth: .infinity, minHeight: 34, maxHeight: 34)
+
+          ProjectFileTreeView(surface: surface, onOpenProject: onOpenProject)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(minWidth: 204, idealWidth: 286, maxWidth: 340, maxHeight: .infinity)
         .background(WorkspaceChrome.surface)
 
-      Divider()
-        .background(WorkspaceChrome.border)
-
-      VStack(spacing: 0) {
-        ProjectPaneLayoutView(
-          state: state,
-          project: project,
-          surface: surface,
-          node: surface.visibleLayout,
-          fontSize: fontSize,
-          wordWrap: wordWrap
-        )
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-        WorkspaceStatusBar(
-          workspace: workspace,
-          project: project,
-          surface: surface,
-          agentWorkflow: agentWorkflow,
-          onOpenAgents: onOpenAgents
-        )
+        Divider()
+          .background(WorkspaceChrome.border)
       }
+
+      ProjectPaneLayoutView(
+        state: state,
+        project: project,
+        surface: surface,
+        node: surface.visibleLayout,
+        fontSize: fontSize,
+        wordWrap: wordWrap
+      )
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(WorkspaceChrome.canvas)
@@ -774,11 +1005,20 @@ private struct ProjectWorkspaceDetail: View {
 
 // MARK: - Workspace Titlebar
 
+private enum WorkspaceTitlebarMetrics {
+  static let height: CGFloat = 48
+  static let trafficLightTopPadding: CGFloat = 6
+  static let trafficLightGutterWidth: CGFloat = 76
+  static let projectLabelHeight: CGFloat = 22
+  static let projectLabelBottomPadding: CGFloat = 7
+  static let projectGroupHeight: CGFloat = 46
+  static let surfaceTabHeight: CGFloat = 40
+}
+
 private struct WorkspaceTitlebar: View {
   @ObservedObject var workspace: ProjectWorkspaceModel
   let activeProjectID: UUID?
   @ObservedObject var agentWorkflow: AgentWorkflowCoordinator
-  @Binding var collapsedProjectIDs: Set<UUID>
   let onOpenProject: () -> Void
   let onRenameProject: (Project) -> Void
   let onOpenCommand: () -> Void
@@ -789,13 +1029,17 @@ private struct WorkspaceTitlebar: View {
       // The hidden titlebar leaves the native traffic lights over the leading
       // content. Reserve the same compact gutter as the Interaction Lab.
       Color.clear
-        .frame(width: 76)
+        .frame(
+          width: WorkspaceTitlebarMetrics.trafficLightGutterWidth,
+          height: WorkspaceTitlebarMetrics.height
+            - WorkspaceTitlebarMetrics.trafficLightTopPadding
+        )
+        .padding(.top, WorkspaceTitlebarMetrics.trafficLightTopPadding)
 
       ProjectGroupStrip(
         workspace: workspace,
         activeProjectID: activeProjectID,
         agentWorkflow: agentWorkflow,
-        collapsedProjectIDs: $collapsedProjectIDs,
         onSelectProject: selectProject,
         onOpenProject: onOpenProject,
         onRenameProject: onRenameProject
@@ -817,7 +1061,10 @@ private struct WorkspaceTitlebar: View {
       .padding(.horizontal, 12)
     }
     .frame(maxWidth: .infinity)
-    .frame(height: 54)
+    .frame(height: WorkspaceTitlebarMetrics.height)
+    .background {
+      WindowZoomDoubleClickHandler()
+    }
     .background(WorkspaceChrome.chromeRaised)
     .overlay(alignment: .bottom) {
       Rectangle()
@@ -844,7 +1091,7 @@ private struct WorkspaceTitlebar: View {
         .frame(height: 34)
         .contentShape(Rectangle())
     }
-    .buttonStyle(.plain)
+    .buttonStyle(.tactile)
     .foregroundStyle(WorkspaceChrome.textSecondary)
     .background(WorkspaceChrome.surface, in: RoundedRectangle(cornerRadius: 4))
     .overlay {
@@ -853,6 +1100,61 @@ private struct WorkspaceTitlebar: View {
     }
     .help(title)
     .accessibilityLabel(title)
+  }
+}
+
+private struct WindowZoomDoubleClickHandler: NSViewRepresentable {
+  func makeNSView(context: Context) -> WindowZoomDoubleClickView {
+    WindowZoomDoubleClickView()
+  }
+
+  func updateNSView(_ nsView: WindowZoomDoubleClickView, context: Context) {}
+
+  static func dismantleNSView(_ nsView: WindowZoomDoubleClickView, coordinator: ()) {
+    nsView.stopMonitoring()
+  }
+}
+
+@MainActor
+private final class WindowZoomDoubleClickView: NSView {
+  private var eventMonitor: Any?
+
+  override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+    stopMonitoring()
+
+    guard window != nil else { return }
+    eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) {
+      [weak self] event in
+      guard
+        let self,
+        let window = self.window,
+        event.window === window,
+        event.clickCount == 2,
+        let contentView = window.contentView
+      else {
+        return event
+      }
+
+      let point = contentView.convert(event.locationInWindow, from: nil)
+      guard point.y >= contentView.bounds.maxY - WorkspaceTitlebarMetrics.height else {
+        return event
+      }
+
+      window.zoom(nil)
+      return event
+    }
+  }
+
+  override func hitTest(_ point: NSPoint) -> NSView? {
+    nil
+  }
+
+  func stopMonitoring() {
+    if let eventMonitor {
+      NSEvent.removeMonitor(eventMonitor)
+      self.eventMonitor = nil
+    }
   }
 }
 
@@ -982,7 +1284,7 @@ private struct WorkspaceCommandPalette: View {
       .frame(minHeight: 44)
       .contentShape(Rectangle())
     }
-    .buttonStyle(.plain)
+    .buttonStyle(.tactile)
     .foregroundStyle(
       match.availability.isAvailable
         ? WorkspaceChrome.textSecondary : WorkspaceChrome.textQuaternary
@@ -1043,7 +1345,6 @@ private struct ProjectGroupStrip: View {
   @ObservedObject var workspace: ProjectWorkspaceModel
   let activeProjectID: UUID?
   @ObservedObject var agentWorkflow: AgentWorkflowCoordinator
-  @Binding var collapsedProjectIDs: Set<UUID>
   let onSelectProject: (UUID) -> Void
   let onOpenProject: () -> Void
   let onRenameProject: (Project) -> Void
@@ -1060,41 +1361,39 @@ private struct ProjectGroupStrip: View {
             .font(.system(size: 10, weight: .semibold))
             .frame(width: 30, height: 30)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.tactile)
         .foregroundStyle(WorkspaceChrome.textTertiary)
+        .padding(.bottom, WorkspaceTitlebarMetrics.projectLabelBottomPadding)
         .help("Projectフォルダを開く")
         .accessibilityLabel("Projectを開く")
       }
-      .frame(maxHeight: .infinity)
+      .frame(maxHeight: .infinity, alignment: .bottom)
     }
-    .padding(.top, 4)
     .padding(.trailing, 8)
     .scrollIndicators(.hidden)
+    .background(HiddenScrollbarsInstaller())
     .frame(maxHeight: .infinity)
   }
 
   private func groupView(_ project: Project) -> some View {
     let isActive = project.id == activeProjectID
-    let isCollapsed = !isActive || collapsedProjectIDs.contains(project.id)
     let projectSurface = workspace.surface(for: project.id)
     let attentionCount = agentWorkflow.activities(for: project.id).filter { activity in
       activity.shouldNotify
         && !agentWorkflow.isMuted(projectID: activity.projectID, sessionID: activity.sessionID)
     }.count
     let isMuted = agentWorkflow.isMuted(projectID: project.id)
+    let isFirstProject = workspace.projects.first?.id == project.id
 
-    return HStack(spacing: 0) {
+    return HStack(alignment: .bottom, spacing: 5) {
       Button {
-        if isActive {
-          toggleCollapse(project.id)
-        } else {
-          collapsedProjectIDs.remove(project.id)
+        if !isActive {
           onSelectProject(project.id)
         }
       } label: {
-        HStack(spacing: 7) {
+        HStack(spacing: 6) {
           Text(project.name)
-            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+            .font(WorkspaceChrome.chromeFont(size: 12, weight: .semibold))
             .frame(maxWidth: 150, alignment: .leading)
             .lineLimit(1)
           if attentionCount > 0 {
@@ -1109,77 +1408,62 @@ private struct ProjectGroupStrip: View {
               .font(.system(size: 8, weight: .medium))
               .foregroundStyle(WorkspaceChrome.textQuaternary)
           }
-          Text(isCollapsed ? "⌄" : "⌃")
-            .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(project.color.workspaceAccent)
-            .opacity(0.86)
-            .accessibilityHidden(true)
         }
-        .padding(.leading, 12)
-        .padding(.trailing, 10)
-        .frame(minHeight: 47, maxHeight: 47)
-        .contentShape(Rectangle())
+        .padding(.horizontal, 9)
+        .frame(height: WorkspaceTitlebarMetrics.projectLabelHeight)
+        .background(
+          project.color.workspaceAccent.opacity(isActive ? 0.22 : 0.12),
+          in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+        )
+        .overlay {
+          RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .stroke(
+              project.color.workspaceAccent.opacity(isActive ? 0.72 : 0.45),
+              lineWidth: 1
+            )
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
       }
-      .buttonStyle(.plain)
+      .buttonStyle(.tactile)
       .foregroundStyle(isActive ? WorkspaceChrome.textPrimary : WorkspaceChrome.textTertiary)
-      .overlay(alignment: .trailing) {
-        Rectangle()
-          .fill(WorkspaceChrome.border)
-          .frame(width: 1)
-      }
+      .padding(.bottom, WorkspaceTitlebarMetrics.projectLabelBottomPadding)
       .help(
         isActive
-          ? "\(project.name)グループを切り替え"
+          ? "\(project.name)（現在のProject）"
           : "\(project.name)（\(project.rootURL.path)）に切り替え"
       )
       .accessibilityLabel("Project \(project.name)")
       .accessibilityValue(
-        isActive
-          ? "アクティブ、\(isCollapsed ? "折りたたみ" : "展開")"
-          : "非アクティブ"
+        isActive ? "アクティブ" : "非アクティブ"
       )
 
-      if isActive, !isCollapsed, let projectSurface {
+      if let projectSurface {
         WorkspaceTabStrip(
           surface: projectSurface,
-          accent: project.color.workspaceAccent
+          accent: project.color.workspaceAccent,
+          isProjectActive: isActive,
+          onActivateProject: {
+            if !isActive {
+              onSelectProject(project.id)
+            }
+          }
         )
         .frame(maxWidth: 360, maxHeight: .infinity)
       }
     }
-    .padding(.top, 4)
-    .frame(minHeight: 51, maxHeight: 51)
-    .background(
-      isActive
-        ? project.color.workspaceAccent.opacity(0.026)
-        : Color.white.opacity(0.014),
-      in: RoundedRectangle(cornerRadius: 6, style: .continuous)
-    )
-    .overlay {
-      RoundedRectangle(cornerRadius: 6, style: .continuous)
-        .stroke(
-          isActive ? WorkspaceChrome.border : WorkspaceChrome.border.opacity(0.65),
-          lineWidth: 1
-        )
+    .padding(.leading, isFirstProject ? 0 : 10)
+    .overlay(alignment: .leading) {
+      if !isFirstProject {
+        Rectangle()
+          .fill(WorkspaceChrome.border.opacity(0.65))
+          .frame(width: 1, height: 26)
+          .offset(x: 4)
+      }
     }
-    .overlay(alignment: .top) {
-      Rectangle()
-        .fill(project.color.workspaceAccent)
-        .frame(height: 2)
-    }
-    .overlay(alignment: .bottom) {
-      Rectangle()
-        .fill(project.color.workspaceAccent)
-        .frame(height: 1)
-    }
+    .frame(height: WorkspaceTitlebarMetrics.projectGroupHeight, alignment: .bottom)
     .contextMenu {
       Button("Project名を変更") {
         onRenameProject(project)
-      }
-      if isActive {
-        Button(isCollapsed ? "グループを展開" : "グループを折りたたむ") {
-          toggleCollapse(project.id)
-        }
       }
       Menu("Projectカラー") {
         ForEach(ProjectColor.allCases, id: \.self) { color in
@@ -1216,19 +1500,13 @@ private struct ProjectGroupStrip: View {
       }
     }
   }
-
-  private func toggleCollapse(_ projectID: UUID) {
-    if collapsedProjectIDs.contains(projectID) {
-      collapsedProjectIDs.remove(projectID)
-    } else {
-      collapsedProjectIDs.insert(projectID)
-    }
-  }
 }
 
 private struct WorkspaceTabStrip: View {
   @ObservedObject var surface: ProjectSurfaceModel
   let accent: Color
+  let isProjectActive: Bool
+  let onActivateProject: () -> Void
   @State private var pendingCloseTabID: String?
 
   var body: some View {
@@ -1241,7 +1519,8 @@ private struct WorkspaceTabStrip: View {
       .frame(maxHeight: .infinity)
     }
     .scrollIndicators(.hidden)
-    .frame(maxHeight: 43)
+    .background(HiddenScrollbarsInstaller())
+    .frame(maxHeight: WorkspaceTitlebarMetrics.surfaceTabHeight)
     .alert("未保存の変更を破棄しますか？", isPresented: pendingCloseIsPresented) {
       Button("キャンセル", role: .cancel) {
         pendingCloseTabID = nil
@@ -1260,11 +1539,12 @@ private struct WorkspaceTabStrip: View {
 
   private func tabView(_ item: ProjectWorkspaceTab) -> some View {
     let tab = item.tab
-    let isActive = surface.activeTabID == tab.id
+    let isActive = isProjectActive && surface.activeTabID == tab.id
     let paneNumber = (surface.paneIDs.firstIndex(of: item.paneID) ?? 0) + 1
 
     return HStack(spacing: 8) {
       Button {
+        onActivateProject()
         surface.activateTab(id: tab.id)
       } label: {
         HStack(spacing: 4) {
@@ -1281,7 +1561,7 @@ private struct WorkspaceTabStrip: View {
         .frame(maxWidth: 150, alignment: .leading)
         .contentShape(Rectangle())
       }
-      .buttonStyle(.plain)
+      .buttonStyle(.tactile)
 
       statusMark(for: tab)
     }
@@ -1289,28 +1569,23 @@ private struct WorkspaceTabStrip: View {
     .frame(
       minWidth: 124,
       maxWidth: 220,
-      minHeight: 43,
-      maxHeight: 43,
+      minHeight: WorkspaceTitlebarMetrics.surfaceTabHeight,
+      maxHeight: WorkspaceTitlebarMetrics.surfaceTabHeight,
       alignment: .leading
     )
     .background(
-      isActive ? WorkspaceChrome.canvas : Color.clear
+      isActive ? WorkspaceChrome.canvas : Color.white.opacity(0.012)
     )
     .foregroundStyle(isActive ? WorkspaceChrome.textPrimary : WorkspaceChrome.textTertiary)
-    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
     .overlay {
-      RoundedRectangle(cornerRadius: 4, style: .continuous)
+      RoundedRectangle(cornerRadius: 7, style: .continuous)
         .stroke(isActive ? WorkspaceChrome.border : Color.clear, lineWidth: 1)
     }
     .overlay(alignment: .top) {
       Rectangle()
         .fill(isActive ? accent : Color.clear)
-        .frame(height: 1)
-    }
-    .overlay(alignment: .bottom) {
-      Rectangle()
-        .fill(isActive ? accent : Color.clear)
-        .frame(height: 1)
+        .frame(height: 2)
     }
     .contextMenu {
       Button("タブを閉じる", role: .destructive) {
@@ -1435,25 +1710,27 @@ private struct WorkspaceActivityBar: View {
   let onQuickOpen: () -> Void
 
   var body: some View {
-    VStack(spacing: 8) {
+    HStack(spacing: 2) {
       ForEach(WorkspaceActivity.allCases) { activity in
         activityButton(activity, badge: badge(for: activity), isActive: selected == activity)
       }
-      Spacer()
+
+      Spacer(minLength: 4)
+
       actionButton(
-        symbol: "magnifyingglass",
+        symbol: "ellipsis",
         hint: "クイックオープンを開く",
         title: "クイックオープン",
         action: onQuickOpen
       )
     }
-    .padding(.vertical, 16)
-    .frame(width: 56)
+    .padding(.horizontal, 8)
+    .frame(maxWidth: .infinity, minHeight: 34, maxHeight: 34)
     .background(WorkspaceChrome.chrome)
-    .overlay(alignment: .trailing) {
+    .overlay(alignment: .bottom) {
       Rectangle()
         .fill(WorkspaceChrome.border)
-        .frame(width: 1)
+        .frame(height: 1)
     }
   }
 
@@ -1465,31 +1742,35 @@ private struct WorkspaceActivityBar: View {
     Button {
       onSelect(activity)
     } label: {
-      VStack(spacing: 2) {
+      HStack(spacing: 4) {
         Image(systemName: activity.symbolName)
-          .font(.system(size: 16, weight: .medium))
+          .font(.system(size: 13, weight: .medium))
         if badge > 0 {
           Text("\(badge)")
-            .font(.system(size: 8, weight: .bold))
+            .font(.system(size: 8, weight: .bold, design: .rounded))
             .foregroundStyle(WorkspaceChrome.canvas)
             .padding(.horizontal, 4)
             .padding(.vertical, 1)
             .background(WorkspaceChrome.accent, in: Capsule())
         }
       }
-      .frame(maxWidth: .infinity)
-      .padding(.vertical, 5)
+      .frame(minWidth: 28, minHeight: 26)
+      .padding(.horizontal, 3)
       .contentShape(Rectangle())
     }
-    .buttonStyle(.plain)
+    .buttonStyle(.tactile)
     .foregroundStyle(
       isActive ? WorkspaceChrome.accent : WorkspaceChrome.textQuaternary
     )
-    .overlay(alignment: .leading) {
+    .background(
+      isActive ? WorkspaceChrome.surfaceActive : Color.clear,
+      in: RoundedRectangle(cornerRadius: 4, style: .continuous)
+    )
+    .overlay(alignment: .bottom) {
       if isActive {
-        Capsule()
+        Rectangle()
           .fill(WorkspaceChrome.accent)
-          .frame(width: 3, height: 24)
+          .frame(width: 18, height: 2)
       }
     }
     .help(activity.accessibilityHint)
@@ -1504,12 +1785,11 @@ private struct WorkspaceActivityBar: View {
   ) -> some View {
     Button(action: action) {
       Image(systemName: symbol)
-        .font(.system(size: 16, weight: .medium))
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 5)
+        .font(.system(size: 13, weight: .medium))
+        .frame(width: 28, height: 26)
         .contentShape(Rectangle())
     }
-    .buttonStyle(.plain)
+    .buttonStyle(.tactile)
     .foregroundStyle(WorkspaceChrome.textQuaternary)
     .help(hint)
     .accessibilityLabel(title)
@@ -1549,7 +1829,7 @@ private struct WorkspaceStatusBar: View {
     }
     .padding(.horizontal, 12)
     .padding(.vertical, 4)
-    .frame(minHeight: 34)
+    .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
     .font(WorkspaceChrome.chromeFont(size: 11))
     .foregroundStyle(WorkspaceChrome.textTertiary)
     .background(WorkspaceChrome.chrome)
@@ -1611,7 +1891,7 @@ private struct WorkspaceStatusBar: View {
       } label: {
         Label("Agentを追加", systemImage: "person.2")
       }
-      .buttonStyle(.plain)
+      .buttonStyle(.tactile)
       .help("Agent追加画面を開く")
     }
   }
@@ -1722,7 +2002,7 @@ private struct ProjectAgentView: View {
           .lineLimit(1)
         Spacer()
         Button("閉じる", action: dismiss.callAsFunction)
-          .buttonStyle(.borderless)
+          .buttonStyle(.tactile)
       }
       .padding(12)
 
@@ -1741,6 +2021,9 @@ private struct ProjectAgentView: View {
       }
     }
     .frame(minWidth: 680, minHeight: 560)
+    .background {
+      ThinScrollbarsInstaller()
+    }
     .onAppear {
       worktreeCoordinator.refresh(project: project)
     }
@@ -1817,7 +2100,7 @@ private struct ProjectAgentView: View {
         Button("更新") {
           worktreeCoordinator.refresh(project: project)
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(.tactile)
       }
 
       if surface.gitStatus?.isRepository != true {
@@ -1881,7 +2164,7 @@ private struct ProjectAgentView: View {
         Button("使う") {
           selectedWorktreeID = worktree.id
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(.tactile)
       }
       Button("クリーンアップ", role: .destructive) {
         cleanupPlan = worktreeCoordinator.prepareCleanup(
@@ -1891,7 +2174,7 @@ private struct ProjectAgentView: View {
           expectedRootURL: worktree.rootURL
         )
       }
-      .buttonStyle(.borderless)
+      .buttonStyle(.tactile)
     }
     .padding(8)
     .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 6))
@@ -2053,7 +2336,7 @@ private struct ProjectAgentView: View {
         surface.workspaceActivity = .files
         dismiss()
       }
-      .buttonStyle(.borderless)
+      .buttonStyle(.tactile)
       Button(
         agentWorkflow.isMuted(projectID: session.projectID, sessionID: session.id)
           ? "ミュート解除"
@@ -2065,7 +2348,7 @@ private struct ProjectAgentView: View {
           sessionID: session.id
         )
       }
-      .buttonStyle(.borderless)
+      .buttonStyle(.tactile)
     }
     .padding(8)
     .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 6))
@@ -2107,7 +2390,7 @@ private struct ProjectAgentView: View {
                 surface.workspaceActivity = .files
                 dismiss()
               }
-              .buttonStyle(.borderless)
+              .buttonStyle(.tactile)
             }
           }
           .padding(.vertical, 3)
@@ -2196,11 +2479,11 @@ private struct ProjectTerminalPanel: View {
             .controlSize(.small)
         }
         Button("エディタ", action: onHide)
-          .buttonStyle(.plain)
+          .buttonStyle(.tactile)
           .font(WorkspaceChrome.chromeFont(size: 11))
           .foregroundStyle(WorkspaceChrome.textTertiary)
         Button("終了", action: onEnd)
-          .buttonStyle(.plain)
+          .buttonStyle(.tactile)
           .font(WorkspaceChrome.chromeFont(size: 11))
           .foregroundStyle(WorkspaceChrome.danger)
       }
@@ -2520,7 +2803,7 @@ private struct ProjectGitView: View {
       } label: {
         Image(systemName: "arrow.clockwise")
       }
-      .buttonStyle(.borderless)
+      .buttonStyle(.tactile)
       .foregroundStyle(WorkspaceChrome.textTertiary)
       .help("Gitの状態を更新")
     }
@@ -2638,7 +2921,7 @@ private struct ProjectGitView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
       }
-      .buttonStyle(.plain)
+      .buttonStyle(.tactile)
 
       Button("差分") {
         _ = workspace.execute(
@@ -2651,7 +2934,7 @@ private struct ProjectGitView: View {
           )
         )
       }
-      .buttonStyle(.borderless)
+      .buttonStyle(.tactile)
 
       Button(mutationTitle, action: mutation)
         .buttonStyle(.bordered)
@@ -2752,7 +3035,7 @@ private struct ProjectBranchReviewView: View {
           .lineLimit(1)
         Spacer()
         Button("閉じる", action: onDismiss)
-          .buttonStyle(.borderless)
+          .buttonStyle(.tactile)
           .foregroundStyle(WorkspaceChrome.textTertiary)
       }
       .padding(.horizontal, 20)
@@ -2890,7 +3173,7 @@ private struct ProjectBranchReviewView: View {
             Button("クリーンアップ", role: .destructive) {
               prepareCleanup(for: selectedWorktree)
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.tactile)
           }
         }
       }
@@ -3190,7 +3473,7 @@ private struct ProjectDiffPreview: View {
                 onOpenInEditor?()
               }
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.tactile)
             .foregroundStyle(WorkspaceChrome.accent)
           }
           .padding(.horizontal, 20)
@@ -3234,13 +3517,32 @@ private struct ProjectDiffPreview: View {
 
 private struct ProjectFileTreeView: View {
   @ObservedObject var surface: ProjectSurfaceModel
+  let onOpenProject: () -> Void
+  @State private var isProjectsExpanded = true
 
   var body: some View {
     VStack(spacing: 0) {
-      HStack {
-        Text("エクスプローラー")
-          .font(WorkspaceChrome.chromeFont(size: 15, weight: .semibold))
-          .foregroundStyle(WorkspaceChrome.textSecondary)
+      HStack(spacing: 5) {
+        Button {
+          withAnimation(.easeOut(duration: 0.12)) {
+            isProjectsExpanded.toggle()
+          }
+        } label: {
+          Image(systemName: isProjectsExpanded ? "chevron.down" : "chevron.right")
+            .font(.system(size: 9, weight: .bold))
+            .frame(width: 14, height: 20)
+        }
+        .buttonStyle(.tactile)
+        .foregroundStyle(WorkspaceChrome.textQuaternary)
+        .help(isProjectsExpanded ? "Project一覧を折りたたむ" : "Project一覧を展開")
+        .accessibilityLabel("Project一覧")
+        .accessibilityValue(isProjectsExpanded ? "展開" : "折りたたみ")
+
+        Text("PROJECTS")
+          .font(WorkspaceChrome.chromeFont(size: 10, weight: .semibold))
+          .kerning(0.7)
+          .foregroundStyle(WorkspaceChrome.textTertiary)
+
         Spacer()
         if surface.fileTree.isLoading {
           ProgressView()
@@ -3248,53 +3550,74 @@ private struct ProjectFileTreeView: View {
             .tint(WorkspaceChrome.accent)
             .accessibilityLabel("ファイルを読み込み中")
         }
-        Button {
-          surface.reload()
-        } label: {
-          Image(systemName: "arrow.clockwise")
-        }
-        .buttonStyle(.borderless)
-        .foregroundStyle(WorkspaceChrome.textTertiary)
-        .help("ファイルツリーを更新")
+        navigatorAction(
+          symbol: "folder.badge.plus",
+          title: "Projectフォルダを開く",
+          action: onOpenProject
+        )
+        navigatorAction(
+          symbol: "arrow.clockwise",
+          title: "ファイルツリーを更新",
+          action: surface.reload
+        )
       }
-      .padding(.horizontal, 20)
-      .frame(height: 64)
+      .padding(.horizontal, 10)
+      .frame(height: 34)
       .background(WorkspaceChrome.surface)
 
       Divider()
         .background(WorkspaceChrome.border)
 
-      if let root = surface.fileTree.root, surface.fileTree.isAvailable {
-        ScrollViewReader { proxy in
-          ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0) {
-              ProjectFileTreeRow(node: root, surface: surface, depth: 0)
+      if isProjectsExpanded {
+        if let root = surface.fileTree.root, surface.fileTree.isAvailable {
+          ScrollViewReader { proxy in
+            ScrollView {
+              LazyVStack(alignment: .leading, spacing: 0) {
+                ProjectFileTreeRow(node: root, surface: surface, depth: 0)
+              }
+              .padding(.vertical, 4)
             }
-            .padding(.vertical, 4)
-          }
-          .onChange(of: surface.selectedNodeID, initial: false) { _, nodeID in
-            guard let nodeID else { return }
-            withAnimation(.easeInOut(duration: 0.15)) {
-              proxy.scrollTo(nodeID, anchor: .center)
+            .onChange(of: surface.selectedNodeID, initial: false) { _, nodeID in
+              guard let nodeID else { return }
+              withAnimation(.easeInOut(duration: 0.15)) {
+                proxy.scrollTo(nodeID, anchor: .center)
+              }
             }
           }
+        } else if surface.fileTree.isLoading {
+          ProgressView("ファイルを読み込み中…")
+            .tint(WorkspaceChrome.accent)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+          ContentUnavailableView(
+            fileTreeTitle,
+            systemImage: fileTreeSystemImage,
+            description: Text(fileTreeMessage)
+          )
+          .padding(16)
         }
-      } else if surface.fileTree.isLoading {
-        ProgressView("ファイルを読み込み中…")
-          .tint(WorkspaceChrome.accent)
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-      } else {
-        ContentUnavailableView(
-          fileTreeTitle,
-          systemImage: fileTreeSystemImage,
-          description: Text(fileTreeMessage)
-        )
-        .padding(16)
       }
     }
     .frame(maxHeight: .infinity)
     .foregroundStyle(WorkspaceChrome.textSecondary)
     .background(WorkspaceChrome.surface)
+  }
+
+  private func navigatorAction(
+    symbol: String,
+    title: String,
+    action: @escaping () -> Void
+  ) -> some View {
+    Button(action: action) {
+      Image(systemName: symbol)
+        .font(.system(size: 11, weight: .medium))
+        .frame(width: 22, height: 22)
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.tactile)
+    .foregroundStyle(WorkspaceChrome.textTertiary)
+    .help(title)
+    .accessibilityLabel(title)
   }
 
   private var fileTreeTitle: String {
@@ -3346,7 +3669,7 @@ private struct ProjectQuickOpenView: View {
             openFirstResult()
           }
         Button("閉じる", action: onDismiss)
-          .buttonStyle(.plain)
+          .buttonStyle(.tactile)
           .foregroundStyle(WorkspaceChrome.textTertiary)
       }
       .padding(12)
@@ -3384,7 +3707,7 @@ private struct ProjectQuickOpenView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
           }
-          .buttonStyle(.plain)
+          .buttonStyle(.tactile)
         }
         .listStyle(.inset)
       }
@@ -3557,7 +3880,7 @@ private struct ProjectSearchView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
           }
-          .buttonStyle(.plain)
+          .buttonStyle(.tactile)
         }
         .listStyle(.inset)
       }
@@ -3692,7 +4015,7 @@ private struct ProjectActivityView: View {
               ? "bell.slash" : "bell"
           )
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(.tactile)
         .foregroundStyle(
           agentWorkflow.isMuted(projectID: project.id)
             ? WorkspaceChrome.attention : WorkspaceChrome.textTertiary
@@ -3831,11 +4154,11 @@ private struct ProjectActivityView: View {
             )
             surface.workspaceActivity = .files
           }
-          .buttonStyle(.borderless)
+          .buttonStyle(.tactile)
           .foregroundStyle(WorkspaceChrome.accent)
         } else if activity.sessionID != nil {
           Button("Agentを開く", action: onOpenAgents)
-            .buttonStyle(.borderless)
+            .buttonStyle(.tactile)
             .foregroundStyle(WorkspaceChrome.textTertiary)
         }
 
@@ -3847,7 +4170,7 @@ private struct ProjectActivityView: View {
               sessionID: sessionID
             )
           }
-          .buttonStyle(.borderless)
+          .buttonStyle(.tactile)
           .foregroundStyle(isMuted ? WorkspaceChrome.attention : WorkspaceChrome.textQuaternary)
         }
       }
@@ -3976,7 +4299,7 @@ private struct ProjectHistoryView: View {
         }
         Spacer()
         Button("閉じる", action: dismiss.callAsFunction)
-          .buttonStyle(.borderless)
+          .buttonStyle(.tactile)
       }
       .padding(12)
 
@@ -4039,17 +4362,16 @@ private struct ProjectFileTreeRow: View {
             .font(.caption2.weight(.bold))
             .frame(width: 14, height: 18)
           }
-          .buttonStyle(.plain)
+          .buttonStyle(.tactile)
           .foregroundStyle(WorkspaceChrome.textQuaternary)
         } else {
           Color.clear
             .frame(width: 14, height: 18)
         }
 
-        Image(systemName: node.isDirectory ? "folder" : "doc.text")
-          .foregroundStyle(
-            node.isDirectory ? WorkspaceChrome.attention : WorkspaceChrome.textTertiary
-          )
+        Image(systemName: fileIconSymbol)
+          .foregroundStyle(WorkspaceChrome.textTertiary)
+          .accessibilityHidden(true)
         Text(node.name)
           .font(WorkspaceChrome.chromeFont(size: 12))
           .foregroundStyle(WorkspaceChrome.textSecondary)
@@ -4083,7 +4405,7 @@ private struct ProjectFileTreeRow: View {
                 .font(WorkspaceChrome.chromeFont(size: 10))
                 .foregroundStyle(WorkspaceChrome.textTertiary)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.tactile)
             .padding(.leading, CGFloat((depth + 1) * 14) + 8)
             .padding(.vertical, 4)
           }
@@ -4096,6 +4418,53 @@ private struct ProjectFileTreeRow: View {
             .padding(.vertical, 4)
         }
       }
+    }
+  }
+
+  private var fileIconSymbol: String {
+    guard !node.isDirectory else {
+      return "folder"
+    }
+
+    let fileName = node.name.lowercased()
+    switch fileName {
+    case "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lockb":
+      return "cube"
+    case "dockerfile", "compose.yaml", "compose.yml", "makefile", "cmakelists.txt":
+      return "shippingbox"
+    case ".env", ".env.local", ".env.development", ".env.production":
+      return "gearshape"
+    default:
+      break
+    }
+
+    switch node.url.pathExtension.lowercased() {
+    case "jsx", "tsx":
+      return "atom"
+    case "html", "htm", "xml", "svg", "vue", "svelte", "astro":
+      return "chevron.left.forwardslash.chevron.right"
+    case "css", "scss", "sass", "less":
+      return "paintbrush"
+    case "sh", "bash", "zsh", "fish", "ps1", "bat", "cmd":
+      return "terminal"
+    case "sql":
+      return "cylinder"
+    case "r":
+      return "chart.xyaxis.line"
+    case "js", "mjs", "cjs", "ts", "mts", "cts", "swift", "rs", "py", "pyw",
+      "c", "cc", "cpp", "cxx", "h", "hh", "hpp", "m", "mm", "java", "kt", "kts",
+      "go", "dart", "php", "rb", "rake", "ex", "exs", "erl", "hrl", "fs", "fsx",
+      "cs", "vb", "scala", "clj", "cljs", "groovy", "lua", "hs", "lhs", "sol", "zig",
+      "nim", "pl", "pm", "asm", "s", "json", "graphql", "gql", "proto":
+      return "curlybraces"
+    case "md", "markdown", "txt":
+      return "doc.plaintext"
+    case "yaml", "yml", "toml", "ini", "conf", "config", "properties", "env":
+      return "gearshape"
+    case "lock":
+      return "lock"
+    default:
+      return "doc.text"
     }
   }
 }
@@ -4117,7 +4486,7 @@ private struct ProjectEditorTabHost: View {
           ProjectNativeEditorTab(
             tab: tab,
             surface: surface,
-            fontSize: 14.5,
+            fontSize: 13,
             wordWrap: false
           )
         } else {
@@ -4166,7 +4535,7 @@ private struct ProjectEditorTabHost: View {
             Button(tab.displayTitle) {
               surface.activateTab(id: tab.id)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.tactile)
             .lineLimit(1)
 
             Button {
@@ -4175,7 +4544,7 @@ private struct ProjectEditorTabHost: View {
               Image(systemName: "xmark")
                 .font(.caption2.weight(.bold))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.tactile)
             .accessibilityLabel("\(tab.title)を閉じる")
           }
           .padding(.horizontal, 9)
@@ -4213,7 +4582,7 @@ private struct ProjectNativeEditorTab: View {
   init(
     tab: ProjectEditorTab,
     surface: ProjectSurfaceModel,
-    fontSize: Double = 14.5,
+    fontSize: Double = 13,
     wordWrap: Bool = false
   ) {
     _tab = ObservedObject(wrappedValue: tab)
@@ -4312,7 +4681,7 @@ private struct ProjectNativeEditorTab: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
       } else {
-        ProjectSourceEditorView(
+        CodeMirrorEditorView(
           document: tab,
           selection: tab.selectionRequest,
           fontSize: CGFloat(fontSize),
@@ -4447,7 +4816,7 @@ private struct WorkspaceSettingsPanel: View {
             .font(.system(size: 10, weight: .bold))
             .frame(width: 24, height: 24)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.tactile)
         .foregroundStyle(WorkspaceChrome.textTertiary)
         .background(WorkspaceChrome.surface, in: RoundedRectangle(cornerRadius: 4))
         .accessibilityLabel("設定を閉じる")
@@ -4464,6 +4833,8 @@ private struct WorkspaceSettingsPanel: View {
           subtitle: "エディタの文字"
         ) {
           Picker("フォントサイズ", selection: $fontSize) {
+            Text("11 px").tag(11.0)
+            Text("12 px").tag(12.0)
             Text("13 px").tag(13.0)
             Text("14 px").tag(14.0)
             Text("14.5 px").tag(14.5)
@@ -4637,7 +5008,7 @@ private struct MobileControlSettingsSection: View {
                   Button("解除") {
                     mobileBridge.revoke(device)
                   }
-                  .buttonStyle(.borderless)
+                  .buttonStyle(.tactile)
                   .controlSize(.small)
                   .foregroundStyle(.red.opacity(0.8))
                 }

@@ -353,6 +353,37 @@ final class ProjectKernelTests: XCTestCase {
     XCTAssertEqual(surface.activeTab?.content, "print(\"hello\")\n")
   }
 
+  func testRestoredExpandedDirectoriesFinishLoadingAfterSurfaceCreation() async throws {
+    let fixture = try Fixture()
+    let root = try fixture.makeDirectory(named: "restored-tree-project")
+    let sources = root.appendingPathComponent("Sources", isDirectory: true)
+    try FileManager.default.createDirectory(at: sources, withIntermediateDirectories: true)
+    let file = sources.appendingPathComponent("main.swift")
+    try Data("print(\"restored\")\n".utf8).write(to: file)
+
+    let projectID = UUID()
+    var workspaceSnapshot = ProjectSurfaceSnapshot.empty(for: projectID)
+    workspaceSnapshot.expandedNodeIDs = [sources.path]
+    let surface = ProjectSurfaceModel(
+      projectID: projectID,
+      rootURL: root,
+      historyStore: ProjectLocalHistoryStore(
+        fileURL: fixture.root.appendingPathComponent("restored-tree-history.json")
+      ),
+      snapshot: workspaceSnapshot
+    )
+
+    await waitForFileTree(surface) { snapshot in
+      !snapshot.isLoading && snapshot.node(withID: file.path) != nil
+    }
+
+    XCTAssertTrue(surface.isExpanded(sources.path))
+    XCTAssertEqual(
+      surface.fileTree.node(withID: sources.path)?.children?.map(\.name),
+      ["main.swift"]
+    )
+  }
+
   func testFileTreeWatcherRefreshesExternalCreateRenameAndDelete() async throws {
     let fixture = try Fixture()
     let root = try fixture.makeDirectory(named: "watched-project")

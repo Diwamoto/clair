@@ -12,6 +12,7 @@ final class ProjectWorkspaceModel: ObservableObject {
   @Published private(set) var activeProjectID: UUID?
   @Published private(set) var activeSurface: ProjectSurfaceModel?
   @Published private(set) var lastErrorMessage: String?
+  @Published private(set) var requestedTabClose: ProjectTabCloseRequest?
 
   private var records: [ProjectRecord] = []
   private var surfaces: [UUID: ProjectSurfaceModel] = [:]
@@ -98,6 +99,22 @@ final class ProjectWorkspaceModel: ObservableObject {
     return surface
   }
 
+  /// The titlebar shows each Project's open editor and terminal tabs, so the
+  /// tab-bar surface needs to exist for every open Project when the shell
+  /// appears. Other control-plane callers can still materialize one Project
+  /// on demand through `materializeSurface(for:)`.
+  func materializeOpenSurfacesForTabBar() {
+    var didMaterializeSurface = false
+    for project in projects where surfaces[project.id] == nil {
+      if materializeSurface(for: project.id) != nil {
+        didMaterializeSurface = true
+      }
+    }
+    if didMaterializeSurface {
+      objectWillChange.send()
+    }
+  }
+
   func dismissError() {
     lastErrorMessage = nil
   }
@@ -112,6 +129,30 @@ final class ProjectWorkspaceModel: ObservableObject {
     for surface in surfaces.values {
       surface.terminateAllTerminalSessions()
     }
+  }
+
+  func saveAll() {
+    for surface in surfaces.values {
+      surface.saveAll()
+    }
+  }
+
+  /// Requests that the UI close the currently active tab. The UI owns the
+  /// confirmation because an editor tab may contain unsaved changes.
+  func requestCloseActiveTab() {
+    guard let surface = activeSurface, let tabID = surface.activeTabID else {
+      return
+    }
+    requestedTabClose = ProjectTabCloseRequest(
+      projectID: surface.projectID,
+      tabID: tabID
+    )
+  }
+
+  func consumeRequestedTabClose() -> ProjectTabCloseRequest? {
+    let request = requestedTabClose
+    requestedTabClose = nil
+    return request
   }
 
   func preflight(_ command: ClairCommand) -> CommandPreflight {
@@ -486,6 +527,11 @@ final class ProjectWorkspaceModel: ObservableObject {
   }
 }
 
+struct ProjectTabCloseRequest: Equatable, Sendable {
+  let projectID: UUID
+  let tabID: String
+}
+
 @MainActor
 final class ProjectSurfaceModel: ObservableObject {
   let projectID: UUID
@@ -733,6 +779,13 @@ final class ProjectSurfaceModel: ObservableObject {
     }
     focusedPaneID = paneID
     notifySnapshotChanged()
+  }
+
+  func focusPane(at index: Int) {
+    guard paneIDs.indices.contains(index) else {
+      return
+    }
+    focusPane(id: paneIDs[index])
   }
 
   func splitFocusedPane(orientation: ProjectPaneOrientation) {
@@ -1393,6 +1446,12 @@ final class ProjectSurfaceModel: ObservableObject {
     }
   }
 
+  func saveAll() {
+    for tab in editorTabs {
+      save(tabID: tab.id)
+    }
+  }
+
   func undoActiveTab() {
     activeTab?.undo()
   }
@@ -1509,7 +1568,17 @@ final class ProjectSurfaceModel: ObservableObject {
       }
     )
     directoryEntryLimits = directoryEntryLimits.filter { loadedDirectoryPaths.contains($0.key) }
+
+    // Expanded directories are restored from the workspace snapshot, while
+    // the in-memory loaded-directory set intentionally starts at the root.
+    // Enqueue any visible restored expansion whose children have not been
+    // loaded yet. Without this, the row renders its child-loading indicator
+    // forever after relaunch or Project switching.
+    let shouldLoadExpandedDirectories = enqueueUnloadedExpandedDirectories(in: root)
     watcher?.updateWatchedDirectories(loadedDirectoryURLs())
+    if shouldLoadExpandedDirectories {
+      scheduleTreeReload()
+    }
 
     let nextLayout = filteringUnavailableEditorTabs(in: layout)
     if nextLayout != layout {
@@ -1518,6 +1587,30 @@ final class ProjectSurfaceModel: ObservableObject {
         focusedPaneID = layout.leafIDs[0]
       }
     }
+  }
+
+  private func enqueueUnloadedExpandedDirectories(in root: ProjectFileTreeNode) -> Bool {
+    var didEnqueue = false
+
+    for nodeID in expandedNodeIDs {
+      guard
+        let node = root.node(withID: nodeID),
+        node.isDirectory,
+        node.children == nil
+      else {
+        continue
+      }
+
+      if loadedDirectoryPaths.insert(node.id).inserted {
+        directoryEntryLimits[node.id] = max(
+          directoryEntryLimits[node.id] ?? 0,
+          ProjectFileTreeScanner.maxChildrenPerDirectory
+        )
+        didEnqueue = true
+      }
+    }
+
+    return didEnqueue
   }
 
   func isExpanded(_ nodeID: String) -> Bool {
@@ -1590,6 +1683,26 @@ final class ProjectSurfaceModel: ObservableObject {
       id,
       in: location.paneID,
       revealEditor: location.tab.kind == .editor
+    )
+  }
+
+  func activateAdjacentTab(direction: Int) {
+    guard
+      let leaf = layout.leaf(withID: focusedPaneID),
+      !leaf.tabs.isEmpty,
+      let activeTabID = leaf.activeTabID,
+      let activeIndex = leaf.tabs.firstIndex(where: { $0.id == activeTabID })
+    else {
+      return
+    }
+
+    let normalizedDirection = direction < 0 ? -1 : 1
+    let nextIndex = (activeIndex + normalizedDirection + leaf.tabs.count) % leaf.tabs.count
+    let nextTab = leaf.tabs[nextIndex]
+    setActiveTab(
+      nextTab.id,
+      in: focusedPaneID,
+      revealEditor: nextTab.kind == .editor
     )
   }
 

@@ -135,6 +135,7 @@ final class NativeTerminalView: NSView {
     scrollView.drawsBackground = true
     scrollView.backgroundColor = WorkspaceChrome.nsCanvas
     scrollView.documentView = textView
+    WorkspaceChrome.configureThinScrollbars(in: scrollView)
     addSubview(scrollView)
 
     textView.grid = grid

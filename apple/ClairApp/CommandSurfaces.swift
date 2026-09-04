@@ -150,14 +150,158 @@ final class CommandShortcutStore {
     key: "k",
     modifiers: [.command, .shift]
   )
+  static let closeTabShortcut = CommandShortcut(
+    key: "w",
+    modifiers: [.command]
+  )
+  static let quitApplicationShortcut = CommandShortcut(
+    key: "q",
+    modifiers: [.command]
+  )
+  static let quickOpenShortcut = CommandShortcut(
+    key: "p",
+    modifiers: [.command]
+  )
+  static let commandPaletteShortcut = CommandShortcut(
+    key: "p",
+    modifiers: [.command, .shift]
+  )
+  static let findShortcut = CommandShortcut(
+    key: "f",
+    modifiers: [.command]
+  )
+  static let replaceShortcut = CommandShortcut(
+    key: "f",
+    modifiers: [.command, .option]
+  )
+  static let goToLineShortcut = CommandShortcut(
+    key: "g",
+    modifiers: [.control]
+  )
+  static let toggleSidebarShortcut = CommandShortcut(
+    key: "b",
+    modifiers: [.command]
+  )
+  static let toggleTerminalShortcut = CommandShortcut(
+    key: "`",
+    modifiers: [.control]
+  )
+  static let splitEditorShortcut = CommandShortcut(
+    key: "\\",
+    modifiers: [.command]
+  )
+  static let previousTabShortcut = CommandShortcut(
+    key: "[",
+    modifiers: [.command, .shift]
+  )
+  static let nextTabShortcut = CommandShortcut(
+    key: "]",
+    modifiers: [.command, .shift]
+  )
+  static let showExplorerShortcut = CommandShortcut(
+    key: "e",
+    modifiers: [.command, .shift]
+  )
+  static let showSearchShortcut = CommandShortcut(
+    key: "f",
+    modifiers: [.command, .shift]
+  )
+  static let showSourceControlShortcut = CommandShortcut(
+    key: "g",
+    modifiers: [.control, .shift]
+  )
+  static let toggleWordWrapShortcut = CommandShortcut(
+    key: "z",
+    modifiers: [.option]
+  )
+  static let saveAllShortcut = CommandShortcut(
+    key: "s",
+    modifiers: [.command, .option]
+  )
+  static let zoomInShortcut = CommandShortcut(
+    key: "=",
+    modifiers: [.command]
+  )
+  static let zoomOutShortcut = CommandShortcut(
+    key: "-",
+    modifiers: [.command]
+  )
+  static let resetZoomShortcut = CommandShortcut(
+    key: "0",
+    modifiers: [.command]
+  )
+  static let openSettingsShortcut = CommandShortcut(
+    key: ",",
+    modifiers: [.command]
+  )
+  static let copyActiveFilePathShortcut = CommandShortcut(
+    key: "p",
+    modifiers: [.command, .option]
+  )
+  static let revealActiveFileShortcut = CommandShortcut(
+    key: "r",
+    modifiers: [.command, .option]
+  )
+  static let selectNextOccurrenceShortcut = CommandShortcut(
+    key: "d",
+    modifiers: [.command]
+  )
+  static let selectLineShortcut = CommandShortcut(
+    key: "l",
+    modifiers: [.command]
+  )
+  static let toggleLineCommentShortcut = CommandShortcut(
+    key: "/",
+    modifiers: [.command]
+  )
+  static let indentLineShortcut = CommandShortcut(
+    key: "]",
+    modifiers: [.command]
+  )
+  static let outdentLineShortcut = CommandShortcut(
+    key: "[",
+    modifiers: [.command]
+  )
+  static let blockedWindowCloseShortcut = CommandShortcut(
+    key: "w",
+    modifiers: [.command, .shift]
+  )
   static let reservedShortcuts: Set<CommandShortcut> = [
     CommandShortcut(key: "s", modifiers: [.command]),
     commandWindowShortcut,
+    closeTabShortcut,
+    quitApplicationShortcut,
+    quickOpenShortcut,
+    commandPaletteShortcut,
+    findShortcut,
+    replaceShortcut,
+    goToLineShortcut,
+    toggleSidebarShortcut,
+    toggleTerminalShortcut,
+    splitEditorShortcut,
+    previousTabShortcut,
+    nextTabShortcut,
+    showExplorerShortcut,
+    showSearchShortcut,
+    showSourceControlShortcut,
+    toggleWordWrapShortcut,
+    saveAllShortcut,
+    zoomInShortcut,
+    zoomOutShortcut,
+    resetZoomShortcut,
+    openSettingsShortcut,
+    copyActiveFilePathShortcut,
+    revealActiveFileShortcut,
+    selectNextOccurrenceShortcut,
+    selectLineShortcut,
+    toggleLineCommentShortcut,
+    indentLineShortcut,
+    outdentLineShortcut,
+    blockedWindowCloseShortcut,
   ]
 
   static let defaultShortcuts: [ClairCommandID: CommandShortcut] = [
     .openProject: CommandShortcut(key: "o", modifiers: [.command]),
-    .switchProject: CommandShortcut(key: "p", modifiers: [.command, .shift]),
     .gitRefresh: CommandShortcut(key: "r", modifiers: [.command, .shift]),
     .gitShowDiff: CommandShortcut(key: "d", modifiers: [.command, .shift]),
   ]
@@ -673,7 +817,7 @@ struct CommandWindowView: View {
             }
             .padding(.vertical, 4)
           }
-          .buttonStyle(.plain)
+          .buttonStyle(.tactile)
           .disabled(!match.availability.isAvailable)
           .tag(match.id)
         }
@@ -705,6 +849,9 @@ struct CommandWindowView: View {
       }
     }
     .frame(minWidth: 680, minHeight: 560)
+    .background {
+      ThinScrollbarsInstaller()
+    }
     .onChange(of: selectedCommandID) { _, commandID in
       guard let commandID else { return }
       let shortcut = surface.shortcuts[commandID]
@@ -814,12 +961,98 @@ struct ClairCommandMenu: Commands {
         modifiers: CommandShortcutStore.commandWindowShortcut.modifiers.eventModifiers
       )
 
+      Button("コマンドパレット") {
+        post(.commandPalette)
+      }
+      .keyboardShortcut(
+        CommandShortcutStore.commandPaletteShortcut.keyEquivalent!,
+        modifiers: CommandShortcutStore.commandPaletteShortcut.modifiers.eventModifiers
+      )
+
+      Button("ファイルをクイックオープン") {
+        post(.quickOpen)
+      }
+      .keyboardShortcut(
+        CommandShortcutStore.quickOpenShortcut.keyEquivalent!,
+        modifiers: CommandShortcutStore.quickOpenShortcut.modifiers.eventModifiers
+      )
+
+      Button("検索") {
+        post(.find)
+      }
+      .keyboardShortcut(
+        CommandShortcutStore.findShortcut.keyEquivalent!,
+        modifiers: CommandShortcutStore.findShortcut.modifiers.eventModifiers
+      )
+
+      Button("置換") {
+        post(.replace)
+      }
+      .keyboardShortcut(
+        CommandShortcutStore.replaceShortcut.keyEquivalent!,
+        modifiers: CommandShortcutStore.replaceShortcut.modifiers.eventModifiers
+      )
+
+      Button("行へ移動") {
+        post(.goToLine)
+      }
+      .keyboardShortcut(
+        CommandShortcutStore.goToLineShortcut.keyEquivalent!,
+        modifiers: CommandShortcutStore.goToLineShortcut.modifiers.eventModifiers
+      )
+
+      Divider()
+
+      Button("タブを閉じる") {
+        surface.workspace.requestCloseActiveTab()
+      }
+
+      Button("エディタを分割") {
+        post(.splitEditor)
+      }
+      .keyboardShortcut(
+        CommandShortcutStore.splitEditorShortcut.keyEquivalent!,
+        modifiers: CommandShortcutStore.splitEditorShortcut.modifiers.eventModifiers
+      )
+
+      Button("ターミナル表示を切り替え") {
+        post(.toggleTerminal)
+      }
+      .keyboardShortcut(
+        CommandShortcutStore.toggleTerminalShortcut.keyEquivalent!,
+        modifiers: CommandShortcutStore.toggleTerminalShortcut.modifiers.eventModifiers
+      )
+
+      Button("サイドバー表示を切り替え") {
+        post(.toggleSidebar)
+      }
+      .keyboardShortcut(
+        CommandShortcutStore.toggleSidebarShortcut.keyEquivalent!,
+        modifiers: CommandShortcutStore.toggleSidebarShortcut.modifiers.eventModifiers
+      )
+
+      Button("設定") {
+        post(.openSettings)
+      }
+      .keyboardShortcut(
+        CommandShortcutStore.openSettingsShortcut.keyEquivalent!,
+        modifiers: CommandShortcutStore.openSettingsShortcut.modifiers.eventModifiers
+      )
+
       Divider()
 
       ForEach(surface.menuMatches) { match in
         commandButton(for: match)
       }
     }
+  }
+
+  private func post(_ action: ClairKeyboardShortcutAction) {
+    NotificationCenter.default.post(
+      name: .clairKeyboardShortcut,
+      object: nil,
+      userInfo: ["action": action.rawValue]
+    )
   }
 
   @ViewBuilder
