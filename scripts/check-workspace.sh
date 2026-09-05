@@ -4,10 +4,12 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 plutil -lint "$repo_root/Clair.xcodeproj/project.pbxproj"
+plutil -lint "$repo_root/apple/ClairMobileApp/Info.plist"
 xmllint --noout "$repo_root/Clair.xcworkspace/contents.xcworkspacedata"
 xmllint --noout \
     "$repo_root/Clair.xcodeproj/xcshareddata/xcschemes/Clair Stable.xcscheme" \
-    "$repo_root/Clair.xcodeproj/xcshareddata/xcschemes/Clair Dev.xcscheme"
+    "$repo_root/Clair.xcodeproj/xcshareddata/xcschemes/Clair Dev.xcscheme" \
+    "$repo_root/Clair.xcodeproj/xcshareddata/xcschemes/Clair Mobile.xcscheme"
 ruby "$repo_root/scripts/validate-xcode-project.rb"
 
 grep -Fq 'PRODUCT_BUNDLE_IDENTIFIER = com.diwamoto.clair' "$repo_root/Config/Stable.xcconfig"

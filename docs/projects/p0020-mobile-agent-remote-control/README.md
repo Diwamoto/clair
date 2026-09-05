@@ -84,13 +84,14 @@ APNs向け通知はopaque wake IDだけを含む。`clair-ptyhost`を直接公�
 境界に固定した。
 
 まだP16を完了扱いにはしない。Cloudflare/Tailscaleの実運用設定、APNs送信、private TestFlight CIは
-次のSlice 3/4で残っている。iOS runtimeが未導入のため実機/Simulator smokeは未実施である。モバイル情報設計の確認用Interaction Labは[private preview](https://clair-interaction-lab.daiki-work-0118.chatgpt.site)
+次のSlice 3/4で残っている。iOS Simulatorではunsigned build/install/launchとpairing deep-link sheetまで確認済みだが、
+実機のprivate-network E2Eは未実施である。モバイル情報設計の確認用Interaction Labは[private preview](https://clair-interaction-lab.daiki-work-0118.chatgpt.site)
 で、Project/session catalog、bounded raw terminal、入力/割り込み、pairing状態を確認できる。
 
 ## Validation evidence
 
-- 2026-09-05: `swift test`（`packages/ClairMobileKit`）— 29 tests passed。host/store、pair/revoke、session projection更新、stream gap、ordered input、RPC、loopback listener/client、client scrollback、APNs payload redaction、disable fallback、multi-connection isolation、deep-link round trip、subscribe replay raceを確認。
-- 2026-09-05: `xcrun --sdk iphonesimulator swiftc -typecheck -target arm64-apple-ios17.0-simulator`で`ClairMobileKit`と`apple/ClairMobileApp`を型チェックし、`Clair Mobile` targetのiOS 17 build settingsとURL scheme用Info.plistを確認。実行先runtime未導入のためiOS destination buildは未実施。
+- 2026-09-05: `swift test`（`packages/ClairMobileKit`）— 30 tests passed。host/store、pair/revoke、session projection更新、stream gap、ordered input、RPC、loopback listener/client、client scrollback、APNs payload redaction、disable fallback、multi-connection isolation、deep-link round trip、subscribe replay race、agent input request factoryを確認。
+- 2026-09-05: `make build-mobile-simulator` — iOS Simulator SDK向けunsigned `Clair Mobile` build passed。`xcrun simctl install`、launch、`clair://pair` deep linkをiPhone 17 Simulatorで確認し、iOSのpairing確認後にPairing sheetが表示されることを確認した。実機接続、Trust、TestFlightは不要な検証経路である。
 - 2026-09-05: `xcodebuild -project Clair.xcodeproj -scheme 'Clair Dev' -configuration Debug -destination 'platform=macOS' build CODE_SIGNING_ALLOWED=NO` — Swift 6 native build passed。`ClairMobileKit` local package、macOS runtime bridge、設定画面のQR生成、GUI close後のlifecycle変更を含む。
 - 2026-09-05: Interaction Labで`npm run build`、`npm run lint`、`git diff --check`を通過し、モバイルの概要→セッション一覧→raw terminal入力→設定→QR/deep link sheetをブラウザで確認した。
 - 2026-09-03: `make test-swift` — 109 tests passed.

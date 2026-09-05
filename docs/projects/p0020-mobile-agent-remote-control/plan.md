@@ -150,8 +150,8 @@ localhost endpointまでのmacOS sliceとnative iOS client foundationは検証�
   registered profile launch、pairing/settingsを実装した。
 - pairing deep linkのdecode、host fingerprint確認、P-256 device keyとcredentialのKeychain保存、challenge認証、
   session subscribeの初期replay race処理を`ClairMobileKit`と接続した。
-- iOS SDK型チェックは通過したが、作業環境にiOS runtimeがないため実機/Simulatorのdestination smokeとvendor private
-  route canaryは未実施である。
+- iOS SDK型チェックに加えて、`make build-mobile-simulator`でiPhone 17 Simulator向けのunsigned destination buildを通し、
+  `simctl install`、launch、`clair://pair`からpairing sheet表示まで確認した。vendor private route canaryと実機E2Eは未実施である。
 
 ### Validation
 

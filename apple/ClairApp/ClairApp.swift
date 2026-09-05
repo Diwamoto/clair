@@ -12,6 +12,7 @@ struct ClairApplication: App {
   @StateObject private var commandSurface: CommandSurfaceModel
   @StateObject private var commandServer: CommandIPCServer
   @StateObject private var updater: ClairUpdateCoordinator
+  @StateObject private var agentRateLimits: AgentRateLimitCoordinator
 
   init() {
     let profile = ClairRuntimeProfile.current
@@ -43,6 +44,7 @@ struct ClairApplication: App {
     _commandSurface = StateObject(
       wrappedValue: CommandSurfaceModel(workspace: workspace)
     )
+    _agentRateLimits = StateObject(wrappedValue: AgentRateLimitCoordinator())
     let router = CommandAdapterRouter(
       workspace: workspace,
       agentWorkflow: agentWorkflow,
@@ -76,7 +78,8 @@ struct ClairApplication: App {
         worktreeCoordinator: worktreeCoordinator,
         mobileBridge: mobileBridge,
         updater: updater,
-        commandSurface: commandSurface
+        commandSurface: commandSurface,
+        agentRateLimits: agentRateLimits
       )
     }
     .defaultSize(width: 980, height: 620)

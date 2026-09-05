@@ -888,6 +888,21 @@ func mobileRequestFactoryProjectsSharedControlMethods() throws {
 }
 
 @Test
+func mobileRequestFactoryEncodesAgentInput() throws {
+  let operation = MobileAgentInputOperation(
+    deviceID: UUID(),
+    agentID: UUID(),
+    payload: Data("steer".utf8)
+  )
+  let input = try MobileControlRequestFactory.agentInput(
+    id: "agent-input",
+    operation: operation
+  )
+  #expect(input.method == .agentInput)
+  #expect(try input.decodeParameters(MobileAgentInputOperation.self) == operation)
+}
+
+@Test
 func mobileHostDeliversFreshAcceptedOperationsToTheApplicationBridge() throws {
   let host = try makeEnabledHost()
   let keyPair = MobileDeviceKeyPair()
