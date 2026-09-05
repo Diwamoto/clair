@@ -1,0 +1,159 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; }
+    a { color: #5b88f7; } a:hover { color: #8fb0fa; }
+    .cl { font-family: "SF Mono", ui-monospace, Menlo, monospace; }
+    .frow { display: flex; align-items: center; gap: 7px; height: 24px; padding: 0 12px 0 22px; font-size: 11px; color: #9ba19b; }
+    .dl { display: grid; grid-template-columns: 44px 44px 1fr; font-size: 12px; line-height: 19px; }
+    .dn { text-align: right; padding-right: 10px; color: #4b5561; }
+    .act { display: flex; align-items: center; justify-content: center; width: 28px; height: 26px; border-radius: 4px; color: #707871; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; height: 820px; display: flex; flex-direction: column; overflow: hidden; background: #121416; color: #f1f3ef; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; font-size: 11px; -webkit-font-smoothing: antialiased;">
+
+  <div style="flex: 1; display: flex; min-height: 0;">
+
+    <!-- sidebar : selection + file list only -->
+    <div style="width: 286px; flex-shrink: 0; display: flex; flex-direction: column; background: #181b1f; border-right: 1px solid rgba(242,244,238,0.11);">
+      <div style="height: 34px; flex-shrink: 0; display: flex; align-items: center; gap: 2px; padding: 0 8px; background: #101214; border-bottom: 1px solid rgba(242,244,238,0.11);">
+        <div class="act"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.2 4.6A1.4 1.4 0 0 1 3.6 3.2h2.7l1.4 1.9h4.7a1.4 1.4 0 0 1 1.4 1.4v5a1.4 1.4 0 0 1-1.4 1.4H3.6a1.4 1.4 0 0 1-1.4-1.4z"/></svg></div>
+        <div class="act"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="7" cy="7" r="4.1"/><path d="M10.1 10.1 13.6 13.6"/></svg></div>
+        <div class="act" style="width: auto; gap: 4px; padding: 0 5px;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="4.6" cy="3.7" r="1.7"/><circle cx="4.6" cy="12.3" r="1.7"/><circle cx="11.4" cy="6.4" r="1.7"/><path d="M4.6 5.4v5.2M11.4 8.1c0 2.2-2.1 2.5-3.6 2.9"/></svg><span style="font-size: 8px; font-weight: 700; color: #121416; background: #9ba19b; border-radius: 7px; padding: 0 4px; line-height: 12px;">7</span></div>
+        <div class="act" style="position: relative; background: #2b333c; color: #5b88f7;">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M8 2.3 3.3 4.2v3.9c0 2.7 2 4.7 4.7 5.5 2.7-.8 4.7-2.8 4.7-5.5V4.2z"/><path d="M6.1 7.9 7.5 9.3l2.5-2.6"/></svg>
+          <div style="position: absolute; left: 50%; bottom: -1px; transform: translateX(-50%); width: 18px; height: 2px; background: #5b88f7;"></div>
+        </div>
+        <div class="act" style="width: auto; gap: 4px; padding: 0 5px;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2.6a3.5 3.5 0 0 1 3.5 3.5c0 2.9 1.2 3.8 1.2 3.8H3.3s1.2-.9 1.2-3.8A3.5 3.5 0 0 1 8 2.6z"/><path d="M6.7 12.3a1.4 1.4 0 0 0 2.6 0"/></svg><span style="font-size: 8px; font-weight: 700; color: #121416; background: #e5c07b; border-radius: 7px; padding: 0 4px; line-height: 12px;">1</span></div>
+        <div class="act" style="width: auto; gap: 4px; padding: 0 5px;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.2" y="3.2" width="11.6" height="9.6" rx="1.5"/><path d="M4.9 6.4 6.9 8.3 4.9 10.2"/><path d="M8.5 10.4h2.6"/></svg><span style="display: flex; gap: 2px;"><span style="width: 4px; height: 4px; border-radius: 50%; background: #8acb94;"></span><span style="width: 4px; height: 4px; border-radius: 50%; background: #8acb94;"></span><span style="width: 4px; height: 4px; border-radius: 50%; background: #e5c07b;"></span></span></div>
+        <div style="flex: 1;"></div>
+        <div class="act"><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><circle cx="4" cy="8" r="1.15"/><circle cx="8" cy="8" r="1.15"/><circle cx="12" cy="8" r="1.15"/></svg></div>
+      </div>
+
+      <div style="height: 32px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid rgba(242,244,238,0.11);">
+        <span style="font-size: 13px; font-weight: 600;">変更を確認</span>
+        <div style="flex: 1;"></div>
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#707871" stroke-width="1.4" stroke-linecap="round"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 3.2v2.6h-2.6"/></svg>
+      </div>
+
+      <div style="padding: 10px 12px; border-bottom: 1px solid rgba(242,244,238,0.11);">
+        <div style="font-size: 9px; font-weight: 700; color: #55605a; letter-spacing: 0.04em; margin-bottom: 6px;">対象 WORKTREE</div>
+        <div style="display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 9px; border-radius: 4px; background: #121416; border: 1px solid rgba(242,244,238,0.19);">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#c783da" stroke-width="1.5"><circle cx="4.6" cy="3.7" r="1.7"/><circle cx="4.6" cy="12.3" r="1.7"/><circle cx="11.4" cy="6.4" r="1.7"/><path d="M4.6 5.4v5.2M11.4 8.1c0 2.2-2.1 2.5-3.6 2.9"/></svg>
+          <span style="font-size: 11px; font-weight: 600; flex: 1;">pane-split</span>
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="#707871" stroke-width="1.6" stroke-linecap="round"><path d="M4.6 6.6 8 10l3.4-3.4"/></svg>
+        </div>
+        <div class="cl" style="margin-top: 6px; font-size: 9.5px; color: #55605a;">~/Library/Application Support/Clair/worktrees/</div>
+      </div>
+
+      <div style="flex: 1; overflow: hidden; padding: 6px 0;">
+        <div style="display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 12px;">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="#8acb94" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="transform: rotate(90deg);"><path d="M5.5 3.5 10 8l-4.5 4.5"/></svg>
+          <span style="font-size: 10px; font-weight: 700; color: #8acb94; letter-spacing: 0.03em;">COMMIT済み</span>
+          <span style="font-size: 9px; color: #55605a;">3 commits · 5 files</span>
+        </div>
+        <div class="frow" style="background: #2b333c; border-left: 2px solid #5b88f7; padding-left: 20px; color: #f1f3ef;"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#e5c07b" stroke-width="1.3" stroke-linejoin="round"><path d="M4.2 2.6h4.6L12 5.8v7.6H4.2z"/><path d="M8.6 2.6v3.3H12"/></svg><span style="flex: 1;">ProjectWorkspace.swift</span><span class="cl" style="font-size: 10px; color: #8acb94;">+42</span><span class="cl" style="font-size: 10px; color: #e27b83;">−9</span></div>
+        <div class="frow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#e5c07b" stroke-width="1.3" stroke-linejoin="round"><path d="M4.2 2.6h4.6L12 5.8v7.6H4.2z"/><path d="M8.6 2.6v3.3H12"/></svg><span style="flex: 1;">PaneSplit.swift</span><span class="cl" style="font-size: 10px; color: #8acb94;">+88</span></div>
+        <div class="frow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#e5c07b" stroke-width="1.3" stroke-linejoin="round"><path d="M4.2 2.6h4.6L12 5.8v7.6H4.2z"/><path d="M8.6 2.6v3.3H12"/></svg><span style="flex: 1;">ContentView.swift</span><span class="cl" style="font-size: 10px; color: #8acb94;">+16</span><span class="cl" style="font-size: 10px; color: #e27b83;">−31</span></div>
+        <div class="frow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#e5c07b" stroke-width="1.3" stroke-linejoin="round"><path d="M4.2 2.6h4.6L12 5.8v7.6H4.2z"/><path d="M8.6 2.6v3.3H12"/></svg><span style="flex: 1;">WorkspaceChrome.swift</span><span class="cl" style="font-size: 10px; color: #8acb94;">+7</span></div>
+        <div class="frow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#9ba19b" stroke-width="1.3" stroke-linejoin="round"><path d="M4.2 2.6h4.6L12 5.8v7.6H4.2z"/><path d="M8.6 2.6v3.3H12"/></svg><span style="flex: 1;">ProjectKernelTests.swift</span><span class="cl" style="font-size: 10px; color: #8acb94;">+54</span></div>
+
+        <div style="display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 12px; margin-top: 6px;">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="#e5c07b" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="transform: rotate(90deg);"><path d="M5.5 3.5 10 8l-4.5 4.5"/></svg>
+          <span style="font-size: 10px; font-weight: 700; color: #e5c07b; letter-spacing: 0.03em;">未COMMIT</span>
+          <span style="font-size: 9px; color: #55605a;">2 files</span>
+        </div>
+        <div class="frow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#e5c07b" stroke-width="1.3" stroke-linejoin="round"><path d="M4.2 2.6h4.6L12 5.8v7.6H4.2z"/><path d="M8.6 2.6v3.3H12"/></svg><span style="flex: 1;">TerminalSurface.swift</span><span class="cl" style="font-size: 10px; color: #8acb94;">+12</span><span class="cl" style="font-size: 10px; color: #e27b83;">−3</span></div>
+        <div class="frow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#8acb94" stroke-width="1.3" stroke-linejoin="round"><path d="M4.2 2.6h4.6L12 5.8v7.6H4.2z"/><path d="M8.6 2.6v3.3H12"/></svg><span style="flex: 1; color: #8acb94;">SessionRail.swift</span><span class="cl" style="font-size: 10px; color: #55605a;">未追跡</span></div>
+      </div>
+
+      <div style="flex-shrink: 0; padding: 10px 12px; border-top: 1px solid rgba(242,244,238,0.11);">
+        <div style="display: flex; align-items: flex-start; gap: 7px; padding: 8px 9px; border-radius: 4px; background: rgba(229,192,123,0.08); border: 1px solid rgba(229,192,123,0.28); color: #e5c07b; font-size: 10px; line-height: 15px;">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="flex-shrink: 0; margin-top: 1px;"><path d="M8 2.6 14 13H2z"/><path d="M8 6.6v3M8 11.1v.6"/></svg>
+          <span>未commitの変更が2件ある。採用の前にagentまたは利用者がcommitする必要がある。</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN : full-width diff -->
+    <div style="flex: 1; display: flex; flex-direction: column; min-width: 0; background: #121416;">
+
+      <div style="height: 44px; flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 0 16px; background: #101214; border-bottom: 1px solid rgba(242,244,238,0.11);">
+        <div style="display: flex; align-items: center; gap: 7px;">
+          <span style="display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px; border-radius: 3px; background: rgba(199,131,218,0.16); border: 1px solid rgba(199,131,218,0.45); color: #c783da; font-size: 10px; font-weight: 600;">pane-split</span>
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#707871" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h9M9 5l3 3-3 3"/></svg>
+          <span style="display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 3px; background: rgba(91,136,247,0.14); border: 1px solid rgba(91,136,247,0.45); color: #5b88f7; font-size: 10px; font-weight: 600;">main</span>
+        </div>
+        <span class="cl" style="font-size: 10px; color: #55605a;">7 files · <span style="color: #8acb94;">+219</span> <span style="color: #e27b83;">−43</span></span>
+
+        <div style="flex: 1;"></div>
+
+        <div style="display: flex; align-items: stretch; height: 24px; border-radius: 4px; background: #181b1f; border: 1px solid rgba(242,244,238,0.11); overflow: hidden;">
+          <div style="display: flex; align-items: center; padding: 0 10px; background: #2b333c; color: #f1f3ef; font-size: 10px; font-weight: 600;">全差分</div>
+          <div style="display: flex; align-items: center; padding: 0 10px; color: #707871; font-size: 10px;">commit済み</div>
+          <div style="display: flex; align-items: center; padding: 0 10px; color: #707871; font-size: 10px;">未commit</div>
+        </div>
+        <div style="display: flex; align-items: center; height: 24px; padding: 0 11px; border-radius: 4px; background: rgba(91,136,247,0.16); border: 1px solid rgba(91,136,247,0.55); color: #8fb0fa; font-size: 11px; font-weight: 600; opacity: 0.45;">
+          merge commitで採用
+        </div>
+      </div>
+
+      <!-- file heading -->
+      <div style="height: 30px; flex-shrink: 0; display: flex; align-items: center; gap: 9px; padding: 0 16px; background: #181b1f; border-bottom: 1px solid rgba(242,244,238,0.11);">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#e5c07b" stroke-width="1.3" stroke-linejoin="round"><path d="M4.2 2.6h4.6L12 5.8v7.6H4.2z"/><path d="M8.6 2.6v3.3H12"/></svg>
+        <span class="cl" style="font-size: 11px; color: #c9cec8;">apple/ClairApp/ProjectWorkspace.swift</span>
+        <span class="cl" style="font-size: 10px; color: #8acb94;">+42</span><span class="cl" style="font-size: 10px; color: #e27b83;">−9</span>
+        <div style="flex: 1;"></div>
+        <span style="display: inline-flex; align-items: center; gap: 4px; height: 18px; padding: 0 6px; border-radius: 3px; background: rgba(138,203,148,0.14); color: #8acb94; font-size: 9px; font-weight: 600;">commit済み · a4f10c2</span>
+      </div>
+
+      <div style="flex: 1; overflow: hidden; background: #121416;">
+        <div class="cl dl" style="color: #abb2bf; white-space: pre;">
+          <div class="dn">241</div><div class="dn">241</div><div style="padding-left: 12px;">  <span style="color: #c678dd;">func</span> <span style="color: #61afef;">updateSplitRatio</span>(nodeID: <span style="color: #e5c07b;">UUID</span>, ratio: <span style="color: #e5c07b;">Double</span>) {</div>
+          <div class="dn"></div><div class="dn" style="background: rgba(138,203,148,0.10);">242</div><div style="padding-left: 12px; background: rgba(138,203,148,0.10);"><span style="color: #8acb94;">+</span>   <span style="color: #c678dd;">let</span> clamped = min(max(ratio, <span style="color: #d19a66;">0.08</span>), <span style="color: #d19a66;">0.92</span>)</div>
+          <div class="dn"></div><div class="dn" style="background: rgba(138,203,148,0.10);">243</div><div style="padding-left: 12px; background: rgba(138,203,148,0.10);"><span style="color: #8acb94;">+</span>   <span style="color: #c678dd;">guard</span> layout.<span style="color: #61afef;">ratio</span>(of: nodeID) != clamped <span style="color: #c678dd;">else</span> {</div>
+          <div class="dn"></div><div class="dn" style="background: rgba(138,203,148,0.10);">244</div><div style="padding-left: 12px; background: rgba(138,203,148,0.10);"><span style="color: #8acb94;">+</span>     <span style="color: #c678dd;">return</span></div>
+          <div class="dn"></div><div class="dn" style="background: rgba(138,203,148,0.10);">245</div><div style="padding-left: 12px; background: rgba(138,203,148,0.10);"><span style="color: #8acb94;">+</span>   }</div>
+          <div class="dn" style="background: rgba(226,123,131,0.10);">242</div><div class="dn"></div><div style="padding-left: 12px; background: rgba(226,123,131,0.10);"><span style="color: #e27b83;">−</span>   layout = layout.<span style="color: #61afef;">equalized</span>()</div>
+          <div class="dn"></div><div class="dn" style="background: rgba(138,203,148,0.10);">246</div><div style="padding-left: 12px; background: rgba(138,203,148,0.10);"><span style="color: #8acb94;">+</span>   layout = layout.<span style="color: #61afef;">settingRatio</span>(clamped, for: nodeID)</div>
+          <div class="dn"></div><div class="dn" style="background: rgba(138,203,148,0.10);">247</div><div style="padding-left: 12px; background: rgba(138,203,148,0.10);"><span style="color: #8acb94;">+</span>   <span style="color: #61afef;">persistWorkspace</span>()</div>
+          <div class="dn">243</div><div class="dn">248</div><div style="padding-left: 12px;">  }</div>
+          <div class="dn">244</div><div class="dn">249</div><div style="padding-left: 12px;"></div>
+          <div class="dn">245</div><div class="dn">250</div><div style="padding-left: 12px;">  <span style="color: #5c6370;">/// Focus moves by geometry, not by pane index.</span></div>
+          <div class="dn"></div><div class="dn" style="background: rgba(138,203,148,0.10);">251</div><div style="padding-left: 12px; background: rgba(138,203,148,0.10);"><span style="color: #8acb94;">+</span>   <span style="color: #c678dd;">func</span> <span style="color: #61afef;">focusPane</span>(direction: <span style="color: #e5c07b;">PaneDirection</span>) {</div>
+          <div class="dn"></div><div class="dn" style="background: rgba(138,203,148,0.10);">252</div><div style="padding-left: 12px; background: rgba(138,203,148,0.10);"><span style="color: #8acb94;">+</span>     <span style="color: #c678dd;">guard let</span> next = layout.<span style="color: #61afef;">neighbor</span>(</div>
+          <div class="dn"></div><div class="dn" style="background: rgba(138,203,148,0.10);">253</div><div style="padding-left: 12px; background: rgba(138,203,148,0.10);"><span style="color: #8acb94;">+</span>       of: focusedPaneID, direction: direction</div>
+          <div class="dn"></div><div class="dn" style="background: rgba(138,203,148,0.10);">254</div><div style="padding-left: 12px; background: rgba(138,203,148,0.10);"><span style="color: #8acb94;">+</span>     ) <span style="color: #c678dd;">else</span> { <span style="color: #c678dd;">return</span> }</div>
+          <div class="dn"></div><div class="dn" style="background: rgba(138,203,148,0.10);">255</div><div style="padding-left: 12px; background: rgba(138,203,148,0.10);"><span style="color: #8acb94;">+</span>     <span style="color: #61afef;">focusPane</span>(id: next)</div>
+          <div class="dn"></div><div class="dn" style="background: rgba(138,203,148,0.10);">256</div><div style="padding-left: 12px; background: rgba(138,203,148,0.10);"><span style="color: #8acb94;">+</span>   }</div>
+          <div class="dn">246</div><div class="dn">257</div><div style="padding-left: 12px;">}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="height: 26px; flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 0 12px; background: #101214; border-top: 1px solid rgba(242,244,238,0.11); color: #9ba19b; font-size: 11px;">
+    <div style="display: flex; align-items: center; gap: 5px;"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="4.6" cy="3.7" r="1.7"/><circle cx="4.6" cy="12.3" r="1.7"/><circle cx="11.4" cy="6.4" r="1.7"/><path d="M4.6 5.4v5.2M11.4 8.1c0 2.2-2.1 2.5-3.6 2.9"/></svg><span>pane-split</span></div>
+    <span style="color: #55605a;">worktree</span>
+    <div style="flex: 1;"></div>
+    <span style="color: #e5c07b;">採用にはcleanなcommit状態が必要</span>
+    <span style="color: #3d454e;">·</span>
+    <div style="display: flex; align-items: center; gap: 6px;">
+      <span style="color: #55605a; font-size: 10px;">Claude 5時間</span>
+      <div style="width: 34px; height: 4px; border-radius: 2px; background: rgba(242,244,238,0.19); overflow: hidden;"><div style="width: 84%; height: 100%; background: #e5c07b;"></div></div>
+      <span class="cl" style="font-size: 10px; color: #e5c07b; font-weight: 600;">残り16%</span>
+    </div>
+    <span style="color: #3d454e;">·</span><span>5 セッション</span>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
