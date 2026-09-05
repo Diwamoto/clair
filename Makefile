@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-.PHONY: help doctor workspace-check build-editor-web build-stable build-dev run-stable run-dev watch-dev
+.PHONY: help doctor workspace-check build-editor-web build-stable build-dev build-mobile-simulator run-stable run-dev watch-dev
 .PHONY: test test-rust test-swift test-mobile lint lint-rust lint-swift analyze
 .PHONY: smoke smoke-ffi smoke-app-link smoke-bundles artifact-check ci clean-artifacts
 
@@ -22,6 +22,9 @@ build-stable: ## Build the unsigned Clair Stable app.
 
 build-dev: ## Build the unsigned Clair Dev app.
 	@./scripts/xcode.sh build "Clair Dev" dev
+
+build-mobile-simulator: ## Build the unsigned Clair Mobile app for iOS Simulator.
+	@./scripts/build-mobile-simulator.sh
 
 run-stable: build-stable ## Build and launch a new Clair Stable process.
 	@./scripts/run-app.sh stable
@@ -70,7 +73,7 @@ artifact-check: ## Confirm generated and local outputs are ignored.
 
 smoke: test smoke-ffi smoke-app-link smoke-bundles artifact-check ## Run the complete unsigned local smoke path.
 
-ci: lint smoke ## Run the same complete checks used by GitHub Actions.
+ci: lint smoke build-mobile-simulator ## Run the same complete checks used by GitHub Actions.
 
 clean-artifacts: ## Remove only disposable repository build outputs.
 	@./scripts/clean-artifacts.sh

@@ -387,6 +387,13 @@ public enum MobileControlRequestFactory {
   ) throws -> MobileControlRequest {
     try MobileControlRequest(id: id, method: .agentLaunch, parameters: operation)
   }
+
+  public static func agentInput(
+    id: String = UUID().uuidString,
+    operation: MobileAgentInputOperation
+  ) throws -> MobileControlRequest {
+    try MobileControlRequest(id: id, method: .agentInput, parameters: operation)
+  }
 }
 
 extension NSLock {
