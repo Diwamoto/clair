@@ -21,6 +21,7 @@ struct ContentView: View {
   @ObservedObject var mobileBridge: MobileControlRuntimeBridge
   @ObservedObject var updater: ClairUpdateCoordinator
   @ObservedObject var commandSurface: CommandSurfaceModel
+  @ObservedObject var agentRateLimits: AgentRateLimitCoordinator
 
   @State private var overlay: WorkspaceOverlayKind?
   @State private var pendingTabClose: ProjectTabCloseRequest?
@@ -59,6 +60,7 @@ struct ContentView: View {
           project: project,
           surface: surface,
           agentWorkflow: agentWorkflow,
+          agentRateLimits: agentRateLimits,
           onOpenAgents: { openOverlay(.agents) }
         )
       }
@@ -1818,12 +1820,18 @@ private struct WorkspaceStatusBar: View {
   let project: Project
   @ObservedObject var surface: ProjectSurfaceModel
   @ObservedObject var agentWorkflow: AgentWorkflowCoordinator
+  @ObservedObject var agentRateLimits: AgentRateLimitCoordinator
   let onOpenAgents: () -> Void
+  @AppStorage("clair.agents.show-rate-limits-v1") private var showRateLimits = true
 
   var body: some View {
     HStack(spacing: 12) {
       statusContent
-      Spacer()
+      Spacer(minLength: 8)
+      if showRateLimits {
+        AgentRateLimitStrip(coordinator: agentRateLimits)
+      }
+      Spacer(minLength: 8)
       surfaceMetadata
       agentSummary
     }
@@ -1837,6 +1845,21 @@ private struct WorkspaceStatusBar: View {
       Rectangle()
         .fill(WorkspaceChrome.border)
         .frame(height: 1)
+    }
+    .onAppear {
+      if showRateLimits {
+        agentRateLimits.start()
+      }
+    }
+    .onChange(of: showRateLimits) { _, isEnabled in
+      if isEnabled {
+        agentRateLimits.start()
+      } else {
+        agentRateLimits.stop()
+      }
+    }
+    .onDisappear {
+      agentRateLimits.stop()
     }
   }
 
@@ -1950,6 +1973,383 @@ private struct WorkspaceStatusBar: View {
       "Rust"
     default:
       "Plain text"
+    }
+  }
+}
+
+private struct AgentRateLimitStrip: View {
+  @ObservedObject var coordinator: AgentRateLimitCoordinator
+
+  var body: some View {
+    HStack(spacing: 3) {
+      ForEach(AgentRateLimitProvider.allCases) { provider in
+        AgentRateLimitChip(provider: provider, coordinator: coordinator)
+      }
+    }
+  }
+}
+
+private struct AgentRateLimitChip: View {
+  let provider: AgentRateLimitProvider
+  @ObservedObject var coordinator: AgentRateLimitCoordinator
+  @State private var isPresented = false
+
+  var body: some View {
+    Button {
+      isPresented.toggle()
+    } label: {
+      HStack(spacing: 8) {
+        ZStack {
+          Circle()
+            .fill(WorkspaceChrome.surfaceHover)
+          Circle()
+            .stroke(WorkspaceChrome.border, lineWidth: 1)
+          Image(systemName: provider.systemImage)
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(WorkspaceChrome.textSecondary)
+        }
+        .frame(width: 19, height: 19)
+
+        VStack(alignment: .leading, spacing: 1) {
+          Text(summaryTitle)
+            .font(WorkspaceChrome.chromeFont(size: 11, weight: .semibold))
+            .foregroundStyle(WorkspaceChrome.textSecondary)
+          Text(summaryDetail)
+            .font(WorkspaceChrome.chromeFont(size: 9))
+            .foregroundStyle(summaryDetailColor)
+            .lineLimit(1)
+        }
+
+        if let usedPercent = snapshot?.primaryWindow?.usedPercent {
+          AgentRateLimitMeter(usedPercent: usedPercent)
+            .frame(width: 34, height: 4)
+        } else if coordinator.phase == .loading, snapshot == nil {
+          ProgressView()
+            .controlSize(.mini)
+            .frame(width: 18, height: 18)
+        }
+      }
+      .padding(.horizontal, 7)
+      .frame(height: 28)
+      .background(
+        isPresented ? WorkspaceChrome.surfaceHover : Color.clear,
+        in: RoundedRectangle(cornerRadius: 5, style: .continuous)
+      )
+      .overlay {
+        RoundedRectangle(cornerRadius: 5, style: .continuous)
+          .stroke(isPresented ? WorkspaceChrome.border : Color.clear, lineWidth: 1)
+      }
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .help("\(provider.displayName)の使用量を表示")
+    .accessibilityLabel("\(provider.displayName)の使用量")
+    .accessibilityValue(summaryDetail)
+    .popover(isPresented: $isPresented, arrowEdge: .bottom) {
+      AgentRateLimitPopover(coordinator: coordinator, selectedProvider: provider)
+    }
+  }
+
+  private var snapshot: AgentRateLimitSnapshot? {
+    coordinator.snapshot(for: provider)
+  }
+
+  private var summaryTitle: String {
+    provider.shortName
+  }
+
+  private var summaryDetail: String {
+    if let snapshot, !snapshot.windows.isEmpty {
+      return snapshot.windows.prefix(2).map { window in
+        "\(window.displayName) 残り\(window.remainingPercent)%"
+      }.joined(separator: " · ")
+    }
+    if let detail = snapshot?.detail ?? snapshot?.planType {
+      return detail
+    }
+    if coordinator.failureMessage(for: provider) != nil {
+      return "使用量を取得できません"
+    }
+    switch coordinator.phase {
+    case .idle, .loading:
+      return "使用量を取得中…"
+    case .loaded:
+      return "使用量はありません"
+    case .failed:
+      return "使用量を取得できません"
+    }
+  }
+
+  private var summaryDetailColor: Color {
+    if coordinator.failureMessage(for: provider) != nil {
+      return WorkspaceChrome.attention
+    }
+    return WorkspaceChrome.textQuaternary
+  }
+}
+
+private struct AgentRateLimitPopover: View {
+  @ObservedObject var coordinator: AgentRateLimitCoordinator
+  let selectedProvider: AgentRateLimitProvider
+  @State private var mode = AgentRateLimitDisplayMode.detail
+
+  var body: some View {
+    VStack(spacing: 0) {
+      HStack {
+        Text("使用量")
+          .font(.system(size: 14, weight: .semibold))
+          .foregroundStyle(WorkspaceChrome.textPrimary)
+        Spacer()
+        Button {
+          coordinator.refresh()
+        } label: {
+          if coordinator.phase == .loading {
+            ProgressView()
+              .controlSize(.small)
+          } else {
+            Image(systemName: "arrow.clockwise")
+          }
+        }
+        .buttonStyle(.plain)
+        .frame(width: 26, height: 26)
+        .disabled(coordinator.phase == .loading)
+        .help("使用量を更新")
+        .accessibilityLabel("使用量を更新")
+      }
+      .padding(.horizontal, 14)
+      .frame(height: 44)
+
+      Picker("表示", selection: $mode) {
+        ForEach(AgentRateLimitDisplayMode.allCases) { mode in
+          Text(mode.title).tag(mode)
+        }
+      }
+      .labelsHidden()
+      .pickerStyle(.segmented)
+      .controlSize(.small)
+      .padding(.horizontal, 12)
+      .padding(.bottom, 9)
+
+      Divider().overlay(WorkspaceChrome.border)
+
+      if coordinator.snapshots.isEmpty, coordinator.phase == .loading {
+        emptyState
+      } else {
+        ForEach(AgentRateLimitProvider.allCases) { provider in
+          if let snapshot = coordinator.snapshot(for: provider) {
+            AgentRateLimitRow(
+              snapshot: snapshot,
+              mode: mode,
+              isSelected: provider == selectedProvider
+            )
+          } else {
+            AgentRateLimitUnavailableRow(
+              provider: provider,
+              message: coordinator.failureMessage(for: provider) ?? "使用量データはありません",
+              isSelected: provider == selectedProvider
+            )
+          }
+          if provider != AgentRateLimitProvider.allCases.last {
+            Divider().overlay(WorkspaceChrome.border)
+          }
+        }
+      }
+
+      if let fetchedAt = coordinator.snapshots.map(\.fetchedAt).max() {
+        Divider().overlay(WorkspaceChrome.border)
+        Text("最終更新 \(fetchedAt.formatted(date: .omitted, time: .shortened))")
+          .font(.system(size: 10, design: .monospaced))
+          .foregroundStyle(WorkspaceChrome.textQuaternary)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(.horizontal, 14)
+          .frame(height: 34)
+      }
+    }
+    .frame(width: 420)
+    .background(WorkspaceChrome.chromeRaised)
+    .preferredColorScheme(.dark)
+  }
+
+  @ViewBuilder
+  private var emptyState: some View {
+    VStack(spacing: 10) {
+      if coordinator.phase == .loading {
+        ProgressView()
+          .controlSize(.small)
+        Text("Agentから使用量を取得しています…")
+          .foregroundStyle(WorkspaceChrome.textTertiary)
+      } else if case .failed(let message) = coordinator.phase {
+        Image(systemName: "exclamationmark.triangle")
+          .foregroundStyle(WorkspaceChrome.attention)
+        Text(message)
+          .multilineTextAlignment(.center)
+          .foregroundStyle(WorkspaceChrome.textTertiary)
+        Button("再試行") {
+          coordinator.refresh()
+        }
+        .controlSize(.small)
+      } else {
+        Text("使用量データはありません")
+          .foregroundStyle(WorkspaceChrome.textTertiary)
+      }
+    }
+    .font(.system(size: 11))
+    .frame(maxWidth: .infinity, minHeight: 112)
+    .padding(16)
+  }
+}
+
+private enum AgentRateLimitDisplayMode: String, CaseIterable, Identifiable {
+  case detail
+  case compact
+
+  var id: String { rawValue }
+
+  var title: String {
+    switch self {
+    case .detail: "詳細"
+    case .compact: "コンパクト"
+    }
+  }
+}
+
+private struct AgentRateLimitRow: View {
+  let snapshot: AgentRateLimitSnapshot
+  let mode: AgentRateLimitDisplayMode
+  let isSelected: Bool
+
+  var body: some View {
+    HStack(spacing: 10) {
+      ZStack {
+        Circle()
+          .fill(WorkspaceChrome.surfaceHover)
+        Circle()
+          .stroke(WorkspaceChrome.border, lineWidth: 1)
+        Image(systemName: provider?.systemImage ?? "sparkles")
+          .font(.system(size: 9, weight: .semibold))
+          .foregroundStyle(WorkspaceChrome.textSecondary)
+      }
+      .frame(width: 21, height: 21)
+
+      VStack(alignment: .leading, spacing: 4) {
+        Text(snapshot.displayName)
+          .font(.system(size: 13, weight: .semibold))
+          .foregroundStyle(WorkspaceChrome.textPrimary)
+          .lineLimit(1)
+        if let secondaryText {
+          Text(secondaryText)
+            .font(.system(size: 10, design: .monospaced))
+            .foregroundStyle(WorkspaceChrome.textTertiary)
+        }
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+
+      if snapshot.windows.isEmpty {
+        Text(snapshot.planType ?? "—")
+          .font(.system(size: 10, design: .monospaced))
+          .foregroundStyle(WorkspaceChrome.textQuaternary)
+      } else {
+        VStack(spacing: 6) {
+          ForEach(snapshot.windows) { window in
+            HStack(spacing: 6) {
+              Text(window.displayName)
+                .frame(width: 34, alignment: .leading)
+                .foregroundStyle(WorkspaceChrome.textQuaternary)
+              AgentRateLimitMeter(usedPercent: window.usedPercent)
+                .frame(width: 64, height: 5)
+              Text(valueText(for: window))
+                .frame(width: 54, alignment: .trailing)
+                .foregroundStyle(WorkspaceChrome.textTertiary)
+            }
+            .font(.system(size: 10, design: .monospaced))
+          }
+        }
+      }
+    }
+    .padding(.horizontal, 12)
+    .padding(.vertical, 11)
+    .frame(minHeight: 72)
+    .background(isSelected ? WorkspaceChrome.surfaceHover : Color.clear)
+  }
+
+  private var provider: AgentRateLimitProvider? {
+    AgentRateLimitProvider(rawValue: snapshot.id)
+  }
+
+  private var secondaryText: String? {
+    snapshot.primaryWindow?.resetDescription() ?? snapshot.detail ?? snapshot.planType
+  }
+
+  private func valueText(for window: AgentRateLimitWindow) -> String {
+    switch mode {
+    case .detail:
+      "残り \(window.remainingPercent)%"
+    case .compact:
+      "\(Int(window.usedPercent.rounded()))%"
+    }
+  }
+}
+
+private struct AgentRateLimitUnavailableRow: View {
+  let provider: AgentRateLimitProvider
+  let message: String
+  let isSelected: Bool
+
+  var body: some View {
+    HStack(spacing: 10) {
+      ZStack {
+        Circle()
+          .fill(WorkspaceChrome.surfaceHover)
+        Circle()
+          .stroke(WorkspaceChrome.border, lineWidth: 1)
+        Image(systemName: provider.systemImage)
+          .font(.system(size: 9, weight: .semibold))
+          .foregroundStyle(WorkspaceChrome.textSecondary)
+      }
+      .frame(width: 21, height: 21)
+
+      VStack(alignment: .leading, spacing: 4) {
+        Text(provider.displayName)
+          .font(.system(size: 13, weight: .semibold))
+          .foregroundStyle(WorkspaceChrome.textPrimary)
+        Text(message)
+          .font(.system(size: 10))
+          .foregroundStyle(WorkspaceChrome.attention)
+          .lineLimit(2)
+      }
+      Spacer(minLength: 0)
+    }
+    .padding(.horizontal, 12)
+    .padding(.vertical, 11)
+    .frame(minHeight: 72)
+    .background(isSelected ? WorkspaceChrome.surfaceHover : Color.clear)
+  }
+}
+
+private struct AgentRateLimitMeter: View {
+  let usedPercent: Double
+
+  var body: some View {
+    GeometryReader { geometry in
+      ZStack(alignment: .leading) {
+        Capsule()
+          .fill(WorkspaceChrome.borderStrong)
+        Capsule()
+          .fill(meterColor)
+          .frame(width: geometry.size.width * usedPercent / 100)
+      }
+    }
+    .accessibilityHidden(true)
+  }
+
+  private var meterColor: Color {
+    switch usedPercent {
+    case 90...:
+      WorkspaceChrome.danger
+    case 75...:
+      WorkspaceChrome.attention
+    default:
+      WorkspaceChrome.textTertiary
     }
   }
 }
