@@ -77,8 +77,8 @@
       "file": "RateLimit.dc.html",
       "x": 2200,
       "y": 940,
-      "w": 980,
-      "h": 820,
+      "w": 1240,
+      "h": 900,
       "page": "page-2",
       "title": "Agent rate limit"
     }
@@ -146,7 +146,7 @@
       "y": 810,
       "w": 620,
       "page": "page-2",
-      "text": "Agent rate limit\n画面下部のstatus barに出す利用枠。agentが公式に報告した値だけを使い、TUIからは読み取らない。"
+      "text": "Agent rate limit\nmasterのd810c35で実装済み。sourceから再現した現状（左）と、密度・一貫性の改善提案（右）。値の出どころの方針は実装が正しいので変えない。"
     }
   ],
   "launch": {

@@ -253,31 +253,36 @@ Projectをまたいだ移動を許可する（Project切替を伴う）。
 
 ## 13. Agent rate limit
 
-status barの右端に、agentの利用枠を表示する。
+`AgentRateLimits.swift`として既に実装がある。この節はそれを追認し、密度だけを定める。
 
 ### 13.1 値の入力
 
 | 入力 | 可否 |
 |---|---|
-| agentが公式hook / CLIの構造化出力で報告した枠と残量 | 採用 |
+| agentが報告した枠と残量（Codex app-server、Claude CodeのCLI出力） | 採用 |
 | TUI画面からの読み取り | 不可（principle 3） |
 | token数からのClair独自の推定 | 不可 |
 
-報告しないagentは「不明」と表示せず、行ごと出さない。
-ずれた値は無い値より悪いため、推定はしない。
+取得できないときは推定せず、失敗として扱う。実装はこのとおりになっている。
 
 ### 13.2 表示
 
-status barには**最も逼迫している枠を1つだけ**出す。全Projectぶんを並べない。
-clickでpopoverを開き、agentと枠種別ごとの使用率・残量・リセット時刻を出す。
+status barには**最も逼迫している枠を1つだけ**、1行で出す。
+全providerを常に並べない。残りはclickで開くpopoverで見る。
+
+meterのしきい値は実装に合わせる。
 
 | 使用率 | token |
 |---|---|
-| 0–69% | `success` |
-| 70–99% | `attention` |
-| 上限 | `danger` |
+| 0–74% | `textTertiary` |
+| 75–89% | `attention` |
+| 90%以上 | `danger` |
 
-### 13.3 通知
+通常時に`success`の緑を使わない。逼迫していない枠は色を持たない。
 
-枠の枯渇はagentの停止と同じ扱いで、1回だけmacOS通知を出す。回復は通知しない。
-Project単位でmuteできる（7.1のattentionと同じ扱い）。
+### 13.3 popover
+
+- 未設定・未対応のproviderは1行にまとめる。1件ごとに72pxの行を作らない。
+- segmented control、progress、dividerは`WorkspaceChrome`のcomponentを使う。
+  `.pickerStyle(.segmented)`等のsystem描画を使わない（6.2と同じ）。
+- 表示のon/offは設定に残す（`clair.agents.show-rate-limits-v1`）。

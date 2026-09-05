@@ -52,7 +52,7 @@ review時点の指摘そのものは記録として残す。
 | 4 | paneの入れ替えは**terminal上部の横向き3点リーダ**をdragして行う。Ghosttyと同じ形式。 | S2-4を置換 |
 | 5 | 検索欄をtitlebarのcommandの**左**へ置く。commandは日本語ラベルと枠を持たない。 | 新規 |
 | 6 | activity barは**元どおりsidebarの中**に置く。全幅rowにはしない。 | S1-2を不採用 |
-| 7 | status barの右端に**agentのrate limit**を表示する。 | 新規、N6として追加 |
+| 7 | **agentのrate limit**の表示。実装は既にmasterにあるため、reviewして密度と一貫性の改善を出す。 | 新規、N6として追加 |
 
 決定2と3の結果、code到達までの縦chromeは48 + 26 = **74px**になる（現在174px、Zed約52px）。
 
@@ -493,24 +493,33 @@ activity barは5項目でhardcodeされ、status barにもdiagnostics slotが無
 Zedはminimapを持たない設計判断をした上でscrollbarにdiagnostics markerを載せている。
 どちらの方針でもよいが、現状は「決めていない」に見える。
 
-#### N6. agentのrate limitが見えない
+#### N6. rate limit表示の密度と一貫性
 
-利用者からの指摘で追加。複数のClaude Codeを並列に走らせる運用では、どの枠がどれだけ
-残っているかが作業計画に直結する。現状Clairはこれを一切表示しない。
+reviewの後、利用者がcanvasのcommentで「画面下部のagent rate limitのデザインも見たい」と述べた。
+その時点でmaster側に`feat(rate-limits): show agent usage in footer` (d810c35)が入っており、
+**この機能は既に実装済みである**。review本文を書いた時点のbranch (8b8a7a8) には無かった。
 
-**決定:** status barの右端に、最も逼迫している枠を1つだけ compact meterで表示する。
-clickでpopoverを開き、agent・枠種別ごとの内訳とリセット時刻を出す。
+実装は`apple/ClairApp/AgentRateLimits.swift`と`ContentView.swift`にある。
+`AgentRateLimitProvider`はCodex、Claude Code、OpenCodeの3つを持ち、
+`CodexRateLimitResponseParser`がCodex app-serverの応答を解析する。
 
-principle 3との整合が要点になる。値の入力は次に限る。
+**方針として正しい点。** 値はagentが報告したものだけを使い、TUIからの読み取りも
+token数からの推定も行わない。取得できない場合は推定せず失敗として扱う。principle 3を守っている。
+meterのしきい値も、通常時をsuccessの緑ではなく`textTertiary`にしており、
+「逼迫していない枠は色を持たない」という正しい判断である。
 
-| 入力 | 可否 |
-|---|---|
-| agentが公式hook / CLIの構造化出力で報告した枠と残量 | 採用 |
-| TUI画面からの読み取り | 不可（principle 3） |
-| token数からのClair独自の推定 | 不可。ずれた値は無い値より悪い |
+**残る指摘は密度と一貫性の4点。**
 
-報告しないagentは「不明」と表示せず、行ごと出さない。
-枠の枯渇はagentの停止と同じ扱いで1回だけ通知し、回復は通知しない。
+| # | 指摘 | 根拠 |
+|---|---|---|
+| 1 | footerのstripが3 provider分で約508px | `AgentRateLimitStrip`が`allCases`を常に描く |
+| 2 | chipが高さ28pxで11px + 9pxの2行 | status barの予算26pxを超える |
+| 3 | 未設定providerが1件あたり72px | `AgentRateLimitUnavailableRow`の`minHeight: 72` |
+| 4 | popoverが`.pickerStyle(.segmented)`等のsystem描画 | S3-1と同じ問題 |
+
+**提案:** status barには最も逼迫した枠を1つだけ1行で出し（約210px）、残りはpopoverで見る。
+未設定providerは1行にまとめる。segmented control、`ProgressView`、`Divider`を
+`WorkspaceChrome`のcomponentへ置き換える。
 
 ---
 
@@ -548,7 +557,7 @@ principle 3との整合が要点になる。値の入力は次に限る。
 ### 差別化のための追加
 
 15. **N1** session railを作る。Clairが4つのeditorに勝てる唯一の領域である。
-16. **N6** rate limit表示を作る。入力はagentの公式報告に限る。
+16. **N6** rate limit表示の密度を詰める。値の出どころの方針は実装が正しいので変更しない。
 17. **N2** 実行contextをstatus barに出す。paneがchromeを持たない決定により、
     worktree/branchの表示先はstatus barとsession railになった。
 18. **S3-4/D8** `ClairDesignKit`としてtokenをpackageへ切り出し、mobileと共有する。
@@ -556,6 +565,8 @@ principle 3との整合が要点になる。値の入力は次に限る。
 ## Limitations
 
 - 実機での操作、build、screenshotによる検証を行っていない。指摘はsource読解に基づく。
+- Part 1とPart 2の本文は`8b8a7a8`時点のsourceに対するreviewである。その後masterへ入った
+  `83817e4`と`d810c35`はN6でのみ扱っている。他の指摘がこの2commitで解消していないかは未確認。
 - latencyとscroll性能は測定していない。D2の予算値は他製品の一般的な水準からの提案であり、
   Clairでの実測に基づかない。
 - contrast比は`textQuaternary`/`canvas`の1組のみ概算した。全組み合わせは未検証。
