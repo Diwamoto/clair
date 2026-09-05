@@ -72,6 +72,15 @@
       "h": 844,
       "page": "page-2",
       "title": "Mobile — 同じトークン"
+    },
+    {
+      "file": "RateLimit.dc.html",
+      "x": 2200,
+      "y": 940,
+      "w": 980,
+      "h": 820,
+      "page": "page-2",
+      "title": "Agent rate limit"
     }
   ],
   "annotations": [
@@ -88,7 +97,7 @@
       "x": 1600,
       "y": -150,
       "w": 620,
-      "text": "提案するworkspace shell\nactivity barをsidebarの外へ、tabを各paneの上へ、editor headerを廃止、dividerをdrag可能に。code到達まで174px→134px。",
+      "text": "提案するworkspace shell\ntabはtitlebarの1本だけで、全Projectを並列に扱う。paneはcontentを直接描き、tab barもheaderも持たない。code到達まで174px→74px。",
       "page": "page-1"
     },
     {
@@ -130,6 +139,14 @@
       "w": 380,
       "page": "page-2",
       "text": "Mobile\nMobileAppPaletteを廃し、desktopと同じtokenを共有する。"
+    },
+    {
+      "id": "n-rate",
+      "x": 2200,
+      "y": 810,
+      "w": 620,
+      "page": "page-2",
+      "text": "Agent rate limit\n画面下部のstatus barに出す利用枠。agentが公式に報告した値だけを使い、TUIからは読み取らない。"
     }
   ],
   "launch": {

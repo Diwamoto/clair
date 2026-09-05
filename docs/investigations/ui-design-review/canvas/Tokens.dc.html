@@ -135,14 +135,12 @@
 
         <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 9px;">
           <span style="width: 52px; font-size: 10px; color: #c9cec8; font-weight: 600;">提案</span>
-          <div style="flex: 1; display: flex; height: 22px; border-radius: 3px; overflow: hidden; width: 77%;">
+          <div style="flex: 1; display: flex; height: 22px; border-radius: 3px; overflow: hidden;">
             <div style="width: 27.6%; background: #8acb94; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #121416;">48</div>
-            <div style="width: 17.2%; background: rgba(138,203,148,0.72); display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #121416;">30</div>
-            <div style="width: 17.2%; background: rgba(138,203,148,0.5); display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #121416;">30</div>
-            <div style="width: 15%; background: rgba(138,203,148,0.3); display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #f1f3ef;">26</div>
+            <div style="width: 14.9%; background: rgba(138,203,148,0.45); display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #f1f3ef;">26</div>
             <div style="flex: 1; background: #121416;"></div>
           </div>
-          <span class="cl" style="width: 40px; text-align: right; font-size: 12px; font-weight: 600; color: #8acb94;">134</span>
+          <span class="cl" style="width: 40px; text-align: right; font-size: 12px; font-weight: 600; color: #8acb94;">74</span>
         </div>
 
         <div style="display: flex; align-items: center; gap: 10px;">
@@ -156,7 +154,8 @@
         </div>
 
         <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(242,244,238,0.08); color: #707871; font-size: 10px; line-height: 15px;">
-          58pxのeditor headerを廃し、breadcrumbとpane操作をpane tab barへ集約する。split時はheaderが増えないぶん差が広がる。
+          tabはtitlebarの1本だけ。paneはcontentを直接描き、header・tab bar・activity barの行を持たない。
+          activity barはsidebarの中、breadcrumbはstatus barへ移す。splitしても縦chromeは74pxのまま増えない。
         </div>
       </div>
 

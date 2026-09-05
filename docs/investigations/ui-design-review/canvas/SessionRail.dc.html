@@ -11,7 +11,7 @@
     body { margin: 0; }
     a { color: #5b88f7; } a:hover { color: #8fb0fa; }
     .cl { font-family: "SF Mono", ui-monospace, Menlo, monospace; }
-    .row { display: grid; grid-template-columns: 26px 150px 92px 210px 74px 1fr 96px; align-items: center; gap: 12px; height: 34px; padding: 0 14px; border-bottom: 1px solid rgba(242,244,238,0.055); }
+    .row { display: grid; grid-template-columns: 26px 146px 84px 196px 66px 1fr 104px 88px; align-items: center; gap: 12px; height: 34px; padding: 0 14px; border-bottom: 1px solid rgba(242,244,238,0.055); }
     .chip { display: inline-flex; align-items: center; gap: 4px; height: 18px; padding: 0 6px; border-radius: 3px; font-size: 9px; font-weight: 600; white-space: nowrap; }
   </style>
 </helmet>
@@ -32,7 +32,7 @@
   </div>
 
   <div class="row" style="height: 26px; background: #101214; border-bottom: 1px solid rgba(242,244,238,0.11); color: #55605a; font-size: 9px; font-weight: 700; letter-spacing: 0.04em;">
-    <div></div><div>AGENT</div><div>PROJECT</div><div>実行CONTEXT</div><div style="text-align: right;">経過</div><div>最後のSIGNAL</div><div></div>
+    <div></div><div>AGENT</div><div>PROJECT</div><div>実行CONTEXT</div><div style="text-align: right;">経過</div><div>最後のSIGNAL</div><div>利用枠</div><div></div>
   </div>
 
   <!-- attention row -->
@@ -43,7 +43,7 @@
     <div><span class="chip" style="background: rgba(155,161,155,0.12); border: 1px solid rgba(155,161,155,0.36); color: #9ba19b;">Project root</span></div>
     <div class="cl" style="text-align: right; color: #9ba19b;">4m 12s</div>
     <div style="color: #9ba19b;">terminal bell <span style="color: #55605a;">· 12:04:38</span></div>
-    <div style="display: flex; justify-content: flex-end;"><span class="chip" style="background: #2b333c; color: #c9cec8;">移動 ↵</span></div>
+    <div class="cl" style="font-size: 10px; color: #4b5561;">—</div><div style="display: flex; justify-content: flex-end;"><span class="chip" style="background: #2b333c; color: #c9cec8;">移動 ↵</span></div>
   </div>
 
   <div class="row">
@@ -53,7 +53,7 @@
     <div><span class="chip" style="background: rgba(199,131,218,0.16); border: 1px solid rgba(199,131,218,0.45); color: #c783da;"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="4.6" cy="3.7" r="1.7"/><circle cx="4.6" cy="12.3" r="1.7"/><circle cx="11.4" cy="6.4" r="1.7"/><path d="M4.6 5.4v5.2M11.4 8.1c0 2.2-2.1 2.5-3.6 2.9"/></svg>worktree · pane-split</span></div>
     <div class="cl" style="text-align: right; color: #9ba19b;">18m 03s</div>
     <div style="color: #9ba19b;">公式hook: PostToolUse <span style="color: #55605a;">· 12:08:51</span></div>
-    <div style="display: flex; justify-content: flex-end;"><span class="chip" style="color: #55605a;">移動</span></div>
+    <div style="display: flex; align-items: center; gap: 6px;"><div style="flex: 1; height: 4px; border-radius: 2px; background: #2b333c; overflow: hidden;"><div style="width: 62%; height: 100%; background: #8acb94;"></div></div><span class="cl" style="font-size: 10px; color: #8acb94;">62%</span></div><div style="display: flex; justify-content: flex-end;"><span class="chip" style="color: #55605a;">移動</span></div>
   </div>
 
   <div class="row">
@@ -63,7 +63,7 @@
     <div><span class="chip" style="background: rgba(199,131,218,0.16); border: 1px solid rgba(199,131,218,0.45); color: #c783da;"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="4.6" cy="3.7" r="1.7"/><circle cx="4.6" cy="12.3" r="1.7"/><circle cx="11.4" cy="6.4" r="1.7"/><path d="M4.6 5.4v5.2M11.4 8.1c0 2.2-2.1 2.5-3.6 2.9"/></svg>worktree · retire-rust-core</span></div>
     <div class="cl" style="text-align: right; color: #9ba19b;">1h 42m</div>
     <div style="color: #9ba19b;">公式hook: Notification <span style="color: #55605a;">· 11:31:02</span></div>
-    <div style="display: flex; justify-content: flex-end;"><span class="chip" style="color: #55605a;">移動</span></div>
+    <div style="display: flex; align-items: center; gap: 6px;"><div style="flex: 1; height: 4px; border-radius: 2px; background: #2b333c; overflow: hidden;"><div style="width: 84%; height: 100%; background: #e5c07b;"></div></div><span class="cl" style="font-size: 10px; color: #e5c07b;">84%</span></div><div style="display: flex; justify-content: flex-end;"><span class="chip" style="color: #55605a;">移動</span></div>
   </div>
 
   <div class="row">
@@ -73,7 +73,7 @@
     <div><span class="chip" style="background: rgba(155,161,155,0.12); border: 1px solid rgba(155,161,155,0.36); color: #9ba19b;">Project root</span></div>
     <div class="cl" style="text-align: right; color: #9ba19b;">3h 06m</div>
     <div style="color: #55605a;">—</div>
-    <div style="display: flex; justify-content: flex-end;"><span class="chip" style="color: #55605a;">移動</span></div>
+    <div class="cl" style="font-size: 10px; color: #4b5561;">—</div><div style="display: flex; justify-content: flex-end;"><span class="chip" style="color: #55605a;">移動</span></div>
   </div>
 
   <div class="row">
@@ -83,7 +83,7 @@
     <div><span class="chip" style="background: rgba(155,161,155,0.12); border: 1px solid rgba(155,161,155,0.36); color: #9ba19b;">Project root</span></div>
     <div class="cl" style="text-align: right; color: #9ba19b;">—</div>
     <div style="color: #e27b83;">exit code 1 <span style="color: #55605a;">· 11:58:14</span></div>
-    <div style="display: flex; justify-content: flex-end;"><span class="chip" style="color: #55605a;">再起動</span></div>
+    <div class="cl" style="font-size: 10px; color: #4b5561;">—</div><div style="display: flex; justify-content: flex-end;"><span class="chip" style="color: #55605a;">再起動</span></div>
   </div>
 
   <div style="flex: 1; background: #121416;"></div>
@@ -99,6 +99,13 @@
     <div style="display: flex; align-items: center; gap: 5px;"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="4.6" cy="3.7" r="1.7"/><circle cx="4.6" cy="12.3" r="1.7"/><circle cx="11.4" cy="6.4" r="1.7"/><path d="M4.6 5.4v5.2M11.4 8.1c0 2.2-2.1 2.5-3.6 2.9"/></svg><span>main</span></div>
     <span style="color: #55605a;">origin/main</span>
     <div style="flex: 1;"></div>
+    <div style="display: flex; align-items: center; gap: 6px;">
+      <span style="color: #55605a; font-size: 10px;">Claude 5h</span>
+      <div style="width: 46px; height: 4px; border-radius: 2px; background: #2b333c; overflow: hidden;"><div style="width: 62%; height: 100%; background: #8acb94;"></div></div>
+      <span class="cl" style="font-size: 10px; color: #9ba19b;">62%</span>
+      <span class="cl" style="font-size: 10px; color: #55605a;">2h11m</span>
+    </div>
+    <span style="color: #3d454e;">·</span>
     <div style="display: flex; align-items: center; gap: 6px; height: 18px; padding: 0 8px; border-radius: 9px; background: rgba(229,192,123,0.14); border: 1px solid rgba(229,192,123,0.4); color: #e5c07b;"><span style="font-weight: 600;">codex が入力待ち</span><span style="font-size: 9px; color: #a9853f;">⌥⇥</span></div>
     <span style="color: #3d454e;">·</span><span>5 セッション</span>
   </div>

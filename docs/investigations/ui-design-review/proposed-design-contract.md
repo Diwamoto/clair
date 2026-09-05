@@ -19,25 +19,31 @@ Clairの画面は、情報密度で勝ち、装飾で負けないことを目指
 
 ```
 ┌──────────────────────────────────────────────┐
-│ titlebar   traffic lights │ Project groups │ ⌘ ⚙ │  48
-├──────────────────────────────────────────────┤
-│ activity bar (sidebarの表示状態と独立)          │  30
+│ traffic │ Project + tab (全Project並列) │ 🔍 ⌘ ⚙ │  48
 ├────────────┬─────────────────────────────────┤
-│            │ pane tab bar                    │  30
-│  sidebar   ├─────────────────────────────────┤
+│ activity   │                                 │  34
+├────────────┤                                 │
+│            │        pane content             │
+│  sidebar   │   （tab barもheaderも持たない）    │
 │            │                                 │
-│  204-340   │  pane content                   │
-│            │                                 │
+│  204-340   │                                 │
 ├────────────┴─────────────────────────────────┤
 │ status bar                                    │  26
 └──────────────────────────────────────────────┘
 ```
 
-- **titlebar**はProjectの所有だけを表す。fileのtabを持たない。
-- **activity bar**はsidebarの外に置き、sidebarを閉じても残る。
-- **pane tab bar**は各paneが1本ずつ持つ。paneが1つならtab行は1本である。
+- **titlebar**はProjectとtabを持つ。tabは**全Projectで1本のstrip**であり、
+  別Projectのtabへ切り替えるとProjectも切り替わる。
+- titlebar右端は左から**検索欄、command、settings**の順。commandはiconのみで、
+  ラベルも枠も持たない。
+- **activity bar**はsidebarの上端に置く。全幅rowにも縦railにもしない。
+- **pane**はtab barもheaderも持たない。terminalとeditorがpaneいっぱいに直接描かれる。
 - **sidebar**はactivityによって内容だけが変わる。main areaは変わらない。
-- **status bar**はProject全体の状態を持つ。paneの状態はpane側で表す。
+- **status bar**はProject全体の状態と、focusしているpaneのcontextを持つ。
+
+sidebarを閉じている間はactivityのiconが見えないため、Files / Search / Git / Review /
+Activity / Sessionsは全てcommandとして登録し、shortcutから直接到達できなければならない。
+iconを唯一の導線にしない。
 
 ### 2.2 activity切替の不変条件
 
@@ -49,8 +55,12 @@ pane内のtabとして開く。sidebarはそれらへの入口とlistだけを�
 
 ### 2.3 Split
 
-- dividerはdragできる。hit areaは見た目の1pxではなく±4pxを取る。
-- dividerのhoverで`resizeLeftRight` / `resizeUpDown`カーソルを出す。
+- dividerは**1pxのborderのみ**で、gripや装飾を持たない。
+- hit areaは見た目の1pxではなく±4pxを取る。
+- hoverしたときに`resizeLeftRight` / `resizeUpDown`カーソルと、borderの色でつかめることを示す。
+- dragで比率を変え、結果はmodelへ書き戻してworkspace復元に残す。
+- paneの**移動・入れ替え**は、paneの上端中央に置く横向き3点リーダのhandleをdragして行う
+  （Ghosttyと同じ形式）。terminalのpaneもeditorのpaneも同じhandleを持つ。
 - 均等化、最大化、focus移動、closeは全てcommandとして存在し、shortcutを割り当てられる。
 - paneの境界は、focusのあるpaneだけがaccent borderを持つ。
 
@@ -58,12 +68,15 @@ pane内のtabとして開く。sidebarはそれらへの入口とlistだけを�
 
 | 要素 | 高さ | 備考 |
 |---|---|---|
-| titlebar | 48 | traffic lightsに必要な最小 |
-| activity bar | 30 | |
-| pane tab bar | 30 | |
-| pane content header | 0 | breadcrumbはtab bar内に置く |
+| titlebar | 48 | traffic lightsに必要な最小。tabを含む |
+| pane tab bar | 0 | paneはtabを持たない |
+| pane content header | 0 | breadcrumbはstatus barへ |
 | status bar | 26 | |
-| **content到達までの合計** | **134** | 現状174から40削減 |
+| **content到達までの合計** | **74** | 現状174から100削減 |
+
+activity barの34pxはsidebarの中にあり、main areaの縦を消費しない。
+
+splitしてもこの74pxは増えない。paneがchromeを持たないためである。
 
 sidebarのsection headerは32pxを上限とする。
 overlayのheaderは48pxを上限とする。
@@ -127,16 +140,21 @@ Clair v2はdark固定とする。light themeとuser themeはv2のscopeに含め�
 
 | 事実 | 常時表示する場所 | 補助 |
 |---|---|---|
-| 未保存 | pane tabのdot | 保存時にstatus barで一時表示 |
-| terminal state | pane tabのdot色 | session railの行 |
+| 未保存 | titlebar tabのdot | 保存時にstatus barで一時表示 |
+| terminal state | titlebar tabのdot色 | session railの行 |
 | attention | Project labelのbadge | session railの行、macOS通知 |
 | branch | status bar | Git sidebarのheader |
+| 開いているfileのpath | status bar | — |
+| agentの利用枠 | status bar（最も逼迫した1つ） | popoverで内訳 |
+
+`保存` buttonは置かない。⌘Sとtabのdotで足りる。
 
 ### 7.2 実行context
 
-terminal paneは、それがProject rootで動いているのか
-managed worktreeで動いているのかを常に表示する。
-managed worktreeのときは`branch`名のchipを出す。
+focusしているpaneが、Project rootで動いているのかmanaged worktreeで動いているのかを
+**status barに常時表示する**。managed worktreeのときは`branch`名のchipを出す。
+
+paneがchromeを持たないため、この情報の置き場所はstatus barとsession railになる。
 
 これは美観ではなく安全性の要件である。
 
@@ -232,3 +250,34 @@ Clairの差別化点であるため、contractに含める。
 Projectをまたいだ移動を許可する（Project切替を伴う）。
 
 「次のattentionへ移動」commandを持ち、shortcutを割り当てられる。
+
+## 13. Agent rate limit
+
+status barの右端に、agentの利用枠を表示する。
+
+### 13.1 値の入力
+
+| 入力 | 可否 |
+|---|---|
+| agentが公式hook / CLIの構造化出力で報告した枠と残量 | 採用 |
+| TUI画面からの読み取り | 不可（principle 3） |
+| token数からのClair独自の推定 | 不可 |
+
+報告しないagentは「不明」と表示せず、行ごと出さない。
+ずれた値は無い値より悪いため、推定はしない。
+
+### 13.2 表示
+
+status barには**最も逼迫している枠を1つだけ**出す。全Projectぶんを並べない。
+clickでpopoverを開き、agentと枠種別ごとの使用率・残量・リセット時刻を出す。
+
+| 使用率 | token |
+|---|---|
+| 0–69% | `success` |
+| 70–99% | `attention` |
+| 上限 | `danger` |
+
+### 13.3 通知
+
+枠の枯渇はagentの停止と同じ扱いで、1回だけmacOS通知を出す。回復は通知しない。
+Project単位でmuteできる（7.1のattentionと同じ扱い）。

@@ -14,30 +14,30 @@
     .frow { display: flex; align-items: center; gap: 7px; height: 24px; padding: 0 12px 0 22px; font-size: 11px; color: #9ba19b; }
     .dl { display: grid; grid-template-columns: 44px 44px 1fr; font-size: 12px; line-height: 19px; }
     .dn { text-align: right; padding-right: 10px; color: #4b5561; }
+    .act { display: flex; align-items: center; justify-content: center; width: 28px; height: 26px; border-radius: 4px; color: #707871; }
   </style>
 </helmet>
 
 <div style="width: 1440px; height: 820px; display: flex; flex-direction: column; overflow: hidden; background: #121416; color: #f1f3ef; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; font-size: 11px; -webkit-font-smoothing: antialiased;">
 
-  <div style="height: 30px; flex-shrink: 0; display: flex; align-items: center; gap: 2px; padding: 0 8px; background: #101214; border-bottom: 1px solid rgba(242,244,238,0.11);">
-    <div style="display: flex; align-items: center; justify-content: center; width: 28px; height: 24px; border-radius: 4px; color: #707871;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.2 4.6A1.4 1.4 0 0 1 3.6 3.2h2.7l1.4 1.9h4.7a1.4 1.4 0 0 1 1.4 1.4v5a1.4 1.4 0 0 1-1.4 1.4H3.6a1.4 1.4 0 0 1-1.4-1.4z"/></svg></div>
-    <div style="display: flex; align-items: center; justify-content: center; width: 28px; height: 24px; border-radius: 4px; color: #707871;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="7" cy="7" r="4.1"/><path d="M10.1 10.1 13.6 13.6"/></svg></div>
-    <div style="display: flex; align-items: center; gap: 4px; height: 24px; padding: 0 7px; border-radius: 4px; color: #707871;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="4.6" cy="3.7" r="1.7"/><circle cx="4.6" cy="12.3" r="1.7"/><circle cx="11.4" cy="6.4" r="1.7"/><path d="M4.6 5.4v5.2M11.4 8.1c0 2.2-2.1 2.5-3.6 2.9"/></svg><span style="font-size: 9px; font-weight: 700; color: #121416; background: #9ba19b; border-radius: 7px; padding: 0 4px; line-height: 13px;">7</span></div>
-    <div style="position: relative; display: flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; border-radius: 4px; background: #2b333c; color: #5b88f7;">
-      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M8 2.3 3.3 4.2v3.9c0 2.7 2 4.7 4.7 5.5 2.7-.8 4.7-2.8 4.7-5.5V4.2z"/><path d="M6.1 7.9 7.5 9.3l2.5-2.6"/></svg>
-      <span style="font-size: 11px; font-weight: 600;">変更を確認</span>
-      <div style="position: absolute; left: 50%; bottom: -3px; transform: translateX(-50%); width: 18px; height: 2px; background: #5b88f7;"></div>
-    </div>
-    <div style="display: flex; align-items: center; gap: 4px; height: 24px; padding: 0 7px; border-radius: 4px; color: #707871;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2.6a3.5 3.5 0 0 1 3.5 3.5c0 2.9 1.2 3.8 1.2 3.8H3.3s1.2-.9 1.2-3.8A3.5 3.5 0 0 1 8 2.6z"/><path d="M6.7 12.3a1.4 1.4 0 0 0 2.6 0"/></svg></div>
-    <div style="width: 1px; height: 16px; background: rgba(242,244,238,0.11); margin: 0 6px;"></div>
-    <div style="display: flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; border-radius: 4px; color: #707871; border: 1px solid rgba(242,244,238,0.11);"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.2" y="3.2" width="11.6" height="9.6" rx="1.5"/><path d="M4.9 6.4 6.9 8.3 4.9 10.2"/></svg><span style="font-size: 11px;">セッション</span></div>
-    <div style="flex: 1;"></div>
-  </div>
-
   <div style="flex: 1; display: flex; min-height: 0;">
 
     <!-- sidebar : selection + file list only -->
     <div style="width: 286px; flex-shrink: 0; display: flex; flex-direction: column; background: #181b1f; border-right: 1px solid rgba(242,244,238,0.11);">
+      <div style="height: 34px; flex-shrink: 0; display: flex; align-items: center; gap: 2px; padding: 0 8px; background: #101214; border-bottom: 1px solid rgba(242,244,238,0.11);">
+        <div class="act"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.2 4.6A1.4 1.4 0 0 1 3.6 3.2h2.7l1.4 1.9h4.7a1.4 1.4 0 0 1 1.4 1.4v5a1.4 1.4 0 0 1-1.4 1.4H3.6a1.4 1.4 0 0 1-1.4-1.4z"/></svg></div>
+        <div class="act"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="7" cy="7" r="4.1"/><path d="M10.1 10.1 13.6 13.6"/></svg></div>
+        <div class="act" style="width: auto; gap: 4px; padding: 0 5px;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="4.6" cy="3.7" r="1.7"/><circle cx="4.6" cy="12.3" r="1.7"/><circle cx="11.4" cy="6.4" r="1.7"/><path d="M4.6 5.4v5.2M11.4 8.1c0 2.2-2.1 2.5-3.6 2.9"/></svg><span style="font-size: 8px; font-weight: 700; color: #121416; background: #9ba19b; border-radius: 7px; padding: 0 4px; line-height: 12px;">7</span></div>
+        <div class="act" style="position: relative; background: #2b333c; color: #5b88f7;">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M8 2.3 3.3 4.2v3.9c0 2.7 2 4.7 4.7 5.5 2.7-.8 4.7-2.8 4.7-5.5V4.2z"/><path d="M6.1 7.9 7.5 9.3l2.5-2.6"/></svg>
+          <div style="position: absolute; left: 50%; bottom: -1px; transform: translateX(-50%); width: 18px; height: 2px; background: #5b88f7;"></div>
+        </div>
+        <div class="act" style="width: auto; gap: 4px; padding: 0 5px;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2.6a3.5 3.5 0 0 1 3.5 3.5c0 2.9 1.2 3.8 1.2 3.8H3.3s1.2-.9 1.2-3.8A3.5 3.5 0 0 1 8 2.6z"/><path d="M6.7 12.3a1.4 1.4 0 0 0 2.6 0"/></svg><span style="font-size: 8px; font-weight: 700; color: #121416; background: #e5c07b; border-radius: 7px; padding: 0 4px; line-height: 12px;">1</span></div>
+        <div class="act" style="width: auto; gap: 4px; padding: 0 5px;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.2" y="3.2" width="11.6" height="9.6" rx="1.5"/><path d="M4.9 6.4 6.9 8.3 4.9 10.2"/><path d="M8.5 10.4h2.6"/></svg><span style="display: flex; gap: 2px;"><span style="width: 4px; height: 4px; border-radius: 50%; background: #8acb94;"></span><span style="width: 4px; height: 4px; border-radius: 50%; background: #8acb94;"></span><span style="width: 4px; height: 4px; border-radius: 50%; background: #e5c07b;"></span></span></div>
+        <div style="flex: 1;"></div>
+        <div class="act"><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><circle cx="4" cy="8" r="1.15"/><circle cx="8" cy="8" r="1.15"/><circle cx="12" cy="8" r="1.15"/></svg></div>
+      </div>
+
       <div style="height: 32px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid rgba(242,244,238,0.11);">
         <span style="font-size: 13px; font-weight: 600;">変更を確認</span>
         <div style="flex: 1;"></div>
@@ -145,6 +145,12 @@
     <span style="color: #55605a;">worktree</span>
     <div style="flex: 1;"></div>
     <span style="color: #e5c07b;">採用にはcleanなcommit状態が必要</span>
+    <span style="color: #3d454e;">·</span>
+    <div style="display: flex; align-items: center; gap: 6px;">
+      <span style="color: #55605a; font-size: 10px;">Claude 5h</span>
+      <div style="width: 46px; height: 4px; border-radius: 2px; background: #2b333c; overflow: hidden;"><div style="width: 62%; height: 100%; background: #8acb94;"></div></div>
+      <span class="cl" style="font-size: 10px; color: #9ba19b;">62%</span>
+    </div>
     <span style="color: #3d454e;">·</span><span>5 セッション</span>
   </div>
 </div>

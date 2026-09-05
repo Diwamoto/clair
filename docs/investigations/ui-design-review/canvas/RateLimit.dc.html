@@ -1,0 +1,197 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; }
+    a { color: #5b88f7; } a:hover { color: #8fb0fa; }
+    .cl { font-family: "SF Mono", ui-monospace, Menlo, monospace; }
+    .sec { font-size: 9px; font-weight: 700; letter-spacing: 0.06em; color: #55605a; }
+    .sb { display: flex; align-items: center; gap: 10px; height: 26px; padding: 0 12px; background: #101214; border: 1px solid rgba(242,244,238,0.11); border-radius: 4px; color: #9ba19b; font-size: 11px; }
+    .meter { width: 46px; height: 4px; border-radius: 2px; background: #2b333c; overflow: hidden; }
+    .prow { display: grid; grid-template-columns: 1fr 96px 62px 78px; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid rgba(242,244,238,0.055); }
+  </style>
+</helmet>
+
+<div style="width: 980px; height: 820px; padding: 22px 24px; box-sizing: border-box; background: #121416; color: #f1f3ef; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; font-size: 11px; -webkit-font-smoothing: antialiased; overflow: hidden;">
+
+  <div style="display: flex; align-items: baseline; gap: 12px;">
+    <span style="font-size: 17px; font-weight: 600; letter-spacing: -0.01em;">Agent rate limit</span>
+    <span style="font-size: 11px; color: #55605a;">status barの右端 · agentが自分で報告した値だけを出す</span>
+  </div>
+  <div style="height: 1px; background: rgba(242,244,238,0.11); margin: 12px 0 18px 0;"></div>
+
+  <div style="display: grid; grid-template-columns: 1fr 372px; gap: 22px; align-items: start;">
+
+    <!-- LEFT : states + popover -->
+    <div>
+      <div class="sec" style="margin-bottom: 10px;">STATUS BAR — 4つの状態</div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 22px;">
+        <div class="sb">
+          <span style="color: #55605a; font-size: 10px;">Claude 5h</span>
+          <div class="meter"><div style="width: 62%; height: 100%; background: #8acb94;"></div></div>
+          <span class="cl" style="font-size: 10px; color: #9ba19b;">62%</span>
+          <span class="cl" style="font-size: 10px; color: #55605a;">2h11m</span>
+          <div style="flex: 1;"></div>
+          <span style="font-size: 10px; color: #4b5561;">通常 — success</span>
+        </div>
+
+        <div class="sb">
+          <span style="color: #55605a; font-size: 10px;">Claude 5h</span>
+          <div class="meter"><div style="width: 84%; height: 100%; background: #e5c07b;"></div></div>
+          <span class="cl" style="font-size: 10px; color: #e5c07b; font-weight: 600;">84%</span>
+          <span class="cl" style="font-size: 10px; color: #55605a;">41m</span>
+          <div style="flex: 1;"></div>
+          <span style="font-size: 10px; color: #4b5561;">70%超 — attention</span>
+        </div>
+
+        <div class="sb">
+          <span style="color: #55605a; font-size: 10px;">Claude 5h</span>
+          <div class="meter"><div style="width: 100%; height: 100%; background: #e27b83;"></div></div>
+          <span class="cl" style="font-size: 10px; color: #e27b83; font-weight: 600;">上限</span>
+          <span class="cl" style="font-size: 10px; color: #e27b83;">18m後に回復</span>
+          <div style="flex: 1;"></div>
+          <span style="font-size: 10px; color: #4b5561;">枯渇 — danger</span>
+        </div>
+
+        <div class="sb">
+          <span style="color: #4b5561; font-size: 10px;">Claude 5h</span>
+          <div class="meter"><div style="width: 100%; height: 100%; background: repeating-linear-gradient(90deg, #2b333c 0 4px, #202730 4px 8px);"></div></div>
+          <span class="cl" style="font-size: 10px; color: #4b5561;">不明</span>
+          <div style="flex: 1;"></div>
+          <span style="font-size: 10px; color: #4b5561;">agentが報告していない</span>
+        </div>
+      </div>
+
+      <div class="sec" style="margin-bottom: 10px;">CLICKで開くPOPOVER</div>
+
+      <div style="width: 460px; border-radius: 8px; background: #1e2227; border: 1px solid rgba(242,244,238,0.19); box-shadow: 0 16px 40px rgba(0,0,0,0.6); overflow: hidden;">
+        <div style="display: flex; align-items: center; gap: 9px; padding: 11px 12px; border-bottom: 1px solid rgba(242,244,238,0.11);">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#5b88f7" stroke-width="1.4"><circle cx="8" cy="8" r="5.8"/><path d="M8 4.6V8l2.4 1.6"/></svg>
+          <span style="font-size: 12px; font-weight: 600; color: #f1f3ef;">利用枠</span>
+          <div style="flex: 1;"></div>
+          <span class="cl" style="font-size: 9px; color: #55605a;">30秒ごとに更新</span>
+        </div>
+
+        <div class="prow" style="background: #101214; border-bottom: 1px solid rgba(242,244,238,0.11); padding-top: 6px; padding-bottom: 6px;">
+          <span class="sec">AGENT / 枠</span><span class="sec">使用</span><span class="sec" style="text-align: right;">残り</span><span class="sec" style="text-align: right;">リセット</span>
+        </div>
+
+        <div class="prow">
+          <div style="display: flex; align-items: center; gap: 7px; min-width: 0;">
+            <span style="width: 6px; height: 6px; border-radius: 50%; background: #8acb94; flex-shrink: 0;"></span>
+            <span style="font-size: 11px; font-weight: 600; color: #f1f3ef;">Claude Code</span>
+            <span style="font-size: 10px; color: #707871;">5時間枠</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 7px;">
+            <div style="flex: 1; height: 4px; border-radius: 2px; background: #2b333c; overflow: hidden;"><div style="width: 62%; height: 100%; background: #8acb94;"></div></div>
+            <span class="cl" style="font-size: 10px; color: #9ba19b;">62%</span>
+          </div>
+          <span class="cl" style="font-size: 10px; color: #9ba19b; text-align: right;">38%</span>
+          <span class="cl" style="font-size: 10px; color: #707871; text-align: right;">14:20</span>
+        </div>
+
+        <div class="prow">
+          <div style="display: flex; align-items: center; gap: 7px; padding-left: 13px; min-width: 0;">
+            <span style="font-size: 10px; color: #707871;">週次枠</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 7px;">
+            <div style="flex: 1; height: 4px; border-radius: 2px; background: #2b333c; overflow: hidden;"><div style="width: 38%; height: 100%; background: #8acb94;"></div></div>
+            <span class="cl" style="font-size: 10px; color: #9ba19b;">38%</span>
+          </div>
+          <span class="cl" style="font-size: 10px; color: #9ba19b; text-align: right;">62%</span>
+          <span class="cl" style="font-size: 10px; color: #707871; text-align: right;">月 09:00</span>
+        </div>
+
+        <div class="prow" style="background: rgba(229,192,123,0.05);">
+          <div style="display: flex; align-items: center; gap: 7px; min-width: 0;">
+            <span style="width: 6px; height: 6px; border-radius: 50%; background: #e5c07b; flex-shrink: 0;"></span>
+            <span style="font-size: 11px; font-weight: 600; color: #f1f3ef;">Claude Code</span>
+            <span style="font-size: 10px; color: #707871;">ccedit · 5時間枠</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 7px;">
+            <div style="flex: 1; height: 4px; border-radius: 2px; background: #2b333c; overflow: hidden;"><div style="width: 84%; height: 100%; background: #e5c07b;"></div></div>
+            <span class="cl" style="font-size: 10px; color: #e5c07b; font-weight: 600;">84%</span>
+          </div>
+          <span class="cl" style="font-size: 10px; color: #e5c07b; text-align: right;">16%</span>
+          <span class="cl" style="font-size: 10px; color: #707871; text-align: right;">12:49</span>
+        </div>
+
+        <div class="prow" style="border-bottom: none;">
+          <div style="display: flex; align-items: center; gap: 7px; min-width: 0;">
+            <span style="width: 6px; height: 6px; border-radius: 50%; background: #3d454e; flex-shrink: 0;"></span>
+            <span style="font-size: 11px; font-weight: 600; color: #9ba19b;">codex</span>
+          </div>
+          <span style="font-size: 10px; color: #4b5561; grid-column: span 3;">利用枠を報告しないagentのため表示しない</span>
+        </div>
+
+        <div style="padding: 10px 12px; background: #181b1f; border-top: 1px solid rgba(242,244,238,0.11);">
+          <div style="display: flex; align-items: flex-start; gap: 8px; color: #707871; font-size: 10px; line-height: 15px;">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#5b88f7" stroke-width="1.4" style="flex-shrink: 0; margin-top: 1px;"><circle cx="8" cy="8" r="5.8"/><path d="M8 7.2v3.6M8 5.3v.9"/></svg>
+            <span>値はagent自身が公式に報告したものだけを使う。TUIの画面からは読み取らない。</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT : the rule -->
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+
+      <div style="background: #181b1f; border: 1px solid rgba(242,244,238,0.11); border-radius: 6px; padding: 14px;">
+        <div class="sec" style="margin-bottom: 10px;">値の出どころ</div>
+        <div style="display: flex; flex-direction: column; gap: 9px; font-size: 10.5px; line-height: 16px;">
+          <div style="display: flex; gap: 8px;">
+            <span style="width: 5px; height: 5px; border-radius: 50%; background: #8acb94; flex-shrink: 0; margin-top: 6px;"></span>
+            <span style="color: #c9cec8;"><b>公式hook / CLIの構造化出力</b><br><span style="color: #707871;">Claude Codeが自分で報告する枠と残量。これが唯一の正当な入力。</span></span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <span style="width: 5px; height: 5px; border-radius: 50%; background: #e27b83; flex-shrink: 0; margin-top: 6px;"></span>
+            <span style="color: #c9cec8;"><b>TUIのscreen scraping</b><br><span style="color: #707871;">principle 3で禁止。画面から%を読み取ることはしない。</span></span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <span style="width: 5px; height: 5px; border-radius: 50%; background: #e27b83; flex-shrink: 0; margin-top: 6px;"></span>
+            <span style="color: #c9cec8;"><b>Clair独自の推定</b><br><span style="color: #707871;">token数を数えて残量を予測しない。ずれた値は無い値より悪い。</span></span>
+          </div>
+        </div>
+        <div style="margin-top: 12px; padding-top: 11px; border-top: 1px solid rgba(242,244,238,0.08); color: #707871; font-size: 10px; line-height: 15px;">
+          報告しないagentは<b style="color: #9ba19b;">「不明」ではなく非表示</b>にする。空の枠が並ぶより、対象agentだけが並ぶほうが読みやすい。
+        </div>
+      </div>
+
+      <div style="background: #181b1f; border: 1px solid rgba(242,244,238,0.11); border-radius: 6px; padding: 14px;">
+        <div class="sec" style="margin-bottom: 10px;">しきい値</div>
+        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 10.5px;">
+          <div style="display: flex; align-items: center; gap: 9px;"><span style="width: 26px; height: 4px; border-radius: 2px; background: #8acb94;"></span><span style="color: #c9cec8; width: 62px;">0–69%</span><span style="color: #707871;">success</span></div>
+          <div style="display: flex; align-items: center; gap: 9px;"><span style="width: 26px; height: 4px; border-radius: 2px; background: #e5c07b;"></span><span style="color: #c9cec8; width: 62px;">70–99%</span><span style="color: #707871;">attention</span></div>
+          <div style="display: flex; align-items: center; gap: 9px;"><span style="width: 26px; height: 4px; border-radius: 2px; background: #e27b83;"></span><span style="color: #c9cec8; width: 62px;">上限</span><span style="color: #707871;">danger</span></div>
+        </div>
+        <div style="margin-top: 12px; padding-top: 11px; border-top: 1px solid rgba(242,244,238,0.08); color: #707871; font-size: 10px; line-height: 15px;">
+          status barには<b style="color: #9ba19b;">最も逼迫している枠を1つだけ</b>出す。全Projectぶんを並べない。残りはpopoverで見る。
+        </div>
+      </div>
+
+      <div style="background: #181b1f; border: 1px solid rgba(242,244,238,0.11); border-radius: 6px; padding: 14px;">
+        <div class="sec" style="margin-bottom: 10px;">枯渇したとき</div>
+        <div style="padding: 10px 11px; border-radius: 5px; background: rgba(226,123,131,0.08); border: 1px solid rgba(226,123,131,0.3);">
+          <div style="display: flex; align-items: center; gap: 7px; margin-bottom: 6px;">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#e27b83" stroke-width="1.5"><circle cx="8" cy="8" r="5.8"/><path d="M8 5.2v3.6M8 10.6v.7"/></svg>
+            <span style="font-size: 11px; font-weight: 600; color: #e27b83;">Claude Codeの5時間枠が上限に達した</span>
+          </div>
+          <div style="color: #9ba19b; font-size: 10px; line-height: 15px;">clair · pane-split の1セッションが停止した。18分後に回復する。</div>
+        </div>
+        <div style="margin-top: 11px; color: #707871; font-size: 10px; line-height: 15px;">
+          macOS通知はagentの停止と同じ扱いで1回だけ出す。回復は通知しない。Project単位でmuteできる。
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

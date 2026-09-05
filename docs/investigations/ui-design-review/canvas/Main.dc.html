@@ -11,320 +11,209 @@
     body { margin: 0; }
     a { color: #5b88f7; } a:hover { color: #8fb0fa; }
     .cl { font-family: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, monospace; }
+    .tab { display: flex; align-items: center; gap: 7px; padding: 0 11px; height: 40px; min-width: 124px; max-width: 210px; border-radius: 7px; }
+    .grip { position: absolute; top: 3px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; justify-content: center; gap: 3px; width: 30px; height: 11px; border-radius: 6px; z-index: 3; }
+    .gd { width: 3px; height: 3px; border-radius: 50%; background: #55605a; }
+    .act { display: flex; align-items: center; justify-content: center; width: 28px; height: 26px; border-radius: 4px; color: #707871; }
   </style>
 </helmet>
 
-<div style="width: 1440px; height: 900px; display: flex; flex-direction: column; overflow: hidden; background: #121416; color: #f1f3ef; font-family: -apple-system, 'SF Pro Text', system-ui, 'Helvetica Neue', sans-serif; font-size: 11px; -webkit-font-smoothing: antialiased;">
+<div style="width: 1440px; height: 900px; display: flex; flex-direction: column; overflow: hidden; background: #121416; color: #f1f3ef; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; font-size: 11px; -webkit-font-smoothing: antialiased;">
 
-  <!-- ===== TITLEBAR 48 : Projects only, no file tabs ===== -->
-  <div style="height: 48px; flex-shrink: 0; display: flex; align-items: center; background: #1e2227; border-bottom: 1px solid rgba(242,244,238,0.11);">
+  <!-- ===== TITLEBAR 48 : one parallel tab strip across every Project ===== -->
+  <div style="height: 48px; flex-shrink: 0; display: flex; align-items: flex-end; background: #1e2227; border-bottom: 1px solid rgba(242,244,238,0.11);">
 
-    <div style="width: 76px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding-left: 20px;">
+    <div style="width: 76px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 0 0 16px 20px;">
       <div style="width: 12px; height: 12px; border-radius: 50%; background: #ff5f57;"></div>
       <div style="width: 12px; height: 12px; border-radius: 50%; background: #febc2e;"></div>
       <div style="width: 12px; height: 12px; border-radius: 50%; background: #28c840;"></div>
     </div>
 
-    <div style="flex: 1; display: flex; align-items: center; gap: 6px; min-width: 0;">
-      <div style="display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 6px; background: rgba(91,136,247,0.22); border: 1px solid rgba(91,136,247,0.72);">
-        <span style="font-size: 11px; font-weight: 600; color: #f1f3ef;">clair</span>
-        <span style="font-size: 9px; font-weight: 700; color: #121416; background: #e5c07b; border-radius: 8px; padding: 1px 5px; line-height: 1.3;">1</span>
+    <div style="flex: 1; display: flex; align-items: flex-end; gap: 5px; min-width: 0; overflow: hidden;">
+
+      <!-- project: clair -->
+      <div style="display: flex; align-items: center; gap: 6px; height: 22px; padding: 0 9px; margin-bottom: 7px; border-radius: 6px; background: rgba(91,136,247,0.22); border: 1px solid rgba(91,136,247,0.72);">
+        <span style="font-size: 12px; font-weight: 600; color: #f1f3ef;">clair</span>
+        <span style="font-size: 8px; font-weight: 700; color: #121416; background: #e5c07b; border-radius: 8px; padding: 1px 4px;">1</span>
       </div>
-      <div style="display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 6px; background: rgba(199,131,218,0.12); border: 1px solid rgba(199,131,218,0.45);">
-        <span style="font-size: 11px; font-weight: 600; color: #9ba19b;">ccedit</span>
-        <span style="width: 5px; height: 5px; border-radius: 50%; background: #8acb94;"></span>
+      <div style="display: flex; align-items: stretch; gap: 2px;">
+        <div class="tab" style="background: #121416; border: 1px solid rgba(242,244,238,0.11); border-top: 2px solid #5b88f7;">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#e5c07b" stroke-width="1.3" stroke-linejoin="round"><path d="M4.2 2.6h4.6L12 5.8v7.6H4.2z"/><path d="M8.6 2.6v3.3H12"/></svg>
+          <span style="font-size: 11px; font-weight: 500; color: #f1f3ef; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1;">ProjectWorkspace.swift</span>
+          <span style="width: 6px; height: 6px; border-radius: 50%; background: #e5c07b; flex-shrink: 0;"></span>
+        </div>
+        <div class="tab" style="background: rgba(255,255,255,0.012);">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#5b88f7" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.2" y="3.2" width="11.6" height="9.6" rx="1.4"/><path d="M4.9 6.4 6.9 8.3 4.9 10.2"/><path d="M8.5 10.4h2.6"/></svg>
+          <span style="font-size: 11px; color: #9ba19b; white-space: nowrap; flex: 1;">Claude Code</span>
+          <span style="width: 6px; height: 6px; border-radius: 50%; background: #8acb94; flex-shrink: 0;"></span>
+        </div>
+        <div class="tab" style="background: rgba(255,255,255,0.012);">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#5b88f7" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.2" y="3.2" width="11.6" height="9.6" rx="1.4"/><path d="M4.9 6.4 6.9 8.3 4.9 10.2"/><path d="M8.5 10.4h2.6"/></svg>
+          <span style="font-size: 11px; color: #9ba19b; white-space: nowrap; flex: 1;">codex</span>
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="#e5c07b" style="flex-shrink: 0;"><path d="M8 2.2a3.6 3.6 0 0 1 3.6 3.6c0 2.9 1.2 3.9 1.2 3.9H3.2s1.2-1 1.2-3.9A3.6 3.6 0 0 1 8 2.2z"/><path d="M6.6 11.6a1.5 1.5 0 0 0 2.8 0z"/></svg>
+        </div>
       </div>
-      <div style="display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 6px; background: rgba(138,203,148,0.12); border: 1px solid rgba(138,203,148,0.45);">
-        <span style="font-size: 11px; font-weight: 600; color: #9ba19b;">dotfiles</span>
+
+      <div style="width: 1px; height: 26px; background: rgba(242,244,238,0.09); margin: 0 5px 10px 9px;"></div>
+
+      <!-- project: ccedit -->
+      <div style="display: flex; align-items: center; height: 22px; padding: 0 9px; margin-bottom: 7px; border-radius: 6px; background: rgba(199,131,218,0.12); border: 1px solid rgba(199,131,218,0.45);">
+        <span style="font-size: 12px; font-weight: 600; color: #9ba19b;">ccedit</span>
       </div>
-      <div style="display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 5px; color: #707871;">
-        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9"/></svg>
+      <div style="display: flex; align-items: stretch;">
+        <div class="tab" style="background: rgba(255,255,255,0.012);">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#5b88f7" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.2" y="3.2" width="11.6" height="9.6" rx="1.4"/><path d="M4.9 6.4 6.9 8.3 4.9 10.2"/><path d="M8.5 10.4h2.6"/></svg>
+          <span style="font-size: 11px; color: #9ba19b; white-space: nowrap; flex: 1;">Claude Code</span>
+          <span style="width: 6px; height: 6px; border-radius: 50%; background: #8acb94; flex-shrink: 0;"></span>
+        </div>
+      </div>
+
+      <div style="width: 1px; height: 26px; background: rgba(242,244,238,0.09); margin: 0 5px 10px 9px;"></div>
+
+      <!-- project: dotfiles -->
+      <div style="display: flex; align-items: center; height: 22px; padding: 0 9px; margin-bottom: 7px; border-radius: 6px; background: rgba(138,203,148,0.12); border: 1px solid rgba(138,203,148,0.45);">
+        <span style="font-size: 12px; font-weight: 600; color: #9ba19b;">dotfiles</span>
+      </div>
+
+      <div style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; margin-bottom: 7px; color: #707871;">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9"/></svg>
       </div>
     </div>
 
-    <div style="display: flex; align-items: center; gap: 6px; padding-right: 14px;">
-      <div style="display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 9px; border-radius: 4px; background: #181b1f; border: 1px solid rgba(242,244,238,0.11); color: #c9cec8;">
-        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.6" y="5.6" width="4.8" height="4.8"/><circle cx="4.1" cy="4.1" r="1.5"/><circle cx="11.9" cy="4.1" r="1.5"/><circle cx="4.1" cy="11.9" r="1.5"/><circle cx="11.9" cy="11.9" r="1.5"/></svg>
-        <span style="font-size: 11px; font-weight: 500;">コマンド</span>
-        <span style="font-size: 9px; font-weight: 500; color: #707871;">⌘K</span>
+    <!-- right cluster : search, then command, then settings -->
+    <div style="display: flex; align-items: center; gap: 4px; padding: 0 12px 9px 12px;">
+      <div style="display: flex; align-items: center; gap: 7px; width: 216px; height: 28px; padding: 0 9px; border-radius: 5px; background: #121416; border: 1px solid rgba(242,244,238,0.11);">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#707871" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="4.1"/><path d="M10.1 10.1 13.6 13.6"/></svg>
+        <span style="font-size: 11px; color: #55605a; flex: 1;">ファイル、シンボル</span>
+        <span class="cl" style="font-size: 9px; color: #4b5561;">⌘P</span>
       </div>
-      <div style="display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 4px; background: #181b1f; border: 1px solid rgba(242,244,238,0.11); color: #c9cec8;">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="2.2"/><path d="M8 2.2v1.5M8 12.3v1.5M13.8 8h-1.5M3.7 8H2.2M12.1 3.9l-1.05 1.05M4.95 11.05 3.9 12.1M12.1 12.1l-1.05-1.05M4.95 4.95 3.9 3.9"/></svg>
+      <div style="display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 4px; color: #9ba19b;">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.6" y="5.6" width="4.8" height="4.8"/><circle cx="4.1" cy="4.1" r="1.5"/><circle cx="11.9" cy="4.1" r="1.5"/><circle cx="4.1" cy="11.9" r="1.5"/><circle cx="11.9" cy="11.9" r="1.5"/></svg>
       </div>
-    </div>
-  </div>
-
-  <!-- ===== ACTIVITY BAR 30 : full width, independent of the sidebar ===== -->
-  <div style="height: 30px; flex-shrink: 0; display: flex; align-items: center; gap: 2px; padding: 0 8px; background: #101214; border-bottom: 1px solid rgba(242,244,238,0.11);">
-
-    <div style="position: relative; display: flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; border-radius: 4px; background: #2b333c; color: #5b88f7;">
-      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.2 4.6A1.4 1.4 0 0 1 3.6 3.2h2.7l1.4 1.9h4.7a1.4 1.4 0 0 1 1.4 1.4v5a1.4 1.4 0 0 1-1.4 1.4H3.6a1.4 1.4 0 0 1-1.4-1.4z"/></svg>
-      <span style="font-size: 11px; font-weight: 600;">エクスプローラー</span>
-      <div style="position: absolute; left: 50%; bottom: -3px; transform: translateX(-50%); width: 18px; height: 2px; background: #5b88f7;"></div>
-    </div>
-
-    <div style="display: flex; align-items: center; justify-content: center; width: 28px; height: 24px; border-radius: 4px; color: #707871;">
-      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="7" cy="7" r="4.1"/><path d="M10.1 10.1 13.6 13.6"/></svg>
-    </div>
-
-    <div style="display: flex; align-items: center; gap: 4px; height: 24px; padding: 0 7px; border-radius: 4px; color: #707871;">
-      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="4.6" cy="3.7" r="1.7"/><circle cx="4.6" cy="12.3" r="1.7"/><circle cx="11.4" cy="6.4" r="1.7"/><path d="M4.6 5.4v5.2M11.4 8.1c0 2.2-2.1 2.5-3.6 2.9"/></svg>
-      <span style="font-size: 9px; font-weight: 700; color: #121416; background: #9ba19b; border-radius: 7px; padding: 0 4px; line-height: 13px;">7</span>
-    </div>
-
-    <div style="display: flex; align-items: center; justify-content: center; width: 28px; height: 24px; border-radius: 4px; color: #707871;">
-      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M8 2.3 3.3 4.2v3.9c0 2.7 2 4.7 4.7 5.5 2.7-.8 4.7-2.8 4.7-5.5V4.2z"/><path d="M6.1 7.9 7.5 9.3l2.5-2.6"/></svg>
-    </div>
-
-    <div style="display: flex; align-items: center; gap: 4px; height: 24px; padding: 0 7px; border-radius: 4px; color: #707871;">
-      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2.6a3.5 3.5 0 0 1 3.5 3.5c0 2.9 1.2 3.8 1.2 3.8H3.3s1.2-.9 1.2-3.8A3.5 3.5 0 0 1 8 2.6z"/><path d="M6.7 12.3a1.4 1.4 0 0 0 2.6 0"/></svg>
-      <span style="font-size: 9px; font-weight: 700; color: #121416; background: #e5c07b; border-radius: 7px; padding: 0 4px; line-height: 13px;">1</span>
-    </div>
-
-    <div style="width: 1px; height: 16px; background: rgba(242,244,238,0.11); margin: 0 6px;"></div>
-
-    <div style="display: flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; border-radius: 4px; color: #c9cec8; border: 1px solid rgba(242,244,238,0.11);">
-      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.2" y="3.2" width="11.6" height="9.6" rx="1.5"/><path d="M4.9 6.4 6.9 8.3 4.9 10.2"/><path d="M8.5 10.4h2.6"/></svg>
-      <span style="font-size: 11px; font-weight: 500;">セッション</span>
-      <span style="display: flex; align-items: center; gap: 3px;">
-        <span style="width: 5px; height: 5px; border-radius: 50%; background: #8acb94;"></span>
-        <span style="width: 5px; height: 5px; border-radius: 50%; background: #8acb94;"></span>
-        <span style="width: 5px; height: 5px; border-radius: 50%; background: #e5c07b;"></span>
-      </span>
-    </div>
-
-    <div style="flex: 1;"></div>
-
-    <div style="display: flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border-radius: 4px; background: #181b1f; border: 1px solid rgba(242,244,238,0.11); color: #707871;">
-      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="7" cy="7" r="4.1"/><path d="M10.1 10.1 13.6 13.6"/></svg>
-      <span style="font-size: 10px;">ファイルへ移動</span>
-      <span style="font-size: 9px; color: #55605a;">⌘P</span>
-    </div>
-    <div style="display: flex; align-items: center; justify-content: center; width: 26px; height: 22px; border-radius: 4px; color: #707871;">
-      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.2" y="3.2" width="11.6" height="9.6" rx="1.4"/><path d="M6.4 3.2v9.6"/></svg>
+      <div style="display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 4px; color: #9ba19b;">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="2.2"/><path d="M8 2.2v1.5M8 12.3v1.5M13.8 8h-1.5M3.7 8H2.2M12.1 3.9l-1.05 1.05M4.95 11.05 3.9 12.1M12.1 12.1l-1.05-1.05M4.95 4.95 3.9 3.9"/></svg>
+      </div>
     </div>
   </div>
 
   <!-- ===== BODY ===== -->
   <div style="flex: 1; display: flex; min-height: 0;">
 
-    <!-- SIDEBAR 286 -->
+    <!-- SIDEBAR 286 : activity icons live at its top -->
     <div style="width: 286px; flex-shrink: 0; display: flex; flex-direction: column; background: #181b1f; border-right: 1px solid rgba(242,244,238,0.11);">
-      <div style="height: 32px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid rgba(242,244,238,0.11);">
-        <span style="font-size: 13px; font-weight: 600; color: #f1f3ef;">エクスプローラー</span>
-        <span style="flex: 1;"></span>
-        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#707871" stroke-width="1.4" stroke-linecap="round"><path d="M8 3.2v9.6M3.2 8h9.6"/></svg>
-        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#707871" stroke-width="1.4" stroke-linecap="round"><path d="M4.4 6.6 8 3.2l3.6 3.4M4.4 9.4 8 12.8l3.6-3.4"/></svg>
+
+      <div style="height: 34px; flex-shrink: 0; display: flex; align-items: center; gap: 2px; padding: 0 8px; background: #101214; border-bottom: 1px solid rgba(242,244,238,0.11);">
+        <div class="act" style="position: relative; background: #2b333c; color: #5b88f7;">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.2 4.6A1.4 1.4 0 0 1 3.6 3.2h2.7l1.4 1.9h4.7a1.4 1.4 0 0 1 1.4 1.4v5a1.4 1.4 0 0 1-1.4 1.4H3.6a1.4 1.4 0 0 1-1.4-1.4z"/></svg>
+          <div style="position: absolute; left: 50%; bottom: -1px; transform: translateX(-50%); width: 18px; height: 2px; background: #5b88f7;"></div>
+        </div>
+        <div class="act"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="7" cy="7" r="4.1"/><path d="M10.1 10.1 13.6 13.6"/></svg></div>
+        <div class="act" style="width: auto; gap: 4px; padding: 0 5px;">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="4.6" cy="3.7" r="1.7"/><circle cx="4.6" cy="12.3" r="1.7"/><circle cx="11.4" cy="6.4" r="1.7"/><path d="M4.6 5.4v5.2M11.4 8.1c0 2.2-2.1 2.5-3.6 2.9"/></svg>
+          <span style="font-size: 8px; font-weight: 700; color: #121416; background: #9ba19b; border-radius: 7px; padding: 0 4px; line-height: 12px;">7</span>
+        </div>
+        <div class="act"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M8 2.3 3.3 4.2v3.9c0 2.7 2 4.7 4.7 5.5 2.7-.8 4.7-2.8 4.7-5.5V4.2z"/><path d="M6.1 7.9 7.5 9.3l2.5-2.6"/></svg></div>
+        <div class="act" style="width: auto; gap: 4px; padding: 0 5px;">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2.6a3.5 3.5 0 0 1 3.5 3.5c0 2.9 1.2 3.8 1.2 3.8H3.3s1.2-.9 1.2-3.8A3.5 3.5 0 0 1 8 2.6z"/><path d="M6.7 12.3a1.4 1.4 0 0 0 2.6 0"/></svg>
+          <span style="font-size: 8px; font-weight: 700; color: #121416; background: #e5c07b; border-radius: 7px; padding: 0 4px; line-height: 12px;">1</span>
+        </div>
+        <div class="act" style="width: auto; gap: 4px; padding: 0 5px;">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.2" y="3.2" width="11.6" height="9.6" rx="1.5"/><path d="M4.9 6.4 6.9 8.3 4.9 10.2"/><path d="M8.5 10.4h2.6"/></svg>
+          <span style="display: flex; gap: 2px;"><span style="width: 4px; height: 4px; border-radius: 50%; background: #8acb94;"></span><span style="width: 4px; height: 4px; border-radius: 50%; background: #8acb94;"></span><span style="width: 4px; height: 4px; border-radius: 50%; background: #e5c07b;"></span></span>
+        </div>
+        <div style="flex: 1;"></div>
+        <div class="act"><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><circle cx="4" cy="8" r="1.15"/><circle cx="8" cy="8" r="1.15"/><circle cx="12" cy="8" r="1.15"/></svg></div>
       </div>
 
-      <div style="flex: 1; overflow: hidden; padding: 4px 0;">
-        <div style="display: flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px; color: #c9cec8;">
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 3.5 10 8l-4.5 4.5"/></svg>
-          <span style="font-size: 11px; font-weight: 600;">clair</span>
-        </div>
-
-        <div style="display: flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px 0 22px; color: #c9cec8;">
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="transform: rotate(90deg);"><path d="M5.5 3.5 10 8l-4.5 4.5"/></svg>
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#5b88f7" stroke-width="1.4" stroke-linejoin="round"><path d="M2.2 4.6A1.4 1.4 0 0 1 3.6 3.2h2.7l1.4 1.9h4.7a1.4 1.4 0 0 1 1.4 1.4v5a1.4 1.4 0 0 1-1.4 1.4H3.6a1.4 1.4 0 0 1-1.4-1.4z"/></svg>
-          <span style="font-size: 11px;">apple</span>
-        </div>
-
-        <div style="display: flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px 0 36px; color: #c9cec8;">
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="transform: rotate(90deg);"><path d="M5.5 3.5 10 8l-4.5 4.5"/></svg>
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#5b88f7" stroke-width="1.4" stroke-linejoin="round"><path d="M2.2 4.6A1.4 1.4 0 0 1 3.6 3.2h2.7l1.4 1.9h4.7a1.4 1.4 0 0 1 1.4 1.4v5a1.4 1.4 0 0 1-1.4 1.4H3.6a1.4 1.4 0 0 1-1.4-1.4z"/></svg>
-          <span style="font-size: 11px;">ClairApp</span>
-        </div>
-
-        <div style="display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px 0 55px; color: #9ba19b;">
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#e5c07b" stroke-width="1.3" stroke-linejoin="round"><path d="M4.2 2.6h4.6L12 5.8v7.6H4.2z"/><path d="M8.6 2.6v3.3H12"/></svg>
-          <span style="font-size: 11px; flex: 1;">ContentView.swift</span>
-          <span style="font-size: 10px; font-weight: 600; color: #e5c07b;">M</span>
-        </div>
-
-        <div style="display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px 0 55px; background: #2b333c; border-left: 2px solid #5b88f7; color: #f1f3ef;">
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#e5c07b" stroke-width="1.3" stroke-linejoin="round"><path d="M4.2 2.6h4.6L12 5.8v7.6H4.2z"/><path d="M8.6 2.6v3.3H12"/></svg>
-          <span style="font-size: 11px; flex: 1; font-weight: 500;">ProjectWorkspace.swift</span>
-          <span style="font-size: 10px; font-weight: 600; color: #e5c07b;">M</span>
-        </div>
-
-        <div style="display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px 0 55px; color: #9ba19b;">
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#e5c07b" stroke-width="1.3" stroke-linejoin="round"><path d="M4.2 2.6h4.6L12 5.8v7.6H4.2z"/><path d="M8.6 2.6v3.3H12"/></svg>
-          <span style="font-size: 11px; flex: 1;">WorkspaceChrome.swift</span>
-          <span style="font-size: 10px; font-weight: 600; color: #8acb94;">A</span>
-        </div>
-
-        <div style="display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px 0 55px; color: #9ba19b;">
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#e5c07b" stroke-width="1.3" stroke-linejoin="round"><path d="M4.2 2.6h4.6L12 5.8v7.6H4.2z"/><path d="M8.6 2.6v3.3H12"/></svg>
-          <span style="font-size: 11px; flex: 1;">TerminalSurface.swift</span>
-        </div>
-
-        <div style="display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px 0 55px; color: #9ba19b;">
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#e5c07b" stroke-width="1.3" stroke-linejoin="round"><path d="M4.2 2.6h4.6L12 5.8v7.6H4.2z"/><path d="M8.6 2.6v3.3H12"/></svg>
-          <span style="font-size: 11px; flex: 1;">SessionRail.swift</span>
-          <span style="font-size: 10px; font-weight: 600; color: #8acb94;">A</span>
-        </div>
-
-        <div style="display: flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px 0 22px; color: #c9cec8;">
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 3.5 10 8l-4.5 4.5"/></svg>
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#5b88f7" stroke-width="1.4" stroke-linejoin="round"><path d="M2.2 4.6A1.4 1.4 0 0 1 3.6 3.2h2.7l1.4 1.9h4.7a1.4 1.4 0 0 1 1.4 1.4v5a1.4 1.4 0 0 1-1.4 1.4H3.6a1.4 1.4 0 0 1-1.4-1.4z"/></svg>
-          <span style="font-size: 11px;">crates</span>
-        </div>
-        <div style="display: flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px 0 22px; color: #c9cec8;">
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 3.5 10 8l-4.5 4.5"/></svg>
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#5b88f7" stroke-width="1.4" stroke-linejoin="round"><path d="M2.2 4.6A1.4 1.4 0 0 1 3.6 3.2h2.7l1.4 1.9h4.7a1.4 1.4 0 0 1 1.4 1.4v5a1.4 1.4 0 0 1-1.4 1.4H3.6a1.4 1.4 0 0 1-1.4-1.4z"/></svg>
-          <span style="font-size: 11px;">docs</span>
-        </div>
-        <div style="display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px 0 39px; color: #9ba19b;">
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#9ba19b" stroke-width="1.3" stroke-linejoin="round"><path d="M4.2 2.6h4.6L12 5.8v7.6H4.2z"/><path d="M8.6 2.6v3.3H12"/></svg>
-          <span style="font-size: 11px; flex: 1;">AGENTS.md</span>
-        </div>
-        <div style="display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px 0 39px; color: #9ba19b;">
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#d19a66" stroke-width="1.3" stroke-linejoin="round"><path d="M4.2 2.6h4.6L12 5.8v7.6H4.2z"/><path d="M8.6 2.6v3.3H12"/></svg>
-          <span style="font-size: 11px; flex: 1;">Cargo.toml</span>
-        </div>
+      <div style="flex: 1; overflow: hidden; padding: 5px 0;">
+        <div style="display: flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px; color: #c9cec8;"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="transform: rotate(90deg);"><path d="M5.5 3.5 10 8l-4.5 4.5"/></svg><span style="font-size: 11px; font-weight: 600;">clair</span></div>
+        <div style="display: flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px 0 22px; color: #c9cec8;"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="transform: rotate(90deg);"><path d="M5.5 3.5 10 8l-4.5 4.5"/></svg><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#5b88f7" stroke-width="1.4" stroke-linejoin="round"><path d="M2.2 4.6A1.4 1.4 0 0 1 3.6 3.2h2.7l1.4 1.9h4.7a1.4 1.4 0 0 1 1.4 1.4v5a1.4 1.4 0 0 1-1.4 1.4H3.6a1.4 1.4 0 0 1-1.4-1.4z"/></svg><span style="font-size: 11px;">apple</span></div>
+        <div style="display: flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px 0 36px; color: #c9cec8;"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="transform: rotate(90deg);"><path d="M5.5 3.5 10 8l-4.5 4.5"/></svg><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#5b88f7" stroke-width="1.4" stroke-linejoin="round"><path d="M2.2 4.6A1.4 1.4 0 0 1 3.6 3.2h2.7l1.4 1.9h4.7a1.4 1.4 0 0 1 1.4 1.4v5a1.4 1.4 0 0 1-1.4 1.4H3.6a1.4 1.4 0 0 1-1.4-1.4z"/></svg><span style="font-size: 11px;">ClairApp</span></div>
+        <div style="display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px 0 55px; color: #9ba19b;"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#e5c07b" stroke-width="1.3" stroke-linejoin="round"><path d="M4.2 2.6h4.6L12 5.8v7.6H4.2z"/><path d="M8.6 2.6v3.3H12"/></svg><span style="font-size: 11px; flex: 1;">ContentView.swift</span><span style="font-size: 10px; font-weight: 600; color: #e5c07b;">M</span></div>
+        <div style="display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px 0 55px; background: #2b333c; border-left: 2px solid #5b88f7; color: #f1f3ef;"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#e5c07b" stroke-width="1.3" stroke-linejoin="round"><path d="M4.2 2.6h4.6L12 5.8v7.6H4.2z"/><path d="M8.6 2.6v3.3H12"/></svg><span style="font-size: 11px; flex: 1; font-weight: 500;">ProjectWorkspace.swift</span><span style="font-size: 10px; font-weight: 600; color: #e5c07b;">M</span></div>
+        <div style="display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px 0 55px; color: #9ba19b;"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#e5c07b" stroke-width="1.3" stroke-linejoin="round"><path d="M4.2 2.6h4.6L12 5.8v7.6H4.2z"/><path d="M8.6 2.6v3.3H12"/></svg><span style="font-size: 11px; flex: 1;">PaneSplit.swift</span><span style="font-size: 10px; font-weight: 600; color: #8acb94;">A</span></div>
+        <div style="display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px 0 55px; color: #9ba19b;"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#e5c07b" stroke-width="1.3" stroke-linejoin="round"><path d="M4.2 2.6h4.6L12 5.8v7.6H4.2z"/><path d="M8.6 2.6v3.3H12"/></svg><span style="font-size: 11px; flex: 1;">WorkspaceChrome.swift</span></div>
+        <div style="display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px 0 55px; color: #9ba19b;"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#e5c07b" stroke-width="1.3" stroke-linejoin="round"><path d="M4.2 2.6h4.6L12 5.8v7.6H4.2z"/><path d="M8.6 2.6v3.3H12"/></svg><span style="font-size: 11px; flex: 1;">SessionRail.swift</span><span style="font-size: 10px; font-weight: 600; color: #8acb94;">A</span></div>
+        <div style="display: flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px 0 22px; color: #c9cec8;"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 3.5 10 8l-4.5 4.5"/></svg><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#5b88f7" stroke-width="1.4" stroke-linejoin="round"><path d="M2.2 4.6A1.4 1.4 0 0 1 3.6 3.2h2.7l1.4 1.9h4.7a1.4 1.4 0 0 1 1.4 1.4v5a1.4 1.4 0 0 1-1.4 1.4H3.6a1.4 1.4 0 0 1-1.4-1.4z"/></svg><span style="font-size: 11px;">crates</span></div>
+        <div style="display: flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px 0 22px; color: #c9cec8;"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 3.5 10 8l-4.5 4.5"/></svg><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#5b88f7" stroke-width="1.4" stroke-linejoin="round"><path d="M2.2 4.6A1.4 1.4 0 0 1 3.6 3.2h2.7l1.4 1.9h4.7a1.4 1.4 0 0 1 1.4 1.4v5a1.4 1.4 0 0 1-1.4 1.4H3.6a1.4 1.4 0 0 1-1.4-1.4z"/></svg><span style="font-size: 11px;">docs</span></div>
       </div>
     </div>
 
-    <!-- MAIN : split -->
+    <!-- ===== PANES : no per-pane tab bar, no pane header ===== -->
     <div style="flex: 1; display: flex; min-width: 0;">
 
-      <!-- LEFT PANE : editor, focused -->
-      <div style="width: 700px; flex-shrink: 0; display: flex; flex-direction: column; min-width: 0; box-shadow: inset 0 0 0 1px rgba(91,136,247,0.55);">
-
-        <div style="height: 30px; flex-shrink: 0; display: flex; align-items: stretch; background: #101214; border-bottom: 1px solid rgba(242,244,238,0.11);">
-          <div style="display: flex; align-items: center; gap: 6px; padding: 0 11px; background: #121416; border-top: 2px solid #5b88f7; color: #f1f3ef; max-width: 200px;">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#e5c07b" stroke-width="1.3" stroke-linejoin="round"><path d="M4.2 2.6h4.6L12 5.8v7.6H4.2z"/><path d="M8.6 2.6v3.3H12"/></svg>
-            <span style="font-size: 11px; font-weight: 600; white-space: nowrap;">ProjectWorkspace.swift</span>
-            <span style="width: 6px; height: 6px; border-radius: 50%; background: #e5c07b; flex-shrink: 0;"></span>
-          </div>
-          <div style="display: flex; align-items: center; gap: 6px; padding: 0 11px; color: #707871; max-width: 200px;">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M4.2 2.6h4.6L12 5.8v7.6H4.2z"/><path d="M8.6 2.6v3.3H12"/></svg>
-            <span style="font-size: 11px; white-space: nowrap;">ContentView.swift</span>
-          </div>
-          <div style="display: flex; align-items: center; gap: 6px; padding: 0 11px; color: #707871;">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#9ba19b" stroke-width="1.3"><path d="M2.6 4.2h4.8v7.6H2.6zM8.6 4.2h4.8v7.6H8.6z"/></svg>
-            <span style="font-size: 11px; white-space: nowrap;">SessionRail.swift ⇄ base</span>
-          </div>
-
-          <div style="flex: 1;"></div>
-
-          <div style="display: flex; align-items: center; gap: 4px; padding: 0 10px; color: #55605a; font-size: 10px; white-space: nowrap;">
-            <span>apple</span><span>›</span><span>ClairApp</span><span>›</span><span style="color: #9ba19b;">ProjectWorkspace</span>
-          </div>
-          <div style="display: flex; align-items: center; gap: 2px; padding-right: 8px;">
-            <div style="display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 3px; color: #707871;">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.4" y="3.4" width="11.2" height="9.2" rx="1.3"/><path d="M8 3.4v9.2"/></svg>
-            </div>
-            <div style="display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 3px; color: #707871;">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><circle cx="4" cy="8" r="1.15"/><circle cx="8" cy="8" r="1.15"/><circle cx="12" cy="8" r="1.15"/></svg>
-            </div>
-          </div>
+      <!-- editor pane -->
+      <div style="position: relative; width: 700px; flex-shrink: 0; display: flex; min-width: 0; background: #121416; box-shadow: inset 0 0 0 1px rgba(91,136,247,0.55);">
+        <div class="grip" style="background: rgba(30,34,39,0.85);">
+          <div class="gd"></div><div class="gd"></div><div class="gd"></div>
         </div>
-
-        <div style="flex: 1; display: flex; min-height: 0; background: #121416; overflow: hidden;">
-          <div class="cl" style="width: 46px; flex-shrink: 0; padding: 8px 0; text-align: right; font-size: 12px; line-height: 19px; color: #4b5561;">
-            <div style="padding-right: 12px;">38</div><div style="padding-right: 12px;">39</div><div style="padding-right: 12px;">40</div><div style="padding-right: 12px;">41</div><div style="padding-right: 12px;">42</div><div style="padding-right: 12px;">43</div><div style="padding-right: 12px;">44</div><div style="padding-right: 12px;">45</div><div style="padding-right: 12px; color: #9ba19b;">46</div><div style="padding-right: 12px;">47</div><div style="padding-right: 12px;">48</div><div style="padding-right: 12px;">49</div><div style="padding-right: 12px;">50</div><div style="padding-right: 12px;">51</div><div style="padding-right: 12px;">52</div><div style="padding-right: 12px;">53</div><div style="padding-right: 12px;">54</div><div style="padding-right: 12px;">55</div><div style="padding-right: 12px;">56</div><div style="padding-right: 12px;">57</div><div style="padding-right: 12px;">58</div><div style="padding-right: 12px;">59</div><div style="padding-right: 12px;">60</div><div style="padding-right: 12px;">61</div><div style="padding-right: 12px;">62</div><div style="padding-right: 12px;">63</div>
-          </div>
-          <div class="cl" style="flex: 1; padding: 8px 0; font-size: 12px; line-height: 19px; color: #abb2bf; white-space: pre; overflow: hidden;"><div><span style="color: #5c6370;">/// Split ratio is owned by the model so the divider can drag it.</span></div><div><span style="color: #c678dd;">private struct</span> <span style="color: #e5c07b;">ProjectPaneLayoutView</span>: <span style="color: #e5c07b;">View</span> {</div><div>  <span style="color: #d19a66;">@ObservedObject</span> <span style="color: #c678dd;">var</span> surface: <span style="color: #e5c07b;">ProjectSurfaceModel</span></div><div>  <span style="color: #c678dd;">let</span> node: <span style="color: #e5c07b;">ProjectPaneNode</span></div><div></div><div>  <span style="color: #c678dd;">private func</span> <span style="color: #61afef;">splitView</span>(</div><div>    <span style="color: #c678dd;">_</span> orientation: <span style="color: #e5c07b;">ProjectPaneOrientation</span>,</div><div>    ratio: <span style="color: #e5c07b;">Double</span>,</div><div style="background: rgba(91,136,247,0.10);">    first: <span style="color: #e5c07b;">ProjectPaneNode</span>,</div><div>    second: <span style="color: #e5c07b;">ProjectPaneNode</span></div><div>  ) -&gt; <span style="color: #c678dd;">some</span> <span style="color: #e5c07b;">View</span> {</div><div>    <span style="color: #e5c07b;">GeometryReader</span> { proxy <span style="color: #c678dd;">in</span></div><div>      <span style="color: #c678dd;">let</span> span = orientation == .horizontal</div><div>        ? proxy.size.width</div><div>        : proxy.size.height</div><div></div><div>      <span style="color: #e5c07b;">PaneSplit</span>(orientation: orientation, ratio: ratio) {</div><div>        <span style="color: #61afef;">nodeView</span>(first)</div><div>      } second: {</div><div>        <span style="color: #61afef;">nodeView</span>(second)</div><div>      } onDrag: { translation <span style="color: #c678dd;">in</span></div><div>        surface.<span style="color: #61afef;">updateSplitRatio</span>(</div><div>          nodeID: node.id,</div><div>          ratio: ratio + translation / span</div><div>        )</div><div>      }</div><div>    }</div></div>
+        <div class="cl" style="width: 46px; flex-shrink: 0; padding: 20px 0 8px 0; text-align: right; font-size: 12px; line-height: 19px; color: #4b5561;">
+          <div style="padding-right: 12px;">38</div><div style="padding-right: 12px;">39</div><div style="padding-right: 12px;">40</div><div style="padding-right: 12px;">41</div><div style="padding-right: 12px;">42</div><div style="padding-right: 12px;">43</div><div style="padding-right: 12px;">44</div><div style="padding-right: 12px;">45</div><div style="padding-right: 12px; color: #9ba19b;">46</div><div style="padding-right: 12px;">47</div><div style="padding-right: 12px;">48</div><div style="padding-right: 12px;">49</div><div style="padding-right: 12px;">50</div><div style="padding-right: 12px;">51</div><div style="padding-right: 12px;">52</div><div style="padding-right: 12px;">53</div><div style="padding-right: 12px;">54</div><div style="padding-right: 12px;">55</div><div style="padding-right: 12px;">56</div><div style="padding-right: 12px;">57</div><div style="padding-right: 12px;">58</div><div style="padding-right: 12px;">59</div><div style="padding-right: 12px;">60</div><div style="padding-right: 12px;">61</div><div style="padding-right: 12px;">62</div><div style="padding-right: 12px;">63</div><div style="padding-right: 12px;">64</div><div style="padding-right: 12px;">65</div><div style="padding-right: 12px;">66</div><div style="padding-right: 12px;">67</div><div style="padding-right: 12px;">68</div><div style="padding-right: 12px;">69</div><div style="padding-right: 12px;">70</div><div style="padding-right: 12px;">71</div><div style="padding-right: 12px;">72</div><div style="padding-right: 12px;">73</div><div style="padding-right: 12px;">74</div><div style="padding-right: 12px;">75</div><div style="padding-right: 12px;">76</div><div style="padding-right: 12px;">77</div><div style="padding-right: 12px;">78</div><div style="padding-right: 12px;">79</div>
         </div>
+        <div class="cl" style="flex: 1; padding: 20px 0 8px 0; font-size: 12px; line-height: 19px; color: #abb2bf; white-space: pre; overflow: hidden;"><div><span style="color: #5c6370;">/// Split ratio is owned by the model so the divider can drag it.</span></div><div><span style="color: #c678dd;">private struct</span> <span style="color: #e5c07b;">ProjectPaneLayoutView</span>: <span style="color: #e5c07b;">View</span> {</div><div>  <span style="color: #d19a66;">@ObservedObject</span> <span style="color: #c678dd;">var</span> surface: <span style="color: #e5c07b;">ProjectSurfaceModel</span></div><div>  <span style="color: #c678dd;">let</span> node: <span style="color: #e5c07b;">ProjectPaneNode</span></div><div></div><div>  <span style="color: #c678dd;">private func</span> <span style="color: #61afef;">splitView</span>(</div><div>    <span style="color: #c678dd;">_</span> orientation: <span style="color: #e5c07b;">ProjectPaneOrientation</span>,</div><div>    ratio: <span style="color: #e5c07b;">Double</span>,</div><div style="background: rgba(91,136,247,0.10);">    first: <span style="color: #e5c07b;">ProjectPaneNode</span>,</div><div>    second: <span style="color: #e5c07b;">ProjectPaneNode</span></div><div>  ) -&gt; <span style="color: #c678dd;">some</span> <span style="color: #e5c07b;">View</span> {</div><div>    <span style="color: #e5c07b;">GeometryReader</span> { proxy <span style="color: #c678dd;">in</span></div><div>      <span style="color: #c678dd;">let</span> span = orientation == .horizontal</div><div>        ? proxy.size.width</div><div>        : proxy.size.height</div><div></div><div>      <span style="color: #e5c07b;">PaneSplit</span>(orientation: orientation, ratio: ratio) {</div><div>        <span style="color: #61afef;">nodeView</span>(first)</div><div>      } second: {</div><div>        <span style="color: #61afef;">nodeView</span>(second)</div><div>      } onDrag: { translation <span style="color: #c678dd;">in</span></div><div>        surface.<span style="color: #61afef;">updateSplitRatio</span>(</div><div>          nodeID: node.id,</div><div>          ratio: ratio + translation / span</div><div>        )</div><div>      }</div><div>    }</div><div>  }</div><div></div><div>  <span style="color: #5c6370;">/// The 1px divider owns a ±4px hit area and a resize cursor.</span></div><div>  <span style="color: #c678dd;">private var</span> <span style="color: #61afef;">divider</span>: <span style="color: #c678dd;">some</span> <span style="color: #e5c07b;">View</span> {</div><div>    <span style="color: #e5c07b;">Rectangle</span>()</div><div>      .<span style="color: #61afef;">fill</span>(<span style="color: #e5c07b;">WorkspaceChrome</span>.border)</div><div>      .<span style="color: #61afef;">frame</span>(width: <span style="color: #d19a66;">1</span>)</div><div>      .<span style="color: #61afef;">contentShape</span>(<span style="color: #e5c07b;">Rectangle</span>().<span style="color: #61afef;">inset</span>(by: <span style="color: #d19a66;">-4</span>))</div><div>      .<span style="color: #61afef;">onHover</span> { hovering <span style="color: #c678dd;">in</span></div><div>        isHovering = hovering</div><div>        hovering</div><div>          ? <span style="color: #e5c07b;">NSCursor</span>.resizeLeftRight.<span style="color: #61afef;">push</span>()</div><div>          : <span style="color: #e5c07b;">NSCursor</span>.<span style="color: #61afef;">pop</span>()</div><div>      }</div><div>  }</div><div>}</div></div>
       </div>
 
-      <!-- DRAGGABLE VERTICAL DIVIDER -->
-      <div style="width: 5px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: rgba(91,136,247,0.14); border-left: 1px solid rgba(242,244,238,0.11); border-right: 1px solid rgba(242,244,238,0.11);">
-        <div style="display: flex; flex-direction: column; gap: 3px;">
-          <div style="width: 3px; height: 3px; border-radius: 50%; background: #5b88f7;"></div>
-          <div style="width: 3px; height: 3px; border-radius: 50%; background: #5b88f7;"></div>
-          <div style="width: 3px; height: 3px; border-radius: 50%; background: #5b88f7;"></div>
-        </div>
-      </div>
+      <!-- 1px divider, hovered -->
+      <div style="width: 1px; flex-shrink: 0; background: #5b88f7;"></div>
 
-      <!-- RIGHT COLUMN : two terminal panes -->
+      <!-- right column -->
       <div style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
 
-        <!-- terminal pane A -->
-        <div style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
-          <div style="height: 30px; flex-shrink: 0; display: flex; align-items: stretch; background: #101214; border-bottom: 1px solid rgba(242,244,238,0.11);">
-            <div style="display: flex; align-items: center; gap: 6px; padding: 0 11px; background: #121416; border-top: 2px solid #5b88f7; color: #f1f3ef;">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#5b88f7" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.2" y="3.2" width="11.6" height="9.6" rx="1.4"/><path d="M4.9 6.4 6.9 8.3 4.9 10.2"/><path d="M8.5 10.4h2.6"/></svg>
-              <span style="font-size: 11px; font-weight: 600; white-space: nowrap;">Claude Code</span>
-              <span style="width: 6px; height: 6px; border-radius: 50%; background: #8acb94;"></span>
-            </div>
-            <div style="display: flex; align-items: center; padding: 0 9px;">
-              <span style="display: flex; align-items: center; gap: 4px; height: 18px; padding: 0 6px; border-radius: 3px; background: rgba(199,131,218,0.16); border: 1px solid rgba(199,131,218,0.45); color: #c783da; font-size: 9px; font-weight: 600; white-space: nowrap;">
-                <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="4.6" cy="3.7" r="1.7"/><circle cx="4.6" cy="12.3" r="1.7"/><circle cx="11.4" cy="6.4" r="1.7"/><path d="M4.6 5.4v5.2M11.4 8.1c0 2.2-2.1 2.5-3.6 2.9"/></svg>
-                worktree · pane-split
-              </span>
-            </div>
-            <div style="flex: 1;"></div>
-            <div style="display: flex; align-items: center; gap: 8px; padding-right: 9px; color: #55605a; font-size: 10px;">
-              <span class="cl">98×24</span>
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><circle cx="4" cy="8" r="1.15"/><circle cx="8" cy="8" r="1.15"/><circle cx="12" cy="8" r="1.15"/></svg>
-            </div>
+        <div style="position: relative; flex: 1; min-height: 0; background: #121416;">
+          <div class="grip" style="background: rgba(30,34,39,0.85);">
+            <div class="gd"></div><div class="gd"></div><div class="gd"></div>
           </div>
-          <div class="cl" style="flex: 1; padding: 10px 12px; background: #121416; font-size: 11px; line-height: 17px; color: #abb2bf; white-space: pre; overflow: hidden;"><div><span style="color: #8acb94;">●</span> Update(apple/ClairApp/ProjectWorkspace.swift)</div><div>  <span style="color: #5c6370;">⎿</span>  Updated with <span style="color: #8acb94;">24 additions</span> and <span style="color: #e27b83;">6 removals</span></div><div></div><div><span style="color: #8acb94;">●</span> Divider drag now writes back through the</div><div>  surface model, so the ratio survives a</div><div>  workspace restore.</div><div></div><div>  <span style="color: #61afef;">Bash</span>(xcodebuild -scheme "Clair Dev" build)</div><div>  <span style="color: #5c6370;">⎿</span>  ** <span style="color: #8acb94;">BUILD SUCCEEDED</span> **</div><div></div><div><span style="color: #8acb94;">●</span> Ready for the pane-tab-bar slice next.</div><div></div><div><span style="color: #c9cec8;">&gt;</span> <span style="background: #abb2bf; color: #121416;"> </span></div></div>
+          <div class="cl" style="height: 100%; box-sizing: border-box; padding: 20px 12px 10px 12px; font-size: 11px; line-height: 17px; color: #abb2bf; white-space: pre; overflow: hidden;"><div><span style="color: #8acb94;">●</span> Update(apple/ClairApp/ProjectWorkspace.swift)</div><div>  <span style="color: #5c6370;">⎿</span>  Updated with <span style="color: #8acb94;">24 additions</span> and <span style="color: #e27b83;">6 removals</span></div><div></div><div><span style="color: #8acb94;">●</span> Divider drag now writes back through the surface</div><div>  model, so the ratio survives a workspace restore.</div><div></div><div>  <span style="color: #61afef;">Bash</span>(xcodebuild -scheme "Clair Dev" build)</div><div>  <span style="color: #5c6370;">⎿</span>  ** <span style="color: #8acb94;">BUILD SUCCEEDED</span> **</div><div></div><div><span style="color: #8acb94;">●</span> Next: the pane drag handle.</div><div></div><div><span style="color: #c9cec8;">&gt;</span> <span style="background: #abb2bf; color: #121416;"> </span></div></div>
         </div>
 
-        <!-- DRAGGABLE HORIZONTAL DIVIDER -->
-        <div style="height: 5px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #101214; border-top: 1px solid rgba(242,244,238,0.11); border-bottom: 1px solid rgba(242,244,238,0.11);">
-          <div style="display: flex; gap: 3px;">
-            <div style="width: 3px; height: 3px; border-radius: 50%; background: #3d454e;"></div>
-            <div style="width: 3px; height: 3px; border-radius: 50%; background: #3d454e;"></div>
-            <div style="width: 3px; height: 3px; border-radius: 50%; background: #3d454e;"></div>
-          </div>
-        </div>
+        <!-- 1px divider, idle -->
+        <div style="height: 1px; flex-shrink: 0; background: rgba(242,244,238,0.11);"></div>
 
-        <!-- terminal pane B : attention -->
-        <div style="height: 268px; flex-shrink: 0; display: flex; flex-direction: column;">
-          <div style="height: 30px; flex-shrink: 0; display: flex; align-items: stretch; background: #101214; border-bottom: 1px solid rgba(242,244,238,0.11);">
-            <div style="display: flex; align-items: center; gap: 6px; padding: 0 11px; background: #121416; border-top: 2px solid #e5c07b; color: #f1f3ef;">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#5b88f7" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.2" y="3.2" width="11.6" height="9.6" rx="1.4"/><path d="M4.9 6.4 6.9 8.3 4.9 10.2"/><path d="M8.5 10.4h2.6"/></svg>
-              <span style="font-size: 11px; font-weight: 600; white-space: nowrap;">codex</span>
-              <svg width="11" height="11" viewBox="0 0 16 16" fill="#e5c07b"><path d="M8 2.2a3.6 3.6 0 0 1 3.6 3.6c0 2.9 1.2 3.9 1.2 3.9H3.2s1.2-1 1.2-3.9A3.6 3.6 0 0 1 8 2.2z"/><path d="M6.6 11.6a1.5 1.5 0 0 0 2.8 0z"/></svg>
-            </div>
-            <div style="display: flex; align-items: center; padding: 0 9px;">
-              <span style="display: flex; align-items: center; gap: 4px; height: 18px; padding: 0 6px; border-radius: 3px; background: rgba(155,161,155,0.12); border: 1px solid rgba(155,161,155,0.36); color: #9ba19b; font-size: 9px; font-weight: 600; white-space: nowrap;">
-                Project root
-              </span>
-            </div>
-            <div style="flex: 1;"></div>
-            <div style="display: flex; align-items: center; gap: 8px; padding-right: 9px; color: #55605a; font-size: 10px;">
-              <span class="cl">98×14</span>
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><circle cx="4" cy="8" r="1.15"/><circle cx="8" cy="8" r="1.15"/><circle cx="12" cy="8" r="1.15"/></svg>
-            </div>
+        <div style="position: relative; height: 300px; flex-shrink: 0; background: #121416;">
+          <div class="grip" style="background: rgba(30,34,39,0.85);">
+            <div class="gd"></div><div class="gd"></div><div class="gd"></div>
           </div>
-          <div class="cl" style="flex: 1; padding: 10px 12px; background: #121416; font-size: 11px; line-height: 17px; color: #abb2bf; white-space: pre; overflow: hidden;"><div><span style="color: #5c6370;">$</span> codex exec --profile review</div><div></div><div>proposed patch</div><div>  <span style="color: #e5c07b;">crates/clair-ptyhost/src/pty.rs</span></div><div>  <span style="color: #8acb94;">+18</span> <span style="color: #e27b83;">-4</span></div><div></div><div>Apply this change? <span style="color: #e5c07b;">[y/N]</span> <span style="background: #abb2bf; color: #121416;"> </span></div></div>
+          <div class="cl" style="height: 100%; box-sizing: border-box; padding: 20px 12px 10px 12px; font-size: 11px; line-height: 17px; color: #abb2bf; white-space: pre; overflow: hidden;"><div><span style="color: #5c6370;">$</span> codex exec --profile review</div><div></div><div>proposed patch</div><div>  <span style="color: #e5c07b;">crates/clair-ptyhost/src/pty.rs</span></div><div>  <span style="color: #8acb94;">+18</span> <span style="color: #e27b83;">-4</span></div><div></div><div>Apply this change? <span style="color: #e5c07b;">[y/N]</span> <span style="background: #abb2bf; color: #121416;"> </span></div></div>
         </div>
       </div>
     </div>
   </div>
 
   <!-- ===== STATUS BAR 26 ===== -->
-  <div style="height: 26px; flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 0 12px; background: #101214; border-top: 1px solid rgba(242,244,238,0.11); color: #9ba19b; font-size: 11px;">
+  <div style="height: 26px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 12px; background: #101214; border-top: 1px solid rgba(242,244,238,0.11); color: #9ba19b; font-size: 11px;">
     <div style="display: flex; align-items: center; gap: 5px;">
       <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="4.6" cy="3.7" r="1.7"/><circle cx="4.6" cy="12.3" r="1.7"/><circle cx="11.4" cy="6.4" r="1.7"/><path d="M4.6 5.4v5.2M11.4 8.1c0 2.2-2.1 2.5-3.6 2.9"/></svg>
       <span>main</span>
     </div>
-    <span style="color: #55605a;">origin/main</span>
     <span class="cl" style="color: #55605a;">↓0 ↑2</span>
     <span style="color: #3d454e;">·</span>
     <span style="color: #e5c07b;">7 変更</span>
+    <span style="color: #3d454e;">·</span>
+    <span style="display: inline-flex; align-items: center; gap: 4px; height: 16px; padding: 0 6px; border-radius: 3px; background: rgba(155,161,155,0.12); color: #9ba19b; font-size: 9px; font-weight: 600;">Project root</span>
+    <span class="cl" style="color: #55605a;">apple/ClairApp/ProjectWorkspace.swift</span>
 
     <div style="flex: 1;"></div>
 
-    <div style="display: flex; align-items: center; gap: 6px; height: 18px; padding: 0 8px; border-radius: 9px; background: rgba(229,192,123,0.14); border: 1px solid rgba(229,192,123,0.4); color: #e5c07b;">
-      <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2.2a3.6 3.6 0 0 1 3.6 3.6c0 2.9 1.2 3.9 1.2 3.9H3.2s1.2-1 1.2-3.9A3.6 3.6 0 0 1 8 2.2z"/><path d="M6.6 11.6a1.5 1.5 0 0 0 2.8 0z"/></svg>
-      <span style="font-weight: 600;">codex が入力待ち</span>
-      <span style="font-size: 9px; color: #a9853f;">⌥⇥</span>
+    <!-- agent rate limit -->
+    <div style="display: flex; align-items: center; gap: 6px;">
+      <span style="color: #55605a; font-size: 10px;">Claude 5h</span>
+      <div style="width: 46px; height: 4px; border-radius: 2px; background: #2b333c; overflow: hidden;">
+        <div style="width: 62%; height: 100%; background: #8acb94;"></div>
+      </div>
+      <span class="cl" style="font-size: 10px; color: #9ba19b;">62%</span>
+      <span class="cl" style="font-size: 10px; color: #55605a;">2h11m</span>
     </div>
 
     <span style="color: #3d454e;">·</span>
-    <span>3 セッション</span>
+    <div style="display: flex; align-items: center; gap: 6px; height: 18px; padding: 0 8px; border-radius: 9px; background: rgba(229,192,123,0.14); border: 1px solid rgba(229,192,123,0.4); color: #e5c07b;">
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2.2a3.6 3.6 0 0 1 3.6 3.6c0 2.9 1.2 3.9 1.2 3.9H3.2s1.2-1 1.2-3.9A3.6 3.6 0 0 1 8 2.2z"/><path d="M6.6 11.6a1.5 1.5 0 0 0 2.8 0z"/></svg>
+      <span style="font-weight: 600;">codex が入力待ち</span>
+      <span class="cl" style="font-size: 9px; color: #a9853f;">⌥⇥</span>
+    </div>
     <span style="color: #3d454e;">·</span>
     <span class="cl">Ln 46, Col 12</span>
     <span style="color: #3d454e;">·</span>
     <span>Swift</span>
-    <span style="color: #3d454e;">·</span>
-    <span>UTF-8</span>
   </div>
 </div>
 </x-dc>

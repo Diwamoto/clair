@@ -39,6 +39,25 @@ editorと同じ水準の構造的判断である。
 
 ---
 
+## Part 0: reviewの後に確定した方針
+
+canvas上のreviewを経て、利用者が次を決定した。本文の該当箇所にも「決定」として反映してある。
+review時点の指摘そのものは記録として残す。
+
+| # | 決定 | 影響する指摘 |
+|---|---|---|
+| 1 | tabはtitlebarの1本のstripに集約し、**全Projectのtabを並列に扱う**。別Projectのtabへ移動したらProjectも一緒に切り替わる。 | S1-5を不採用 |
+| 2 | **paneはtab barもheaderも持たない**。Ghosttyと同じく、terminalとeditorがそのまま描かれる。 | S1-5、S2-2、S2-4の解決手段を変更 |
+| 3 | split dividerは**1pxのborderのみ**。hoverでつかめるようにし、dragで比率を変える。3点リーダのgripは置かない。 | S1-3の表現を変更 |
+| 4 | paneの入れ替えは**terminal上部の横向き3点リーダ**をdragして行う。Ghosttyと同じ形式。 | S2-4を置換 |
+| 5 | 検索欄をtitlebarのcommandの**左**へ置く。commandは日本語ラベルと枠を持たない。 | 新規 |
+| 6 | activity barは**元どおりsidebarの中**に置く。全幅rowにはしない。 | S1-2を不採用 |
+| 7 | status barの右端に**agentのrate limit**を表示する。 | 新規、N6として追加 |
+
+決定2と3の結果、code到達までの縦chromeは48 + 26 = **74px**になる（現在174px、Zed約52px）。
+
+---
+
 ## Part 1: docsに欠けているもの
 
 ### D1. Design contractの正本が無い（最重要）
@@ -170,8 +189,12 @@ activity barは`if showsNavigation`の内側にある。`showsNavigation`は`isS
 VS Codeのactivity barはsidebarと独立して残る。Zedはdockが閉じてもstatus barのbuttonが残る。
 Clairだけが、closeしたら戻れなくなる。
 
-**提案:** activity barをsidebarの外へ出す。titlebar下の全幅rowにするか、
-左端の縦railにする。どちらでもよいが、sidebarの表示状態と独立させる。
+**決定（不採用）:** activity barはsidebarの中に残す。全幅rowにも縦railにもしない。
+
+この結果、⌘Bでsidebarを閉じている間はicon経由の導線が無い状態が残る。緩和として、
+Files / Search / Git / Review / Activity / Sessionsの各表示をCommand Registryへ登録し、
+shortcutとcommand paletteから直接到達できるようにする（K4と同じ対応）。
+iconが唯一の導線である状態を解消すれば、sidebarに置いたままでも詰まらない。
 
 #### S1-3. split dividerがdragできない
 
@@ -195,6 +218,9 @@ scopeには「幅均等、高さ均等」が明記されているが、これは
 
 `ratio`はmodel側に既にあるので、divider上に`DragGesture`を載せて`ratio`を更新すれば済む。
 hit areaはdividerの1pxではなく±4pxを取り、`.onHover`で`resizeLeftRight`カーソルを出す。
+
+**決定:** 見た目は1pxのborderのままにする。gripのような装飾は置かず、hoverしたときに
+つかめると分かる状態（cursorとborderの色）だけで示す。
 
 #### S1-4. branch reviewが286pxのsidebarに入っている
 
@@ -225,9 +251,14 @@ Projectが2つ開いていれば、strip 2本 + Project label 2つがtitlebarに
 `clair-mock-lab`の契約は「file-tabの2段目を作らない」だったが、
 これはsplitが無い前提のmockでの判断である。splitを一級にした時点で前提が変わっている。
 
-**提案:** Project group stripはProjectとその「代表surface」だけを示すものに縮退させ、
-tabは各paneの上に置く。paneが1つのときはpane tab barが唯一のtab行なので段数は増えない。
-splitしたときだけ、それぞれのpaneが自分のtabを持つ。
+**決定（不採用）:** per-pane tab barは作らない。tabはtitlebarの1本のstripのままとし、
+全Projectのtabを並列に扱う。tab切り替えで別Projectのtabへ移ったら、そのProjectへも切り替わる。
+
+`P1` / `P2`のprefixは、paneがtabを持たなくなるため不要になり削除する。
+「どのtabがどのpaneか」という問い自体が消えるためである。
+
+paneは代わりに**chromeを一切持たない**。terminalとeditorがpaneいっぱいに直接描かれる
+（Ghosttyと同じ）。paneの識別と実行contextはstatus barとsession railが担う。
 
 ### S2. Chrome budget
 
@@ -250,6 +281,9 @@ splitすると`ProjectNativeEditorTab`のheaderが1つ増えるごとに58px、
 terminal paneは`ProjectTerminalPanel`のheaderで42px消費する。
 2x2 splitでは、4つのheaderが合計200px以上を占める。
 
+**決定後の構成:** titlebar 48 + status bar 26 = **74px**。activity barはsidebarの中へ入るので
+main areaの縦を消費せず、paneはheaderもtab barも持たない。splitしても74pxのまま増えない。
+
 #### S2-2. editor pane headerが重い
 
 `ProjectNativeEditorTab`のheader（4586-4665行）は58px高で、
@@ -261,8 +295,12 @@ breadcrumb、dirty表示、ellipsis menu、`保存` buttonを持つ。
 - breadcrumbはmonospacedの単一textで、`Project / path/to/file.swift`という文字列である。
   segmentごとにclickできない。VS Code / Cursorのbreadcrumbはsymbol階層まで辿れる。
 
-**提案:** headerを28-30pxにする。breadcrumbをclickable segmentにし、`保存` buttonを外し、
-dirty表示をtabのdotだけに一本化する。ellipsis menuはpane tab barの右端へ移す。
+**決定:** headerを縮小するのではなく**廃止する**。paneはcontentだけを描く。
+
+- breadcrumbはstatus barへ移す（focusしているpaneのpathを出す）。
+- `保存` buttonは廃止する。⌘Sとtabのdotで足りる。
+- dirty表示はtabのdotだけに一本化する。
+- ellipsis menuは廃止し、paneの操作はcommand paletteとshortcutから行う。
 
 #### S2-3. sidebar section headerが64px
 
@@ -279,7 +317,11 @@ contentの上に置かれる。editorのcodeやterminalの出力の右上を常�
 
 `allowsHitTesting`も切っていないので、その位置のcodeはclickできない。
 
-**提案:** pane tab barの右端へ移す（S1-5と同時に解決する）。
+**決定:** 廃止する。paneの操作はCommand Registry経由で行う。
+
+代わりに、paneの入れ替え用として**terminal上部に横向きの3点リーダ**を置き、これをdragして
+paneを移動・入れ替えする。Ghosttyと同じ形式である。contentの上に浮かせず、paneの上端に
+薄く置く。editorのpaneにも同じhandleを付ける（editorのpaneだけ移動できないのは不自然なため）。
 
 ### S3. 一貫性
 
@@ -451,40 +493,65 @@ activity barは5項目でhardcodeされ、status barにもdiagnostics slotが無
 Zedはminimapを持たない設計判断をした上でscrollbarにdiagnostics markerを載せている。
 どちらの方針でもよいが、現状は「決めていない」に見える。
 
+#### N6. agentのrate limitが見えない
+
+利用者からの指摘で追加。複数のClaude Codeを並列に走らせる運用では、どの枠がどれだけ
+残っているかが作業計画に直結する。現状Clairはこれを一切表示しない。
+
+**決定:** status barの右端に、最も逼迫している枠を1つだけ compact meterで表示する。
+clickでpopoverを開き、agent・枠種別ごとの内訳とリセット時刻を出す。
+
+principle 3との整合が要点になる。値の入力は次に限る。
+
+| 入力 | 可否 |
+|---|---|
+| agentが公式hook / CLIの構造化出力で報告した枠と残量 | 採用 |
+| TUI画面からの読み取り | 不可（principle 3） |
+| token数からのClair独自の推定 | 不可。ずれた値は無い値より悪い |
+
+報告しないagentは「不明」と表示せず、行ごと出さない。
+枠の枯渇はagentの停止と同じ扱いで1回だけ通知し、回復は通知しない。
+
 ---
 
 ## Recommendation
 
-優先順位付きで、実装量の小さい順に並べる。
+優先順位付きで、実装量の小さい順に並べる。Part 0の決定を反映済みである。
 
 ### 今すぐ直すべきもの（1-2日規模、明確な不具合）
 
-1. **S1-2** activity barをsidebarの外へ出す。closeしたら戻れないのは不具合である。
-2. **K2** command paletteの↑↓を実装する。表示と挙動が食い違っている。
-3. **S1-3** split dividerにdrag gestureを付ける。`ratio`は既にmodelにある。
-4. **S3-3** `.background(.background)`を`WorkspaceChrome.canvas`にする。
-5. **K1/K4** pane操作とReview/ActivityをCommand Registryへ登録する。
+1. **K2** command paletteの↑↓を実装する。表示と挙動が食い違っている。
+2. **S1-3** split dividerにdrag gestureを付ける。`ratio`は既にmodelにある。
+   見た目は1pxのまま、hoverでcursorとborder色を変える。
+3. **S3-3** `.background(.background)`を`WorkspaceChrome.canvas`にする。
+4. **K1/K4** pane操作とactivity切替をCommand Registryへ登録する。
+   activity barをsidebarに残す決定により、K4は必須になった。
 
 ### 次に着手すべきもの（構造の修正）
 
-6. **S1-1** activity切替でpane layoutを置換しない。Gitのdiffとactivity detailはpane tabへ。
-7. **S1-4** branch reviewをmain areaの全幅surfaceへ移す。
-8. **S1-5 + S2-2 + S2-4** pane tab barを導入し、pane headerを28-30pxへ、
-   ellipsis menuをtab bar右端へ。
-9. **S2-1 + S2-3** chrome高さの予算を決めて全headerを合わせる。
+5. **S1-5決定** tabのstripを全Project並列の1本に統一し、`P1`/`P2` prefixを削除する。
+   別Projectのtabへの切り替えでProjectも切り替える。
+6. **S2-2 + S2-4決定** paneのheaderとellipsis menuを廃止する。
+   breadcrumbはstatus barへ、pane操作はcommandへ。
+7. **S2-4決定** paneの上端に横向き3点リーダのdrag handleを置き、pane入れ替えを可能にする。
+8. **S1-1** activity切替でpane layoutを置換しない。Gitのdiffとactivity detailはpane tabへ。
+9. **S1-4** branch reviewをmain areaの全幅surfaceへ移す。
+10. **titlebar** 検索欄をcommandの左へ置き、commandからラベルと枠を外す。
 
 ### docsとして残すべきもの
 
-10. **D1** `docs/product/interaction.md`を追加する。draftを添付した。
-11. **D4** dark固定をADRにする。
-12. **D2** latency budgetをbenchmark contractへ追加する。
-13. **D3** focus modelを書く。特にterminal focus時のshortcut境界。
+11. **D1** `docs/product/interaction.md`を追加する。draftを添付した。
+12. **D4** dark固定をADRにする。
+13. **D2** latency budgetをbenchmark contractへ追加する。
+14. **D3** focus modelを書く。特にterminal focus時のshortcut境界。
 
 ### 差別化のための追加
 
-14. **N1** session railを作る。Clairが4つのeditorに勝てる唯一の領域である。
-15. **N2** terminal paneにworktree/branch chipを出す。安全性の問題である。
-16. **S3-4/D8** `ClairDesignKit`としてtokenをpackageへ切り出し、mobileと共有する。
+15. **N1** session railを作る。Clairが4つのeditorに勝てる唯一の領域である。
+16. **N6** rate limit表示を作る。入力はagentの公式報告に限る。
+17. **N2** 実行contextをstatus barに出す。paneがchromeを持たない決定により、
+    worktree/branchの表示先はstatus barとsession railになった。
+18. **S3-4/D8** `ClairDesignKit`としてtokenをpackageへ切り出し、mobileと共有する。
 
 ## Limitations
 

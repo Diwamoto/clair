@@ -15,6 +15,7 @@
 | System | `Tokens.dc.html` | design token、type scale、chrome budget、latency budget |
 | System | `Palette.dc.html` | commandとファイル移動を統一したoverlay（選択が動く） |
 | System | `Mobile.dc.html` | desktopと同じtokenを使うmobile画面 |
+| System | `RateLimit.dc.html` | status barのagent利用枠と、その値の出どころ |
 
 `canvas.json`がページ、配置、注釈を持つ。
 
