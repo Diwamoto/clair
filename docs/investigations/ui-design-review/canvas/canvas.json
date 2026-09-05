@@ -1,0 +1,139 @@
+{
+  "pages": [
+    {
+      "id": "page-1",
+      "name": "Workspace"
+    },
+    {
+      "id": "page-2",
+      "name": "System"
+    }
+  ],
+  "artboards": [
+    {
+      "file": "Current.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 1010,
+      "page": "page-1",
+      "title": "現在のUI — 指摘つき"
+    },
+    {
+      "file": "Main.dc.html",
+      "x": 1600,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "page": "page-1",
+      "title": "提案 — Workspace shell"
+    },
+    {
+      "file": "BranchReview.dc.html",
+      "x": 1600,
+      "y": 1180,
+      "w": 1440,
+      "h": 820,
+      "page": "page-1",
+      "title": "提案 — Branch review を全幅へ"
+    },
+    {
+      "file": "SessionRail.dc.html",
+      "x": 0,
+      "y": 1180,
+      "w": 1240,
+      "h": 640,
+      "page": "page-1",
+      "title": "提案 — Session rail"
+    },
+    {
+      "file": "Tokens.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1120,
+      "h": 1000,
+      "page": "page-2",
+      "title": "Design tokens"
+    },
+    {
+      "file": "Palette.dc.html",
+      "x": 1280,
+      "y": 0,
+      "w": 760,
+      "h": 640,
+      "page": "page-2",
+      "title": "統一オーバーレイ（操作可）"
+    },
+    {
+      "file": "Mobile.dc.html",
+      "x": 2200,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "page": "page-2",
+      "title": "Mobile — 同じトークン"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "n-current",
+      "x": 0,
+      "y": -150,
+      "w": 620,
+      "text": "現在のUI\nsourceから再現。赤い番号は下の凡例に対応する。",
+      "page": "page-1"
+    },
+    {
+      "id": "n-main",
+      "x": 1600,
+      "y": -150,
+      "w": 620,
+      "text": "提案するworkspace shell\nactivity barをsidebarの外へ、tabを各paneの上へ、editor headerを廃止、dividerをdrag可能に。code到達まで174px→134px。",
+      "page": "page-1"
+    },
+    {
+      "id": "n-rail",
+      "x": 0,
+      "y": 1030,
+      "w": 620,
+      "text": "Session rail\n全Projectのterminal/agentを1つのlistに。値はPTYとprocessから得られる事実だけで、TUIは解釈しない。",
+      "page": "page-1"
+    },
+    {
+      "id": "n-review",
+      "x": 1600,
+      "y": 1030,
+      "w": 620,
+      "text": "Branch review\n286pxのsidebarから全幅のmain areaへ。sidebarはworktree選択とfile listだけを持つ。",
+      "page": "page-1"
+    },
+    {
+      "id": "n-tokens",
+      "x": 0,
+      "y": -150,
+      "w": 620,
+      "page": "page-2",
+      "text": "Design tokens\nWorkspaceChrome.swiftの実測値。type scaleは8段階から4段階へ、chrome budgetとlatency budgetを追加。"
+    },
+    {
+      "id": "n-palette",
+      "x": 1280,
+      "y": -150,
+      "w": 620,
+      "page": "page-2",
+      "text": "統一オーバーレイ\nコマンドとファイル移動が同じshellを共有する。↑↓と行clickで選択が動く。現在の実装では↑↓は表示だけで動かない。"
+    },
+    {
+      "id": "n-mobile",
+      "x": 2200,
+      "y": -150,
+      "w": 380,
+      "page": "page-2",
+      "text": "Mobile\nMobileAppPaletteを廃し、desktopと同じtokenを共有する。"
+    }
+  ],
+  "launch": {
+    "view": "canvas",
+    "page": "page-1"
+  }
+}

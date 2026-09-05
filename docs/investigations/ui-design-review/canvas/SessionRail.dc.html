@@ -1,0 +1,108 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; }
+    a { color: #5b88f7; } a:hover { color: #8fb0fa; }
+    .cl { font-family: "SF Mono", ui-monospace, Menlo, monospace; }
+    .row { display: grid; grid-template-columns: 26px 150px 92px 210px 74px 1fr 96px; align-items: center; gap: 12px; height: 34px; padding: 0 14px; border-bottom: 1px solid rgba(242,244,238,0.055); }
+    .chip { display: inline-flex; align-items: center; gap: 4px; height: 18px; padding: 0 6px; border-radius: 3px; font-size: 9px; font-weight: 600; white-space: nowrap; }
+  </style>
+</helmet>
+
+<div style="width: 1240px; height: 640px; display: flex; flex-direction: column; overflow: hidden; background: #121416; color: #f1f3ef; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; font-size: 11px; -webkit-font-smoothing: antialiased;">
+
+  <div style="height: 44px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 16px; background: #101214; border-bottom: 1px solid rgba(242,244,238,0.11);">
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#5b88f7" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.2" y="3.2" width="11.6" height="9.6" rx="1.4"/><path d="M4.9 6.4 6.9 8.3 4.9 10.2"/><path d="M8.5 10.4h2.6"/></svg>
+    <span style="font-size: 13px; font-weight: 600;">セッション</span>
+    <span style="font-size: 10px; color: #707871;">全Project · PTYとprocessから得られる事実のみ</span>
+    <div style="flex: 1;"></div>
+    <div class="chip" style="background: rgba(229,192,123,0.14); border: 1px solid rgba(229,192,123,0.4); color: #e5c07b;">
+      <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2.2a3.6 3.6 0 0 1 3.6 3.6c0 2.9 1.2 3.9 1.2 3.9H3.2s1.2-1 1.2-3.9A3.6 3.6 0 0 1 8 2.2z"/><path d="M6.6 11.6a1.5 1.5 0 0 0 2.8 0z"/></svg>
+      次の注意へ
+      <span style="color: #a9853f; font-weight: 500;">⌥⇥</span>
+    </div>
+    <div class="chip" style="background: #181b1f; border: 1px solid rgba(242,244,238,0.11); color: #9ba19b;">Agentを起動 <span style="color: #55605a; font-weight: 500;">⌃⌘N</span></div>
+  </div>
+
+  <div class="row" style="height: 26px; background: #101214; border-bottom: 1px solid rgba(242,244,238,0.11); color: #55605a; font-size: 9px; font-weight: 700; letter-spacing: 0.04em;">
+    <div></div><div>AGENT</div><div>PROJECT</div><div>実行CONTEXT</div><div style="text-align: right;">経過</div><div>最後のSIGNAL</div><div></div>
+  </div>
+
+  <!-- attention row -->
+  <div class="row" style="background: rgba(229,192,123,0.07); border-left: 2px solid #e5c07b; padding-left: 12px;">
+    <div style="display: flex; justify-content: center;"><svg width="13" height="13" viewBox="0 0 16 16" fill="#e5c07b"><path d="M8 2.2a3.6 3.6 0 0 1 3.6 3.6c0 2.9 1.2 3.9 1.2 3.9H3.2s1.2-1 1.2-3.9A3.6 3.6 0 0 1 8 2.2z"/><path d="M6.6 11.6a1.5 1.5 0 0 0 2.8 0z"/></svg></div>
+    <div style="display: flex; align-items: center; gap: 7px;"><span style="font-weight: 600; color: #f1f3ef;">codex</span><span class="chip" style="background: rgba(229,192,123,0.16); color: #e5c07b;">入力待ち</span></div>
+    <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 6px; height: 6px; border-radius: 2px; background: #5b88f7;"></span><span style="color: #c9cec8;">clair</span></div>
+    <div><span class="chip" style="background: rgba(155,161,155,0.12); border: 1px solid rgba(155,161,155,0.36); color: #9ba19b;">Project root</span></div>
+    <div class="cl" style="text-align: right; color: #9ba19b;">4m 12s</div>
+    <div style="color: #9ba19b;">terminal bell <span style="color: #55605a;">· 12:04:38</span></div>
+    <div style="display: flex; justify-content: flex-end;"><span class="chip" style="background: #2b333c; color: #c9cec8;">移動 ↵</span></div>
+  </div>
+
+  <div class="row">
+    <div style="display: flex; justify-content: center;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #8acb94;"></span></div>
+    <div style="display: flex; align-items: center; gap: 7px;"><span style="font-weight: 600; color: #f1f3ef;">Claude Code</span><span class="chip" style="background: rgba(138,203,148,0.14); color: #8acb94;">実行中</span></div>
+    <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 6px; height: 6px; border-radius: 2px; background: #5b88f7;"></span><span style="color: #c9cec8;">clair</span></div>
+    <div><span class="chip" style="background: rgba(199,131,218,0.16); border: 1px solid rgba(199,131,218,0.45); color: #c783da;"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="4.6" cy="3.7" r="1.7"/><circle cx="4.6" cy="12.3" r="1.7"/><circle cx="11.4" cy="6.4" r="1.7"/><path d="M4.6 5.4v5.2M11.4 8.1c0 2.2-2.1 2.5-3.6 2.9"/></svg>worktree · pane-split</span></div>
+    <div class="cl" style="text-align: right; color: #9ba19b;">18m 03s</div>
+    <div style="color: #9ba19b;">公式hook: PostToolUse <span style="color: #55605a;">· 12:08:51</span></div>
+    <div style="display: flex; justify-content: flex-end;"><span class="chip" style="color: #55605a;">移動</span></div>
+  </div>
+
+  <div class="row">
+    <div style="display: flex; justify-content: center;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #8acb94;"></span></div>
+    <div style="display: flex; align-items: center; gap: 7px;"><span style="font-weight: 600; color: #f1f3ef;">Claude Code</span><span class="chip" style="background: rgba(138,203,148,0.14); color: #8acb94;">実行中</span></div>
+    <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 6px; height: 6px; border-radius: 2px; background: #c783da;"></span><span style="color: #c9cec8;">ccedit</span></div>
+    <div><span class="chip" style="background: rgba(199,131,218,0.16); border: 1px solid rgba(199,131,218,0.45); color: #c783da;"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="4.6" cy="3.7" r="1.7"/><circle cx="4.6" cy="12.3" r="1.7"/><circle cx="11.4" cy="6.4" r="1.7"/><path d="M4.6 5.4v5.2M11.4 8.1c0 2.2-2.1 2.5-3.6 2.9"/></svg>worktree · retire-rust-core</span></div>
+    <div class="cl" style="text-align: right; color: #9ba19b;">1h 42m</div>
+    <div style="color: #9ba19b;">公式hook: Notification <span style="color: #55605a;">· 11:31:02</span></div>
+    <div style="display: flex; justify-content: flex-end;"><span class="chip" style="color: #55605a;">移動</span></div>
+  </div>
+
+  <div class="row">
+    <div style="display: flex; justify-content: center;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #707871;"></span></div>
+    <div style="display: flex; align-items: center; gap: 7px;"><span style="font-weight: 600; color: #c9cec8;">zsh</span><span class="chip" style="background: rgba(155,161,155,0.12); color: #9ba19b;">待機</span></div>
+    <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 6px; height: 6px; border-radius: 2px; background: #5b88f7;"></span><span style="color: #c9cec8;">clair</span></div>
+    <div><span class="chip" style="background: rgba(155,161,155,0.12); border: 1px solid rgba(155,161,155,0.36); color: #9ba19b;">Project root</span></div>
+    <div class="cl" style="text-align: right; color: #9ba19b;">3h 06m</div>
+    <div style="color: #55605a;">—</div>
+    <div style="display: flex; justify-content: flex-end;"><span class="chip" style="color: #55605a;">移動</span></div>
+  </div>
+
+  <div class="row">
+    <div style="display: flex; justify-content: center;"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#e27b83" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l6 6M11 5l-6 6"/></svg></div>
+    <div style="display: flex; align-items: center; gap: 7px;"><span style="font-weight: 600; color: #c9cec8;">OpenCode</span><span class="chip" style="background: rgba(226,123,131,0.14); color: #e27b83;">exit 1</span></div>
+    <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 6px; height: 6px; border-radius: 2px; background: #8acb94;"></span><span style="color: #c9cec8;">dotfiles</span></div>
+    <div><span class="chip" style="background: rgba(155,161,155,0.12); border: 1px solid rgba(155,161,155,0.36); color: #9ba19b;">Project root</span></div>
+    <div class="cl" style="text-align: right; color: #9ba19b;">—</div>
+    <div style="color: #e27b83;">exit code 1 <span style="color: #55605a;">· 11:58:14</span></div>
+    <div style="display: flex; justify-content: flex-end;"><span class="chip" style="color: #55605a;">再起動</span></div>
+  </div>
+
+  <div style="flex: 1; background: #121416;"></div>
+
+  <div style="flex-shrink: 0; padding: 12px 16px; background: #101214; border-top: 1px solid rgba(242,244,238,0.11);">
+    <div style="display: flex; align-items: flex-start; gap: 9px; color: #707871; font-size: 10px; line-height: 15px;">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#5b88f7" stroke-width="1.4" style="flex-shrink: 0; margin-top: 1px;"><circle cx="8" cy="8" r="5.8"/><path d="M8 7.2v3.6M8 5.3v.9"/></svg>
+      <span>ここに出す値は全て <b style="color: #9ba19b;">PTYとprocessから直接得られる事実</b> である。state は <span class="cl" style="color: #9ba19b;">TerminalSession.State</span>、signal は bell / exit code / 公式hook、実行context は起動時に選ばれた cwd。TUIの内容は解釈しない（principle 3）。</span>
+    </div>
+  </div>
+
+  <div style="height: 26px; flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 0 12px; background: #101214; border-top: 1px solid rgba(242,244,238,0.11); color: #9ba19b; font-size: 11px;">
+    <div style="display: flex; align-items: center; gap: 5px;"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="4.6" cy="3.7" r="1.7"/><circle cx="4.6" cy="12.3" r="1.7"/><circle cx="11.4" cy="6.4" r="1.7"/><path d="M4.6 5.4v5.2M11.4 8.1c0 2.2-2.1 2.5-3.6 2.9"/></svg><span>main</span></div>
+    <span style="color: #55605a;">origin/main</span>
+    <div style="flex: 1;"></div>
+    <div style="display: flex; align-items: center; gap: 6px; height: 18px; padding: 0 8px; border-radius: 9px; background: rgba(229,192,123,0.14); border: 1px solid rgba(229,192,123,0.4); color: #e5c07b;"><span style="font-weight: 600;">codex が入力待ち</span><span style="font-size: 9px; color: #a9853f;">⌥⇥</span></div>
+    <span style="color: #3d454e;">·</span><span>5 セッション</span>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

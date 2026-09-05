@@ -22,3 +22,6 @@ xcuserdata/
 # Local CodeMirror build dependencies and disposable build output.
 /editor-web/node_modules/
 /editor-web/dist/
+
+# Seeded Claude Design canvas output. Re-seed from the .dc.html sources.
+/docs/investigations/ui-design-review/clair-workspace-redesign.html

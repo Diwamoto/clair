@@ -1,0 +1,205 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; }
+    a { color: #5b88f7; } a:hover { color: #8fb0fa; }
+    .cl { font-family: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, monospace; }
+    .pin { position: absolute; z-index: 5; width: 17px; height: 17px; border-radius: 50%; background: #e27b83; color: #121416; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px #121416, 0 1px 4px rgba(0,0,0,0.6); }
+  </style>
+</helmet>
+
+<div style="width: 1440px; height: 1010px; background: #121416; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif;">
+
+<div style="position: relative; width: 1440px; height: 900px; display: flex; flex-direction: column; overflow: hidden; background: #121416; color: #f1f3ef; font-size: 11px; -webkit-font-smoothing: antialiased;">
+
+  <!-- TITLEBAR 48 : project groups AND file tabs share the row -->
+  <div style="height: 48px; flex-shrink: 0; display: flex; align-items: flex-end; background: #1e2227; border-bottom: 1px solid rgba(242,244,238,0.11);">
+    <div style="width: 76px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 0 0 16px 20px;">
+      <div style="width: 12px; height: 12px; border-radius: 50%; background: #ff5f57;"></div>
+      <div style="width: 12px; height: 12px; border-radius: 50%; background: #febc2e;"></div>
+      <div style="width: 12px; height: 12px; border-radius: 50%; background: #28c840;"></div>
+    </div>
+
+    <div style="flex: 1; display: flex; align-items: flex-end; gap: 5px; min-width: 0; overflow: hidden;">
+      <div style="display: flex; align-items: center; height: 22px; padding: 0 9px; margin-bottom: 7px; border-radius: 6px; background: rgba(91,136,247,0.22); border: 1px solid rgba(91,136,247,0.72); gap: 6px;">
+        <span style="font-size: 12px; font-weight: 600; color: #f1f3ef;">clair</span>
+        <span style="font-size: 8px; font-weight: 700; color: #121416; background: #e5c07b; border-radius: 8px; padding: 1px 4px;">1</span>
+      </div>
+
+      <div style="display: flex; align-items: stretch; gap: 2px; max-width: 360px; height: 40px;">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 0 11px; min-width: 124px; max-width: 220px; background: #121416; border: 1px solid rgba(242,244,238,0.11); border-radius: 7px; border-top: 2px solid #5b88f7;">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#e5c07b" stroke-width="1.3" stroke-linejoin="round"><path d="M4.2 2.6h4.6L12 5.8v7.6H4.2z"/><path d="M8.6 2.6v3.3H12"/></svg>
+          <span style="font-size: 9px; font-weight: 600; color: #707871;">P1</span>
+          <span style="font-size: 11px; color: #f1f3ef; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">ProjectWorkspa…</span>
+          <span style="width: 6px; height: 6px; border-radius: 50%; background: #e5c07b; flex-shrink: 0;"></span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; padding: 0 11px; min-width: 124px; max-width: 220px; background: rgba(255,255,255,0.012); border-radius: 7px;">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#5b88f7" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.2" y="3.2" width="11.6" height="9.6" rx="1.4"/><path d="M4.9 6.4 6.9 8.3 4.9 10.2"/><path d="M8.5 10.4h2.6"/></svg>
+          <span style="font-size: 9px; font-weight: 600; color: #707871;">P2</span>
+          <span style="font-size: 11px; color: #9ba19b; white-space: nowrap;">Claude Code</span>
+          <span style="width: 6px; height: 6px; border-radius: 50%; background: #8acb94; flex-shrink: 0;"></span>
+        </div>
+      </div>
+
+      <div style="width: 1px; height: 26px; background: rgba(242,244,238,0.07); margin: 0 4px 10px 10px;"></div>
+
+      <div style="display: flex; align-items: center; height: 22px; padding: 0 9px; margin-bottom: 7px; border-radius: 6px; background: rgba(199,131,218,0.12); border: 1px solid rgba(199,131,218,0.45);">
+        <span style="font-size: 12px; font-weight: 600; color: #9ba19b;">ccedit</span>
+      </div>
+      <div style="display: flex; align-items: stretch; height: 40px;">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 0 11px; min-width: 124px; background: rgba(255,255,255,0.012); border-radius: 7px;">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#5b88f7" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.2" y="3.2" width="11.6" height="9.6" rx="1.4"/><path d="M4.9 6.4 6.9 8.3 4.9 10.2"/><path d="M8.5 10.4h2.6"/></svg>
+          <span style="font-size: 11px; color: #9ba19b; white-space: nowrap;">zsh</span>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; margin-bottom: 7px; color: #707871;">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9"/></svg>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 6px; padding: 0 12px 7px 12px;">
+      <div style="display: flex; align-items: center; gap: 5px; height: 34px; padding: 0 8px; border-radius: 4px; background: #181b1f; border: 1px solid rgba(242,244,238,0.11); color: #c9cec8;">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.6" y="5.6" width="4.8" height="4.8"/><circle cx="4.1" cy="4.1" r="1.5"/><circle cx="11.9" cy="4.1" r="1.5"/><circle cx="4.1" cy="11.9" r="1.5"/><circle cx="11.9" cy="11.9" r="1.5"/></svg>
+        <span style="font-size: 12px; font-weight: 500;">コマンドウィンドウ</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 5px; height: 34px; padding: 0 8px; border-radius: 4px; background: #181b1f; border: 1px solid rgba(242,244,238,0.11); color: #c9cec8;">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="2.2"/><path d="M8 2.2v1.5M8 12.3v1.5M13.8 8h-1.5M3.7 8H2.2M12.1 3.9l-1.05 1.05M4.95 11.05 3.9 12.1M12.1 12.1l-1.05-1.05M4.95 4.95 3.9 3.9"/></svg>
+        <span style="font-size: 12px; font-weight: 500;">設定</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- BODY -->
+  <div style="flex: 1; display: flex; min-height: 0;">
+
+    <!-- SIDEBAR COLUMN : activity bar lives INSIDE it -->
+    <div style="width: 286px; flex-shrink: 0; display: flex; flex-direction: column; background: #181b1f; border-right: 1px solid rgba(242,244,238,0.11);">
+      <div style="height: 34px; flex-shrink: 0; display: flex; align-items: center; gap: 2px; padding: 0 8px; background: #101214; border-bottom: 1px solid rgba(242,244,238,0.11);">
+        <div style="position: relative; display: flex; align-items: center; justify-content: center; min-width: 28px; height: 26px; padding: 0 3px; border-radius: 4px; background: #2b333c; color: #5b88f7;">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.2 4.6A1.4 1.4 0 0 1 3.6 3.2h2.7l1.4 1.9h4.7a1.4 1.4 0 0 1 1.4 1.4v5a1.4 1.4 0 0 1-1.4 1.4H3.6a1.4 1.4 0 0 1-1.4-1.4z"/></svg>
+          <div style="position: absolute; left: 50%; bottom: -1px; transform: translateX(-50%); width: 18px; height: 2px; background: #5b88f7;"></div>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: center; width: 28px; height: 26px; border-radius: 4px; color: #707871;">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="7" cy="7" r="4.1"/><path d="M10.1 10.1 13.6 13.6"/></svg>
+        </div>
+        <div style="display: flex; align-items: center; gap: 4px; height: 26px; padding: 0 5px; border-radius: 4px; color: #707871;">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="4.6" cy="3.7" r="1.7"/><circle cx="4.6" cy="12.3" r="1.7"/><circle cx="11.4" cy="6.4" r="1.7"/><path d="M4.6 5.4v5.2M11.4 8.1c0 2.2-2.1 2.5-3.6 2.9"/></svg>
+          <span style="font-size: 8px; font-weight: 700; color: #121416; background: #5b88f7; border-radius: 7px; padding: 0 4px; line-height: 12px;">7</span>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: center; width: 28px; height: 26px; border-radius: 4px; color: #707871;">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M8 2.3 3.3 4.2v3.9c0 2.7 2 4.7 4.7 5.5 2.7-.8 4.7-2.8 4.7-5.5V4.2z"/><path d="M6.1 7.9 7.5 9.3l2.5-2.6"/></svg>
+        </div>
+        <div style="display: flex; align-items: center; gap: 4px; height: 26px; padding: 0 5px; border-radius: 4px; color: #707871;">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2.6a3.5 3.5 0 0 1 3.5 3.5c0 2.9 1.2 3.8 1.2 3.8H3.3s1.2-.9 1.2-3.8A3.5 3.5 0 0 1 8 2.6z"/><path d="M6.7 12.3a1.4 1.4 0 0 0 2.6 0"/></svg>
+          <span style="font-size: 8px; font-weight: 700; color: #121416; background: #5b88f7; border-radius: 7px; padding: 0 4px; line-height: 12px;">1</span>
+        </div>
+        <div style="flex: 1;"></div>
+        <div style="display: flex; align-items: center; justify-content: center; width: 28px; height: 26px; color: #707871;">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><circle cx="4" cy="8" r="1.15"/><circle cx="8" cy="8" r="1.15"/><circle cx="12" cy="8" r="1.15"/></svg>
+        </div>
+      </div>
+
+      <div style="flex: 1; padding: 6px 0;">
+        <div style="display: flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; color: #c9cec8;"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="transform: rotate(90deg);"><path d="M5.5 3.5 10 8l-4.5 4.5"/></svg><span style="font-size: 11px; font-weight: 600;">clair</span></div>
+        <div style="display: flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px 0 24px; color: #c9cec8;"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="transform: rotate(90deg);"><path d="M5.5 3.5 10 8l-4.5 4.5"/></svg><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#5b88f7" stroke-width="1.4" stroke-linejoin="round"><path d="M2.2 4.6A1.4 1.4 0 0 1 3.6 3.2h2.7l1.4 1.9h4.7a1.4 1.4 0 0 1 1.4 1.4v5a1.4 1.4 0 0 1-1.4 1.4H3.6a1.4 1.4 0 0 1-1.4-1.4z"/></svg><span style="font-size: 11px;">apple</span></div>
+        <div style="display: flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px 0 38px; color: #c9cec8;"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="transform: rotate(90deg);"><path d="M5.5 3.5 10 8l-4.5 4.5"/></svg><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#5b88f7" stroke-width="1.4" stroke-linejoin="round"><path d="M2.2 4.6A1.4 1.4 0 0 1 3.6 3.2h2.7l1.4 1.9h4.7a1.4 1.4 0 0 1 1.4 1.4v5a1.4 1.4 0 0 1-1.4 1.4H3.6a1.4 1.4 0 0 1-1.4-1.4z"/></svg><span style="font-size: 11px;">ClairApp</span></div>
+        <div style="display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px 0 56px; color: #9ba19b;"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#e5c07b" stroke-width="1.3" stroke-linejoin="round"><path d="M4.2 2.6h4.6L12 5.8v7.6H4.2z"/><path d="M8.6 2.6v3.3H12"/></svg><span style="font-size: 11px; flex: 1;">ContentView.swift</span><span style="font-size: 10px; font-weight: 600; color: #e5c07b;">M</span></div>
+        <div style="display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px 0 56px; background: #2b333c; color: #f1f3ef;"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#e5c07b" stroke-width="1.3" stroke-linejoin="round"><path d="M4.2 2.6h4.6L12 5.8v7.6H4.2z"/><path d="M8.6 2.6v3.3H12"/></svg><span style="font-size: 11px; flex: 1;">ProjectWorkspace.swift</span><span style="font-size: 10px; font-weight: 600; color: #e5c07b;">M</span></div>
+        <div style="display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px 0 56px; color: #9ba19b;"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#e5c07b" stroke-width="1.3" stroke-linejoin="round"><path d="M4.2 2.6h4.6L12 5.8v7.6H4.2z"/><path d="M8.6 2.6v3.3H12"/></svg><span style="font-size: 11px; flex: 1;">WorkspaceChrome.swift</span></div>
+        <div style="display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px 0 56px; color: #9ba19b;"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#e5c07b" stroke-width="1.3" stroke-linejoin="round"><path d="M4.2 2.6h4.6L12 5.8v7.6H4.2z"/><path d="M8.6 2.6v3.3H12"/></svg><span style="font-size: 11px; flex: 1;">TerminalSurface.swift</span></div>
+      </div>
+    </div>
+
+    <!-- MAIN -->
+    <div style="flex: 1; display: flex; min-width: 0;">
+
+      <!-- editor pane -->
+      <div style="position: relative; width: 700px; flex-shrink: 0; display: flex; flex-direction: column; min-width: 0; box-shadow: inset 0 0 0 1px rgba(91,136,247,0.7); border-radius: 4px;">
+        <div style="min-height: 58px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: #1e2227; border-bottom: 1px solid rgba(242,244,238,0.11);">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#5b88f7" stroke-width="1.3" stroke-linejoin="round"><path d="M4.2 2.6h4.6L12 5.8v7.6H4.2z"/><path d="M8.6 2.6v3.3H12"/></svg>
+          <span class="cl" style="font-size: 11px; color: #9ba19b;">clair / apple/ClairApp/ProjectWorkspace.swift</span>
+          <div style="flex: 1;"></div>
+          <span style="font-size: 10px; font-weight: 500; color: #e5c07b;">未保存</span>
+          <div style="display: flex; align-items: center; justify-content: center; width: 26px; height: 28px; border-radius: 4px; background: #181b1f; border: 1px solid rgba(242,244,238,0.11); color: #9ba19b;">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><circle cx="4" cy="8" r="1.1"/><circle cx="8" cy="8" r="1.1"/><circle cx="12" cy="8" r="1.1"/></svg>
+          </div>
+          <div style="display: flex; align-items: center; height: 22px; padding: 0 11px; border-radius: 5px; background: #0a63ce; color: #ffffff; font-size: 12px; font-weight: 500;">保存</div>
+        </div>
+
+        <div style="flex: 1; display: flex; min-height: 0; background: #121416; overflow: hidden;">
+          <div class="cl" style="width: 46px; flex-shrink: 0; padding: 8px 0; text-align: right; font-size: 12px; line-height: 19px; color: #4b5561;"><div style="padding-right: 12px;">38</div><div style="padding-right: 12px;">39</div><div style="padding-right: 12px;">40</div><div style="padding-right: 12px;">41</div><div style="padding-right: 12px;">42</div><div style="padding-right: 12px;">43</div><div style="padding-right: 12px;">44</div><div style="padding-right: 12px;">45</div><div style="padding-right: 12px;">46</div><div style="padding-right: 12px;">47</div><div style="padding-right: 12px;">48</div><div style="padding-right: 12px;">49</div><div style="padding-right: 12px;">50</div><div style="padding-right: 12px;">51</div><div style="padding-right: 12px;">52</div><div style="padding-right: 12px;">53</div><div style="padding-right: 12px;">54</div><div style="padding-right: 12px;">55</div><div style="padding-right: 12px;">56</div><div style="padding-right: 12px;">57</div><div style="padding-right: 12px;">58</div><div style="padding-right: 12px;">59</div></div>
+          <div class="cl" style="flex: 1; padding: 8px 0; font-size: 12px; line-height: 19px; color: #abb2bf; white-space: pre; overflow: hidden;"><div><span style="color: #c678dd;">private struct</span> <span style="color: #e5c07b;">ProjectPaneLayoutView</span>: <span style="color: #e5c07b;">View</span> {</div><div>  <span style="color: #c678dd;">let</span> state: <span style="color: #e5c07b;">BootstrapState</span></div><div>  <span style="color: #c678dd;">let</span> project: <span style="color: #e5c07b;">Project</span></div><div>  <span style="color: #d19a66;">@ObservedObject</span> <span style="color: #c678dd;">var</span> surface: <span style="color: #e5c07b;">ProjectSurfaceModel</span></div><div>  <span style="color: #c678dd;">let</span> node: <span style="color: #e5c07b;">ProjectPaneNode</span></div><div></div><div>  <span style="color: #c678dd;">private func</span> <span style="color: #61afef;">nodeView</span>(<span style="color: #c678dd;">_</span> node: <span style="color: #e5c07b;">ProjectPaneNode</span>) -&gt; <span style="color: #e5c07b;">AnyView</span> {</div><div>    <span style="color: #c678dd;">switch</span> node {</div><div>    <span style="color: #c678dd;">case</span> .split(<span style="color: #c678dd;">_</span>, <span style="color: #c678dd;">let</span> orientation, <span style="color: #c678dd;">let</span> ratio, ...):</div><div>      <span style="color: #c678dd;">return</span> <span style="color: #e5c07b;">AnyView</span>(</div><div>        <span style="color: #e5c07b;">GeometryReader</span> { proxy <span style="color: #c678dd;">in</span></div><div>          <span style="color: #c678dd;">let</span> fraction = <span style="color: #e5c07b;">CGFloat</span>(min(max(ratio, <span style="color: #d19a66;">0.05</span>), <span style="color: #d19a66;">0.95</span>))</div><div>          <span style="color: #e5c07b;">HStack</span>(spacing: <span style="color: #d19a66;">0</span>) {</div><div>            <span style="color: #61afef;">nodeView</span>(first)</div><div>              .<span style="color: #61afef;">frame</span>(width: proxy.size.width * fraction)</div><div>            <span style="color: #e5c07b;">Divider</span>()  <span style="color: #5c6370;">// no drag gesture</span></div><div>            <span style="color: #61afef;">nodeView</span>(second)</div><div>          }</div><div>        }</div><div>      )</div><div>    }</div><div>  }</div></div>
+        </div>
+
+        <div style="position: absolute; top: 66px; right: 8px; display: flex; align-items: center; justify-content: center; width: 24px; height: 22px; border-radius: 4px; background: rgba(30,34,39,0.9); border: 1px solid rgba(242,244,238,0.11); color: #9ba19b;">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><circle cx="4" cy="8" r="1.1"/><circle cx="8" cy="8" r="1.1"/><circle cx="12" cy="8" r="1.1"/></svg>
+        </div>
+      </div>
+
+      <div style="width: 1px; flex-shrink: 0; background: rgba(242,244,238,0.14);"></div>
+
+      <!-- terminal pane -->
+      <div style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
+        <div style="min-height: 42px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: #1e2227; border-bottom: 1px solid rgba(242,244,238,0.11);">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#9ba19b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.2" y="3.2" width="11.6" height="9.6" rx="1.4"/><path d="M4.9 6.4 6.9 8.3 4.9 10.2"/><path d="M8.5 10.4h2.6"/></svg>
+          <span style="font-size: 11px; color: #8acb94;">実行中</span>
+          <span class="cl" style="font-size: 10px; color: #55605a;">98 × 24</span>
+          <div style="flex: 1;"></div>
+          <span style="font-size: 11px; color: #9ba19b;">エディタ</span>
+          <span style="font-size: 11px; color: #e27b83;">終了</span>
+        </div>
+        <div class="cl" style="flex: 1; padding: 10px 12px; background: #121416; font-size: 11px; line-height: 17px; color: #abb2bf; white-space: pre; overflow: hidden;"><div><span style="color: #8acb94;">●</span> Update(apple/ClairApp/ProjectWorkspace.swift)</div><div>  <span style="color: #5c6370;">⎿</span>  Updated with <span style="color: #8acb94;">24 additions</span></div><div></div><div><span style="color: #8acb94;">●</span> どのworktreeで動いているかは</div><div>  この画面から読み取れない。</div><div></div><div>  <span style="color: #61afef;">Bash</span>(xcodebuild -scheme "Clair Dev" build)</div><div>  <span style="color: #5c6370;">⎿</span>  ** <span style="color: #8acb94;">BUILD SUCCEEDED</span> **</div><div></div><div><span style="color: #c9cec8;">&gt;</span> <span style="background: #abb2bf; color: #121416;"> </span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STATUS BAR 34 -->
+  <div style="height: 34px; flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 0 12px; background: #101214; border-top: 1px solid rgba(242,244,238,0.11); color: #9ba19b; font-size: 11px;">
+    <div style="display: flex; align-items: center; gap: 5px;"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="4.6" cy="3.7" r="1.7"/><circle cx="4.6" cy="12.3" r="1.7"/><circle cx="11.4" cy="6.4" r="1.7"/><path d="M4.6 5.4v5.2M11.4 8.1c0 2.2-2.1 2.5-3.6 2.9"/></svg><span>main</span></div>
+    <span style="color: #55605a;">origin/main</span>
+    <span class="cl" style="color: #55605a;">↓0 ↑2</span>
+    <span style="color: #55605a;">·</span>
+    <div style="display: flex; align-items: center; gap: 5px;"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.2" y="3.2" width="11.6" height="9.6" rx="1.4"/><path d="M4.9 6.4 6.9 8.3 4.9 10.2"/></svg><span>実行中</span></div>
+    <span class="cl" style="color: #55605a;">98×24</span>
+    <div style="flex: 1;"></div>
+    <span style="color: #e5c07b;">未保存の変更</span>
+    <span>ProjectWorkspace.swift</span>
+    <span style="color: #55605a;">Swift</span>
+    <div style="display: flex; align-items: center; gap: 5px; color: #8acb94;"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><rect x="2.2" y="3.2" width="11.6" height="9.6" rx="1.4"/></svg><span>2 実行中</span></div>
+    <div style="display: flex; align-items: center; gap: 5px;"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="6" cy="5.4" r="2"/><circle cx="11" cy="6.4" r="1.6"/><path d="M2.4 12.4c0-2 1.6-3.2 3.6-3.2s3.6 1.2 3.6 3.2"/></svg><span>Agentを追加</span></div>
+  </div>
+
+  <!-- issue pins -->
+  <div class="pin" style="top: 6px; left: 300px;">1</div>
+  <div class="pin" style="top: 84px; left: 260px;">2</div>
+  <div class="pin" style="top: 84px; left: 1000px;">3</div>
+  <div class="pin" style="top: 60px; left: 970px;">7</div>
+  <div class="pin" style="top: 108px; left: 977px;">4</div>
+  <div class="pin" style="top: 420px; left: 990px;">5</div>
+  <div class="pin" style="top: 84px; left: 1040px;">6</div>
+  <div class="pin" style="top: 872px; left: 1180px;">7</div>
+</div>
+
+<!-- legend -->
+<div style="height: 110px; padding: 10px 20px 0 20px; background: #121416; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px 20px; align-content: start; color: #9ba19b; font-size: 10.5px; line-height: 15px;">
+  <div style="display: flex; gap: 7px;"><span style="flex-shrink: 0; width: 15px; height: 15px; border-radius: 50%; background: #e27b83; color: #121416; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center;">1</span><span><b style="color: #c9cec8;">titlebarにfile tabが同居</b><br>幅360px上限、split時は P1/P2 の文字で区別</span></div>
+  <div style="display: flex; gap: 7px;"><span style="flex-shrink: 0; width: 15px; height: 15px; border-radius: 50%; background: #e27b83; color: #121416; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center;">2</span><span><b style="color: #c9cec8;">activity barがsidebarの中</b><br>⌘Bで閉じるとGit/検索/Reviewへ行けない</span></div>
+  <div style="display: flex; gap: 7px;"><span style="flex-shrink: 0; width: 15px; height: 15px; border-radius: 50%; background: #e27b83; color: #121416; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center;">3</span><span><b style="color: #c9cec8;">editor headerが58px</b><br>⌘Sがあるのに常時「保存」button</span></div>
+  <div style="display: flex; gap: 7px;"><span style="flex-shrink: 0; width: 15px; height: 15px; border-radius: 50%; background: #e27b83; color: #121416; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center;">4</span><span><b style="color: #c9cec8;">pane menuがcodeの上に浮く</b><br>その位置のcodeはclickできない</span></div>
+  <div style="display: flex; gap: 7px;"><span style="flex-shrink: 0; width: 15px; height: 15px; border-radius: 50%; background: #e27b83; color: #121416; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center;">5</span><span><b style="color: #c9cec8;">dividerがdragできない</b><br>比率変更は「分割を均等化」のみ</span></div>
+  <div style="display: flex; gap: 7px;"><span style="flex-shrink: 0; width: 15px; height: 15px; border-radius: 50%; background: #e27b83; color: #121416; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center;">6</span><span><b style="color: #c9cec8;">terminal headerが42px</b><br>worktree/branchが分からない</span></div>
+  <div style="display: flex; gap: 7px;"><span style="flex-shrink: 0; width: 15px; height: 15px; border-radius: 50%; background: #e27b83; color: #121416; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center;">7</span><span><b style="color: #c9cec8;">未保存が3箇所に重複</b><br>tabのdot、header、status bar</span></div>
+  <div style="display: flex; gap: 7px;"><span style="flex-shrink: 0; width: 15px; height: 15px; border-radius: 4px; background: #2b333c; color: #e5c07b; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center;">Σ</span><span><b style="color: #c9cec8;">code到達まで縦174px</b><br>48 + 34 + 58 + 34。Zedは約52</span></div>
+</div>
+
+</div>
+</x-dc>
+</body>
+</html>
