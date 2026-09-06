@@ -8,6 +8,81 @@ enum ProjectEditorCommand {
   case redo
 }
 
+private final class CodeMirrorEditorSchemeHandler: NSObject, WKURLSchemeHandler {
+  private let rootURL: URL
+
+  init(rootURL: URL) {
+    self.rootURL = rootURL.standardizedFileURL
+  }
+
+  func webView(_: WKWebView, start task: WKURLSchemeTask) {
+    do {
+      guard let requestURL = task.request.url else {
+        throw NSError(
+          domain: "Clair.EditorWeb",
+          code: 1,
+          userInfo: [NSLocalizedDescriptionKey: "The editor resource URL was missing."]
+        )
+      }
+
+      let path = requestURL.path
+      let relativePath = path.hasPrefix("/") ? String(path.dropFirst()) : path
+      guard !relativePath.isEmpty,
+        !relativePath.split(separator: "/").contains("..")
+      else {
+        throw NSError(
+          domain: "Clair.EditorWeb",
+          code: 2,
+          userInfo: [NSLocalizedDescriptionKey: "The editor resource path was invalid."]
+        )
+      }
+
+      let fileURL = rootURL.appendingPathComponent(relativePath).standardizedFileURL
+      guard fileURL.path == rootURL.path || fileURL.path.hasPrefix(rootURL.path + "/") else {
+        throw NSError(
+          domain: "Clair.EditorWeb",
+          code: 3,
+          userInfo: [NSLocalizedDescriptionKey: "The editor resource escaped its bundle."]
+        )
+      }
+
+      let data = try Data(contentsOf: fileURL)
+      let response = URLResponse(
+        url: requestURL,
+        mimeType: Self.mimeType(for: fileURL.pathExtension),
+        expectedContentLength: data.count,
+        textEncodingName: Self.isTextResource(fileURL.pathExtension) ? "utf-8" : nil
+      )
+      task.didReceive(response)
+      task.didReceive(data)
+      task.didFinish()
+    } catch {
+      task.didFailWithError(error)
+    }
+  }
+
+  func webView(_: WKWebView, stop _: WKURLSchemeTask) {}
+
+  private static func isTextResource(_ pathExtension: String) -> Bool {
+    ["css", "html", "js", "json", "map", "txt"].contains(pathExtension.lowercased())
+  }
+
+  private static func mimeType(for pathExtension: String) -> String {
+    switch pathExtension.lowercased() {
+    case "css":
+      "text/css"
+    case "html":
+      "text/html"
+    case "js", "mjs":
+      "text/javascript"
+    case "json", "map":
+      "application/json"
+    default:
+      "application/octet-stream"
+    }
+  }
+}
+
 @MainActor
 struct CodeMirrorEditorView: NSViewRepresentable {
   @ObservedObject var document: ProjectEditorTab
@@ -40,6 +115,18 @@ struct CodeMirrorEditorView: NSViewRepresentable {
     userContentController.add(context.coordinator, name: "clairEditor")
     configuration.userContentController = userContentController
 
+    let editorRootURL = Bundle.main.url(
+      forResource: "index",
+      withExtension: "html",
+      subdirectory: "EditorWeb"
+    )?.deletingLastPathComponent()
+    if let editorRootURL {
+      configuration.setURLSchemeHandler(
+        CodeMirrorEditorSchemeHandler(rootURL: editorRootURL),
+        forURLScheme: "clair-editor"
+      )
+    }
+
     let webView = WKWebView(frame: .zero, configuration: configuration)
     webView.navigationDelegate = context.coordinator
     webView.underPageBackgroundColor = WorkspaceChrome.nsCanvas
@@ -52,15 +139,8 @@ struct CodeMirrorEditorView: NSViewRepresentable {
       onSave: onSave
     )
 
-    if let editorURL = Bundle.main.url(
-      forResource: "index",
-      withExtension: "html",
-      subdirectory: "EditorWeb"
-    ) {
-      webView.loadFileURL(
-        editorURL,
-        allowingReadAccessTo: editorURL.deletingLastPathComponent()
-      )
+    if editorRootURL != nil {
+      webView.load(URLRequest(url: URL(string: "clair-editor://editor/index.html")!))
     } else {
       webView.loadHTMLString(
         "<html><body style=\"background:#121416;color:#f1f3ef;font:13px monospace\">Editor resource is missing.</body></html>",
