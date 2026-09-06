@@ -458,6 +458,7 @@ enum SessionBrokerRuntime {
       "--catalog",
       paths.catalogURL.path,
     ]
+    process.environment = brokerEnvironment()
     process.standardInput = FileHandle.nullDevice
     process.standardOutput = FileHandle.nullDevice
     process.standardError = FileHandle.nullDevice
@@ -474,6 +475,20 @@ enum SessionBrokerRuntime {
       userInfo: [
         NSLocalizedDescriptionKey: "The local Clair session broker did not start."
       ])
+  }
+
+  private static func brokerEnvironment() -> [String: String] {
+    var environment = ProcessInfo.processInfo.environment
+
+    // A broker can outlive the app that launched it. Do not let an embedding
+    // terminal's shell integration redirect Clair's zsh startup files or leak
+    // its integration-only variables into future sessions.
+    for key in environment.keys.filter({ $0.hasPrefix("CCEDIT_") }) {
+      environment.removeValue(forKey: key)
+    }
+    environment.removeValue(forKey: "ZDOTDIR")
+
+    return environment
   }
 
   static func connect(

@@ -23,6 +23,17 @@ pub fn spawn(options: &SpawnOptions) -> io::Result<SpawnedPty> {
     let login_argument = CString::new("-l").expect("static shell argument has no NUL");
     let term_name = CString::new("TERM").expect("static environment key has no NUL");
     let term_value = CString::new("xterm-256color").expect("static environment value has no NUL");
+    let color_term_name = CString::new("COLORTERM").expect("static environment key has no NUL");
+    let color_term_value = CString::new("truecolor").expect("static environment value has no NUL");
+    let shell_name = CString::new("SHELL").expect("static environment key has no NUL");
+    let terminal_program_name =
+        CString::new("TERM_PROGRAM").expect("static environment key has no NUL");
+    let terminal_program_value =
+        CString::new("Clair").expect("static environment value has no NUL");
+    let pwd_name = CString::new("PWD").expect("static environment key has no NUL");
+    let zdotdir_name = CString::new("ZDOTDIR").expect("static environment key has no NUL");
+    let ccedit_user_zdotdir_name =
+        CString::new("CCEDIT_USER_ZDOTDIR").expect("static environment key has no NUL");
     let shell_arguments = [shell.as_ptr(), login_argument.as_ptr(), std::ptr::null()];
     let mut window = libc::winsize {
         ws_row: options.rows,
@@ -52,7 +63,17 @@ pub fn spawn(options: &SpawnOptions) -> io::Result<SpawnedPty> {
         // before exec. All pointers are NUL-terminated CString values.
         unsafe {
             if libc::chdir(cwd.as_ptr()) != 0
+                || libc::unsetenv(zdotdir_name.as_ptr()) != 0
+                || libc::unsetenv(ccedit_user_zdotdir_name.as_ptr()) != 0
                 || libc::setenv(term_name.as_ptr(), term_value.as_ptr(), 1) != 0
+                || libc::setenv(color_term_name.as_ptr(), color_term_value.as_ptr(), 1) != 0
+                || libc::setenv(shell_name.as_ptr(), shell.as_ptr(), 1) != 0
+                || libc::setenv(
+                    terminal_program_name.as_ptr(),
+                    terminal_program_value.as_ptr(),
+                    1,
+                ) != 0
+                || libc::setenv(pwd_name.as_ptr(), cwd.as_ptr(), 1) != 0
             {
                 libc::_exit(127);
             }

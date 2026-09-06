@@ -136,6 +136,29 @@ fn shell_command_round_trips_raw_output_and_resize() -> io::Result<()> {
 }
 
 #[test]
+fn shell_receives_clair_terminal_environment() -> io::Result<()> {
+    let mut harness = ShellHarness::start(24, 80)?;
+    harness.send(
+        1,
+        b"printf 'CLAIR_ENV:%s:%s:%s:%s:%s:%s\\n' \"$TERM\" \"$COLORTERM\" \"$SHELL\" \"${ZDOTDIR-unset}\" \"$TERM_PROGRAM\" \"$PWD\"; exit\n",
+    )?;
+
+    let output = harness.collect_until_exit()?;
+    let expected = format!(
+        "CLAIR_ENV:xterm-256color:truecolor:/bin/sh:unset:Clair:{}",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    assert!(
+        output
+            .windows(expected.len())
+            .any(|window| window == expected.as_bytes()),
+        "shell environment output was: {}",
+        String::from_utf8_lossy(&output)
+    );
+    Ok(())
+}
+
+#[test]
 fn shell_preserves_cjk_and_osc_bytes() -> io::Result<()> {
     let mut harness = ShellHarness::start(24, 80)?;
     let cjk_command = "printf '\\033]0;clair\\007CJK-日本語\\n'; exit\n".to_owned();
