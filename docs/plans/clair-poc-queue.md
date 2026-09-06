@@ -559,23 +559,23 @@ dependencyとする独立したhigh-priority itemで、現在のactive item完�
 - Status: `active`
 - Priority: `high`
 - Depends on: P07、P09、P10、P13。P15のcutover完了はdependencyにしない。
-- Outcome: 自所有Macで動くClairのregistered agentを、private network上のiPhone/iPadから確認・raw操作・起動できる。
+- Outcome: 自所有Macで動くClairのregistered agentを、private network上のiPhone/iPad PWAから確認・raw操作・起動できる。
 - Scope: shared mobile protocol、Project/session catalog、current screen/bounded scrollback、raw input/interrupt、
-  broker arrival-order input、Cloudflare private network、QR pairing/revoke、APNs opaque attention、private TestFlight CI。
+  broker arrival-order input、Cloudflare private network、QR pairing/revoke、PWA foreground attention、HTTPS/WSS client。
 - Functional checks: desktop + mobile multi-subscriber、cursor/gap、concurrent input、viewport非resize、pair/revoke、
   agent launch、agent attention、Mac GUI close後のhost継続、remote disable時のlocal fallback。
 - Durable detail: [p0020-mobile-agent-remote-control](../projects/p0020-mobile-agent-remote-control/README.md) and
-  [ADR-0011](../decisions/0011-early-mobile-agent-control.md)。
+  [ADR-0011](../decisions/0011-early-mobile-agent-control.md)、[ADR-0013](../decisions/0013-self-only-mobile-pwa.md)。
 - Progress (2026-09-05): `ClairMobileKit`にhost identity/pairing/challenge/revoke、session journalとsubscriber gap、
-  localhost-only framed listener、Network.framework client、client-local bounded scrollback、操作配送handler、
-  APNs content-free payloadを追加した。さらにmacOS `MobileControlRuntimeBridge`を既存のProject/session/Agent/PTYへ
+  localhost-only framed listener、Network.framework reference client、client-local bounded scrollback、操作配送handler、
+  APNs-compatible content-free payloadを追加した。さらにmacOS `MobileControlRuntimeBridge`を既存のProject/session/Agent/PTYへ
   接続し、設定画面のhost fingerprint、one-time QR/deep-link、端末revoke、GUI close後のhost継続を実装した。さらに
   `Clair Mobile` iOS targetへSwiftUIの概要/session/raw terminal/activity/settings、Keychain credential store、
-  pairing確認、再接続、agent launch UIを追加した。host coreのsession projection更新を含む30テスト、Swift 6 macOS
-  scheme build、iOS SDK型チェック、iOS Simulatorのunsigned destination build/install/launchと`clair://pair` pairing sheet、
-  Interaction Labのmobile control UIを確認した。`make build-mobile-simulator`でこのSimulator buildを再現できる。
-- Remaining: Cloudflare/Tailscale実経路、APNs送信、private TestFlight CI。実機private-network E2Eが未実施であり、
-  これらが未完了のためstatusは`active`を維持する。
+  pairing確認、再接続、agent launch UIをreference clientとして追加した。host coreのsession projection更新を含む30テスト、
+  Swift 6 macOS scheme build、iOS SDK型チェック、iOS Simulatorのunsigned destination build/install/launchと`clair://pair`
+  pairing sheet、Interaction Labのmobile control UIを確認した。`make build-mobile-simulator`でこのreference buildを再現できる。
+- Remaining: `clair-mobile-host`のPWA向けWSS/HTTPS adapter、PWA shell、Cloudflare/Tailscale実経路、PWA実機private-network
+  E2E。App Store、TestFlight、APNs送信はP16の完了条件から外し、これらが未完了のためstatusは`active`を維持する。
 - Deferred: semantic approval/status、vendor adapter、public relay/E2EE、branch review、mobile source editor、team identity。
 
 ### P15 Clair-on-Clair dogfood cutover

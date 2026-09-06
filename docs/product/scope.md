@@ -82,11 +82,12 @@ Mobileからagentの状態を確認し、必要な入力を返せることは、
 M1のlocal session/agent基盤に依存するが、Go editorやdebuggerの完了を待たずに実装する。最初の対象は
 single-user・自所有device・private networkに限定する。
 
-- native iPhone/iPad appをprivate TestFlight internal buildとして配布する。
-- GitHub Actionsの`main`、manual、30日scheduleでbuildを自動発行する。
+- native iPhone/iPad appはreference clientとして保持し、supported self-only clientはHTTPSで提供するPWAとする。
+- App Store、TestFlight、Ad Hoc、Apple Developer Programをmobile clientの配布前提にしない。
+- SafariからPWAをホーム画面へ追加し、web UIの更新でclientを更新できるようにする。
 - Cloudflare One ClientとCloudflare Tunnel private network routeを初期transportにする。
 - MacのQRを使うdevice-key pairingと端末単位のrevokeを行う。
-- APNsで内容を秘匿したattention notificationを送る。
+- PWAはforeground復帰時にprivate channelからattentionを取得する。Web Pushは後続判断とする。
 - Project/terminal選択、current screenとbounded scrollback、raw terminal入力、registered agent profile起動を提供する。
 - Macとmobileの入力はbroker到着順で同じPTYへ適用する。
 - mobileにはterminal outputやdiffを永続cacheしない。

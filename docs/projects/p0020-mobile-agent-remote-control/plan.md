@@ -8,9 +8,9 @@
 | AC-02, AC-03 | 1 | broker multi-subscriber, cursor/gap, restart integration tests |
 | AC-04 | 1, 2 | ordered input, operation dedupe, viewport/resize tests |
 | AC-05, AC-11, AC-13 | 2 | QR scope/revoke/disable and per-device credential security tests |
-| AC-06 | 1, 3 | private-network iOS smoke with shell and registered profiles |
-| AC-07 | 3 | APNs payload redaction and foreground resume test |
-| AC-08 | 3 | GitHub Actions TestFlight internal build workflow check |
+| AC-06 | 1, 3 | private-network PWA smoke with shell and registered profiles |
+| AC-07 | 3 | PWA foreground resume and attention redaction test |
+| AC-08 | 3 | HTTPS PWA shell, Safari Home Screen, and WSS smoke |
 | AC-09, AC-14 | 1, 2, 3, 4 | bounds, slow consumer, outage, single-endpoint isolation, agent exit, resource tests |
 | AC-10 | 1A | shared agent registry, CLI projection, headless confirmation, and typed errors |
 | AC-12 | 2, 3 | endpoint migration, host fingerprint pinning, and explicit re-pair tests |
@@ -21,7 +21,8 @@
 - P09 raw agent workflow and attention.
 - P10 managed worktree identity for worktree-scoped catalog filtering.
 - P13 typed Command Registry for registered agent launch projection.
-- Accepted product scope and [ADR-0011](../../decisions/0011-early-mobile-agent-control.md).
+- Accepted product scope、[ADR-0011](../../decisions/0011-early-mobile-agent-control.md)、および
+  [ADR-0013](../../decisions/0013-self-only-mobile-pwa.md)。
 
 ## Current execution status (2026-09-05)
 
@@ -30,14 +31,17 @@
 - [x] localhost-only framed listenerとNetwork.framework clientが同じRPC/terminal envelopeを利用する。
 - [x] session journal、per-subscriber bounded queue、epoch/cursor gap、arrival-order input、操作配送handlerを共有する。
 - [x] iOS/macOS共有client stateがlocal viewport、bounded raw scrollback、duplicate/gap/exitを扱う。
-- [x] APNs向けcontent-free attention payloadを定義する。
+- [x] APNs向けcontent-free attention payloadをnative/reference compatibilityとして定義する。
 - [x] macOS app runtimeへhost/PTY/agent bridgeを接続し、復元済みProject/sessionとAgent状態をhostへ投影する。
 - [x] macOS settingsへhost fingerprint、one-time QR/deep-link表示、device list/revoke UIを接続する。
-- [x] native iOS UI、deep link pairing、Keychain credential store、raw session/agent controlsを実装する。
-- [ ] Cloudflare/Tailscale実運用、APNs送信、private TestFlight CIを実装・検証する。
+- [x] native iOS UI、deep link pairing、Keychain credential store、raw session/agent controlsをreference clientとして実装する。
+- [ ] `clair-mobile-host`のPWA向けWSS/HTTPS adapterを実装する。
+- [ ] PWA shell、HTTPS pairing URL、Web Crypto/browser storage、Safari Home Screen起動を実装・検証する。
+- [ ] Cloudflare/Tailscale実運用とPWAの実機private-network E2Eを実装・検証する。
 
-localhost endpointまでのmacOS sliceとnative iOS client foundationは検証済みだが、private route、APNs、TestFlightが未実装である。
-この状態ではP16のキュー項目を`active`に保つ。host coreとruntime projectionの検証済み範囲を固定し、未実装の運用経路を完了扱いにしない。
+localhost endpointまでのmacOS sliceとnative iOS reference client foundationは検証済みだが、PWA向けWSS adapter、private route、
+PWA shell、実機E2Eが未実装である。この状態ではP16のキュー項目を`active`に保つ。host coreとruntime projectionの検証済み
+範囲を固定し、未実装のbrowser運用経路を完了扱いにしない。
 
 ## Slice 0: Shared protocol foundation — complete
 
@@ -132,16 +136,20 @@ localhost endpointまでのmacOS sliceとnative iOS client foundationは検証�
 - 端末Aのtokenが端末Bで使えないこと、link再生成が未使用linkだけを無効化すること、既存grantがrevokeまで残ること。
 - remote disable後もPTY、Mac terminal、local reattachが継続すること。
 
-## Slice 3: iOS client, private transports, APNs, TestFlight
+## Slice 3: PWA client, WebSocket transport, and private-network operation
 
 ### Changes
 
-- native iPhone/iPad clientにsession list、raw renderer、bounded scrollback、input、interrupt、agent launchを実装する。
-- QR/deep link scanner、host list、fingerprint confirmation、per-host token storage、re-pair/revoke UXを実装する。
+- PWA clientにsession list、raw renderer、bounded scrollback、input、interrupt、agent launchを実装する。UIはInteraction Labの
+  mobile control surfaceを基準にする。
+- HTTPS pairing URL、QR open flow、host list、fingerprint confirmation、Web Crypto device key、browser protected storage、
+  re-pair/revoke UXを実装する。
+- `clair-mobile-host`へWSS/HTTPS WebSocket adapterを追加し、既存のtyped control/data protocol、scope、ordering、replayを
+  同じhost coreへ投影する。PWAからraw TCP listenerへ接続しない。
+- PWA shellをHTTPSで配信し、manifest、cache policy、更新、Safari Home Screen起動を検証する。
 - `MobileControlTransport`のCloudflare One Client / Tunnel private route adapterを実装する。
 - Tailscale Serveをself-owned/dev transportとして実装または検証し、localhostの`clair-mobile-host`だけを公開する。
-- APNsはopaque wake identifierのみを送り、foregroundでsecure channelを再開する。
-- GitHub Actionsでmain/manual/30日scheduleのprivate TestFlight internal buildを作る。
+- PWAはforeground復帰時にsecure channelを再開してattentionを取得する。Web Pushは後続sliceとし、APNs senderを必須にしない。
 
 ### Implementation progress (2026-09-05)
 
@@ -150,13 +158,13 @@ localhost endpointまでのmacOS sliceとnative iOS client foundationは検証�
   registered profile launch、pairing/settingsを実装した。
 - pairing deep linkのdecode、host fingerprint確認、P-256 device keyとcredentialのKeychain保存、challenge認証、
   session subscribeの初期replay race処理を`ClairMobileKit`と接続した。
-- iOS SDK型チェックに加えて、`make build-mobile-simulator`でiPhone 17 Simulator向けのunsigned destination buildを通し、
-  `simctl install`、launch、`clair://pair`からpairing sheet表示まで確認した。vendor private route canaryと実機E2Eは未実施である。
+- iOS SDK型チェックに加えて、`make build-mobile-simulator`でiPhone 17 Simulator向けのunsigned reference client buildを通し、
+  `simctl install`、launch、`clair://pair`からpairing sheet表示まで確認した。vendor private route canary、PWA WSS、PWA実機E2Eは未実施である。
 
 ### Validation
 
-- network switch、background/foreground、duplicate push、CJK/IME、large paste、offline expiry、endpoint変更。
-- Tailscale/Cloudflare private-network canaryでpair/view/input/revoke/disableを同じfixtureでmanual smokeする。
+- Safari Home Screen起動、network switch、foreground resume、browser data消去、CJK/IME、large paste、offline expiry、endpoint変更。
+- PWA WSSとTailscale/Cloudflare private-network canaryでpair/view/input/revoke/disableを同じfixtureでmanual smokeする。
 
 ## Slice 4: Agent convenience and hardening
 
@@ -176,4 +184,4 @@ localhost endpointまでのmacOS sliceとnative iOS client foundationは検証�
 - host-owned portable terminal snapshotと完全resync。
 - public relay/E2EE、traffic padding、team identity。
 - semantic approval、Codex/OpenCode/ACP adapter、mobile branch review。
-- Android、mobile source editor、attachments。
+- Web Push、native iOS release distribution、Android、mobile source editor、attachments。

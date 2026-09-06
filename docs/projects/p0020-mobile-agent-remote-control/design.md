@@ -9,7 +9,8 @@ mobile methodと`clair agent` CLIはこの同じstable commandへ投影する。
 の正本であり続ける。
 
 初期共有契約は [`packages/ClairMobileKit`](../../../packages/ClairMobileKit) に置く。これはiOS/macOSの両方でビルド
-できるFoundation-only packageで、network、Keychain、APNsのSDK差をprotocol modelへ漏らさない。
+できるFoundation-only packageで、network、Keychain、browser storage、APNsのSDK差をprotocol modelへ漏らさない。
+PWAはこのtyped contractのgolden fixtureとWebSocket message mappingを利用し、native clientはreference/互換実装として扱う。
 
 ## Initial architecture
 
@@ -28,21 +29,26 @@ clair-mobile-host
   `- transport adapter: Tailscale Serve / Cloudflare private route / relay later
              ^
              | WSS or equivalent authenticated byte stream
-  native iPhone/iPad client
-  |- session list and raw terminal renderer
-  |- local viewport / input controls
-  `- opaque APNs wake handling
+  PWA client (supported self-only client)
+  |- HTTPS app shell / Safari Home Screen launch
+  |- WebSocket control + binary terminal frames
+  |- Web Crypto device key + browser protected storage
+  `- foreground resume; Web Push later
+
+  native iPhone/iPad client (reference/optional)
+  `- Network.framework framed TCP, Keychain, and native UI
 
 clair-ptyhost
   |- PTY lifecycle, session catalog, journal, subscriber cursor
   `- same-user local IPC only; never exposed directly to mobile
 ```
 
-Transport is replaceable, while the endpoint and protocol remain stable. Tailscale Serve may proxy a localhost service
-for a private/dev path; Cloudflare Tunnel / One private route remains the distribution-oriented private path. Neither
-network identity is treated as Clair application authorization. Cloudflare/Tailscale configuration, device enrollment,
-APNs provider, and TestFlight signing are operational interfaces kept outside the application protocol. A public relay
-still requires the security gate in [ADR-0004](../../decisions/0004-outbound-e2ee-relay.md).
+Transport is replaceable, while the endpoint and protocol remain stable. The browser cannot open the current raw framed TCP
+listener, so `clair-mobile-host` needs a WebSocket/HTTPS adapter for the PWA. The existing framed TCP listener may remain for the
+native/reference client and diagnostics. Tailscale Serve may proxy a localhost service for a private/dev path; Cloudflare Tunnel /
+One private route remains the distribution-oriented private path. Neither network identity is treated as Clair application
+authorization. Cloudflare/Tailscale configuration, browser/native device storage, and optional Web Push are operational interfaces
+kept outside the application protocol. A public relay still requires the security gate in [ADR-0004](../../decisions/0004-outbound-e2ee-relay.md).
 
 ## Protocol layering
 
@@ -86,31 +92,37 @@ The host keeps a persistent host identity and a separate grant for every paired 
 | Record | Owner | Lifetime | Contents |
 |---|---|---|---|
 | Host identity | Mac | host lifetime | `host_id`, server public-key identity, TLS fingerprint |
-| Pairing link | Mac | one-time, short expiry | endpoint, `host_id`, fingerprint, protocol version, bootstrap secret |
+| Pairing link | Mac | one-time, short expiry | endpoint, `host_id`, fingerprint, protocol version, bootstrap secret; PWA material is a URL fragment |
 | Device grant | Mac + mobile | until revoke or reset | `device_id`, device public key, opaque device token, generation, scopes, visible worktrees, timestamps |
 | Connection session | host | one connection | negotiated protocol, challenge result, connection ID, last-seen state |
 
 The pairing link is a secret, not an account login. It must not contain a device private key, terminal data, prompt, cwd,
-credential, or an already-issued device token. The QR/deep link may include the endpoint selected for the current path;
+credential, or an already-issued device token. For the PWA, bootstrap material is carried in the short-lived URL fragment so it
+is not sent in the shell request, referrer, or server access log; the client clears it after handoff to the in-memory pairing flow.
+The QR/deep link may include the endpoint selected for the current path;
 the mobile host record can later replace that endpoint without re-pairing if the pinned host identity is unchanged.
 
 ### Pairing flow
 
 1. The Mac user explicitly chooses **Pair mobile**. The host creates a fresh one-time pairing link with a short expiry.
    Generating another link invalidates the previous unused link; already-paired devices keep their own grants.
-2. The mobile scans the QR or opens the deep link, shows the host name/address/fingerprint, and requires user confirmation.
-3. The mobile creates or loads a device key pair in protected storage. The private key never leaves the mobile device.
-4. The mobile connects to the advertised endpoint, verifies the server TLS/public-key fingerprint, and sends the bootstrap
-   secret plus the device public key over the authenticated channel.
+2. The PWA scans the QR or opens the HTTPS pairing URL, shows the host name/address/fingerprint, and requires user confirmation.
+   The native/reference client may use the existing deep-link form.
+3. The PWA creates or loads a P-256 device key pair with Web Crypto and stores the non-extractable private key in browser protected
+   storage such as IndexedDB. The native/reference client uses Keychain or equivalent platform protected storage.
+4. The PWA connects to the advertised WSS endpoint and sends the bootstrap secret plus the device public key over the TLS channel.
+   Because browser JavaScript cannot inspect the TLS certificate, host identity is verified again by the application-level challenge
+   proof against the fingerprint/identity shown during pairing.
 5. The host atomically consumes the bootstrap secret, allocates a new `device_id`, stores the device public key, and issues
-   an opaque device token with the default `view` scope. The token is returned once and stored in the mobile Keychain.
-6. The mobile stores the host record, endpoint, pinned fingerprint, device ID, and token. It then performs normal protocol
+   an opaque device token with the default `view` scope. The token is returned once and stored in client protected storage.
+6. The client stores the host record, endpoint, pinned application identity, device ID, and token. It then performs normal protocol
    version/capability negotiation and requests the visible session catalog.
 
 ### Reconnect and authorization flow
 
 1. A reconnect uses the saved endpoint, `host_id`, `device_id`, and device token. It does not show the QR again.
-2. The host sends a fresh challenge. The mobile proves possession of the paired device key and presents the token.
+2. The host sends a fresh challenge. The client proves possession of the paired device key and presents the token. For the PWA,
+   the host's application-level identity proof is the pinning boundary because the browser owns TLS certificate validation.
 3. The host checks token generation, device revoke state, protocol compatibility, and the requested operation scope before
    admitting the connection or dispatching any operation.
 4. Each operation includes `device_id`, `session_id`, `operation_id`, and its payload. The existing broker ordering and
@@ -154,13 +166,16 @@ and a crash must degrade to raw PTY.
   and token; there is no shared static token. Revoke increments the device generation, closes active connections, and
   rejects old tokens, signatures, and operations.
 - Tailscale/Cloudflare is a coarse reachability gate, not the application identity. A device that can reach the Mac still
-  needs a valid Clair grant, and a valid grant still cannot exceed its scopes or visible worktree set.
+  needs a valid Clair grant, and a valid grant still cannot exceed its scopes or visible worktree set. The PWA uses WSS and the
+  application challenge to preserve this boundary; it never connects to the raw TCP listener directly.
 - Tailscale deployment uses a localhost-only service behind Serve, a single allowed endpoint, and no subnet routes or Exit
   Node. Cloudflare deployment targets one private host/port rather than a broad CIDR route.
 - Scopes default to deny. The initial read-only grant cannot write, signal, terminate, spawn, or manage devices.
-- APNs receives only an opaque wake identifier. Terminal text, prompt, cwd, command line, and credentials never enter push
-  payloads, logs, metrics, or crash reports.
-- Mobile stores no terminal transcript or diff after the session ends. Host journal retention remains bounded.
+- The PWA refreshes attention after foreground resume. If Web Push is added later, it receives only an opaque wake identifier.
+  Terminal text, prompt, cwd, command line, and credentials never enter notification payloads, browser storage, logs, metrics, or
+  crash reports.
+- Client storage uses only a bounded in-memory terminal view plus the protected pairing credential. It stores no terminal transcript
+  or diff after the session ends. Host journal retention remains bounded.
 - Device token handling, host key pinning, and challenge replay protection are part of the private-network contract.
   Algorithm/library selection for application-layer E2EE remains the separate secure-link investigation.
 - Public internet relay and application-layer E2EE are not implied by the private-network MVP; they require the separate
@@ -188,13 +203,19 @@ Vendor remote services do not cover arbitrary PTYs or give Clair a common sessio
 identify approvals. ACP is a useful later adapter but is not a protocol for attaching to every existing PTY. A relay-first
 design would delay a useful private-network MVP and enlarge the security boundary before the local contract is tested.
 
+Native Personal Team installation is useful for short-lived device smoke, but its provisioning lifetime makes it a poor self-only
+daily-driver path. Private TestFlight and Ad Hoc avoid public App Store listing but add paid membership and signing/device operations.
+PWA is selected for the supported self-only client; its additional WebSocket adapter is smaller than carrying distribution and
+certificate lifecycle into the product.
+
 Tailscale and Cloudflare are not competing mobile protocols. They are transport choices below the same
 `clair-mobile-host` endpoint. The Orca precedent is useful here because it keeps the desktop as source of truth, makes
 pairing explicit, issues a separate revocable grant per client, and lets a saved host address change without silently
 changing the host identity.
 
 The raw-terminal-first choice and early roadmap placement are recorded in [ADR-0011](../../decisions/0011-early-mobile-agent-control.md);
-the older adapter/relay proposals remain historical follow-up decisions.
+the self-only PWA distribution decision is recorded in [ADR-0013](../../decisions/0013-self-only-mobile-pwa.md); the older adapter/relay
+proposals remain historical follow-up decisions.
 
 The transport boundary and Orca-style pairing contract are recorded in
 [ADR-0012](../../decisions/0012-orca-style-mobile-pairing.md).

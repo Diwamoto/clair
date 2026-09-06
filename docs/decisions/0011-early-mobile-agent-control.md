@@ -10,7 +10,8 @@ related_projects:
 related_issues:
   - "https://github.com/Diwamoto/clair/issues/20"
 supersedes: []
-superseded_by: []
+superseded_by:
+  - "ADR-0013 (client distribution and notification portions)"
 ---
 
 # ADR-0011: Mobile agent controlを早期raw-terminal sliceとして開始する
@@ -65,6 +66,12 @@ callを推測することは誤操作のリスクがあるため採用しない�
 - Cloudflare One/Tunnel、QR、APNs、private TestFlightという外部運用が必要になる。
 - journal保持範囲外の完全なterminal復元は後続課題として残る。
 - inputはarrival orderであり、ユーザーが意図した順序をbroker到着前に保証するものではない。
+
+## Follow-up decision
+
+Client packaging and distribution assumptions in this ADR are refined by [ADR-0013](0013-self-only-mobile-pwa.md): PWA is the
+supported self-only client path, while the raw-terminal scope, host ownership, private-network boundary, and pairing authorization
+decided here remain in force.
 
 ## Revisit conditions
 

@@ -118,6 +118,12 @@ unpaired
 `link-issued`から`paired`への遷移は一回だけである。`revoked`のdevice ID/tokenは再利用せず、新しいpairingで新しい
 device grantを作る。
 
+## Client platform mapping
+
+PWAではQRからHTTPS pairing URLを開き、Web Cryptoでdevice keyを生成してbrowser protected storageへ保存する。native/reference
+clientでは既存のdeep link、Keychain、Network.frameworkを使ってよい。どちらも同じone-time bootstrap、host identity、challenge、
+scope、revokeの状態機械を使い、browserのTLS certificate access不可を理由に別の認証方式を作らない。
+
 ## Consequences
 
 ### Positive

@@ -61,10 +61,10 @@ Go editorやdebuggerを待たず、自宅Macで動くClairのagentをiPhone/iPad
 ### Exit criteria
 
 - Project/session catalog、current screen、bounded scrollback、raw terminal input、registered agent launchが動作する。
-- Cloudflare private-network transport、QR device-key pairing、device revoke、APNs opaque attention notificationが動作する。
+- Cloudflare private-network transport、QR device-key pairing、device revoke、PWA foreground attention取得が動作する。
 - Macとmobileの入力がbroker到着順で同じPTYへ適用され、mobileがPTY geometryを暗黙に変更しない。
 - GUIを閉じてもhost serviceが継続し、mobile feature flagで機能全体を無効化できる。
-- Private TestFlight internal buildと`main`/manual/30日scheduleのCIが動作する。
+- HTTPS PWA shell、WSS client、Safari Home Screen起動が動作し、App Store/TestFlightなしで実機から利用できる。
 
 Initial scopeはsingle-user・自所有device・raw terminalに限定する。semantic approval、vendor adapter、branch review、
 public relay/E2EEはこのmilestoneのexit criteriaに含めず、後続sliceで個別に判断する。

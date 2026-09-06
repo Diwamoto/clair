@@ -5,7 +5,7 @@ status: in-progress
 source_issue: "https://github.com/Diwamoto/clair/issues/20"
 suggested_branch: "project/p0020-mobile-agent-remote-control"
 created: 2026-08-27
-updated: 2026-09-05
+updated: 2026-09-06
 owners:
   - "Daiki"
 related_adrs:
@@ -16,6 +16,7 @@ related_adrs:
   - "../../decisions/0003-versioned-session-broker-protocol.md"
   - "../../decisions/0004-outbound-e2ee-relay.md"
   - "../../decisions/0012-orca-style-mobile-pairing.md"
+  - "../../decisions/0013-self-only-mobile-pwa.md"
 related_investigations:
   - "../../investigations/p0020-protocol-landscape/README.md"
   - "../../investigations/p0020-terminal-snapshot-spike/README.md"
@@ -33,10 +34,11 @@ Codex、OpenCode、未知CLIを同じ経路で扱う。agent-specific semantic s
 対応可否を確認してから別sliceで追加する。
 
 初期版はprivate-network transportに限定し、Cloudflare One Client / Tunnelを配布向けの既定経路、Tailscale
-Serveを自所有環境・開発用の経路として同じAPIへ接続する。外部に見せるのは`clair-mobile-host`の単一endpoint
-だけで、`clair-ptyhost`はlocal IPCに閉じる。認証はOrca型のone-time QR/deep-link pairing、ホストfingerprint
-pinning、端末ごとのdevice token/grant、端末単位のrevokeをClairが所有する。APNsの内容秘匿attention通知と
-private TestFlight CIも含む。
+Serveを自所有環境・開発用の経路として同じAPIへ接続する。mobile clientはApp Storeへ公開せず、HTTPSで提供する
+PWAをSafariのホーム画面へ追加して使う。外部に見せるのは`clair-mobile-host`の単一endpointだけで、
+`clair-ptyhost`はlocal IPCに閉じる。認証はOrca型のone-time QR/HTTPS pairing、ホストidentity pinning、端末ごとの
+device token/grant、端末単位のrevokeをClairが所有する。PWAのforeground復帰時にprivate channelからattentionを
+取得し、Web Pushは後続sliceとする。App Store、TestFlight、APNsはP0020の必須依存にしない。
 
 ## Documents
 
@@ -45,6 +47,7 @@ private TestFlight CIも含む。
 - [Implementation plan](plan.md)
 - Accepted product scope: [Early mobile agent control](../../product/scope.md#early-mobile-agent-control)
 - Priority decision: [ADR-0011](../../decisions/0011-early-mobile-agent-control.md)
+- Distribution decision: [ADR-0013](../../decisions/0013-self-only-mobile-pwa.md)
 
 ## Context
 
@@ -65,10 +68,11 @@ private TestFlight CIも含む。
 - [x] 同じagent commandをlocal CLIからJSONで実行できるようにした
 - [x] host identity、one-time pairing、device challenge/revoke、bounded stream hostを実装した
 - [x] localhost-only listener、共有Network client、client-side gap/scrollback stateを実装した
-- [x] APNsへ渡せるcontent-free attention payloadを実装した
+- [x] APNsへ渡せるcontent-free attention payloadをnative/reference compatibilityとして実装した
 - [x] Clair macOS runtimeへhost/PTY/agent bridgeとMac側のpairing UIを接続する（localhost endpointまで）
-- [x] native iOS UI、deep link pairing、Keychain credential store、raw session/agent controlsを追加した
-- [ ] vendor private-route運用、APNs送信、private TestFlight CIを完了する
+- [x] native iOS UI、deep link pairing、Keychain credential store、raw session/agent controlsをreference clientとして追加した
+- [ ] PWA shell、HTTPS pairing URL、Web Crypto/browser storage、WSS clientを追加する
+- [ ] vendor private-route運用とPWAの実機private-network E2Eを完了する
 
 ## Completion summary
 
@@ -80,18 +84,19 @@ revokeを追加し、最後のworkspace windowを閉じてもユーザーがQuit
 P-256 challenge、opaque token digest、per-device revoke、session epoch/cursor/gap、broker到着順のraw inputを正本として
 持つ。さらに `Clair Mobile` iOS targetへSwiftUIの概要・session catalog・bounded raw terminal・入力/interrupt・
 registered profile launch・attention・settingsを追加し、短命link以外のcredentialとdevice keyをiOS Keychainへ保存する。
-APNs向け通知はopaque wake IDだけを含む。`clair-ptyhost`を直接公開せず、private routeは同じTCP endpointへproxyする
-境界に固定した。
+このnative clientはprotocolとUIのreferenceとして保持し、supported clientはPWAへ切り替える。PWAはWeb Cryptoとbrowser
+protected storageを使い、HTTPS pairing URLからWSSで`clair-mobile-host`へ接続する。`clair-ptyhost`を直接公開せず、
+private routeはgatewayだけへ到達させる境界に固定した。
 
-まだP16を完了扱いにはしない。Cloudflare/Tailscaleの実運用設定、APNs送信、private TestFlight CIは
-次のSlice 3/4で残っている。iOS Simulatorではunsigned build/install/launchとpairing deep-link sheetまで確認済みだが、
-実機のprivate-network E2Eは未実施である。モバイル情報設計の確認用Interaction Labは[private preview](https://clair-interaction-lab.daiki-work-0118.chatgpt.site)
+まだP16を完了扱いにはしない。Cloudflare/Tailscaleの実運用設定、WebSocket adapter、PWA shell、実機private-network
+E2Eが次のSlice 3/4で残っている。iOS Simulatorではreference native clientのunsigned build/install/launchとpairing
+deep-link sheetまで確認済みだが、PWAの実機private-network E2Eは未実施である。モバイル情報設計の確認用Interaction Labは[private preview](https://clair-interaction-lab.daiki-work-0118.chatgpt.site)
 で、Project/session catalog、bounded raw terminal、入力/割り込み、pairing状態を確認できる。
 
 ## Validation evidence
 
-- 2026-09-05: `swift test`（`packages/ClairMobileKit`）— 30 tests passed。host/store、pair/revoke、session projection更新、stream gap、ordered input、RPC、loopback listener/client、client scrollback、APNs payload redaction、disable fallback、multi-connection isolation、deep-link round trip、subscribe replay race、agent input request factoryを確認。
-- 2026-09-05: `make build-mobile-simulator` — iOS Simulator SDK向けunsigned `Clair Mobile` build passed。`xcrun simctl install`、launch、`clair://pair` deep linkをiPhone 17 Simulatorで確認し、iOSのpairing確認後にPairing sheetが表示されることを確認した。実機接続、Trust、TestFlightは不要な検証経路である。
+- 2026-09-05: `swift test`（`packages/ClairMobileKit`）— 30 tests passed。host/store、pair/revoke、session projection更新、stream gap、ordered input、RPC、loopback listener/client、client scrollback、APNs payload redaction、disable fallback、multi-connection isolation、deep-link round trip、subscribe replay race、agent input request factoryを確認した。APNs型はnative/reference compatibilityとして保持する。
+- 2026-09-05: `make build-mobile-simulator` — iOS Simulator SDK向けunsigned `Clair Mobile` build passed。`xcrun simctl install`、launch、`clair://pair` deep linkをiPhone 17 Simulatorで確認し、iOSのpairing確認後にPairing sheetが表示されることを確認した。これはPWA実装前のreference client検証であり、P0020の配布経路ではない。
 - 2026-09-05: `xcodebuild -project Clair.xcodeproj -scheme 'Clair Dev' -configuration Debug -destination 'platform=macOS' build CODE_SIGNING_ALLOWED=NO` — Swift 6 native build passed。`ClairMobileKit` local package、macOS runtime bridge、設定画面のQR生成、GUI close後のlifecycle変更を含む。
 - 2026-09-05: Interaction Labで`npm run build`、`npm run lint`、`git diff --check`を通過し、モバイルの概要→セッション一覧→raw terminal入力→設定→QR/deep link sheetをブラウザで確認した。
 - 2026-09-03: `make test-swift` — 109 tests passed.

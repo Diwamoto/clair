@@ -39,7 +39,7 @@
 | Area | Capability | ccedit V1 status/evidence | Clair M1 classification | Verification anchor |
 |---|---|---|---|---|
 | Language intelligence | generic LSP、gopls、completion/diagnostics/definition/references/rename/code action/format | not-verified — V1 状態は M1 gate の判定に使わない | later | M2 / #26 |
-| Mobile terminal | private iPhone/iPad client、pairing/revoke、APNs、raw terminal control | not-verified — V1 desktop baseline の比較対象外 | early slice | P16 / #20 |
+| Mobile terminal | private iPhone/iPad PWA、pairing/revoke、WSS、raw terminal control | not-verified — V1 desktop baseline の比較対象外 | early slice | P16 / #20 |
 | Debugger | DAP、Go/Delve、breakpoint、step、stack、variables、console | not-verified — V1 状態は M1 gate の判定に使わない | later | M3B / #27 |
 | Mobile review | branch-wide diff review と merge commit 承認 | not-verified — V1 desktop baseline の比較対象外 | later | M4 / #24 |
 | Dev Container | 既存 `.devcontainer/devcontainer.json` の検出・起動と container 内 editor/terminal/agent | not-verified — V1 状態は M1 gate の判定に使わない | later | M5 / #23 |

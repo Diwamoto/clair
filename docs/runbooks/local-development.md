@@ -620,13 +620,15 @@ swift test --package-path packages/ClairMobileKit
 ~~~
 
 The mobile package provides the versioned control/data contract, authorization rules,
-host core, localhost-only framed listener, Network.framework client, client-local
-scrollback/gap state, and content-free attention payload. The focused package tests
-exercise pair/revoke, RPC authentication, loopback listener/client, bounded streams,
-ordered input, and payload redaction. The macOS runtime bridge, pairing UI, native iOS
-UI, Cloudflare/Tailscale operations, APNs sender, and TestFlight CI remain later P0020
-slices. Use the package test command for the transport-neutral local checks and the CLI
-projection for the existing screen-free control-plane checks.
+host core, localhost-only framed listener, Network.framework reference client,
+client-local scrollback/gap state, and content-free attention payload. The focused
+package tests exercise pair/revoke, RPC authentication, loopback listener/client,
+bounded streams, ordered input, and payload redaction. The macOS runtime bridge,
+pairing UI, PWA WebSocket adapter, HTTPS shell, and Cloudflare/Tailscale operations
+remain later P0020 slices. The native iOS UI and APNs payload type are reference/
+compatibility surfaces, not the supported distribution path. Use the package test
+command for transport-neutral local checks and the CLI projection for existing
+screen-free control-plane checks.
 
 The automated P13 checks are:
 
