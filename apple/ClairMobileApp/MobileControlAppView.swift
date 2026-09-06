@@ -378,6 +378,21 @@ private struct MobileTerminalView: View {
       }
 
       VStack(spacing: 8) {
+        if let profileID = session.agentProfileID {
+          HStack(spacing: 8) {
+            Text("コマンド")
+              .font(.system(size: 10, design: .monospaced))
+              .foregroundStyle(MobileAppPalette.secondary)
+            Button("モデル") {
+              model.sendInput(profileID == "opencode" ? "/models" : "/model")
+            }
+            .buttonStyle(.bordered)
+            Button("状態") { model.sendInput("/status") }
+              .buttonStyle(.bordered)
+            Spacer()
+          }
+          .disabled(!model.canWriteTerminal || model.selectedExited)
+        }
         HStack(alignment: .bottom, spacing: 8) {
           TextField("ターミナル入力", text: $input, axis: .vertical)
             .lineLimit(1...4)
@@ -474,7 +489,11 @@ private struct AgentRow: View {
         VStack(alignment: .leading, spacing: 3) {
           Text(agent.title)
             .font(.system(size: 13, weight: .medium))
-          Text("\(agent.state.rawValue) · \(agent.profileID)")
+          Text(
+            [agent.state.rawValue, agent.profileID, agent.modelID]
+              .compactMap { $0 }
+              .joined(separator: " · ")
+          )
             .font(.system(size: 10, design: .monospaced))
             .foregroundStyle(MobileAppPalette.secondary)
         }
@@ -492,6 +511,16 @@ private struct AgentRow: View {
           .lineLimit(1)
           .truncationMode(.middle)
         Spacer()
+        if model.canSteerAgent {
+          Menu("コマンド") {
+            Button("モデルを変更…") {
+              model.sendAgentCommand(agent.profileID == "opencode" ? "/models" : "/model", to: agent)
+            }
+            Button("状態を表示") {
+              model.sendAgentCommand("/status", to: agent)
+            }
+          }
+        }
         if model.grantedScopes.contains(.signal) {
           Button("割り込み") { model.controlAgent(agent, action: .interrupt) }
             .buttonStyle(.borderless)
@@ -511,10 +540,31 @@ private struct AgentLaunchCard: View {
   @ObservedObject var model: MobileControlAppModel
   @State private var selectedProfileID: String?
   @State private var selectedProjectID: UUID?
+  @State private var selectedModelChoice = "__default"
+  @State private var customModelID = ""
+
+  private static let defaultModelChoice = "__default"
+  private static let customModelChoice = "__custom"
 
   private var selectedProfile: MobileAgentProfileDescriptor? {
     guard let selectedProfileID else { return nil }
     return model.profiles.first { $0.id == selectedProfileID }
+  }
+
+  private var selectedModelID: String? {
+    switch selectedModelChoice {
+    case Self.defaultModelChoice:
+      return nil
+    case Self.customModelChoice:
+      let value = customModelID.trimmingCharacters(in: .whitespacesAndNewlines)
+      return value.isEmpty ? nil : value
+    default:
+      return selectedModelChoice
+    }
+  }
+
+  private var hasValidModelSelection: Bool {
+    selectedModelChoice != Self.customModelChoice || selectedModelID != nil
   }
 
   var body: some View {
@@ -529,12 +579,30 @@ private struct AgentLaunchCard: View {
         .foregroundStyle(MobileAppPalette.secondary)
 
       Picker("profile", selection: $selectedProfileID) {
-        Text("profileを選択").tag(UUID?.none)
+        Text("profileを選択").tag(String?.none)
         ForEach(model.profiles) { profile in
           Text(profile.title).tag(Optional(profile.id))
         }
       }
       .pickerStyle(.menu)
+
+      if let selectedProfile {
+        Picker("model", selection: $selectedModelChoice) {
+          Text("設定済みのデフォルト").tag(Self.defaultModelChoice)
+          ForEach(selectedProfile.models) { model in
+            Text(model.title).tag(model.id)
+          }
+          Text("カスタムmodel ID…").tag(Self.customModelChoice)
+        }
+        .pickerStyle(.menu)
+
+        if selectedModelChoice == Self.customModelChoice {
+          TextField("provider/model または model ID", text: $customModelID)
+            .textFieldStyle(.roundedBorder)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+        }
+      }
 
       Picker("project", selection: $selectedProjectID) {
         Text("projectを選択").tag(UUID?.none)
@@ -546,17 +614,25 @@ private struct AgentLaunchCard: View {
 
       Button {
         guard let selectedProfile, let selectedProjectID else { return }
-        model.launch(profile: selectedProfile, projectID: selectedProjectID)
+        model.launch(
+          profile: selectedProfile,
+          modelID: selectedModelID,
+          projectID: selectedProjectID
+        )
       } label: {
         Label("起動を要求", systemImage: "play.fill")
           .frame(maxWidth: .infinity)
       }
       .buttonStyle(.borderedProminent)
-      .disabled(selectedProfile == nil || selectedProjectID == nil)
+      .disabled(selectedProfile == nil || selectedProjectID == nil || !hasValidModelSelection)
     }
     .mobileCard()
     .onAppear(perform: synchronizeSelection)
     .onChange(of: model.profiles) { _, _ in synchronizeSelection() }
+    .onChange(of: selectedProfileID) { _, _ in
+      selectedModelChoice = Self.defaultModelChoice
+      customModelID = ""
+    }
     .onChange(of: model.projectOptions) { _, _ in synchronizeSelection() }
   }
 

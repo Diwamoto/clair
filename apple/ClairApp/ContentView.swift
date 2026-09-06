@@ -2362,9 +2362,15 @@ private struct ProjectAgentView: View {
   @ObservedObject var worktreeCoordinator: ProjectWorktreeCoordinator
   @Environment(\.dismiss) private var dismiss
   @State private var selectedWorktreeID: WorktreeID?
+  @State private var selectedProfile: AgentLaunchProfile = .codex
+  @State private var selectedModelChoice = Self.defaultModelChoice
+  @State private var customModelID = ""
   @State private var newWorktreeBranch = ""
   @State private var newWorktreeTargetName = ""
   @State private var cleanupPlan: ManagedWorktreeCleanupPlan?
+
+  private static let defaultModelChoice = "__default"
+  private static let customModelChoice = "__custom"
 
   private var projectSessions: [AgentWorkflowSession] {
     agentWorkflow.sessions.filter { $0.projectID == project.id }
@@ -2390,6 +2396,22 @@ private struct ProjectAgentView: View {
       return project.rootURL
     }
     return selectedWorktree.rootURL
+  }
+
+  private var selectedModelID: String? {
+    switch selectedModelChoice {
+    case Self.defaultModelChoice:
+      return nil
+    case Self.customModelChoice:
+      let value = customModelID.trimmingCharacters(in: .whitespacesAndNewlines)
+      return value.isEmpty ? nil : value
+    default:
+      return selectedModelChoice
+    }
+  }
+
+  private var hasValidModelSelection: Bool {
+    selectedModelChoice != Self.customModelChoice || selectedModelID != nil
   }
 
   var body: some View {
@@ -2460,34 +2482,65 @@ private struct ProjectAgentView: View {
 
   private var launchSection: some View {
     VStack(alignment: .leading, spacing: 8) {
-      Text(selectedWorktree == nil ? "Projectルートで起動" : "管理対象worktreeで起動")
-        .font(.headline)
+      VStack(alignment: .leading, spacing: 5) {
+        Text("Agentを追加")
+          .font(.headline)
+        Text("Agent、起動モデル、セッションの場所を選択します。")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+
+      Picker("Agent", selection: $selectedProfile) {
+        ForEach(AgentLaunchProfile.all) { profile in
+          Text(profile.displayName)
+            .tag(profile)
+        }
+      }
+      .pickerStyle(.menu)
+
+      Picker("モデル", selection: $selectedModelChoice) {
+        Text("設定済みのデフォルト")
+          .tag(Self.defaultModelChoice)
+        ForEach(selectedProfile.suggestedModels) { model in
+          Text(model.title)
+            .tag(model.id)
+        }
+        Text("カスタムmodel ID…")
+          .tag(Self.customModelChoice)
+      }
+      .pickerStyle(.menu)
+
+      if selectedModelChoice == Self.customModelChoice {
+        TextField(
+          selectedProfile == .openCode ? "provider/model" : "model ID",
+          text: $customModelID
+        )
+        .textFieldStyle(.roundedBorder)
+        .autocorrectionDisabled()
+      }
+
+      Picker("起動場所", selection: $selectedWorktreeID) {
+        Text("Projectルート")
+          .tag(nil as WorktreeID?)
+        ForEach(projectWorktrees.filter { $0.state == .available }) { worktree in
+          Text("\(worktree.branch) — \(worktree.state.displayName)")
+            .tag(worktree.id as WorktreeID?)
+        }
+      }
+      .pickerStyle(.menu)
+
       Text(selectedExecutionRoot.path)
         .font(.caption.monospaced())
         .foregroundStyle(.secondary)
         .textSelection(.enabled)
 
-      Picker("起動場所", selection: $selectedWorktreeID) {
-        Text("Projectルート").tag(nil as WorktreeID?)
-        ForEach(projectWorktrees.filter { $0.state == .available }) { worktree in
-          Text(
-            "\(worktree.branch) — \(worktree.state.displayName)"
-          )
-          .tag(worktree.id as WorktreeID?)
-        }
+      Button {
+        launch(profile: selectedProfile, modelID: selectedModelID)
+      } label: {
+        Label("Agentを起動", systemImage: "play.fill")
       }
-      .pickerStyle(.menu)
-
-      HStack(spacing: 8) {
-        ForEach(AgentLaunchProfile.all) { profile in
-          Button {
-            launch(profile: profile)
-          } label: {
-            Label(profile.displayName, systemImage: "terminal")
-          }
-          .buttonStyle(.borderedProminent)
-        }
-      }
+      .buttonStyle(.borderedProminent)
+      .disabled(!hasValidModelSelection)
     }
   }
 
@@ -2655,7 +2708,7 @@ private struct ProjectAgentView: View {
     }
   }
 
-  private func launch(profile: AgentLaunchProfile) {
+  private func launch(profile: AgentLaunchProfile, modelID: String?) {
     let worktree: ManagedWorktree?
     if let selectedWorktreeID {
       guard
@@ -2673,6 +2726,7 @@ private struct ProjectAgentView: View {
 
     _ = agentWorkflow.launch(
       profile: profile,
+      modelID: modelID,
       projectID: project.id,
       projectRoot: worktree?.rootURL ?? project.rootURL,
       surface: surface,
@@ -2723,7 +2777,11 @@ private struct ProjectAgentView: View {
       VStack(alignment: .leading, spacing: 2) {
         Text(session.profile?.displayName ?? "不明なAgent")
           .font(.body.weight(.medium))
-        Text(lifecycleDescription(for: session))
+        Text(
+          [lifecycleDescription(for: session), session.agent.modelID]
+            .compactMap { $0 }
+            .joined(separator: " · ")
+        )
           .font(.caption)
           .foregroundStyle(.secondary)
       }

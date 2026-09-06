@@ -84,6 +84,9 @@ final class MobileControlRuntimeBridge: ObservableObject {
         try? resolvedHost.registerAgentProfile(
           profile.stableID,
           title: profile.displayName,
+          models: profile.suggestedModels.map {
+            MobileAgentModelDescriptor(id: $0.id, title: $0.title)
+          },
           capabilities: [.agentLaunch]
         )
       }
@@ -336,6 +339,7 @@ final class MobileControlRuntimeBridge: ObservableObject {
       projectID: snapshot.projectID,
       worktreeID: snapshot.worktreeID,
       profileID: snapshot.profileID,
+      modelID: snapshot.modelID,
       title: snapshot.title,
       cwd: snapshot.projectRoot.path,
       lifecycle: makeSessionLifecycle(snapshot.lifecycle),
@@ -468,6 +472,7 @@ final class MobileControlRuntimeBridge: ObservableObject {
     }
     _ = agentWorkflow.launch(
       profile: profile,
+      modelID: accepted.modelID,
       projectID: project.id,
       projectRoot: project.rootURL,
       surface: surface,

@@ -220,6 +220,8 @@ def handle_cli(args: argparse.Namespace) -> int:
                 "projectID": args.project_id,
                 "profileID": args.profile_id,
             }
+            if args.model is not None:
+                params["modelID"] = args.model
             if args.worktree_id is not None:
                 params["worktreeID"] = args.worktree_id
             response = request(
@@ -393,6 +395,7 @@ def build_parser() -> argparse.ArgumentParser:
     agent_launch_parser = agent_subparsers.add_parser("launch", help="launch a registered agent profile")
     agent_launch_parser.add_argument("project_id")
     agent_launch_parser.add_argument("profile_id")
+    agent_launch_parser.add_argument("--model", help="model ID passed to the agent CLI")
     agent_launch_parser.add_argument("--worktree-id")
     agent_launch_parser.add_argument("--yes", action="store_true", help="confirm the external agent launch")
 

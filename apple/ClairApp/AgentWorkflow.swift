@@ -37,20 +37,60 @@ enum AgentLaunchProfile: String, CaseIterable, Codable, Identifiable, Sendable {
     }
   }
 
-  var arguments: [String] {
-    []
+  var suggestedModels: [AgentModelChoice] {
+    switch self {
+    case .claudeCode:
+      [
+        AgentModelChoice(id: "sonnet", title: "Sonnet"),
+        AgentModelChoice(id: "opus", title: "Opus"),
+        AgentModelChoice(id: "haiku", title: "Haiku"),
+      ]
+    case .codex:
+      [
+        AgentModelChoice(id: "gpt-5.6", title: "GPT-5.6"),
+        AgentModelChoice(id: "gpt-5.5", title: "GPT-5.5"),
+      ]
+    case .openCode:
+      []
+    }
   }
 
-  func launchCommand(for projectRoot: URL) -> AgentLaunchCommand {
-    AgentLaunchCommand(profile: self, projectRoot: projectRoot)
+  var arguments: [String] {
+    arguments(modelID: nil)
+  }
+
+  func arguments(modelID: String?) -> [String] {
+    guard let modelID = Self.normalizedModelID(modelID) else {
+      return []
+    }
+    return ["--model", modelID]
+  }
+
+  var modelPickerCommand: String {
+    switch self {
+    case .claudeCode, .codex:
+      "/model"
+    case .openCode:
+      "/models"
+    }
+  }
+
+  private static func normalizedModelID(_ modelID: String?) -> String? {
+    guard let modelID else { return nil }
+    let normalized = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
+    return normalized.isEmpty ? nil : normalized
+  }
+
+  func launchCommand(for projectRoot: URL, modelID: String? = nil) -> AgentLaunchCommand {
+    AgentLaunchCommand(profile: self, projectRoot: projectRoot, modelID: modelID)
   }
 
   func launchCommand(projectRoot: URL) -> AgentLaunchCommand {
     launchCommand(for: projectRoot)
   }
 
-  func shellCommand(for projectRoot: URL) -> String {
-    launchCommand(for: projectRoot).shellCommand
+  func shellCommand(for projectRoot: URL, modelID: String? = nil) -> String {
+    launchCommand(for: projectRoot, modelID: modelID).shellCommand
   }
 
   func shellCommand(cwd: URL) -> String {
@@ -60,15 +100,20 @@ enum AgentLaunchProfile: String, CaseIterable, Codable, Identifiable, Sendable {
 
 typealias AgentProfile = AgentLaunchProfile
 
+struct AgentModelChoice: Codable, Equatable, Identifiable, Sendable {
+  let id: String
+  let title: String
+}
+
 struct AgentLaunchCommand: Codable, Equatable, Sendable {
   let executable: String
   let arguments: [String]
   let cwd: String
 
-  init(profile: AgentLaunchProfile, projectRoot: URL) {
+  init(profile: AgentLaunchProfile, projectRoot: URL, modelID: String? = nil) {
     self.init(
       executable: profile.executable,
-      arguments: profile.arguments,
+      arguments: profile.arguments(modelID: modelID),
       cwd: projectRoot
     )
   }
@@ -176,6 +221,7 @@ typealias AgentLifecycle = AgentSessionLifecycle
 struct AgentSession: Codable, Equatable, Identifiable, Sendable {
   let id: UUID
   let profileID: String
+  let modelID: String?
   let projectRoot: URL
   let worktreeID: WorktreeID?
   var lifecycle: AgentSessionLifecycle
@@ -183,6 +229,7 @@ struct AgentSession: Codable, Equatable, Identifiable, Sendable {
   init(
     id: UUID = UUID(),
     profile: AgentLaunchProfile,
+    modelID: String? = nil,
     projectRoot: URL,
     worktreeID: WorktreeID? = nil,
     lifecycle: AgentSessionLifecycle = .starting
@@ -190,6 +237,7 @@ struct AgentSession: Codable, Equatable, Identifiable, Sendable {
     self.init(
       id: id,
       profileID: profile.stableID,
+      modelID: modelID,
       projectRoot: projectRoot,
       worktreeID: worktreeID,
       lifecycle: lifecycle
@@ -199,12 +247,15 @@ struct AgentSession: Codable, Equatable, Identifiable, Sendable {
   init(
     id: UUID = UUID(),
     profileID: String,
+    modelID: String? = nil,
     projectRoot: URL,
     worktreeID: WorktreeID? = nil,
     lifecycle: AgentSessionLifecycle = .starting
   ) {
     self.id = id
     self.profileID = profileID
+    let normalizedModelID = modelID?.trimmingCharacters(in: .whitespacesAndNewlines)
+    self.modelID = normalizedModelID?.isEmpty == false ? normalizedModelID : nil
     self.projectRoot = projectRoot.standardizedFileURL
     self.worktreeID = worktreeID
     self.lifecycle = lifecycle
@@ -253,6 +304,7 @@ struct AgentControlSnapshot: Codable, Equatable, Identifiable, Sendable {
   let id: UUID
   let projectID: UUID
   let profileID: String
+  let modelID: String?
   let title: String
   let projectRoot: URL
   let worktreeID: WorktreeID?
@@ -268,6 +320,7 @@ struct AgentControlSnapshot: Codable, Equatable, Identifiable, Sendable {
     id = session.id
     projectID = session.projectID
     profileID = session.agent.profileID
+    modelID = session.agent.modelID
     title = session.profile?.displayName ?? session.agent.profileID
     projectRoot = session.agent.projectRoot
     worktreeID = session.worktreeID

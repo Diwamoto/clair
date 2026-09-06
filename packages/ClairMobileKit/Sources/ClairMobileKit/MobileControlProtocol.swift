@@ -361,6 +361,7 @@ public struct MobileAgentDescriptor: Codable, Equatable, Identifiable, Sendable 
   public let projectID: UUID
   public let worktreeID: UUID?
   public let profileID: String
+  public let modelID: String?
   public let title: String
   public let cwd: String
   public let lifecycle: MobileSessionLifecycle
@@ -374,6 +375,7 @@ public struct MobileAgentDescriptor: Codable, Equatable, Identifiable, Sendable 
     projectID: UUID,
     worktreeID: UUID? = nil,
     profileID: String,
+    modelID: String? = nil,
     title: String,
     cwd: String,
     lifecycle: MobileSessionLifecycle,
@@ -386,6 +388,7 @@ public struct MobileAgentDescriptor: Codable, Equatable, Identifiable, Sendable 
     self.projectID = projectID
     self.worktreeID = worktreeID
     self.profileID = profileID
+    self.modelID = modelID
     self.title = title
     self.cwd = cwd
     self.lifecycle = lifecycle
@@ -396,19 +399,47 @@ public struct MobileAgentDescriptor: Codable, Equatable, Identifiable, Sendable 
   }
 }
 
+public struct MobileAgentModelDescriptor: Codable, Equatable, Identifiable, Sendable {
+  public let id: String
+  public let title: String
+
+  public init(id: String, title: String) {
+    self.id = id
+    self.title = title
+  }
+}
+
 public struct MobileAgentProfileDescriptor: Codable, Equatable, Identifiable, Sendable {
   public let id: String
   public let title: String
+  public let models: [MobileAgentModelDescriptor]
   public let capabilities: Set<MobileCapability>
 
   public init(
     id: String,
     title: String,
+    models: [MobileAgentModelDescriptor] = [],
     capabilities: Set<MobileCapability> = [.agentLaunch]
   ) {
     self.id = id
     self.title = title
+    self.models = models
     self.capabilities = capabilities
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case id
+    case title
+    case models
+    case capabilities
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    id = try container.decode(String.self, forKey: .id)
+    title = try container.decode(String.self, forKey: .title)
+    models = try container.decodeIfPresent([MobileAgentModelDescriptor].self, forKey: .models) ?? []
+    capabilities = try container.decode(Set<MobileCapability>.self, forKey: .capabilities)
   }
 }
 
@@ -430,6 +461,7 @@ public struct MobileAgentLaunchOperation: Codable, Equatable, Identifiable, Send
   public let deviceID: UUID
   public let projectID: UUID
   public let profileID: String
+  public let modelID: String?
   public let worktreeID: UUID?
 
   public init(
@@ -437,12 +469,14 @@ public struct MobileAgentLaunchOperation: Codable, Equatable, Identifiable, Send
     deviceID: UUID,
     projectID: UUID,
     profileID: String,
+    modelID: String? = nil,
     worktreeID: UUID? = nil
   ) {
     self.id = id
     self.deviceID = deviceID
     self.projectID = projectID
     self.profileID = profileID
+    self.modelID = modelID
     self.worktreeID = worktreeID
   }
 }
@@ -451,17 +485,20 @@ public struct MobileAcceptedAgentLaunch: Codable, Equatable, Sendable {
   public let operationID: UUID
   public let projectID: UUID
   public let profileID: String
+  public let modelID: String?
   public let worktreeID: UUID?
 
   public init(
     operationID: UUID,
     projectID: UUID,
     profileID: String,
+    modelID: String? = nil,
     worktreeID: UUID?
   ) {
     self.operationID = operationID
     self.projectID = projectID
     self.profileID = profileID
+    self.modelID = modelID
     self.worktreeID = worktreeID
   }
 }
@@ -495,6 +532,7 @@ public enum MobileAgentLaunchAuthorizer {
       operationID: operation.id,
       projectID: operation.projectID,
       profileID: operation.profileID,
+      modelID: operation.modelID,
       worktreeID: operation.worktreeID
     )
   }

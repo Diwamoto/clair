@@ -118,6 +118,10 @@ final class MobileControlAppModel: ObservableObject {
     isConnected && grantedScopes.contains(.spawnSession)
   }
 
+  var canSteerAgent: Bool {
+    isConnected && grantedScopes.contains(.steerAgent)
+  }
+
   func setLocalViewport(rows: UInt16, columns: UInt16) {
     guard let viewport = try? MobileClientViewport(rows: rows, columns: columns) else {
       return
@@ -224,9 +228,19 @@ final class MobileControlAppModel: ObservableObject {
     }
   }
 
-  func launch(profile: MobileAgentProfileDescriptor, projectID: UUID) {
+  func launch(
+    profile: MobileAgentProfileDescriptor,
+    modelID: String?,
+    projectID: UUID
+  ) {
     Task { @MainActor [weak self] in
-      await self?.launchAsync(profile: profile, projectID: projectID)
+      await self?.launchAsync(profile: profile, modelID: modelID, projectID: projectID)
+    }
+  }
+
+  func sendAgentCommand(_ command: String, to agent: MobileAgentDescriptor) {
+    Task { @MainActor [weak self] in
+      await self?.sendAgentCommandAsync(command, to: agent)
     }
   }
 
@@ -444,7 +458,7 @@ final class MobileControlAppModel: ObservableObject {
       return
     }
     guard let connection, let activeHost, let selectedSessionID else { return }
-    let data = Data(text.utf8)
+    let data = Data((text + "\r").utf8)
     guard !data.isEmpty else { return }
     do {
       let operation = MobileTerminalInputOperation(
@@ -483,7 +497,11 @@ final class MobileControlAppModel: ObservableObject {
     }
   }
 
-  private func launchAsync(profile: MobileAgentProfileDescriptor, projectID: UUID) async {
+  private func launchAsync(
+    profile: MobileAgentProfileDescriptor,
+    modelID: String?,
+    projectID: UUID
+  ) async {
     guard canSpawnSession else {
       lastErrorMessage = "この端末には spawn_session 権限がありません。"
       return
@@ -493,15 +511,42 @@ final class MobileControlAppModel: ObservableObject {
       let operation = MobileAgentLaunchOperation(
         deviceID: activeHost.credential.deviceID,
         projectID: projectID,
-        profileID: profile.id
+        profileID: profile.id,
+        modelID: modelID
       )
       let request = try MobileControlRequestFactory.agentLaunch(operation: operation)
       let response = try await connection.request(request)
       _ = try MobileControlClientConnection.decodeResult(response) as MobileAcceptedAgentLaunch
       await refreshCatalogAsync()
-      lastActivityMessage = "\(profile.title) の起動を要求しました。"
+      let modelLabel = modelID.map { " · \($0)" } ?? ""
+      lastActivityMessage = "\(profile.title)\(modelLabel) の起動を要求しました。"
     } catch {
       lastErrorMessage = "agentを起動できませんでした: \(error.localizedDescription)"
+    }
+  }
+
+  private func sendAgentCommandAsync(
+    _ command: String,
+    to agent: MobileAgentDescriptor
+  ) async {
+    guard canSteerAgent else {
+      lastErrorMessage = "この端末には steer_agent 権限がありません。"
+      return
+    }
+    let normalized = command.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !normalized.isEmpty, let connection, let activeHost else { return }
+    do {
+      let operation = MobileAgentInputOperation(
+        deviceID: activeHost.credential.deviceID,
+        agentID: agent.id,
+        payload: Data((normalized + "\r").utf8)
+      )
+      let request = try MobileControlRequestFactory.agentInput(operation: operation)
+      let response = try await connection.request(request)
+      _ = try MobileControlClientConnection.decodeResult(response) as MobileAcceptedAgentInput
+      lastActivityMessage = "\(agent.title) に \(normalized) を送信しました。"
+    } catch {
+      lastErrorMessage = "agentコマンドを送信できませんでした: \(error.localizedDescription)"
     }
   }
 

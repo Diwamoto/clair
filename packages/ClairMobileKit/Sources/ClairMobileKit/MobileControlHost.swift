@@ -876,6 +876,7 @@ public final class MobileControlHost: @unchecked Sendable {
   public func registerAgentProfile(
     _ profileID: String,
     title: String? = nil,
+    models: [MobileAgentModelDescriptor] = [],
     capabilities: Set<MobileCapability> = [.agentLaunch]
   ) throws {
     guard !profileID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -885,6 +886,7 @@ public final class MobileControlHost: @unchecked Sendable {
       registeredAgentProfiles[profileID] = MobileAgentProfileDescriptor(
         id: profileID,
         title: title ?? profileID,
+        models: models,
         capabilities: capabilities
       )
     }

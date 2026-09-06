@@ -188,6 +188,7 @@ func agentControlContractExposesFactualStateAndCapabilities() throws {
     id: UUID(),
     projectID: UUID(),
     profileID: "codex",
+    modelID: "gpt-5.6",
     title: "Codex",
     cwd: "/private/project",
     lifecycle: .running,
@@ -200,6 +201,7 @@ func agentControlContractExposesFactualStateAndCapabilities() throws {
 
   #expect(decoded == agent)
   #expect(decoded.state == .attention)
+  #expect(decoded.modelID == "gpt-5.6")
   #expect(decoded.capabilities.contains(.agentControl))
   #expect(MobileControlMethod.agentList.rawValue == "agent/list")
   #expect(MobileControlMethod.agentInterrupt.rawValue == "agent/interrupt")
@@ -251,6 +253,7 @@ func agentLaunchAuthorizerOnlyAcceptsRegisteredProfilesAndVisibleWorktrees() thr
     deviceID: deviceID,
     projectID: projectID,
     profileID: "codex",
+    modelID: "gpt-5.6",
     worktreeID: worktreeID
   )
   let grant = MobileDeviceGrant(
@@ -266,6 +269,7 @@ func agentLaunchAuthorizerOnlyAcceptsRegisteredProfilesAndVisibleWorktrees() thr
   )
   #expect(accepted.operationID == operation.id)
   #expect(accepted.profileID == "codex")
+  #expect(accepted.modelID == "gpt-5.6")
 
   let unknownProfile = MobileAgentLaunchOperation(
     deviceID: deviceID,
@@ -929,7 +933,11 @@ func mobileHostDeliversFreshAcceptedOperationsToTheApplicationBridge() throws {
     capabilities: [.agentCatalog, .agentStatus, .agentControl, .terminalInput, .terminalInterrupt]
   )
   host.registerAgent(agent)
-  try host.registerAgentProfile("codex")
+  try host.registerAgentProfile(
+    "codex",
+    models: [MobileAgentModelDescriptor(id: "gpt-5.6", title: "GPT-5.6")]
+  )
+  #expect(host.registeredProfiles().first?.models.first?.id == "gpt-5.6")
 
   let recorder = MobileOperationRecorder()
   host.setOperationHandlers(
@@ -976,11 +984,13 @@ func mobileHostDeliversFreshAcceptedOperationsToTheApplicationBridge() throws {
     id: UUID(),
     deviceID: credential.deviceID,
     projectID: terminal.projectID,
-    profileID: "codex"
+    profileID: "codex",
+    modelID: "gpt-5.6"
   )
   _ = try host.acceptAgentLaunch(launch)
   _ = try host.acceptAgentLaunch(launch)
   #expect(recorder.launches.count == 1)
+  #expect(recorder.launches[0].modelID == "gpt-5.6")
 }
 
 #if canImport(Network)

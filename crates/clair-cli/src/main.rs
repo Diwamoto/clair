@@ -185,6 +185,7 @@ enum AgentAction {
     Launch {
         project_id: String,
         profile_id: String,
+        model_id: Option<String>,
         worktree_id: Option<String>,
         confirmed: bool,
     },
@@ -377,6 +378,7 @@ fn parse_agent_status(arguments: &[String]) -> Result<Action, CliError> {
 
 fn parse_agent_launch(arguments: &[String]) -> Result<Action, CliError> {
     let mut positional = Vec::new();
+    let mut model_id = None;
     let mut worktree_id = None;
     let mut confirmed = false;
     let mut index = 0;
@@ -385,6 +387,9 @@ fn parse_agent_launch(arguments: &[String]) -> Result<Action, CliError> {
             "--help" | "-h" => return Ok(Action::Help),
             "--worktree-id" => {
                 worktree_id = Some(required_value(arguments, &mut index, "--worktree-id")?);
+            }
+            "--model" => {
+                model_id = Some(required_value(arguments, &mut index, "--model")?);
             }
             "--yes" => confirmed = true,
             argument if argument.starts_with('-') => {
@@ -404,6 +409,7 @@ fn parse_agent_launch(arguments: &[String]) -> Result<Action, CliError> {
     Ok(Action::Agent(AgentAction::Launch {
         project_id: positional[0].clone(),
         profile_id: positional[1].clone(),
+        model_id,
         worktree_id,
         confirmed,
     }))
@@ -602,12 +608,16 @@ fn execute_agent_action(config: &Config, action: AgentAction) -> Result<(), CliE
         AgentAction::Launch {
             project_id,
             profile_id,
+            model_id,
             worktree_id,
             confirmed,
         } => {
             let mut params = Map::new();
             params.insert("projectID".to_owned(), Value::String(project_id));
             params.insert("profileID".to_owned(), Value::String(profile_id));
+            if let Some(model_id) = model_id {
+                params.insert("modelID".to_owned(), Value::String(model_id));
+            }
             if let Some(worktree_id) = worktree_id {
                 params.insert("worktreeID".to_owned(), Value::String(worktree_id));
             }
@@ -1082,7 +1092,7 @@ fn usage_text() -> &'static str {
 
 fn print_help() {
     println!(
-        "{usage}\n\nCommands:\n  open PATH[:LINE[:COLUMN]]  Open a file in Clair\n  list                       List registered commands\n  agent list                 List known agent sessions\n  agent status SESSION_ID    Show one agent session\n  agent launch PROJECT_ID PROFILE_ID [--worktree-id ID] [--yes]\n                             Launch a registered agent profile\n  agent reveal PROJECT_ID SESSION_ID\n                             Reveal an agent session in Clair\n  agent input SESSION_ID --text TEXT [--yes]\n                             Send UTF-8 input to an agent PTY\n  agent interrupt SESSION_ID [--yes]\n                             Send Ctrl-C to an agent PTY\n  agent stop SESSION_ID [--yes]\n                             Stop an agent session\n  command COMMAND_ID [--params JSON] [--yes]\n                             Call any registered command\n  mcp serve                  Run the MCP stdio adapter\n\nMutating commands require --yes when used from the CLI.\nThe CLI talks to the same local command server used by Clair's other surfaces.",
+        "{usage}\n\nCommands:\n  open PATH[:LINE[:COLUMN]]  Open a file in Clair\n  list                       List registered commands\n  agent list                 List known agent sessions\n  agent status SESSION_ID    Show one agent session\n  agent launch PROJECT_ID PROFILE_ID [--model MODEL] [--worktree-id ID] [--yes]\n                             Launch a registered agent profile\n  agent reveal PROJECT_ID SESSION_ID\n                             Reveal an agent session in Clair\n  agent input SESSION_ID --text TEXT [--yes]\n                             Send UTF-8 input to an agent PTY\n  agent interrupt SESSION_ID [--yes]\n                             Send Ctrl-C to an agent PTY\n  agent stop SESSION_ID [--yes]\n                             Stop an agent session\n  command COMMAND_ID [--params JSON] [--yes]\n                             Call any registered command\n  mcp serve                  Run the MCP stdio adapter\n\nMutating commands require --yes when used from the CLI.\nThe CLI talks to the same local command server used by Clair's other surfaces.",
         usage = usage_text()
     );
 }

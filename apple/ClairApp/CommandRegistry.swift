@@ -176,6 +176,7 @@ struct TerminalCommand: Sendable {
 struct LaunchAgentCommand: Sendable {
   let projectID: UUID
   let profileID: String
+  let modelID: String?
   let worktreeID: WorktreeID?
 }
 

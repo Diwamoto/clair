@@ -450,6 +450,7 @@ enum ClairCommandCodec {
         LaunchAgentCommand(
           projectID: try reader.uuid("projectID") ?? UUID(),
           profileID: try reader.string("profileID") ?? "",
+          modelID: try reader.string("modelID", required: false),
           worktreeID: try reader.uuid("worktreeID", required: false)
         )
       )
@@ -1354,6 +1355,7 @@ final class CommandAdapterRouter {
     guard
       let session = agentWorkflow.launch(
         profile: profile,
+        modelID: input.modelID,
         projectID: project.id,
         projectRoot: project.rootURL,
         surface: surface,
@@ -1754,6 +1756,7 @@ final class CommandAdapterRouter {
       "sessionID": .string(agent.id.uuidString),
       "projectID": .string(agent.projectID.uuidString),
       "profileID": .string(agent.profileID),
+      "modelID": agent.modelID.map(CommandJSONValue.string) ?? .null,
       "title": .string(agent.title),
       "projectRoot": .string(agent.projectRoot.path),
       "cwd": .string(agent.projectRoot.path),
@@ -1801,6 +1804,12 @@ final class CommandAdapterRouter {
       "id": .string(profile.stableID),
       "title": .string(profile.displayName),
       "executable": .string(profile.executable),
+      "models": .array(profile.suggestedModels.map { model in
+        .object([
+          "id": .string(model.id),
+          "title": .string(model.title),
+        ])
+      }),
       "capabilities": .array([.string("agent_launch")]),
     ])
   }

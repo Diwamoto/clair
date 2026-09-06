@@ -214,6 +214,7 @@ final class AgentWorkflowCoordinator: ObservableObject {
   @discardableResult
   func launch(
     profile: AgentLaunchProfile,
+    modelID: String? = nil,
     projectID: UUID,
     projectRoot: URL,
     surface: ProjectSurfaceModel,
@@ -253,6 +254,7 @@ final class AgentWorkflowCoordinator: ObservableObject {
     let agent = AgentSession(
       id: terminal.sessionID,
       profile: profile,
+      modelID: modelID,
       projectRoot: executionRoot,
       worktreeID: worktreeID,
       lifecycle: .starting
@@ -270,6 +272,7 @@ final class AgentWorkflowCoordinator: ObservableObject {
     terminal.sendCommandWhenReady(
       launchCommand(
         profile: profile,
+        modelID: modelID,
         projectRoot: executionRoot,
         projectID: projectID,
         sessionID: workflowSession.id,
@@ -281,6 +284,7 @@ final class AgentWorkflowCoordinator: ObservableObject {
 
   func launchCommand(
     profile: AgentLaunchProfile,
+    modelID: String? = nil,
     projectRoot: URL,
     projectID: UUID,
     sessionID: UUID,
@@ -302,7 +306,7 @@ final class AgentWorkflowCoordinator: ObservableObject {
     let exportCommand = exports.map { name, value in
       "export \(name)=\(AgentLaunchCommand.shellQuote(value))"
     }.joined(separator: "; ")
-    let agentCommand = profile.shellCommand(for: projectRoot)
+    let agentCommand = profile.shellCommand(for: projectRoot, modelID: modelID)
     return exportCommand.isEmpty ? agentCommand : "\(exportCommand); \(agentCommand)"
   }
 

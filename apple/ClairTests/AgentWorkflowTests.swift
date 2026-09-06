@@ -19,6 +19,26 @@ final class AgentWorkflowTests: XCTestCase {
       ["claude", "codex", "opencode"]
     )
     XCTAssertEqual(AgentLaunchProfile.all.map(\.arguments), [[], [], []])
+    XCTAssertEqual(
+      AgentLaunchProfile.claudeCode.suggestedModels.map(\.id),
+      ["sonnet", "opus", "haiku"]
+    )
+    XCTAssertEqual(AgentLaunchProfile.codex.modelPickerCommand, "/model")
+    XCTAssertEqual(AgentLaunchProfile.openCode.modelPickerCommand, "/models")
+  }
+
+  func testProfilePassesSelectedModelAsQuotedLaunchArguments() {
+    let root = URL(fileURLWithPath: "/tmp/project")
+    let command = AgentLaunchProfile.claudeCode.launchCommand(
+      for: root,
+      modelID: "custom model; $(touch injected)"
+    )
+
+    XCTAssertEqual(command.arguments, ["--model", "custom model; $(touch injected)"])
+    XCTAssertEqual(
+      command.shellCommand,
+      "cd -- '/tmp/project' && exec 'claude' '--model' 'custom model; $(touch injected)'"
+    )
   }
 
   func testProfileBuildsProjectRootShellCommandWithQuotedValues() {
@@ -84,12 +104,14 @@ final class AgentWorkflowTests: XCTestCase {
     var session = AgentSession(
       id: sessionID,
       profile: .claudeCode,
+      modelID: "sonnet",
       projectRoot: root
     )
 
     XCTAssertEqual(session.id, sessionID)
     XCTAssertEqual(session.profileID, "claude-code")
     XCTAssertEqual(session.profile, .claudeCode)
+    XCTAssertEqual(session.modelID, "sonnet")
     XCTAssertEqual(session.cwd, root.path)
     XCTAssertTrue(session.isActive)
     XCTAssertNil(session.exitCode)
