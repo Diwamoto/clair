@@ -3,7 +3,6 @@ import CoreImage
 import SwiftUI
 
 enum WorkspaceOverlayKind: String, Identifiable {
-  case quickOpen
   case command
   case settings
   case agents
@@ -11,6 +10,11 @@ enum WorkspaceOverlayKind: String, Identifiable {
   var id: String {
     rawValue
   }
+}
+
+private enum WorkspacePaletteMode: String, Equatable {
+  case command
+  case quickOpen
 }
 
 struct ContentView: View {
@@ -24,6 +28,7 @@ struct ContentView: View {
   @ObservedObject var agentRateLimits: AgentRateLimitCoordinator
 
   @State private var overlay: WorkspaceOverlayKind?
+  @State private var commandPaletteMode: WorkspacePaletteMode = .command
   @State private var pendingTabClose: ProjectTabCloseRequest?
   @State private var isLineJumpPresented = false
   @State private var lineJumpValue = ""
@@ -139,11 +144,6 @@ struct ContentView: View {
       }
     }
     .overlay {
-      if overlay == .quickOpen, let surface = workspace.activeSurface {
-        quickOpenOverlay(surface)
-      }
-    }
-    .overlay {
       if isLineJumpPresented {
         lineJumpOverlay
       }
@@ -183,7 +183,7 @@ struct ContentView: View {
       agentWorkflow: agentWorkflow,
       onOpenProject: openProject,
       onRenameProject: beginRename,
-      onOpenCommand: { openOverlay(.command) },
+      onOpenCommand: { openCommandPalette(mode: .command) },
       onOpenSettings: { openOverlay(.settings) }
     )
   }
@@ -205,7 +205,7 @@ struct ContentView: View {
           openProject()
           return
         }
-        openOverlay(.quickOpen)
+        openCommandPalette(mode: .quickOpen)
       }
     )
   }
@@ -333,24 +333,6 @@ struct ContentView: View {
     workspace.activeSurface?.workspaceActivity = .files
   }
 
-  // MARK: Quick Open Floating Overlay
-
-  private func quickOpenOverlay(_ surface: ProjectSurfaceModel) -> some View {
-    Color.black.opacity(0.45)
-      .ignoresSafeArea()
-      .onTapGesture {
-        overlay = nil
-      }
-      .overlay {
-        ProjectQuickOpenView(surface: surface, onDismiss: dismissOverlay)
-          .frame(maxWidth: 560, maxHeight: 420)
-          .background(WorkspaceChrome.chromeRaised)
-          .clipShape(RoundedRectangle(cornerRadius: 12))
-          .shadow(color: .black.opacity(0.5), radius: 24, y: 8)
-          .padding(.top, 90)
-      }
-  }
-
   private var commandOverlay: some View {
     Color.black.opacity(0.45)
       .ignoresSafeArea()
@@ -360,6 +342,7 @@ struct ContentView: View {
       .overlay {
         WorkspaceCommandPalette(
           surface: commandSurface,
+          mode: $commandPaletteMode,
           onDismiss: dismissOverlay
         )
         .frame(maxWidth: 500, maxHeight: 520)
@@ -423,6 +406,11 @@ struct ContentView: View {
 
   // MARK: Helpers
 
+  private func openCommandPalette(mode: WorkspacePaletteMode) {
+    commandPaletteMode = mode
+    overlay = .command
+  }
+
   private func openOverlay(_ kind: WorkspaceOverlayKind) {
     overlay = kind
   }
@@ -441,9 +429,9 @@ struct ContentView: View {
         openProject()
         return
       }
-      openOverlay(.quickOpen)
+      openCommandPalette(mode: .quickOpen)
     case .commandPalette:
-      openOverlay(.command)
+      openCommandPalette(mode: .command)
     case .find, .replace, .showSearch:
       guard let surface = workspace.activeSurface else {
         return
@@ -1162,25 +1150,35 @@ private final class WindowZoomDoubleClickView: NSView {
 
 private struct WorkspaceCommandPalette: View {
   @ObservedObject var surface: CommandSurfaceModel
+  @Binding var mode: WorkspacePaletteMode
   let onDismiss: () -> Void
 
   @State private var query = ""
+  @State private var selectedIndex = 0
   @FocusState private var searchFocused: Bool
 
-  private var matches: [CommandSurfaceMatch] {
+  private var commandMatches: [CommandSurfaceMatch] {
     surface.matches(for: query)
+  }
+
+  private var quickOpenItems: [ProjectQuickOpenItem] {
+    surface.workspace.activeSurface?.quickOpenResults ?? []
+  }
+
+  private var resultCount: Int {
+    mode == .command ? commandMatches.count : quickOpenItems.count
   }
 
   var body: some View {
     VStack(spacing: 0) {
       HStack(spacing: 10) {
-        Image(systemName: "command")
+        Image(systemName: mode == .command ? "command" : "doc.text")
           .font(.system(size: 14, weight: .semibold))
           .foregroundStyle(WorkspaceChrome.accent)
         VStack(alignment: .leading, spacing: 2) {
-          Text("コマンドウィンドウ")
+          Text(mode == .command ? "コマンド" : "ファイルへ移動")
             .font(WorkspaceChrome.chromeFont(size: 15, weight: .semibold))
-          Text("エディタ操作を実行")
+          Text(mode == .command ? "Command Registryの全操作" : "Project内のファイル")
             .font(WorkspaceChrome.chromeFont(size: 11))
             .foregroundStyle(WorkspaceChrome.textTertiary)
         }
@@ -1198,13 +1196,34 @@ private struct WorkspaceCommandPalette: View {
       HStack(spacing: 8) {
         Image(systemName: "magnifyingglass")
           .foregroundStyle(WorkspaceChrome.textTertiary)
-        TextField("コマンドを検索", text: $query)
-          .textFieldStyle(.plain)
-          .font(WorkspaceChrome.chromeFont(size: 14))
-          .focused($searchFocused)
-          .onSubmit {
-            runFirstAvailableMatch()
+        TextField(
+          mode == .command ? "コマンドを検索" : "ファイル名で検索",
+          text: $query
+        )
+        .textFieldStyle(.plain)
+        .font(WorkspaceChrome.chromeFont(size: 14))
+        .focused($searchFocused)
+        .onSubmit {
+          runSelected()
+        }
+        .onKeyPress(keys: [.upArrow, .downArrow, .return]) { keyPress in
+          guard keyPress.modifiers.isEmpty else {
+            return .ignored
           }
+          if keyPress.key == .upArrow {
+            moveSelection(.up)
+          } else if keyPress.key == .downArrow {
+            moveSelection(.down)
+          } else if keyPress.key == .return {
+            runSelected()
+          } else {
+            return .ignored
+          }
+          return .handled
+        }
+        Text("\(resultCount)件")
+          .font(WorkspaceChrome.chromeFont(size: 10))
+          .foregroundStyle(WorkspaceChrome.textQuaternary)
       }
       .padding(.horizontal, 10)
       .frame(height: 54)
@@ -1221,18 +1240,9 @@ private struct WorkspaceCommandPalette: View {
 
       ScrollView {
         LazyVStack(spacing: 2) {
-          if matches.isEmpty {
-            Text("コマンドが見つかりません")
-              .font(WorkspaceChrome.chromeFont(size: 11))
-              .foregroundStyle(WorkspaceChrome.textTertiary)
-              .frame(maxWidth: .infinity, alignment: .leading)
-              .padding(18)
-          } else {
-            ForEach(matches) { match in
-              commandRow(match)
-            }
-          }
+          resultList
         }
+        .id(mode.rawValue)
         .padding(8)
       }
       .frame(maxHeight: .infinity)
@@ -1241,23 +1251,134 @@ private struct WorkspaceCommandPalette: View {
         .background(WorkspaceChrome.border)
 
       HStack(spacing: 12) {
-        Text("↑↓で移動")
-        Text("↵で実行")
+        Button("コマンド") {
+          switchMode(.command)
+        }
+        .buttonStyle(.tactile)
+        .foregroundStyle(
+          mode == .command ? WorkspaceChrome.textPrimary : WorkspaceChrome.textTertiary
+        )
+        .padding(.horizontal, 8)
+        .frame(height: 20)
+        .background(
+          mode == .command ? WorkspaceChrome.surfaceActive : Color.clear,
+          in: RoundedRectangle(cornerRadius: 4, style: .continuous)
+        )
+
+        Button("ファイルへ移動") {
+          switchMode(.quickOpen)
+        }
+        .buttonStyle(.tactile)
+        .foregroundStyle(
+          mode == .quickOpen ? WorkspaceChrome.textPrimary : WorkspaceChrome.textTertiary
+        )
+        .padding(.horizontal, 8)
+        .frame(height: 20)
+        .background(
+          mode == .quickOpen ? WorkspaceChrome.surfaceActive : Color.clear,
+          in: RoundedRectangle(cornerRadius: 4, style: .continuous)
+        )
+
+        Rectangle()
+          .fill(WorkspaceChrome.border)
+          .frame(width: 1, height: 14)
+
+        Button("↑") {
+          moveSelection(.up)
+        }
+        .buttonStyle(.tactile)
+        .frame(width: 22, height: 20)
+        .background(
+          WorkspaceChrome.canvas,
+          in: RoundedRectangle(cornerRadius: 4, style: .continuous)
+        )
+        .overlay {
+          RoundedRectangle(cornerRadius: 4, style: .continuous)
+            .stroke(WorkspaceChrome.border, lineWidth: 1)
+        }
+
+        Button("↓") {
+          moveSelection(.down)
+        }
+        .buttonStyle(.tactile)
+        .frame(width: 22, height: 20)
+        .background(
+          WorkspaceChrome.canvas,
+          in: RoundedRectangle(cornerRadius: 4, style: .continuous)
+        )
+        .overlay {
+          RoundedRectangle(cornerRadius: 4, style: .continuous)
+            .stroke(WorkspaceChrome.border, lineWidth: 1)
+        }
+
+        Text("↵ 選択中を実行")
       }
       .font(WorkspaceChrome.chromeFont(size: 9))
       .foregroundStyle(WorkspaceChrome.textQuaternary)
       .padding(.horizontal, 14)
       .padding(.vertical, 8)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .overlay(alignment: .trailing) {
+        Text("⌘P")
+          .font(WorkspaceChrome.chromeFont(size: 9))
+          .foregroundStyle(WorkspaceChrome.textQuaternary)
+          .padding(.trailing, 14)
+      }
     }
     .foregroundStyle(WorkspaceChrome.textPrimary)
     .frame(minWidth: 420, minHeight: 360)
     .onExitCommand(perform: onDismiss)
+    .onMoveCommand { direction in
+      moveSelection(direction)
+    }
     .onAppear {
       searchFocused = true
+      refreshQuickOpenResults()
+    }
+    .onChange(of: query) { _, _ in
+      selectedIndex = 0
+      refreshQuickOpenResults()
+    }
+    .onChange(of: mode) { _, _ in
+      query = ""
+      selectedIndex = 0
+      searchFocused = true
+      refreshQuickOpenResults()
     }
   }
 
-  private func commandRow(_ match: CommandSurfaceMatch) -> some View {
+  @ViewBuilder
+  private var resultList: some View {
+    if mode == .command {
+      if commandMatches.isEmpty {
+        emptyResult(message: "コマンドが見つかりません")
+      } else {
+        ForEach(Array(commandMatches.enumerated()), id: \.offset) { index, match in
+          commandRow(match, index: index)
+        }
+      }
+    } else if surface.workspace.activeSurface?.quickOpenIsLoading == true {
+      ProgressView("ファイルを検索中…")
+        .font(WorkspaceChrome.chromeFont(size: 11))
+        .frame(maxWidth: .infinity, minHeight: 82)
+    } else if quickOpenItems.isEmpty {
+      emptyResult(message: "ファイルが見つかりません")
+    } else {
+      ForEach(Array(quickOpenItems.enumerated()), id: \.offset) { index, item in
+        quickOpenRow(item, index: index)
+      }
+    }
+  }
+
+  private func emptyResult(message: String) -> some View {
+    Text(message)
+      .font(WorkspaceChrome.chromeFont(size: 11))
+      .foregroundStyle(WorkspaceChrome.textTertiary)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .padding(18)
+  }
+
+  private func commandRow(_ match: CommandSurfaceMatch, index: Int) -> some View {
     Button {
       run(match)
     } label: {
@@ -1293,13 +1414,89 @@ private struct WorkspaceCommandPalette: View {
     )
     .disabled(!match.availability.isAvailable)
     .help(match.statusText)
+    .background(
+      selectedIndex == index ? WorkspaceChrome.accent.opacity(0.18) : Color.clear,
+      in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+    )
+    .overlay {
+      if selectedIndex == index {
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
+          .stroke(WorkspaceChrome.borderStrong, lineWidth: 1)
+      }
+    }
+    .onHover {
+      if $0 {
+        selectedIndex = index
+      }
+    }
   }
 
-  private func runFirstAvailableMatch() {
-    guard let match = matches.first(where: { $0.availability.isAvailable }) else {
+  private func quickOpenRow(_ item: ProjectQuickOpenItem, index: Int) -> some View {
+    Button {
+      run(item)
+    } label: {
+      HStack(spacing: 10) {
+        Image(systemName: "doc.text")
+          .font(.system(size: 11, weight: .medium))
+          .foregroundStyle(WorkspaceChrome.accent)
+          .frame(width: 18)
+        VStack(alignment: .leading, spacing: 2) {
+          Text(item.title)
+            .font(WorkspaceChrome.chromeFont(size: 12, weight: .medium))
+            .lineLimit(1)
+          Text(item.relativePath)
+            .font(WorkspaceChrome.chromeFont(size: 9))
+            .foregroundStyle(WorkspaceChrome.textQuaternary)
+            .lineLimit(1)
+        }
+        Spacer(minLength: 8)
+      }
+      .padding(.horizontal, 9)
+      .frame(minHeight: 44)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.tactile)
+    .foregroundStyle(WorkspaceChrome.textSecondary)
+    .background(
+      selectedIndex == index ? WorkspaceChrome.accent.opacity(0.18) : Color.clear,
+      in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+    )
+    .overlay {
+      if selectedIndex == index {
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
+          .stroke(WorkspaceChrome.borderStrong, lineWidth: 1)
+      }
+    }
+    .onHover {
+      if $0 {
+        selectedIndex = index
+      }
+    }
+  }
+
+  private func moveSelection(_ direction: MoveCommandDirection) {
+    guard resultCount > 0 else {
       return
     }
-    run(match)
+    switch direction {
+    case .up:
+      selectedIndex = max(0, selectedIndex - 1)
+    case .down:
+      selectedIndex = min(resultCount - 1, selectedIndex + 1)
+    default:
+      break
+    }
+  }
+
+  private func runSelected() {
+    guard selectedIndex >= 0, selectedIndex < resultCount else {
+      return
+    }
+    if mode == .command {
+      run(commandMatches[selectedIndex])
+    } else {
+      run(quickOpenItems[selectedIndex])
+    }
   }
 
   private func run(_ match: CommandSurfaceMatch) {
@@ -1308,6 +1505,30 @@ private struct WorkspaceCommandPalette: View {
     }
     _ = surface.invoke(commandID: match.id, source: .commandWindow)
     onDismiss()
+  }
+
+  private func run(_ item: ProjectQuickOpenItem) {
+    guard let activeSurface = surface.workspace.activeSurface else {
+      return
+    }
+    activeSurface.openQuickOpenItem(item)
+    if activeSurface.lastNavigationErrorMessage == nil {
+      onDismiss()
+    }
+  }
+
+  private func switchMode(_ nextMode: WorkspacePaletteMode) {
+    guard mode != nextMode else {
+      return
+    }
+    mode = nextMode
+  }
+
+  private func refreshQuickOpenResults() {
+    guard mode == .quickOpen, let activeSurface = surface.workspace.activeSurface else {
+      return
+    }
+    activeSurface.requestQuickOpenItems(matching: query)
   }
 
   private func symbol(for risk: CommandRisk) -> String {
@@ -1414,13 +1635,17 @@ private struct ProjectGroupStrip: View {
         .padding(.horizontal, 9)
         .frame(height: WorkspaceTitlebarMetrics.projectLabelHeight)
         .background(
-          project.color.workspaceAccent.opacity(isActive ? 0.22 : 0.12),
+          isActive
+            ? project.color.workspaceAccent.opacity(0.22)
+            : Color.clear,
           in: RoundedRectangle(cornerRadius: 6, style: .continuous)
         )
         .overlay {
           RoundedRectangle(cornerRadius: 6, style: .continuous)
             .stroke(
-              project.color.workspaceAccent.opacity(isActive ? 0.72 : 0.45),
+              isActive
+                ? project.color.workspaceAccent.opacity(0.72)
+                : Color.clear,
               lineWidth: 1
             )
         }
@@ -1439,7 +1664,7 @@ private struct ProjectGroupStrip: View {
         isActive ? "アクティブ" : "非アクティブ"
       )
 
-      if let projectSurface {
+      if isActive, let projectSurface {
         WorkspaceTabStrip(
           surface: projectSurface,
           accent: project.color.workspaceAccent,
@@ -1462,7 +1687,13 @@ private struct ProjectGroupStrip: View {
           .offset(x: 4)
       }
     }
-    .frame(height: WorkspaceTitlebarMetrics.projectGroupHeight, alignment: .bottom)
+    .frame(
+      height: isActive
+        ? WorkspaceTitlebarMetrics.projectGroupHeight
+        : WorkspaceTitlebarMetrics.projectLabelHeight
+          + WorkspaceTitlebarMetrics.projectLabelBottomPadding,
+      alignment: .bottom
+    )
     .contextMenu {
       Button("Project名を変更") {
         onRenameProject(project)
@@ -2004,7 +2235,7 @@ private struct AgentRateLimitChip: View {
             .fill(WorkspaceChrome.surfaceHover)
           Circle()
             .stroke(WorkspaceChrome.border, lineWidth: 1)
-          Image(systemName: provider.systemImage)
+          AgentVendorIcon(provider: provider)
             .font(.system(size: 9, weight: .semibold))
             .foregroundStyle(WorkspaceChrome.textSecondary)
         }
@@ -2225,7 +2456,7 @@ private struct AgentRateLimitRow: View {
           .fill(WorkspaceChrome.surfaceHover)
         Circle()
           .stroke(WorkspaceChrome.border, lineWidth: 1)
-        Image(systemName: provider?.systemImage ?? "sparkles")
+        AgentVendorIcon(provider: provider)
           .font(.system(size: 9, weight: .semibold))
           .foregroundStyle(WorkspaceChrome.textSecondary)
       }
@@ -2302,7 +2533,7 @@ private struct AgentRateLimitUnavailableRow: View {
           .fill(WorkspaceChrome.surfaceHover)
         Circle()
           .stroke(WorkspaceChrome.border, lineWidth: 1)
-        Image(systemName: provider.systemImage)
+        AgentVendorIcon(provider: provider)
           .font(.system(size: 9, weight: .semibold))
           .foregroundStyle(WorkspaceChrome.textSecondary)
       }
