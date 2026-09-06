@@ -1675,7 +1675,7 @@ private struct ProjectGroupStrip: View {
             }
           }
         )
-        .frame(maxWidth: 360, maxHeight: .infinity)
+        .frame(maxHeight: .infinity)
       }
     }
     .padding(.leading, isFirstProject ? 0 : 10)
@@ -1743,16 +1743,11 @@ private struct WorkspaceTabStrip: View {
   @State private var pendingCloseTabID: String?
 
   var body: some View {
-    ScrollView(.horizontal) {
-      HStack(spacing: 2) {
-        ForEach(surface.visibleWorkspaceTabs) { item in
-          tabView(item)
-        }
+    HStack(spacing: 2) {
+      ForEach(surface.visibleWorkspaceTabs) { item in
+        tabView(item)
       }
-      .frame(maxHeight: .infinity)
     }
-    .scrollIndicators(.hidden)
-    .background(HiddenScrollbarsInstaller())
     .frame(maxHeight: WorkspaceTitlebarMetrics.surfaceTabHeight)
     .alert("未保存の変更を破棄しますか？", isPresented: pendingCloseIsPresented) {
       Button("キャンセル", role: .cancel) {
@@ -3596,23 +3591,6 @@ private struct ProjectGitView: View {
   ) -> some View {
     HStack(spacing: 8) {
       Button {
-        surface.revealGitChange(relativePath: change.path)
-        if surface.lastNavigationErrorMessage == nil {
-          onDismiss()
-        }
-      } label: {
-        VStack(alignment: .leading, spacing: 2) {
-          Text(change.displayPath)
-            .lineLimit(1)
-          Text(change.kind.displayName)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-      }
-      .buttonStyle(.tactile)
-
-      Button("差分") {
         _ = workspace.execute(
           .gitShowDiff(
             GitShowDiffCommand(
@@ -3622,6 +3600,15 @@ private struct ProjectGitView: View {
             )
           )
         )
+      } label: {
+        VStack(alignment: .leading, spacing: 2) {
+          Text(change.displayPath)
+            .lineLimit(1)
+          Text(change.kind.displayName)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
       }
       .buttonStyle(.tactile)
 
