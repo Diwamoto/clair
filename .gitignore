@@ -16,9 +16,6 @@ xcuserdata/
 /generated/
 /.tmp/
 
-# Interaction Lab is hosted and versioned as its own nested repository.
-/prototypes/clair-interaction-lab/
-
 # Local CodeMirror build dependencies and disposable build output.
 /editor-web/node_modules/
 /editor-web/dist/

@@ -1,0 +1,357 @@
+.panel {
+  min-width: 0;
+  min-height: 0;
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-top: 34px;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.heading {
+  min-height: 64px;
+  flex: 0 0 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.heading kbd {
+  color: var(--text-4);
+  font: 11px var(--font-mono);
+}
+
+.searchHeader {
+  flex: 0 0 auto;
+  padding: 16px 16px 13px;
+  border-bottom: 1px solid var(--border);
+}
+
+.inputRow {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.inputRow input {
+  width: 100%;
+  height: 40px;
+  padding: 0 36px 0 38px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  outline: 0;
+  background: var(--canvas);
+  color: var(--text);
+  font-size: 13.5px;
+}
+
+.inputRow input::placeholder { color: var(--text-4); }
+.inputRow input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
+
+.searchGlyph,
+.largeSearchGlyph {
+  position: absolute;
+  width: 13px;
+  height: 13px;
+  border: 1.6px solid currentColor;
+  border-radius: 50%;
+  color: var(--text-4);
+}
+
+.searchGlyph { left: 14px; pointer-events: none; }
+.searchGlyph::after,
+.largeSearchGlyph::after {
+  content: "";
+  position: absolute;
+  width: 6px;
+  height: 1.6px;
+  right: -5px;
+  bottom: -3px;
+  transform: rotate(45deg);
+  background: currentColor;
+}
+
+.clearButton {
+  position: absolute;
+  right: 7px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-4);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.clearButton:hover { background: var(--surface-hover); color: var(--text-2); }
+
+.searchMeta {
+  min-height: 32px;
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  padding: 11px 2px 0;
+}
+
+.searchMeta > span {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--text-4);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.searchMeta strong { color: var(--text-2); font-weight: 500; }
+.searchMeta em { color: var(--red); font-style: normal; }
+
+.options { display: flex; gap: 2px; }
+
+.options button {
+  min-width: 28px;
+  height: 24px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-4);
+  cursor: pointer;
+  font: 11px var(--font-mono);
+}
+
+.options button:hover { background: var(--surface-hover); color: var(--text-2); }
+.options button.optionActive { background: var(--blue-soft); color: #b4c7ff; }
+
+.results {
+  min-height: 0;
+  flex: 1;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-bottom: 22px;
+}
+
+.directory + .directory { border-top: 1px solid var(--border); }
+
+.directoryRow,
+.fileRow {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 0;
+  background: var(--surface);
+  color: var(--text-3);
+  text-align: left;
+  cursor: pointer;
+}
+
+.directoryRow {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  min-height: 36px;
+  padding: 0 16px 0 13px;
+}
+
+.fileRow { min-height: 34px; padding: 0 16px 0 30px; }
+.directoryRow:hover,
+.fileRow:hover { background: var(--surface-hover); }
+
+.chevron {
+  width: 12px;
+  flex: 0 0 12px;
+  color: var(--text-4);
+  font: 18px/1 var(--font-mono);
+  transform-origin: center;
+  transition: transform 100ms ease-out;
+}
+
+.chevronOpen { transform: rotate(90deg); }
+
+.folderGlyph {
+  position: relative;
+  width: 16px;
+  height: 11px;
+  flex: 0 0 16px;
+  border: 1px solid var(--yellow);
+  border-radius: 2px;
+  opacity: .85;
+}
+
+.folderGlyph::before {
+  content: "";
+  position: absolute;
+  left: 1px;
+  top: -5px;
+  width: 7px;
+  height: 4px;
+  border: 1px solid var(--yellow);
+  border-bottom: 0;
+  border-radius: 2px 2px 0 0;
+}
+
+.fileGlyph {
+  position: relative;
+  width: 12px;
+  height: 15px;
+  flex: 0 0 12px;
+  border: 1px solid var(--text-4);
+  border-radius: 2px;
+  opacity: .8;
+}
+
+.fileGlyph::after {
+  content: "";
+  position: absolute;
+  right: -1px;
+  top: -1px;
+  width: 5px;
+  height: 5px;
+  border-left: 1px solid var(--text-4);
+  border-bottom: 1px solid var(--text-4);
+  background: var(--surface);
+}
+
+.directoryPath,
+.fileName {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.directoryPath { color: var(--text-3); font: 12px var(--font-mono); }
+.directoryPath i { color: var(--text-4); font-style: normal; }
+.fileName { color: var(--text-2); font-size: 13px; }
+
+.matchBadge {
+  min-width: 22px;
+  height: 20px;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--blue-soft);
+  color: #b4c7ff;
+  font: 11px var(--font-mono);
+}
+
+.matchBadgeDim { background: rgba(255, 255, 255, .05); color: var(--text-4); }
+
+.matchRow {
+  position: relative;
+  min-height: 31px;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 28px;
+  align-items: center;
+  padding-left: 40px;
+  color: var(--text-3);
+  cursor: pointer;
+}
+
+.matchRow:hover { background: var(--surface-hover); }
+.matchRowActive { background: var(--blue-soft); }
+.matchRowActive::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--blue); }
+
+.lineNumber {
+  padding-right: 10px;
+  color: var(--text-4);
+  font: 11px var(--font-mono);
+  text-align: right;
+}
+
+.matchRow code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-3);
+  font: 12px/25px var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.matchRow mark {
+  padding: 1px 2px;
+  border-radius: 3px;
+  background: rgba(91, 136, 247, .26);
+  color: #c6d4ff;
+}
+
+.copyButton {
+  width: 25px;
+  height: 25px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-4);
+  opacity: 0;
+  cursor: pointer;
+  font: 12px var(--font-mono);
+}
+
+.matchRow:hover .copyButton,
+.copyButton:focus-visible,
+.copyButtonDone { opacity: 1; }
+.copyButton:hover { background: var(--blue-soft); color: #b4c7ff; }
+.copyButtonDone { color: var(--green); }
+
+.copyGlyph {
+  position: relative;
+  width: 10px;
+  height: 10px;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+}
+
+.copyGlyph::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: -4px;
+  width: 8px;
+  height: 8px;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+}
+
+.emptyState {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  color: var(--text-4);
+}
+
+.emptyState p { margin: 0; font-size: 13px; }
+.largeSearchGlyph { position: relative; width: 30px; height: 30px; opacity: .4; }
+.largeSearchGlyph::after { width: 11px; right: -9px; bottom: -5px; }
+
+@media (max-width: 980px) {
+  .heading { padding-right: 16px; padding-left: 16px; }
+  .searchHeader { padding-right: 13px; padding-left: 13px; }
+  .directoryRow { padding-right: 12px; padding-left: 10px; }
+  .fileRow { padding-right: 12px; padding-left: 24px; }
+  .matchRow { padding-left: 30px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron { transition: none; }
+}

@@ -23,32 +23,31 @@ Work on the established interactive prototype rather than starting a new mock.
 - Source: `/Users/daiki/Projects/clair/prototypes/clair-interaction-lab`
 - Live private URL: `https://clair-interaction-lab.daiki-work-0118.chatgpt.site`
 - Sites project ID: `appgprj_6a8efdff717481919f80ceb9d8d62176`
-- The prototype has its own nested Git repository. Commit and push from the prototype directory, not the parent Clair repository.
-- The nested repository's `sites` remote is the private Sites source repository. It is not the parent GitHub repository (`origin`), so do not switch remotes or push the prototype commits to the parent repo as a substitute.
+- The prototype is tracked as ordinary source under the parent Clair repository. Commit mock changes from the parent repository; do not recreate a nested `.git` directory.
+- The private Sites project has a separate deployment source repository. It is a publish mirror, not the canonical source, so do not push the parent Clair repository's `origin` to Sites as a substitute for the publish step.
 - Preserve `.openai/hosting.json`, existing metadata, and `public/og.png` unless the user explicitly requests changes to them.
 
 ## Execution boundary
 
-This skill has two separate capabilities: preparing the prototype source and
-publishing it through Sites.
+This skill has two separate capabilities: preparing the prototype source in
+the parent Clair repository and publishing it through Sites.
 
 - A Codex session that owns this Site can use the Sites connector to verify
-  access, obtain a short-lived source-repository write credential, push the
-  exact validated commit to the `sites` remote, package it, save a version,
-  and deploy privately. Keep the credential out of remote URLs, Git config,
-  files, logs, and user-facing output; use it only for the push command.
-- A plain Claude Code session can still edit, build, inspect, and commit the
-  nested repository. It may also run `git push sites ...` if an already
-  configured credential helper makes that command succeed. However, Claude
-  Code does not normally have the Codex-side Sites connector or packaging
-  helper. If no existing credential works, stop after the local commit and
-  report that the source push/deploy is waiting for a Codex Sites session.
-  Do not invent a token, put one in the remote URL, or treat this as an
-  implementation failure.
+  access, prepare a clean Sites-source export from the validated mock subtree,
+  obtain a short-lived source-repository write credential, push that export,
+  package it, save a version, and deploy privately. Keep the credential out of
+  remote URLs, Git config, files, logs, and user-facing output; use it only for
+  the publish operation.
+- A plain Claude Code session can edit, build, inspect, and commit the mock in
+  the parent Clair repository. It does not normally have the Codex-side Sites
+  connector or packaging helper, so after a successful parent commit it must
+  report that private Site publication is waiting for Codex. Do not invent a
+  token, create a nested repository, or treat the missing publish tooling as
+  an implementation failure.
 
-The parent Clair repository and the Sites source repository are intentionally
-separate. A successful push to `origin` does not publish the Interaction Lab,
-and a successful Sites push does not commit the parent repository.
+The parent Clair repository is the canonical source. The Sites source
+repository is only a deployment mirror; a parent `origin` push makes the mock
+available to Claude, while a Sites publish makes it live.
 
 ## Design contract
 
@@ -77,11 +76,11 @@ When an attached image or document is supplied, use it as visual evidence only. 
 6. Unless the user asks for local-only work, publish to the same private Sites project when Sites tooling is available:
    - confirm with `get_site` that the current user is owner and access is still owner-only/custom;
    - never broaden sharing or change access as part of a mock edit;
-   - commit the exact source state in the nested repository;
-   - obtain a short-lived source write credential and push that commit to the `sites` remote without printing the token;
+   - commit the exact source state in the parent Clair repository;
+   - prepare a clean Sites-source export containing the mock project root, then obtain a short-lived source write credential and push that export without printing the token;
    - package the successful build with the Sites packaging helper, save a new version, deploy it privately, and wait for success;
    - reopen the stable live URL and stop the local server with `scripts/dev-server.sh stop <pid>` using the PID captured earlier. If the server was reused (`PID=existing`), do not stop it.
-   - If this is a plain Claude Code session without the Sites connector or packaging helper, do not claim that publication succeeded. After the successful local commit, report the commit and hand off the remaining source push/deploy to Codex (or the user can push manually with a valid short-lived credential).
+   - If this is a plain Claude Code session without the Sites connector or packaging helper, do not claim that publication succeeded. After the successful parent commit, report the commit and hand off the remaining Sites publish/deploy to Codex.
 7. Report the visible changes, verification performed, published URL, and whether access remained private.
 
 Use the available Sites building/hosting guidance when present. Do not install Figma or another design service for this workflow; UI decisions come from the Clair UI Design canvas (see the notice at the top of this file), and this prototype exists to make that canvas's current state runnable and shareable, not to originate design.

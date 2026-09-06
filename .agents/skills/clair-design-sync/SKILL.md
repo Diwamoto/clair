@@ -34,8 +34,8 @@ only run from Claude Code (Codex has no access to Claude Design canvases).
   merged direction as settled, not still under debate.
 - Mock: `/Users/daiki/Projects/clair/prototypes/clair-interaction-lab`
   (`app/page.tsx`, `app/mock-data.ts`, `app/globals.css`,
-  `app/SourceSearchPanel.tsx`). It has its own nested Git repository;
-  commit and push from the prototype directory, not the parent Clair repo.
+  `app/SourceSearchPanel.tsx`). It is tracked as ordinary source in the
+  parent Clair repository; commit the synced mock from the parent repository.
 - The mock's own publish workflow (dev server, build, commit, short-lived
   Sites write credential, packaging, private deploy, verification) is
   documented in [`clair-mock-lab`](../clair-mock-lab/SKILL.md) — reuse
@@ -48,8 +48,8 @@ only run from Claude Code (Codex has no access to Claude Design canvases).
   (obtaining a short-lived source write credential, the Sites packaging
   helper) that a plain Claude Code session does not have. If that tooling
   isn't available in this session, stop after committing locally in the
-  nested repo and tell the user to run `clair-mock-lab` from Codex (or
-  push manually) to deploy the synced mock.
+  parent mock source and tell the user to run `clair-mock-lab` from Codex to
+  publish the synced mock.
 
 ## Workflow
 
@@ -70,7 +70,7 @@ only run from Claude Code (Codex has no access to Claude Design canvases).
    confirm HTTP 200, and visually check the changed view(s). Capture the
    returned `PID=...` so you can stop a server you started.
 5. Run `npm run build` and `git diff --check` in the prototype directory.
-6. Commit the exact synced source in the nested repository.
+6. Commit the exact synced source in the parent Clair repository.
 7. If Sites publish tooling is available this session, follow
    `clair-mock-lab`'s steps 6–7 (confirm owner-only access unchanged,
    obtain a short-lived write credential, push, package, deploy
