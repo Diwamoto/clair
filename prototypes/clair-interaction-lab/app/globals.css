@@ -1340,18 +1340,49 @@ button:disabled { cursor: default; }
   cursor: pointer;
 }
 .command-list button:hover { background: var(--blue-soft); color: var(--text); }
+.command-list button.is-active { background: var(--blue-soft); color: var(--text); box-shadow: inset 0 0 0 1px var(--border-strong); }
 .command-list button kbd { color: var(--text-4); font: 11px var(--font-mono); }
 .command-list p { padding: 16px 10px; color: var(--text-4); font: 12px var(--font-mono); }
+.command-item-text { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.command-item-text strong { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.command-item-text small { color: var(--text-4); font: 10px var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.command-count { flex-shrink: 0; color: var(--text-4); font: 10px var(--font-mono); }
 .command-window > footer {
   min-height: 38px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 10px;
   padding: 0 18px;
   border-top: 1px solid var(--border);
+  background: var(--surface);
   color: var(--text-4);
   font: 11px var(--font-mono);
 }
+.palette-mode-tab {
+  height: 20px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-3);
+  font: 600 10px var(--font-mono);
+  cursor: pointer;
+}
+.palette-mode-tab.is-active { background: var(--surface-hover); color: var(--text); }
+.palette-divider { width: 1px; height: 14px; background: var(--border); }
+.palette-move {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--canvas);
+  color: var(--text-2);
+  cursor: pointer;
+}
+.palette-move:hover { color: var(--text); border-color: var(--border-strong); }
 .settings-window { width: min(410px, 100%); }
 .setting-row {
   min-height: 58px;
@@ -9812,4 +9843,24 @@ textarea:not(:disabled):not(.code-editor):hover {
   .app-layout.is-sidebar-hidden {
     grid-template-columns: 204px minmax(0, 1fr);
   }
+}
+
+/* Design canvas Main: only the active project expands into its editor/
+   terminal tabs. Other open projects collapse to a plain label until
+   switched to, so the titlebar row stays a single strip of parallel tabs
+   for the current project rather than every project's tabs at once. */
+.project-group:not(.is-active) .project-surfaces {
+  display: none;
+}
+
+.project-group:not(.is-active) .project-group-label {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-3);
+}
+
+.project-group:not(.is-active) .project-group-label:hover {
+  border-color: var(--group-color);
+  background: color-mix(in srgb, var(--group-color) 16%, var(--surface-raised));
+  color: var(--text-2);
 }
