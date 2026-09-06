@@ -11,6 +11,10 @@
 *.xcresult
 *.xcuserstate
 xcuserdata/
+/Clair.xcodeproj/project.xcworkspace/
+
+# Python
+__pycache__/
 
 # Generated bindings and intermediates
 /generated/
@@ -19,6 +23,9 @@ xcuserdata/
 # Local CodeMirror build dependencies and disposable build output.
 /editor-web/node_modules/
 /editor-web/dist/
+
+# Standalone docs site project (own repo, own remote — not part of this history).
+/docs-site/
 
 # Seeded Claude Design canvas output. Re-seed from the .dc.html sources.
 /docs/investigations/ui-design-review/clair-workspace-redesign.html
