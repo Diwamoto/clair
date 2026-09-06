@@ -111,6 +111,7 @@ final class AgentWorkflowCoordinator: ObservableObject {
   private let hookDirectory: URL?
   private var ledger = AgentActivityLedger()
   private var terminalEventObservers: [UUID: (session: TerminalSession, observerID: UUID)] = [:]
+  private var terminalTabOwners: [UUID: ProjectSurfaceModel] = [:]
   private var hookOffsets: [String: Int] = [:]
   private var hookPollingTask: Task<Void, Never>?
 
@@ -267,6 +268,7 @@ final class AgentWorkflowCoordinator: ObservableObject {
       finishedAt: nil
     )
     sessions.append(workflowSession)
+    terminalTabOwners[workflowSession.id] = surface
     observe(terminal, for: workflowSession.id)
     synchronizeInitialState(of: terminal, for: workflowSession.id)
     terminal.sendCommandWhenReady(
@@ -356,6 +358,7 @@ final class AgentWorkflowCoordinator: ObservableObject {
           finishedAt: nil
         )
         sessions.append(workflowSession)
+        terminalTabOwners[workflowSession.id] = surface
         observe(terminal, for: sessionID)
         synchronizeInitialState(of: terminal, for: sessionID)
       }
@@ -566,6 +569,8 @@ final class AgentWorkflowCoordinator: ObservableObject {
     if let observation = terminalEventObservers.removeValue(forKey: session.id) {
       observation.session.removeEventObserver(observation.observerID)
     }
+    let surface = terminalTabOwners.removeValue(forKey: session.id)
+    surface?.closeTab(id: session.terminalTabID)
   }
 
   private func record(_ activity: AgentActivity) {
