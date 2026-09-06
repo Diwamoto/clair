@@ -852,7 +852,7 @@ private struct ClairAgentSettingsRow: View {
 
   var body: some View {
     HStack(spacing: 12) {
-      Text(profile.settingsMonogram)
+      AgentVendorIcon(provider: AgentRateLimitProvider(rawValue: profile.stableID))
         .font(.system(size: 10, weight: .bold, design: .monospaced))
         .foregroundStyle(profile.settingsColor)
         .frame(width: 24, height: 24)
@@ -898,17 +898,6 @@ private struct ClairAgentSettingsRow: View {
 }
 
 extension AgentLaunchProfile {
-  fileprivate var settingsMonogram: String {
-    switch self {
-    case .codex:
-      "CX"
-    case .claudeCode:
-      "CC"
-    case .openCode:
-      "OC"
-    }
-  }
-
   fileprivate var settingsColor: Color {
     switch self {
     case .codex:
@@ -1224,5 +1213,35 @@ private struct ClairSettingsPairingCodeView: View {
     let image = NSImage(size: representation.size)
     image.addRepresentation(representation)
     return image
+  }
+}
+
+/// Vendor artwork shared by usage indicators and agent settings.
+struct AgentVendorIcon: View {
+  let provider: AgentRateLimitProvider?
+
+  var body: some View {
+    Group {
+      switch provider {
+      case .codex:
+        Image("VendorCodex")
+          .resizable()
+          .scaledToFit()
+          .foregroundStyle(WorkspaceChrome.textPrimary)
+      case .claudeCode:
+        Image("VendorClaude")
+          .resizable()
+          .scaledToFit()
+      case .openCode:
+        Image("VendorOpenCode")
+          .resizable()
+          .scaledToFit()
+          .padding(3)
+      case nil:
+        Image(systemName: "sparkles")
+      }
+    }
+    .frame(width: 19, height: 19)
+    .accessibilityHidden(true)
   }
 }

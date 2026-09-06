@@ -22,14 +22,6 @@ enum AgentRateLimitProvider: String, CaseIterable, Identifiable, Sendable {
     default: displayName
     }
   }
-
-  var systemImage: String {
-    switch self {
-    case .codex: "sparkles"
-    case .claudeCode: "brain.head.profile"
-    case .openCode: "chevron.left.forwardslash.chevron.right"
-    }
-  }
 }
 
 struct AgentRateLimitWindow: Equatable, Identifiable, Sendable {
