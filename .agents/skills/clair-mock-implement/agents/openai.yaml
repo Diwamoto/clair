@@ -1,0 +1,4 @@
+interface:
+  display_name: "Clair Mock Implement"
+  short_description: "Implement native Clair changes from the interaction-lab mock"
+  default_prompt: "Use $clair-mock-implement to implement the native Clair change for <mock screen/interaction>."

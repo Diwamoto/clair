@@ -5,6 +5,17 @@ description: Update, verify, and publish the existing Clair Interaction Lab mock
 
 # Clair Mock Lab
 
+> **Superseded as the design source of truth.** The Clair UI Design canvas
+> (`https://claude.ai/code/artifact/8e7aded4-c0f1-46e4-af9c-4b9501ff4ce1`,
+> "Clair UI") is now the single source of truth for Clair's UI, not this
+> HTML/CSS prototype. New UI decisions belong in that canvas; use
+> [`clair-design-sync`](../clair-design-sync/SKILL.md) to bring this mock
+> back in line with it. This skill still owns the mechanics of building,
+> committing, and privately publishing the prototype — `clair-design-sync`
+> reuses its publish steps — but do not use it to make freeform UI
+> decisions the canvas hasn't made first. It stays as-is for now and is
+> expected to be retired once the canvas fully covers this mock's states.
+
 Work on the established interactive prototype rather than starting a new mock.
 
 ## Fixed context
@@ -48,4 +59,4 @@ When an attached image or document is supplied, use it as visual evidence only. 
    - reopen the stable live URL and stop the local server with `scripts/dev-server.sh stop <pid>` using the PID captured earlier. If the server was reused (`PID=existing`), do not stop it.
 7. Report the visible changes, verification performed, published URL, and whether access remained private.
 
-Use the available Sites building/hosting and frontend-design guidance when present. Do not install Figma or another design service for this workflow; the HTML/CSS prototype is the source of truth.
+Use the available Sites building/hosting guidance when present. Do not install Figma or another design service for this workflow; UI decisions come from the Clair UI Design canvas (see the notice at the top of this file), and this prototype exists to make that canvas's current state runnable and shareable, not to originate design.
