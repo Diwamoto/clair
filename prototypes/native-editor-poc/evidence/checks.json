@@ -395,6 +395,51 @@
     "probe" : "hi"
   },
   {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "clean tab releases display cache"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : false,
+    "test" : "reopen preserves text and selection"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "dirty tab retains undo-capable display"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "retained tab undo restores body"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "policy sync boundary"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "policy async boundary"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "policy byte fallback boundary"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "policy line boundary"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "policy long-line fallback boundary"
+  },
+  {
     "alternative_TextKit2" : {
       "TextKit2 basic Tree-sitter capture styling" : true,
       "TextKit2 created" : true,

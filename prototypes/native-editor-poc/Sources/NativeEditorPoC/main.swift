@@ -46,7 +46,7 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
         let bar = NSStackView(); bar.orientation = .horizontal
         tabs.target = self; tabs.action = #selector(switchTab)
         bar.addArrangedSubview(tabs)
-        for (title, action) in [("Open", #selector(openFile)), ("Multi", #selector(multi)), ("Comment", #selector(comment)), ("Propose / Diff", #selector(propose)), ("Apply all", #selector(applyAll)), ("Apply row", #selector(applyRow)), ("Apply block", #selector(applyBlock)), ("Reject", #selector(reject)), ("Editor", #selector(editor)), ("Save as", #selector(save))] {
+        for (title, action) in [("Open", #selector(openFile)), ("Multi", #selector(multi)), ("Comment", #selector(comment)), ("Propose / Diff", #selector(propose)), ("Apply all", #selector(applyAll)), ("Apply row", #selector(applyRow)), ("Apply block", #selector(applyBlock)), ("Reject", #selector(reject)), ("Editor", #selector(editor)), ("Release tab cache", #selector(releaseTab)), ("Save as", #selector(save))] {
             bar.addArrangedSubview(NSButton(title: title, target: self, action: action))
         }
         root.addArrangedSubview(bar)
@@ -70,7 +70,9 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
         diffScroll.documentView = table; diffScroll.hasVerticalScroller = true; diffScroll.hasHorizontalScroller = true
         setupMenu()
         show(); window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
-        if CommandLine.arguments.contains("--self-test") || CommandLine.arguments.contains("--benchmark") {
+        if CommandLine.arguments.contains("--lifecycle-probe") {
+            Task { @MainActor in await self.runLifecycleProbe() }
+        } else if CommandLine.arguments.contains("--self-test") || CommandLine.arguments.contains("--benchmark") {
             Task { @MainActor in await self.runChecks(benchmark: CommandLine.arguments.contains("--benchmark")) }
         }
     }
@@ -81,15 +83,15 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
     }
     @MainActor func show() {
         if let observer { NotificationCenter.default.removeObserver(observer) }
+        doc.ensureDisplay()
         host.subviews.forEach { $0.removeFromSuperview() }
         let view = diffVisible ? diffScroll : doc.controller.view
         view.frame = host.bounds; view.autoresizingMask = [.width, .height]; host.addSubview(view)
         window.contentView?.layoutSubtreeIfNeeded()
         let initialLoad = doc.pendingText != nil
-        if let initial = doc.pendingText {
-            doc.pendingText = nil; doc.controller.setText(initial)
-            doc.controller.textView.selectionManager.setSelectedRange(NSRange(location: 0, length: 0))
-        }
+        doc.loadPendingText()
+        _ = doc.controller.textView.layoutManager.layoutLines()
+        NotificationCenter.default.post(name: NSView.boundsDidChangeNotification, object: doc.controller.scrollView.contentView)
         if initialLoad { doc.requestInitialHighlight() }
         rail.document = doc; rail.isHidden = diffVisible; tabs.selectItem(at: active)
         doc.controller.scrollView.contentView.postsBoundsChangedNotifications = true
@@ -102,8 +104,21 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
         status.stringValue = "rev \(doc.revision) · selection \(doc.controller.textView.selectedRange()) · \(comments)"
         rail.needsDisplay = true
     }
-    @objc func switchTab() { active = tabs.indexOfSelectedItem; diffVisible = false; show() }
+    @objc func switchTab() {
+        active = tabs.indexOfSelectedItem
+        for (index, document) in documents.enumerated() where index != active { _ = document.releaseDisplayCache() }
+        diffVisible = false; show()
+    }
     @objc func editor() { diffVisible = false; show() }
+    @objc func releaseTab() {
+        guard doc.releaseDisplayCache() else {
+            status.stringValue = "Retained: dirty buffer, undo history, composition, or pending proposal"
+            return
+        }
+        host.subviews.forEach { $0.removeFromSuperview() }
+        rail.document = nil
+        status.stringValue = "Released display cache; text and selection snapshot retained"
+    }
     @objc func openFile() {
         let panel = NSOpenPanel(); panel.allowsMultipleSelection = true
         if panel.runModal() == .OK { for url in panel.urls { if let text = try? String(contentsOf: url, encoding: .utf8) { add(name: url.lastPathComponent, text: text, language: languageFor(url.path)) } }; editor() }

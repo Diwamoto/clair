@@ -18,6 +18,40 @@ func evidenceOutput(benchmark: Bool) -> String {
     return "evidence/checks.json"
 }
 extension App {
+    @MainActor func runLifecycleProbe() async {
+        guard let d = documents.first else { exit(1) }
+        let startedAt = ISO8601DateFormatter().string(from: Date())
+        let profile = NativeEditorFileProfile(text: d.text)
+        await pump(0.3)
+        let afterOpen = processFootprintBytes()
+        d.controller.textView._undoManager?.clearStack()
+        let tempURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("clair-poc-lifecycle-probe-\(UUID().uuidString).txt")
+        try? d.save(to: tempURL)
+        let beforeRelease = processFootprintBytes()
+        let released = d.releaseDisplayCache()
+        await pump(0.2)
+        let afterRelease = processFootprintBytes()
+        try? FileManager.default.removeItem(at: tempURL)
+        let result: [String: Any] = [
+            "fixture": d.name,
+            "measured_at": startedAt,
+            "utf8_bytes": profile.utf8Bytes,
+            "utf16_length": profile.utf16Length,
+            "maximum_line_utf16_length": profile.maximumLineUTF16Length,
+            "policy": NativeEditorPolicy.decide(text: d.text).mode.rawValue,
+            "open_footprint_bytes": afterOpen,
+            "before_release_footprint_bytes": beforeRelease,
+            "released_display_cache": released,
+            "after_release_footprint_bytes": afterRelease,
+            "note": "single process, one fixture, one open/close cycle; footprint is task resident_size and not a peak or input-to-photon metric"
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]) {
+            FileHandle.standardOutput.write(data)
+            FileHandle.standardOutput.write(Data([10]))
+        }
+        exit(released ? 0 : 1)
+    }
+
     @MainActor func runChecks(benchmark: Bool) async {
         var results: [[String: Any]] = []
         func check(_ name: String, _ pass: Bool, expectedFailure: Bool = false) {
@@ -172,6 +206,32 @@ extension App {
             currentDocument.controller.textView.undoManager?.undo()
             await pump(0.15)
         }
+        let lifecycle = Document(name: "lifecycle.swift", text: "let value = 1\n", language: .swift)
+        lifecycle.loadPendingText()
+        lifecycle.controller.textView.selectionManager.setSelectedRange(NSRange(location: 4, length: 5))
+        let lifecycleURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("clair-poc-lifecycle-\(UUID().uuidString).txt")
+        do {
+            try lifecycle.save(to: lifecycleURL)
+            let released = lifecycle.releaseDisplayCache()
+            check("clean tab releases display cache", released && !lifecycle.isDisplayLoaded)
+            lifecycle.ensureDisplay()
+            check("reopen preserves text and selection", lifecycle.text == "let value = 1\n" && lifecycle.controller.textView.selectedRange() == NSRange(location: 4, length: 5))
+            try? FileManager.default.removeItem(at: lifecycleURL)
+        } catch {
+            check("clean tab lifecycle fixture", false)
+        }
+        lifecycle.controller.textView.replaceCharacters(in: NSRange(location: 0, length: 0), with: "// dirty\n")
+        check("dirty tab retains undo-capable display", !lifecycle.releaseDisplayCache() && lifecycle.isDisplayLoaded && lifecycle.hasUndoHistory)
+        lifecycle.controller.textView.undoManager?.undo()
+        check("retained tab undo restores body", lifecycle.text == "let value = 1\n")
+        let policyBoundary = String(repeating: "a", count: NativeEditorPolicy.maximumSynchronousUTF16Length)
+        check("policy sync boundary", NativeEditorPolicy.decide(text: policyBoundary).mode == .synchronousNative)
+        check("policy async boundary", NativeEditorPolicy.decide(text: policyBoundary + "a").mode == .asynchronousNative)
+        let nativeLimit = String(repeating: "a", count: NativeEditorPolicy.maximumNativeUTF8Bytes)
+        check("policy byte fallback boundary", NativeEditorPolicy.decide(text: nativeLimit + "a").fallbackReason == .utf8Bytes)
+        let longLineLimit = String(repeating: "a", count: NativeEditorPolicy.maximumNativeLineUTF16Length)
+        check("policy line boundary", NativeEditorPolicy.decide(text: longLineLimit).mode == .asynchronousNative)
+        check("policy long-line fallback boundary", NativeEditorPolicy.decide(text: longLineLimit + "a").fallbackReason == .maximumLineLength)
         results.append(["alternative_TextKit2": textKitProbe(), "note": "basic captures only; incremental syntax, IME and multicursor not validated for alternative"])
         if benchmark { await runBenchmarks(into: &results) }
         if let data = try? JSONSerialization.data(withJSONObject: results, options: [.prettyPrinted, .sortedKeys]) { try? data.write(to: URL(fileURLWithPath: evidenceOutput(benchmark: benchmark))) }
@@ -179,6 +239,18 @@ extension App {
         fflush(stdout)
         exit(failed ? 1 : 0)
     }
+
+    private func processFootprintBytes() -> Int64 {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
+        let result = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+            }
+        }
+        return result == KERN_SUCCESS ? Int64(info.resident_size) : -1
+    }
+
     @MainActor func runBenchmarks(into results: inout [[String: Any]]) async {
         let fixtureRoot = URL(fileURLWithPath: "fixtures")
         for name in ["normal.swift", "1mb.swift", "10mb.swift", "long-line.ts"] {

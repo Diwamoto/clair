@@ -26,27 +26,55 @@ struct Proposal {
 final class Document: NSObject, TextViewCoordinator, NSTextStorageDelegate {
     let name: String
     let highlightProvider: RevisionAwareHighlightProvider
+    let language: CodeLanguage
     var controller: TextViewController!
     var pendingText: String?
+    private(set) var textSnapshot: String
+    private(set) var selectionSnapshot = NSRange(location: 0, length: 0)
+    private(set) var scrollOriginSnapshot = NSPoint.zero
     var revision = 0
+    private(set) var savedRevision = 0
     var groupMulticursorEdits = true
     private var ownsUndoGroup = false
     private var undoGroupCloseScheduled = false
     private var observers: [NSObjectProtocol] = []
+    private var restoring = false
     var comments: [CommentAnchor] = []
     var proposal: Proposal?
     var onChange: (() -> Void)?
+    var text: String { controller?.text ?? textSnapshot }
+    var isDirty: Bool { revision != savedRevision }
+    var hasUndoHistory: Bool {
+        guard let undo = controller?.textView._undoManager else { return false }
+        return undo.canUndo || undo.canRedo
+    }
+    var canReleaseDisplayCache: Bool {
+        controller != nil && !isDirty && !hasUndoHistory && controller.textView.hasMarkedText() == false && proposal == nil
+    }
+    var isDisplayLoaded: Bool { controller != nil }
+
     init(name: String, text: String, language: CodeLanguage) {
         self.name = name
         self.highlightProvider = RevisionAwareHighlightProvider()
+        self.language = language
+        self.textSnapshot = text
         self.pendingText = text
         super.init()
+        makeController()
+    }
+
+    private func makeController() {
         controller = TextViewController(string: "", language: language,
             configuration: .init(appearance: .init(theme: Self.theme,
                 font: .monospacedSystemFont(ofSize: 13, weight: .regular), wrapLines: false),
                 peripherals: .init(showMinimap: false)), cursorPositions: [],
             highlightProviders: [highlightProvider], coordinators: [self])
         _ = controller.view
+        controller.textView.selectionManager.setSelectedRanges([NSRange(location: 0, length: 0)])
+        installObservers()
+    }
+
+    private func installObservers() {
         observers.append(NotificationCenter.default.addObserver(forName: CodeEditTextView.TextView.textWillChangeNotification, object: controller.textView, queue: .main) { [weak self] _ in
             guard let self, self.groupMulticursorEdits, !self.ownsUndoGroup,
                   self.controller.textView.selectionManager.textSelections.count > 1,
@@ -58,7 +86,12 @@ final class Document: NSObject, TextViewCoordinator, NSTextStorageDelegate {
             self?.scheduleMulticursorUndoGroupClose()
         })
     }
-    deinit { observers.forEach(NotificationCenter.default.removeObserver) }
+    private func removeObservers() {
+        observers.forEach(NotificationCenter.default.removeObserver)
+        observers.removeAll()
+    }
+
+    deinit { removeObservers() }
     /// Marked-range updates are transient notifications. Keep the adapter's multi-cursor
     /// group open across them, then close it after the run-loop turn that commits or cancels
     /// the composition.
@@ -69,7 +102,7 @@ final class Document: NSObject, TextViewCoordinator, NSTextStorageDelegate {
             guard let self else { return }
             self.undoGroupCloseScheduled = false
             guard self.ownsUndoGroup else { return }
-            guard let textView = self.controller.textView else {
+            guard let textView = self.controller?.textView else {
                 self.ownsUndoGroup = false
                 return
             }
@@ -85,23 +118,73 @@ final class Document: NSObject, TextViewCoordinator, NSTextStorageDelegate {
             if undo.isGrouping { undo.endUndoGrouping() }
             self.ownsUndoGroup = false
         }
+    }
 
     @MainActor func requestInitialHighlight() {
         highlightProvider.requestInitialVisibleRange(for: controller.textView)
     }
+
+    func loadPendingText() {
+        guard let initial = pendingText, let controller else { return }
+        pendingText = nil
+        restoring = true
+        controller.setText(initial)
+        restoring = false
+        selectionSnapshot = NSRange(location: 0, length: 0)
+    }
+
+    func ensureDisplay() {
+        guard controller == nil else { return }
+        let requestedSelection = selectionSnapshot
+        makeController()
+        restoring = true
+        controller.setText(textSnapshot)
+        restoring = false
+        let range = validSelection(requestedSelection, in: textSnapshot) ? requestedSelection : NSRange(location: 0, length: 0)
+        selectionSnapshot = range
+        controller.textView.layoutManager.layoutLines()
+        controller.textView.selectionManager.setSelectedRanges([range])
+        controller.scrollView.contentView.scroll(to: scrollOriginSnapshot)
+        controller.scrollView.reflectScrolledClipView(controller.scrollView.contentView)
+    }
+
+    @discardableResult
+    func releaseDisplayCache() -> Bool {
+        guard canReleaseDisplayCache, let controller else { return false }
+        textSnapshot = controller.text
+        selectionSnapshot = controller.textView.selectedRange()
+        scrollOriginSnapshot = controller.scrollView.contentView.bounds.origin
+        controller.view.removeFromSuperview()
+        removeObservers()
+        self.controller = nil
+        return true
+    }
     func prepareCoordinator(controller: TextViewController) { controller.textView.addStorageDelegate(self) }
     func textStorage(_ storage: NSTextStorage, didProcessEditing mask: NSTextStorageEditActions,
                      range editedRange: NSRange, changeInLength delta: Int) {
-        guard mask.contains(.editedCharacters) else { return }
+        guard mask.contains(.editedCharacters), !restoring else { return }
         revision += 1
+        textSnapshot = controller?.text ?? textSnapshot
         let oldRange = NSRange(location: editedRange.location, length: editedRange.length - delta)
         for index in comments.indices { comments[index].transform(edit: oldRange, inserted: editedRange.length) }
         onChange?()
     }
     func textViewDidChangeSelection(controller: TextViewController, newPositions: [CursorPosition]) {
+        let range = controller.textView.selectedRange()
+        if range.location != NSNotFound && range.location >= 0 && range.length >= 0 &&
+            range.location <= controller.textView.textStorage.length &&
+            range.length <= controller.textView.textStorage.length - range.location {
+            selectionSnapshot = range
+        }
         onChange?() // no text getter, no document binding
     }
+
+    private func validSelection(_ range: NSRange, in text: String) -> Bool {
+        range.location != NSNotFound && range.location >= 0 && range.length >= 0 &&
+            range.location <= text.utf16.count && range.length <= text.utf16.count - range.location
+    }
     func addComment(range: NSRange) {
+        guard let controller else { return }
         guard range.location != NSNotFound, range.location >= 0, range.length >= 0,
               range.location <= controller.textView.textStorage.length,
               range.length <= controller.textView.textStorage.length - range.location else { return }
@@ -109,13 +192,13 @@ final class Document: NSObject, TextViewCoordinator, NSTextStorageDelegate {
         onChange?()
     }
     func propose() {
-        let length = controller.textView.textStorage.length
+        let length = text.utf16.count
         let edits = [(NSRange(location: 0, length: 0), "// AI: reviewed\n"),
                      (NSRange(location: length, length: 0), "\n// AI: end\n")]
         proposal = .init(revision: revision, edits: edits, pending: Set(edits.indices))
     }
     @discardableResult func apply(indices: Set<Int>) -> Bool {
-        guard var p = proposal, p.revision == revision, !indices.isEmpty,
+        guard let controller, var p = proposal, p.revision == revision, !indices.isEmpty,
               indices.isSubset(of: p.pending), !controller.textView.hasMarkedText() else { return false }
         let undo = controller.textView.undoManager!
         undo.beginUndoGrouping()
@@ -130,8 +213,10 @@ final class Document: NSObject, TextViewCoordinator, NSTextStorageDelegate {
         return true
     }
     func save(to url: URL) throws {
-        guard !controller.textView.hasMarkedText() else { throw NSError(domain: "CompositionActive", code: 1) }
-        try controller.text.write(to: url, atomically: true, encoding: .utf8)
+        guard controller?.textView.hasMarkedText() != true else { throw NSError(domain: "CompositionActive", code: 1) }
+        try text.write(to: url, atomically: true, encoding: .utf8)
+        textSnapshot = text
+        savedRevision = revision
     }
     static let theme = EditorTheme(text: .init(color: .white), insertionPoint: .white,
         invisibles: .init(color: .tertiaryLabelColor), background: NSColor(srgbRed: 0.12, green: 0.13, blue: 0.15, alpha: 1),
