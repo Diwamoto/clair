@@ -29,3 +29,18 @@ and are not redistributed from this repository.
 Any dependency that is linked, embedded, copied, or redistributed must update
 this file in the same change. Generated notice artifacts belong under
 `.build/generated/` and remain untracked; this file remains tracked.
+
+## Native editor PoC (not cleared for distribution)
+
+The native editor PoC has a fixed SwiftPM graph, a binary grammar container,
+grammar query resources, Unicode/ICU-derived code, and custom symbol assets.
+The complete audit and draft notice inventory are tracked in
+[`docs/issues/native-editor/evidence/license-audit.md`](docs/issues/native-editor/evidence/license-audit.md)
+and [`docs/issues/native-editor/evidence/THIRD_PARTY_NOTICES.md`](docs/issues/native-editor/evidence/THIRD_PARTY_NOTICES.md).
+
+This inventory is not distribution approval. CodeEditLanguages and
+CodeEditSymbols have no root LICENSE/NOTICE at the audited revisions, the
+37 grammar licenses are not yet mapped to the binary framework, and the
+SF Symbols-derived assets lack per-asset provenance. The PoC must remain
+unshipped until those gates are resolved. The known MIT, BSD-3-Clause,
+Apache-2.0, and Unicode/ICU notice candidates are recorded in the audit.
