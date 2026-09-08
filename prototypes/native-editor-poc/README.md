@@ -28,9 +28,9 @@ python3 make-fixtures.py
 - **Apply row / Apply block**: 変更行を選択して部分適用。固定サンプルでは1ブロック＝1編集なので共通経路。**Apply all**は全適用。**Reject**は破棄。
 - 部分適用後の残りは意図的に古いrevisionのまま。再提案が必要。Editorへ戻って編集してから適用すると拒否される。
 - **Save as**: UTF-8で別名保存。IME変換中は拒否。本番の外部変更検出・ローカル履歴との統合はPoC外。
-- **Release tab cache**: clean、Undo/Redo履歴なし、marked textなし、pending proposalなしのタブだけ表示controllerを解放し、本文・selection・scrollを保持して再オープン時に復元する。dirty本文、Undo/Redo、composition、pending proposalは保持する。
+- **Release tab cache**: clean、Undo/Redo履歴なし、marked textなし、pending proposalなしのタブだけ表示controllerを解放し、本文・selection・scrollを保持して再オープン時に復元する。dirty本文、Undo/Redo、composition、pending proposalは保持する。close時は解析revisionを無効化してlate callbackを拒否するが、固定したCodeEditSourceEditorに解析jobのclose handle/idle待機APIがないため、表示cache解放とTree-sitter idleを同一視しない。
 
-大規模fileのPoC policyは、UTF-8 bytes `10,000,000`、UTF-16長 `10,000,000`、最大行UTF-16長 `1,000,000` をnative上限とする。UTF-16長 `250,000` 超は非同期native、それ以外の上限超過はweb fallback候補として扱う。これは採用決定ではなく、[NE-05 lifecycle evidence](../../docs/issues/native-editor/evidence/ne05-lifecycle.md) と `LifecyclePolicy.swift` の回帰境界である。
+大規模fileのPoC policyは、UTF-8 bytes `10,000,000`、UTF-16長 `10,000,000`、最大行UTF-16長 `1,000,000` をnative上限とする。UTF-16長 `250,000` 超は非同期native、いずれかの上限超過はweb fallbackとして扱い、native controllerとTree-sitterを生成しない。これは採用決定ではなく、[NE-05 lifecycle evidence](../../docs/issues/native-editor/evidence/ne05-lifecycle.md) と `LifecyclePolicy.swift` の回帰境界である。
 
 ## 自動検証と計測
 

@@ -27,11 +27,36 @@ extension App {
         let profile = NativeEditorFileProfile(text: d.text)
         await pump(0.3)
         let afterOpen = processFootprintBytes()
-        d.controller.textView._undoManager?.clearStack()
+        if d.isFallback {
+            let result: [String: Any] = [
+                "fixture": d.name,
+                "measured_at": startedAt,
+                "utf8_bytes": profile.utf8Bytes,
+                "utf16_length": profile.utf16Length,
+                "maximum_line_utf16_length": profile.maximumLineUTF16Length,
+                "policy": d.policyDecision.mode.rawValue,
+                "open_footprint_bytes": afterOpen,
+                "before_release_footprint_bytes": afterOpen,
+                "released_display_cache": false,
+                "display_lifecycle": d.lifecycleState.display.rawValue,
+                "analysis_lifecycle": d.lifecycleState.analysis.rawValue,
+                "parser_idle": d.lifecycleState.parserIdle as Any,
+                "fully_released": d.lifecycleState.isFullyReleased,
+                "after_release_footprint_bytes": afterOpen,
+                "note": "native controller and Tree-sitter were not created because the file exceeded a native safety limit"
+            ]
+            if let data = try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]) {
+                FileHandle.standardOutput.write(data)
+                FileHandle.standardOutput.write(Data([10]))
+            }
+            exit(0)
+        }
+        guard let controller = d.controller else { exit(1) }
+        controller.textView._undoManager?.clearStack()
         let tempURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("clair-poc-lifecycle-probe-\(UUID().uuidString).txt")
         try? d.save(to: tempURL)
         let beforeRelease = processFootprintBytes()
-        let released = d.releaseDisplayCache()
+        let displayCacheReleased = d.releaseDisplayCache()
         await pump(0.2)
         let afterRelease = processFootprintBytes()
         try? FileManager.default.removeItem(at: tempURL)
@@ -41,18 +66,22 @@ extension App {
             "utf8_bytes": profile.utf8Bytes,
             "utf16_length": profile.utf16Length,
             "maximum_line_utf16_length": profile.maximumLineUTF16Length,
-            "policy": NativeEditorPolicy.decide(text: d.text).mode.rawValue,
+            "policy": d.policyDecision.mode.rawValue,
             "open_footprint_bytes": afterOpen,
             "before_release_footprint_bytes": beforeRelease,
-            "released_display_cache": released,
+            "released_display_cache": displayCacheReleased,
+            "display_lifecycle": d.lifecycleState.display.rawValue,
+            "analysis_lifecycle": d.lifecycleState.analysis.rawValue,
+            "parser_idle": d.lifecycleState.parserIdle as Any,
+            "fully_released": d.lifecycleState.isFullyReleased,
             "after_release_footprint_bytes": afterRelease,
-            "note": "single process, one fixture, one open/close cycle; footprint is task resident_size and not a peak or input-to-photon metric"
+            "note": "single process, one fixture, one open/close cycle; display cache release is separate from Tree-sitter idle; parser_idle remains unknown because the pinned dependency exposes no close/join contract; footprint is task resident_size and not a peak or input-to-photon metric"
         ]
         if let data = try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]) {
             FileHandle.standardOutput.write(data)
             FileHandle.standardOutput.write(Data([10]))
         }
-        exit(released ? 0 : 1)
+        exit(displayCacheReleased ? 0 : 1)
     }
 
     @MainActor func runChecks(benchmark: Bool) async {
@@ -60,7 +89,11 @@ extension App {
         func check(_ name: String, _ pass: Bool, expectedFailure: Bool = false) {
             results.append(["test": name, "pass": pass, "expectedFailure": expectedFailure]); print("\(pass ? "PASS" : "FAIL") \(name)"); fflush(stdout)
         }
-        let d = doc, t = doc.controller.textView!
+        guard !doc.isFallback, let controller = doc.controller else {
+            print("FAIL self-test requires a native editor document")
+            exit(1)
+        }
+        let d = doc, t = controller.textView!
         func reset() { d.controller.setText(original); t._undoManager?.clearStack(); d.comments = []; d.proposal = nil }
 
         let original = d.controller.text
@@ -240,7 +273,17 @@ extension App {
             try lifecycle.save(to: lifecycleURL)
             let released = lifecycle.releaseDisplayCache()
             check("clean tab releases display cache", released && !lifecycle.isDisplayLoaded)
+            check(
+                "display release does not claim parser idle",
+                lifecycle.lifecycleState == .init(display: .displayCacheReleased, analysis: .closeRequestedIdleUnknown)
+                    && lifecycle.lifecycleState.parserIdle == nil
+                    && !lifecycle.lifecycleState.isFullyReleased
+            )
             lifecycle.ensureDisplay()
+            check(
+                "reopen starts active display lifecycle",
+                lifecycle.lifecycleState == .init(display: .loaded, analysis: .active)
+            )
             check("reopen preserves text and selection", lifecycle.text == "let value = 1\n" && lifecycle.controller.textView.selectedRange() == NSRange(location: 4, length: 5))
             try? FileManager.default.removeItem(at: lifecycleURL)
         } catch {
@@ -258,6 +301,17 @@ extension App {
         let longLineLimit = String(repeating: "a", count: NativeEditorPolicy.maximumNativeLineUTF16Length)
         check("policy line boundary", NativeEditorPolicy.decide(text: longLineLimit).mode == .asynchronousNative)
         check("policy long-line fallback boundary", NativeEditorPolicy.decide(text: longLineLimit + "a").fallbackReason == .maximumLineLength)
+        let unicodeText = String(repeating: "🙂", count: 5_000_000)
+        let unicodeProfile = NativeEditorFileProfile(text: unicodeText)
+        check("policy reports UTF8 and UTF16 independently", unicodeProfile.utf8Bytes == 20_000_000 && unicodeProfile.utf16Length == 10_000_000)
+        check("policy unicode byte fallback wins at equal UTF16 limit", NativeEditorPolicy.decide(text: unicodeText).fallbackReason == .utf8Bytes)
+        let fallbackDocument = Document(name: "fallback.swift", text: unicodeText, language: .swift)
+        check(
+            "fallback does not create native controller",
+            fallbackDocument.isFallback && fallbackDocument.controller == nil
+                && fallbackDocument.lifecycleState.display == .fallback
+                && fallbackDocument.lifecycleState.analysis == .notStarted
+        )
         results.append(["alternative_TextKit2": textKitProbe(), "note": "basic captures only; incremental syntax, IME and multicursor not validated for alternative"])
         if benchmark { await runBenchmarks(into: &results) }
         if let data = try? JSONSerialization.data(withJSONObject: results, options: [.prettyPrinted, .sortedKeys]) { try? data.write(to: URL(fileURLWithPath: evidenceOutput(benchmark: benchmark))) }
@@ -281,6 +335,18 @@ extension App {
         let fixtureRoot = URL(fileURLWithPath: "fixtures")
         for name in ["normal.swift", "1mb.swift", "10mb.swift", "long-line.ts"] {
             guard let text = try? String(contentsOf: fixtureRoot.appendingPathComponent(name), encoding: .utf8) else { continue }
+            let decision = NativeEditorPolicy.decide(text: text)
+            if decision.mode == .webFallback {
+                results.append([
+                    "fixture": name,
+                    "bytes": text.utf8.count,
+                    "skipped": true,
+                    "policy": decision.mode.rawValue,
+                    "fallback_reason": decision.fallbackReason?.rawValue as Any,
+                    "note": "native benchmark skipped because the file exceeded a native safety limit"
+                ])
+                continue
+            }
             print("BENCH START \(name)"); fflush(stdout)
             let cpuStart = clock()
             let openedAt = DispatchTime.now().uptimeNanoseconds

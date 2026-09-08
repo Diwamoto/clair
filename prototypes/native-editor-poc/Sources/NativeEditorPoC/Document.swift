@@ -25,8 +25,9 @@ struct Proposal {
 
 final class Document: NSObject, TextViewCoordinator, NSTextStorageDelegate {
     let name: String
-    let highlightProvider: RevisionAwareHighlightProvider
+    private(set) var highlightProvider: RevisionAwareHighlightProvider?
     let language: CodeLanguage
+    let policyDecision: NativeEditorDecision
     var controller: TextViewController!
     var pendingText: String?
     private(set) var textSnapshot: String
@@ -42,8 +43,10 @@ final class Document: NSObject, TextViewCoordinator, NSTextStorageDelegate {
     var comments: [CommentAnchor] = []
     var proposal: Proposal?
     var onChange: (() -> Void)?
+    private(set) var lifecycleState: NativeEditorLifecycleState
     var text: String { controller?.text ?? textSnapshot }
     var isDirty: Bool { revision != savedRevision }
+    var isFallback: Bool { policyDecision.mode == .webFallback }
     var hasUndoHistory: Bool {
         guard let undo = controller?.textView._undoManager else { return false }
         return undo.canUndo || undo.canRedo
@@ -55,20 +58,28 @@ final class Document: NSObject, TextViewCoordinator, NSTextStorageDelegate {
 
     init(name: String, text: String, language: CodeLanguage) {
         self.name = name
-        self.highlightProvider = RevisionAwareHighlightProvider()
         self.language = language
+        self.policyDecision = NativeEditorPolicy.decide(text: text)
         self.textSnapshot = text
         self.pendingText = text
+        self.lifecycleState = .init(
+            display: policyDecision.mode == .webFallback ? .fallback : .loaded,
+            analysis: policyDecision.mode == .webFallback ? .notStarted : .active
+        )
         super.init()
-        makeController()
+        if !isFallback { makeController() }
     }
 
     private func makeController() {
+        guard !isFallback else { return }
+        let highlightProvider = RevisionAwareHighlightProvider()
+        self.highlightProvider = highlightProvider
         controller = TextViewController(string: "", language: language,
             configuration: .init(appearance: .init(theme: Self.theme,
                 font: .monospacedSystemFont(ofSize: 13, weight: .regular), wrapLines: false),
-                peripherals: .init(showMinimap: false)), cursorPositions: [],
+            peripherals: .init(showMinimap: false)), cursorPositions: [],
             highlightProviders: [highlightProvider], coordinators: [self])
+        lifecycleState = .init(display: .loaded, analysis: .active)
         _ = controller.view
         controller.textView.selectionManager.setSelectedRanges([NSRange(location: 0, length: 0)])
         installObservers()
@@ -91,7 +102,10 @@ final class Document: NSObject, TextViewCoordinator, NSTextStorageDelegate {
         observers.removeAll()
     }
 
-    deinit { removeObservers() }
+    deinit {
+        highlightProvider?.requestClose()
+        removeObservers()
+    }
     /// Marked-range updates are transient notifications. Keep the adapter's multi-cursor
     /// group open across them, then close it after the run-loop turn that commits or cancels
     /// the composition.
@@ -121,6 +135,7 @@ final class Document: NSObject, TextViewCoordinator, NSTextStorageDelegate {
     }
 
     @MainActor func requestInitialHighlight() {
+        guard let highlightProvider, let controller else { return }
         highlightProvider.requestInitialVisibleRange(for: controller.textView)
     }
 
@@ -134,7 +149,7 @@ final class Document: NSObject, TextViewCoordinator, NSTextStorageDelegate {
     }
 
     func ensureDisplay() {
-        guard controller == nil else { return }
+        guard !isFallback, controller == nil else { return }
         let requestedSelection = selectionSnapshot
         makeController()
         restoring = true
@@ -151,12 +166,15 @@ final class Document: NSObject, TextViewCoordinator, NSTextStorageDelegate {
     @discardableResult
     func releaseDisplayCache() -> Bool {
         guard canReleaseDisplayCache, let controller else { return false }
+        highlightProvider?.requestClose()
         textSnapshot = controller.text
         selectionSnapshot = controller.textView.selectedRange()
         scrollOriginSnapshot = controller.scrollView.contentView.bounds.origin
         controller.view.removeFromSuperview()
         removeObservers()
         self.controller = nil
+        self.highlightProvider = nil
+        lifecycleState = .init(display: .displayCacheReleased, analysis: .closeRequestedIdleUnknown)
         return true
     }
     func prepareCoordinator(controller: TextViewController) { controller.textView.addStorageDelegate(self) }

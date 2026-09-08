@@ -26,12 +26,25 @@ struct HighlightRevisionGate {
 final class RevisionAwareHighlightProvider: HighlightProviding {
     private let client = TreeSitterClient()
     private var gate = HighlightRevisionGate()
+    private(set) var lifecycleState: NativeEditorAnalysisLifecycle = .active
+
+    /// Invalidates completions before the display controller is released.
+    /// CodeEditSourceEditor has no cancellable job handle or idle/join callback,
+    /// so this intentionally records an unknown idle state instead of claiming
+    /// that Tree-sitter work has finished.
+    func requestClose() {
+        guard lifecycleState == .active else { return }
+        _ = gate.beginEdit()
+        lifecycleState = .closeRequestedIdleUnknown
+    }
 
     @MainActor func setUp(textView: TextView, codeLanguage: CodeLanguage) {
+        guard lifecycleState == .active else { return }
         client.setUp(textView: textView, codeLanguage: codeLanguage)
     }
 
     @MainActor func willApplyEdit(textView: TextView, range: NSRange) {
+        guard lifecycleState == .active else { return }
         _ = gate.beginEdit()
         client.willApplyEdit(textView: textView, range: range)
     }
@@ -42,6 +55,10 @@ final class RevisionAwareHighlightProvider: HighlightProviding {
         delta: Int,
         completion: @escaping @MainActor (Result<IndexSet, Error>) -> Void
     ) {
+        guard lifecycleState == .active else {
+            completion(.failure(HighlightProvidingError.operationCancelled))
+            return
+        }
         let token = gate.token()
         client.applyEdit(textView: textView, range: range, delta: delta) { [weak self] result in
             guard let self, self.gate.accepts(token) else {
@@ -57,6 +74,10 @@ final class RevisionAwareHighlightProvider: HighlightProviding {
         range: NSRange,
         completion: @escaping @MainActor (Result<[HighlightRange], Error>) -> Void
     ) {
+        guard lifecycleState == .active else {
+            completion(.failure(HighlightProvidingError.operationCancelled))
+            return
+        }
         let token = gate.token()
         client.queryHighlightsFor(textView: textView, range: range) { [weak self] result in
             guard let self, self.gate.accepts(token) else {
@@ -71,6 +92,7 @@ final class RevisionAwareHighlightProvider: HighlightProviding {
     /// The second pass is on the next main-queue turn so the provider sees the
     /// final scroll bounds after AppKit layout/display.
     @MainActor func requestInitialVisibleRange(for textView: TextView) {
+        guard lifecycleState == .active else { return }
         _ = textView.layoutManager.layoutLines()
         postVisibleRangeChange(for: textView)
         DispatchQueue.main.async { [weak self, weak textView] in

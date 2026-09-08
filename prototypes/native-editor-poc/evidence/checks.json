@@ -2,6 +2,16 @@
   {
     "expectedFailure" : false,
     "pass" : true,
+    "test" : "stale highlight revision rejected"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "current highlight revision accepted"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
     "test" : "multicursor inserts two copies"
   },
   {
@@ -147,12 +157,37 @@
   {
     "expectedFailure" : false,
     "pass" : true,
+    "test" : "diff model preserves CRLF and trailing newline"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "diff model assigns hunk and stable row IDs"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "diff view virtualizes visible cells and returns row\/hunk selection"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "diff view mode and width changes retain rows"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
     "test" : "tab preserves document selection scroll undo"
   },
   {
     "expectedFailure" : false,
     "pass" : true,
     "test" : "Swift multiple highlight colors"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "query asset normal.swift"
   },
   {
     "fixture" : "normal.swift",
@@ -213,6 +248,16 @@
     "probe" : "42"
   },
   {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight refresh after edit normal.swift"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "query asset sample.rs"
+  },
+  {
     "fixture" : "sample.rs",
     "highlight_color_count" : 4,
     "view_size" : "{1164, 710}"
@@ -259,6 +304,16 @@
     "probe" : "日本語"
   },
   {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight refresh after edit sample.rs"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "query asset sample.ts"
+  },
+  {
     "fixture" : "sample.ts",
     "highlight_color_count" : 4,
     "view_size" : "{1164, 710}"
@@ -291,6 +346,16 @@
     "fixture" : "sample.ts",
     "matches" : true,
     "probe" : "日本語"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight refresh after edit sample.ts"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "query asset sample.tsx"
   },
   {
     "fixture" : "sample.tsx",
@@ -327,6 +392,16 @@
     "probe" : "🙂"
   },
   {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight refresh after edit sample.tsx"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "query asset sample.json"
+  },
+  {
     "fixture" : "sample.json",
     "highlight_color_count" : 3,
     "view_size" : "{1164, 710}"
@@ -359,6 +434,16 @@
     "fixture" : "sample.json",
     "matches" : true,
     "probe" : "42"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight refresh after edit sample.json"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "query asset sample.md"
   },
   {
     "fixture" : "sample.md",
@@ -397,11 +482,26 @@
   {
     "expectedFailure" : false,
     "pass" : true,
+    "test" : "highlight refresh after edit sample.md"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
     "test" : "clean tab releases display cache"
   },
   {
     "expectedFailure" : false,
-    "pass" : false,
+    "pass" : true,
+    "test" : "display release does not claim parser idle"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "reopen starts active display lifecycle"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
     "test" : "reopen preserves text and selection"
   },
   {
@@ -438,6 +538,21 @@
     "expectedFailure" : false,
     "pass" : true,
     "test" : "policy long-line fallback boundary"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "policy reports UTF8 and UTF16 independently"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "policy unicode byte fallback wins at equal UTF16 limit"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "fallback does not create native controller"
   },
   {
     "alternative_TextKit2" : {

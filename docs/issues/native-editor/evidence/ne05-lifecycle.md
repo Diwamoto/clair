@@ -8,6 +8,22 @@
 - `after_release_footprint_bytes` は `Document.releaseDisplayCache()` 後に0.2秒待って取得した値。peak RSSやinput-to-photonではない。
 - 累積値は既存の `benchmark.json` / `poc-measurements.md` の「先行文書を保持した累積max RSS」。単独値と比較して速度・必要メモリ比を主張しない。
 
+## 2026-09-09 実装後: 表示解放とfallbackの境界
+
+今回の実装では、表示 cache の解放と parser の idle を別状態として記録する。固定したCodeEditSourceEditorにclose用job handle、idle通知、join APIがないため、close時はrevisionを無効化してlate callbackを拒否するが、parser停止完了を推定しない。
+
+native安全上限（UTF-8 bytes `10,000,000`、UTF-16長 `10,000,000`、最大行UTF-16長 `1,000,000`）のいずれかを超える文書は `webFallback` とし、POCはnative controllerとTree-sitterを生成せず、サイズと理由を表示する。これにより10MB fixtureのような文書を解析jobへ無条件投入しない。上限内でUTF-16長が `250,000` を超える文書は引き続き非同期nativeであり、close後idleは未検証である。
+
+### 実装後のprobe
+
+| fixture | policy | display lifecycle | analysis lifecycle | parser idle | fully released | native controller |
+|---|---|---|---|---|---|---|
+| `normal.swift` | `synchronousNative` | `displayCacheReleased` | `closeRequestedIdleUnknown` | `null` | `false` | close後に解放要求 |
+| `10mb.swift` | `webFallback` | `fallback` | `notStarted` | `true` | `false` | 生成しない |
+| `long-line.ts` | `webFallback` | `fallback` | `notStarted` | `true` | `false` | 生成しない |
+
+実行コマンドは `./run.sh --lifecycle-probe -ApplePersistenceIgnoreState YES fixtures/<fixture>`。normalの表示解放は `true` だがparser idleはunknown、10MBはfallbackでexit 0となる。各値は `task_info(TASK_VM_INFO).resident_size` の単独プロセス測定であり、peak RSSやinput-to-photonではない。
+
 ## 2026-09-08 再調査: close後jobのcancel/idle契約
 
 ### API確認

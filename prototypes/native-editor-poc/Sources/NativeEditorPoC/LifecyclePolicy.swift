@@ -1,5 +1,41 @@
 import Foundation
 
+enum NativeEditorDisplayLifecycle: String, Equatable {
+    case loaded
+    case displayCacheReleased
+    case fallback
+}
+
+enum NativeEditorAnalysisLifecycle: String, Equatable {
+    case notStarted
+    case active
+    case closeRequestedIdleUnknown
+    case idleVerified
+}
+
+/// Display memory and parser work have separate completion contracts.
+/// The pinned CodeEditSourceEditor dependency does not expose a close handle
+/// or an idle/join signal, so display release must not imply parser release.
+struct NativeEditorLifecycleState: Equatable {
+    let display: NativeEditorDisplayLifecycle
+    let analysis: NativeEditorAnalysisLifecycle
+
+    var parserIdle: Bool? {
+        switch analysis {
+        case .notStarted, .idleVerified:
+            return true
+        case .active:
+            return false
+        case .closeRequestedIdleUnknown:
+            return nil
+        }
+    }
+
+    var isFullyReleased: Bool {
+        display == .displayCacheReleased && analysis == .idleVerified
+    }
+}
+
 struct NativeEditorFileProfile: Equatable {
     let utf8Bytes: Int
     let utf16Length: Int

@@ -2,24 +2,61 @@ import AppKit
 import CodeEditSourceEditor
 import CodeEditLanguages
 
+final class NativeEditorFallbackView: NSView {
+    private var lines: [String] = []
+
+    override var isFlipped: Bool { true }
+
+    func configure(document: Document) {
+        let profile = NativeEditorFileProfile(text: document.text)
+        let reason = document.policyDecision.fallbackReason?.rawValue ?? "unknown"
+        lines = [
+            "Native editor fallback",
+            document.name,
+            "Reason: \(reason)",
+            "UTF-8 bytes: \(profile.utf8Bytes) · UTF-16 length: \(profile.utf16Length)",
+            "Maximum line UTF-16 length: \(profile.maximumLineUTF16Length)",
+            "The native controller was not created for this document."
+        ]
+        needsDisplay = true
+    }
+
+    override func draw(_ rect: NSRect) {
+        NSColor(srgbRed: 0.12, green: 0.13, blue: 0.15, alpha: 1).setFill()
+        rect.fill()
+        let headingAttributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 15, weight: .semibold),
+            .foregroundColor: NSColor.systemOrange
+        ]
+        let bodyAttributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedSystemFont(ofSize: 13, weight: .regular),
+            .foregroundColor: NSColor.secondaryLabelColor
+        ]
+        for (index, line) in lines.enumerated() {
+            let attributes = index == 0 ? headingAttributes : bodyAttributes
+            (line as NSString).draw(at: NSPoint(x: 24, y: 28 + CGFloat(index * 24)), withAttributes: attributes)
+        }
+    }
+}
+
 final class CommentRail: NSView {
     weak var document: Document?
     override var isFlipped: Bool { true }
     override func draw(_ rect: NSRect) {
         NSColor.controlBackgroundColor.setFill(); rect.fill()
-        guard let d = document else { return }
-        let layout = d.controller.textView.layoutManager!
-        let origin = d.controller.scrollView.contentView.bounds.minY
+        guard let d = document, let controller = d.controller else { return }
+        let layout = controller.textView.layoutManager!
+        let origin = controller.scrollView.contentView.bounds.minY
         for c in d.comments where !c.orphaned {
             guard let line = layout.lineStorage.getLine(atOffset: c.range.location) else { continue }
             ("●" as NSString).draw(at: NSPoint(x: 4, y: line.yPos - origin), withAttributes: [.foregroundColor: NSColor.systemOrange])
         }
     }
     override func mouseDown(with event: NSEvent) {
-        guard let d = document else { return }
-        let y = convert(event.locationInWindow, from: nil).y + d.controller.scrollView.contentView.bounds.minY
-        guard let line = d.controller.textView.layoutManager.lineStorage.getLine(atPosition: y) else { return }
-        let selected = d.controller.textView.selectedRange()
+        guard let d = document, let controller = d.controller else { return }
+        let y = convert(event.locationInWindow, from: nil).y + controller.scrollView.contentView.bounds.minY
+        guard let line = controller.textView.layoutManager.lineStorage.getLine(atPosition: y) else { return }
+        let selected = controller.textView.selectedRange()
         d.addComment(range: selected.length > 0 ? selected : line.range)
         needsDisplay = true
     }
@@ -31,6 +68,7 @@ final class App: NSObject, NSApplicationDelegate {
     var active = 0
     let host = NSView(), status = NSTextField(labelWithString: ""), tabs = NSPopUpButton()
     let rail = CommentRail()
+    let fallbackView = NativeEditorFallbackView(frame: .zero)
     let diffView = NativeDiffView(frame: .zero)
     var diffVisible = false
     var observer: NSObjectProtocol?
@@ -84,23 +122,39 @@ final class App: NSObject, NSApplicationDelegate {
         if let observer { NotificationCenter.default.removeObserver(observer) }
         doc.ensureDisplay()
         host.subviews.forEach { $0.removeFromSuperview() }
-        let view = diffVisible ? diffView : doc.controller.view
+        let view: NSView
+        if diffVisible {
+            view = diffView
+        } else if let controller = doc.controller {
+            view = controller.view
+        } else {
+            fallbackView.configure(document: doc)
+            view = fallbackView
+        }
         view.frame = host.bounds; view.autoresizingMask = [.width, .height]; host.addSubview(view)
         window.contentView?.layoutSubtreeIfNeeded()
-        let initialLoad = doc.pendingText != nil
-        doc.loadPendingText()
-        _ = doc.controller.textView.layoutManager.layoutLines()
-        NotificationCenter.default.post(name: NSView.boundsDidChangeNotification, object: doc.controller.scrollView.contentView)
-        if initialLoad { doc.requestInitialHighlight() }
-        rail.document = doc; rail.isHidden = diffVisible; tabs.selectItem(at: active)
-        doc.controller.scrollView.contentView.postsBoundsChangedNotifications = true
-        observer = NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification, object: doc.controller.scrollView.contentView, queue: .main) { [weak self] _ in self?.rail.needsDisplay = true }
-        window.makeFirstResponder(diffVisible ? diffView.table : doc.controller.textView); refresh()
+        if let controller = doc.controller {
+            let initialLoad = doc.pendingText != nil
+            doc.loadPendingText()
+            _ = controller.textView.layoutManager.layoutLines()
+            NotificationCenter.default.post(name: NSView.boundsDidChangeNotification, object: controller.scrollView.contentView)
+            if initialLoad { doc.requestInitialHighlight() }
+            controller.scrollView.contentView.postsBoundsChangedNotifications = true
+            observer = NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification, object: controller.scrollView.contentView, queue: .main) { [weak self] _ in self?.rail.needsDisplay = true }
+        }
+        rail.document = doc; rail.isHidden = diffVisible || doc.controller == nil; tabs.selectItem(at: active)
+        window.makeFirstResponder(diffVisible ? diffView.table : (doc.controller?.textView ?? fallbackView)); refresh()
     }
     func refresh() {
         guard !documents.isEmpty else { return }
+        guard let controller = doc.controller else {
+            let reason = doc.policyDecision.fallbackReason?.rawValue ?? "unknown"
+            status.stringValue = "native fallback · \(doc.name) · reason \(reason)"
+            rail.needsDisplay = true
+            return
+        }
         let comments = doc.comments.map { "\($0.orphaned ? "orphan" : "UTF16 \($0.range.location):\($0.range.length)") \($0.text)" }.joined(separator: " | ")
-        status.stringValue = "rev \(doc.revision) · selection \(doc.controller.textView.selectedRange()) · \(comments)"
+        status.stringValue = "rev \(doc.revision) · selection \(controller.textView.selectedRange()) · \(comments)"
         rail.needsDisplay = true
     }
     @objc func switchTab() {
@@ -123,15 +177,17 @@ final class App: NSObject, NSApplicationDelegate {
         if panel.runModal() == .OK { for url in panel.urls { if let text = try? String(contentsOf: url, encoding: .utf8) { add(name: url.lastPathComponent, text: text, language: languageFor(url.path)) } }; editor() }
     }
     @objc func multi() {
-        let layout = doc.controller.textView.layoutManager!
+        guard let controller = doc.controller else { refresh(); return }
+        let layout = controller.textView.layoutManager!
         let ranges = (0..<min(3, layout.lineCount)).compactMap { layout.lineStorage.getLine(atIndex: $0).map { NSRange(location: $0.range.location, length: 0) } }
-        doc.controller.textView.selectionManager.setSelectedRanges(ranges)
-        window.makeFirstResponder(doc.controller.textView)
+        controller.textView.selectionManager.setSelectedRanges(ranges)
+        window.makeFirstResponder(controller.textView)
     }
-    @objc func comment() { doc.addComment(range: doc.controller.textView.selectedRange()) }
+    @objc func comment() { guard let controller = doc.controller else { refresh(); return }; doc.addComment(range: controller.textView.selectedRange()) }
     @objc func propose() {
+        guard doc.controller != nil else { refresh(); return }
         doc.propose()
-        let old = doc.controller.text
+        let old = doc.text
         let proposed = NSMutableString(string: old)
         for (range, text) in doc.proposal!.edits.reversed() { proposed.replaceCharacters(in: range, with: text) }
         let diff = NativeDiffModel.calculate(
