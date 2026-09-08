@@ -17,7 +17,7 @@ CodeEdit系は条件付き候補。実IME未検証、上流複数カーソルUnd
 | [NE-04](NE-04.md) | 初回ハイライトと解析スケジューリングを改善する | NE-00 | done |
 | [NE-05](NE-05.md) | メモリ保持を調べてタブ解放・大規模ファイル方針を作る | NE-00 | open |
 | [NE-06](NE-06.md) | コメントanchorを編集・Undoに追従させる | NE-02 | done |
-| [NE-07](NE-07.md) | 行操作とコメントUIを折返し・折畳みに対応させる | NE-03, NE-06 | open |
+| [NE-07](NE-07.md) | 行操作とコメントUIを折返し・折畳みに対応させる | NE-03, NE-06 | blocked |
 | [NE-08](NE-08.md) | 任意差分の行・hunkモデルを作る | NE-02 | done |
 | [NE-09](NE-09.md) | ネイティブread-only diff表示を完成させる | NE-04, NE-08 | open |
 | [NE-10](NE-10.md) | 任意の行・hunkに対するAI部分適用を実装する | NE-02, NE-08 | open |
