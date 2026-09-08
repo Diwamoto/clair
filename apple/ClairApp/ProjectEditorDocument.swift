@@ -144,6 +144,18 @@ final class ProjectEditorDocumentModel {
     )
   }
 
+  /// Replaces the document at an explicit synchronization boundary.
+  ///
+  /// External reloads and native host restores are not represented as a
+  /// collection of user edits. They invalidate the old coordinate space, so
+  /// the caller supplies the revision that the next bridge snapshot should
+  /// advertise (or lets the model advance it once).
+  func replaceSnapshot(content newContent: String, revision newRevision: UInt64? = nil) {
+    content = newContent
+    revision = newRevision ?? revision &+ 1
+    selection = nil
+  }
+
   func setSelection(_ nextSelection: ProjectEditorUTF16Range?) throws {
     if let nextSelection {
       try validate(
