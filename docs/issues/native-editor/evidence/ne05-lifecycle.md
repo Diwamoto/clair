@@ -8,6 +8,34 @@
 - `after_release_footprint_bytes` は `Document.releaseDisplayCache()` 後に0.2秒待って取得した値。peak RSSやinput-to-photonではない。
 - 累積値は既存の `benchmark.json` / `poc-measurements.md` の「先行文書を保持した累積max RSS」。単独値と比較して速度・必要メモリ比を主張しない。
 
+## 2026-09-08 再調査: close後jobのcancel/idle契約
+
+### API確認
+
+`Package.resolved` の `CodeEditSourceEditor` 固定revisionは `1fa4d3c3ffba007482111466cb9721416f97ae00` である。このrevisionの実装では次の境界になっている。
+
+|確認対象|既存APIの挙動|NE-05への意味|
+|---|---|---|
+|`TreeSitterClient.setUp`|内部で全jobをcancelするが、直後に新しい`.reset` setup jobを投入|close cancelとして使うと新しいparseを開始する|
+|`TreeSitterClient.applyEdit`|edit開始時に低優先度jobをcancelし、cancel callbackを返す|close後のparser/query全体を止めるAPIではない|
+|`TreeSitterClient.queryHighlightsFor`|結果callbackのみ。jobのhandleは返さない|個別queryをclose時にcancelできない|
+|`TreeSitterExecutor.cancelAll`|`package` scope。即時停止を保証しない|PoC consumerから呼べず、呼べてもidle確認にはならない|
+|`TreeSitterExecutor`|queue empty待機、running taskのjoin、idle通知がない|controller/parser/delegateの解放を証明できない|
+|PoC `RevisionAwareHighlightProvider`|edit/query completionでgeneration不一致を拒否|stale結果防止のみ。実行停止・in-flight追跡ではない|
+|PoC `Document.releaseDisplayCache`|controller/view/observerを外すがprovider/clientは`Document`所有|close後もexecutor jobの寿命が残る|
+
+したがって、既存APIだけで「close → parser/query jobが停止 → idleを確認 → controller/parser/delegateが解放」を安全に実装することはできない。`setUp` の副作用やproviderのdeinitに依存する実装は、新しい解析jobの投入またはjoinされない非同期処理を残すため採用しない。generation gateは必要だが、それだけではメモリ保持の完了条件を満たさない。
+
+### 再現手順
+
+1. `fixtures/10mb.swift` を生成し、PoCをReleaseでbuild/packageする。
+2. `NativeEditorPoC --lifecycle-probe -ApplePersistenceIgnoreState YES fixtures/10mb.swift` を実行する。
+3. probeはopen footprint、close前 footprint、`Document.releaseDisplayCache()` の戻り値、0.2秒後の footprintを記録する。
+4. 既存証跡では、解放APIは `true` だが、close前 `323,502,080` bytes に対してclose後 `411,549,696` bytesとなった。controller解放だけではTree-sitterの非同期parse/query jobが停止・idleしたとは判定できない。
+5. 固定checkoutの `TreeSitterClient.swift` と `TreeSitterExecutor.swift` を確認すると、公開されたclose cancel handleまたはidle/join APIが存在しない。`cancelAll` はpackage scopeで、キャンセルも即時停止を保証しない。
+
+この再現は既存の10MB lifecycle probe結果に基づく。今回の再調査では同一Macの競合を避けるため、Xcode host testとGUI benchmarkを追加実行していない。必要な解決は、upstreamまたはfork側で job単位のcancel、generation付きcompletion、cancel完了後のidle/joinを公開し、その契約をPoCで検証することである。
+
 ## 結果
 
 | fixture | bytes / UTF-16 / 最大行UTF-16 | policy | 単独open footprint | close前 | close後 | 解放API |
