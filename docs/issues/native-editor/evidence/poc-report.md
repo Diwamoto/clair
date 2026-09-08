@@ -7,18 +7,18 @@ PoCでは6言語のTree-sitterハイライト、範囲変更通知によるコ�
 ## 作業の隔離と比較対象
 
 - 原PoC作業場所: `/Users/daiki/.codex/worktrees/afc2/clair`。開始時クリーンな既存の隔離worktree、detached HEAD `d4fe851fb85f2e4e06993b53934b31c3a378fb97`。
-- 共有正本は [`prototypes/native-editor-poc`](../../../prototypes/native-editor-poc)。原PoCの未コミット変更を編集・破棄していない。公開・push・リリースなし。
-- 元チェックアウト: `/Users/daiki/Projects/clair`。開始時点の状態と重要ファイルのSHA-256は [baseline.json](evidence/baseline.json)。別作業による変更との混同を避けるため、HEADだけで未コミット実装を識別しない。
+- 共有正本は [`prototypes/native-editor-poc`](../../../../prototypes/native-editor-poc)。原PoCの未コミット変更を編集・破棄していない。公開・push・リリースなし。
+- 元チェックアウト: `/Users/daiki/Projects/clair`。開始時点の状態と重要ファイルのSHA-256は [baseline.json](../../../../prototypes/native-editor-poc/evidence/baseline.json)。別作業による変更との混同を避けるため、HEADだけで未コミット実装を識別しない。
 - 比較A: 上記HEADのCodeMirrorEditor/NativeEditor/ContentView。ソース調査対象。コミット時点のdiffはSwiftUIの`ScrollView + Text`によるunified patch表示。
-- 比較B: 元チェックアウトの未コミット版`editor-web/src/diff-main.ts`, `diff.ts`, `native-bridge.ts`など。unified patchを解析し、CodeMirrorのガターと行装飾で表示する。左右独立編集用のMergeViewとは異なる。凍結した実ビルド資産は [web-baseline.json](evidence/web-baseline.json) で識別し、`.build/baseline-web`に保存。
-- 比較C: CodeEditSourceEditor固定revision、依存解決は [Package.resolved](../../../prototypes/native-editor-poc/Package.resolved)。実測PoCのソースは共有正本に保存した。
+- 比較B: 元チェックアウトの未コミット版`editor-web/src/diff-main.ts`, `diff.ts`, `native-bridge.ts`など。unified patchを解析し、CodeMirrorのガターと行装飾で表示する。左右独立編集用のMergeViewとは異なる。凍結した実ビルド資産は [web-baseline.json](../../../../prototypes/native-editor-poc/evidence/web-baseline.json) で識別し、`.build/baseline-web`に保存。
+- 比較C: CodeEditSourceEditor固定revision、依存解決は [Package.resolved](../../../../prototypes/native-editor-poc/Package.resolved)。実測PoCのソースは共有正本に保存した。
 - 比較D: ローカルのVS Code 1.136.1。専用user-data-dirとextensions-dir、開発用の小さなベンチマーク拡張のみ。通常のユーザー環境は変更しない。
 
 **Web測定はClairの現行資産を載せたWKWebViewハーネスであり、Clair全体の測定ではない。** Swift側の全文代入・SwiftUI再描画、プロジェクトのバックグラウンド処理は含まれない。全体での公平な比較は未検証。
 
 ## 移行経緯と現状
 
-[ADR-0001](../../docs/decisions/0001-adopt-swiftui-appkit-frontend.md)は、SwiftUIを一般的な画面、AppKitを高頻度・macOS固有ビューに使い、エディタのIME・Unicode・large fileを実測する方針。ADR-0010による置換はRust core再利用条項だけで、frontend選択は有効。
+[ADR-0001](../../../decisions/0001-adopt-swiftui-appkit-frontend.md)は、SwiftUIを一般的な画面、AppKitを高頻度・macOS固有ビューに使い、エディタのIME・Unicode・large fileを実測する方針。ADR-0010による置換はRust core再利用条項だけで、frontend選択は有効。
 
 `NativeEditor.swift`には文書・保存・ローカル履歴などの基盤に加え、従来の`NSTextView` wrapperと正規表現によるハイライトが残る。編集後に`textView.string`を文書へ渡し、ハイライト時も全文の状態を比較する。IME marked text中のハイライト回避がある。これをそのまま再有効化しても今回の性能・品質要件の解決にはならない。
 
@@ -28,7 +28,7 @@ PoCでは6言語のTree-sitterハイライト、範囲変更通知によるコ�
 
 ## 固定依存・ライセンス
 
-直接・間接依存のrevisionとライセンスファイルのハッシュは [dependencies.json](evidence/dependencies.json)。バイナリgrammarのソース側解決記録は [grammar-source-pins.json](evidence/grammar-source-pins.json)。後者だけで配布バイナリとの完全な対応・全license noticeの収録を保証しない。
+直接・間接依存のrevisionとライセンスファイルのハッシュは [dependencies.json](../../../../prototypes/native-editor-poc/evidence/dependencies.json)。バイナリgrammarのソース側解決記録は [grammar-source-pins.json](../../../../prototypes/native-editor-poc/evidence/grammar-source-pins.json)。後者だけで配布バイナリとの完全な対応・全license noticeの収録を保証しない。
 
 |依存|実解決|確認結果|
 |---|---|---|
@@ -66,7 +66,7 @@ PoCでは6言語のTree-sitterハイライト、範囲変更通知によるコ�
 
 ## 機能別結果
 
-「合格」は記載したfixture/API範囲に限る。詳細は [checks.json](evidence/checks.json)、[benchmark-async.log](evidence/benchmark-async.log)。未検証をAPIの存在で合格へ変更しない。
+「合格」は記載したfixture/API範囲に限る。詳細は [checks.json](../../../../prototypes/native-editor-poc/evidence/checks.json)、[benchmark-async.log](../../../../prototypes/native-editor-poc/evidence/benchmark-async.log)。未検証をAPIの存在で合格へ変更しない。
 
 |項目|判定|範囲・制約|
 |---|---|---|
@@ -92,7 +92,7 @@ PoCでは6言語のTree-sitterハイライト、範囲変更通知によるコ�
 
 ## 見つかった問題と対応
 
-1. **生成時に大きい文字列を渡すと画面に載る前に大量の行viewを作る。** 最初の計測は90秒以上で1コアほぼ100%、physical footprint約758MiB。`TextView.init → TextLayoutManager.layoutLines → NSView.addSubview / z-order invalidation`を [sample](evidence/eager-constructor-sample.txt) に保存。空viewを配置後に`setText`する公開APIの経路へ変更して完走した。
+1. **生成時に大きい文字列を渡すと画面に載る前に大量の行viewを作る。** 最初の計測は90秒以上で1コアほぼ100%、physical footprint約758MiB。`TextView.init → TextLayoutManager.layoutLines → NSView.addSubview / z-order invalidation`を [sample](../../../../prototypes/native-editor-poc/evidence/eager-constructor-sample.txt) に保存。空viewを配置後に`setText`する公開APIの経路へ変更して完走した。
 2. **背景にNSColor.textBackgroundColorをそのまま渡すと例外。** minimapを非表示にしていても`brightnessComponent`を呼び、catalog colorで例外となった。RGB背景のthemeで回避。アプリが固まったのではなく、AppKitが初期化中の例外を捕捉してwindow setupが未完了だった。
 3. **Swift CLIのリソース差異。** Symbolsの`Bundle.module`生成とLanguagesの`Resources/Resources`参照を補正。Parserだけ動作してもquery不在なら色が付かない。最終版は全6言語のqueryの存在と色を検証済み。
 4. **初回可視範囲。** 遅延setText後に公開layout APIで配置を確定し、scroll bounds変更通知で可視highlightを更新。初期本文の再代入で毎回直す方法は使わない。
@@ -104,7 +104,7 @@ PoCでは6言語のTree-sitterハイライト、範囲変更通知によるコ�
 
 ## 測定条件・解釈
 
-生データから生成した数値表は [MEASUREMENTS.md](MEASUREMENTS.md)。fixtureは [fixtures.json](evidence/fixtures.json) のbyte数/SHA-256で固定。
+生データから生成した数値表は [MEASUREMENTS.md](../../../../prototypes/native-editor-poc/MEASUREMENTS.md)。fixtureは [fixtures.json](../../../../prototypes/native-editor-poc/evidence/fixtures.json) のbyte数/SHA-256で固定。
 
 - 同じApple M4（10 logical CPU）、32GiB、macOS 26.6.2、arm64、Swift 6.3.3。Release build。ユーザーの他アプリは動作中で、完全idleやthermal状態を統制したラボ測定ではない。
 - Nativeは約1164×710の本文可視領域、13pt monospaced、折返しoff、minimap非表示。VS Codeは独立profileの標準画面・標準settingsであり、本文viewport・font設定まで一致していない。
