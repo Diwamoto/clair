@@ -30,6 +30,7 @@ final class Document: NSObject, TextViewCoordinator, NSTextStorageDelegate {
     var revision = 0
     var groupMulticursorEdits = true
     private var ownsUndoGroup = false
+    private var undoGroupCloseScheduled = false
     private var observers: [NSObjectProtocol] = []
     var comments: [CommentAnchor] = []
     var proposal: Proposal?
@@ -51,11 +52,38 @@ final class Document: NSObject, TextViewCoordinator, NSTextStorageDelegate {
             self.ownsUndoGroup = true; undo.beginUndoGrouping()
         })
         observers.append(NotificationCenter.default.addObserver(forName: CodeEditTextView.TextView.textDidChangeNotification, object: controller.textView, queue: .main) { [weak self] _ in
-            guard let self, self.ownsUndoGroup else { return }
-            self.controller.textView.undoManager?.endUndoGrouping(); self.ownsUndoGroup = false
+            self?.scheduleMulticursorUndoGroupClose()
         })
     }
     deinit { observers.forEach(NotificationCenter.default.removeObserver) }
+
+    /// Marked-range updates are transient notifications. Keep the adapter's multi-cursor
+    /// group open across them, then close it after the run-loop turn that commits or cancels
+    /// the composition.
+    private func scheduleMulticursorUndoGroupClose() {
+        guard ownsUndoGroup, !undoGroupCloseScheduled else { return }
+        undoGroupCloseScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.undoGroupCloseScheduled = false
+            guard self.ownsUndoGroup else { return }
+            guard let textView = self.controller.textView else {
+                self.ownsUndoGroup = false
+                return
+            }
+            guard let undo = textView._undoManager else {
+                self.ownsUndoGroup = false
+                return
+            }
+            guard !undo.isUndoing, !undo.isRedoing else {
+                self.scheduleMulticursorUndoGroupClose()
+                return
+            }
+            guard !textView.hasMarkedText() else { return }
+            if undo.isGrouping { undo.endUndoGrouping() }
+            self.ownsUndoGroup = false
+        }
+    }
     func prepareCoordinator(controller: TextViewController) { controller.textView.addStorageDelegate(self) }
     func textStorage(_ storage: NSTextStorage, didProcessEditing mask: NSTextStorageEditActions,
                      range editedRange: NSRange, changeInLength delta: Int) {

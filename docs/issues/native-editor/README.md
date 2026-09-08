@@ -13,7 +13,7 @@ CodeEdit系は条件付き候補。実IME未検証、上流複数カーソルUnd
 | [NE-00](NE-00.md) | PoCを再現可能な共有ベースへ移す | なし | done |
 | [NE-01](NE-01.md) | 配布依存と必要言語の許諾を確定する | NE-00 | blocked |
 | [NE-02](NE-02.md) | 文書の差分更新・revision契約を実装する | NE-00 | done |
-| [NE-03](NE-03.md) | 実IME・Unicode操作・Undoの不具合を潰す | NE-00 | open |
+| [NE-03](NE-03.md) | 実IME・Unicode操作・Undoの不具合を潰す | NE-00 | blocked |
 | [NE-04](NE-04.md) | 初回ハイライトと解析スケジューリングを改善する | NE-00 | open |
 | [NE-05](NE-05.md) | メモリ保持を調べてタブ解放・大規模ファイル方針を作る | NE-00 | open |
 | [NE-06](NE-06.md) | コメントanchorを編集・Undoに追従させる | NE-02 | done |

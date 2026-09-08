@@ -32,6 +32,7 @@ extension App {
         t.selectionManager.setSelectedRanges([NSRange(location: 0, length: 0), NSRange(location: 3, length: 0)])
         t.insertText("X"); t.undoManager?.undo()
         check("adapter multicursor single undo", d.controller.text == original)
+        await pump()
         reset()
         d.addComment(range: NSRange(location: 3, length: 2))
         let beforeLength = t.textStorage.length
@@ -57,6 +58,51 @@ extension App {
         check("synthetic marked text", t.hasMarkedText())
         t.insertText("日本", replacementRange: t.markedRange())
         check("synthetic composition commit", !t.hasMarkedText() && d.controller.text.hasPrefix("日本"))
+        await pump()
+        reset()
+
+        let unicode = "A👨‍👩‍👧‍👦e\u{301}日本語\nB"
+        d.controller.setText(unicode)
+        t.selectionManager.setSelectedRange(NSRange(location: 0, length: 0))
+        let family = (unicode as NSString).range(of: "👨‍👩‍👧‍👦")
+        let familyInterior = NSRange(location: family.location + 2, length: 0)
+        var actual = NSRange(location: NSNotFound, length: 0)
+        let familyResult = t.attributedSubstring(forProposedRange: familyInterior, actualRange: &actual)
+        check("family emoji input range stays grapheme aligned", actual == family && familyResult?.string == "👨‍👩‍👧‍👦")
+        var rectRange = NSRange(location: NSNotFound, length: 0)
+        _ = t.firstRect(forCharacterRange: familyInterior, actualRange: &rectRange)
+        check("IME candidate range expands to family grapheme", rectRange == family)
+        let combining = (unicode as NSString).range(of: "e\u{301}")
+        var combiningActual = NSRange(location: NSNotFound, length: 0)
+        let combiningResult = t.attributedSubstring(
+            forProposedRange: NSRange(location: combining.location + 1, length: 0),
+            actualRange: &combiningActual
+        )
+        check("combining mark input range stays grapheme aligned", combiningActual == combining && combiningResult?.string == "e\u{301}")
+
+        t.selectionManager.setSelectedRange(NSRange(location: family.max, length: 0))
+        t.deleteBackward(nil)
+        check("backspace removes family emoji as one grapheme", d.controller.text == "Ae\u{301}日本語\nB")
+        t.undoManager?.undo()
+        check("family emoji deletion undo restores text", d.controller.text == unicode)
+        t.selectionManager.setSelectedRange(NSRange(location: combining.max, length: 0))
+        t.deleteBackward(nil)
+        check("backspace removes combining sequence as one grapheme", d.controller.text == "A👨‍👩‍👧‍👦日本語\nB")
+        t.undoManager?.undo()
+        check("combining sequence deletion undo restores text", d.controller.text == unicode)
+
+        reset()
+        t.selectionManager.setSelectedRange(NSRange(location: 0, length: 0))
+        t.setMarkedText("にほん", selectedRange: NSRange(location: 3, length: 0), replacementRange: NSRange(location: NSNotFound, length: 0))
+        t.setMarkedText("にほんご", selectedRange: NSRange(location: 4, length: 0), replacementRange: NSRange(location: NSNotFound, length: 0))
+        check("composition updates do not enter undo history", t.hasMarkedText() && !(t.undoManager?.canUndo ?? true), expectedFailure: true)
+        t.insertText("日本語", replacementRange: NSRange(location: NSNotFound, length: 0))
+        await pump()
+        check("composition commit clears marked text", !t.hasMarkedText() && d.controller.text.hasPrefix("日本語"))
+        t.undoManager?.undo()
+        check("composition commit is one undo unit", d.controller.text == original)
+        t.undoManager?.redo()
+        check("composition commit redo restores text", d.controller.text.hasPrefix("日本語"))
         let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("clair-poc-\(UUID().uuidString).txt")
         do { try d.save(to: url); let read = try String(contentsOf: url, encoding: .utf8); check("UTF8 save roundtrip", read == d.controller.text); try FileManager.default.removeItem(at: url) }
         catch { check("UTF8 save roundtrip", false) }

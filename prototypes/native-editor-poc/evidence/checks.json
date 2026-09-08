@@ -77,6 +77,61 @@
   {
     "expectedFailure" : false,
     "pass" : true,
+    "test" : "family emoji input range stays grapheme aligned"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "IME candidate range expands to family grapheme"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "combining mark input range stays grapheme aligned"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "backspace removes family emoji as one grapheme"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "family emoji deletion undo restores text"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "backspace removes combining sequence as one grapheme"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "combining sequence deletion undo restores text"
+  },
+  {
+    "expectedFailure" : true,
+    "pass" : false,
+    "test" : "composition updates do not enter undo history"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "composition commit clears marked text"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "composition commit is one undo unit"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "composition commit redo restores text"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
     "test" : "UTF8 save roundtrip"
   },
   {
