@@ -95,4 +95,21 @@ final class ProjectEditorWebBridgeTests: XCTestCase {
     XCTAssertEqual(decoded, change)
     XCTAssertFalse(String(decoding: data, as: UTF8.self).contains("content"))
   }
+
+  func testSelectionEnvelopeContainsNoDocumentOrRevisionFields() throws {
+    let change = ProjectEditorWebSelectionChange(
+      selection: ProjectEditorWebSelection(from: 10, to: 12),
+      canUndo: true,
+      canRedo: false
+    )
+
+    let data = try JSONEncoder().encode(change)
+    let json = String(decoding: data, as: UTF8.self)
+
+    XCTAssertTrue(json.contains("selection"))
+    XCTAssertTrue(json.contains("canUndo"))
+    XCTAssertFalse(json.contains("content"))
+    XCTAssertFalse(json.contains("baseRevision"))
+    XCTAssertFalse(json.contains("changes"))
+  }
 }
