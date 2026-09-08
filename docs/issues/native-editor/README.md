@@ -19,7 +19,7 @@ CodeEdit系は条件付き候補。実IME未検証、上流複数カーソルUnd
 | [NE-06](NE-06.md) | コメントanchorを編集・Undoに追従させる | NE-02 | done |
 | [NE-07](NE-07.md) | 行操作とコメントUIを折返し・折畳みに対応させる | NE-03, NE-06 | blocked |
 | [NE-08](NE-08.md) | 任意差分の行・hunkモデルを作る | NE-02 | done |
-| [NE-09](NE-09.md) | ネイティブread-only diff表示を完成させる | NE-04, NE-08 | open |
+| [NE-09](NE-09.md) | ネイティブread-only diff表示を完成させる | NE-04, NE-08 | done |
 | [NE-10](NE-10.md) | 任意の行・hunkに対するAI部分適用を実装する | NE-02, NE-08 | open |
 | [NE-11](NE-11.md) | 通常エディタを本番ホストへopt-inで接続する | NE-01, NE-02, NE-03, NE-04, NE-05 | open |
 | [NE-12](NE-12.md) | Clair全体とVS Codeを同条件で測定する | NE-11, NE-14 | open |

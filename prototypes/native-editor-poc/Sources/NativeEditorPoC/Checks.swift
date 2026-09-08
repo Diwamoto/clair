@@ -9,6 +9,9 @@ func milliseconds(_ work: () -> Void) -> Double {
     return Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000
 }
 func evidenceOutput(benchmark: Bool) -> String {
+    if CommandLine.arguments.contains("--ne09") {
+        return benchmark ? "evidence/benchmark-ne09.json" : "evidence/checks-ne09.json"
+    }
     if CommandLine.arguments.contains("--ne04") {
         return benchmark ? "evidence/benchmark-ne04.json" : "evidence/checks-ne04.json"
     }
@@ -158,6 +161,29 @@ extension App {
         check("diff insertion alignment", rows.count == 4 && rows[2].old == nil && rows[3].oldLine == 3 && rows[3].newLine == 4)
         let deletion = alignedRows(old: "a\nx\ny\nc", new: "a\nb\nc")
         check("diff deletion alignment", deletion.count == 4 && deletion[2].new == nil)
+        let modelOld = NativeDiffInput(documentID: "fixture", path: "fixture.swift", revision: 7, content: "one\r\nsame\r\nlast")
+        let modelNew = NativeDiffInput(documentID: "fixture", path: "fixture.swift", revision: 8, content: "one\r\nchanged\r\nlast\r\n")
+        let modelDiff = NativeDiffModel.calculate(old: modelOld, new: modelNew)
+        check("diff model preserves CRLF and trailing newline", modelDiff.reconstructOldSource() == modelOld.content && modelDiff.reconstructNewSource() == modelNew.content)
+        check("diff model assigns hunk and stable row IDs", modelDiff.rows.contains { $0.hunkID != nil } && modelDiff.rows.map(\.id) == NativeDiffModel.calculate(old: modelOld, new: modelNew).rows.map(\.id))
+        let largeDiffOld = (0..<10_000).map { "line \($0)" }.joined(separator: "\n")
+        let largeDiffNew = (0..<10_000).map { $0 % 5 == 0 ? "changed \($0)" : "line \($0)" }.joined(separator: "\n")
+        let interactiveDiff = NativeDiffModel.calculate(old: .init(documentID: "large", path: "large.swift", revision: 1, content: largeDiffOld), new: .init(documentID: "large", path: "large.swift", revision: 2, content: largeDiffNew))
+        diffView.set(result: interactiveDiff, language: "swift", mode: .split)
+        diffVisible = true
+        show()
+        window.contentView?.layoutSubtreeIfNeeded()
+        diffView.table.scrollRowToVisible(min(9_999, max(0, diffView.table.numberOfRows - 1)))
+        diffView.table.selectRowIndexes(IndexSet(integer: min(1, max(0, diffView.table.numberOfRows - 1))), byExtendingSelection: false)
+        check("diff view virtualizes visible cells and returns row/hunk selection", diffView.generatedCellCount > 0 && diffView.lastSelection?.rowID.isEmpty == false)
+        diffView.setMode(.unified)
+        window.contentView?.layoutSubtreeIfNeeded()
+        diffView.setFrameSize(NSSize(width: 760, height: diffView.frame.height))
+        diffView.layoutSubtreeIfNeeded()
+        check("diff view mode and width changes retain rows", diffView.mode == .unified && diffView.table.numberOfRows == interactiveDiff.rows.count)
+        diffView.setMode(.split)
+        diffVisible = false
+        show()
         let selected = t.selectedRange(), scroll = d.controller.scrollView.contentView.bounds.origin
         add(name: "second.swift", text: "let second = 2", language: .swift); show(); active = 0; show()
         check("tab preserves document selection scroll undo", doc === d && t.selectedRange() == selected && d.controller.scrollView.contentView.bounds.origin == scroll && t.undoManager!.canUndo)
@@ -292,10 +318,14 @@ extension App {
         let a = (0..<10000).map { "line \($0)" }.joined(separator: "\n")
         let b = (0..<10000).map { $0 % 5 == 0 ? "changed \($0)" : "line \($0)" }.joined(separator: "\n")
         var count = 0
-        let diffTime = milliseconds { count = alignedRows(old: a, new: b).count }
-        let displayTime = milliseconds { rows = alignedRows(old: a, new: b); table.reloadData(); diffVisible = true; show(); window.displayIfNeeded() }
+        let benchmarkOld = NativeDiffInput(documentID: "bench", path: "large.swift", revision: 1, content: a)
+        let benchmarkNew = NativeDiffInput(documentID: "bench", path: "large.swift", revision: 2, content: b)
+        let diffTime = milliseconds { count = NativeDiffModel.calculate(old: benchmarkOld, new: benchmarkNew).rows.count }
+        var benchmarkResult: NativeDiffResult?
+        let displayTime = milliseconds { benchmarkResult = NativeDiffModel.calculate(old: benchmarkOld, new: benchmarkNew); if let benchmarkResult { diffView.set(result: benchmarkResult, language: "swift", mode: .split) }; diffVisible = true; show(); window.displayIfNeeded() }
         var diffScrollTimes: [Double] = []
-        for i in 0..<20 { diffScrollTimes.append(milliseconds { table.scrollRowToVisible(i * 100); window.displayIfNeeded() }); await pump(0.02) }
-        results.append(["fixture": "10000 lines / 2000 replacements diff", "alignment_ms": diffTime, "alignment_and_display_ms": displayTime, "scroll_sync_ms": diffScrollTimes, "rows": count])
+        for i in 0..<20 { diffScrollTimes.append(milliseconds { diffView.table.scrollRowToVisible(i * 100); window.displayIfNeeded() }); await pump(0.02) }
+        diffView.setMode(.unified); window.contentView?.layoutSubtreeIfNeeded(); diffView.setFrameSize(NSSize(width: 760, height: diffView.frame.height)); diffView.layoutSubtreeIfNeeded(); diffView.setMode(.split)
+        results.append(["fixture": "10000 lines / 2000 replacements diff", "alignment_ms": diffTime, "alignment_and_display_ms": displayTime, "scroll_sync_ms": diffScrollTimes, "rows": count, "visible_cells_created": diffView.generatedCellCount, "modes_tested": ["split", "unified"], "width_change_tested": true])
     }
 }

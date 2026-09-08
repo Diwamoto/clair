@@ -25,14 +25,13 @@ final class CommentRail: NSView {
     }
 }
 @MainActor
-final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTableViewDelegate {
+final class App: NSObject, NSApplicationDelegate {
     var window: NSWindow!
     var documents: [Document] = []
     var active = 0
     let host = NSView(), status = NSTextField(labelWithString: ""), tabs = NSPopUpButton()
     let rail = CommentRail()
-    let table = NSTableView(), diffScroll = NSScrollView()
-    var rows: [DiffRow] = []
+    let diffView = NativeDiffView(frame: .zero)
     var diffVisible = false
     var observer: NSObjectProtocol?
     var doc: Document { documents[active] }
@@ -62,12 +61,12 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
         let paths = CommandLine.arguments.dropFirst().filter { !$0.hasPrefix("--") }
         for path in paths { if let text = try? String(contentsOfFile: path, encoding: .utf8) { add(name: URL(fileURLWithPath: path).lastPathComponent, text: text, language: languageFor(path)) } }
         if documents.isEmpty { add(name: "sample.swift", text: "// 日本語 👨‍👩‍👧‍👦 é\nlet greeting = \"こんにちは\"\nlet count = 42\n", language: .swift) }
-        for (id, title) in [("old", "Original"), ("new", "Proposed")] {
-            let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(id)); column.title = title; column.width = 540; table.addTableColumn(column)
+        diffView.onSelection = { [weak self] selection in
+            self?.status.stringValue = selection
         }
-        table.dataSource = self; table.delegate = self; table.rowHeight = 20
-        table.allowsMultipleSelection = false
-        diffScroll.documentView = table; diffScroll.hasVerticalScroller = true; diffScroll.hasHorizontalScroller = true
+        diffView.onModeChange = { [weak self] mode in
+            self?.status.stringValue = "diff mode: \(mode.rawValue)"
+        }
         setupMenu()
         show(); window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
         if CommandLine.arguments.contains("--lifecycle-probe") {
@@ -85,7 +84,7 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
         if let observer { NotificationCenter.default.removeObserver(observer) }
         doc.ensureDisplay()
         host.subviews.forEach { $0.removeFromSuperview() }
-        let view = diffVisible ? diffScroll : doc.controller.view
+        let view = diffVisible ? diffView : doc.controller.view
         view.frame = host.bounds; view.autoresizingMask = [.width, .height]; host.addSubview(view)
         window.contentView?.layoutSubtreeIfNeeded()
         let initialLoad = doc.pendingText != nil
@@ -96,7 +95,7 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
         rail.document = doc; rail.isHidden = diffVisible; tabs.selectItem(at: active)
         doc.controller.scrollView.contentView.postsBoundsChangedNotifications = true
         observer = NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification, object: doc.controller.scrollView.contentView, queue: .main) { [weak self] _ in self?.rail.needsDisplay = true }
-        window.makeFirstResponder(diffVisible ? table : doc.controller.textView); refresh()
+        window.makeFirstResponder(diffVisible ? diffView.table : doc.controller.textView); refresh()
     }
     func refresh() {
         guard !documents.isEmpty else { return }
@@ -135,14 +134,19 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
         let old = doc.controller.text
         let proposed = NSMutableString(string: old)
         for (range, text) in doc.proposal!.edits.reversed() { proposed.replaceCharacters(in: range, with: text) }
-        rows = alignedRows(old: old, new: proposed as String); table.reloadData(); diffVisible = true; show()
+        let diff = NativeDiffModel.calculate(
+            old: .init(documentID: doc.name, path: doc.name, revision: UInt64(max(0, doc.revision)), content: old),
+            new: .init(documentID: doc.name, path: doc.name, revision: UInt64(max(0, doc.revision + 1)), content: proposed as String)
+        )
+        diffView.set(result: diff, language: diffLanguage(for: doc.name), mode: .split)
+        diffVisible = true; show()
     }
     @objc func applyAll() { apply(doc.proposal?.pending ?? []) }
     @objc func applyRow() {
-        guard table.selectedRow >= 0 else { return }
-        let r = rows[table.selectedRow]
-        guard r.changed else { return }
-        apply(r.new?.contains("AI: reviewed") == true ? [0] : [1])
+        guard let selected = diffView.lastSelection,
+              let row = diffView.result?.rows.first(where: { $0.id == selected.rowID }),
+              row.kind != .context else { return }
+        apply(row.newText?.contains("AI: reviewed") == true ? [0] : [1])
     }
     @objc func applyBlock() { applyRow() } // Fixed sample: each independent block consists of one proposal edit.
     func apply(_ indices: Set<Int>) {
@@ -153,16 +157,6 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
     @objc func save() {
         let panel = NSSavePanel(); panel.nameFieldStringValue = doc.name
         if panel.runModal() == .OK, let url = panel.url { do { try doc.save(to: url) } catch { status.stringValue = error.localizedDescription } }
-    }
-    func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
-    func tableView(_ tableView: NSTableView, viewFor column: NSTableColumn?, row: Int) -> NSView? {
-        let r = rows[row], left = column?.identifier.rawValue == "old"
-        let value = left ? r.old : r.new, n = left ? r.oldLine : r.newLine
-        let cell = NSTextField(labelWithString: value.map { "\(n.map(String.init) ?? "–")  \($0)" } ?? "")
-        cell.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
-        cell.textColor = r.changed ? (left ? .systemRed : .systemGreen) : .labelColor
-        cell.lineBreakMode = .byClipping
-        return cell
     }
     func setupMenu() {
         let menu = NSMenu(); let appMenu = NSMenuItem(); menu.addItem(appMenu); appMenu.submenu = NSMenu()
@@ -182,6 +176,17 @@ func languageFor(_ path: String) -> CodeLanguage {
     case "json": return .json
     case "md": return .markdown
     default: return .default
+    }
+}
+
+func diffLanguage(for path: String) -> String {
+    switch URL(fileURLWithPath: path).pathExtension.lowercased() {
+    case "swift": return "swift"
+    case "rs": return "rust"
+    case "ts", "tsx": return "typescript"
+    case "json": return "json"
+    case "md": return "markdown"
+    default: return "plain"
     }
 }
 let application = NSApplication.shared

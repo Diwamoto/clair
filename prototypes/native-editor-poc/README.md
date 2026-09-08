@@ -24,7 +24,7 @@ python3 make-fixtures.py
 - **Open**: UTF-8ファイルを別タブとして読み込む。タブはcontroller/文書/Undo/selection/scrollを保持。
 - **Multi**: 先頭3行にカーソルを置く。文字入力、Cmd-Z、Shift-Cmd-Zを試す。
 - **行番号の左の細い領域をクリック**: 選択がある場合はそのUTF-16範囲、なければクリック行をコメント対象にする。オレンジの印と下部の範囲・本文で表示。**Comment**は現在の選択範囲に追加。
-- **Propose / Diff**: 文書の先頭・末尾にコメントを挿入する固定AI提案。左右は同じ表の行・スクロールを共有し、片側にない行は表示専用の空欄となる。
+- **Propose / Diff**: 文書の先頭・末尾にコメントを挿入する固定AI提案。Unified/左右2列を切り替えられ、左右は同じ表の行・スクロールを共有し、片側にない行は表示専用の空欄となる。行選択は安定したrow/hunk IDへ戻る。
 - **Apply row / Apply block**: 変更行を選択して部分適用。固定サンプルでは1ブロック＝1編集なので共通経路。**Apply all**は全適用。**Reject**は破棄。
 - 部分適用後の残りは意図的に古いrevisionのまま。再提案が必要。Editorへ戻って編集してから適用すると拒否される。
 - **Save as**: UTF-8で別名保存。IME変換中は拒否。本番の外部変更検出・ローカル履歴との統合はPoC外。
@@ -41,6 +41,7 @@ python3 make-fixtures.py
 # NE-04の採用ポリシー（UTF-16 250,000）を再現する場合は --async-policy または無指定を使う。
 # 旧ポリシー（UTF-16 1,000,000）との比較は --legacy-policy を使う。
 ./run.sh --lifecycle-probe fixtures/normal.swift
+# NE-09のdiff表示・選択・モード切替・幅変更・大diff証跡は --ne09 を追加する。
 python3 summarize-results.py
 python3 audit-dependencies.py
 ```
