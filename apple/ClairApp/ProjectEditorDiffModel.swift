@@ -106,6 +106,11 @@ enum ProjectEditorDiffModel {
   private struct LineValue: Equatable, Sendable {
     let text: String
     let terminator: String
+
+    static func == (lhs: LineValue, rhs: LineValue) -> Bool {
+      lhs.terminator == rhs.terminator
+        && lhs.text.utf8.elementsEqual(rhs.text.utf8)
+    }
   }
 
   private enum Operation: Sendable {

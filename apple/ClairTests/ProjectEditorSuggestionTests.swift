@@ -16,7 +16,7 @@ final class ProjectEditorSuggestionTests: XCTestCase {
 
     XCTAssertEqual(proposal.baseRevision, 4)
     XCTAssertEqual(
-      proposal.edits.map(\.replacementText), ["inserted\r\n", "🙂 new\r\n", "", "added"])
+      proposal.edits.map(\.replacementText), ["inserted\r\n", "🙂 new\r\n", "", "added\r\n"])
     XCTAssertEqual(proposal.edits.map(\.expectedText), ["", "🙂 old\r\n", "remove\r\n", ""])
     XCTAssertEqual(
       proposal.edits.map(\.range),

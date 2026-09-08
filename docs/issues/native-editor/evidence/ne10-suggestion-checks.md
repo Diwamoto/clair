@@ -21,8 +21,8 @@
 6. rejectは本文を変更せず、部分rangeは`unsupportedPartialSelection`を返す。
 7. manual edit、external snapshot、Undo後にbase revisionが変わった古い提案を拒否する。
 
-結果: すべてpass。実行コマンドはNE-10本文の「検証結果」に記録した。これはfake/モデル境界の証跡であり、実AI APIへの送信を含まない。
+結果: すべてpass。加えて、Clair DevのXCTestでNE-10の6件、既存bridgeの5件、native integrationの1件を実行し、12件すべて成功した。実行コマンドはNE-10本文の「検証結果」に記録した。これはfake/モデル境界の証跡であり、実AI APIへの送信を含まない。
 
 ## Known limitation
 
-Xcodeのテストbundle全体は、既存の`ProjectEditorWebNativeIntegrationTests.swift`が現行`ProjectEditorTab` initializerと不一致のため実行できない。新規NE-10ソースとテストはそのbuild中にコンパイルされた。既存テストの修正はNE-10の範囲外として保留した。
+実AI APIへの送信、提案preview UI、本番AI command adapterへの接続はNE-20の対象であり、ここではfake providerと検証可能なモデル境界までを確認した。
