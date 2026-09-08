@@ -1,6 +1,5 @@
 /* Base reset only — each canvas screen (app/canvas-screens.ts) carries its
-   own scoped <style> block copied verbatim from the design canvas, so this
-   file stays deliberately thin: page chrome + the screen-switcher rail. */
+   own scoped <style> block copied verbatim from the design canvas. */
 
 * { box-sizing: border-box; }
 html, body { width: 100%; height: 100%; overflow: hidden; }
@@ -14,85 +13,31 @@ body {
 }
 
 .screen-shell {
-  display: flex;
+  display: block;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
 }
 
-.screen-rail {
-  flex: 0 0 168px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 14px 10px;
-  overflow-y: auto;
-  background: #1a1c1f;
-  border-right: 1px solid rgba(242, 244, 238, .1);
-}
-
-.screen-rail-heading {
-  padding: 4px 8px 10px;
-  color: #6b7178;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-}
-
-.screen-rail button {
-  display: block;
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  color: #9ba19b;
-  font-size: 12.5px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.screen-rail button:hover {
-  background: rgba(242, 244, 238, .06);
-  color: #f1f3ef;
-}
-
-.screen-rail button.is-active {
-  background: rgba(242, 244, 238, .1);
-  border-color: rgba(242, 244, 238, .18);
-  color: #f1f3ef;
-  font-weight: 600;
-}
-
 .screen-stage {
   position: relative;
-  flex: 1;
+  width: 100%;
+  height: 100%;
   overflow: auto;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 56px 32px 32px;
-  background:
-    radial-gradient(circle at 1px 1px, rgba(242, 244, 238, .05) 1px, transparent 0) 0 0 / 16px 16px,
-    #101214;
+  background: #101214;
 }
 
 .screen-frame {
+  position: relative;
   flex-shrink: 0;
   overflow: hidden;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, .5);
 }
 
-.screen-frame-note {
-  position: fixed;
-  top: 12px;
-  left: 200px;
-  z-index: 5;
-  padding: 5px 10px;
-  border-radius: 5px;
-  background: rgba(16, 18, 20, .92);
-  color: #6b7178;
-  font-size: 10.5px;
-  font-family: "SF Mono", ui-monospace, Menlo, monospace;
+.screen-interaction-feedback {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
