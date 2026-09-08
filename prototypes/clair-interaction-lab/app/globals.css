@@ -615,7 +615,8 @@ button:disabled { cursor: default; }
   background: var(--blue-soft);
   color: var(--text);
 }
-.editor-actions button:disabled { opacity: .42; }
+.editor-actions button:disabled,
+.content-actions button:disabled { opacity: .45; cursor: default; pointer-events: none; }
 .editor-actions button span,
 .content-actions button span { font-size: 15px; line-height: 1; }
 
@@ -1029,7 +1030,7 @@ button:disabled { cursor: default; }
   width: 100%;
   min-height: 40px;
   display: grid;
-  grid-template-columns: 21px minmax(0, 1fr) 25px;
+  grid-template-columns: 21px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   padding: 5px 16px 5px 20px;
@@ -1058,6 +1059,11 @@ button:disabled { cursor: default; }
 .change-row:hover > i,
 .change-row.is-active > i { opacity: 1; }
 .change-row > i:hover { background: var(--surface-active); color: var(--green); }
+.change-row-stat { display: inline-flex; align-items: center; gap: 5px; font: 10.5px var(--font-mono); white-space: nowrap; }
+.change-row-stat em { font-style: normal; }
+.change-row-stat .is-add { color: var(--green); }
+.change-row-stat .is-remove { color: var(--red); }
+.change-row-stat.is-untracked { color: var(--text-4); }
 .change-empty {
   margin: 8px 20px;
   color: var(--text-4);
@@ -7657,6 +7663,21 @@ a:focus-visible,
   white-space: nowrap;
 }
 
+.add-agent-prompt {
+  width: 100%;
+  min-height: 56px;
+  padding: 9px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  outline: 0;
+  resize: vertical;
+  background: var(--canvas);
+  color: var(--text-2);
+  font: 11px var(--font-mono);
+  line-height: 1.5;
+}
+.add-agent-prompt::placeholder { color: var(--text-4); }
+
 .add-agent-options-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -9984,3 +10005,96 @@ textarea:not(:disabled):not(.code-editor):hover {
   background: color-mix(in srgb, var(--group-color) 16%, var(--surface-raised));
   color: var(--text-2);
 }
+
+/* Merge graph — a screen separate from branch review: the commit history's
+   branch/merge topology, read-only, no file sidebar. */
+.merge-graph-legend { color: var(--text-4); font: 10px var(--font-mono); }
+.merge-graph-legend-item { display: inline-flex; align-items: center; gap: 5px; margin-right: 4px; }
+.merge-graph-legend-item i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.merge-graph-table { min-height: 0; flex: 1; overflow: auto; }
+.merge-graph-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 110px 100px 90px 84px;
+  align-items: center;
+  gap: 12px;
+  min-height: 32px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border-quiet);
+}
+.merge-graph-heading {
+  min-height: 26px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-4);
+  font: 9px var(--font-mono);
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.merge-graph-lane { display: flex; align-items: center; justify-content: center; }
+.merge-graph-message { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--text-2); }
+.merge-graph-message.is-merge { font-weight: 700; color: var(--text); }
+.merge-graph-branch { display: inline-flex; align-items: center; gap: 5px; font-size: 9.5px; color: var(--text-3); }
+.merge-graph-branch i { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+.merge-graph-author { font-size: 10.5px; color: var(--text-3); }
+.merge-graph-time,
+.merge-graph-hash { font: 10px var(--font-mono); color: var(--text-4); }
+
+/* Session rail — all Projects' terminals/agents in one table. Values here
+   come only from the PTY/process directly: state, signal (bell / exit code
+   / official hook), and the cwd chosen at launch. TUI content is not
+   interpreted. */
+.session-rail-hint { display: inline-flex; align-items: center; gap: 6px; color: var(--text-4); font-size: 11px; }
+.session-rail-hint kbd,
+.session-rail-view kbd { border: 1px solid var(--border-strong); border-radius: 3px; padding: 1px 5px; font: 9px var(--font-mono); color: var(--text-4); }
+.session-rail-table { min-height: 0; flex: 0 1 auto; overflow: auto; }
+.session-rail-row {
+  display: grid;
+  grid-template-columns: 22px 190px 110px 190px 70px minmax(0, 1fr) 110px 80px;
+  align-items: center;
+  gap: 12px;
+  min-height: 34px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border-quiet);
+}
+.session-rail-heading {
+  min-height: 26px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-4);
+  font: 9px var(--font-mono);
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.session-rail-status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-4); justify-self: center; }
+.session-rail-row.is-running .session-rail-status-dot { background: var(--text-2); }
+.session-rail-row.is-attention { background: var(--surface-hover); border-left: 2px solid var(--text); padding-left: 18px; }
+.session-rail-row.is-attention .session-rail-status-dot { background: var(--text); }
+.session-rail-agent { display: flex; align-items: center; gap: 7px; min-width: 0; overflow: hidden; }
+.session-rail-agent strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text); }
+.session-rail-chip { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 3px; background: var(--surface-active); color: var(--text-3); font: 9px var(--font-mono); font-weight: 600; white-space: nowrap; }
+.session-rail-project { display: flex; align-items: center; gap: 5px; color: var(--text-2); font-size: 11px; }
+.session-rail-project i { width: 6px; height: 6px; border-radius: 2px; background: var(--text-4); flex-shrink: 0; }
+.session-rail-elapsed { text-align: right; color: var(--text-3); font: 11px var(--font-mono); }
+.session-rail-signal { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-3); font-size: 11px; }
+.session-rail-usage { display: flex; align-items: center; gap: 6px; }
+.session-rail-usage i { flex: 1; height: 4px; border-radius: 2px; background: var(--surface-active); overflow: hidden; }
+.session-rail-usage i b { display: block; height: 100%; background: var(--text-3); }
+.session-rail-usage em { font: 10px var(--font-mono); color: var(--text-3); }
+.session-rail-usage em.is-muted { color: var(--text-4); }
+.session-rail-action { display: flex; justify-content: flex-end; }
+.session-rail-footnote {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 12px 20px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  color: var(--text-4);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.session-rail-footnote b { color: var(--text-3); font-weight: 600; }
+.session-rail-footnote code { font: 10px var(--font-mono); color: var(--text-3); }
