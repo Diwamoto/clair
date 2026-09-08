@@ -229,6 +229,18 @@ button:disabled { cursor: default; }
 }
 .title-actions button.is-active { color: #a9c0ff; }
 .title-actions button span { font-size: 17px; line-height: 1; }
+.title-search {
+  width: 180px;
+  flex-shrink: 0;
+  justify-content: flex-start;
+  gap: 7px;
+  background: rgba(0, 0, 0, .18);
+  color: var(--text-4);
+  font: 11px var(--font-mono);
+  white-space: nowrap;
+}
+.title-search:hover { background: rgba(0, 0, 0, .26); color: var(--text-3); }
+.title-search span { font-size: 12px; }
 .title-actions button b { font-weight: 500; }
 
 .app-layout {
