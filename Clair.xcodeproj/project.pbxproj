@@ -94,6 +94,12 @@
 		A0000000000000000000010B /* ProjectEditorDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000010D /* ProjectEditorDocument.swift */; };
 		A0000000000000000000010C /* ProjectEditorDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000010D /* ProjectEditorDocument.swift */; };
 		A0000000000000000000010E /* ProjectEditorDocumentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000010F /* ProjectEditorDocumentTests.swift */; };
+		A00000000000000000000110 /* ProjectEditorCommentAnchor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000113 /* ProjectEditorCommentAnchor.swift */; };
+		A00000000000000000000111 /* ProjectEditorCommentAnchor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000113 /* ProjectEditorCommentAnchor.swift */; };
+		A00000000000000000000112 /* ProjectEditorCommentAnchorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000115 /* ProjectEditorCommentAnchorTests.swift */; };
+		A00000000000000000000117 /* ProjectEditorDiffModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000114 /* ProjectEditorDiffModel.swift */; };
+		A00000000000000000000118 /* ProjectEditorDiffModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000114 /* ProjectEditorDiffModel.swift */; };
+		A00000000000000000000119 /* ProjectEditorDiffModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000116 /* ProjectEditorDiffModelTests.swift */; };
 		A000000000000000000000DA /* MobileClientSecureStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000E0 /* MobileClientSecureStore.swift */; };
 		A000000000000000000000DB /* MobileControlAppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000E1 /* MobileControlAppModel.swift */; };
 		A000000000000000000000DC /* MobileControlAppView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000E2 /* MobileControlAppView.swift */; };
@@ -173,6 +179,10 @@
 		A00000000000000000000107 /* AgentRateLimitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentRateLimitTests.swift; sourceTree = "<group>"; };
 		A0000000000000000000010D /* ProjectEditorDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectEditorDocument.swift; sourceTree = "<group>"; };
 		A0000000000000000000010F /* ProjectEditorDocumentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectEditorDocumentTests.swift; sourceTree = "<group>"; };
+		A00000000000000000000113 /* ProjectEditorCommentAnchor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectEditorCommentAnchor.swift; sourceTree = "<group>"; };
+		A00000000000000000000114 /* ProjectEditorDiffModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectEditorDiffModel.swift; sourceTree = "<group>"; };
+		A00000000000000000000115 /* ProjectEditorCommentAnchorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectEditorCommentAnchorTests.swift; sourceTree = "<group>"; };
+		A00000000000000000000116 /* ProjectEditorDiffModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectEditorDiffModelTests.swift; sourceTree = "<group>"; };
 		A000000000000000000000E0 /* MobileClientSecureStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileClientSecureStore.swift; sourceTree = "<group>"; };
 		A000000000000000000000E1 /* MobileControlAppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileControlAppModel.swift; sourceTree = "<group>"; };
 		A000000000000000000000E2 /* MobileControlAppView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileControlAppView.swift; sourceTree = "<group>"; };
@@ -314,6 +324,8 @@
 				A00000000000000000000100 /* CodeMirrorEditor.swift */,
 				A00000000000000000000106 /* AgentRateLimits.swift */,
 				A0000000000000000000010D /* ProjectEditorDocument.swift */,
+				A00000000000000000000113 /* ProjectEditorCommentAnchor.swift */,
+				A00000000000000000000114 /* ProjectEditorDiffModel.swift */,
 				A00000000000000000000101 /* EditorWeb */,
 			);
 			path = ClairApp;
@@ -347,6 +359,8 @@
 				A000000000000000000000B7 /* ClairUpdateTests.swift */,
 				A00000000000000000000107 /* AgentRateLimitTests.swift */,
 				A0000000000000000000010F /* ProjectEditorDocumentTests.swift */,
+				A00000000000000000000115 /* ProjectEditorCommentAnchorTests.swift */,
+				A00000000000000000000116 /* ProjectEditorDiffModelTests.swift */,
 			);
 			path = ClairTests;
 			sourceTree = "<group>";
@@ -643,6 +657,8 @@
 				A00000000000000000000102 /* CodeMirrorEditor.swift in Sources */,
 				A00000000000000000000108 /* AgentRateLimits.swift in Sources */,
 				A0000000000000000000010B /* ProjectEditorDocument.swift in Sources */,
+				A00000000000000000000110 /* ProjectEditorCommentAnchor.swift in Sources */,
+				A00000000000000000000117 /* ProjectEditorDiffModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -683,6 +699,8 @@
 				A00000000000000000000103 /* CodeMirrorEditor.swift in Sources */,
 				A00000000000000000000109 /* AgentRateLimits.swift in Sources */,
 				A0000000000000000000010C /* ProjectEditorDocument.swift in Sources */,
+				A00000000000000000000111 /* ProjectEditorCommentAnchor.swift in Sources */,
+				A00000000000000000000118 /* ProjectEditorDiffModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -703,6 +721,8 @@
 				A000000000000000000000B4 /* ClairUpdateTests.swift in Sources */,
 				A0000000000000000000010A /* AgentRateLimitTests.swift in Sources */,
 				A0000000000000000000010E /* ProjectEditorDocumentTests.swift in Sources */,
+				A00000000000000000000112 /* ProjectEditorCommentAnchorTests.swift in Sources */,
+				A00000000000000000000119 /* ProjectEditorDiffModelTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
