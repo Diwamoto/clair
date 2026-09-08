@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { AddAgentOverlay, CommandPalette, SearchOverlay } from './screens/Overlays';
 import { ActivityScreen } from './screens/Activity';
@@ -15,15 +24,65 @@ import { color, line } from './tokens';
 
 type Route = 'ide' | 'mobile';
 
-function useRoute(): [Route, (r: Route) => void] {
-  const read = (): Route => (window.location.hash.replace(/^#\/?/, '') === 'mobile' ? 'mobile' : 'ide');
-  const [route, setRoute] = useState<Route>(read);
+const readHash = (): Route => {
+  try {
+    return window.location.hash.replace(/^#\/?/, '') === 'mobile' ? 'mobile' : 'ide';
+  } catch {
+    return 'ide';
+  }
+};
+
+// The route lives in state and is mirrored into the hash, so a direct
+// #/mobile link still works while a hosted frame that refuses the hash write
+// can still navigate.
+const RouteContext = createContext<{ route: Route; go: (r: Route) => void }>({
+  route: 'ide',
+  go: () => undefined,
+});
+
+function useRouteValue() {
+  const [route, setRoute] = useState<Route>(readHash);
+
   useEffect(() => {
-    const onHash = () => setRoute(read());
+    const onHash = () => setRoute(readHash());
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
-  return [route, (r: Route) => (window.location.hash = `#/${r}`)];
+
+  const go = useCallback((next: Route) => {
+    setRoute(next);
+    try {
+      window.location.hash = `#/${next}`;
+    } catch {
+      /* the frame refused the hash write; state has already moved */
+    }
+  }, []);
+
+  return useMemo(() => ({ route, go }), [go, route]);
+}
+
+export function RouteLink({
+  to,
+  children,
+  style,
+}: {
+  to: Route;
+  children: React.ReactNode;
+  style: React.CSSProperties;
+}) {
+  const { go } = useContext(RouteContext);
+  return (
+    <a
+      href={`#/${to}`}
+      onClick={(event) => {
+        event.preventDefault();
+        go(to);
+      }}
+      style={style}
+    >
+      {children}
+    </a>
+  );
 }
 
 function useViewport() {
@@ -261,12 +320,12 @@ function ViewerBar({
         +
       </button>
       <div style={{ width: 1, height: 18, background: 'rgba(242,244,238,0.14)', margin: '0 4px' }} />
-      <a
-        href="#/mobile"
+      <RouteLink
+        to="mobile"
         style={{ ...button, textDecoration: 'none', fontSize: 10, fontWeight: 600, color: color.textTertiary }}
       >
         モバイル
-      </a>
+      </RouteLink>
     </div>
   );
 }
@@ -281,8 +340,8 @@ function MobileStage({ viewport }: { viewport: { width: number; height: number }
     return (
       <div style={{ position: 'fixed', inset: 0, background: color.chrome }}>
         <MobileApp />
-        <a
-          href="#/ide"
+        <RouteLink
+          to="ide"
           style={{
             position: 'fixed',
             right: 'calc(10px + env(safe-area-inset-right))',
@@ -302,7 +361,7 @@ function MobileStage({ viewport }: { viewport: { width: number; height: number }
           }}
         >
           IDEへ
-        </a>
+        </RouteLink>
       </div>
     );
   }
@@ -338,8 +397,8 @@ function MobileStage({ viewport }: { viewport: { width: number; height: number }
           <MobileApp />
         </div>
       </div>
-      <a
-        href="#/ide"
+      <RouteLink
+        to="ide"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -355,25 +414,27 @@ function MobileStage({ viewport }: { viewport: { width: number; height: number }
         }}
       >
         デスクトップのIDEへ戻る
-      </a>
+      </RouteLink>
     </div>
   );
 }
 
 export default function App() {
-  const [route] = useRoute();
+  const router = useRouteValue();
   const viewport = useViewport();
   const narrow = viewport.width < 1000;
 
   return (
-    <WorkbenchProvider>
-      {route === 'mobile' ? (
-        <MobileStage viewport={viewport} />
-      ) : narrow ? (
-        <ScaledIde viewport={viewport} />
-      ) : (
-        <Ide />
-      )}
-    </WorkbenchProvider>
+    <RouteContext.Provider value={router}>
+      <WorkbenchProvider>
+        {router.route === 'mobile' ? (
+          <MobileStage viewport={viewport} />
+        ) : narrow ? (
+          <ScaledIde viewport={viewport} />
+        ) : (
+          <Ide />
+        )}
+      </WorkbenchProvider>
+    </RouteContext.Provider>
   );
 }

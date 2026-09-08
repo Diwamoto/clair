@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { IconCloseThin } from '../icons';
+import { RouteLink } from '../App';
 import { useWorkbench } from '../store';
 import { TrafficLights, VDivider } from '../ui';
 import { color, line } from '../tokens';
@@ -270,8 +271,8 @@ export function SettingsScreen() {
                   title="モバイルの画面を確認"
                   note="iPhone向けのセッション一覧を別画面で開きます。"
                   control={
-                    <a
-                      href="#/mobile"
+                    <RouteLink
+                      to="mobile"
                       style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -287,7 +288,7 @@ export function SettingsScreen() {
                       }}
                     >
                       モバイルを開く ↗
-                    </a>
+                    </RouteLink>
                   }
                 />
               </Card>
