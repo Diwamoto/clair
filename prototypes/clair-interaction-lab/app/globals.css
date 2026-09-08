@@ -1,25 +1,35 @@
 @import 'tailwindcss';
 
 :root {
-  --app-bg: #101214;
-  --surface: #191c21;
-  --surface-raised: #20242a;
-  --surface-hover: #262b32;
-  --surface-active: #2c3239;
-  --canvas: #121519;
-  --border: rgba(255, 255, 255, .12);
-  --border-strong: rgba(255, 255, 255, .2);
-  --border-quiet: rgba(255, 255, 255, .07);
-  --text: #e8ebe7;
-  --text-2: #c4cac5;
-  --text-3: #969e98;
-  --text-4: #707972;
-  --blue: #9aaff1;
-  --blue-soft: rgba(154, 175, 241, .1);
-  --yellow: #cdb87e;
-  --green: #91b99a;
-  --red: #cd8d95;
-  --purple: #b99cc9;
+  /* Clair design tokens (packages/ClairDesignKit, per the canvas's Tokens
+     artboard): canvas/chrome/surface are unified into one flat #282c34 —
+     no gradients, no separate "raised" panel tone for ordinary chrome.
+     --surface-raised (chromeRaised) stays reserved for the few genuinely
+     elevated overlays (command palette, add-agent, toasts, sheets). */
+  --app-bg: #282c34;
+  --surface: #282c34;
+  --surface-raised: #1e2227;
+  --surface-hover: #242a31;
+  --surface-active: #2b333c;
+  --canvas: #282c34;
+  --border: rgba(242, 244, 238, .11);
+  --border-strong: rgba(242, 244, 238, .19);
+  --border-quiet: rgba(242, 244, 238, .07);
+  --text: #f1f3ef;
+  --text-2: #c9cec8;
+  --text-3: #9ba19b;
+  --text-4: #707871;
+  /* "Accent" tokens keep their names for the many call sites that use them
+     as the active/selected/focus treatment, but per the canvas, chrome
+     carries no hue for that: --blue/--blue-soft resolve to a neutral
+     light wash (the same treatment the canvas gives active rows and
+     primary buttons) rather than an accent color. */
+  --blue: #c9cec8;
+  --blue-soft: rgba(242, 244, 238, .08);
+  --yellow: #e5c07b;
+  --green: #8acb94;
+  --red: #e27b83;
+  --purple: #8b6ac8;
   --usage-footer-height: 36px;
   --font-ui: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
   --font-mono: "SFMono-Regular", "SF Mono", Menlo, Monaco, Consolas, monospace;
@@ -77,7 +87,7 @@ button:disabled { cursor: default; }
   grid-template-columns: 76px minmax(0, 1fr) auto;
   align-items: stretch;
   border-bottom: 1px solid var(--border);
-  background: var(--surface-raised);
+  background: var(--canvas);
 }
 
 .traffic-lights {
@@ -93,9 +103,10 @@ button:disabled { cursor: default; }
   background: #555d65;
   box-shadow: inset 0 0 0 .5px rgba(0, 0, 0, .3);
 }
-.traffic-lights span:first-child { background: var(--red); }
-.traffic-lights span:nth-child(2) { background: var(--yellow); }
-.traffic-lights span:nth-child(3) { background: var(--green); }
+/* macOS's own traffic-light hues — independent of the diff green/red tokens. */
+.traffic-lights span:first-child { background: #ff5f57; }
+.traffic-lights span:nth-child(2) { background: #febc2e; }
+.traffic-lights span:nth-child(3) { background: #28c840; }
 
 .project-tabstrip {
   min-width: 0;
@@ -279,7 +290,7 @@ button:disabled { cursor: default; }
 .activity-bar button:hover { background: var(--surface-hover); color: var(--text-2); }
 .activity-bar button.is-active {
   background: var(--blue-soft);
-  color: #aec3ff;
+  color: var(--text);
 }
 .activity-bar button.is-active::before {
   content: "";
@@ -923,7 +934,7 @@ button:disabled { cursor: default; }
   border-bottom: 1px solid var(--border);
   background: #15181b;
 }
-.diff-context span { color: #9db5ff; font: 12px var(--font-mono); }
+.diff-context span { color: var(--text-2); font: 12px var(--font-mono); }
 .diff-context b { color: var(--text-4); font: 11px var(--font-mono); font-weight: 500; letter-spacing: .05em; }
 .diff-lines {
   min-height: 0;
@@ -996,7 +1007,7 @@ button:disabled { cursor: default; }
   border-bottom: 1px solid var(--border);
   background: rgba(255, 255, 255, .018);
 }
-.branch-icon { color: #9db5ff; font: 18px var(--font-mono); }
+.branch-icon { color: var(--text-2); font: 18px var(--font-mono); }
 .branch-picker select {
   min-width: 0;
   flex: 1;
@@ -1017,7 +1028,7 @@ button:disabled { cursor: default; }
   place-items: center;
   border-radius: 11px;
   background: var(--blue-soft);
-  color: #aec3ff;
+  color: var(--text-2);
   font: 11px var(--font-mono);
 }
 .change-list,
@@ -1200,7 +1211,7 @@ button:disabled { cursor: default; }
 .activity-icon.waiting,
 .large-activity-icon.waiting { background: rgba(229, 192, 123, .16); color: var(--yellow); }
 .activity-icon.running,
-.large-activity-icon.running { background: var(--blue-soft); color: #aec3ff; }
+.large-activity-icon.running { background: var(--blue-soft); color: var(--text-2); }
 .activity-icon.exited,
 .large-activity-icon.exited { background: rgba(138, 203, 148, .14); color: var(--green); }
 .activity-row > span:nth-child(2) { min-width: 0; }
@@ -1262,8 +1273,8 @@ button:disabled { cursor: default; }
 .activity-detail-copy dl > div:first-child { border-top: 0; }
 .activity-detail-copy dt { color: var(--text-4); font-size: 13px; }
 .activity-detail-copy dd { margin: 0; color: var(--text-2); font: 12.5px var(--font-mono); text-align: right; }
-.activity-detail-copy .primary-action { min-height: 36px; padding: 0 13px; border: 1px solid rgba(91, 136, 247, .62); border-radius: 6px; background: var(--blue-soft); color: #b6c9ff; font-size: 12.5px; cursor: pointer; }
-.activity-detail-copy .primary-action:hover { background: rgba(91, 136, 247, .23); color: #fff; }
+.activity-detail-copy .primary-action { min-height: 36px; padding: 0 13px; border: 1px solid var(--border-strong); border-radius: 6px; background: rgba(242, 244, 238, .09); color: var(--text); font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.activity-detail-copy .primary-action:hover { background: rgba(242, 244, 238, .16); color: var(--text); }
 .activity-detail-copy .primary-action span { margin-left: 9px; font-size: 16px; }
 
 .window-overlay {
@@ -1303,7 +1314,7 @@ button:disabled { cursor: default; }
   place-items: center;
   border-radius: 7px;
   background: var(--blue-soft);
-  color: #aec3ff;
+  color: var(--text);
   font-size: 18px;
 }
 .overlay-header strong,
