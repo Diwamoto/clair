@@ -8,6 +8,15 @@ func milliseconds(_ work: () -> Void) -> Double {
     let start = DispatchTime.now().uptimeNanoseconds; work()
     return Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000
 }
+func evidenceOutput(benchmark: Bool) -> String {
+    if CommandLine.arguments.contains("--ne04") {
+        return benchmark ? "evidence/benchmark-ne04.json" : "evidence/checks-ne04.json"
+    }
+    if benchmark {
+        return CommandLine.arguments.contains("--async-policy") ? "evidence/benchmark-async.json" : "evidence/benchmark.json"
+    }
+    return "evidence/checks.json"
+}
 extension App {
     @MainActor func runChecks(benchmark: Bool) async {
         var results: [[String: Any]] = []
@@ -18,6 +27,11 @@ extension App {
         func reset() { d.controller.setText(original); t._undoManager?.clearStack(); d.comments = []; d.proposal = nil }
 
         let original = d.controller.text
+        var gate = HighlightRevisionGate()
+        let staleToken = gate.token()
+        _ = gate.beginEdit()
+        check("stale highlight revision rejected", !gate.accepts(staleToken))
+        check("current highlight revision accepted", gate.accepts(gate.token()))
         d.groupMulticursorEdits = false
         t.selectionManager.setSelectedRanges([NSRange(location: 0, length: 0), NSRange(location: 3, length: 0)])
         t.insertText("X")
@@ -125,6 +139,7 @@ extension App {
             do { try parser.setLanguage(lang.language!); let tree = parser.parse(text)
                 print("PARSER \(name) query=\(lang.queryURL?.path ?? "nil") exists=\(lang.queryURL.map { FileManager.default.fileExists(atPath: $0.path) } ?? false) root=\(String(describing: tree?.rootNode))")
             } catch { print("PARSER ERROR \(error)") }
+            check("query asset " + name, lang.queryURL.map { FileManager.default.fileExists(atPath: $0.path) } ?? false)
             fflush(stdout)
             let storage = doc.controller.textView.textStorage!
             var colors = Set<String>()
@@ -146,12 +161,20 @@ extension App {
                 check("highlight probe " + name + " " + token, actual == expected)
                 results.append(["fixture": name, "probe": token, "expected_color": expected.description, "actual_color": actual?.description ?? "nil", "matches": actual == expected])
             }
+            let currentDocument = doc
+            currentDocument.controller.textView.replaceCharacters(in: .zero, with: " ")
+            await pump(0.35)
+            let editedStorage = currentDocument.controller.textView.textStorage!
+            let editedProbe = probes[0].0
+            let editedRange = (currentDocument.controller.text as NSString).range(of: editedProbe)
+            let editedColor = editedStorage.attribute(.foregroundColor, at: editedRange.location + 1, effectiveRange: nil) as? NSColor
+            check("highlight refresh after edit " + name, editedColor == probes[0].1)
+            currentDocument.controller.textView.undoManager?.undo()
+            await pump(0.15)
         }
         results.append(["alternative_TextKit2": textKitProbe(), "note": "basic captures only; incremental syntax, IME and multicursor not validated for alternative"])
-        if let data = try? JSONSerialization.data(withJSONObject: results, options: [.prettyPrinted, .sortedKeys]) { try? data.write(to: URL(fileURLWithPath: "evidence/checks.json")) }
         if benchmark { await runBenchmarks(into: &results) }
-        let output = CommandLine.arguments.contains("--benchmark") ? (CommandLine.arguments.contains("--async-policy") ? "benchmark-async.json" : "benchmark.json") : "checks.json"
-        if let data = try? JSONSerialization.data(withJSONObject: results, options: [.prettyPrinted, .sortedKeys]) { try? data.write(to: URL(fileURLWithPath: "evidence/\(output)")) }
+        if let data = try? JSONSerialization.data(withJSONObject: results, options: [.prettyPrinted, .sortedKeys]) { try? data.write(to: URL(fileURLWithPath: evidenceOutput(benchmark: benchmark))) }
         let failed = results.contains { ($0["pass"] as? Bool) == false && ($0["expectedFailure"] as? Bool) != true }
         fflush(stdout)
         exit(failed ? 1 : 0)
@@ -189,7 +212,7 @@ extension App {
                 "input_sync_ms": input, "scroll_sync_ms": scroll, "two_tab_switch_sync_ms": tabs,
                 "process_cpu_seconds": Double(clock() - cpuStart) / Double(CLOCKS_PER_SEC), "process_maxrss_bytes": usage.ru_maxrss,
                 "note": "one run; synchronous API + display submission, not input-to-photon; awaited visible highlight up to 10s; retained earlier documents; maxrss cumulative"])
-            if let data = try? JSONSerialization.data(withJSONObject: results, options: [.prettyPrinted, .sortedKeys]) { try? data.write(to: URL(fileURLWithPath: "evidence/" + (CommandLine.arguments.contains("--async-policy") ? "benchmark-async.json" : "benchmark.json"))) }
+            if let data = try? JSONSerialization.data(withJSONObject: results, options: [.prettyPrinted, .sortedKeys]) { try? data.write(to: URL(fileURLWithPath: evidenceOutput(benchmark: true))) }
             print("BENCH DONE \(name)"); fflush(stdout)
         }
         let duration = milliseconds { for i in 0..<50 { add(name: "tab\(i).swift", text: "// tab\nlet x = \(i)\n", language: .swift); show() } }

@@ -24,6 +24,7 @@ final class CommentRail: NSView {
         needsDisplay = true
     }
 }
+@MainActor
 final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTableViewDelegate {
     var window: NSWindow!
     var documents: [Document] = []
@@ -37,7 +38,7 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
     var doc: Document { documents[active] }
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard window == nil else { return }
-        if CommandLine.arguments.contains("--async-policy") { TreeSitterClient.Constants.maxSyncContentLength = 250_000 }
+        HighlightSchedulingPolicy.configure(arguments: CommandLine.arguments)
         window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 1200, height: 800), styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: false)
         window.title = "Clair Native Editor PoC — isolated"
         let root = NSStackView(); root.orientation = .vertical; root.spacing = 6; root.edgeInsets = NSEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
@@ -78,18 +79,18 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
         d.onChange = { [weak self] in self?.refresh() }
         documents.append(d); tabs.addItem(withTitle: "\(documents.count): \(name)"); active = documents.count - 1
     }
-    func show() {
+    @MainActor func show() {
         if let observer { NotificationCenter.default.removeObserver(observer) }
         host.subviews.forEach { $0.removeFromSuperview() }
         let view = diffVisible ? diffScroll : doc.controller.view
         view.frame = host.bounds; view.autoresizingMask = [.width, .height]; host.addSubview(view)
         window.contentView?.layoutSubtreeIfNeeded()
+        let initialLoad = doc.pendingText != nil
         if let initial = doc.pendingText {
             doc.pendingText = nil; doc.controller.setText(initial)
             doc.controller.textView.selectionManager.setSelectedRange(NSRange(location: 0, length: 0))
         }
-        _ = doc.controller.textView.layoutManager.layoutLines()
-        NotificationCenter.default.post(name: NSView.boundsDidChangeNotification, object: doc.controller.scrollView.contentView)
+        if initialLoad { doc.requestInitialHighlight() }
         rail.document = doc; rail.isHidden = diffVisible; tabs.selectItem(at: active)
         doc.controller.scrollView.contentView.postsBoundsChangedNotifications = true
         observer = NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification, object: doc.controller.scrollView.contentView, queue: .main) { [weak self] _ in self?.rail.needsDisplay = true }
@@ -170,6 +171,8 @@ func languageFor(_ path: String) -> CodeLanguage {
 }
 let application = NSApplication.shared
 application.setActivationPolicy(.regular)
-let delegate: NSObject & NSApplicationDelegate = CommandLine.arguments.contains("--web-benchmark") ? WebBenchmark() : App()
+let delegate: NSObject & NSApplicationDelegate = CommandLine.arguments.contains("--web-benchmark")
+    ? WebBenchmark()
+    : MainActor.assumeIsolated { App() }
 application.delegate = delegate
 application.run()

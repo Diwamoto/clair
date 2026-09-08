@@ -1,0 +1,70 @@
+PASS stale highlight revision rejected
+PASS current highlight revision accepted
+PASS multicursor inserts two copies
+FAIL upstream multicursor single undo
+PASS multicursor redo
+PASS adapter multicursor single undo
+ANCHOR after insert {4, 2} orphan=false delta=1
+PASS comment shifts after line insertion
+PASS comment shifts back after undo
+PASS deleted comment becomes orphan
+PASS partial AI apply
+PASS remaining old proposal rejected
+PASS AI apply undo
+PASS stale proposal rejected after edit
+PASS AI apply all
+PASS AI all one undo
+PASS synthetic marked text
+PASS synthetic composition commit
+PASS UTF8 save roundtrip
+PASS diff insertion alignment
+PASS diff deletion alignment
+PASS tab preserves document selection scroll undo
+PASS Swift multiple highlight colors
+PARSER normal.swift query=/Users/daiki/.codex/worktrees/8bdb/clair/prototypes/native-editor-poc/.build/Clair Native PoC.app/CodeEditLanguages_CodeEditLanguages.bundle/Resources/Resources/tree-sitter-swift/highlights.scm exists=true root=Optional(<source_file range: {0, 81} childCount: 4>)
+PASS query asset normal.swift
+PASS highlight colors normal.swift
+PASS highlight probe normal.swift multi
+PASS highlight probe normal.swift line
+PASS highlight probe normal.swift 日本語 🙂
+PASS highlight probe normal.swift 42
+PASS highlight refresh after edit normal.swift
+PARSER sample.rs query=/Users/daiki/.codex/worktrees/8bdb/clair/prototypes/native-editor-poc/.build/Clair Native PoC.app/CodeEditLanguages_CodeEditLanguages.bundle/Resources/Resources/tree-sitter-rust/highlights.scm exists=true root=Optional(<source_file range: {0, 89} childCount: 2>)
+PASS query asset sample.rs
+PASS highlight colors sample.rs
+PASS highlight probe sample.rs nested
+PASS highlight probe sample.rs comment */ comment
+PASS highlight probe sample.rs 日本語
+PASS highlight refresh after edit sample.rs
+PARSER sample.ts query=/Users/daiki/.codex/worktrees/8bdb/clair/prototypes/native-editor-poc/.build/Clair Native PoC.app/CodeEditLanguages_CodeEditLanguages.bundle/Resources/Resources/tree-sitter-typescript/highlights.scm exists=true root=Optional(<program range: {0, 61} childCount: 2>)
+PASS query asset sample.ts
+PASS highlight colors sample.ts
+PASS highlight probe sample.ts continued
+PASS highlight probe sample.ts 日本語
+PASS highlight refresh after edit sample.ts
+PARSER sample.tsx query=/Users/daiki/.codex/worktrees/8bdb/clair/prototypes/native-editor-poc/.build/Clair Native PoC.app/CodeEditLanguages_CodeEditLanguages.bundle/Resources/Resources/tree-sitter-typescript/highlights.scm exists=true root=Optional(<program range: {0, 75} childCount: 2>)
+PASS query asset sample.tsx
+PASS highlight colors sample.tsx
+PASS highlight probe sample.tsx 日本語
+PASS highlight probe sample.tsx 🙂
+PASS highlight refresh after edit sample.tsx
+PARSER sample.json query=/Users/daiki/.codex/worktrees/8bdb/clair/prototypes/native-editor-poc/.build/Clair Native PoC.app/CodeEditLanguages_CodeEditLanguages.bundle/Resources/Resources/tree-sitter-json/highlights.scm exists=true root=Optional(<document range: {0, 64} childCount: 1>)
+PASS query asset sample.json
+PASS highlight colors sample.json
+PASS highlight probe sample.json 🙂
+PASS highlight probe sample.json 42
+PASS highlight refresh after edit sample.json
+PARSER sample.md query=/Users/daiki/.codex/worktrees/8bdb/clair/prototypes/native-editor-poc/.build/Clair Native PoC.app/CodeEditLanguages_CodeEditLanguages.bundle/Resources/Resources/tree-sitter-markdown/highlights.scm exists=true root=Optional(<document range: {0, 59} childCount: 1>)
+PASS query asset sample.md
+PASS highlight colors sample.md
+PASS highlight probe sample.md let
+PASS highlight probe sample.md hi
+PASS highlight refresh after edit sample.md
+BENCH START normal.swift
+BENCH DONE normal.swift
+BENCH START 1mb.swift
+BENCH DONE 1mb.swift
+BENCH START 10mb.swift
+BENCH DONE 10mb.swift
+BENCH START long-line.ts
+BENCH DONE long-line.ts

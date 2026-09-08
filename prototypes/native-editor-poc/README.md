@@ -35,13 +35,15 @@ python3 make-fixtures.py
 ./run.sh --self-test > evidence/checks.log 2>&1
 ./run.sh --benchmark > evidence/benchmark.log 2>&1
 ./run.sh --benchmark --async-policy > evidence/benchmark-async.log 2>&1
+# NE-04の採用ポリシー（UTF-16 250,000）を再現する場合は --async-policy または無指定を使う。
+# 旧ポリシー（UTF-16 1,000,000）との比較は --legacy-policy を使う。
 python3 summarize-results.py
 python3 audit-dependencies.py
 ```
 
 上流そのままの複数カーソルUndoは`expectedFailure: true`として失敗を記録し、PoCアダプター付きの同じ操作は合格を要求する。他の必須テストが失敗した場合、終了コードは1。TextKit 2の小さな代案検証は補足結果として別に保存する。実IME操作の合否を合成marked-text APIテストから推定しない。
 
-ベンチマークは各サイズの文書を順次保持。各操作20回、起動1回。初期表示の同期処理、可視範囲の色付け検出、編集API、スクロールAPI、2タブ往復を計測する。画面の最終ピクセルが更新されるまでの時間ではない。50タブを開き、大きいdiffの配置計算・表示・スクロールも測る。結果の生データはJSON。
+ベンチマークは各サイズの文書を順次保持。各操作20回、起動1回。初期表示の同期処理、可視範囲の色付け検出、編集API、スクロールAPI、2タブ往復を計測する。画面の最終ピクセルが更新されるまでの時間ではない。50タブを開き、大きいdiffの配置計算・表示・スクロールも測る。結果の生データはJSON。NE-04の検証では `--ne04` を追加すると既存証跡を上書きせず `evidence/checks-ne04.json` / `evidence/benchmark-ne04.json` に保存する。
 
 ## Web / VS Code比較
 

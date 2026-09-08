@@ -1,0 +1,758 @@
+[
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "stale highlight revision rejected"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "current highlight revision accepted"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "multicursor inserts two copies"
+  },
+  {
+    "expectedFailure" : true,
+    "pass" : false,
+    "test" : "upstream multicursor single undo"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "multicursor redo"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "adapter multicursor single undo"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "comment shifts after line insertion"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "comment shifts back after undo"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "deleted comment becomes orphan"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "partial AI apply"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "remaining old proposal rejected"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "AI apply undo"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "stale proposal rejected after edit"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "AI apply all"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "AI all one undo"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "synthetic marked text"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "synthetic composition commit"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "UTF8 save roundtrip"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "diff insertion alignment"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "diff deletion alignment"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "tab preserves document selection scroll undo"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "Swift multiple highlight colors"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "query asset normal.swift"
+  },
+  {
+    "fixture" : "normal.swift",
+    "highlight_color_count" : 5,
+    "view_size" : "{1164, 710}"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight colors normal.swift"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight probe normal.swift multi"
+  },
+  {
+    "actual_color" : "Catalog color: System systemGreenColor",
+    "expected_color" : "Catalog color: System systemGreenColor",
+    "fixture" : "normal.swift",
+    "matches" : true,
+    "probe" : "multi"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight probe normal.swift line"
+  },
+  {
+    "actual_color" : "Catalog color: System systemGreenColor",
+    "expected_color" : "Catalog color: System systemGreenColor",
+    "fixture" : "normal.swift",
+    "matches" : true,
+    "probe" : "line"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight probe normal.swift 日本語 🙂"
+  },
+  {
+    "actual_color" : "Catalog color: System systemRedColor",
+    "expected_color" : "Catalog color: System systemRedColor",
+    "fixture" : "normal.swift",
+    "matches" : true,
+    "probe" : "日本語 🙂"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight probe normal.swift 42"
+  },
+  {
+    "actual_color" : "Catalog color: System systemOrangeColor",
+    "expected_color" : "Catalog color: System systemOrangeColor",
+    "fixture" : "normal.swift",
+    "matches" : true,
+    "probe" : "42"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight refresh after edit normal.swift"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "query asset sample.rs"
+  },
+  {
+    "fixture" : "sample.rs",
+    "highlight_color_count" : 4,
+    "view_size" : "{1164, 710}"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight colors sample.rs"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight probe sample.rs nested"
+  },
+  {
+    "actual_color" : "Catalog color: System systemGreenColor",
+    "expected_color" : "Catalog color: System systemGreenColor",
+    "fixture" : "sample.rs",
+    "matches" : true,
+    "probe" : "nested"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight probe sample.rs comment *\/ comment"
+  },
+  {
+    "actual_color" : "Catalog color: System systemGreenColor",
+    "expected_color" : "Catalog color: System systemGreenColor",
+    "fixture" : "sample.rs",
+    "matches" : true,
+    "probe" : "comment *\/ comment"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight probe sample.rs 日本語"
+  },
+  {
+    "actual_color" : "Catalog color: System systemRedColor",
+    "expected_color" : "Catalog color: System systemRedColor",
+    "fixture" : "sample.rs",
+    "matches" : true,
+    "probe" : "日本語"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight refresh after edit sample.rs"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "query asset sample.ts"
+  },
+  {
+    "fixture" : "sample.ts",
+    "highlight_color_count" : 4,
+    "view_size" : "{1164, 710}"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight colors sample.ts"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight probe sample.ts continued"
+  },
+  {
+    "actual_color" : "Catalog color: System systemGreenColor",
+    "expected_color" : "Catalog color: System systemGreenColor",
+    "fixture" : "sample.ts",
+    "matches" : true,
+    "probe" : "continued"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight probe sample.ts 日本語"
+  },
+  {
+    "actual_color" : "Catalog color: System systemRedColor",
+    "expected_color" : "Catalog color: System systemRedColor",
+    "fixture" : "sample.ts",
+    "matches" : true,
+    "probe" : "日本語"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight refresh after edit sample.ts"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "query asset sample.tsx"
+  },
+  {
+    "fixture" : "sample.tsx",
+    "highlight_color_count" : 4,
+    "view_size" : "{1164, 710}"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight colors sample.tsx"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight probe sample.tsx 日本語"
+  },
+  {
+    "actual_color" : "Catalog color: System systemGreenColor",
+    "expected_color" : "Catalog color: System systemGreenColor",
+    "fixture" : "sample.tsx",
+    "matches" : true,
+    "probe" : "日本語"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight probe sample.tsx 🙂"
+  },
+  {
+    "actual_color" : "Catalog color: System systemRedColor",
+    "expected_color" : "Catalog color: System systemRedColor",
+    "fixture" : "sample.tsx",
+    "matches" : true,
+    "probe" : "🙂"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight refresh after edit sample.tsx"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "query asset sample.json"
+  },
+  {
+    "fixture" : "sample.json",
+    "highlight_color_count" : 3,
+    "view_size" : "{1164, 710}"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight colors sample.json"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight probe sample.json 🙂"
+  },
+  {
+    "actual_color" : "Catalog color: System systemRedColor",
+    "expected_color" : "Catalog color: System systemRedColor",
+    "fixture" : "sample.json",
+    "matches" : true,
+    "probe" : "🙂"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight probe sample.json 42"
+  },
+  {
+    "actual_color" : "Catalog color: System systemOrangeColor",
+    "expected_color" : "Catalog color: System systemOrangeColor",
+    "fixture" : "sample.json",
+    "matches" : true,
+    "probe" : "42"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight refresh after edit sample.json"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "query asset sample.md"
+  },
+  {
+    "fixture" : "sample.md",
+    "highlight_color_count" : 3,
+    "view_size" : "{1164, 710}"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight colors sample.md"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight probe sample.md let"
+  },
+  {
+    "actual_color" : "Catalog color: System systemPurpleColor",
+    "expected_color" : "Catalog color: System systemPurpleColor",
+    "fixture" : "sample.md",
+    "matches" : true,
+    "probe" : "let"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight probe sample.md hi"
+  },
+  {
+    "actual_color" : "Catalog color: System systemRedColor",
+    "expected_color" : "Catalog color: System systemRedColor",
+    "fixture" : "sample.md",
+    "matches" : true,
+    "probe" : "hi"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "highlight refresh after edit sample.md"
+  },
+  {
+    "alternative_TextKit2" : {
+      "TextKit2 basic Tree-sitter capture styling" : true,
+      "TextKit2 created" : true,
+      "TextKit2 remains enabled after styling" : true,
+      "TextKit2 undo manager available without window" : false,
+      "TextKit2 Unicode insertion" : true
+    },
+    "note" : "basic captures only; incremental syntax, IME and multicursor not validated for alternative"
+  },
+  {
+    "bytes" : 110,
+    "construct_layout_ms" : 34.072291,
+    "first_visible_highlight_ms" : 78.231166000000002,
+    "fixture" : "normal.swift",
+    "input_sync_ms" : [
+      0.64958300000000002,
+      0.98983299999999996,
+      1.0349999999999999,
+      1.0665420000000001,
+      0.98091600000000001,
+      1.011333,
+      0.94254199999999999,
+      1.0299579999999999,
+      1.0634589999999999,
+      1.048,
+      1.0036670000000001,
+      1.1505840000000001,
+      1.0880000000000001,
+      0.96116699999999999,
+      1.1819999999999999,
+      0.96316599999999997,
+      1.0122089999999999,
+      0.94470900000000002,
+      0.93937499999999996,
+      1.119375
+    ],
+    "note" : "one run; synchronous API + display submission, not input-to-photon; awaited visible highlight up to 10s; retained earlier documents; maxrss cumulative",
+    "process_cpu_seconds" : 0.61050700000000002,
+    "process_maxrss_bytes" : 151666688,
+    "scroll_sync_ms" : [
+      0.030707999999999999,
+      0.30191600000000002,
+      0.45587499999999997,
+      0.45995900000000001,
+      0.24049999999999999,
+      0.285833,
+      0.723333,
+      0.69033299999999997,
+      0.58670900000000004,
+      0.51587499999999997,
+      0.56870799999999999,
+      0.32524999999999998,
+      0.23433300000000001,
+      0.199375,
+      0.111375,
+      0.111083,
+      0.17308299999999999,
+      0.27608300000000002,
+      0.151333,
+      0.19491700000000001
+    ],
+    "two_tab_switch_sync_ms" : [
+      24.819334000000001,
+      21.502417000000001,
+      21.448708,
+      21.195084000000001,
+      21.136666000000002,
+      21.182959,
+      21.265208000000001,
+      24.643540999999999,
+      24.9955,
+      27.789124999999999,
+      27.213166000000001,
+      26.763249999999999,
+      27.546665999999998,
+      26.483958000000001,
+      26.823083,
+      27.009499999999999,
+      27.859458,
+      27.692542,
+      23.858125000000001,
+      23.083041000000001
+    ],
+    "visible_highlight_colors" : 5
+  },
+  {
+    "bytes" : 1048554,
+    "construct_layout_ms" : 54.060250000000003,
+    "first_visible_highlight_ms" : 510.26970799999998,
+    "fixture" : "1mb.swift",
+    "input_sync_ms" : [
+      3.4462090000000001,
+      3.6987079999999999,
+      3.793917,
+      3.6762920000000001,
+      3.701041,
+      3.6957080000000002,
+      3.7143329999999999,
+      3.7285840000000001,
+      3.6484580000000002,
+      3.740583,
+      3.708917,
+      3.8039589999999999,
+      3.8394170000000001,
+      3.8276659999999998,
+      3.825917,
+      3.9162910000000002,
+      4.0004169999999997,
+      3.7992499999999998,
+      3.8511669999999998,
+      3.8755419999999998
+    ],
+    "note" : "one run; synchronous API + display submission, not input-to-photon; awaited visible highlight up to 10s; retained earlier documents; maxrss cumulative",
+    "process_cpu_seconds" : 2.5658820000000002,
+    "process_maxrss_bytes" : 269549568,
+    "scroll_sync_ms" : [
+      0.026707999999999999,
+      0.87829199999999996,
+      3.6418330000000001,
+      0.840584,
+      0.79241700000000004,
+      0.86583399999999999,
+      0.799709,
+      7.3232080000000002,
+      50.094499999999996,
+      26.501458,
+      1.0498339999999999,
+      1.1120829999999999,
+      1.1215409999999999,
+      1.071625,
+      1.2019580000000001,
+      1.071666,
+      1.044834,
+      1.0502499999999999,
+      1.1265000000000001,
+      1.1557500000000001
+    ],
+    "two_tab_switch_sync_ms" : [
+      26.097916999999999,
+      23.395624999999999,
+      22.348500000000001,
+      21.885708999999999,
+      21.778917,
+      22.645125,
+      22.338249999999999,
+      22.314624999999999,
+      21.84225,
+      21.621583999999999,
+      21.859249999999999,
+      22.890042000000001,
+      22.524125000000002,
+      22.227416000000002,
+      21.922084000000002,
+      22.184000000000001,
+      21.861249999999998,
+      22.018916999999998,
+      22.356458,
+      25.664124999999999
+    ],
+    "visible_highlight_colors" : 4
+  },
+  {
+    "bytes" : 10485735,
+    "construct_layout_ms" : 151.21924999999999,
+    "first_visible_highlight_ms" : 4594.033958,
+    "fixture" : "10mb.swift",
+    "input_sync_ms" : [
+      3.3541249999999998,
+      3.4005420000000002,
+      3.3233329999999999,
+      3.4221659999999998,
+      3.1895419999999999,
+      3.4058329999999999,
+      3.2982499999999999,
+      3.4695,
+      3.4157500000000001,
+      3.5701670000000001,
+      3.5586250000000001,
+      3.7136670000000001,
+      3.70275,
+      3.4481250000000001,
+      3.3534160000000002,
+      3.44475,
+      3.353291,
+      3.4710839999999998,
+      3.3359160000000001,
+      3.34775
+    ],
+    "note" : "one run; synchronous API + display submission, not input-to-photon; awaited visible highlight up to 10s; retained earlier documents; maxrss cumulative",
+    "process_cpu_seconds" : 7.8676459999999997,
+    "process_maxrss_bytes" : 1131200512,
+    "scroll_sync_ms" : [
+      0.022166999999999999,
+      1.057917,
+      0.79262500000000002,
+      0.87708399999999997,
+      0.82774999999999999,
+      0.99166600000000005,
+      0.97550000000000003,
+      0.84137499999999998,
+      0.89429099999999995,
+      0.86458299999999999,
+      1.0605830000000001,
+      3.9586250000000001,
+      3.8106249999999999,
+      3.554583,
+      3.5924170000000002,
+      3.3890829999999998,
+      42.073959000000002,
+      9.5770420000000005,
+      10.153791,
+      10.506792000000001
+    ],
+    "two_tab_switch_sync_ms" : [
+      28.714625000000002,
+      26.115874999999999,
+      25.339834,
+      25.393374999999999,
+      26.157374999999998,
+      25.016708000000001,
+      21.643750000000001,
+      21.306625,
+      21.043541000000001,
+      21.522708000000002,
+      21.289833000000002,
+      21.309709000000002,
+      20.483416999999999,
+      20.247667,
+      20.400333,
+      20.563917,
+      23.786625000000001,
+      24.338542,
+      23.532834000000001,
+      27.003541999999999
+    ],
+    "visible_highlight_colors" : 4
+  },
+  {
+    "bytes" : 1048589,
+    "construct_layout_ms" : 743.38483299999996,
+    "first_visible_highlight_ms" : 3000.7407079999998,
+    "fixture" : "long-line.ts",
+    "input_sync_ms" : [
+      689.12512500000003,
+      687.84225000000004,
+      688.94912499999998,
+      669.04008399999998,
+      687.48162500000001,
+      682.47974999999997,
+      676.70795799999996,
+      688.21608300000003,
+      678.03020900000001,
+      693.289084,
+      688.47191699999996,
+      693.84658400000001,
+      683.95487500000002,
+      685.49258299999997,
+      680.14462500000002,
+      672.582041,
+      671.70987500000001,
+      684.23287500000004,
+      672.81183299999998,
+      687.67537500000003
+    ],
+    "note" : "one run; synchronous API + display submission, not input-to-photon; awaited visible highlight up to 10s; retained earlier documents; maxrss cumulative",
+    "process_cpu_seconds" : 23.275886,
+    "process_maxrss_bytes" : 1254768640,
+    "scroll_sync_ms" : [
+      696.45379100000002,
+      711.93554200000005,
+      712.40712499999995,
+      0.13258300000000001,
+      0.14558399999999999,
+      0.159833,
+      0.17899999999999999,
+      0.18312500000000001,
+      0.16675000000000001,
+      0.15512500000000001,
+      0.314417,
+      0.26050000000000001,
+      0.21325,
+      0.19375000000000001,
+      0.197542,
+      0.189917,
+      0.16145899999999999,
+      0.18687500000000001,
+      0.1195,
+      0.16387499999999999
+    ],
+    "two_tab_switch_sync_ms" : [
+      29.309125000000002,
+      27.074207999999999,
+      24.87875,
+      24.262958000000001,
+      23.245709000000002,
+      22.832542,
+      27.409333,
+      33.505916999999997,
+      32.353417,
+      28.607792,
+      30.22325,
+      29.532833,
+      28.428417,
+      29.424499999999998,
+      27.273416999999998,
+      26.616541000000002,
+      27.001166999999999,
+      25.987832999999998,
+      22.945834000000001,
+      23.879292
+    ],
+    "visible_highlight_colors" : 3
+  },
+  {
+    "construct_ms" : 3326.6691249999999,
+    "fixture" : "50 additional retained tabs"
+  },
+  {
+    "alignment_and_display_ms" : 492.75091700000002,
+    "alignment_ms" : 376.58024999999998,
+    "fixture" : "10000 lines \/ 2000 replacements diff",
+    "rows" : 10000,
+    "scroll_sync_ms" : [
+      0.30375000000000002,
+      68.842416,
+      55.258125,
+      42.168582999999998,
+      40.575042000000003,
+      39.860957999999997,
+      64.423541999999998,
+      72.523124999999993,
+      65.533625000000001,
+      53.359583000000001,
+      74.218249999999998,
+      74.542833000000002,
+      75.424916999999994,
+      73.947041999999996,
+      72.976416999999998,
+      75.655291000000005,
+      56.704040999999997,
+      42.756875000000001,
+      40.847042000000002,
+      41.832707999999997
+    ]
+  }
+]

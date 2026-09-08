@@ -25,6 +25,7 @@ struct Proposal {
 
 final class Document: NSObject, TextViewCoordinator, NSTextStorageDelegate {
     let name: String
+    let highlightProvider: RevisionAwareHighlightProvider
     var controller: TextViewController!
     var pendingText: String?
     var revision = 0
@@ -37,12 +38,14 @@ final class Document: NSObject, TextViewCoordinator, NSTextStorageDelegate {
     var onChange: (() -> Void)?
     init(name: String, text: String, language: CodeLanguage) {
         self.name = name
+        self.highlightProvider = RevisionAwareHighlightProvider()
         self.pendingText = text
         super.init()
         controller = TextViewController(string: "", language: language,
             configuration: .init(appearance: .init(theme: Self.theme,
                 font: .monospacedSystemFont(ofSize: 13, weight: .regular), wrapLines: false),
-                peripherals: .init(showMinimap: false)), cursorPositions: [], coordinators: [self])
+                peripherals: .init(showMinimap: false)), cursorPositions: [],
+            highlightProviders: [highlightProvider], coordinators: [self])
         _ = controller.view
         observers.append(NotificationCenter.default.addObserver(forName: CodeEditTextView.TextView.textWillChangeNotification, object: controller.textView, queue: .main) { [weak self] _ in
             guard let self, self.groupMulticursorEdits, !self.ownsUndoGroup,
@@ -56,7 +59,6 @@ final class Document: NSObject, TextViewCoordinator, NSTextStorageDelegate {
         })
     }
     deinit { observers.forEach(NotificationCenter.default.removeObserver) }
-
     /// Marked-range updates are transient notifications. Keep the adapter's multi-cursor
     /// group open across them, then close it after the run-loop turn that commits or cancels
     /// the composition.
@@ -83,6 +85,9 @@ final class Document: NSObject, TextViewCoordinator, NSTextStorageDelegate {
             if undo.isGrouping { undo.endUndoGrouping() }
             self.ownsUndoGroup = false
         }
+
+    @MainActor func requestInitialHighlight() {
+        highlightProvider.requestInitialVisibleRange(for: controller.textView)
     }
     func prepareCoordinator(controller: TextViewController) { controller.textView.addStorageDelegate(self) }
     func textStorage(_ storage: NSTextStorage, didProcessEditing mask: NSTextStorageEditActions,
