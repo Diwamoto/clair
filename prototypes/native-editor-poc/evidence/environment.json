@@ -1,0 +1,17 @@
+{
+  "date": "2026-09-08",
+  "cpu": "Apple M4",
+  "logical_cpu": 10,
+  "ram_bytes": 34359738368,
+  "macOS": "26.6.2 (25G83)",
+  "swift": "6.3.3 (swiftlang-6.3.3.1.3)",
+  "baseline_head": "d4fe851fb85f2e4e06993b53934b31c3a378fb97",
+  "original_tracked_editor_hashes_changed_since_start": [],
+  "final_sources": {
+    "Sources/NativeEditorPoC/Checks.swift": "25318ecbe18f5704c2e2c9d33678e9e86da839d06103e184ab4c20b2f3e21cc3",
+    "Sources/NativeEditorPoC/Document.swift": "49a13d90a61cb3296598f66a06c4ca2879d76ba05d7b9a3282787d6907f8ec8f",
+    "Sources/NativeEditorPoC/TextKitProbe.swift": "c27397bfa09cd0549b4cab8d0e06ea35ad1ba2344c9f05a6922a97609a7fd114",
+    "Sources/NativeEditorPoC/WebBenchmark.swift": "aeb87a405eb61ec68b6b7c10cb5d46acfab696b7c92211c8846f2626a828f717",
+    "Sources/NativeEditorPoC/main.swift": "dfadcb944ebf10ee003b951c4dd9918a775d0bf22cc24e5bf652bdd2ba0506e0"
+  }
+}

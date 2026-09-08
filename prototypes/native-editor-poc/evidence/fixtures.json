@@ -1,0 +1,46 @@
+{
+  "10mb.swift": {
+    "bytes": 10485735,
+    "sha256": "625afad8007221ca60d78b5d013ebf07b622afef6db7ae67ab90a06cf19a80ae"
+  },
+  "1mb.swift": {
+    "bytes": 1048554,
+    "sha256": "d75c8ba509f8de38bccc426484272bf77207378330b889afde2a335fbdd49643"
+  },
+  "large-new.txt": {
+    "bytes": 104889,
+    "sha256": "3531ed56101225784b8cfb5fb4f82b5aa1e819a47f110f1773496579dfc48ff4"
+  },
+  "large-old.txt": {
+    "bytes": 98889,
+    "sha256": "ceb5bc897c34c6df592f1613dde9b18916a3c81658955e792828ee5c5af79cfe"
+  },
+  "long-line.ts": {
+    "bytes": 1048589,
+    "sha256": "9893bd0d1a9b258057c0be4ba5f76a6ced7c4b62d64377c44e09f24129280809"
+  },
+  "normal.swift": {
+    "bytes": 110,
+    "sha256": "05a48698061877b47ab8696c53320d0e0fe0fa2ff0378f15b4c74437dd2b21f2"
+  },
+  "sample.json": {
+    "bytes": 72,
+    "sha256": "cb4b6a9b9e71def8ed75f201bb43bc71471cf7a7315bc96ae54ddd8184dbe294"
+  },
+  "sample.md": {
+    "bytes": 67,
+    "sha256": "add0c221808149f63344eab6fe2355ad51b8e492e15e221695f81930ac4ad008"
+  },
+  "sample.rs": {
+    "bytes": 97,
+    "sha256": "fe88b4c196a72e58d190405b885a0554258af57824ff497addebd38bfb39698d"
+  },
+  "sample.ts": {
+    "bytes": 67,
+    "sha256": "b5f40689fd1b89d73dd586ed67a77e4596c2078a200afbd5c414a8ddaf00b344"
+  },
+  "sample.tsx": {
+    "bytes": 83,
+    "sha256": "24d652d906b1c48e9a6cb58f0c2b842bada24188ded7c9caaa4184425d1e4047"
+  }
+}

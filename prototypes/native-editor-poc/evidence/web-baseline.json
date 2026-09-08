@@ -1,0 +1,30 @@
+{
+  "source": "/Users/daiki/Projects/clair/apple/ClairApp/EditorWeb",
+  "captured_at": "2026-09-08T07:56:14.711535+09:00",
+  "files": {
+    "assets/css-BnMrqG3P.js": "aa3e47bd7d7e6f2b9aed7b342b7d6aa059ff6e770c86d64cb0eaf97b403ec98a",
+    "assets/diff-B2gkDGKR.css": "e399dfddfe56fe5f1a1449e2387cece642f2a88a0ae664a10269d7eebe3fbc65",
+    "assets/diff-E4VaWtp2.js": "e28a626f9df48e3ca65b3ddbaa333b49366dc3c38cd0dfeb8633142583381834",
+    "assets/dockerfile-ZL4hHokT.js": "8475113be4b710aaa66307baebc09291053e00a44db4662a145b172322798685",
+    "assets/index-B0KvVob2.js": "e7a03642afd1e40aa22f2593682b8f3bcf6618268da72ad0f125b288de808a3d",
+    "assets/index-BFrPvfrX.js": "e7d80d6d941845201191a2d5cefbf85e4cec43a5f48c33f1e784b3fbe7d6c875",
+    "assets/index-Bj1WO4sP.js": "22a51f0ef161421140c7115e8728c24e3aad2f512c69434cd750d4391e8c8820",
+    "assets/index-DE5xxQDZ.js": "d8ceef95c13ca68be54e6bbd7e9572fdd11f19f80483fe651fe292326ba4b72a",
+    "assets/index-DQCa1bUk.js": "12259feb9132a67f28714546743647b217f9d861af821efd356c2307692541d2",
+    "assets/index-DVFx3ICC.js": "ad20ebd67c68a72a549139201bc2c1a6bd31f8c2ee0c97c01109224941a10d9b",
+    "assets/index-DrvzkDCx.js": "c70f76c52e0891fcbf848a6e6e6f795bd8ba287949e0460ba7e64b1c80c6a1c5",
+    "assets/index-DwlPiEb5.js": "4aa8137c93bd75ec9afd9fbea38738bb687f331c6701a7e344bfd7dca5dda5a0",
+    "assets/index-n73vtbgZ.js": "a827c98d53a9aa8d0468bbf2fd7347a09c2ffdaffeee5633aa90ca7fd64de5a3",
+    "assets/index-rvbGVpYD.js": "4acdccfb6b2ea326675bd13aa283db56c22dca1e056af2ce1f455498528575da",
+    "assets/language-CYVC7Vkm.js": "26a3908ec28dd9ab614309c31b072775652c22027322b1ea0d0a9024bce8f7a2",
+    "assets/language-CjXZ9B5R.css": "f07a41db03e5f2923526d066b0798d1f9ebbed720efb829c60e667ee37b58f70",
+    "assets/ruby-B2Rjki9n.js": "5cd3a5c7aab2013878c02b629ac364781ffd33eea086457f1d1c28f5cdede906",
+    "assets/shell-CjFT_Tl9.js": "b4da8a11db1127e003f10a94ff707474af1392051c41f1e0ef78152e9bd0ea95",
+    "assets/sql-D0XecflT.js": "de179cb192745a50f178503fd65ae5ff2488f34b4d421de85961a1207930a125",
+    "assets/swift-tJI2jDWQ.js": "0e612096f4efbf46828f939970c57d4680f7735730ec5481dda8d8e6f444cbf0",
+    "assets/xml-BQQZnNBQ.js": "3084c64a4b1953e9c46aff390e9fef9ea7bdb637f9d1c8f94e3c009293ecc560",
+    "assets/yaml-DsCXHVTH.js": "c8dfd05d7ae0e3107aebef566f4eb64f4a6771cbd2ed5f1c867c9766c9922c07",
+    "diff.html": "3a9eba68196678ed953db0a175d611db9e940d359c316091cb2e9c20a2d14b2d",
+    "index.html": "30485f1989fad5f7f98722a4ea68425b37a908d298e4e77ead93433705fed129"
+  }
+}
