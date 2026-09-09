@@ -1,47 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { activityItems } from '../data';
-import { IconGear, IconSearch } from '../icons';
+import { IconSearch } from '../icons';
 import { useWorkbench } from '../store';
-import { ScreenShell, Sidebar, StatusBar, Titlebar } from '../chrome';
+
 import { color, line, wash } from '../tokens';
 
-export function ActivityScreen() {
+export function ActivityPanel() {
   const wb = useWorkbench();
   const [filter, setFilter] = useState('');
   const [scope, setScope] = useState<'すべて' | 'clair' | 'ccedit'>('すべて');
-  const [draft, setDraft] = useState('');
-  const feedRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = feedRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [wb.messages.length]);
 
   const items = activityItems.filter((i) => !filter || i.title.includes(filter) || i.meta.includes(filter));
 
   return (
-    <ScreenShell>
-      <Titlebar project="ccedit">
-        <div style={{ flex: 1 }} />
-        <button
-          onClick={() => wb.setScreen('settings')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 28,
-            height: 28,
-            borderRadius: 4,
-            color: color.textTertiary,
-          }}
-        >
-          <IconGear size={15} />
-        </button>
-      </Titlebar>
-
-      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        <Sidebar width={300} compact>
+    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' }}>
           <div
             style={{
               display: 'flex',
@@ -149,9 +122,22 @@ export function ActivityScreen() {
               );
             })}
           </div>
-        </Sidebar>
+    </div>
+  );
+}
 
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: color.canvas }}>
+export function ActivityMain() {
+  const wb = useWorkbench();
+  const [draft, setDraft] = useState('');
+  const feedRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = feedRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [wb.messages.length]);
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, background: color.canvas }}>
           <div ref={feedRef} className="scroll" style={{ minHeight: 0, flex: 1, padding: '26px 0 16px' }}>
             {wb.messages.map((m) => (
               <div key={m.id} style={{ maxWidth: 640, margin: '0 auto 16px', padding: '0 30px' }}>
@@ -299,16 +285,14 @@ export function ActivityScreen() {
               }}
             />
           </div>
-        </div>
-      </div>
+    </div>
+  );
+}
 
-      <StatusBar>
-        <span>main</span>
-        <span style={{ color: color.divider }}>·</span>
-        <span className="cl" style={{ color: color.textMuted }}>
-          ccedit · Claude Code
-        </span>
-      </StatusBar>
-    </ScreenShell>
+export function ActivityStatus() {
+  return (
+    <span className="cl" style={{ color: color.textMuted }}>
+      Claude Code · 実行中
+    </span>
   );
 }

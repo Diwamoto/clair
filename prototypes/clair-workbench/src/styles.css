@@ -121,24 +121,22 @@ textarea {
 .screen-layer {
   position: absolute;
   inset: 0;
+  /* A column so a main area that says flex:1 fills the stage rather than
+     collapsing to its content height. */
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
   transform-origin: 50% 50%;
   will-change: transform, opacity;
 }
 
-.screen-layer.leave-depth,
-.screen-layer.leave-slide-fwd,
-.screen-layer.leave-slide-back,
-.screen-layer.leave-lift,
-.screen-layer.leave-sheet {
+.screen-layer[class*='leave-'] {
   pointer-events: none;
   z-index: 1;
 }
 
-.screen-layer.enter-depth,
-.screen-layer.enter-slide-fwd,
-.screen-layer.enter-slide-back,
-.screen-layer.enter-lift,
-.screen-layer.enter-sheet {
+.screen-layer[class*='enter-'] {
   z-index: 2;
 }
 
@@ -273,5 +271,23 @@ textarea {
   }
   .caret {
     animation: none;
+  }
+}
+
+/* fade — the sidebar panel, too narrow for depth to read as anything but a glitch */
+.leave-fade {
+  animation: leave-fade 90ms linear both;
+}
+.enter-fade {
+  animation: enter-fade 90ms linear both;
+}
+@keyframes leave-fade {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes enter-fade {
+  from {
+    opacity: 0;
   }
 }

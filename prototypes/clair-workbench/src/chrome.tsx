@@ -1,21 +1,41 @@
-// Shared chrome. Every screen composes the same header, sidebar and footer
-// from here instead of redrawing them, so the 48 / 34 / 26px chrome budget is
-// held in one place. The values are still the canvas's own — this file is
-// where they live, not a reinterpretation of them.
+// The application chrome.
+//
+// The Main artboard's titlebar, sidebar and status bar are the app's chrome,
+// not one screen's decoration. They are built once here and stay put; only the
+// sidebar panel and the main area change as you navigate. The other artboards
+// each drew their own header because an artboard is a single still frame —
+// those are treated as internal parts of this shell, not as separate chrome.
 
 import type { CSSProperties, ReactNode } from 'react';
 
-import { color, line, mono, wash } from './tokens';
+import { files, projects, type FileKind } from './data';
+import { color, line, mono } from './tokens';
 import {
   IconBell,
   IconBranch,
   IconBug,
+  IconClaude,
+  IconCodex,
+  IconCommand,
+  IconDoc,
   IconEllipsis,
   IconFolder,
+  IconGear,
+  IconMarkdown,
+  IconSearch,
   IconSession,
   IconShieldCheck,
+  IconSparkle,
 } from './icons';
 import { useWorkbench, type Screen } from './store';
+
+const byPath = new Map(files.map((f) => [f.path, f]));
+
+export function FileIcon({ kind, tint }: { kind: FileKind; tint: string }) {
+  if (kind === 'md') return <IconMarkdown size={12} color={tint} />;
+  if (kind === 'swift') return <IconClaude size={12} color={tint} />;
+  return <IconDoc size={12} color={tint} />;
+}
 
 /* ── atoms ────────────────────────────────────────────────────────────── */
 
@@ -113,85 +133,283 @@ export function Chip({
   return <span style={base}>{children}</span>;
 }
 
-/** The project pill the titlebar carries on every non-workspace screen. */
-export function ProjectPill({ name, onClick }: { name: string; onClick?: () => void }) {
-  const style: CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    height: 26,
-    padding: '0 9px',
-    borderRadius: 6,
-    background: wash.strong,
-    border: `1px solid ${line.ring}`,
-  };
-  const label = <span style={{ fontSize: 12, fontWeight: 600 }}>{name}</span>;
-  return onClick ? (
-    <button onClick={onClick} style={style}>
-      {label}
-    </button>
-  ) : (
-    <div style={style}>{label}</div>
+/**
+ * The 44px header a screen puts at the top of the main area — branch review,
+ * the session rail and the merge graph all draw one. It is not chrome: it
+ * belongs to the screen, under the shared titlebar.
+ */
+export function MainHeader({ children, height = 44 }: { children: ReactNode; height?: number }) {
+  return (
+    <div
+      style={{
+        height,
+        flexShrink: 0,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '0 16px',
+        backgroundColor: color.chrome,
+        borderBottom: `1px solid ${line.chrome}`,
+      }}
+    >
+      {children}
+    </div>
   );
 }
 
-/* ── header ───────────────────────────────────────────────────────────── */
+/* ── titlebar ─────────────────────────────────────────────────────────── */
+
+function Tab({ path, active }: { path: string; active: boolean }) {
+  const wb = useWorkbench();
+  const tab = wb.tabs.find((t) => t.path === path);
+  const file = byPath.get(path);
+  const tint = active ? color.textPrimary : color.textTertiary;
+  return (
+    <button
+      onClick={() => {
+        wb.setActivePath(path);
+        wb.openFile(path);
+      }}
+      style={{
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 7,
+        padding: '0 11px',
+        minWidth: 124,
+        maxWidth: 210,
+        borderRadius: 7,
+        background: 'transparent',
+        height: '100%',
+        alignSelf: 'stretch',
+      }}
+    >
+      {file ? <FileIcon kind={file.kind} tint={tint} /> : <IconSparkle size={12} color={tint} />}
+      <span
+        style={{
+          fontSize: 11,
+          fontWeight: active ? 600 : 400,
+          color: tint,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          flex: 1,
+        }}
+      >
+        {file?.name ?? path}
+      </span>
+      {tab?.dirty ? (
+        <span
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: '50%',
+            background: active ? color.textTertiary : color.textQuaternary,
+            flexShrink: 0,
+          }}
+        />
+      ) : null}
+      {active ? (
+        <div
+          style={{
+            position: 'absolute',
+            left: 11,
+            right: 11,
+            bottom: 0,
+            height: 2,
+            background: color.textPrimary,
+            borderRadius: '1px 1px 0 0',
+          }}
+        />
+      ) : null}
+    </button>
+  );
+}
 
 /**
- * The 48px titlebar. `variant="workspace"` is the parallel-tab row the Main
- * artboard draws; the default is the centred row every other screen uses.
- * A screen passes its own right-hand content as children.
+ * The one titlebar, from the Main artboard: traffic lights, the active
+ * project's parallel tabs, the other projects, then file/symbol search and the
+ * two window actions. `extra` is where a screen adds its own status badge
+ * (the debugger's stop badge, for instance) without growing a second row.
  */
-export function Titlebar({
-  variant = 'plain',
-  project,
-  onProjectClick,
-  title,
-  children,
-  align = 'center',
-}: {
-  variant?: 'plain' | 'workspace';
-  project?: string;
-  onProjectClick?: () => void;
-  title?: string;
-  children?: ReactNode;
-  align?: 'center' | 'end';
-}) {
+export function AppTitlebar({ extra }: { extra?: ReactNode }) {
+  const wb = useWorkbench();
   return (
     <div
       style={{
         height: 48,
         flexShrink: 0,
         display: 'flex',
-        alignItems: align === 'end' ? 'flex-end' : 'center',
-        gap: variant === 'workspace' ? 0 : 12,
-        padding: variant === 'workspace' ? 0 : '0 16px',
+        alignItems: 'flex-end',
         backgroundColor: color.chrome,
-        borderBottom: `1px solid ${variant === 'workspace' ? line.hairline : line.chrome}`,
+        borderBottom: `1px solid ${line.hairline}`,
       }}
     >
-      {variant === 'workspace' ? (
+      <div style={{ width: 76, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '0 0 18px 20px' }}>
+        <TrafficLights />
+      </div>
+
+      <div
+        className="no-scrollbar"
+        style={{ flex: 1, height: 48, display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, overflow: 'hidden' }}
+      >
         <div
           style={{
-            width: 76,
-            flexShrink: 0,
             display: 'flex',
             alignItems: 'center',
-            gap: 8,
-            padding: '0 0 18px 20px',
+            gap: 6,
+            height: 26,
+            padding: '0 10px',
+            borderRadius: 8,
+            background: 'rgba(255,255,255,0.08)',
+            border: '1px solid rgba(255,255,255,0.12)',
+            alignSelf: 'center',
+            flexShrink: 0,
           }}
         >
-          <TrafficLights />
+          <span style={{ fontSize: 12, fontWeight: 600, color: color.textPrimary }}>{wb.activeProject}</span>
         </div>
-      ) : (
-        <>
-          <TrafficLights />
-          <VDivider />
-          {project ? <ProjectPill name={project} onClick={onProjectClick} /> : null}
-          {title ? <span style={{ fontSize: 13, fontWeight: 600 }}>{title}</span> : null}
-        </>
-      )}
-      {children}
+
+        <div style={{ display: 'flex', alignItems: 'center', alignSelf: 'stretch', gap: 3, marginLeft: 4, minWidth: 0 }}>
+          {wb.tabs.map((t) => (
+            <Tab key={t.path} path={t.path} active={t.path === wb.activePath && wb.screen === 'workspace'} />
+          ))}
+          <button
+            onClick={() => wb.setScreen('activity')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 7,
+              padding: '0 11px',
+              minWidth: 124,
+              borderRadius: 7,
+              height: '100%',
+              alignSelf: 'stretch',
+              position: 'relative',
+            }}
+          >
+            <IconSparkle size={12} color={wb.screen === 'activity' ? color.textPrimary : color.textTertiary} />
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: wb.screen === 'activity' ? 600 : 400,
+                color: wb.screen === 'activity' ? color.textPrimary : color.textTertiary,
+                whiteSpace: 'nowrap',
+                flex: 1,
+              }}
+            >
+              Claude Code
+            </span>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: color.textQuaternary, flexShrink: 0 }} />
+            {wb.screen === 'activity' ? (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: 11,
+                  right: 11,
+                  bottom: 0,
+                  height: 2,
+                  background: color.textPrimary,
+                  borderRadius: '1px 1px 0 0',
+                }}
+              />
+            ) : null}
+          </button>
+          <button
+            onClick={() => wb.setScreen('sessions')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 7,
+              padding: '0 11px',
+              minWidth: 124,
+              borderRadius: 7,
+              height: '100%',
+              alignSelf: 'stretch',
+              position: 'relative',
+            }}
+          >
+            <IconCodex size={12} color={wb.screen === 'sessions' ? color.textPrimary : color.textTertiary} />
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: wb.screen === 'sessions' ? 600 : 400,
+                color: wb.screen === 'sessions' ? color.textPrimary : color.textTertiary,
+                whiteSpace: 'nowrap',
+                flex: 1,
+              }}
+            >
+              codex
+            </span>
+            {wb.screen === 'sessions' ? (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: 11,
+                  right: 11,
+                  bottom: 0,
+                  height: 2,
+                  background: color.textPrimary,
+                  borderRadius: '1px 1px 0 0',
+                }}
+              />
+            ) : null}
+          </button>
+        </div>
+
+        {projects
+          .filter((p) => p !== wb.activeProject)
+          .map((p) => (
+            <div key={p} style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+              <div style={{ width: 1, height: 22, background: 'rgba(242,244,238,0.09)', margin: '0 5px' }} />
+              <button
+                onClick={() => wb.setActiveProject(p)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  height: 22,
+                  padding: '0 9px',
+                  borderRadius: 8,
+                  color: color.textQuaternary,
+                  alignSelf: 'center',
+                }}
+              >
+                <span style={{ fontSize: 12, fontWeight: 600 }}>{p}</span>
+              </button>
+            </div>
+          ))}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 12px 9px 12px', flexShrink: 0 }}>
+        {extra}
+        <button
+          onClick={() => wb.setOverlay('search')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 7,
+            width: 200,
+            height: 28,
+            padding: '0 9px',
+            borderRadius: 8,
+            background: 'rgba(0,0,0,0.18)',
+          }}
+        >
+          <IconSearch size={12} color={color.textQuaternary} />
+          <span style={{ fontSize: 11, color: color.textMuted, flex: 1 }}>ファイル、シンボル</span>
+        </button>
+        <button className="act" title="コマンドパレット" onClick={() => wb.setOverlay('command')}>
+          <IconCommand size={15} />
+        </button>
+        <button
+          className="act"
+          title="設定"
+          onClick={() => wb.setScreen(wb.screen === 'settings' ? 'workspace' : 'settings')}
+          style={wb.screen === 'settings' ? { background: color.surfaceActive, color: color.textPrimary } : undefined}
+        >
+          <IconGear size={15} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -199,11 +417,11 @@ export function Titlebar({
 /* ── sidebar ──────────────────────────────────────────────────────────── */
 
 /**
- * The activity strip that lives inside the sidebar rather than in a column of
- * its own — the chrome budget on the Tokens artboard is what pays for this.
+ * The activity strip inside the sidebar rather than in a column of its own —
+ * the chrome budget on the Tokens artboard is what pays for that.
  *
- * Search is deliberately absent: file and symbol search is the titlebar
- * field, so having it here too would give one job two entry points.
+ * Search is deliberately absent: file and symbol search is the titlebar field,
+ * so having it here too would give one job two entry points.
  */
 const NAV: Array<{ id: string; screen: Screen; label: string; icon: (p: { size?: number }) => ReactNode }> = [
   { id: 'files', screen: 'workspace', label: 'エクスプローラー', icon: IconFolder },
@@ -213,20 +431,19 @@ const NAV: Array<{ id: string; screen: Screen; label: string; icon: (p: { size?:
   { id: 'activity', screen: 'activity', label: 'アクティビティ', icon: IconBell },
 ];
 
-/** Which strip entry the current screen lights up. */
+/** Which strip entry the current screen lights up, and which panel it shows. */
 export function navIdFor(screen: Screen): string {
   if (screen === 'debug' || screen === 'debugAgent') return 'debug';
   if (screen === 'graph') return 'graph';
   if (screen === 'review') return 'review';
   if (screen === 'activity') return 'activity';
+  if (screen === 'settings') return 'settings';
   return 'files';
 }
 
-export function SidebarStrip({ compact, showSessions }: { compact?: boolean; showSessions?: boolean }) {
+function SidebarStrip() {
   const wb = useWorkbench();
   const active = navIdFor(wb.screen);
-  const w = compact ? 36 : 38;
-  const h = compact ? 30 : 32;
 
   return (
     <div
@@ -235,7 +452,7 @@ export function SidebarStrip({ compact, showSessions }: { compact?: boolean; sho
         flexShrink: 0,
         display: 'flex',
         alignItems: 'center',
-        gap: compact ? 2 : 3,
+        gap: 3,
         padding: '0 8px',
         borderBottom: `1px solid ${line.chromeSoft}`,
       }}
@@ -246,8 +463,8 @@ export function SidebarStrip({ compact, showSessions }: { compact?: boolean; sho
           return (
             <Act
               key={item.id}
-              width={w}
-              height={h}
+              width={38}
+              height={32}
               title={item.label}
               active={active === item.id}
               underline={item.id !== 'files'}
@@ -260,18 +477,16 @@ export function SidebarStrip({ compact, showSessions }: { compact?: boolean; sho
             </Act>
           );
         })}
-        {showSessions ? (
-          <Act
-            width={w}
-            height={h}
-            title="セッション"
-            active={wb.screen === 'sessions'}
-            underline
-            onClick={() => wb.setScreen('sessions')}
-          >
-            <IconSession size={16} />
-          </Act>
-        ) : null}
+        <Act
+          width={38}
+          height={32}
+          title="セッション"
+          active={wb.screen === 'sessions'}
+          underline
+          onClick={() => wb.setScreen('sessions')}
+        >
+          <IconSession size={16} />
+        </Act>
       </div>
       <Act title="その他">
         <IconEllipsis size={13} />
@@ -280,36 +495,7 @@ export function SidebarStrip({ compact, showSessions }: { compact?: boolean; sho
   );
 }
 
-/** The 286px (or wider) sidebar column: the strip plus whatever the screen puts under it. */
-export function Sidebar({
-  width = 286,
-  compact,
-  showSessions,
-  children,
-}: {
-  width?: number;
-  compact?: boolean;
-  showSessions?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <div
-      style={{
-        width,
-        flexShrink: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        backgroundColor: color.chrome,
-        borderRight: `1px solid ${line.chrome}`,
-      }}
-    >
-      <SidebarStrip compact={compact} showSessions={showSessions} />
-      {children}
-    </div>
-  );
-}
-
-/* ── footer ───────────────────────────────────────────────────────────── */
+/* ── status bar ───────────────────────────────────────────────────────── */
 
 export function QuotaMeter({ percent = 84, label = '残り16%', tint }: { percent?: number; label?: string; tint?: string }) {
   const fill = tint ?? color.textSecondary;
@@ -326,7 +512,15 @@ export function QuotaMeter({ percent = 84, label = '残り16%', tint }: { percen
   );
 }
 
-export function StatusBar({ children }: { children: ReactNode }) {
+/**
+ * The one status bar. Branch and working-tree state on the left, then the
+ * screen's own context, then the tightest agent's quota — which the Settings
+ * artboard makes a preference — and the session count.
+ */
+function AppStatusBar({ context, trailing }: { context?: ReactNode; trailing?: ReactNode }) {
+  const wb = useWorkbench();
+  const onBranch = wb.screen === 'review';
+
   return (
     <div
       style={{
@@ -342,15 +536,47 @@ export function StatusBar({ children }: { children: ReactNode }) {
         fontSize: 11,
       }}
     >
-      {children}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+        <IconBranch size={12} />
+        <span>{onBranch ? 'pane-split' : 'main'}</span>
+      </div>
+      <span className="cl" style={{ color: color.textMuted }}>
+        {onBranch ? 'worktree' : '↓0 ↑2'}
+      </span>
+      <span>{6 + wb.dirtyCount} 変更</span>
+      {context ? <span style={{ color: color.divider }}>·</span> : null}
+      {context}
+      <div style={{ flex: 1 }} />
+      {wb.toggles.showQuota ? <QuotaMeter /> : null}
+      <span style={{ color: color.divider }}>·</span>
+      <span>{wb.sessions.length} セッション</span>
+      {trailing ? <span style={{ color: color.divider }}>·</span> : null}
+      {trailing}
     </div>
   );
 }
 
 /* ── shell ────────────────────────────────────────────────────────────── */
 
-/** Every screen is a column: header, body, footer. */
-export function ScreenShell({ children }: { children: ReactNode }) {
+/**
+ * Header, sidebar and footer are mounted once and never unmount; only the
+ * sidebar panel and the main area swap as you navigate.
+ */
+export function AppShell({
+  panel,
+  main,
+  titlebarExtra,
+  statusContext,
+  statusTrailing,
+  sidebarWidth = 286,
+}: {
+  panel: ReactNode;
+  main: ReactNode;
+  titlebarExtra?: ReactNode;
+  statusContext?: ReactNode;
+  statusTrailing?: ReactNode;
+  sidebarWidth?: number;
+}) {
   return (
     <div
       style={{
@@ -364,14 +590,29 @@ export function ScreenShell({ children }: { children: ReactNode }) {
         fontSize: 11,
       }}
     >
-      {children}
+      <AppTitlebar extra={titlebarExtra} />
+      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+        <div
+          style={{
+            width: sidebarWidth,
+            flexShrink: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            backgroundColor: color.chrome,
+            borderRight: `1px solid ${line.chrome}`,
+            minHeight: 0,
+          }}
+        >
+          <SidebarStrip />
+          <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>{panel}</div>
+        </div>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, position: 'relative' }}>
+          {main}
+        </div>
+      </div>
+      <AppStatusBar context={statusContext} trailing={statusTrailing} />
     </div>
   );
-}
-
-/** The area between header and footer. */
-export function ScreenBody({ children }: { children: ReactNode }) {
-  return <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>{children}</div>;
 }
 
 export const monoStyle: CSSProperties = { fontFamily: mono };

@@ -1,230 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { files, projects, tree, type FileKind } from '../data';
+import { files, tree } from '../data';
 import { HighlightedLine } from '../highlight';
-import {
-  IconBranchSmall,
-  IconClaude,
-  IconCodex,
-  IconCommand,
-  IconDoc,
-  IconGear,
-  IconMarkdown,
-  IconSearch,
-  IconSparkle,
-} from '../icons';
+import { IconBranchSmall } from '../icons';
 import { useWorkbench, type PaneNode } from '../store';
-import { QuotaMeter, ScreenShell, Sidebar, StatusBar, Titlebar } from '../chrome';
-import { color, line, mono, wash } from '../tokens';
+import { FileIcon } from '../chrome';
+import { color, line, mono } from '../tokens';
 
 const byPath = new Map(files.map((f) => [f.path, f]));
 
 const INDENT: Record<number, number> = { 0: 10, 1: 22, 2: 36, 3: 55 };
 
-function FileIcon({ kind, tint }: { kind: FileKind; tint: string }) {
-  if (kind === 'md') return <IconMarkdown size={12} color={tint} />;
-  if (kind === 'swift') return <IconClaude size={12} color={tint} />;
-  return <IconDoc size={12} color={tint} />;
-}
-
-/* ── titlebar ─────────────────────────────────────────────────────────── */
-
-function Tab({ path, active }: { path: string; active: boolean }) {
-  const wb = useWorkbench();
-  const tab = wb.tabs.find((t) => t.path === path);
-  const file = byPath.get(path);
-  const tint = active ? color.textPrimary : color.textTertiary;
-  return (
-    <button
-      className="tab"
-      onClick={() => {
-        wb.setActivePath(path);
-        wb.openFile(path);
-      }}
-      style={{
-        position: 'relative',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 7,
-        padding: '0 11px',
-        minWidth: 124,
-        maxWidth: 210,
-        borderRadius: 7,
-        background: 'transparent',
-        height: '100%',
-        alignSelf: 'stretch',
-      }}
-    >
-      {file ? <FileIcon kind={file.kind} tint={tint} /> : <IconSparkle size={12} color={tint} />}
-      <span
-        style={{
-          fontSize: 11,
-          fontWeight: active ? 600 : 400,
-          color: tint,
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          flex: 1,
-        }}
-      >
-        {file?.name ?? path}
-      </span>
-      {tab?.dirty ? (
-        <span
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: '50%',
-            background: active ? color.textTertiary : color.textQuaternary,
-            flexShrink: 0,
-          }}
-        />
-      ) : null}
-      {active ? (
-        <div
-          style={{
-            position: 'absolute',
-            left: 11,
-            right: 11,
-            bottom: 0,
-            height: 2,
-            background: color.textPrimary,
-            borderRadius: '1px 1px 0 0',
-          }}
-        />
-      ) : null}
-    </button>
-  );
-}
-
-function WorkspaceTitlebar() {
-  const wb = useWorkbench();
-  return (
-    <Titlebar variant="workspace" align="end">
-      <div
-        className="no-scrollbar"
-        style={{
-          flex: 1,
-          height: 48,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 5,
-          minWidth: 0,
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            height: 26,
-            padding: '0 10px',
-            borderRadius: 8,
-            background: 'rgba(255,255,255,0.08)',
-            border: '1px solid rgba(255,255,255,0.12)',
-            alignSelf: 'center',
-            flexShrink: 0,
-          }}
-        >
-          <span style={{ fontSize: 12, fontWeight: 600, color: color.textPrimary }}>{wb.activeProject}</span>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', alignSelf: 'stretch', gap: 3, marginLeft: 4, minWidth: 0 }}>
-          {wb.tabs.map((t) => (
-            <Tab key={t.path} path={t.path} active={t.path === wb.activePath} />
-          ))}
-          <button
-            className="tab"
-            onClick={() => wb.setScreen('activity')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 7,
-              padding: '0 11px',
-              minWidth: 124,
-              borderRadius: 7,
-              height: '100%',
-              alignSelf: 'stretch',
-            }}
-          >
-            <IconSparkle size={12} color={color.textTertiary} />
-            <span style={{ fontSize: 11, color: color.textTertiary, whiteSpace: 'nowrap', flex: 1 }}>Claude Code</span>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: color.textQuaternary, flexShrink: 0 }} />
-          </button>
-          <button
-            className="tab"
-            onClick={() => wb.setScreen('sessions')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 7,
-              padding: '0 11px',
-              minWidth: 124,
-              borderRadius: 7,
-              height: '100%',
-              alignSelf: 'stretch',
-            }}
-          >
-            <IconCodex size={12} color={color.textTertiary} />
-            <span style={{ fontSize: 11, color: color.textTertiary, whiteSpace: 'nowrap', flex: 1 }}>codex</span>
-          </button>
-        </div>
-
-        {projects
-          .filter((p) => p !== wb.activeProject)
-          .map((p) => (
-            <div key={p} style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-              <div style={{ width: 1, height: 22, background: 'rgba(242,244,238,0.09)', margin: '0 5px' }} />
-              <button
-                onClick={() => wb.setActiveProject(p)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  height: 22,
-                  padding: '0 9px',
-                  borderRadius: 8,
-                  color: color.textQuaternary,
-                  alignSelf: 'center',
-                }}
-              >
-                <span style={{ fontSize: 12, fontWeight: 600 }}>{p}</span>
-              </button>
-            </div>
-          ))}
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 12px 9px 12px', flexShrink: 0 }}>
-        <button
-          onClick={() => wb.setOverlay('search')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 7,
-            width: 200,
-            height: 28,
-            padding: '0 9px',
-            borderRadius: 8,
-            background: 'rgba(0,0,0,0.18)',
-          }}
-        >
-          <IconSearch size={12} color={color.textQuaternary} />
-          <span style={{ fontSize: 11, color: color.textMuted, flex: 1 }}>ファイル、シンボル</span>
-        </button>
-        <button className="act" title="コマンドパレット" onClick={() => wb.setOverlay('command')}>
-          <IconCommand size={15} />
-        </button>
-        <button className="act" title="設定" onClick={() => wb.setScreen('settings')}>
-          <IconGear size={15} />
-        </button>
-      </div>
-    </Titlebar>
-  );
-}
-
 /* ── sidebar ──────────────────────────────────────────────────────────── */
 
-function WorkspaceSidebar() {
+export function ExplorerPanel() {
   const wb = useWorkbench();
 
   const hidden = (parent: string | undefined) => {
@@ -237,8 +26,7 @@ function WorkspaceSidebar() {
   };
 
   return (
-    <Sidebar>
-      <div className="scroll" style={{ flex: 1, padding: '6px 0' }}>
+    <div className="scroll" style={{ position: 'absolute', inset: 0, padding: '6px 0' }}>
         {tree.map((node) => {
           if (node.type !== 'project' && hidden(node.parent)) return null;
 
@@ -324,9 +112,8 @@ function WorkspaceSidebar() {
               ) : null}
             </button>
           );
-        })}
-      </div>
-    </Sidebar>
+      })}
+    </div>
   );
 }
 
@@ -654,9 +441,9 @@ function Pane({ node }: { node: PaneNode }) {
   );
 }
 
-/* ── screen ───────────────────────────────────────────────────────────── */
+/* ── main area ────────────────────────────────────────────────────────── */
 
-export function WorkspaceScreen() {
+export function WorkspaceMain() {
   const wb = useWorkbench();
   const maximizedNode = wb.maximized
     ? ((): PaneNode | null => {
@@ -667,28 +454,17 @@ export function WorkspaceScreen() {
     : null;
 
   return (
-    <ScreenShell>
-      <WorkspaceTitlebar />
-      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        <WorkspaceSidebar />
-        <div style={{ flex: 1, display: 'flex', minWidth: 0 }}>
-          <Pane node={maximizedNode ?? wb.layout} />
-        </div>
-      </div>
-      <StatusBar>
-        <span>main</span>
-        <span className="cl" style={{ color: color.textMuted }}>
-          ↓0 ↑2
-        </span>
-        <span>{6 + wb.dirtyCount} 変更</span>
-        <div style={{ flex: 1 }} />
-        <QuotaMeter />
-        <span className="cl">
-          Ln {wb.cursor.line}, Col {wb.cursor.column}
-        </span>
-      </StatusBar>
-    </ScreenShell>
+    <div style={{ flex: 1, display: 'flex', minWidth: 0, minHeight: 0 }}>
+      <Pane node={maximizedNode ?? wb.layout} />
+    </div>
   );
 }
 
-export const workspaceWash = wash;
+export function WorkspaceStatus() {
+  const wb = useWorkbench();
+  return (
+    <span className="cl">
+      Ln {wb.cursor.line}, Col {wb.cursor.column}
+    </span>
+  );
+}

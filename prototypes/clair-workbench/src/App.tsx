@@ -10,14 +10,24 @@ import {
 } from 'react';
 
 import { AddAgentOverlay, CommandPalette, SearchOverlay } from './screens/Overlays';
-import { ActivityScreen } from './screens/Activity';
-import { DebugAgentScreen, DebugScreen } from './screens/Debug';
-import { MergeGraphScreen, SessionsScreen } from './screens/Sessions';
+import { ActivityMain, ActivityPanel, ActivityStatus } from './screens/Activity';
+import {
+  DebugAgentBadge,
+  DebugAgentMain,
+  DebugAgentPanel,
+  DebugAgentStatus,
+  DebugBadge,
+  DebugMain,
+  DebugPanel,
+  DebugStatus,
+} from './screens/Debug';
+import { MergeGraphMain, SessionsMain, SessionsStatus } from './screens/Sessions';
 import { MobileApp } from './screens/Mobile';
-import { ReviewScreen } from './screens/Review';
-import { SettingsScreen } from './screens/Settings';
-import { WorkspaceScreen } from './screens/Workspace';
-import { ScreenStage } from './motion';
+import { ReviewMain, ReviewPanel, ReviewStatus } from './screens/Review';
+import { SettingsMain, SettingsPanel, SettingsStatus } from './screens/Settings';
+import { ExplorerPanel, WorkspaceMain, WorkspaceStatus } from './screens/Workspace';
+import { AppShell, navIdFor } from './chrome';
+import { PanelStage, ScreenStage } from './motion';
 import { WorkbenchProvider, useWorkbench } from './store';
 import { color, line } from './tokens';
 
@@ -198,18 +208,77 @@ function Ide() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [wb]);
 
+  const panelId = navIdFor(wb.screen);
+
+  // The sidebar panel follows the navigation, not the screen: opening the
+  // session rail or the merge graph in the main area leaves the explorer in
+  // place, the way an editor's sidebar does.
+  const panel =
+    panelId === 'review' ? (
+      <ReviewPanel />
+    ) : panelId === 'activity' ? (
+      <ActivityPanel />
+    ) : panelId === 'debug' ? (
+      wb.screen === 'debugAgent' ? (
+        <DebugAgentPanel />
+      ) : (
+        <DebugPanel />
+      )
+    ) : panelId === 'settings' ? (
+      <SettingsPanel />
+    ) : (
+      // The canvas defines no sidebar panel for the merge graph, so the
+      // explorer stays — a gap to fill on the canvas, not to invent here.
+      <ExplorerPanel />
+    );
+
+  const main =
+    wb.screen === 'review' ? (
+      <ReviewMain />
+    ) : wb.screen === 'graph' ? (
+      <MergeGraphMain />
+    ) : wb.screen === 'activity' ? (
+      <ActivityMain />
+    ) : wb.screen === 'debug' ? (
+      <DebugMain />
+    ) : wb.screen === 'debugAgent' ? (
+      <DebugAgentMain />
+    ) : wb.screen === 'settings' ? (
+      <SettingsMain />
+    ) : wb.screen === 'sessions' ? (
+      <SessionsMain />
+    ) : (
+      <WorkspaceMain />
+    );
+
+  const status =
+    wb.screen === 'review' ? (
+      <ReviewStatus />
+    ) : wb.screen === 'activity' ? (
+      <ActivityStatus />
+    ) : wb.screen === 'debug' ? (
+      <DebugStatus />
+    ) : wb.screen === 'debugAgent' ? (
+      <DebugAgentStatus />
+    ) : wb.screen === 'settings' ? (
+      <SettingsStatus />
+    ) : wb.screen === 'sessions' ? (
+      <SessionsStatus />
+    ) : wb.screen === 'workspace' ? (
+      <WorkspaceStatus />
+    ) : null;
+
+  const titlebarExtra =
+    wb.screen === 'debug' ? <DebugBadge /> : wb.screen === 'debugAgent' ? <DebugAgentBadge /> : null;
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
-      <ScreenStage screen={wb.screen}>
-        {wb.screen === 'workspace' ? <WorkspaceScreen /> : null}
-        {wb.screen === 'review' ? <ReviewScreen /> : null}
-        {wb.screen === 'graph' ? <MergeGraphScreen /> : null}
-        {wb.screen === 'activity' ? <ActivityScreen /> : null}
-        {wb.screen === 'debug' ? <DebugScreen /> : null}
-        {wb.screen === 'debugAgent' ? <DebugAgentScreen /> : null}
-        {wb.screen === 'settings' ? <SettingsScreen /> : null}
-        {wb.screen === 'sessions' ? <SessionsScreen /> : null}
-      </ScreenStage>
+      <AppShell
+        titlebarExtra={titlebarExtra}
+        statusContext={status}
+        panel={<PanelStage id={panelId}>{panel}</PanelStage>}
+        main={<ScreenStage screen={wb.screen}>{main}</ScreenStage>}
+      />
 
       {wb.overlay === 'command' || wb.overlay === 'quickOpen' ? <CommandPalette /> : null}
       {wb.overlay === 'search' ? <SearchOverlay /> : null}

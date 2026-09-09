@@ -11,7 +11,7 @@ import {
   IconTerminalPrompt,
 } from '../icons';
 import { useWorkbench } from '../store';
-import { Chip, QuotaMeter, ScreenShell, StatusBar, Titlebar } from '../chrome';
+import { Chip, MainHeader } from '../chrome';
 import { color, line, wash } from '../tokens';
 
 const GRID = '26px 146px 84px 196px 66px 1fr 104px 88px';
@@ -23,24 +23,13 @@ function AgentIcon({ icon }: { icon: Session['icon'] }) {
   return <IconTerminalPrompt size={12} color={color.textQuaternary} />;
 }
 
-export function SessionsScreen() {
+export function SessionsMain() {
   const wb = useWorkbench();
   const attention = wb.sessions.find((s) => s.attention);
 
   return (
-    <ScreenShell>
-      <div
-        style={{
-          height: 44,
-          flexShrink: 0,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          padding: '0 16px',
-          backgroundColor: color.chrome,
-          borderBottom: `1px solid ${line.chrome}`,
-        }}
-      >
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
+      <MainHeader>
         <IconSession size={15} color={color.textTertiary} />
         <span style={{ fontSize: 13, fontWeight: 600 }}>セッション</span>
         <span style={{ fontSize: 10, color: color.textQuaternary }}>全Project · PTYとprocessから得られる事実のみ</span>
@@ -63,7 +52,7 @@ export function SessionsScreen() {
         >
           Agentを起動 <span style={{ color: color.textMuted, fontWeight: 500 }}>⌃⌘N</span>
         </Chip>
-      </div>
+      </MainHeader>
 
       <div
         style={{
@@ -235,40 +224,31 @@ export function SessionsScreen() {
           </span>
         </div>
       </div>
+    </div>
+  );
+}
 
-      <StatusBar>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-          <IconBranch size={12} />
-          <span>main</span>
-        </div>
-        <span style={{ color: color.textMuted }}>origin/main</span>
-        <div style={{ flex: 1 }} />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <QuotaMeter />
-        </div>
-        <span style={{ color: color.divider }}>·</span>
-        {attention ? (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              height: 18,
-              padding: '0 8px',
-              borderRadius: 9,
-              background: 'rgba(242,244,238,0.07)',
-              border: '1px solid rgba(242,244,238,0.22)',
-              color: color.textSecondary,
-            }}
-          >
-            <span style={{ fontWeight: 600 }}>{attention.agent} が入力待ち</span>
-            <span style={{ fontSize: 9, color: color.textQuaternary }}>⌥⇥</span>
-          </div>
-        ) : null}
-        <span style={{ color: color.divider }}>·</span>
-        <span>{wb.sessions.length} セッション</span>
-      </StatusBar>
-    </ScreenShell>
+export function SessionsStatus() {
+  const wb = useWorkbench();
+  const attention = wb.sessions.find((s) => s.attention);
+  if (!attention) return null;
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        height: 18,
+        padding: '0 8px',
+        borderRadius: 9,
+        background: 'rgba(242,244,238,0.07)',
+        border: '1px solid rgba(242,244,238,0.22)',
+        color: color.textSecondary,
+      }}
+    >
+      <span style={{ fontWeight: 600 }}>{attention.agent} が入力待ち</span>
+      <span style={{ fontSize: 9, color: color.textQuaternary }}>⌥⇥</span>
+    </div>
   );
 }
 
@@ -326,11 +306,12 @@ function GraphCell({ kind }: { kind: (typeof commits)[number]['graph'] }) {
   );
 }
 
-export function MergeGraphScreen() {
+export function MergeGraphMain() {
   const wb = useWorkbench();
   return (
-    <ScreenShell>
-      <Titlebar project="clair" onProjectClick={() => wb.setScreen('workspace')} title="マージグラフ">
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
+      <MainHeader>
+        <span style={{ fontSize: 13, fontWeight: 600 }}>マージグラフ</span>
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 10, color: color.textTertiary }}>
           {(Object.keys(branchColor) as Array<keyof typeof branchColor>).map((b) => (
@@ -340,7 +321,7 @@ export function MergeGraphScreen() {
             </span>
           ))}
         </div>
-      </Titlebar>
+      </MainHeader>
 
       <div
         style={{
@@ -408,6 +389,6 @@ export function MergeGraphScreen() {
           </button>
         ))}
       </div>
-    </ScreenShell>
+    </div>
   );
 }

@@ -1,8 +1,8 @@
 import { changedFiles, diffs, type DiffLine } from '../data';
 import { HighlightedLine } from '../highlight';
-import { IconArrowRight, IconBranch, IconChevron, IconClaude, IconRefresh } from '../icons';
+import { IconArrowRight, IconChevron, IconClaude, IconRefresh } from '../icons';
 import { useWorkbench } from '../store';
-import { QuotaMeter, ScreenShell, Sidebar, StatusBar } from '../chrome';
+import { MainHeader } from '../chrome';
 import { color, line, wash } from '../tokens';
 
 function FileRow({
@@ -80,21 +80,24 @@ function DiffRow({ row }: { row: DiffLine }) {
   );
 }
 
-export function ReviewScreen() {
+function useReview() {
   const wb = useWorkbench();
   const visible = changedFiles.filter((f) =>
     wb.reviewFilter === '全差分' ? true : wb.reviewFilter === 'commit済み' ? f.group === 'committed' : f.group === 'uncommitted',
   );
-  const committed = visible.filter((f) => f.group === 'committed');
-  const uncommitted = visible.filter((f) => f.group === 'uncommitted');
-  const current = changedFiles.find((f) => f.path === wb.reviewFile) ?? changedFiles[0];
-  const rows = diffs[current.path] ?? [];
-  const totals = changedFiles.reduce((acc, f) => ({ a: acc.a + f.added, r: acc.r + f.removed }), { a: 0, r: 0 });
+  return {
+    wb,
+    committed: visible.filter((f) => f.group === 'committed'),
+    uncommitted: visible.filter((f) => f.group === 'uncommitted'),
+    current: changedFiles.find((f) => f.path === wb.reviewFile) ?? changedFiles[0],
+  };
+}
+
+export function ReviewPanel() {
+  const { wb, committed, uncommitted, current } = useReview();
 
   return (
-    <ScreenShell>
-      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        <Sidebar compact showSessions>
+    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' }}>
           <div
             style={{
               height: 32,
@@ -154,21 +157,18 @@ export function ReviewScreen() {
               />
             ))}
           </div>
-        </Sidebar>
+    </div>
+  );
+}
 
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: color.canvas }}>
-          <div
-            style={{
-              height: 44,
-              flexShrink: 0,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              padding: '0 16px',
-              backgroundColor: color.chrome,
-              borderBottom: `1px solid ${line.chrome}`,
-            }}
-          >
+export function ReviewMain() {
+  const { wb, uncommitted, current } = useReview();
+  const rows = diffs[current.path] ?? [];
+  const totals = changedFiles.reduce((acc, f) => ({ a: acc.a + f.added, r: acc.r + f.removed }), { a: 0, r: 0 });
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, background: color.canvas }}>
+          <MainHeader>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
               <span
                 style={{
@@ -261,7 +261,7 @@ export function ReviewScreen() {
             >
               merge commitで採用
             </button>
-          </div>
+          </MainHeader>
 
           <div
             style={{
@@ -324,22 +324,15 @@ export function ReviewScreen() {
               ))}
             </div>
           </div>
-        </div>
-      </div>
+    </div>
+  );
+}
 
-      <StatusBar>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-          <IconBranch size={12} />
-          <span>pane-split</span>
-        </div>
-        <span style={{ color: color.textMuted }}>worktree</span>
-        <div style={{ flex: 1 }} />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <QuotaMeter tint={color.attention} />
-        </div>
-        <span style={{ color: color.divider }}>·</span>
-        <span>{wb.sessions.length} セッション</span>
-      </StatusBar>
-    </ScreenShell>
+export function ReviewStatus() {
+  const { current } = useReview();
+  return (
+    <span className="cl" style={{ color: color.textMuted }}>
+      {current.path}
+    </span>
   );
 }

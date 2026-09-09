@@ -53,25 +53,37 @@ function transitionFor(from: Screen, to: Screen) {
 }
 
 /**
- * Cross-fades between screens. The outgoing screen stays mounted for one
- * transition so both halves of the movement are visible at once.
+ * Cross-fades between two states of one area. The outgoing tree stays mounted
+ * for a single transition so both halves of the movement are visible at once.
+ * Only the main area and the sidebar panel move — the titlebar, the navigation
+ * strip and the status bar are chrome and never unmount.
  */
-export function ScreenStage({ screen, children }: { screen: Screen; children: ReactNode }) {
+function Stage({
+  id,
+  name,
+  duration,
+  children,
+}: {
+  id: string;
+  name: (from: string, to: string) => string;
+  duration: number;
+  children: ReactNode;
+}) {
   const nodeRef = useRef<ReactNode>(children);
-  const screenRef = useRef<Screen>(screen);
+  const screenRef = useRef<string>(id);
   const [leaving, setLeaving] = useState<{ key: number; node: ReactNode; name: string } | null>(null);
   const [entering, setEntering] = useState<{ key: number; name: string } | null>(null);
   const seq = useRef(0);
   const timer = useRef(0);
 
   useLayoutEffect(() => {
-    if (screenRef.current !== screen) {
-      const name = transitionFor(screenRef.current, screen);
+    if (screenRef.current !== id) {
+      const kind = name(screenRef.current, id);
       seq.current += 1;
       const key = seq.current;
-      setLeaving({ key, node: nodeRef.current, name });
-      setEntering({ key, name });
-      screenRef.current = screen;
+      setLeaving({ key, node: nodeRef.current, name: kind });
+      setEntering({ key, name: kind });
+      screenRef.current = id;
 
       // The timer is held in a ref rather than returned as an effect cleanup:
       // this effect has no dependency list, so a cleanup would be run by the
@@ -81,7 +93,7 @@ export function ScreenStage({ screen, children }: { screen: Screen; children: Re
       timer.current = window.setTimeout(() => {
         setLeaving((current) => (current?.key === key ? null : current));
         setEntering((current) => (current?.key === key ? null : current));
-      }, SCREEN_MS);
+      }, duration);
     }
     nodeRef.current = children;
   });
@@ -99,5 +111,26 @@ export function ScreenStage({ screen, children }: { screen: Screen; children: Re
         {children}
       </div>
     </div>
+  );
+}
+
+/** The main area — the screen itself. */
+export function ScreenStage({ screen, children }: { screen: Screen; children: ReactNode }) {
+  return (
+    <Stage id={screen} name={(from, to) => transitionFor(from as Screen, to as Screen)} duration={SCREEN_MS}>
+      {children}
+    </Stage>
+  );
+}
+
+/**
+ * The sidebar panel. A 286px column is too narrow for depth or a slide to read
+ * as anything but a glitch, so it simply cross-fades on the overlay budget.
+ */
+export function PanelStage({ id, children }: { id: string; children: ReactNode }) {
+  return (
+    <Stage id={id} name={() => 'fade'} duration={OVERLAY_MS}>
+      {children}
+    </Stage>
   );
 }

@@ -1,9 +1,8 @@
 import { useState } from 'react';
 
-import { IconCloseThin } from '../icons';
 import { RouteLink } from '../App';
 import { useWorkbench } from '../store';
-import { ScreenShell, Titlebar } from '../chrome';
+
 import { color, line } from '../tokens';
 
 const SECTIONS = ['一般', 'AIプロバイダー', 'エディタ', 'ターミナル', 'モバイル', 'アップデート'];
@@ -94,42 +93,23 @@ function Card({ title, note, children }: { title: string; note: string; children
   );
 }
 
-export function SettingsScreen() {
+/** The settings sections live in the shared sidebar, not in a column of their own. */
+export function SettingsPanel() {
   const wb = useWorkbench();
   const [query, setQuery] = useState('');
   const section = wb.settingsSection;
   const sections = SECTIONS.filter((s) => !query || s.includes(query));
 
   return (
-    <ScreenShell>
-      <Titlebar title="設定">
-        <div style={{ flex: 1 }} />
-        <button
-          onClick={() => wb.setScreen('workspace')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 26,
-            height: 26,
-            borderRadius: 6,
-            color: color.textTertiary,
-          }}
-        >
-          <IconCloseThin size={13} />
-        </button>
-      </Titlebar>
-
-      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '232px minmax(0,1fr)', minHeight: 0 }}>
         <div
+          className="scroll"
           style={{
-            minWidth: 0,
+            position: 'absolute',
+            inset: 0,
             display: 'flex',
             flexDirection: 'column',
             gap: 14,
-            overflow: 'hidden',
             padding: '18px 10px',
-            borderRight: `1px solid ${line.chrome}`,
           }}
         >
           <input
@@ -179,8 +159,15 @@ export function SettingsScreen() {
             })}
           </nav>
         </div>
+  );
+}
 
-        <div className="scroll" style={{ minWidth: 0, padding: '40px 56px', background: '#1e2127' }}>
+export function SettingsMain() {
+  const wb = useWorkbench();
+  const section = wb.settingsSection;
+
+  return (
+        <div className="scroll" style={{ flex: 1, minWidth: 0, minHeight: 0, padding: '40px 56px', background: '#1e2127' }}>
           <div style={{ maxWidth: 720, margin: '0 auto' }}>
             <h1 style={{ margin: 0, fontSize: 20, fontWeight: 600, letterSpacing: '-0.01em' }}>{section}</h1>
             <p style={{ margin: '8px 0 24px', color: color.textTertiary, fontSize: 12, lineHeight: 1.6 }}>
@@ -276,7 +263,14 @@ export function SettingsScreen() {
             )}
           </div>
         </div>
-      </div>
-    </ScreenShell>
+  );
+}
+
+export function SettingsStatus() {
+  const wb = useWorkbench();
+  return (
+    <span className="cl" style={{ color: color.textMuted }}>
+      設定 · {wb.settingsSection}
+    </span>
   );
 }
