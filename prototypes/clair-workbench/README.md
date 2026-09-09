@@ -6,6 +6,12 @@ Clair UI の Design canvas を **実際に動く React 実装** に落とした�
 状態を持った本物のコンポーネントとして組み直してある。IDE として触った
 ときの操作感を確認するのが目的。
 
+このモック自身も Artifact として公開されている
+（`https://claude.ai/code/artifact/89251d23-43a1-47ff-93c3-7c1be1069895`）。
+**キャンバス（下記）とは別 URL** — 更新するときは `npm run artifact` の
+`dist/artifact.html` をこの URL に publish する。キャンバスの URL に誤って
+publish しないこと（build 出力でキャンバスの appifact-doc を上書きしてしまう）。
+
 ## 正本はキャンバス
 
 デザインの正本は Claude Design の **Clair UI** キャンバス
@@ -61,6 +67,20 @@ AppShell
 文字を使わずに伝えられるし、切れ目でも文字のインクが濁らない。実際にはみ出した
 タブにだけ適用し、収まっているタブは最後の一文字まで通常の濃さのまま。全名は
 hover のツールチップで読める。
+
+**プロジェクトごとのタブグループ**。titlebar には `clair` / `ccedit` /
+`clair-releases` の3プロジェクトが並び、それぞれが Chrome のタブグループの
+ように自分の chip（プロジェクト名 + chevron）と自分のタブ行を持つ。既定では
+全グループが展開済みで、どのプロジェクトのタブも同時に見える。chip をクリック
+すると、そのグループのタブ行が `grid-template-columns: 1fr → 0fr` で自分の
+chip へ向かって畳まれる（`activeProject` には触らない — 今開いているグループを
+畳んでも main の内容は変わらない）。`clair` 以外の2グループは実データ（開ける
+ファイル）を持たないため、`data.ts` の `projectTabs` にモックが既に知っている
+情報（ccedit のセッション worktree と `ProjectLayout.restore()` の言及、
+clair-releases は汎用のプレースホルダー）から1タブずつ立てている。**キャンバス
+との差分**: `Main` artboard もこの3グループ展開状態を描くよう直したが、
+`projectTabs` の中身（ファイル名）はキャンバスに定義がない発明であり、正式な
+ファイル名が決まったらキャンバス側で上書きしてほしい。
 
 デバッガの停止バッジのような画面固有の表示は、2段目の行を作らずに
 `AppTitlebar` の `extra` スロットへ入れる。画面が自分の44pxヘッダーを持つ場合
