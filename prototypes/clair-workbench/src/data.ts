@@ -566,3 +566,15 @@ export const branchColor: Record<Commit['branch'], string> = {
 };
 
 export const projects = ['clair', 'ccedit', 'clair-releases'] as const;
+
+// The titlebar's non-active tab groups have no real editor content behind
+// them (only `clair`'s files are mocked in full), but the group needs
+// something to show when expanded. Labels are pulled from what the mock
+// already says about each project elsewhere — ccedit's worktree session
+// (s3) and the chat mention of `ProjectLayout.restore()` — rather than
+// invented outright; `clair-releases` has no such trace, so its one tab is
+// a plain placeholder.
+export const projectTabs: Record<string, { path: string; name: string; kind: FileKind }[]> = {
+  ccedit: [{ path: 'ccedit-core/src/project_layout.rs', name: 'project_layout.rs', kind: 'rust' }],
+  'clair-releases': [{ path: 'CHANGELOG.md', name: 'CHANGELOG.md', kind: 'md' }],
+};

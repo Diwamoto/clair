@@ -8,12 +8,13 @@
 
 import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
-import { files, projects, type FileKind } from './data';
+import { files, projectTabs, projects, type FileKind } from './data';
 import { color, line, mono } from './tokens';
 import {
   IconBell,
   IconBranch,
   IconBug,
+  IconChevron,
   IconClaude,
   IconCodex,
   IconCommand,
@@ -299,10 +300,143 @@ function FileTab({ path, active }: { path: string; active: boolean }) {
 }
 
 /**
- * The one titlebar, from the Main artboard: traffic lights, the active
- * project's parallel tabs, the other projects, then file/symbol search and the
- * two window actions. `extra` is where a screen adds its own status badge
- * (the debugger's stop badge, for instance) without growing a second row.
+ * A titlebar tab group's own label, Chrome's tab-group pill: the whole chip
+ * toggles that project's tabs open or shut, independent of which project is
+ * active. Collapsing does not touch `activeProject` — folding away the group
+ * you're working in just hides its tab strip, the way collapsing the active
+ * group in Chrome leaves the page alone.
+ */
+function ProjectChip({
+  project,
+  active,
+  collapsed,
+  onToggle,
+}: {
+  project: string;
+  active: boolean;
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      onClick={onToggle}
+      title={`${project} タブグループを${collapsed ? '展開' : '折りたたむ'}`}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 4,
+        height: 26,
+        padding: '0 7px 0 10px',
+        borderRadius: 8,
+        background: active ? 'rgba(255,255,255,0.08)' : 'transparent',
+        border: `1px solid ${active ? 'rgba(255,255,255,0.12)' : 'transparent'}`,
+        alignSelf: 'center',
+        flexShrink: 0,
+      }}
+    >
+      <span
+        style={{
+          fontSize: 12,
+          fontWeight: 600,
+          color: active ? color.textPrimary : color.textQuaternary,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {project}
+      </span>
+      <span
+        className="tab-group-chevron"
+        style={{ display: 'inline-flex', transform: collapsed ? 'rotate(0deg)' : 'rotate(90deg)' }}
+      >
+        <IconChevron size={10} color={active ? color.textSecondary : color.textQuaternary} />
+      </span>
+    </button>
+  );
+}
+
+/**
+ * One project's row of tabs, collapsing toward its own chip rather than
+ * disappearing outright: the `1fr → 0fr` grid track keeps the chip as the
+ * fixed left edge, so the tabs shrink into it instead of the row jumping.
+ * Only `clair` has real editor state behind its tabs (`wb.tabs`); the other
+ * groups render `projectTabs`, a couple of stand-in labels drawn from what
+ * the mock already says about those projects elsewhere, so every group has
+ * something to show when expanded per the "make every project's tabs
+ * visible" request — not real openable files.
+ */
+function ProjectGroup({ project }: { project: string }) {
+  const wb = useWorkbench();
+  const active = project === wb.activeProject;
+  const collapsed = wb.collapsedProjects.has(project);
+
+  // The real editor tabs (wb.tabs) and the Claude Code / codex tabs are
+  // `clair`'s specifically — the workspace behind them never changes with
+  // `activeProject` — so they stay put in `clair`'s row regardless of which
+  // chip is currently highlighted; every other project renders its
+  // `projectTabs` stand-ins instead.
+  const items: ReactNode[] =
+    !(project in projectTabs)
+      ? [
+          ...wb.tabs.map((t) => (
+            <FileTab key={t.path} path={t.path} active={t.path === wb.activePath && wb.screen === 'workspace'} />
+          )),
+          <Tab
+            key="activity"
+            icon={<IconSparkle size={12} color={wb.screen === 'activity' ? color.textPrimary : color.textTertiary} />}
+            label="Claude Code"
+            active={wb.screen === 'activity'}
+            dot
+            onClick={() => wb.setScreen('activity')}
+          />,
+          <Tab
+            key="sessions"
+            icon={<IconCodex size={12} color={wb.screen === 'sessions' ? color.textPrimary : color.textTertiary} />}
+            label="codex"
+            active={wb.screen === 'sessions'}
+            onClick={() => wb.setScreen('sessions')}
+          />,
+        ]
+      : (projectTabs[project] ?? []).map((f) => (
+          <Tab
+            key={f.path}
+            icon={<FileIcon kind={f.kind} tint={color.textTertiary} />}
+            label={f.name}
+            active={false}
+            onClick={() => wb.setActiveProject(project)}
+          />
+        ));
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', alignSelf: 'stretch', flexShrink: 0, minWidth: 0 }}>
+      <ProjectChip project={project} active={active} collapsed={collapsed} onToggle={() => wb.toggleProjectCollapsed(project)} />
+      <div
+        className="tab-group-track"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: collapsed ? '0fr' : '1fr',
+          alignSelf: 'stretch',
+          minWidth: 0,
+        }}
+      >
+        <div style={{ overflow: 'hidden', minWidth: 0, display: 'flex', alignItems: 'center', height: '100%', gap: 3, paddingLeft: 4 }}>
+          {items.map((tab, i) => (
+            <Fragment key={i}>
+              {i > 0 ? <TabDivider /> : null}
+              {tab}
+            </Fragment>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The one titlebar, from the Main artboard: traffic lights, every project's
+ * tab group — Chrome-style, each collapsible toward its own chip — then
+ * file/symbol search and the two window actions. `extra` is where a screen
+ * adds its own status badge (the debugger's stop badge, for instance)
+ * without growing a second row.
  */
 export function AppTitlebar({ extra }: { extra?: ReactNode }) {
   const wb = useWorkbench();
@@ -325,72 +459,12 @@ export function AppTitlebar({ extra }: { extra?: ReactNode }) {
         className="no-scrollbar"
         style={{ flex: 1, height: 48, display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, overflow: 'hidden' }}
       >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            height: 26,
-            padding: '0 10px',
-            borderRadius: 8,
-            background: 'rgba(255,255,255,0.08)',
-            border: '1px solid rgba(255,255,255,0.12)',
-            alignSelf: 'center',
-            flexShrink: 0,
-          }}
-        >
-          <span style={{ fontSize: 12, fontWeight: 600, color: color.textPrimary }}>{wb.activeProject}</span>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', alignSelf: 'stretch', gap: 3, marginLeft: 4, minWidth: 0 }}>
-          {[
-            ...wb.tabs.map((t) => (
-              <FileTab key={t.path} path={t.path} active={t.path === wb.activePath && wb.screen === 'workspace'} />
-            )),
-            <Tab
-              key="activity"
-              icon={<IconSparkle size={12} color={wb.screen === 'activity' ? color.textPrimary : color.textTertiary} />}
-              label="Claude Code"
-              active={wb.screen === 'activity'}
-              dot
-              onClick={() => wb.setScreen('activity')}
-            />,
-            <Tab
-              key="sessions"
-              icon={<IconCodex size={12} color={wb.screen === 'sessions' ? color.textPrimary : color.textTertiary} />}
-              label="codex"
-              active={wb.screen === 'sessions'}
-              onClick={() => wb.setScreen('sessions')}
-            />,
-          ].map((tab, i) => (
-            <Fragment key={i}>
-              {i > 0 ? <TabDivider /> : null}
-              {tab}
-            </Fragment>
-          ))}
-        </div>
-
-        {projects
-          .filter((p) => p !== wb.activeProject)
-          .map((p) => (
-            <div key={p} style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-              <div style={{ width: 1, height: 22, background: 'rgba(242,244,238,0.09)', margin: '0 5px' }} />
-              <button
-                onClick={() => wb.setActiveProject(p)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  height: 22,
-                  padding: '0 9px',
-                  borderRadius: 8,
-                  color: color.textQuaternary,
-                  alignSelf: 'center',
-                }}
-              >
-                <span style={{ fontSize: 12, fontWeight: 600 }}>{p}</span>
-              </button>
-            </div>
-          ))}
+        {projects.map((p, i) => (
+          <Fragment key={p}>
+            {i > 0 ? <div style={{ width: 1, height: 22, background: 'rgba(242,244,238,0.09)', margin: '0 5px', flexShrink: 0 }} /> : null}
+            <ProjectGroup project={p} />
+          </Fragment>
+        ))}
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 12px 9px 12px', flexShrink: 0 }}>

@@ -137,6 +137,7 @@ function useWorkbenchState() {
   const [activeActivity, setActiveActivity] = useState(activityItems[1].id);
   const [sessionList, setSessionList] = useState<Session[]>(sessions);
   const [activeProject, setActiveProject] = useState('clair');
+  const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(() => new Set());
 
   const [reviewFile, setReviewFile] = useState('apple/ClairApp/ProjectWorkspace.swift');
   const [reviewFilter, setReviewFilter] = useState<'全差分' | 'commit済み' | '未commit'>('全差分');
@@ -385,6 +386,15 @@ function useWorkbenchState() {
     });
   }, []);
 
+  const toggleProjectCollapsed = useCallback((project: string) => {
+    setCollapsedProjects((current) => {
+      const next = new Set(current);
+      if (next.has(project)) next.delete(project);
+      else next.add(project);
+      return next;
+    });
+  }, []);
+
   const dirtyCount = tabs.filter((t) => t.dirty).length;
 
   return {
@@ -426,6 +436,8 @@ function useWorkbenchState() {
     restartSession,
     activeProject,
     setActiveProject,
+    collapsedProjects,
+    toggleProjectCollapsed,
     reviewFile,
     setReviewFile,
     reviewFilter,

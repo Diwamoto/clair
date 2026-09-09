@@ -272,6 +272,20 @@ textarea {
   .caret {
     animation: none;
   }
+  .tab-group-track,
+  .tab-group-chevron {
+    transition: none !important;
+  }
+}
+
+/* Titlebar tab group: the track collapses toward its chip on a 1fr → 0fr
+   grid column rather than a measured width, so it works without knowing the
+   tabs' content size. */
+.tab-group-track {
+  transition: grid-template-columns 90ms ease;
+}
+.tab-group-chevron {
+  transition: transform 90ms ease;
 }
 
 /* fade — the sidebar panel, too narrow for depth to read as anything but a glitch */
