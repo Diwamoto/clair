@@ -159,6 +159,65 @@ fn shell_receives_clair_terminal_environment() -> io::Result<()> {
 }
 
 #[test]
+fn shell_does_not_inherit_stale_host_environment() -> io::Result<()> {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_clair-ptyhost"))
+        .args([
+            "--spawn",
+            "--cwd",
+            env!("CARGO_MANIFEST_DIR"),
+            "--shell",
+            "/bin/sh",
+            "--rows",
+            "24",
+            "--cols",
+            "80",
+        ])
+        .env("CLAIR_SHOULD_NOT_LEAK", "stale")
+        .env("ZDOTDIR", "/tmp/clair-should-not-use")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let mut stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| io::Error::other("PTY harness stdin was not piped"))?;
+    let mut stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| io::Error::other("PTY harness stdout was not piped"))?;
+    let payload = b"printf 'LEAK:%s:%s\\n' \"${CLAIR_SHOULD_NOT_LEAK-unset}\" \"${ZDOTDIR-unset}\"; exit\n";
+    let mut frame = vec![b'C', b'P', 1, 1];
+    frame.extend_from_slice(&(payload.len() as u32).to_be_bytes());
+    frame.extend_from_slice(payload);
+    stdin.write_all(&frame)?;
+    stdin.flush()?;
+
+    let mut collected = Vec::new();
+    let mut buffer = [0_u8; 4096];
+    loop {
+        let count = stdout.read(&mut buffer)?;
+        if count == 0 {
+            break;
+        }
+        collected.extend_from_slice(&buffer[..count]);
+        if collected.windows(b"LEAK:unset:unset".len()).any(|window| window == b"LEAK:unset:unset")
+        {
+            break;
+        }
+    }
+    let _ = child.wait();
+    assert!(
+        collected
+            .windows(b"LEAK:unset:unset".len())
+            .any(|window| window == b"LEAK:unset:unset"),
+        "shell environment output was: {}",
+        String::from_utf8_lossy(&collected)
+    );
+    Ok(())
+}
+
+#[test]
 fn shell_preserves_cjk_and_osc_bytes() -> io::Result<()> {
     let mut harness = ShellHarness::start(24, 80)?;
     let cjk_command = "printf '\\033]0;clair\\007CJK-日本語\\n'; exit\n".to_owned();

@@ -128,6 +128,10 @@ final class NativeTerminalView: NSView {
     textView.inputHandler = { [weak self] data in
       self?.session.sendInput(data)
     }
+    let clipView = FlippedClipView()
+    clipView.drawsBackground = true
+    clipView.backgroundColor = WorkspaceChrome.nsCanvas
+    scrollView.contentView = clipView
     scrollView.borderType = .noBorder
     scrollView.hasVerticalScroller = true
     scrollView.hasHorizontalScroller = true
@@ -135,6 +139,7 @@ final class NativeTerminalView: NSView {
     scrollView.drawsBackground = true
     scrollView.backgroundColor = WorkspaceChrome.nsCanvas
     scrollView.documentView = textView
+    scrollView.scrollerStyle = .overlay
     WorkspaceChrome.configureThinScrollbars(in: scrollView)
     addSubview(scrollView)
 
@@ -184,14 +189,11 @@ final class NativeTerminalView: NSView {
   }
 
   private func render(_ output: Data) {
-    let documentMaxY = scrollView.documentView?.bounds.maxY ?? 0
-    let visibleMaxY = scrollView.contentView.bounds.maxY
-    let wasAtBottom =
-      visibleMaxY >= documentMaxY - scrollView.contentView.bounds.height - 24
+    let wasAtBottom = isPinnedToBottom()
     grid.feed(output)
     textView.render(grid)
     if wasAtBottom {
-      textView.scroll(NSPoint(x: 0, y: textView.bounds.maxY))
+      scrollToBottom()
     }
   }
 
@@ -199,7 +201,31 @@ final class NativeTerminalView: NSView {
     grid.reset()
     grid.feed(marker)
     textView.render(grid)
-    textView.scroll(NSPoint(x: 0, y: textView.bounds.maxY))
+    scrollToBottom()
+  }
+
+  private func isPinnedToBottom() -> Bool {
+    let clip = scrollView.contentView
+    let documentHeight = textView.bounds.height
+    let visibleHeight = clip.bounds.height
+    guard documentHeight > visibleHeight + 1 else {
+      return true
+    }
+    return clip.bounds.maxY >= documentHeight - 24
+  }
+
+  private func scrollToBottom() {
+    let clip = scrollView.contentView
+    let y = max(0, textView.bounds.height - clip.bounds.height)
+    clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: y))
+    scrollView.reflectScrolledClipView(clip)
+  }
+}
+
+@MainActor
+final class FlippedClipView: NSClipView {
+  override var isFlipped: Bool {
+    true
   }
 }
 
@@ -266,6 +292,10 @@ final class TerminalTextView: NSTextView {
     isHorizontallyResizable = true
     self.textContainer?.widthTracksTextView = false
     self.textContainer?.heightTracksTextView = false
+  }
+
+  override func scrollWheel(with event: NSEvent) {
+    enclosingScrollView?.scrollWheel(with: event)
   }
 
   required init?(coder: NSCoder) {
@@ -423,7 +453,9 @@ final class TerminalTextView: NSTextView {
       width: textContainerInset.width * 2 + CGFloat(grid.columns) * cellSize.width,
       height: textContainerInset.height * 2 + CGFloat(grid.displayedRows) * cellSize.height
     )
-    frame.size = size
+    minSize = size
+    setFrameSize(size)
+    enclosingScrollView?.contentView.needsDisplay = true
     needsDisplay = true
   }
 

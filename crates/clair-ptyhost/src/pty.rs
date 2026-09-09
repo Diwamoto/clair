@@ -3,13 +3,29 @@
     reason = "PTY creation and terminal sizing require the macOS libc ABI"
 )]
 
-use std::ffi::CString;
+use std::env;
+use std::ffi::{CString, c_char};
 use std::fs::File;
 use std::io;
 use std::os::fd::{AsRawFd, FromRawFd};
 use std::path::Path;
 
 use crate::SpawnOptions;
+
+const LOGIN_PATH: &str = "/usr/bin:/bin:/usr/sbin:/sbin";
+const INHERITED_ENVIRONMENT_KEYS: &[&str] = &[
+    "HOME",
+    "USER",
+    "LOGNAME",
+    "TMPDIR",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "LC_MESSAGES",
+    "SSH_AUTH_SOCK",
+    "SSH_AGENT_PID",
+    "__CF_USER_TEXT_ENCODING",
+];
 
 #[derive(Debug)]
 pub struct SpawnedPty {
@@ -21,19 +37,10 @@ pub fn spawn(options: &SpawnOptions) -> io::Result<SpawnedPty> {
     let shell = c_string(&options.shell, "shell")?;
     let cwd = c_string(&options.cwd, "working directory")?;
     let login_argument = CString::new("-l").expect("static shell argument has no NUL");
-    let term_name = CString::new("TERM").expect("static environment key has no NUL");
-    let term_value = CString::new("xterm-256color").expect("static environment value has no NUL");
-    let color_term_name = CString::new("COLORTERM").expect("static environment key has no NUL");
-    let color_term_value = CString::new("truecolor").expect("static environment value has no NUL");
-    let shell_name = CString::new("SHELL").expect("static environment key has no NUL");
-    let terminal_program_name =
-        CString::new("TERM_PROGRAM").expect("static environment key has no NUL");
-    let terminal_program_value =
-        CString::new("Clair").expect("static environment value has no NUL");
-    let pwd_name = CString::new("PWD").expect("static environment key has no NUL");
-    let zdotdir_name = CString::new("ZDOTDIR").expect("static environment key has no NUL");
-    let ccedit_user_zdotdir_name =
-        CString::new("CCEDIT_USER_ZDOTDIR").expect("static environment key has no NUL");
+    let environment = child_environment(&options.shell, &options.cwd)?;
+    let mut environment_pointers: Vec<*const c_char> =
+        environment.iter().map(|value| value.as_ptr()).collect();
+    environment_pointers.push(std::ptr::null());
     let shell_arguments = [shell.as_ptr(), login_argument.as_ptr(), std::ptr::null()];
     let mut window = libc::winsize {
         ws_row: options.rows,
@@ -62,22 +69,14 @@ pub fn spawn(options: &SpawnOptions) -> io::Result<SpawnedPty> {
         // SAFETY: forkpty returned zero, so these calls run in the child
         // before exec. All pointers are NUL-terminated CString values.
         unsafe {
-            if libc::chdir(cwd.as_ptr()) != 0
-                || libc::unsetenv(zdotdir_name.as_ptr()) != 0
-                || libc::unsetenv(ccedit_user_zdotdir_name.as_ptr()) != 0
-                || libc::setenv(term_name.as_ptr(), term_value.as_ptr(), 1) != 0
-                || libc::setenv(color_term_name.as_ptr(), color_term_value.as_ptr(), 1) != 0
-                || libc::setenv(shell_name.as_ptr(), shell.as_ptr(), 1) != 0
-                || libc::setenv(
-                    terminal_program_name.as_ptr(),
-                    terminal_program_value.as_ptr(),
-                    1,
-                ) != 0
-                || libc::setenv(pwd_name.as_ptr(), cwd.as_ptr(), 1) != 0
-            {
+            if libc::chdir(cwd.as_ptr()) != 0 {
                 libc::_exit(127);
             }
-            libc::execv(shell.as_ptr(), shell_arguments.as_ptr());
+            libc::execve(
+                shell.as_ptr(),
+                shell_arguments.as_ptr(),
+                environment_pointers.as_ptr(),
+            );
             libc::_exit(127);
         }
     }
@@ -137,6 +136,33 @@ pub fn wait_for_exit(pid: libc::pid_t) -> io::Result<u8> {
             return Err(error);
         }
     }
+}
+
+fn child_environment(shell: &Path, cwd: &Path) -> io::Result<Vec<CString>> {
+    let mut entries = Vec::new();
+    for key in INHERITED_ENVIRONMENT_KEYS {
+        if let Ok(value) = env::var(key) {
+            if !value.is_empty() {
+                entries.push(env_entry(key, &value)?);
+            }
+        }
+    }
+    entries.push(env_entry("TERM", "xterm-256color")?);
+    entries.push(env_entry("COLORTERM", "truecolor")?);
+    entries.push(env_entry("TERM_PROGRAM", "Clair")?);
+    entries.push(env_entry("SHELL", &shell.to_string_lossy())?);
+    entries.push(env_entry("PWD", &cwd.to_string_lossy())?);
+    entries.push(env_entry("PATH", LOGIN_PATH)?);
+    Ok(entries)
+}
+
+fn env_entry(key: &str, value: &str) -> io::Result<CString> {
+    CString::new(format!("{key}={value}")).map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("{key} contains an embedded NUL byte"),
+        )
+    })
 }
 
 fn c_string(path: &Path, label: &str) -> io::Result<CString> {

@@ -42,6 +42,21 @@ final class TerminalProtocolTests: XCTestCase {
       grid.cell(row: 0, column: 0)?.codepoint, Character("p").unicodeScalars.first?.value)
   }
 
+  func testTerminalGridKeepsScrollbackAndTerminalTextViewGrowsDocumentHeight() throws {
+    let grid = try XCTUnwrap(TerminalGrid(rows: 4, columns: 12))
+    grid.feed(Data(String(repeating: "line\n", count: 20).utf8))
+
+    XCTAssertGreaterThan(grid.scrollbackRows, 0)
+    XCTAssertGreaterThan(grid.displayedRows, grid.rows)
+
+    let textView = TerminalTextView(frame: .zero)
+    textView.render(grid)
+    let expectedHeight =
+      textView.textContainerInset.height * 2 + CGFloat(grid.displayedRows) * textView.cellSize.height
+    XCTAssertEqual(textView.bounds.height, expectedHeight)
+    XCTAssertGreaterThan(textView.bounds.height, textView.cellSize.height * CGFloat(grid.rows))
+  }
+
   func testTerminalControlKeyMappingSendsRawPtyBytes() {
     XCTAssertEqual(TerminalKeySequence.controlByte(forKeyCode: 0), 0x01)
     XCTAssertEqual(TerminalKeySequence.controlByte(forKeyCode: 8), 0x03)
