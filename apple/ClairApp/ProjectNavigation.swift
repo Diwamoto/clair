@@ -578,19 +578,3 @@ enum ProjectNavigation {
     return String(filePath.dropFirst(prefix.count))
   }
 }
-
-extension ProjectLocalHistoryStore {
-  func entries(for projectID: UUID) throws -> [ProjectLocalHistoryEntry] {
-    try load().entries
-      .filter { $0.projectID == projectID }
-      .sorted { lhs, rhs in
-        if lhs.createdAt != rhs.createdAt {
-          return lhs.createdAt > rhs.createdAt
-        }
-        if lhs.filePath != rhs.filePath {
-          return lhs.filePath < rhs.filePath
-        }
-        return lhs.id.uuidString > rhs.id.uuidString
-      }
-  }
-}

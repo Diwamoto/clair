@@ -10,15 +10,23 @@ import {
   undo,
   undoDepth,
 } from "@codemirror/commands";
+import { searchKeymap } from "@codemirror/search";
 import { bracketMatching, codeFolding, foldGutter, foldKeymap, indentOnInput } from "@codemirror/language";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import { oneDark } from "@codemirror/theme-one-dark";
-import { drawSelection, EditorView, highlightActiveLine, keymap, lineNumbers } from "@codemirror/view";
+import { drawSelection, EditorView, highlightActiveLine, keymap, lineNumbers, type ViewUpdate } from "@codemirror/view";
 import { detectLanguageId, loadLanguageExtension } from "./language";
+import type { NativeBridge } from "./native-bridge";
 
 type Selection = { from: number; to: number };
 
-type EditorDocument = { content: string; selection?: Selection | null };
+type EditorDocument = {
+  content: string;
+  revision?: number;
+  selection?: Selection | null;
+  scrollTop?: number | null;
+};
+type EditorChange = { from: number; to: number; insert: string };
 
 type EditorConfig = {
   path: string;
@@ -35,18 +43,24 @@ type NativeMessage =
   | { type: "ready" }
   | {
       type: "change";
-      content: string;
+      baseRevision: number;
+      changes: EditorChange[];
       selection: Selection;
+      scrollTop: number;
+      canUndo: boolean;
+      canRedo: boolean;
+    }
+  | {
+      type: "selection";
+      selection: Selection;
+      scrollTop: number;
       canUndo: boolean;
       canRedo: boolean;
     }
   | { type: "save" };
 
-type NativeBridge = { postMessage(message: NativeMessage): void };
-
 declare global {
   interface Window {
-    webkit?: { messageHandlers?: { clairEditor?: NativeBridge } };
     clairEditor: {
       configure(config: Partial<EditorConfig>): void;
       setDocument(document: string | EditorDocument, selection?: Selection | null): void;
@@ -54,6 +68,7 @@ declare global {
       undo(): void;
       redo(): void;
       reveal(selection: Selection): void;
+      releaseDocument(path: string): void;
     };
   }
 }
@@ -75,7 +90,25 @@ let config: EditorConfig = {
 };
 let languageRequest = 0;
 let suppressNativeChanges = false;
+let viewportNotificationPending = false;
 let languageExtension: Extension = [];
+let currentPath = "";
+let documentRevision = 0;
+
+type CachedDocument = { state: EditorState; content: string; revision: number };
+
+const MAX_CACHED_DOCUMENTS = 24;
+const documentStateCache = new Map<string, CachedDocument>();
+
+function rememberDocumentState(path: string, state: EditorState, content: string): void {
+  if (!path) return;
+  documentStateCache.delete(path);
+  documentStateCache.set(path, { state, content, revision: documentRevision });
+  if (documentStateCache.size > MAX_CACHED_DOCUMENTS) {
+    const oldestPath = documentStateCache.keys().next().value;
+    if (oldestPath !== undefined) documentStateCache.delete(oldestPath);
+  }
+}
 
 function bridge(): NativeBridge | null {
   return window.webkit?.messageHandlers?.clairEditor ?? null;
@@ -123,13 +156,51 @@ function currentSelection(view: EditorView): Selection {
   return { from: selection.from, to: selection.to };
 }
 
-function notifyChange(view: EditorView): void {
+function currentScrollTop(view: EditorView): number {
+  return Math.max(0, Math.round(view.scrollDOM.scrollTop));
+}
+
+function notifySelection(view: EditorView): void {
   if (suppressNativeChanges) return;
   const selection = currentSelection(view);
   post({
-    type: "change",
-    content: view.state.doc.toString(),
+    type: "selection",
     selection,
+    scrollTop: currentScrollTop(view),
+    canUndo: undoDepth(view.state) > 0,
+    canRedo: redoDepth(view.state) > 0,
+  });
+}
+
+function scheduleViewportNotification(view: EditorView): void {
+  if (viewportNotificationPending) return;
+  viewportNotificationPending = true;
+  requestAnimationFrame(() => {
+    viewportNotificationPending = false;
+    notifySelection(view);
+  });
+}
+
+function notifyChange(update: ViewUpdate): void {
+  const view = update.view;
+  if (suppressNativeChanges) return;
+  const changes: EditorChange[] = [];
+  update.changes.iterChanges((from, to, _fromB, _toB, inserted) => {
+    changes.push({ from, to, insert: inserted.toString() });
+  });
+  if (changes.length === 0) {
+    notifySelection(view);
+    return;
+  }
+
+  const baseRevision = documentRevision;
+  documentRevision += 1;
+  post({
+    type: "change",
+    baseRevision,
+    changes,
+    selection: currentSelection(view),
+    scrollTop: currentScrollTop(view),
     canUndo: undoDepth(view.state) > 0,
     canRedo: redoDepth(view.state) > 0,
   });
@@ -153,13 +224,21 @@ function buildState(doc = ""): EditorState {
         indentWithTab,
         ...defaultKeymap,
         ...historyKeymap,
+        ...searchKeymap,
         ...foldKeymap,
       ]),
       appearanceCompartment.of(appearanceTheme()),
       editabilityCompartment.of(editability()),
       languageCompartment.of(languageExtension),
       EditorView.updateListener.of((update) => {
-        if (update.docChanged || update.selectionSet) notifyChange(update.view);
+        if (update.docChanged) notifyChange(update);
+        else if (update.selectionSet) notifySelection(update.view);
+      }),
+      EditorView.domEventHandlers({
+        scroll: (_event, view) => {
+          scheduleViewportNotification(view);
+          return false;
+        },
       }),
     ],
   });
@@ -172,8 +251,28 @@ async function loadLanguage(path: string, requestedID?: string): Promise<void> {
   const id = requestedID || detectLanguageId(path);
   const extension = await loadLanguageExtension(id);
   if (request !== languageRequest) return;
-  languageExtension = extension ?? [];
-  view.dispatch({ effects: languageCompartment.reconfigure(languageExtension) });
+  const resolvedExtension = extension ?? [];
+
+  if (currentPath === path) {
+    languageExtension = resolvedExtension;
+    view.dispatch({ effects: languageCompartment.reconfigure(resolvedExtension) });
+    rememberDocumentState(path, view.state, view.state.doc.toString());
+    return;
+  }
+  // The user already switched away from `path` while its language was
+  // loading. Patch the cached (inactive) state so it carries the right
+  // highlighting when the tab is revisited, without touching the live view.
+  const cachedForPath = documentStateCache.get(path);
+  if (cachedForPath) {
+    const nextState = cachedForPath.state.update({
+      effects: languageCompartment.reconfigure(resolvedExtension),
+    }).state;
+    documentStateCache.set(path, {
+      state: nextState,
+      content: cachedForPath.content,
+      revision: cachedForPath.revision,
+    });
+  }
 }
 
 window.clairEditor = {
@@ -187,23 +286,60 @@ window.clairEditor = {
         editabilityCompartment.reconfigure(editability()),
       ],
     });
-    void loadLanguage(config.path, config.language);
   },
   setDocument(documentOrContent, selection) {
     const document: EditorDocument = typeof documentOrContent === "string"
       ? { content: documentOrContent, selection }
       : documentOrContent;
     const content = document.content;
+    const path = config.path;
     const wasFocused = view.hasFocus;
     suppressNativeChanges = true;
-    view.setState(buildState(content));
+
+    if (currentPath && currentPath !== path) {
+      rememberDocumentState(currentPath, view.state, view.state.doc.toString());
+    }
+    documentRevision = document.revision ?? documentRevision;
+
+    // Revisiting an already-opened tab is the common case (tab switching)
+    // and should not pay for a full document re-parse/re-highlight: reuse
+    // the EditorState we kept from last time instead of rebuilding it.
+    const cached = documentStateCache.get(path);
+    if (cached && cached.content === content && cached.revision === documentRevision) {
+      view.setState(cached.state);
+    } else {
+      view.setState(buildState(content));
+      void loadLanguage(path, config.language);
+    }
+
+    // Global appearance/editability settings may have changed while this
+    // document's cached state sat inactive; re-apply them (cheap facet
+    // updates, no re-highlighting) so they can't go stale.
+    view.dispatch({
+      effects: [
+        appearanceCompartment.reconfigure(appearanceTheme()),
+        editabilityCompartment.reconfigure(editability()),
+      ],
+    });
+
+    currentPath = path;
+
     if (document.selection) {
       const from = Math.min(document.selection.from, content.length);
       const to = Math.min(document.selection.to, content.length);
       view.dispatch({ selection: { anchor: from, head: to }, scrollIntoView: true });
     }
+    // Store the post-selection state. If this is done before applying the
+    // selection, revisiting a tab would restore the previous caret instead.
+    rememberDocumentState(path, view.state, content);
+    if (document.scrollTop != null && Number.isFinite(document.scrollTop)) {
+      const scrollTop = Math.max(0, document.scrollTop);
+      requestAnimationFrame(() => {
+        view.scrollDOM.scrollTop = scrollTop;
+      });
+    }
     suppressNativeChanges = false;
-    notifyChange(view);
+    notifySelection(view);
     if (wasFocused) view.focus();
   },
   focus() {
@@ -220,6 +356,13 @@ window.clairEditor = {
     const to = Math.min(selection.to, view.state.doc.length);
     view.dispatch({ selection: { anchor: from, head: to }, scrollIntoView: true });
     view.focus();
+  },
+  releaseDocument(path: string) {
+    documentStateCache.delete(path);
+    if (path === currentPath) {
+      currentPath = "";
+      documentRevision = 0;
+    }
   },
 };
 

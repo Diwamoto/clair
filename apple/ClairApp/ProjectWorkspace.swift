@@ -1,12 +1,19 @@
 import Foundation
 import SwiftUI
 
+private final class ProjectFileManagerBox: @unchecked Sendable {
+  let value: FileManager
+
+  init(_ value: FileManager) {
+    self.value = value
+  }
+}
+
 @MainActor
 final class ProjectWorkspaceModel: ObservableObject {
   let store: ProjectStore
   let rootChecker: any ProjectRootChecking
   let commandRegistry: CommandRegistry
-  let historyStore: ProjectLocalHistoryStore
 
   @Published private(set) var projects: [Project] = []
   @Published private(set) var activeProjectID: UUID?
@@ -21,13 +28,11 @@ final class ProjectWorkspaceModel: ObservableObject {
   init(
     store: ProjectStore,
     rootChecker: any ProjectRootChecking = FileSystemProjectRootChecker(),
-    commandRegistry: CommandRegistry = CommandRegistry(),
-    historyStore: ProjectLocalHistoryStore? = nil
+    commandRegistry: CommandRegistry = CommandRegistry()
   ) {
     self.store = store
     self.rootChecker = rootChecker
     self.commandRegistry = commandRegistry
-    self.historyStore = historyStore ?? .makeDefault(for: .current)
 
     do {
       let snapshot = try store.load()
@@ -89,7 +94,6 @@ final class ProjectWorkspaceModel: ObservableObject {
       projectID: project.id,
       rootURL: project.rootURL,
       rootChecker: rootChecker,
-      historyStore: historyStore,
       snapshot: surfaceSnapshots[project.id],
       onSnapshotChange: { [weak self] snapshot in
         self?.persistSurfaceSnapshot(snapshot)
@@ -465,7 +469,6 @@ final class ProjectWorkspaceModel: ObservableObject {
       projectID: project.id,
       rootURL: project.rootURL,
       rootChecker: rootChecker,
-      historyStore: historyStore,
       snapshot: surfaceSnapshots[project.id],
       onSnapshotChange: { [weak self] snapshot in
         self?.persistSurfaceSnapshot(snapshot)
@@ -536,15 +539,14 @@ struct ProjectTabCloseRequest: Equatable, Sendable {
 final class ProjectSurfaceModel: ObservableObject {
   let projectID: UUID
   let rootURL: URL
-  let historyStore: ProjectLocalHistoryStore
 
   @Published private(set) var fileTree: ProjectFileTreeSnapshot
+  @Published private(set) var tabStore: [ProjectPaneTab]
   @Published private(set) var layout: ProjectPaneNode
   @Published private(set) var focusedPaneID: UUID
   @Published private(set) var maximizedPaneID: UUID?
   @Published private(set) var selectedNodeID: String?
   @Published private(set) var lastEditorErrorMessage: String?
-  @Published private(set) var historyEntries: [ProjectLocalHistoryEntry] = []
   @Published private(set) var searchResults: [ProjectSearchMatch] = []
   @Published private(set) var quickOpenResults: [ProjectQuickOpenItem] = []
   @Published private(set) var quickOpenIsLoading = false
@@ -566,6 +568,7 @@ final class ProjectSurfaceModel: ObservableObject {
   private var expandedNodeIDs: Set<String> = []
   private var loadedDirectoryPaths: Set<String> = []
   private var directoryEntryLimits: [String: Int] = [:]
+  private var directoryCache: [String: ProjectFileTreeDirectoryListing] = [:]
   private var editorDocuments: [String: ProjectEditorTab] = [:]
   private var terminalSessions: [String: TerminalSession] = [:]
   private var watcher: ProjectFileSystemWatcher?
@@ -573,17 +576,19 @@ final class ProjectSurfaceModel: ObservableObject {
   private var quickOpenTask: Task<Void, Never>?
   private var searchTask: Task<Void, Never>?
   private var replacementTask: Task<Void, Never>?
+  private var directoryCacheTask: Task<Void, Never>?
   private var treeLoadGeneration = 0
+  private var directoryCacheGeneration = 0
   private var quickOpenGeneration = 0
   private var searchGeneration = 0
   private var replacementGeneration = 0
+  private var editorViewportPersistTask: Task<Void, Never>?
 
   init(
     projectID: UUID,
     rootURL: URL,
     rootChecker: any ProjectRootChecking = FileSystemProjectRootChecker(),
     fileManager: FileManager = .default,
-    historyStore: ProjectLocalHistoryStore = .makeDefault(for: .current),
     snapshot: ProjectSurfaceSnapshot? = nil,
     onSnapshotChange: ((ProjectSurfaceSnapshot) -> Void)? = nil
   ) {
@@ -592,12 +597,12 @@ final class ProjectSurfaceModel: ObservableObject {
     self.rootChecker = rootChecker
     self.fileManager = fileManager
     self.gitService = ProjectGitService(rootURL: rootURL, fileManager: fileManager)
-    self.historyStore = historyStore
     self.onSnapshotChange = onSnapshotChange
 
     let initialSnapshot =
       snapshot?.validated(for: projectID)
       ?? ProjectSurfaceSnapshot.empty(for: projectID)
+    self.tabStore = initialSnapshot.tabs
     self.layout = initialSnapshot.root
     self.focusedPaneID = initialSnapshot.focusedPaneID
     self.maximizedPaneID = initialSnapshot.maximizedPaneID
@@ -613,7 +618,6 @@ final class ProjectSurfaceModel: ObservableObject {
     )
 
     restoreRuntimeTabs()
-    refreshHistoryEntries()
 
     if rootChecker.availability(for: rootURL) == .available {
       let initialTree = ProjectFileTreeScanner.scanLoaded(
@@ -639,6 +643,7 @@ final class ProjectSurfaceModel: ObservableObject {
     }
     watcher?.updateWatchedDirectories(loadedDirectoryURLs())
     watcher?.start()
+    startDirectoryCachePrefetch()
   }
 
   deinit {
@@ -646,6 +651,8 @@ final class ProjectSurfaceModel: ObservableObject {
     quickOpenTask?.cancel()
     searchTask?.cancel()
     replacementTask?.cancel()
+    directoryCacheTask?.cancel()
+    editorViewportPersistTask?.cancel()
     watcher?.stop()
   }
 
@@ -657,13 +664,11 @@ final class ProjectSurfaceModel: ObservableObject {
   }
 
   var editorTabs: [ProjectEditorTab] {
-    layout.leaves.flatMap { leaf in
-      leaf.tabs.compactMap { tab in
-        guard tab.kind == .editor else {
-          return nil
-        }
-        return editorDocuments[tab.id]
+    tabStore.compactMap { tab in
+      guard tab.kind == .editor else {
+        return nil
       }
+      return editorDocuments[tab.id]
     }
   }
 
@@ -689,20 +694,15 @@ final class ProjectSurfaceModel: ObservableObject {
   /// All tabs in document order, retaining their owning pane for the global
   /// workspace tab strip.
   var workspaceTabs: [ProjectWorkspaceTab] {
-    layout.leaves.flatMap { leaf in
-      leaf.tabs.map { ProjectWorkspaceTab(paneID: leaf.id, tab: $0) }
+    tabStore.map { tab in
+      ProjectWorkspaceTab(paneID: paneID(showing: tab.id), tab: tab)
     }
   }
 
-  /// A maximized pane hides the other panes, so its tabs are the only tabs
-  /// shown in the titlebar until the layout is restored.
+  /// The titlebar always shows the surface tab store. Maximizing a pane only
+  /// hides other viewports, not other tabs.
   var visibleWorkspaceTabs: [ProjectWorkspaceTab] {
-    guard let maximizedPaneID,
-      let leaf = layout.leaf(withID: maximizedPaneID)
-    else {
-      return workspaceTabs
-    }
-    return leaf.tabs.map { ProjectWorkspaceTab(paneID: leaf.id, tab: $0) }
+    workspaceTabs
   }
 
   var visibleLayout: ProjectPaneNode {
@@ -720,6 +720,7 @@ final class ProjectSurfaceModel: ObservableObject {
     ProjectSurfaceSnapshot(
       schemaVersion: ProjectSurfaceSnapshot.currentSchemaVersion,
       projectID: projectID,
+      tabs: tabStore,
       root: layout,
       focusedPaneID: focusedPaneID,
       maximizedPaneID: maximizedPaneID,
@@ -730,14 +731,21 @@ final class ProjectSurfaceModel: ObservableObject {
   }
 
   func tabs(in paneID: UUID) -> [ProjectPaneTab] {
-    layout.leaf(withID: paneID)?.tabs ?? []
+    guard let tab = activeTab(in: paneID) else {
+      return []
+    }
+    return [tab]
   }
 
   func activeTab(in paneID: UUID) -> ProjectPaneTab? {
     guard let leaf = layout.leaf(withID: paneID), let activeTabID = leaf.activeTabID else {
       return nil
     }
-    return leaf.tabs.first { $0.id == activeTabID }
+    return tabStore.first { $0.id == activeTabID }
+  }
+
+  func paneID(showing tabID: String) -> UUID? {
+    layout.leaves.first { $0.activeTabID == tabID }?.id
   }
 
   func editorDocument(tabID: String) -> ProjectEditorTab? {
@@ -750,7 +758,7 @@ final class ProjectSurfaceModel: ObservableObject {
 
   func sessionIDsInUse(for worktreeID: WorktreeID) -> Set<UUID> {
     Set(
-      layout.leaves.flatMap(\.tabs).compactMap { tab in
+      tabStore.compactMap { tab in
         guard
           tab.kind == .terminal,
           tab.worktreeID == worktreeID,
@@ -815,24 +823,19 @@ final class ProjectSurfaceModel: ObservableObject {
       layout.leafIDs.contains(paneID),
       let source = layout.leaf(withID: focusedPaneID),
       let activeTabID = source.activeTabID,
-      let tab = source.tabs.first(where: { $0.id == activeTabID })
+      tabStore.contains(where: { $0.id == activeTabID })
     else {
-      return
-    }
-    guard layout.leaf(withID: paneID)?.tabs.contains(where: { $0.id == tab.id }) != true else {
       return
     }
 
     layout = updatingLeaf(in: layout, leafID: focusedPaneID) { leaf in
       var next = leaf
-      next.tabs.removeAll { $0.id == tab.id }
-      next.activeTabID = next.tabs.last?.id
+      next.activeTabID = fallbackTabID(excluding: activeTabID, currentlyShownIn: leaf.id)
       return next
     }
     layout = updatingLeaf(in: layout, leafID: paneID) { leaf in
       var next = leaf
-      next.tabs.append(tab)
-      next.activeTabID = tab.id
+      next.activeTabID = activeTabID
       return next
     }
     focusedPaneID = paneID
@@ -844,12 +847,6 @@ final class ProjectSurfaceModel: ObservableObject {
       return
     }
 
-    if let leaf = layout.leaf(withID: paneID) {
-      stopTerminalSessions(in: leaf)
-      for tab in leaf.tabs where tab.kind == .editor {
-        editorDocuments[tab.id] = nil
-      }
-    }
     guard let nextLayout = removingLeaf(in: layout, leafID: paneID) else {
       return
     }
@@ -900,9 +897,9 @@ final class ProjectSurfaceModel: ObservableObject {
       executionRootURL: executionRootURL,
       worktreeID: worktreeID
     )
+    tabStore.append(newTab)
     layout = updatingLeaf(in: layout, leafID: targetPaneID) { leaf in
       var next = leaf
-      next.tabs.append(newTab)
       next.activeTabID = newTab.id
       return next
     }
@@ -912,23 +909,18 @@ final class ProjectSurfaceModel: ObservableObject {
   }
 
   func showTerminal(in paneID: UUID) {
-    guard let leaf = layout.leaf(withID: paneID) else {
+    guard layout.leaf(withID: paneID) != nil else {
       return
     }
     focusedPaneID = paneID
-    let terminalTab = leaf.tabs.first { $0.kind == .terminal }
+    let terminalTab = tabStore.first { $0.kind == .terminal }
     let tabID: String
     if let terminalTab {
       tabID = terminalTab.id
     } else {
       let newTab = ProjectPaneTab.terminal()
       tabID = newTab.id
-      layout = updatingLeaf(in: layout, leafID: paneID) { leaf in
-        var next = leaf
-        next.tabs.append(newTab)
-        next.activeTabID = newTab.id
-        return next
-      }
+      tabStore.append(newTab)
     }
     setActiveTab(tabID, in: paneID, revealEditor: false)
     startTerminal(tabID: tabID)
@@ -961,13 +953,17 @@ final class ProjectSurfaceModel: ObservableObject {
   }
 
   func hideTerminal() {
-    guard let leaf = layout.leaf(withID: focusedPaneID) else {
+    guard layout.leaf(withID: focusedPaneID) != nil else {
       return
     }
-    let fallback = leaf.tabs.last { $0.kind != .terminal }
-    if let fallback {
-      setActiveTab(fallback.id, in: focusedPaneID, revealEditor: fallback.kind == .editor)
-    } else if leaf.activeTabID != nil {
+    if let fallbackID = fallbackTabID(excludingKind: .terminal, currentlyShownIn: focusedPaneID) {
+      let fallback = tabStore.first { $0.id == fallbackID }
+      setActiveTab(
+        fallbackID,
+        in: focusedPaneID,
+        revealEditor: fallback?.kind == .editor
+      )
+    } else if layout.leaf(withID: focusedPaneID)?.activeTabID != nil {
       layout = updatingLeaf(in: layout, leafID: focusedPaneID) { leaf in
         var next = leaf
         next.activeTabID = nil
@@ -984,18 +980,22 @@ final class ProjectSurfaceModel: ObservableObject {
     closeTab(id: descriptor.id)
   }
 
-  func openDiff() {
-    openDiff(in: focusedPaneID)
+  func openDiff(relativePath: String? = nil, basis: ProjectGitDiffBasis? = nil) {
+    openDiff(in: focusedPaneID, relativePath: relativePath, basis: basis)
   }
 
-  func openDiff(in paneID: UUID) {
+  func openDiff(
+    in paneID: UUID,
+    relativePath: String? = nil,
+    basis: ProjectGitDiffBasis? = nil
+  ) {
     guard layout.leafIDs.contains(paneID) else {
       return
     }
-    let tab = ProjectPaneTab.diff()
+    let tab = ProjectPaneTab.diff(relativePath: relativePath, basis: basis)
+    tabStore.append(tab)
     layout = updatingLeaf(in: layout, leafID: paneID) { leaf in
       var next = leaf
-      next.tabs.append(tab)
       next.activeTabID = tab.id
       return next
     }
@@ -1047,7 +1047,7 @@ final class ProjectSurfaceModel: ObservableObject {
       let diff = try gitService.diff(for: change, basis: basis)
       selectedGitDiff = diff
       lastGitErrorMessage = nil
-      openDiff()
+      openDiff(relativePath: relativePath, basis: basis)
       return diff
     } catch {
       lastGitErrorMessage = error.localizedDescription
@@ -1399,39 +1399,6 @@ final class ProjectSurfaceModel: ObservableObject {
     )
   }
 
-  func refreshHistoryEntries() {
-    do {
-      historyEntries = try historyStore.entries(for: projectID)
-    } catch {
-      historyEntries = []
-      lastNavigationErrorMessage = error.localizedDescription
-    }
-  }
-
-  func restoreHistoryEntry(_ entry: ProjectLocalHistoryEntry) {
-    guard entry.projectID == projectID else {
-      lastNavigationErrorMessage = "この履歴エントリは別のProjectに属しています。"
-      return
-    }
-    guard
-      let fileURL = ProjectNavigation.fileURL(for: entry.filePath, rootURL: rootURL),
-      let document = openEditorTab(for: fileURL, title: fileURL.lastPathComponent)
-    else {
-      lastNavigationErrorMessage =
-        "履歴ファイルは利用できなくなりました: \(entry.filePath)"
-      return
-    }
-
-    do {
-      try document.restoreHistoryEntry(id: entry.id)
-      lastNavigationErrorMessage = nil
-      lastNavigationStatusMessage =
-        "\(entry.filePath) をエディタバッファに復元しました。ディスクに書き込むにはタブを保存してください。"
-    } catch {
-      lastNavigationErrorMessage = error.localizedDescription
-    }
-  }
-
   func save(tabID: String? = nil) {
     guard let tab = editorTab(withID: tabID) else {
       return
@@ -1440,7 +1407,6 @@ final class ProjectSurfaceModel: ObservableObject {
     do {
       try tab.save()
       lastEditorErrorMessage = nil
-      refreshHistoryEntries()
     } catch {
       lastEditorErrorMessage = error.localizedDescription
     }
@@ -1460,22 +1426,10 @@ final class ProjectSurfaceModel: ObservableObject {
     activeTab?.redo()
   }
 
-  func restoreHistoryEntry(_ entryID: UUID, tabID: String? = nil) {
-    guard let tab = editorTab(withID: tabID) else {
-      return
-    }
-
-    do {
-      try tab.restoreHistoryEntry(id: entryID)
-      lastEditorErrorMessage = nil
-      refreshHistoryEntries()
-    } catch {
-      lastEditorErrorMessage = error.localizedDescription
-    }
-  }
-
   func reload() {
     refreshEditorDocumentsFromDisk()
+    directoryCache.removeAll(keepingCapacity: true)
+    startDirectoryCachePrefetch()
     scheduleTreeReload()
 
     if activeSearchQuery.isEmpty {
@@ -1489,7 +1443,6 @@ final class ProjectSurfaceModel: ObservableObject {
     replacementGeneration += 1
     replacementTask?.cancel()
     replacementIsLoading = false
-    refreshHistoryEntries()
     refreshGitStatus()
   }
 
@@ -1501,6 +1454,8 @@ final class ProjectSurfaceModel: ObservableObject {
     let rootURL = rootChecker.canonicalURL(for: self.rootURL)
     let loadedDirectoryPaths = self.loadedDirectoryPaths
     let directoryEntryLimits = self.directoryEntryLimits
+    let directoryCache = self.directoryCache
+    let fileManager = ProjectFileManagerBox(self.fileManager)
     fileTree = ProjectFileTreeSnapshot(
       root: fileTree.root,
       availability: fileTree.availability,
@@ -1512,7 +1467,9 @@ final class ProjectSurfaceModel: ObservableObject {
         ProjectFileTreeScanner.scanLoaded(
           rootURL: rootURL,
           loadedDirectoryPaths: loadedDirectoryPaths,
-          directoryEntryLimits: directoryEntryLimits
+          directoryEntryLimits: directoryEntryLimits,
+          directoryCache: directoryCache,
+          fileManager: fileManager.value
         )
       }
       let snapshot = await withTaskCancellationHandler(
@@ -1526,6 +1483,39 @@ final class ProjectSurfaceModel: ObservableObject {
         return
       }
       self.applyTreeSnapshot(snapshot)
+    }
+  }
+
+  private func startDirectoryCachePrefetch() {
+    directoryCacheGeneration += 1
+    let generation = directoryCacheGeneration
+    directoryCacheTask?.cancel()
+
+    let rootURL = rootChecker.canonicalURL(for: self.rootURL)
+    let fileManager = ProjectFileManagerBox(self.fileManager)
+    directoryCacheTask = Task { [weak self] in
+      let cacheTask = Task.detached(priority: .utility) {
+        ProjectFileTreeScanner.prefetchDirectoryCache(
+          rootURL: rootURL,
+          fileManager: fileManager.value
+        )
+      }
+      let cache = await withTaskCancellationHandler(
+        operation: {
+          await cacheTask.value
+        },
+        onCancel: {
+          cacheTask.cancel()
+        })
+      guard
+        !Task.isCancelled,
+        let self,
+        generation == self.directoryCacheGeneration
+      else {
+        return
+      }
+      self.directoryCache = cache
+      self.directoryCacheTask = nil
     }
   }
 
@@ -1672,33 +1662,30 @@ final class ProjectSurfaceModel: ObservableObject {
   }
 
   func activateTab(id: String) {
-    guard let location = tabLocation(for: id) else {
+    guard let tab = tabStore.first(where: { $0.id == id }) else {
       return
     }
-    if maximizedPaneID != nil, maximizedPaneID != location.paneID {
+    let targetPaneID = paneID(showing: id) ?? focusedPaneID
+    if maximizedPaneID != nil, maximizedPaneID != targetPaneID {
       maximizedPaneID = nil
     }
-    focusedPaneID = location.paneID
+    focusedPaneID = targetPaneID
     setActiveTab(
       id,
-      in: location.paneID,
-      revealEditor: location.tab.kind == .editor
+      in: targetPaneID,
+      revealEditor: tab.kind == .editor
     )
   }
 
   func activateAdjacentTab(direction: Int) {
-    guard
-      let leaf = layout.leaf(withID: focusedPaneID),
-      !leaf.tabs.isEmpty,
-      let activeTabID = leaf.activeTabID,
-      let activeIndex = leaf.tabs.firstIndex(where: { $0.id == activeTabID })
-    else {
+    guard !tabStore.isEmpty else {
       return
     }
-
+    let activeID = layout.leaf(withID: focusedPaneID)?.activeTabID
+    let activeIndex = activeID.flatMap { id in tabStore.firstIndex(where: { $0.id == id }) } ?? 0
     let normalizedDirection = direction < 0 ? -1 : 1
-    let nextIndex = (activeIndex + normalizedDirection + leaf.tabs.count) % leaf.tabs.count
-    let nextTab = leaf.tabs[nextIndex]
+    let nextIndex = (activeIndex + normalizedDirection + tabStore.count) % tabStore.count
+    let nextTab = tabStore[nextIndex]
     setActiveTab(
       nextTab.id,
       in: focusedPaneID,
@@ -1707,20 +1694,20 @@ final class ProjectSurfaceModel: ObservableObject {
   }
 
   func closeTab(id: String) {
-    guard let location = tabLocation(for: id) else {
+    guard let tab = tabStore.first(where: { $0.id == id }) else {
       return
     }
-    if location.tab.kind == .terminal {
+    if tab.kind == .terminal {
       terminalSessions[id]?.stop()
       terminalSessions[id] = nil
-    } else if location.tab.kind == .editor {
+    } else if tab.kind == .editor {
       editorDocuments[id] = nil
     }
-    layout = updatingLeaf(in: layout, leafID: location.paneID) { leaf in
+    tabStore.removeAll { $0.id == id }
+    layout = mappingLeaves(in: layout) { leaf in
       var next = leaf
-      next.tabs.removeAll { $0.id == id }
       if next.activeTabID == id {
-        next.activeTabID = next.tabs.last?.id
+        next.activeTabID = fallbackTabID(excluding: id, currentlyShownIn: leaf.id)
       }
       return next
     }
@@ -1749,22 +1736,24 @@ final class ProjectSurfaceModel: ObservableObject {
     }
 
     if editorDocuments[fileURL.path] == nil {
-      editorDocuments[fileURL.path] = ProjectEditorTab(
+      let document = ProjectEditorTab(
         projectID: projectID,
         rootURL: rootURL,
         url: fileURL,
-        historyStore: historyStore,
         fileManager: fileManager
       )
+      editorDocuments[fileURL.path] = document
+      attachEditorViewportPersistence(document, tabID: fileURL.path)
     }
-    if let existingLocation = tabLocation(for: fileURL.path) {
-      setActiveTab(fileURL.path, in: existingLocation.paneID, revealEditor: false)
+    if tabStore.contains(where: { $0.id == fileURL.path }) {
+      let targetPaneID = paneID(showing: fileURL.path) ?? focusedPaneID
+      setActiveTab(fileURL.path, in: targetPaneID, revealEditor: false)
       return editorDocuments[fileURL.path]
     }
     let tab = ProjectPaneTab.editor(path: fileURL.path, title: title)
+    tabStore.append(tab)
     layout = updatingLeaf(in: layout, leafID: focusedPaneID) { leaf in
       var next = leaf
-      next.tabs.append(tab)
       next.activeTabID = tab.id
       return next
     }
@@ -1807,53 +1796,102 @@ final class ProjectSurfaceModel: ObservableObject {
     onSnapshotChange?(workspaceSnapshot)
   }
 
+  private func attachEditorViewportPersistence(
+    _ document: ProjectEditorTab,
+    tabID: String
+  ) {
+    document.onEditorViewportChange = { [weak self, weak document] in
+      guard let self, let document else {
+        return
+      }
+      self.updateEditorViewport(
+        tabID: tabID,
+        selection: document.editorSelection,
+        scrollTop: document.editorScrollTop
+      )
+    }
+  }
+
+  private func updateEditorViewport(
+    tabID: String,
+    selection: ProjectEditorUTF16Range?,
+    scrollTop: Double
+  ) {
+    guard let index = tabStore.firstIndex(where: { $0.id == tabID }),
+      tabStore[index].kind == .editor
+    else {
+      return
+    }
+    tabStore[index].editorSelection = selection
+    tabStore[index].editorScrollTop = max(0, scrollTop)
+
+    editorViewportPersistTask?.cancel()
+    editorViewportPersistTask = Task { @MainActor [weak self] in
+      try? await Task.sleep(for: .milliseconds(150))
+      guard !Task.isCancelled else {
+        return
+      }
+      self?.notifySnapshotChanged()
+    }
+  }
+
   func notifyWorkspaceActivityChanged() {
     notifySnapshotChanged()
   }
 
   private func restoreRuntimeTabs() {
-    layout = mappingLeaves(in: layout) { [self] leaf in
-      var restoredTabs: [ProjectPaneTab] = []
-      for tab in leaf.tabs {
-        switch tab.kind {
-        case .editor:
-          guard
-            let filePath = tab.filePath,
-            let fileURL = restorableFileURL(for: filePath),
-            editorDocuments[tab.id] == nil
-          else {
-            continue
-          }
-          let document = ProjectEditorTab(
-            projectID: projectID,
-            rootURL: rootURL,
-            url: fileURL,
-            historyStore: historyStore,
-            fileManager: fileManager
-          )
-          editorDocuments[tab.id] = document
-          restoredTabs.append(tab)
-        case .terminal:
-          let session = TerminalSession(
-            projectRootURL: tab.executionRootURL ?? rootURL,
-            sessionID: tab.sessionID ?? UUID(),
-            startMode: .reattach
-          )
-          terminalSessions[tab.id] = session
-          restoredTabs.append(tab)
-        case .diff:
-          restoredTabs.append(tab)
+    var restoredTabs: [ProjectPaneTab] = []
+    for tab in tabStore {
+      switch tab.kind {
+      case .editor:
+        guard
+          let filePath = tab.filePath,
+          let fileURL = restorableFileURL(for: filePath),
+          editorDocuments[tab.id] == nil
+        else {
+          continue
         }
+        let document = ProjectEditorTab(
+          projectID: projectID,
+          rootURL: rootURL,
+          url: fileURL,
+          fileManager: fileManager
+        )
+        editorDocuments[tab.id] = document
+        document.restoreEditorViewport(
+          selection: tab.editorSelection,
+          scrollTop: tab.editorScrollTop
+        )
+        attachEditorViewportPersistence(document, tabID: tab.id)
+        restoredTabs.append(tab)
+      case .terminal:
+        let session = TerminalSession(
+          projectRootURL: tab.executionRootURL ?? rootURL,
+          sessionID: tab.sessionID ?? UUID(),
+          startMode: .reattach
+        )
+        terminalSessions[tab.id] = session
+        restoredTabs.append(tab)
+      case .diff:
+        if let relativePath = tab.diffRelativePath, let basis = tab.diffBasis,
+          selectedGitDiff == nil
+            || layout.leaves.contains(where: { $0.activeTabID == tab.id })
+        {
+          if let change = try? currentGitChange(relativePath: relativePath),
+            let diff = try? gitService.diff(for: change, basis: basis)
+          {
+            selectedGitDiff = diff
+          }
+        }
+        restoredTabs.append(tab)
       }
+    }
+    tabStore = restoredTabs
+    let restoredIDs = Set(restoredTabs.map(\.id))
+    layout = mappingLeaves(in: layout) { leaf in
       let activeTabID =
-        leaf.activeTabID.flatMap { activeID in
-          restoredTabs.contains(where: { $0.id == activeID }) ? activeID : nil
-        } ?? restoredTabs.last?.id
-      return ProjectPaneLeaf(
-        id: leaf.id,
-        tabs: restoredTabs,
-        activeTabID: activeTabID
-      )
+        leaf.activeTabID.flatMap { restoredIDs.contains($0) ? $0 : nil }
+      return ProjectPaneLeaf(id: leaf.id, activeTabID: activeTabID)
     }
     if !layout.leafIDs.contains(focusedPaneID) {
       focusedPaneID = layout.leafIDs[0]
@@ -1880,14 +1918,13 @@ final class ProjectSurfaceModel: ObservableObject {
   }
 
   private func filteringUnavailableEditorTabs(in node: ProjectPaneNode) -> ProjectPaneNode {
-    mappingLeaves(in: node) { leaf in
-      let tabs = leaf.tabs.filter { tab in
-        tab.kind != .editor || editorDocuments[tab.id] != nil
-      }
-      let activeTabID = leaf.activeTabID.flatMap { activeID in
-        tabs.contains(where: { $0.id == activeID }) ? activeID : tabs.last?.id
-      }
-      return ProjectPaneLeaf(id: leaf.id, tabs: tabs, activeTabID: activeTabID)
+    tabStore.removeAll { tab in
+      tab.kind == .editor && editorDocuments[tab.id] == nil
+    }
+    let remainingIDs = Set(tabStore.map(\.id))
+    return mappingLeaves(in: node) { leaf in
+      let activeTabID = leaf.activeTabID.flatMap { remainingIDs.contains($0) ? $0 : nil }
+      return ProjectPaneLeaf(id: leaf.id, activeTabID: activeTabID)
     }
   }
 
@@ -1923,7 +1960,8 @@ final class ProjectSurfaceModel: ObservableObject {
     in paneID: UUID,
     revealEditor: Bool
   ) {
-    guard let tab = layout.leaf(withID: paneID)?.tabs.first(where: { $0.id == tabID }) else {
+    guard let tab = tabStore.first(where: { $0.id == tabID }), layout.leafIDs.contains(paneID)
+    else {
       return
     }
     focusedPaneID = paneID
@@ -1945,12 +1983,31 @@ final class ProjectSurfaceModel: ObservableObject {
   }
 
   private func tabLocation(for tabID: String) -> (paneID: UUID, tab: ProjectPaneTab)? {
-    for leaf in layout.leaves {
-      if let tab = leaf.tabs.first(where: { $0.id == tabID }) {
-        return (leaf.id, tab)
-      }
+    guard let tab = tabStore.first(where: { $0.id == tabID }) else {
+      return nil
     }
-    return nil
+    return (paneID(showing: tabID) ?? focusedPaneID, tab)
+  }
+
+  private func fallbackTabID(
+    excluding excludedID: String? = nil,
+    excludingKind: ProjectPaneTabKind? = nil,
+    currentlyShownIn paneID: UUID
+  ) -> String? {
+    let shownIDs = Set(
+      layout.leaves.compactMap { leaf in
+        leaf.id == paneID ? nil : leaf.activeTabID
+      }
+    )
+    return tabStore.reversed().first { tab in
+      if let excludedID, tab.id == excludedID {
+        return false
+      }
+      if let excludingKind, tab.kind == excludingKind {
+        return false
+      }
+      return !shownIDs.contains(tab.id)
+    }?.id
   }
 
   func reattachRuntimeSessions() {
@@ -1964,13 +2021,6 @@ final class ProjectSurfaceModel: ObservableObject {
       session.stop()
     }
     terminalSessions.removeAll()
-  }
-
-  private func stopTerminalSessions(in leaf: ProjectPaneLeaf) {
-    for tab in leaf.tabs where tab.kind == .terminal {
-      terminalSessions[tab.id]?.stop()
-      terminalSessions[tab.id] = nil
-    }
   }
 
   private func mappingLeaves(
@@ -2077,7 +2127,7 @@ extension ProjectSurfaceModel {
     guard let leaf = layout.leaf(withID: focusedPaneID), let activeTabID = leaf.activeTabID else {
       return nil
     }
-    guard let tab = leaf.tabs.first(where: { $0.id == activeTabID }), tab.kind == .terminal else {
+    guard let tab = tabStore.first(where: { $0.id == activeTabID }), tab.kind == .terminal else {
       return nil
     }
     return terminalSessions[tab.id]

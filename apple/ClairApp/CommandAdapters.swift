@@ -1042,7 +1042,6 @@ final class CommandAdapterRouter {
       let tab = try editorTab(on: surface, tabID: input.tabID)
       do {
         try tab.save()
-        surface.refreshHistoryEntries()
       } catch let error as ProjectEditorError {
         throw CommandError.editor(error)
       }
@@ -1129,7 +1128,7 @@ final class CommandAdapterRouter {
       let surface = try surface(for: input.projectID)
       let tabID = input.tabID ?? surface.activeTabID
       guard let tabID,
-        surface.tabs(in: surface.focusedPaneID).contains(where: {
+        surface.tabStore.contains(where: {
           $0.id == tabID && $0.kind == .terminal
         })
       else {

@@ -221,90 +221,169 @@ struct ContentView: View {
           onDismiss: dismissOverlay
         )
       } else if let project = workspace.activeProject, let surface = workspace.activeSurface {
-        switch surface.workspaceActivity {
-        case .files:
-          workspacePane(project: project, surface: surface)
-        case .search:
-          WorkspaceActivityLayout(
-            project: project,
-            surface: surface,
-            navigation: activityBar,
-            showsNavigation: isSidebarVisible,
-            context: ProjectSearchView(surface: surface, onDismiss: selectFilesActivity),
-            main: editorPane(project: project, surface: surface),
-          )
-        case .git:
-          WorkspaceActivityLayout(
-            project: project,
-            surface: surface,
-            navigation: activityBar,
-            showsNavigation: isSidebarVisible,
-            context: ProjectGitView(
-              workspace: workspace,
-              projectID: project.id,
-              surface: surface,
-              onDismiss: selectFilesActivity
-            ),
-            main: ProjectDiffPreview(
-              surface: surface,
-              onOpenInEditor: selectFilesActivity
-            )
-          )
-        case .review:
-          WorkspaceActivityLayout(
-            project: project,
-            surface: surface,
-            navigation: activityBar,
-            showsNavigation: isSidebarVisible,
-            context: ProjectBranchReviewView(
-              project: project,
-              surface: surface,
-              agentWorkflow: agentWorkflow,
-              worktreeCoordinator: worktreeCoordinator,
-              onDismiss: selectFilesActivity
-            ),
-            main: editorPane(project: project, surface: surface),
-          )
-        case .activity:
-          WorkspaceActivityLayout(
-            project: project,
-            surface: surface,
-            navigation: activityBar,
-            showsNavigation: isSidebarVisible,
-            context: ProjectActivityView(
-              project: project,
-              workspace: workspace,
-              surface: surface,
-              agentWorkflow: agentWorkflow,
-              onOpenAgents: { openOverlay(.agents) }
-            ),
-            main: ProjectActivityDetailView(
-              project: project,
-              workspace: workspace,
-              surface: surface,
-              agentWorkflow: agentWorkflow,
-              onOpenAgents: { openOverlay(.agents) }
-            ),
-          )
-        }
+        workspaceSurface(project: project, surface: surface)
       } else {
         welcomeView
       }
     }
   }
 
-  private func workspacePane(project: Project, surface: ProjectSurfaceModel) -> some View {
-    ProjectWorkspaceDetail(
-      state: state,
-      project: project,
-      workspace: workspace,
-      agentWorkflow: agentWorkflow,
-      surface: surface,
-      navigation: activityBar,
-      showsNavigation: isSidebarVisible,
-      fontSize: editorFontSize,
-      wordWrap: editorWordWrap,
-      onOpenProject: openProject
+  // The activity bar (navigation icon row) is mounted once here, outside the
+  // per-tab `sidebarContent`/`mainContent` switches below. Switching between
+  // tabs whose content views have different concrete types forces SwiftUI to
+  // tear down and rebuild whatever is inside the switch; keeping the nav row
+  // outside it means the icon strip itself is never rebuilt, so it can't
+  // visibly jump when a tab (e.g. the bell/Activity tab) is selected.
+  private func workspaceSurface(project: Project, surface: ProjectSurfaceModel) -> some View {
+    HStack(spacing: 0) {
+      if isSidebarVisible {
+        VStack(spacing: 0) {
+          activityBar
+            .frame(maxWidth: .infinity, minHeight: 34, maxHeight: 34)
+
+          sidebarContent(project: project, surface: surface)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+        .frame(
+          minWidth: 204,
+          idealWidth: 286,
+          maxWidth: 340,
+          maxHeight: .infinity,
+          alignment: .topLeading
+        )
+        .background(WorkspaceChrome.surface)
+
+        Divider()
+          .background(WorkspaceChrome.border)
+      }
+
+      mainContent(project: project, surface: surface)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background(WorkspaceChrome.canvas)
+    .alert("エディタの操作に失敗しました", isPresented: editorErrorIsPresented(surface)) {
+      Button("OK") {
+        surface.dismissEditorError()
+      }
+    } message: {
+      Text(surface.lastEditorErrorMessage ?? "エディタで不明なエラーが発生しました。")
+    }
+    .alert("Projectの移動に失敗しました", isPresented: navigationErrorIsPresented(surface)) {
+      Button("OK") {
+        surface.dismissNavigationError()
+      }
+    } message: {
+      Text(surface.lastNavigationErrorMessage ?? "Projectの移動で不明なエラーが発生しました。")
+    }
+    .alert("Git操作に失敗しました", isPresented: gitErrorIsPresented(surface)) {
+      Button("OK") {
+        surface.dismissGitError()
+      }
+    } message: {
+      Text(surface.lastGitErrorMessage ?? "Gitで不明なエラーが発生しました。")
+    }
+    .alert("Agentワークフローに失敗しました", isPresented: agentErrorIsPresented) {
+      Button("OK") {
+        agentWorkflow.clearError()
+      }
+    } message: {
+      Text(agentWorkflow.lastErrorMessage ?? "Agentワークフローで不明なエラーが発生しました。")
+    }
+  }
+
+  @ViewBuilder
+  private func sidebarContent(project: Project, surface: ProjectSurfaceModel) -> some View {
+    switch surface.workspaceActivity {
+    case .files:
+      ProjectFileTreeView(surface: surface, onOpenProject: openProject)
+    case .search:
+      ProjectSearchView(surface: surface, onDismiss: selectFilesActivity)
+    case .git:
+      ProjectGitView(
+        workspace: workspace,
+        projectID: project.id,
+        surface: surface,
+        onDismiss: selectFilesActivity
+      )
+    case .review:
+      ProjectBranchReviewView(
+        project: project,
+        surface: surface,
+        agentWorkflow: agentWorkflow,
+        worktreeCoordinator: worktreeCoordinator,
+        onDismiss: selectFilesActivity
+      )
+    case .activity:
+      ProjectActivityView(
+        project: project,
+        workspace: workspace,
+        surface: surface,
+        agentWorkflow: agentWorkflow,
+        onOpenAgents: { openOverlay(.agents) }
+      )
+    }
+  }
+
+  @ViewBuilder
+  private func mainContent(project: Project, surface: ProjectSurfaceModel) -> some View {
+    switch surface.workspaceActivity {
+    case .files, .search, .review:
+      editorPane(project: project, surface: surface)
+    case .git:
+      ProjectDiffPreview(surface: surface, onOpenInEditor: selectFilesActivity)
+    case .activity:
+      ProjectActivityDetailView(
+        project: project,
+        workspace: workspace,
+        surface: surface,
+        agentWorkflow: agentWorkflow,
+        onOpenAgents: { openOverlay(.agents) }
+      )
+    }
+  }
+
+  private func editorErrorIsPresented(_ surface: ProjectSurfaceModel) -> Binding<Bool> {
+    Binding(
+      get: { surface.lastEditorErrorMessage != nil },
+      set: { isPresented in
+        if !isPresented {
+          surface.dismissEditorError()
+        }
+      }
+    )
+  }
+
+  private func navigationErrorIsPresented(_ surface: ProjectSurfaceModel) -> Binding<Bool> {
+    Binding(
+      get: { surface.lastNavigationErrorMessage != nil },
+      set: { isPresented in
+        if !isPresented {
+          surface.dismissNavigationError()
+        }
+      }
+    )
+  }
+
+  private func gitErrorIsPresented(_ surface: ProjectSurfaceModel) -> Binding<Bool> {
+    Binding(
+      get: { surface.lastGitErrorMessage != nil && workspace.lastErrorMessage == nil },
+      set: { isPresented in
+        if !isPresented {
+          surface.dismissGitError()
+        }
+      }
+    )
+  }
+
+  private var agentErrorIsPresented: Binding<Bool> {
+    Binding(
+      get: { agentWorkflow.lastErrorMessage != nil && workspace.lastErrorMessage == nil },
+      set: { isPresented in
+        if !isPresented {
+          agentWorkflow.clearError()
+        }
+      }
     )
   }
 
@@ -639,49 +718,6 @@ struct ContentView: View {
     cancelRename()
   }
 }
-private struct WorkspaceActivityLayout<Context: View, Main: View, Navigation: View>: View {
-  let project: Project
-  @ObservedObject var surface: ProjectSurfaceModel
-  let navigation: Navigation
-  let showsNavigation: Bool
-  let context: Context
-  let main: Main
-
-  var body: some View {
-    HStack(spacing: 0) {
-      if showsNavigation {
-        VStack(spacing: 0) {
-          navigation
-            .frame(maxWidth: .infinity, minHeight: 34, maxHeight: 34)
-
-          context
-            .frame(
-              maxWidth: .infinity,
-              maxHeight: .infinity,
-              alignment: .topLeading
-            )
-        }
-        .frame(
-          minWidth: 204,
-          idealWidth: 286,
-          maxWidth: 340,
-          maxHeight: .infinity,
-          alignment: .topLeading
-        )
-        .background(WorkspaceChrome.surface)
-
-        Divider()
-          .background(WorkspaceChrome.border)
-      }
-
-      main
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(WorkspaceChrome.canvas)
-  }
-}
-
 private struct ProjectActivityDetailView: View {
   let project: Project
   @ObservedObject var workspace: ProjectWorkspaceModel
@@ -691,10 +727,6 @@ private struct ProjectActivityDetailView: View {
 
   private var latestActivity: AgentActivity? {
     agentWorkflow.activities(for: project.id).max { $0.occurredAt < $1.occurredAt }
-  }
-
-  private var latestHistory: ProjectLocalHistoryEntry? {
-    surface.historyEntries.first
   }
 
   var body: some View {
@@ -719,8 +751,6 @@ private struct ProjectActivityDetailView: View {
 
       if let latestActivity {
         activityDetail(latestActivity)
-      } else if let latestHistory {
-        historyDetail(latestHistory)
       } else {
         VStack(spacing: 10) {
           Image(systemName: "bell")
@@ -728,7 +758,7 @@ private struct ProjectActivityDetailView: View {
             .foregroundStyle(WorkspaceChrome.textQuaternary)
           Text("アクティビティはまだありません")
             .font(WorkspaceChrome.chromeFont(size: 13, weight: .semibold))
-          Text("ターミナルのシグナルと復元スナップショットがここに表示されます。")
+          Text("ターミナルのシグナルがここに表示されます。")
             .font(WorkspaceChrome.chromeFont(size: 10))
             .foregroundStyle(WorkspaceChrome.textTertiary)
         }
@@ -809,30 +839,6 @@ private struct ProjectActivityDetailView: View {
     }
   }
 
-  private func historyDetail(_ entry: ProjectLocalHistoryEntry) -> some View {
-    VStack(alignment: .leading, spacing: 16) {
-      Label("エディタの復元スナップショット", systemImage: "clock.arrow.circlepath")
-        .font(WorkspaceChrome.chromeFont(size: 14, weight: .semibold))
-        .foregroundStyle(WorkspaceChrome.accent)
-      Text(entry.filePath)
-        .font(WorkspaceChrome.chromeFont(size: 12, weight: .medium))
-      Text(entry.displayLabel)
-        .font(WorkspaceChrome.chromeFont(size: 10))
-        .foregroundStyle(WorkspaceChrome.textTertiary)
-      Text("スナップショットはローカルに保持され、エディタバッファへ復元できます。")
-        .font(WorkspaceChrome.chromeFont(size: 11))
-        .foregroundStyle(WorkspaceChrome.textSecondary)
-      Button("エディタで復元") {
-        surface.restoreHistoryEntry(entry)
-        surface.workspaceActivity = .files
-      }
-      .buttonStyle(.borderedProminent)
-      Spacer()
-    }
-    .frame(maxWidth: 620, maxHeight: .infinity, alignment: .topLeading)
-    .padding(24)
-  }
-
   private func detailRow(label: String, value: String) -> some View {
     HStack(alignment: .firstTextBaseline, spacing: 12) {
       Text(label)
@@ -875,123 +881,6 @@ private struct ProjectActivityDetailView: View {
   }
 }
 
-// MARK: - Project Workspace Detail
-
-private struct ProjectWorkspaceDetail<Navigation: View>: View {
-  let state: BootstrapState
-  let project: Project
-  @ObservedObject var workspace: ProjectWorkspaceModel
-  @ObservedObject var agentWorkflow: AgentWorkflowCoordinator
-  @ObservedObject var surface: ProjectSurfaceModel
-  let navigation: Navigation
-  let showsNavigation: Bool
-  let fontSize: Double
-  let wordWrap: Bool
-  let onOpenProject: () -> Void
-
-  var body: some View {
-    HStack(spacing: 0) {
-      if showsNavigation {
-        VStack(spacing: 0) {
-          navigation
-            .frame(maxWidth: .infinity, minHeight: 34, maxHeight: 34)
-
-          ProjectFileTreeView(surface: surface, onOpenProject: onOpenProject)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .frame(minWidth: 204, idealWidth: 286, maxWidth: 340, maxHeight: .infinity)
-        .background(WorkspaceChrome.surface)
-
-        Divider()
-          .background(WorkspaceChrome.border)
-      }
-
-      ProjectPaneLayoutView(
-        state: state,
-        project: project,
-        surface: surface,
-        node: surface.visibleLayout,
-        fontSize: fontSize,
-        wordWrap: wordWrap
-      )
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(WorkspaceChrome.canvas)
-    .alert("エディタの操作に失敗しました", isPresented: editorErrorIsPresented) {
-      Button("OK") {
-        surface.dismissEditorError()
-      }
-    } message: {
-      Text(surface.lastEditorErrorMessage ?? "エディタで不明なエラーが発生しました。")
-    }
-    .alert("Projectの移動に失敗しました", isPresented: navigationErrorIsPresented) {
-      Button("OK") {
-        surface.dismissNavigationError()
-      }
-    } message: {
-      Text(surface.lastNavigationErrorMessage ?? "Projectの移動で不明なエラーが発生しました。")
-    }
-    .alert("Git操作に失敗しました", isPresented: gitErrorIsPresented) {
-      Button("OK") {
-        surface.dismissGitError()
-      }
-    } message: {
-      Text(surface.lastGitErrorMessage ?? "Gitで不明なエラーが発生しました。")
-    }
-    .alert("Agentワークフローに失敗しました", isPresented: agentErrorIsPresented) {
-      Button("OK") {
-        agentWorkflow.clearError()
-      }
-    } message: {
-      Text(agentWorkflow.lastErrorMessage ?? "Agentワークフローで不明なエラーが発生しました。")
-    }
-  }
-
-  private var editorErrorIsPresented: Binding<Bool> {
-    Binding(
-      get: { surface.lastEditorErrorMessage != nil },
-      set: { isPresented in
-        if !isPresented {
-          surface.dismissEditorError()
-        }
-      }
-    )
-  }
-
-  private var navigationErrorIsPresented: Binding<Bool> {
-    Binding(
-      get: { surface.lastNavigationErrorMessage != nil },
-      set: { isPresented in
-        if !isPresented {
-          surface.dismissNavigationError()
-        }
-      }
-    )
-  }
-
-  private var gitErrorIsPresented: Binding<Bool> {
-    Binding(
-      get: { surface.lastGitErrorMessage != nil && workspace.lastErrorMessage == nil },
-      set: { isPresented in
-        if !isPresented {
-          surface.dismissGitError()
-        }
-      }
-    )
-  }
-
-  private var agentErrorIsPresented: Binding<Bool> {
-    Binding(
-      get: { agentWorkflow.lastErrorMessage != nil && workspace.lastErrorMessage == nil },
-      set: { isPresented in
-        if !isPresented {
-          agentWorkflow.clearError()
-        }
-      }
-    )
-  }
-}
 
 // MARK: - Workspace Titlebar
 
@@ -1000,9 +889,8 @@ private enum WorkspaceTitlebarMetrics {
   static let trafficLightTopPadding: CGFloat = 6
   static let trafficLightGutterWidth: CGFloat = 76
   static let projectLabelHeight: CGFloat = 22
-  static let projectLabelBottomPadding: CGFloat = 7
   static let projectGroupHeight: CGFloat = 46
-  static let surfaceTabHeight: CGFloat = 40
+  static let surfaceTabHeight: CGFloat = 38
 }
 
 private struct WorkspaceTitlebar: View {
@@ -1574,7 +1462,7 @@ private struct ProjectGroupStrip: View {
 
   var body: some View {
     ScrollView(.horizontal) {
-      HStack(alignment: .bottom, spacing: 5) {
+      HStack(alignment: .center, spacing: 5) {
         ForEach(workspace.projects) { project in
           groupView(project)
         }
@@ -1586,11 +1474,10 @@ private struct ProjectGroupStrip: View {
         }
         .buttonStyle(.tactile)
         .foregroundStyle(WorkspaceChrome.textTertiary)
-        .padding(.bottom, WorkspaceTitlebarMetrics.projectLabelBottomPadding)
         .help("Projectフォルダを開く")
         .accessibilityLabel("Projectを開く")
       }
-      .frame(maxHeight: .infinity, alignment: .bottom)
+      .frame(maxHeight: .infinity, alignment: .center)
     }
     .padding(.trailing, 8)
     .scrollIndicators(.hidden)
@@ -1608,7 +1495,7 @@ private struct ProjectGroupStrip: View {
     let isMuted = agentWorkflow.isMuted(projectID: project.id)
     let isFirstProject = workspace.projects.first?.id == project.id
 
-    return HStack(alignment: .bottom, spacing: 5) {
+    return HStack(alignment: .center, spacing: 5) {
       Button {
         if !isActive {
           onSelectProject(project.id)
@@ -1653,7 +1540,6 @@ private struct ProjectGroupStrip: View {
       }
       .buttonStyle(.tactile)
       .foregroundStyle(isActive ? WorkspaceChrome.textPrimary : WorkspaceChrome.textTertiary)
-      .padding(.bottom, WorkspaceTitlebarMetrics.projectLabelBottomPadding)
       .help(
         isActive
           ? "\(project.name)（現在のProject）"
@@ -1667,7 +1553,6 @@ private struct ProjectGroupStrip: View {
       if isActive, let projectSurface {
         WorkspaceTabStrip(
           surface: projectSurface,
-          accent: project.color.workspaceAccent,
           isProjectActive: isActive,
           onActivateProject: {
             if !isActive {
@@ -1690,9 +1575,8 @@ private struct ProjectGroupStrip: View {
     .frame(
       height: isActive
         ? WorkspaceTitlebarMetrics.projectGroupHeight
-        : WorkspaceTitlebarMetrics.projectLabelHeight
-          + WorkspaceTitlebarMetrics.projectLabelBottomPadding,
-      alignment: .bottom
+        : WorkspaceTitlebarMetrics.projectLabelHeight,
+      alignment: .center
     )
     .contextMenu {
       Button("Project名を変更") {
@@ -1737,10 +1621,10 @@ private struct ProjectGroupStrip: View {
 
 private struct WorkspaceTabStrip: View {
   @ObservedObject var surface: ProjectSurfaceModel
-  let accent: Color
   let isProjectActive: Bool
   let onActivateProject: () -> Void
   @State private var pendingCloseTabID: String?
+  @State private var hoveredTabID: String?
 
   var body: some View {
     HStack(spacing: 2) {
@@ -1768,8 +1652,7 @@ private struct WorkspaceTabStrip: View {
   private func tabView(_ item: ProjectWorkspaceTab) -> some View {
     let tab = item.tab
     let isActive = isProjectActive && surface.activeTabID == tab.id
-    let paneNumber = (surface.paneIDs.firstIndex(of: item.paneID) ?? 0) + 1
-
+    let isHovered = hoveredTabID == tab.id
     return HStack(spacing: 8) {
       Button {
         onActivateProject()
@@ -1777,11 +1660,6 @@ private struct WorkspaceTabStrip: View {
       } label: {
         HStack(spacing: 4) {
           WorkspaceSurfaceIcon(kind: tab.kind)
-          if surface.paneIDs.count > 1 {
-            Text("P\(paneNumber)")
-              .font(WorkspaceChrome.chromeFont(size: 9, weight: .semibold))
-              .foregroundStyle(WorkspaceChrome.textQuaternary)
-          }
           Text(displayTitle(for: tab))
             .font(WorkspaceChrome.chromeFont(size: 11))
             .lineLimit(1)
@@ -1801,29 +1679,28 @@ private struct WorkspaceTabStrip: View {
       maxHeight: WorkspaceTitlebarMetrics.surfaceTabHeight,
       alignment: .leading
     )
-    .background(
-      isActive ? WorkspaceChrome.canvas : Color.white.opacity(0.012)
-    )
+    .background(tabBackground(isActive: isActive, isHovered: isHovered))
     .foregroundStyle(isActive ? WorkspaceChrome.textPrimary : WorkspaceChrome.textTertiary)
     .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-    .overlay {
-      RoundedRectangle(cornerRadius: 7, style: .continuous)
-        .stroke(isActive ? WorkspaceChrome.border : Color.clear, lineWidth: 1)
-    }
-    .overlay(alignment: .top) {
-      Rectangle()
-        .fill(isActive ? accent : Color.clear)
-        .frame(height: 2)
+    .onHover { hovering in
+      hoveredTabID = hovering ? tab.id : (hoveredTabID == tab.id ? nil : hoveredTabID)
     }
     .contextMenu {
       Button("タブを閉じる", role: .destructive) {
         requestClose(tab)
       }
     }
-    .help("\(tab.title) · \(kindTitle(tab.kind)) · Project-owned pane \(paneNumber)")
+    .help("\(tab.title) · \(kindTitle(tab.kind))")
     .accessibilityElement(children: .contain)
-    .accessibilityLabel("\(tab.title), \(kindTitle(tab.kind)), pane \(paneNumber)")
+    .accessibilityLabel("\(tab.title), \(kindTitle(tab.kind))")
     .accessibilityValue(isActive ? "アクティブ" : "非アクティブ")
+  }
+
+  private func tabBackground(isActive: Bool, isHovered: Bool) -> Color {
+    if isActive {
+      return WorkspaceChrome.surfaceActive
+    }
+    return isHovered ? WorkspaceChrome.surfaceHover : WorkspaceChrome.surface
   }
 
   @ViewBuilder
@@ -2503,7 +2380,7 @@ private struct AgentRateLimitRow: View {
   }
 
   private var secondaryText: String? {
-    snapshot.primaryWindow?.resetDescription() ?? snapshot.detail ?? snapshot.planType
+    snapshot.detail ?? snapshot.primaryWindow?.resetDescription() ?? snapshot.planType
   }
 
   private func valueText(for window: AgentRateLimitWindow) -> String {
@@ -4156,13 +4033,13 @@ private struct ProjectDiffPreview: View {
           .frame(minHeight: 76)
           .background(WorkspaceChrome.surface)
           Divider().background(WorkspaceChrome.border)
-          ScrollView {
-            Text(diff.text.isEmpty ? "この状態では差分を利用できません。" : diff.text)
-              .font(.system(.body, design: .monospaced))
-              .foregroundStyle(WorkspaceChrome.textSecondary)
-              .textSelection(.enabled)
-              .frame(maxWidth: .infinity, alignment: .leading)
-              .padding(16)
+          if diff.text.isEmpty {
+            Text("この状態では差分を利用できません。")
+              .font(WorkspaceChrome.chromeFont(size: 12))
+              .foregroundStyle(WorkspaceChrome.textTertiary)
+              .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+          } else {
+            CodeMirrorDiffView(path: diff.change.path, patch: diff.text)
           }
         }
         .background(WorkspaceChrome.canvas)
@@ -4574,7 +4451,6 @@ private enum ProjectActivityFilter: String, CaseIterable, Identifiable {
   case all
   case attention
   case agents
-  case files
 
   var id: String {
     rawValue
@@ -4588,44 +4464,6 @@ private enum ProjectActivityFilter: String, CaseIterable, Identifiable {
       "注意"
     case .agents:
       "Agent"
-    case .files:
-      "ファイル"
-    }
-  }
-}
-
-private enum ProjectActivityItem: Identifiable {
-  case agent(AgentActivity)
-  case history(ProjectLocalHistoryEntry)
-
-  var id: String {
-    switch self {
-    case .agent(let activity):
-      "agent:\(activity.id.uuidString)"
-    case .history(let entry):
-      "history:\(entry.id.uuidString)"
-    }
-  }
-
-  var occurredAt: Date {
-    switch self {
-    case .agent(let activity):
-      activity.occurredAt
-    case .history(let entry):
-      entry.createdAt
-    }
-  }
-
-  var searchText: String {
-    switch self {
-    case .agent(let activity):
-      [
-        activity.source.rawValue,
-        activity.kind.rawValue,
-        activity.summary ?? "",
-      ].joined(separator: " ")
-    case .history(let entry):
-      [entry.filePath, entry.reason.displayName, entry.displayLabel].joined(separator: " ")
     }
   }
 }
@@ -4644,20 +4482,22 @@ private struct ProjectActivityView: View {
     agentWorkflow.activities(for: project.id)
   }
 
-  private var items: [ProjectActivityItem] {
-    let all =
-      projectActivities.map(ProjectActivityItem.agent)
-      + surface.historyEntries.map(ProjectActivityItem.history)
+  private var items: [AgentActivity] {
     let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
 
-    return all.filter { item in
-      guard matchesFilter(item) else {
+    return projectActivities.filter { activity in
+      guard matchesFilter(activity) else {
         return false
       }
       guard !normalizedQuery.isEmpty else {
         return true
       }
-      return item.searchText.localizedCaseInsensitiveContains(normalizedQuery)
+      let searchText = [
+        activity.source.rawValue,
+        activity.kind.rawValue,
+        activity.summary ?? "",
+      ].joined(separator: " ")
+      return searchText.localizedCaseInsensitiveContains(normalizedQuery)
     }
     .sorted { $0.occurredAt > $1.occurredAt }
   }
@@ -4668,7 +4508,7 @@ private struct ProjectActivityView: View {
         VStack(alignment: .leading, spacing: 2) {
           Text("アクティビティ")
             .font(WorkspaceChrome.chromeFont(size: 15, weight: .semibold))
-          Text("通知、Agent、復元履歴")
+          Text("通知、Agent")
             .font(WorkspaceChrome.chromeFont(size: 10))
             .foregroundStyle(WorkspaceChrome.textQuaternary)
         }
@@ -4736,7 +4576,7 @@ private struct ProjectActivityView: View {
           systemImage: "bell",
           description: Text(
             query.isEmpty && filter == .all
-              ? "このProjectのシグナルとファイル復元スナップショットがここに表示されます。"
+              ? "このProjectのシグナルがここに表示されます。"
               : "別の絞り込みまたは検索語を試してください。"
           )
         )
@@ -4744,8 +4584,8 @@ private struct ProjectActivityView: View {
       } else {
         ScrollView {
           LazyVStack(spacing: 1) {
-            ForEach(items) { item in
-              activityRow(item)
+            ForEach(items) { activity in
+              agentRow(activity)
             }
           }
           .padding(8)
@@ -4756,19 +4596,6 @@ private struct ProjectActivityView: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .foregroundStyle(WorkspaceChrome.textSecondary)
     .background(WorkspaceChrome.surface)
-    .onAppear {
-      surface.refreshHistoryEntries()
-    }
-  }
-
-  @ViewBuilder
-  private func activityRow(_ item: ProjectActivityItem) -> some View {
-    switch item {
-    case .agent(let activity):
-      agentRow(activity)
-    case .history(let entry):
-      historyRow(entry)
-    }
   }
 
   private func agentRow(_ activity: AgentActivity) -> some View {
@@ -4867,57 +4694,14 @@ private struct ProjectActivityView: View {
     }
   }
 
-  private func historyRow(_ entry: ProjectLocalHistoryEntry) -> some View {
-    HStack(alignment: .top, spacing: 10) {
-      Image(systemName: "clock.arrow.circlepath")
-        .font(.system(size: 13, weight: .semibold))
-        .foregroundStyle(WorkspaceChrome.textTertiary)
-        .frame(width: 20)
-      VStack(alignment: .leading, spacing: 3) {
-        Text(entry.filePath)
-          .font(WorkspaceChrome.chromeFont(size: 11, weight: .medium))
-          .lineLimit(1)
-        Text(entry.reason.displayName)
-          .font(WorkspaceChrome.chromeFont(size: 9))
-          .foregroundStyle(WorkspaceChrome.textQuaternary)
-        Text(entry.createdAt.formatted(date: .omitted, time: .shortened))
-          .font(WorkspaceChrome.chromeFont(size: 9))
-          .foregroundStyle(WorkspaceChrome.textQuaternary)
-      }
-      Spacer(minLength: 8)
-      Button("復元") {
-        surface.restoreHistoryEntry(entry)
-      }
-      .buttonStyle(.bordered)
-      .controlSize(.small)
-    }
-    .padding(9)
-    .background(WorkspaceChrome.surface, in: RoundedRectangle(cornerRadius: 5))
-    .overlay {
-      RoundedRectangle(cornerRadius: 5)
-        .stroke(WorkspaceChrome.border, lineWidth: 1)
-    }
-  }
-
-  private func matchesFilter(_ item: ProjectActivityItem) -> Bool {
+  private func matchesFilter(_ activity: AgentActivity) -> Bool {
     switch filter {
     case .all:
-      return true
+      true
     case .attention:
-      if case .agent(let activity) = item {
-        return activity.shouldNotify
-      }
-      return false
+      activity.shouldNotify
     case .agents:
-      if case .agent = item {
-        return true
-      }
-      return false
-    case .files:
-      if case .history = item {
-        return true
-      }
-      return false
+      true
     }
   }
 
@@ -4955,65 +4739,6 @@ private struct ProjectActivityView: View {
       "実行中 · raw terminal · \(session.agent.cwd)"
     case .exited(let code):
       "終了 \(code) · raw terminal · \(session.agent.cwd)"
-    }
-  }
-}
-
-private struct ProjectHistoryView: View {
-  @ObservedObject var surface: ProjectSurfaceModel
-  @Environment(\.dismiss) private var dismiss
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 0) {
-      HStack {
-        VStack(alignment: .leading, spacing: 3) {
-          Text("Projectの履歴")
-            .font(.title3.weight(.semibold))
-          Text("スナップショットをエディタバッファに復元します。ディスクへの書き込みは明示的に保存してください。")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        }
-        Spacer()
-        Button("閉じる", action: dismiss.callAsFunction)
-          .buttonStyle(.tactile)
-      }
-      .padding(12)
-
-      Divider()
-
-      if surface.historyEntries.isEmpty {
-        ContentUnavailableView(
-          "履歴スナップショットはありません",
-          systemImage: "clock.arrow.circlepath",
-          description: Text("ファイルを保存または再読み込みするとClairが復元スナップショットを保持します。")
-        )
-      } else {
-        List(surface.historyEntries) { entry in
-          HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 3) {
-              Text(entry.filePath)
-                .font(.body.weight(.medium))
-                .lineLimit(1)
-              Text(entry.displayLabel)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-            Spacer()
-            Button("復元") {
-              surface.restoreHistoryEntry(entry)
-              if surface.lastNavigationErrorMessage == nil {
-                dismiss()
-              }
-            }
-            .buttonStyle(.bordered)
-          }
-        }
-        .listStyle(.inset)
-      }
-    }
-    .frame(minWidth: 560, minHeight: 360)
-    .onAppear {
-      surface.refreshHistoryEntries()
     }
   }
 }
@@ -5291,18 +5016,6 @@ private struct ProjectNativeEditorTab: View {
             .foregroundStyle(WorkspaceChrome.attention)
         }
         Menu {
-          Menu("履歴") {
-            if tab.historyEntries.isEmpty {
-              Text("復元スナップショットはありません")
-            } else {
-              ForEach(tab.historyEntries) { entry in
-                Button(entry.displayLabel) {
-                  surface.restoreHistoryEntry(entry.id, tabID: tab.id)
-                }
-              }
-            }
-          }
-          Divider()
           Button("元に戻す") {
             surface.undoActiveTab()
           }
@@ -5357,13 +5070,24 @@ private struct ProjectNativeEditorTab: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
       } else {
-        CodeMirrorEditorView(
-          document: tab,
-          selection: tab.selectionRequest,
-          fontSize: CGFloat(fontSize),
-          wordWrap: wordWrap
-        ) {
-          surface.save(tabID: tab.id)
+        if ProjectEditorEngine.usesAppKitNativeEditor() {
+          ProjectSourceEditorView(
+            document: tab,
+            selection: tab.selectionRequest,
+            fontSize: CGFloat(fontSize),
+            wordWrap: wordWrap
+          ) {
+            surface.save(tabID: tab.id)
+          }
+        } else {
+          CodeMirrorEditorView(
+            document: tab,
+            selection: tab.selectionRequest,
+            fontSize: CGFloat(fontSize),
+            wordWrap: wordWrap
+          ) {
+            surface.save(tabID: tab.id)
+          }
         }
       }
     }

@@ -48,6 +48,7 @@ struct ProjectEditorWebChange: Codable, Equatable, Sendable {
   let baseRevision: UInt64
   let changes: [ProjectEditorWebEdit]
   let selection: ProjectEditorWebSelection
+  let scrollTop: Double?
   let canUndo: Bool
   let canRedo: Bool
 
@@ -55,12 +56,14 @@ struct ProjectEditorWebChange: Codable, Equatable, Sendable {
     baseRevision: UInt64,
     changes: [ProjectEditorWebEdit],
     selection: ProjectEditorWebSelection,
+    scrollTop: Double? = nil,
     canUndo: Bool,
     canRedo: Bool
   ) {
     self.baseRevision = baseRevision
     self.changes = changes
     self.selection = selection
+    self.scrollTop = scrollTop
     self.canUndo = canUndo
     self.canRedo = canRedo
   }
@@ -80,8 +83,21 @@ struct ProjectEditorWebChange: Codable, Equatable, Sendable {
 
 struct ProjectEditorWebSelectionChange: Codable, Equatable, Sendable {
   let selection: ProjectEditorWebSelection
+  let scrollTop: Double?
   let canUndo: Bool
   let canRedo: Bool
+
+  init(
+    selection: ProjectEditorWebSelection,
+    scrollTop: Double? = nil,
+    canUndo: Bool,
+    canRedo: Bool
+  ) {
+    self.selection = selection
+    self.scrollTop = scrollTop
+    self.canUndo = canUndo
+    self.canRedo = canRedo
+  }
 }
 
 extension ProjectEditorWebChange {

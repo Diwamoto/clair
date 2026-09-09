@@ -175,9 +175,11 @@ struct CodeMirrorEditorView: NSViewRepresentable {
     weak var webView: WKWebView?
     private var isReady = false
     private var lastRenderedContent: String?
+    private var lastRenderedRevision: UInt64?
     private var lastConfiguration: WebEditorConfiguration?
     private var lastSelectionRequest: ProjectEditorSelection?
     private var lastEditorSelection: WebEditorSelection?
+    private var lastEditorScrollTop: Double?
     private var onSave: (() -> Void)?
     private var requestedFontSize: CGFloat = 13
     private var requestedWordWrap = false
@@ -197,8 +199,11 @@ struct CodeMirrorEditorView: NSViewRepresentable {
         self.document.detachEditorCommandHandler()
         self.document = document
         lastRenderedContent = nil
+        lastRenderedRevision = nil
         lastConfiguration = nil
         lastSelectionRequest = nil
+        lastEditorSelection = nil
+        lastEditorScrollTop = nil
         attachCommandHandler()
       }
       self.onSave = onSave
@@ -225,16 +230,26 @@ struct CodeMirrorEditorView: NSViewRepresentable {
         )
       }
 
-      if lastRenderedContent != document.content {
+      if lastRenderedContent != document.content
+        || lastRenderedRevision != document.editorRevision
+      {
         lastRenderedContent = document.content
+        lastRenderedRevision = document.editorRevision
         let requestedSelection = selection.flatMap { webSelection(for: $0) }
-        sendDocument(document.content, selection: requestedSelection ?? preservedSelection())
+        sendDocument(
+          document.content,
+          selection: requestedSelection ?? preservedSelection(),
+          restoreScroll: requestedSelection == nil
+        )
       } else if let selection, selection != lastSelectionRequest {
         reveal(selection)
       }
     }
 
     func detach() {
+      if isReady {
+        evaluate(method: "releaseDocument", argument: document.url.path)
+      }
       document.detachEditorCommandHandler()
       onSave = nil
       webView = nil
@@ -257,6 +272,7 @@ struct CodeMirrorEditorView: NSViewRepresentable {
         attachCommandHandler()
         lastConfiguration = nil
         lastRenderedContent = nil
+        lastRenderedRevision = nil
         update(
           document: document,
           selection: lastSelectionRequest,
@@ -265,20 +281,34 @@ struct CodeMirrorEditorView: NSViewRepresentable {
           onSave: onSave ?? {}
         )
       case "change":
-        guard let content = body["content"] as? String,
-          let selection = WebEditorSelection(dictionary: body["selection"] as? [String: Any]),
-          let canUndo = body["canUndo"] as? Bool,
-          let canRedo = body["canRedo"] as? Bool
+        guard let change = ProjectEditorWebChange(messageBody: body)
         else {
           return
         }
-        lastRenderedContent = content
-        lastEditorSelection = selection
-        document.updateFromEditor(
-          content,
-          canUndo: canUndo,
-          canRedo: canRedo
+        do {
+          _ = try document.applyEditorChange(change)
+          lastRenderedContent = document.content
+          lastRenderedRevision = document.editorRevision
+          lastEditorSelection = WebEditorSelection(
+            from: change.selection.from,
+            to: change.selection.to
+          )
+          lastEditorScrollTop = change.scrollTop
+        } catch {
+          // A stale or malformed transaction must not be silently dropped.
+          // Send the authoritative native snapshot back to the web editor.
+          resynchronizeEditor()
+        }
+      case "selection":
+        guard let change = ProjectEditorWebSelectionChange(messageBody: body) else {
+          return
+        }
+        document.applyEditorSelection(change)
+        lastEditorSelection = WebEditorSelection(
+          from: change.selection.from,
+          to: change.selection.to
         )
+        lastEditorScrollTop = change.scrollTop
       case "save":
         onSave?()
       default:
@@ -319,13 +349,31 @@ struct CodeMirrorEditorView: NSViewRepresentable {
       }
     }
 
-    private func sendDocument(_ content: String, selection: WebEditorSelection?) {
-      let argument = WebEditorDocument(content: content, selection: selection)
+    private func sendDocument(
+      _ content: String,
+      selection: WebEditorSelection?,
+      restoreScroll: Bool = true
+    ) {
+      let argument = WebEditorDocument(
+        content: content,
+        revision: document.editorRevision,
+        selection: selection,
+        scrollTop: restoreScroll ? preservedScrollTop() : nil
+      )
       evaluate(method: "setDocument", argument: argument)
+      lastRenderedContent = content
+      lastRenderedRevision = document.editorRevision
       if let selection {
         lastEditorSelection = selection
       }
       applySelectionRequestIfNeeded()
+    }
+
+    private func resynchronizeEditor() {
+      guard isReady else {
+        return
+      }
+      sendDocument(document.content, selection: preservedSelection())
     }
 
     private func webSelection(for selection: ProjectEditorSelection) -> WebEditorSelection? {
@@ -375,6 +423,9 @@ struct CodeMirrorEditorView: NSViewRepresentable {
     }
 
     private func preservedSelection() -> WebEditorSelection? {
+      if let selection = document.editorSelection {
+        return WebEditorSelection(from: selection.location, to: selection.end)
+      }
       guard let lastEditorSelection else {
         return nil
       }
@@ -383,6 +434,13 @@ struct CodeMirrorEditorView: NSViewRepresentable {
         from: min(lastEditorSelection.from, length),
         to: min(lastEditorSelection.to, length)
       )
+    }
+
+    private func preservedScrollTop() -> Double? {
+      if document.editorScrollTop > 0 {
+        return document.editorScrollTop
+      }
+      return lastEditorScrollTop
     }
 
     private func evaluate<T: Encodable>(method: String, argument: T) {
@@ -415,7 +473,9 @@ private struct WebEditorConfiguration: Codable, Equatable {
 
 private struct WebEditorDocument: Codable {
   let content: String
+  let revision: UInt64
   let selection: WebEditorSelection?
+  let scrollTop: Double?
 }
 
 private struct WebEditorSelection: Codable {
@@ -436,4 +496,169 @@ private struct WebEditorSelection: Codable {
     }
     self.init(from: from, to: to)
   }
+}
+
+@MainActor
+struct CodeMirrorDiffView: NSViewRepresentable {
+  let path: String
+  let patch: String
+  let fontSize: CGFloat
+
+  init(path: String, patch: String, fontSize: CGFloat = 12) {
+    self.path = path
+    self.patch = patch
+    self.fontSize = fontSize
+  }
+
+  func makeCoordinator() -> Coordinator {
+    Coordinator()
+  }
+
+  func makeNSView(context: Context) -> WKWebView {
+    let configuration = WKWebViewConfiguration()
+    let userContentController = WKUserContentController()
+    userContentController.add(context.coordinator, name: "clairDiffViewer")
+    configuration.userContentController = userContentController
+
+    let editorRootURL = Bundle.main.url(
+      forResource: "index",
+      withExtension: "html",
+      subdirectory: "EditorWeb"
+    )?.deletingLastPathComponent()
+    if let editorRootURL {
+      configuration.setURLSchemeHandler(
+        CodeMirrorEditorSchemeHandler(rootURL: editorRootURL),
+        forURLScheme: "clair-editor"
+      )
+    }
+
+    let webView = WKWebView(frame: .zero, configuration: configuration)
+    webView.navigationDelegate = context.coordinator
+    webView.underPageBackgroundColor = WorkspaceChrome.nsCanvas
+    context.coordinator.webView = webView
+    context.coordinator.update(path: path, patch: patch, fontSize: fontSize)
+
+    if editorRootURL != nil {
+      webView.load(URLRequest(url: URL(string: "clair-editor://editor/diff.html")!))
+    } else {
+      webView.loadHTMLString(
+        "<html><body style=\"background:#121416;color:#f1f3ef;font:13px monospace\">Editor resource is missing.</body></html>",
+        baseURL: nil
+      )
+    }
+    return webView
+  }
+
+  func updateNSView(_ webView: WKWebView, context: Context) {
+    context.coordinator.webView = webView
+    context.coordinator.update(path: path, patch: patch, fontSize: fontSize)
+  }
+
+  static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
+    webView.navigationDelegate = nil
+    webView.configuration.userContentController.removeScriptMessageHandler(
+      forName: "clairDiffViewer"
+    )
+    coordinator.detach()
+  }
+
+  @MainActor
+  final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+    weak var webView: WKWebView?
+    private var isReady = false
+    private var lastConfiguration: WebDiffConfiguration?
+    private var lastPatch: String?
+
+    func update(path: String, patch: String, fontSize: CGFloat) {
+      guard isReady else {
+        pendingPath = path
+        pendingPatch = patch
+        pendingFontSize = fontSize
+        return
+      }
+
+      let nextConfiguration = WebDiffConfiguration(
+        path: path,
+        fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+        fontSize: fontSize,
+        background: "#121416",
+        textColor: "#f1f3ef",
+        wordWrap: false
+      )
+      if lastConfiguration != nextConfiguration {
+        lastConfiguration = nextConfiguration
+        evaluate(method: "configure", argument: nextConfiguration)
+      }
+
+      if lastPatch != patch {
+        lastPatch = patch
+        evaluate(method: "setDiff", argument: patch)
+      }
+    }
+
+    func detach() {
+      webView = nil
+      isReady = false
+    }
+
+    private var pendingPath: String?
+    private var pendingPatch: String?
+    private var pendingFontSize: CGFloat = 12
+
+    func userContentController(
+      _ userContentController: WKUserContentController,
+      didReceive message: WKScriptMessage
+    ) {
+      guard message.name == "clairDiffViewer", let body = message.body as? [String: Any],
+        let type = body["type"] as? String
+      else {
+        return
+      }
+
+      if type == "ready" {
+        isReady = true
+        lastConfiguration = nil
+        lastPatch = nil
+        if let pendingPath, let pendingPatch {
+          update(path: pendingPath, patch: pendingPatch, fontSize: pendingFontSize)
+        }
+      }
+    }
+
+    func webView(
+      _ webView: WKWebView,
+      didFinish navigation: WKNavigation!
+    ) {
+      WorkspaceChrome.configureThinScrollbars(in: webView)
+    }
+
+    func webView(
+      _ webView: WKWebView,
+      didFail navigation: WKNavigation!,
+      withError _: Error
+    ) {
+      isReady = false
+    }
+
+    private func evaluate<T: Encodable>(method: String, argument: T) {
+      guard let webView else {
+        return
+      }
+      guard let data = try? JSONEncoder().encode(argument),
+        let json = String(data: data, encoding: .utf8)
+      else {
+        return
+      }
+      webView.evaluateJavaScript("window.clairDiffViewer?.\(method)(\(json));")
+    }
+  }
+}
+
+private struct WebDiffConfiguration: Codable, Equatable {
+  let path: String
+  let fontFamily: String
+  let fontSize: CGFloat
+  let background: String
+  let textColor: String
+  let wordWrap: Bool
 }

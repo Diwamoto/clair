@@ -4,16 +4,35 @@ import Darwin
 import Foundation
 import SwiftUI
 
+/// Developer-only switch for exercising the AppKit editor adapter without
+/// changing the Stable default or importing the unverified CodeEdit package.
+enum ProjectEditorEngine {
+  static let nativeOptInDefaultsKey = "clair.editor.native-v1"
+
+  static func usesAppKitNativeEditor(
+    defaults: UserDefaults = .standard,
+    environment: [String: String] = ProcessInfo.processInfo.environment
+  ) -> Bool {
+    #if CLAIR_DEV
+      if defaults.object(forKey: nativeOptInDefaultsKey) != nil {
+        return defaults.bool(forKey: nativeOptInDefaultsKey)
+      }
+      guard let value = environment["CLAIR_NATIVE_EDITOR"]?.lowercased() else {
+        return false
+      }
+      return ["1", "true", "yes", "on"].contains(value)
+    #else
+      return false
+    #endif
+  }
+}
+
 enum ProjectEditorError: Error, Equatable, LocalizedError, Sendable {
   case fileMissing(path: String)
   case invalidUTF8(path: String)
   case readFailed(path: String, message: String)
   case writeFailed(path: String, message: String)
   case externalChangeDetected(path: String)
-  case historyUnavailable
-  case historyMalformed
-  case historyIO(String)
-  case historyEntryNotFound(UUID)
 
   var errorDescription: String? {
     switch self {
@@ -27,14 +46,6 @@ enum ProjectEditorError: Error, Equatable, LocalizedError, Sendable {
       "Clair could not save \(path): \(message)"
     case .externalChangeDetected(let path):
       "The file changed on disk while it was open: \(path)"
-    case .historyUnavailable:
-      "Clair's local editor history is unavailable. The file was not overwritten."
-    case .historyMalformed:
-      "Clair's local editor history is malformed. The file was not overwritten."
-    case .historyIO(let message):
-      "Clair could not update local editor history: \(message)"
-    case .historyEntryNotFound(let id):
-      "The local editor history entry \(id.uuidString) was not found."
     }
   }
 }
@@ -45,210 +56,9 @@ struct ProjectEditorSelection: Equatable, Sendable {
   let length: Int
 }
 
-enum ProjectLocalHistoryReason: String, Codable, CaseIterable, Sendable {
-  case save
-  case externalChange
-  case externalDeletion
-
-  var displayName: String {
-    switch self {
-    case .save:
-      "保存前"
-    case .externalChange:
-      "ディスク再読み込み前"
-    case .externalDeletion:
-      "ファイル削除前"
-    }
-  }
-}
-
-struct ProjectLocalHistoryEntry: Identifiable, Codable, Equatable, Sendable {
-  let id: UUID
-  let projectID: UUID
-  let filePath: String
-  let createdAt: Date
-  let reason: ProjectLocalHistoryReason
-  let content: String
-
-  var displayLabel: String {
-    "\(reason.displayName) · \(createdAt.formatted(date: .abbreviated, time: .shortened))"
-  }
-}
-
-struct ProjectLocalHistorySnapshot: Codable, Equatable, Sendable {
-  static let currentSchemaVersion = 1
-
-  var schemaVersion: Int
-  var entries: [ProjectLocalHistoryEntry]
-
-  static var empty: ProjectLocalHistorySnapshot {
-    ProjectLocalHistorySnapshot(
-      schemaVersion: currentSchemaVersion,
-      entries: []
-    )
-  }
-}
-
-@MainActor
-final class ProjectLocalHistoryStore {
-  static let currentSchemaVersion = ProjectLocalHistorySnapshot.currentSchemaVersion
-  static let maximumEntriesPerFile = 100
-
-  let fileURL: URL?
-
-  private let fileManager: FileManager
-  private let encoder: JSONEncoder
-  private let decoder: JSONDecoder
-
-  init(fileURL: URL?, fileManager: FileManager = .default) {
-    self.fileURL = fileURL
-    self.fileManager = fileManager
-
-    let encoder = JSONEncoder()
-    encoder.dateEncodingStrategy = .iso8601
-    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-    self.encoder = encoder
-
-    let decoder = JSONDecoder()
-    decoder.dateDecodingStrategy = .iso8601
-    self.decoder = decoder
-  }
-
-  static func makeDefault(
-    for profile: ClairRuntimeProfile,
-    fileManager: FileManager = .default
-  ) -> ProjectLocalHistoryStore {
-    let baseDirectory = fileManager.urls(
-      for: .applicationSupportDirectory,
-      in: .userDomainMask
-    ).first
-    let dataDirectory = baseDirectory.map(profile.applicationSupportURL)
-    let fileURL = dataDirectory?.appendingPathComponent(
-      "editor-history-v1.json",
-      isDirectory: false
-    )
-    return ProjectLocalHistoryStore(fileURL: fileURL, fileManager: fileManager)
-  }
-
-  func load() throws -> ProjectLocalHistorySnapshot {
-    guard let fileURL else {
-      throw ProjectEditorError.historyUnavailable
-    }
-    guard fileManager.fileExists(atPath: fileURL.path) else {
-      return .empty
-    }
-
-    let data: Data
-    do {
-      data = try Data(contentsOf: fileURL)
-    } catch {
-      throw ProjectEditorError.historyIO(error.localizedDescription)
-    }
-
-    let snapshot: ProjectLocalHistorySnapshot
-    do {
-      snapshot = try decoder.decode(ProjectLocalHistorySnapshot.self, from: data)
-    } catch {
-      throw ProjectEditorError.historyMalformed
-    }
-
-    guard snapshot.schemaVersion == ProjectLocalHistorySnapshot.currentSchemaVersion else {
-      throw ProjectEditorError.historyMalformed
-    }
-    return snapshot
-  }
-
-  func entries(
-    for projectID: UUID,
-    fileURL: URL,
-    rootURL: URL
-  ) throws -> [ProjectLocalHistoryEntry] {
-    let filePath = Self.relativePath(for: fileURL, rootURL: rootURL)
-    return try load().entries
-      .filter { $0.projectID == projectID && $0.filePath == filePath }
-      .sorted {
-        if $0.createdAt == $1.createdAt {
-          return $0.id.uuidString > $1.id.uuidString
-        }
-        return $0.createdAt > $1.createdAt
-      }
-  }
-
-  @discardableResult
-  func record(
-    projectID: UUID,
-    fileURL: URL,
-    rootURL: URL,
-    content: String,
-    reason: ProjectLocalHistoryReason,
-    createdAt: Date = Date()
-  ) throws -> ProjectLocalHistoryEntry {
-    var snapshot = try load()
-    let entry = ProjectLocalHistoryEntry(
-      id: UUID(),
-      projectID: projectID,
-      filePath: Self.relativePath(for: fileURL, rootURL: rootURL),
-      createdAt: createdAt,
-      reason: reason,
-      content: content
-    )
-    snapshot.entries.append(entry)
-
-    let filePath = entry.filePath
-    let matchingEntries = snapshot.entries
-      .filter { $0.projectID == projectID && $0.filePath == filePath }
-      .sorted {
-        if $0.createdAt == $1.createdAt {
-          return $0.id.uuidString < $1.id.uuidString
-        }
-        return $0.createdAt < $1.createdAt
-      }
-    if matchingEntries.count > Self.maximumEntriesPerFile {
-      let removedIDs = Set(
-        matchingEntries
-          .prefix(matchingEntries.count - Self.maximumEntriesPerFile)
-          .map(\.id)
-      )
-      snapshot.entries.removeAll { removedIDs.contains($0.id) }
-    }
-
-    try save(snapshot)
-    return entry
-  }
-
-  private func save(_ snapshot: ProjectLocalHistorySnapshot) throws {
-    guard let fileURL else {
-      throw ProjectEditorError.historyUnavailable
-    }
-
-    do {
-      try fileManager.createDirectory(
-        at: fileURL.deletingLastPathComponent(),
-        withIntermediateDirectories: true,
-        attributes: nil
-      )
-      let data = try encoder.encode(snapshot)
-      try data.write(to: fileURL, options: [.atomic])
-    } catch let error as ProjectEditorError {
-      throw error
-    } catch {
-      throw ProjectEditorError.historyIO(error.localizedDescription)
-    }
-  }
-
-  private static func relativePath(for fileURL: URL, rootURL: URL) -> String {
-    let rootPath = rootURL.standardizedFileURL.path
-    let filePath = fileURL.standardizedFileURL.path
-    let prefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
-    if filePath.hasPrefix(prefix) {
-      return String(filePath.dropFirst(prefix.count))
-    }
-    return filePath
-  }
-}
-
 final class ProjectEditorFileWatcher: @unchecked Sendable {
   private let fileURL: URL
+  private let parentURL: URL
   private let queue: DispatchQueue
   private let onChange: @Sendable () -> Void
   private var source: DispatchSourceFileSystemObject?
@@ -256,6 +66,7 @@ final class ProjectEditorFileWatcher: @unchecked Sendable {
 
   init(fileURL: URL, onChange: @escaping @Sendable () -> Void) {
     self.fileURL = fileURL
+    self.parentURL = fileURL.deletingLastPathComponent()
     self.onChange = onChange
     self.queue = DispatchQueue(
       label: "com.diwamoto.clair.editor-file-watcher.\(UUID().uuidString)"
@@ -287,7 +98,13 @@ final class ProjectEditorFileWatcher: @unchecked Sendable {
     guard isStarted else {
       return
     }
-    let descriptor = Darwin.open(fileURL.path, O_EVTONLY)
+    // Keep watching the file while it exists, but fall back to its parent
+    // directory after an unlink/rename. Atomic saves replace the inode, and a
+    // file-only watcher cannot observe the file being recreated afterwards.
+    let watchURL = FileManager.default.fileExists(atPath: fileURL.path)
+      ? fileURL
+      : parentURL
+    let descriptor = Darwin.open(watchURL.path, O_EVTONLY)
     guard descriptor >= 0 else {
       return
     }
@@ -330,17 +147,22 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
   @Published private(set) var isReadOnly = false
   @Published private(set) var canUndo = false
   @Published private(set) var canRedo = false
-  @Published private(set) var historyEntries: [ProjectLocalHistoryEntry] = []
   @Published private(set) var lastErrorMessage: String?
   @Published private(set) var loadError: ProjectEditorError?
   @Published private(set) var selectionRequest: ProjectEditorSelection?
+  /// The editor viewport state belongs to the document, rather than to a
+  /// particular WKWebView instance. This keeps the caret and scroll position
+  /// when SwiftUI tears down and recreates a tab's view.
+  @Published private(set) var editorSelection: ProjectEditorUTF16Range?
+  @Published private(set) var editorScrollTop: Double = 0
+  var onEditorViewportChange: (() -> Void)?
 
   let projectID: UUID
   let rootURL: URL
 
   private let fileManager: FileManager
-  private let historyStore: ProjectLocalHistoryStore
   private let undoManager = UndoManager()
+  private let documentModel: ProjectEditorDocumentModel
   private var baselineContent: String
   private var diskData: Data?
   private var fileWatcher: ProjectEditorFileWatcher?
@@ -350,7 +172,6 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
     projectID: UUID,
     rootURL: URL,
     url: URL,
-    historyStore: ProjectLocalHistoryStore,
     fileManager: FileManager = .default
   ) {
     let canonicalURL = url.standardizedFileURL
@@ -360,7 +181,6 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
     self.projectID = projectID
     self.rootURL = rootURL.standardizedFileURL
     self.fileManager = fileManager
-    self.historyStore = historyStore
 
     let loadResult: Result<(content: String, data: Data), ProjectEditorError>
     do {
@@ -378,21 +198,43 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
       )
     }
 
+    let shouldWatch: Bool
     switch loadResult {
     case .success((let content, let data)):
       self.content = content
+      self.documentModel = ProjectEditorDocumentModel(content: content)
       self.baselineContent = content
       self.diskData = data
       self.loadError = nil
       self.isReadOnly = false
       self.isMissing = false
-      self.historyEntries =
-        (try? historyStore.entries(
-          for: projectID,
-          fileURL: canonicalURL,
-          rootURL: rootURL
-        )) ?? []
+      self.editorSelection = nil
 
+      shouldWatch = true
+    case .failure(.fileMissing):
+      self.content = ""
+      self.documentModel = ProjectEditorDocumentModel(content: "")
+      self.baselineContent = ""
+      self.diskData = nil
+      self.loadError = nil
+      self.isReadOnly = false
+      self.isMissing = true
+      self.editorSelection = nil
+      shouldWatch = true
+    case .failure(let error):
+      let errorContent = Self.errorContent(for: error)
+      self.content = errorContent
+      self.documentModel = ProjectEditorDocumentModel(content: errorContent)
+      self.baselineContent = errorContent
+      self.diskData = nil
+      self.loadError = error
+      self.isReadOnly = true
+      self.isMissing = false
+      self.editorSelection = nil
+      shouldWatch = false
+    }
+
+    if shouldWatch {
       let fileWatcher = ProjectEditorFileWatcher(fileURL: canonicalURL) { [weak self] in
         Task { @MainActor [weak self] in
           guard let self else {
@@ -407,34 +249,13 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
       }
       self.fileWatcher = fileWatcher
       fileWatcher.start()
-    case .failure(.fileMissing):
-      self.content = ""
-      self.baselineContent = ""
-      self.diskData = nil
-      self.loadError = nil
-      self.isReadOnly = false
-      self.isMissing = true
-      self.historyEntries = []
-      self.fileWatcher = nil
-    case .failure(let error):
-      let errorContent = Self.errorContent(for: error)
-      self.content = errorContent
-      self.baselineContent = errorContent
-      self.diskData = nil
-      self.loadError = error
-      self.isReadOnly = true
-      self.isMissing = false
-      self.historyEntries = []
+    } else {
       self.fileWatcher = nil
     }
   }
 
   deinit {
     fileWatcher?.stop()
-  }
-
-  var hasRecoveryHistory: Bool {
-    !historyEntries.isEmpty
   }
 
   func dismissError() {
@@ -517,6 +338,68 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
     refreshUndoState()
   }
 
+  /// Revision advertised to the WebKit bridge. Selection changes deliberately
+  /// leave this value unchanged; document edits advance it exactly once.
+  var editorRevision: UInt64 {
+    documentModel.revision
+  }
+
+  @discardableResult
+  func applyEditorChange(
+    _ change: ProjectEditorWebChange
+  ) throws -> ProjectEditorDocumentChange? {
+    guard !isReadOnly else {
+      return nil
+    }
+
+    let documentChange = try documentModel.apply(change.transaction())
+    content = documentModel.content
+    isDirty = content != baselineContent || isMissing
+    canUndo = change.canUndo
+    canRedo = change.canRedo
+    try? documentModel.setSelection(change.selection.range)
+    editorSelection = documentModel.selection
+    if let scrollTop = change.scrollTop, scrollTop.isFinite {
+      editorScrollTop = max(0, scrollTop)
+    }
+    onEditorViewportChange?()
+    return documentChange
+  }
+
+  func applyEditorSelection(_ change: ProjectEditorWebSelectionChange) {
+    try? documentModel.setSelection(change.selection.range)
+    editorSelection = documentModel.selection
+    if let scrollTop = change.scrollTop, scrollTop.isFinite {
+      editorScrollTop = max(0, scrollTop)
+    }
+    canUndo = change.canUndo
+    canRedo = change.canRedo
+    onEditorViewportChange?()
+  }
+
+  func updateEditorViewport(
+    selection: ProjectEditorUTF16Range?,
+    scrollTop: Double
+  ) {
+    try? documentModel.setSelection(selection)
+    editorSelection = documentModel.selection
+    if scrollTop.isFinite {
+      editorScrollTop = max(0, scrollTop)
+    }
+    onEditorViewportChange?()
+  }
+
+  func restoreEditorViewport(
+    selection: ProjectEditorUTF16Range?,
+    scrollTop: Double?
+  ) {
+    try? documentModel.setSelection(selection)
+    editorSelection = documentModel.selection
+    if let scrollTop, scrollTop.isFinite {
+      editorScrollTop = max(0, scrollTop)
+    }
+  }
+
   private static func errorContent(for error: ProjectEditorError) -> String {
     let message = error.localizedDescription
     return """
@@ -543,8 +426,11 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
       }
       return
     }
-    content = newContent
-    isDirty = newContent != baselineContent || isMissing
+    applyModelContent(
+      newContent,
+      source: .user,
+      undoUnit: .typing
+    )
     if let embeddedCanUndo, let embeddedCanRedo {
       canUndo = embeddedCanUndo
       canRedo = embeddedCanRedo
@@ -599,13 +485,6 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
     }
 
     let encodedContent = Data(content.utf8)
-    if currentDiskData != encodedContent, let currentDiskData {
-      guard let currentDiskContent = String(data: currentDiskData, encoding: .utf8) else {
-        throw ProjectEditorError.invalidUTF8(path: url.path)
-      }
-      try recordHistory(content: currentDiskContent, reason: .save)
-    }
-
     do {
       try encodedContent.write(to: url, options: [.atomic])
     } catch {
@@ -619,6 +498,7 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
     baselineContent = content
     isDirty = false
     isMissing = false
+    _ = documentModel.snapshot(reason: .save)
     if editorCommandHandler == nil {
       undoManager.removeAllActions()
       refreshUndoState()
@@ -637,7 +517,6 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
     }
 
     guard let currentDiskData else {
-      try recordHistory(content: content, reason: .externalDeletion)
       diskData = nil
       isMissing = true
       isDirty = true
@@ -649,9 +528,21 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
       throw ProjectEditorError.invalidUTF8(path: url.path)
     }
 
+    guard !isDirty else {
+      // Don't silently clobber unsaved edits with the external content; the
+      // user's buffer is the only copy of those edits now that we don't keep
+      // a separate history store, so leave it alone until they save or the
+      // conflict resolves itself (e.g. a future disk write matches it again).
+      lastErrorMessage = "ファイルが外部で変更されましたが、未保存の変更があるため自動では反映しませんでした。"
+      return false
+    }
+
     if diskContent != content {
-      try recordHistory(content: content, reason: .externalChange)
-      content = diskContent
+      documentModel.replaceSnapshot(content: diskContent)
+      content = documentModel.content
+      editorSelection = documentModel.selection
+      editorScrollTop = 0
+      onEditorViewportChange?()
     }
     diskData = currentDiskData
     baselineContent = diskContent
@@ -659,14 +550,8 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
     isMissing = false
     undoManager.removeAllActions()
     refreshUndoState()
+    _ = documentModel.snapshot(reason: .initialLoad)
     return true
-  }
-
-  func restoreHistoryEntry(id: UUID) throws {
-    guard let entry = historyEntries.first(where: { $0.id == id }) else {
-      throw ProjectEditorError.historyEntryNotFound(id)
-    }
-    replaceContent(entry.content, actionName: "Restore History")
   }
 
   private func applyContent(
@@ -689,9 +574,48 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
       }
       undoManager.setActionName(actionName)
     }
-    content = newContent
-    isDirty = newContent != baselineContent || isMissing
+    applyModelContent(
+      newContent,
+      source: .user,
+      undoUnit: .typing
+    )
     refreshUndoState()
+  }
+
+  private func applyModelContent(
+    _ newContent: String,
+    source: ProjectEditorChangeSource,
+    undoUnit: ProjectEditorUndoUnit
+  ) {
+    guard newContent != documentModel.content else {
+      return
+    }
+
+    let transaction = ProjectEditorTransaction(
+      baseRevision: documentModel.revision,
+      edits: [
+        ProjectEditorReplacement(
+          range: ProjectEditorUTF16Range(
+            location: 0,
+            length: documentModel.utf16Length
+          ),
+          text: newContent
+        )
+      ],
+      source: source,
+      undoUnit: undoUnit
+    )
+    do {
+      _ = try documentModel.apply(transaction)
+    } catch {
+      // A full replacement is the compatibility path for the NSTextView
+      // fallback. Its range is built from the same model it replaces, so a
+      // failure indicates an internal invariant breach; retain the old text
+      // rather than letting the two representations diverge.
+      return
+    }
+    content = documentModel.content
+    isDirty = content != baselineContent || isMissing
   }
 
   private func readDiskData() throws -> Data? {
@@ -705,24 +629,6 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
         message: error.localizedDescription
       )
     }
-  }
-
-  private func recordHistory(
-    content: String,
-    reason: ProjectLocalHistoryReason
-  ) throws {
-    _ = try historyStore.record(
-      projectID: projectID,
-      fileURL: url,
-      rootURL: rootURL,
-      content: content,
-      reason: reason
-    )
-    historyEntries = try historyStore.entries(
-      for: projectID,
-      fileURL: url,
-      rootURL: rootURL
-    )
   }
 
   private func refreshUndoState() {
@@ -1233,6 +1139,9 @@ struct ProjectSourceEditorView: NSViewRepresentable {
     scrollView.documentView = textView
     WorkspaceChrome.configureThinScrollbars(in: scrollView)
     context.coordinator.textView = textView
+    context.coordinator.scrollView = scrollView
+    context.coordinator.startObservingScroll()
+    context.coordinator.restoreEditorViewport()
     return scrollView
   }
 
@@ -1260,6 +1169,7 @@ struct ProjectSourceEditorView: NSViewRepresentable {
       }
     }
     textView.applySyntaxHighlighting(for: document.url.pathExtension)
+    context.coordinator.restoreEditorViewport()
     applySelectionIfNeeded(to: textView, context: context)
   }
 
@@ -1282,20 +1192,104 @@ struct ProjectSourceEditorView: NSViewRepresentable {
     guard let textView = nsView.documentView as? ProjectSourceTextView else {
       return
     }
+    coordinator.stopObservingScroll()
     textView.delegate = nil
     textView.onSave = nil
     coordinator.textView = nil
+    coordinator.scrollView = nil
   }
 
   @MainActor
   final class Coordinator: NSObject, NSTextViewDelegate {
     let document: ProjectEditorTab
     weak var textView: NSTextView?
+    weak var scrollView: NSScrollView?
     var isUpdatingFromModel = false
     var lastAppliedSelection: ProjectEditorSelection?
+    private var scrollObserver: NSObjectProtocol?
 
     init(document: ProjectEditorTab) {
       self.document = document
+    }
+
+    func startObservingScroll() {
+      guard let scrollView, scrollObserver == nil else {
+        return
+      }
+      scrollView.contentView.postsBoundsChangedNotifications = true
+      scrollObserver = NotificationCenter.default.addObserver(
+        forName: NSView.boundsDidChangeNotification,
+        object: scrollView.contentView,
+        queue: .main
+      ) { [weak self] _ in
+        Task { @MainActor [weak self] in
+          self?.captureViewport()
+        }
+      }
+    }
+
+    func stopObservingScroll() {
+      if let scrollObserver {
+        NotificationCenter.default.removeObserver(scrollObserver)
+        self.scrollObserver = nil
+      }
+    }
+
+    func restoreEditorViewport() {
+      guard let textView else {
+        return
+      }
+
+      let documentLength = textView.string.utf16.count
+      let selection = document.editorSelection
+      let range =
+        selection.map {
+          let location = min(max(0, $0.location), documentLength)
+          let length = min(max(0, $0.length), documentLength - location)
+          return NSRange(location: location, length: length)
+        } ?? NSRange(location: 0, length: 0)
+
+      isUpdatingFromModel = true
+      textView.setSelectedRange(range)
+      isUpdatingFromModel = false
+
+      guard document.editorScrollTop.isFinite else {
+        return
+      }
+      let scrollTop = max(0, document.editorScrollTop)
+      DispatchQueue.main.async { @MainActor [weak self] in
+        guard let self, let scrollView = self.scrollView else {
+          return
+        }
+        var origin = scrollView.contentView.bounds.origin
+        origin.y = scrollTop
+        self.isUpdatingFromModel = true
+        scrollView.contentView.scroll(to: origin)
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+        self.isUpdatingFromModel = false
+      }
+    }
+
+    func captureViewport() {
+      guard !isUpdatingFromModel, let textView, let scrollView else {
+        return
+      }
+      let selectedRange = textView.selectedRange()
+      let selection: ProjectEditorUTF16Range? =
+        selectedRange.location == NSNotFound
+        ? nil
+        : ProjectEditorUTF16Range(
+          location: selectedRange.location,
+          length: selectedRange.length
+        )
+      let scrollTop = max(0, Double(scrollView.contentView.bounds.origin.y))
+      guard
+        document.editorSelection != selection
+          || document.editorScrollTop != scrollTop
+      else {
+        return
+      }
+      document.updateEditorViewport(selection: selection, scrollTop: scrollTop)
     }
 
     func textViewDidChange(_ notification: Notification) {
@@ -1309,6 +1303,10 @@ struct ProjectSourceEditorView: NSViewRepresentable {
       (textView as? ProjectSourceTextView)?.applySyntaxHighlighting(
         for: document.url.pathExtension
       )
+    }
+
+    func textViewDidChangeSelection(_ notification: Notification) {
+      captureViewport()
     }
 
     func undoManager(for textView: NSTextView) -> UndoManager? {

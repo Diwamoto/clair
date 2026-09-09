@@ -84,6 +84,7 @@ struct ClairApplication: App {
     }
     .defaultSize(width: 980, height: 620)
     .windowStyle(.hiddenTitleBar)
+    .windowResizability(.contentMinSize)
     .commands {
       ClairCommandMenu(surface: commandSurface)
       ClairUpdateCommands(updater: updater)

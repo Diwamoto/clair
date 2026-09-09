@@ -4,7 +4,7 @@ import SwiftUI
 /// First-class workspace activities surfaced by the native shell.
 ///
 /// The Interaction Lab contract keeps Files, Search, Git, Review, and
-/// Notifications/History as the only always-present core navigation. Advanced
+/// Notifications as the only always-present core navigation. Advanced
 /// tools (Quick Open overlay, Command Window, Agent launcher, pane layout
 /// actions) stay out of the default rail.
 enum WorkspaceActivity: String, CaseIterable, Identifiable, Codable, Sendable {
@@ -44,7 +44,7 @@ enum WorkspaceActivity: String, CaseIterable, Identifiable, Codable, Sendable {
     case .review:
       "管理対象worktreeのブランチを確認"
     case .activity:
-      "通知、Agentのアクティビティ、ファイル履歴を表示"
+      "通知、Agentのアクティビティを表示"
     }
   }
 

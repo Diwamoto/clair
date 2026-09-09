@@ -17,7 +17,10 @@ export default defineConfig({
     outDir: "dist",
     emptyOutDir: true,
     rollupOptions: {
-      input: "index.html",
+      input: {
+        index: "index.html",
+        diff: "diff.html",
+      },
     },
   },
 });

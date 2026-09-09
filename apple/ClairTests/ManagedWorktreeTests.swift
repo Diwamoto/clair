@@ -262,17 +262,15 @@ final class ManagedWorktreeTests: XCTestCase {
     )
     XCTAssertEqual(decodedAgentSession, agentSession)
 
-    let leaf = ProjectPaneLeaf(tabs: [tab], activeTabID: tab.id)
+    let leaf = ProjectPaneLeaf(activeTabID: tab.id)
 
     let surface = ProjectSurfaceModel(
       projectID: projectID,
       rootURL: fixture.container,
-      historyStore: ProjectLocalHistoryStore(
-        fileURL: fixture.container.appendingPathComponent("history.json")
-      ),
       snapshot: ProjectSurfaceSnapshot(
         schemaVersion: ProjectSurfaceSnapshot.currentSchemaVersion,
         projectID: projectID,
+        tabs: [tab],
         root: .leaf(leaf),
         focusedPaneID: leaf.id,
         maximizedPaneID: nil,
@@ -339,10 +337,7 @@ final class ManagedWorktreeTests: XCTestCase {
     )
     let surface = ProjectSurfaceModel(
       projectID: projectID,
-      rootURL: projectRoot,
-      historyStore: ProjectLocalHistoryStore(
-        fileURL: fixture.container.appendingPathComponent("history-3.json")
-      )
+      rootURL: projectRoot
     )
     let coordinator = AgentWorkflowCoordinator(
       activityStore: AgentActivityStore(fileURL: nil),
@@ -360,7 +355,7 @@ final class ManagedWorktreeTests: XCTestCase {
       )
     )
     XCTAssertTrue(coordinator.lastErrorMessage?.contains("no longer available") == true)
-    XCTAssertTrue(surface.layout.leaves.allSatisfy { $0.tabs.isEmpty })
+    XCTAssertTrue(surface.tabStore.isEmpty)
   }
 }
 

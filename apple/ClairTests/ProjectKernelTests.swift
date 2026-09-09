@@ -367,9 +367,6 @@ final class ProjectKernelTests: XCTestCase {
     let surface = ProjectSurfaceModel(
       projectID: projectID,
       rootURL: root,
-      historyStore: ProjectLocalHistoryStore(
-        fileURL: fixture.root.appendingPathComponent("restored-tree-history.json")
-      ),
       snapshot: workspaceSnapshot
     )
 
@@ -527,6 +524,7 @@ final class ProjectKernelTests: XCTestCase {
     surface.endTerminal()
     surface.closePane(id: lowerPaneID)
     XCTAssertEqual(surface.paneIDs.count, 2)
+    XCTAssertTrue(surface.tabStore.contains { $0.id == movedTabID })
     XCTAssertTrue(surface.workspaceSnapshot.validated(for: surface.projectID) != nil)
   }
 
@@ -649,13 +647,9 @@ final class ProjectKernelTests: XCTestCase {
     let secondFile = root.appendingPathComponent("second.txt")
     try Data("old first\n".utf8).write(to: firstFile)
     try Data("old second\n".utf8).write(to: secondFile)
-    let historyStore = ProjectLocalHistoryStore(
-      fileURL: fixture.root.appendingPathComponent("navigation-history.json")
-    )
     let surface = ProjectSurfaceModel(
       projectID: UUID(),
-      rootURL: root,
-      historyStore: historyStore
+      rootURL: root
     )
 
     let quickOpen = surface.quickOpenItems(matching: "first")
@@ -689,10 +683,7 @@ final class ProjectKernelTests: XCTestCase {
     try Data("before\n".utf8).write(to: file)
     let surface = ProjectSurfaceModel(
       projectID: UUID(),
-      rootURL: root,
-      historyStore: ProjectLocalHistoryStore(
-        fileURL: fixture.root.appendingPathComponent("search-watch-history.json")
-      )
+      rootURL: root
     )
 
     surface.search(query: "after")
@@ -706,40 +697,6 @@ final class ProjectKernelTests: XCTestCase {
     XCTAssertTrue(surface.searchResults.isEmpty)
     surface.search(query: "after")
     XCTAssertEqual(surface.searchResults.first?.relativePath, "watched.txt")
-  }
-
-  func testProjectHistoryBrowserRestoresNestedEntryIntoDirtyBuffer() throws {
-    let fixture = try Fixture()
-    let root = try fixture.makeDirectory(named: "history-browser-project")
-    let sources = root.appendingPathComponent("Sources", isDirectory: true)
-    try FileManager.default.createDirectory(at: sources, withIntermediateDirectories: true)
-    let file = sources.appendingPathComponent("history.txt")
-    try Data("after\n".utf8).write(to: file)
-    let projectID = UUID()
-    let historyStore = ProjectLocalHistoryStore(
-      fileURL: fixture.root.appendingPathComponent("history-browser.json")
-    )
-    let surface = ProjectSurfaceModel(
-      projectID: projectID,
-      rootURL: root,
-      historyStore: historyStore
-    )
-    XCTAssertNil(surface.fileTree.node(withID: file.path))
-
-    let entry = try historyStore.record(
-      projectID: projectID,
-      fileURL: file,
-      rootURL: root,
-      content: "before\n",
-      reason: .save
-    )
-
-    surface.restoreHistoryEntry(entry)
-
-    XCTAssertEqual(surface.activeTab?.content, "before\n")
-    XCTAssertTrue(surface.activeTab?.isDirty == true)
-    XCTAssertEqual(try String(contentsOf: file), "after\n")
-    XCTAssertTrue(surface.lastNavigationStatusMessage?.contains("history.txt") == true)
   }
 
   private func splitRatios(in node: ProjectPaneNode) -> [Double] {

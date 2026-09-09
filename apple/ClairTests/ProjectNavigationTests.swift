@@ -92,6 +92,28 @@ final class ProjectNavigationTests: XCTestCase {
     XCTAssertTrue(manyFilesNode.hasMoreChildren)
   }
 
+  func testPrefetchedDirectoryCacheRebuildsExpandedTreeWithoutWalkingDisk() throws {
+    let fixture = try NavigationFixture()
+    let sources = fixture.root.appendingPathComponent("Sources", isDirectory: true)
+    let nested = sources.appendingPathComponent("Nested", isDirectory: true)
+    try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+    let file = nested.appendingPathComponent("main.swift")
+    try Data("print(\"cached\")\n".utf8).write(to: file)
+
+    let cache = ProjectFileTreeScanner.prefetchDirectoryCache(rootURL: fixture.root)
+    XCTAssertNotNil(cache[fixture.root.path])
+    XCTAssertNotNil(cache[sources.path])
+    XCTAssertNotNil(cache[nested.path])
+
+    let snapshot = ProjectFileTreeScanner.scanLoaded(
+      rootURL: fixture.root,
+      loadedDirectoryPaths: [fixture.root.path, sources.path, nested.path],
+      directoryCache: cache
+    )
+
+    XCTAssertEqual(snapshot.node(withID: file.path)?.name, "main.swift")
+  }
+
   func testWatcherGraphIsLimitedToLoadedDirectories() throws {
     let fixture = try NavigationFixture()
     var loadedPaths: Set<String> = [fixture.root.path]
@@ -182,50 +204,6 @@ final class ProjectNavigationTests: XCTestCase {
       String(data: try XCTUnwrap(preview.files.last?.replacementData), encoding: .utf8),
       "new new\n"
     )
-  }
-
-  func testHistoryEntriesAreProjectScopedAndNewestFirst() throws {
-    let fixture = try NavigationFixture()
-    let first = fixture.root.appendingPathComponent("first.txt")
-    let second = fixture.root.appendingPathComponent("second.txt")
-    try Data("first".utf8).write(to: first)
-    try Data("second".utf8).write(to: second)
-    let projectID = UUID()
-    let otherProjectID = UUID()
-    let store = ProjectLocalHistoryStore(
-      fileURL: fixture.root.appendingPathComponent("editor-history-v1.json")
-    )
-    let firstDate = Date(timeIntervalSince1970: 100)
-    let secondDate = Date(timeIntervalSince1970: 200)
-    _ = try store.record(
-      projectID: projectID,
-      fileURL: first,
-      rootURL: fixture.root,
-      content: "first-before",
-      reason: .save,
-      createdAt: firstDate
-    )
-    _ = try store.record(
-      projectID: otherProjectID,
-      fileURL: second,
-      rootURL: fixture.root,
-      content: "other",
-      reason: .save,
-      createdAt: secondDate
-    )
-    _ = try store.record(
-      projectID: projectID,
-      fileURL: second,
-      rootURL: fixture.root,
-      content: "second-before",
-      reason: .externalChange,
-      createdAt: secondDate
-    )
-
-    let entries = try store.entries(for: projectID)
-    XCTAssertEqual(entries.count, 2)
-    XCTAssertEqual(entries.first?.filePath, "second.txt")
-    XCTAssertEqual(entries.last?.filePath, "first.txt")
   }
 
   func testFileURLRejectsAbsoluteAndTraversalPaths() throws {

@@ -6,6 +6,35 @@ import XCTest
 
 @MainActor
 final class NativeEditorTests: XCTestCase {
+  func testAppKitNativeEditorRequiresExplicitDevOptIn() {
+    let suiteName = "clair-native-editor-engine-\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suiteName)!
+    defer {
+      defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    XCTAssertFalse(
+      ProjectEditorEngine.usesAppKitNativeEditor(
+        defaults: defaults,
+        environment: [:]
+      )
+    )
+    XCTAssertTrue(
+      ProjectEditorEngine.usesAppKitNativeEditor(
+        defaults: defaults,
+        environment: ["CLAIR_NATIVE_EDITOR": "1"]
+      )
+    )
+
+    defaults.set(false, forKey: ProjectEditorEngine.nativeOptInDefaultsKey)
+    XCTAssertFalse(
+      ProjectEditorEngine.usesAppKitNativeEditor(
+        defaults: defaults,
+        environment: ["CLAIR_NATIVE_EDITOR": "1"]
+      )
+    )
+  }
+
   func testEditorSavesOnlyAfterExplicitSaveAndUndoRestoresCleanState() throws {
     let fixture = try EditorFixture()
     let fileURL = try fixture.makeFile(named: "notes.txt", content: "before\n")
@@ -27,8 +56,6 @@ final class NativeEditorTests: XCTestCase {
 
     XCTAssertFalse(document.isDirty)
     XCTAssertEqual(try String(contentsOf: fileURL), "after\n")
-    XCTAssertEqual(document.historyEntries.first?.content, "before\n")
-    XCTAssertEqual(document.historyEntries.first?.reason, .save)
   }
 
   func testEditorPreservesUnicodeEmojiAndCombiningTextAsUTF8() throws {
@@ -156,30 +183,34 @@ final class NativeEditorTests: XCTestCase {
     XCTAssertEqual(storage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont, font)
   }
 
-  func testExternalRewriteWinsAndCapturesUnsavedBufferForRecovery() throws {
+  func testExternalRewriteWinsWhenTheTabHasNoUnsavedEdits() throws {
+    let fixture = try EditorFixture()
+    let fileURL = try fixture.makeFile(named: "agent.txt", content: "disk-v1\n")
+    let document = fixture.makeDocument(at: fileURL)
+
+    try Data("disk-v2 from agent\n".utf8).write(to: fileURL)
+    XCTAssertTrue(try document.refreshFromDisk())
+
+    XCTAssertEqual(document.content, "disk-v2 from agent\n")
+    XCTAssertFalse(document.isDirty)
+  }
+
+  func testExternalRewriteDoesNotClobberUnsavedEdits() throws {
     let fixture = try EditorFixture()
     let fileURL = try fixture.makeFile(named: "agent.txt", content: "disk-v1\n")
     let document = fixture.makeDocument(at: fileURL)
     document.replaceContent("unsaved-v2 日本語\n")
 
     try Data("disk-v3 from agent\n".utf8).write(to: fileURL)
-    XCTAssertTrue(try document.refreshFromDisk())
+    XCTAssertFalse(try document.refreshFromDisk())
 
-    XCTAssertEqual(document.content, "disk-v3 from agent\n")
-    XCTAssertFalse(document.isDirty)
-    let recovery = try XCTUnwrap(
-      document.historyEntries.first { $0.reason == .externalChange }
-    )
-    XCTAssertEqual(recovery.content, "unsaved-v2 日本語\n")
-    XCTAssertEqual(try String(contentsOf: fileURL), "disk-v3 from agent\n")
-
-    try document.restoreHistoryEntry(id: recovery.id)
     XCTAssertEqual(document.content, "unsaved-v2 日本語\n")
     XCTAssertTrue(document.isDirty)
+    XCTAssertNotNil(document.lastErrorMessage)
     XCTAssertEqual(try String(contentsOf: fileURL), "disk-v3 from agent\n")
   }
 
-  func testSaveRefusesToOverwriteAnExternalChange() throws {
+  func testSaveRefusesToOverwriteAnExternalChangeAndKeepsTheUnsavedBuffer() throws {
     let fixture = try EditorFixture()
     let fileURL = try fixture.makeFile(named: "conflict.txt", content: "disk-v1\n")
     let document = fixture.makeDocument(at: fileURL)
@@ -194,16 +225,11 @@ final class NativeEditorTests: XCTestCase {
       )
     }
     XCTAssertEqual(try String(contentsOf: fileURL), "disk-v3 from agent\n")
-    XCTAssertEqual(document.content, "disk-v3 from agent\n")
-    XCTAssertFalse(document.isDirty)
-    XCTAssertTrue(
-      document.historyEntries.contains {
-        $0.reason == .externalChange && $0.content == "unsaved-v2\n"
-      }
-    )
+    XCTAssertEqual(document.content, "unsaved-v2\n")
+    XCTAssertTrue(document.isDirty)
   }
 
-  func testExternalDeletionRetainsTheTabForRecovery() throws {
+  func testExternalDeletionRetainsTheTabAndItsBufferContent() throws {
     let fixture = try EditorFixture()
     let fileURL = try fixture.makeFile(named: "deleted.txt", content: "keep me\n")
     let document = fixture.makeDocument(at: fileURL)
@@ -213,10 +239,7 @@ final class NativeEditorTests: XCTestCase {
 
     XCTAssertTrue(document.isMissing)
     XCTAssertTrue(document.isDirty)
-    let recovery = try XCTUnwrap(
-      document.historyEntries.first { $0.reason == .externalDeletion }
-    )
-    XCTAssertEqual(recovery.content, "keep me\n")
+    XCTAssertEqual(document.content, "keep me\n")
   }
 
   func testSurfaceKeepsMultipleEditorTabsIndependent() throws {
@@ -225,8 +248,7 @@ final class NativeEditorTests: XCTestCase {
     let secondURL = try fixture.makeFile(named: "second.txt", content: "two\n")
     let surface = ProjectSurfaceModel(
       projectID: fixture.projectID,
-      rootURL: fixture.root,
-      historyStore: fixture.historyStore
+      rootURL: fixture.root
     )
 
     surface.select(nodeID: firstURL.standardizedFileURL.path)
@@ -242,13 +264,29 @@ final class NativeEditorTests: XCTestCase {
     XCTAssertFalse(second.isDirty)
   }
 
-  func testWatcherReloadsAnExternalRewrite() async throws {
+  func testWatcherReloadsAnExternalRewriteWhenTheTabIsClean() async throws {
     let fixture = try EditorFixture()
     let fileURL = try fixture.makeFile(named: "watched.txt", content: "before\n")
     let surface = ProjectSurfaceModel(
       projectID: fixture.projectID,
-      rootURL: fixture.root,
-      historyStore: fixture.historyStore
+      rootURL: fixture.root
+    )
+    surface.select(nodeID: fileURL.standardizedFileURL.path)
+    let document = try XCTUnwrap(surface.activeTab)
+
+    try Data("external\n".utf8).write(to: fileURL)
+
+    await waitForDocument(document) { document in
+      document.content == "external\n" && !document.isDirty
+    }
+  }
+
+  func testWatcherDoesNotClobberUnsavedEditsOnExternalRewrite() async throws {
+    let fixture = try EditorFixture()
+    let fileURL = try fixture.makeFile(named: "watched.txt", content: "before\n")
+    let surface = ProjectSurfaceModel(
+      projectID: fixture.projectID,
+      rootURL: fixture.root
     )
     surface.select(nodeID: fileURL.standardizedFileURL.path)
     let document = try XCTUnwrap(surface.activeTab)
@@ -257,13 +295,38 @@ final class NativeEditorTests: XCTestCase {
     try Data("external\n".utf8).write(to: fileURL)
 
     await waitForDocument(document) { document in
-      document.content == "external\n" && !document.isDirty
+      document.lastErrorMessage != nil
     }
-    XCTAssertTrue(
-      document.historyEntries.contains {
-        $0.reason == .externalChange && $0.content == "unsaved\n"
-      }
+    XCTAssertEqual(document.content, "unsaved\n")
+    XCTAssertTrue(document.isDirty)
+    XCTAssertEqual(try String(contentsOf: fileURL), "external\n")
+  }
+
+  func testWatcherKeepsWatchingAfterExternalDeletionAndRecreation() async throws {
+    let fixture = try EditorFixture()
+    let fileURL = try fixture.makeFile(named: "watched.txt", content: "before\n")
+    let surface = ProjectSurfaceModel(
+      projectID: fixture.projectID,
+      rootURL: fixture.root
     )
+    surface.select(nodeID: fileURL.standardizedFileURL.path)
+    let document = try XCTUnwrap(surface.activeTab)
+
+    try FileManager.default.removeItem(at: fileURL)
+    await waitForDocument(document) { document in
+      document.isMissing
+    }
+
+    try Data("recreated\n".utf8).write(to: fileURL)
+    await waitForDocument(document) { document in
+      document.lastErrorMessage != nil
+    }
+
+    // Recreating the path must not silently replace the tab's buffer. The
+    // user still needs to resolve the external-change conflict explicitly.
+    XCTAssertEqual(document.content, "before\n")
+    XCTAssertTrue(document.isDirty)
+    XCTAssertEqual(try String(contentsOf: fileURL), "recreated\n")
   }
 
   func testNonUTF8FileOpensReadOnlyErrorTab() throws {
@@ -272,8 +335,7 @@ final class NativeEditorTests: XCTestCase {
     try Data([0xFF, 0xFE, 0x00]).write(to: fileURL)
     let surface = ProjectSurfaceModel(
       projectID: fixture.projectID,
-      rootURL: fixture.root,
-      historyStore: fixture.historyStore
+      rootURL: fixture.root
     )
 
     surface.select(nodeID: fileURL.standardizedFileURL.path)
@@ -290,14 +352,28 @@ final class NativeEditorTests: XCTestCase {
     let tab = ProjectEditorTab(
       projectID: fixture.projectID,
       rootURL: fixture.root,
-      url: fileURL,
-      historyStore: fixture.historyStore
+      url: fileURL
     )
 
     XCTAssertTrue(tab.isMissing)
     XCTAssertFalse(tab.isReadOnly)
     XCTAssertNil(tab.loadError)
     XCTAssertEqual(tab.content, "")
+  }
+
+  func testWatcherLoadsFileCreatedAfterOpeningMissingTab() async throws {
+    let fixture = try EditorFixture()
+    let fileURL = fixture.root.appendingPathComponent("created-later.txt")
+    let document = ProjectEditorTab(
+      projectID: fixture.projectID,
+      rootURL: fixture.root,
+      url: fileURL
+    )
+
+    try Data("created\n".utf8).write(to: fileURL)
+    await waitForDocument(document) { document in
+      document.content == "created\n" && !document.isMissing && !document.isDirty
+    }
   }
 
   private func waitForDocument(
@@ -322,7 +398,6 @@ final class NativeEditorTests: XCTestCase {
 private final class EditorFixture {
   let projectID = UUID()
   let root: URL
-  let historyStore: ProjectLocalHistoryStore
 
   init() throws {
     root = FileManager.default.temporaryDirectory
@@ -330,9 +405,6 @@ private final class EditorFixture {
     try FileManager.default.createDirectory(
       at: root,
       withIntermediateDirectories: true
-    )
-    historyStore = ProjectLocalHistoryStore(
-      fileURL: root.appendingPathComponent("editor-history-v1.json")
     )
   }
 
@@ -346,8 +418,7 @@ private final class EditorFixture {
     ProjectEditorTab(
       projectID: projectID,
       rootURL: root,
-      url: url,
-      historyStore: historyStore
+      url: url
     )
   }
 
