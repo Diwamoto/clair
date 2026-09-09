@@ -6,7 +6,7 @@
 // each drew their own header because an artboard is a single still frame —
 // those are treated as internal parts of this shell, not as separate chrome.
 
-import type { CSSProperties, ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
 import { files, projects, type FileKind } from './data';
 import { color, line, mono } from './tokens';
@@ -159,46 +159,94 @@ export function MainHeader({ children, height = 44 }: { children: ReactNode; hei
 
 /* ── titlebar ─────────────────────────────────────────────────────────── */
 
-function Tab({ path, active }: { path: string; active: boolean }) {
-  const wb = useWorkbench();
-  const tab = wb.tabs.find((t) => t.path === path);
-  const file = byPath.get(path);
+/**
+ * Tabs are a fixed width so the row stays a steady rhythm however long a file
+ * name is. A name that does not fit is faded out at its right edge rather than
+ * ellipsised: the fade says "there is more" without spending characters on
+ * punctuation, and it keeps the label's ink even at the cut.
+ *
+ * 168px sits inside the 124–210px band the Main artboard specifies.
+ */
+const TAB_WIDTH = 168;
+const TAB_FADE = 18;
+
+const fadeRight: CSSProperties = {
+  WebkitMaskImage: `linear-gradient(to right, #000 calc(100% - ${TAB_FADE}px), transparent 100%)`,
+  maskImage: `linear-gradient(to right, #000 calc(100% - ${TAB_FADE}px), transparent 100%)`,
+};
+
+/** True while the label is wider than the room the tab gives it. */
+function useClipped(label: string) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [clipped, setClipped] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => setClipped(el.scrollWidth > el.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [label]);
+
+  return [ref, clipped] as const;
+}
+
+function Tab({
+  icon,
+  label,
+  active,
+  dot,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  active: boolean;
+  /** The unsaved / running marker the Main artboard draws after the label. */
+  dot?: boolean;
+  onClick: () => void;
+}) {
   const tint = active ? color.textPrimary : color.textTertiary;
+  const [labelRef, clipped] = useClipped(label);
   return (
     <button
-      onClick={() => {
-        wb.setActivePath(path);
-        wb.openFile(path);
-      }}
+      onClick={onClick}
+      title={label}
       style={{
         position: 'relative',
         display: 'flex',
         alignItems: 'center',
         gap: 7,
         padding: '0 11px',
-        minWidth: 124,
-        maxWidth: 210,
+        width: TAB_WIDTH,
+        flexShrink: 0,
         borderRadius: 7,
         background: 'transparent',
         height: '100%',
         alignSelf: 'stretch',
+        overflow: 'hidden',
       }}
     >
-      {file ? <FileIcon kind={file.kind} tint={tint} /> : <IconSparkle size={12} color={tint} />}
+      {icon}
       <span
+        ref={labelRef}
         style={{
           fontSize: 11,
           fontWeight: active ? 600 : 400,
           color: tint,
           whiteSpace: 'nowrap',
           overflow: 'hidden',
-          textOverflow: 'ellipsis',
           flex: 1,
+          textAlign: 'left',
+          // Only a name that actually runs past the tab is faded; one that
+          // fits keeps its last letters at full ink.
+          ...(clipped ? fadeRight : null),
         }}
       >
-        {file?.name ?? path}
+        {label}
       </span>
-      {tab?.dirty ? (
+      {dot ? (
         <span
           style={{
             width: 6,
@@ -223,6 +271,25 @@ function Tab({ path, active }: { path: string; active: boolean }) {
         />
       ) : null}
     </button>
+  );
+}
+
+function FileTab({ path, active }: { path: string; active: boolean }) {
+  const wb = useWorkbench();
+  const tab = wb.tabs.find((t) => t.path === path);
+  const file = byPath.get(path);
+  const tint = active ? color.textPrimary : color.textTertiary;
+  return (
+    <Tab
+      icon={file ? <FileIcon kind={file.kind} tint={tint} /> : <IconSparkle size={12} color={tint} />}
+      label={file?.name ?? path}
+      active={active}
+      dot={tab?.dirty}
+      onClick={() => {
+        wb.setActivePath(path);
+        wb.openFile(path);
+      }}
+    />
   );
 }
 
@@ -272,89 +339,21 @@ export function AppTitlebar({ extra }: { extra?: ReactNode }) {
 
         <div style={{ display: 'flex', alignItems: 'center', alignSelf: 'stretch', gap: 3, marginLeft: 4, minWidth: 0 }}>
           {wb.tabs.map((t) => (
-            <Tab key={t.path} path={t.path} active={t.path === wb.activePath && wb.screen === 'workspace'} />
+            <FileTab key={t.path} path={t.path} active={t.path === wb.activePath && wb.screen === 'workspace'} />
           ))}
-          <button
+          <Tab
+            icon={<IconSparkle size={12} color={wb.screen === 'activity' ? color.textPrimary : color.textTertiary} />}
+            label="Claude Code"
+            active={wb.screen === 'activity'}
+            dot
             onClick={() => wb.setScreen('activity')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 7,
-              padding: '0 11px',
-              minWidth: 124,
-              borderRadius: 7,
-              height: '100%',
-              alignSelf: 'stretch',
-              position: 'relative',
-            }}
-          >
-            <IconSparkle size={12} color={wb.screen === 'activity' ? color.textPrimary : color.textTertiary} />
-            <span
-              style={{
-                fontSize: 11,
-                fontWeight: wb.screen === 'activity' ? 600 : 400,
-                color: wb.screen === 'activity' ? color.textPrimary : color.textTertiary,
-                whiteSpace: 'nowrap',
-                flex: 1,
-              }}
-            >
-              Claude Code
-            </span>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: color.textQuaternary, flexShrink: 0 }} />
-            {wb.screen === 'activity' ? (
-              <div
-                style={{
-                  position: 'absolute',
-                  left: 11,
-                  right: 11,
-                  bottom: 0,
-                  height: 2,
-                  background: color.textPrimary,
-                  borderRadius: '1px 1px 0 0',
-                }}
-              />
-            ) : null}
-          </button>
-          <button
+          />
+          <Tab
+            icon={<IconCodex size={12} color={wb.screen === 'sessions' ? color.textPrimary : color.textTertiary} />}
+            label="codex"
+            active={wb.screen === 'sessions'}
             onClick={() => wb.setScreen('sessions')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 7,
-              padding: '0 11px',
-              minWidth: 124,
-              borderRadius: 7,
-              height: '100%',
-              alignSelf: 'stretch',
-              position: 'relative',
-            }}
-          >
-            <IconCodex size={12} color={wb.screen === 'sessions' ? color.textPrimary : color.textTertiary} />
-            <span
-              style={{
-                fontSize: 11,
-                fontWeight: wb.screen === 'sessions' ? 600 : 400,
-                color: wb.screen === 'sessions' ? color.textPrimary : color.textTertiary,
-                whiteSpace: 'nowrap',
-                flex: 1,
-              }}
-            >
-              codex
-            </span>
-            {wb.screen === 'sessions' ? (
-              <div
-                style={{
-                  position: 'absolute',
-                  left: 11,
-                  right: 11,
-                  bottom: 0,
-                  height: 2,
-                  background: color.textPrimary,
-                  borderRadius: '1px 1px 0 0',
-                }}
-              />
-            ) : null}
-          </button>
+          />
         </div>
 
         {projects
