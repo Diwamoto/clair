@@ -210,9 +210,12 @@ function Ide() {
 
   const panelId = navIdFor(wb.screen);
 
-  // The sidebar panel follows the navigation, not the screen: opening the
-  // session rail or the merge graph in the main area leaves the explorer in
-  // place, the way an editor's sidebar does.
+  // The sidebar panel follows the navigation, not the screen: `graph` maps
+  // to the same `review` nav entry as the changes view (it's a mode of the
+  // one source-control tool, not a separate destination), so switching
+  // between them keeps the same changed-files panel in place. Opening the
+  // session rail leaves the explorer in place, the way an editor's sidebar
+  // does.
   const panel =
     panelId === 'review' ? (
       <ReviewPanel />
@@ -227,7 +230,7 @@ function Ide() {
     ) : panelId === 'settings' ? (
       <SettingsPanel />
     ) : (
-      // The canvas defines no sidebar panel for the merge graph, so the
+      // The canvas defines no sidebar panel for the session rail, so the
       // explorer stays — a gap to fill on the canvas, not to invent here.
       <ExplorerPanel />
     );

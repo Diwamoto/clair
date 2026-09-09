@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 
 import { files, tree } from '../data';
 import { HighlightedLine } from '../highlight';
@@ -119,6 +119,57 @@ export function ExplorerPanel() {
 
 /* ── panes ────────────────────────────────────────────────────────────── */
 
+/**
+ * The open file's path, one segment per directory plus the filename, at the
+ * top of the pane it belongs to. A deliberate exception to the "no header
+ * row per pane" rule on the Tokens artboard — see that artboard's own note
+ * for the trade-off this accepts (the 74px chrome budget no longer holds
+ * once an editor is split; each editor pane now carries its own 24px row).
+ */
+function PathBreadcrumb({ path }: { path: string }) {
+  const parts = path.split('/');
+  return (
+    <div
+      className="cl"
+      style={{
+        height: 24,
+        flexShrink: 0,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 5,
+        padding: '0 12px',
+        overflow: 'hidden',
+        borderBottom: `1px solid ${line.hairline}`,
+        background: color.chromeRaised,
+      }}
+    >
+      {parts.map((part, i) => {
+        const last = i === parts.length - 1;
+        return (
+          <Fragment key={i}>
+            {i > 0 ? (
+              <span style={{ fontSize: 10, color: color.textQuaternary, flexShrink: 0 }}>›</span>
+            ) : null}
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: last ? 600 : 400,
+                color: last ? color.textSecondary : color.textQuaternary,
+                whiteSpace: 'nowrap',
+                flexShrink: last ? 0 : 1,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {part}
+            </span>
+          </Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
 function EditorPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
   const wb = useWorkbench();
   const path = node.filePath ?? wb.activePath;
@@ -153,84 +204,95 @@ function EditorPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
   return (
     <div
       onMouseDown={() => wb.setFocusedPane(node.id)}
-      style={{ flex: 1, display: 'flex', minWidth: 0, minHeight: 0, background: color.canvas, overflow: 'hidden' }}
+      style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        minWidth: 0,
+        minHeight: 0,
+        background: color.canvas,
+        overflow: 'hidden',
+      }}
     >
-      <div
-        ref={gutterRef}
-        className="cl"
-        style={{
-          width: 46,
-          flexShrink: 0,
-          padding: '20px 0 8px 0',
-          textAlign: 'right',
-          fontSize: 12,
-          lineHeight: '19px',
-          color: color.lineNumber,
-          overflow: 'hidden',
-        }}
-      >
-        {lines.map((_, i) => (
-          <div key={i} style={{ paddingRight: 12, color: i + 1 === caretLine ? color.textTertiary : undefined }}>
-            {i + 1}
-          </div>
-        ))}
-      </div>
-      <div style={{ flex: 1, position: 'relative', minWidth: 0, overflow: 'hidden' }}>
-        <pre
-          ref={preRef}
+      <PathBreadcrumb path={path} />
+      <div style={{ flex: 1, display: 'flex', minWidth: 0, minHeight: 0, overflow: 'hidden' }}>
+        <div
+          ref={gutterRef}
           className="cl"
-          aria-hidden
           style={{
-            margin: 0,
-            padding: '20px 12px 8px 0',
+            width: 46,
+            flexShrink: 0,
+            padding: '20px 0 8px 0',
+            textAlign: 'right',
             fontSize: 12,
             lineHeight: '19px',
-            color: color.code,
-            whiteSpace: 'pre',
+            color: color.lineNumber,
             overflow: 'hidden',
-            height: '100%',
           }}
         >
-          {lines.map((l, i) => (
-            <HighlightedLine key={i} line={l} kind={file?.kind ?? 'swift'} />
+          {lines.map((_, i) => (
+            <div key={i} style={{ paddingRight: 12, color: i + 1 === caretLine ? color.textTertiary : undefined }}>
+              {i + 1}
+            </div>
           ))}
-        </pre>
-        <textarea
-          ref={areaRef}
-          className="cl scroll"
-          spellCheck={false}
-          value={text}
-          onChange={(e) => {
-            wb.editFile(path, e.target.value);
-            syncCaret();
-          }}
-          onKeyUp={syncCaret}
-          onClick={syncCaret}
-          onScroll={syncScroll}
-          onKeyDown={(e) => {
-            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
-              e.preventDefault();
-              wb.saveFile(path);
-            }
-          }}
-          style={{
-            position: 'absolute',
-            inset: 0,
-            width: '100%',
-            height: '100%',
-            padding: '20px 12px 8px 0',
-            border: 0,
-            outline: 'none',
-            resize: 'none',
-            background: 'transparent',
-            color: 'transparent',
-            caretColor: color.textPrimary,
-            fontSize: 12,
-            lineHeight: '19px',
-            whiteSpace: 'pre',
-            overflow: 'auto',
-          }}
-        />
+        </div>
+        <div style={{ flex: 1, position: 'relative', minWidth: 0, overflow: 'hidden' }}>
+          <pre
+            ref={preRef}
+            className="cl"
+            aria-hidden
+            style={{
+              margin: 0,
+              padding: '20px 12px 8px 0',
+              fontSize: 12,
+              lineHeight: '19px',
+              color: color.code,
+              whiteSpace: 'pre',
+              overflow: 'hidden',
+              height: '100%',
+            }}
+          >
+            {lines.map((l, i) => (
+              <HighlightedLine key={i} line={l} kind={file?.kind ?? 'swift'} />
+            ))}
+          </pre>
+          <textarea
+            ref={areaRef}
+            className="cl scroll"
+            spellCheck={false}
+            value={text}
+            onChange={(e) => {
+              wb.editFile(path, e.target.value);
+              syncCaret();
+            }}
+            onKeyUp={syncCaret}
+            onClick={syncCaret}
+            onScroll={syncScroll}
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+                e.preventDefault();
+                wb.saveFile(path);
+              }
+            }}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              padding: '20px 12px 8px 0',
+              border: 0,
+              outline: 'none',
+              resize: 'none',
+              background: 'transparent',
+              color: 'transparent',
+              caretColor: color.textPrimary,
+              fontSize: 12,
+              lineHeight: '19px',
+              whiteSpace: 'pre',
+              overflow: 'auto',
+            }}
+          />
+        </div>
       </div>
     </div>
   );

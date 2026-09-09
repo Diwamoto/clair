@@ -2,7 +2,7 @@ import { changedFiles, diffs, type DiffLine } from '../data';
 import { HighlightedLine } from '../highlight';
 import { IconArrowRight, IconChevron, IconClaude, IconRefresh } from '../icons';
 import { useWorkbench } from '../store';
-import { MainHeader } from '../chrome';
+import { MainHeader, SourceControlModeTabs } from '../chrome';
 import { color, line, wash } from '../tokens';
 
 function FileRow({
@@ -169,6 +169,7 @@ export function ReviewMain() {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, background: color.canvas }}>
           <MainHeader>
+            <SourceControlModeTabs />
             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
               <span
                 style={{

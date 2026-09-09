@@ -272,8 +272,7 @@ textarea {
   .caret {
     animation: none;
   }
-  .tab-group-track,
-  .tab-group-chevron {
+  .tab-group-track {
     transition: none !important;
   }
 }
@@ -283,9 +282,6 @@ textarea {
    tabs' content size. */
 .tab-group-track {
   transition: grid-template-columns 90ms ease;
-}
-.tab-group-chevron {
-  transition: transform 90ms ease;
 }
 
 /* fade — the sidebar panel, too narrow for depth to read as anything but a glitch */

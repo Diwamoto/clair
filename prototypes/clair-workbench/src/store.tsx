@@ -9,6 +9,7 @@ import {
 } from 'react';
 
 import { activityItems, chat, files, sessions, type ChatMessage, type Session } from './data';
+import { GROUP_COLOR_KEYS, type GroupColorKey } from './tokens';
 
 export type Screen =
   | 'workspace'
@@ -138,6 +139,11 @@ function useWorkbenchState() {
   const [sessionList, setSessionList] = useState<Session[]>(sessions);
   const [activeProject, setActiveProject] = useState('clair');
   const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(() => new Set());
+  const [groupColors, setGroupColors] = useState<Record<string, GroupColorKey>>(() => ({
+    clair: 'blue',
+    ccedit: 'green',
+    'clair-releases': 'amber',
+  }));
 
   const [reviewFile, setReviewFile] = useState('apple/ClairApp/ProjectWorkspace.swift');
   const [reviewFilter, setReviewFilter] = useState<'全差分' | 'commit済み' | '未commit'>('全差分');
@@ -395,6 +401,15 @@ function useWorkbenchState() {
     });
   }, []);
 
+  const cycleGroupColor = useCallback((project: string) => {
+    setGroupColors((current) => {
+      const now = current[project] ?? 'gray';
+      const idx = GROUP_COLOR_KEYS.indexOf(now);
+      const next = GROUP_COLOR_KEYS[(idx + 1) % GROUP_COLOR_KEYS.length];
+      return { ...current, [project]: next };
+    });
+  }, []);
+
   const dirtyCount = tabs.filter((t) => t.dirty).length;
 
   return {
@@ -438,6 +453,8 @@ function useWorkbenchState() {
     setActiveProject,
     collapsedProjects,
     toggleProjectCollapsed,
+    groupColors,
+    cycleGroupColor,
     reviewFile,
     setReviewFile,
     reviewFilter,

@@ -9,12 +9,11 @@
 import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
 import { files, projectTabs, projects, type FileKind } from './data';
-import { color, line, mono } from './tokens';
+import { color, groupColor, line, mono, type GroupColorKey } from './tokens';
 import {
   IconBell,
   IconBranch,
   IconBug,
-  IconChevron,
   IconClaude,
   IconCodex,
   IconCommand,
@@ -300,33 +299,37 @@ function FileTab({ path, active }: { path: string; active: boolean }) {
 }
 
 /**
- * A titlebar tab group's own label, Chrome's tab-group pill: the whole chip
- * toggles that project's tabs open or shut, independent of which project is
- * active. Collapsing does not touch `activeProject` — folding away the group
- * you're working in just hides its tab strip, the way collapsing the active
- * group in Chrome leaves the page alone.
+ * A titlebar tab group's own label, Chrome's tab-group pill: the name toggles
+ * that project's tabs open or shut, independent of which project is active.
+ * Collapsing does not touch `activeProject` — folding away the group you're
+ * working in just hides its tab strip, the way collapsing the active group in
+ * Chrome leaves the page alone. The color dot is a second, separate control —
+ * click it to cycle the group's identifying colour (`GROUP_COLOR_KEYS`),
+ * which is what the underline below the whole group is drawn in.
  */
 function ProjectChip({
   project,
   active,
   collapsed,
+  colorKey,
   onToggle,
+  onCycleColor,
 }: {
   project: string;
   active: boolean;
   collapsed: boolean;
+  colorKey: GroupColorKey;
   onToggle: () => void;
+  onCycleColor: () => void;
 }) {
   return (
-    <button
-      onClick={onToggle}
-      title={`${project} タブグループを${collapsed ? '展開' : '折りたたむ'}`}
+    <div
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 4,
+        gap: 2,
         height: 26,
-        padding: '0 7px 0 10px',
+        padding: '0 2px',
         borderRadius: 8,
         background: active ? 'rgba(255,255,255,0.08)' : 'transparent',
         border: `1px solid ${active ? 'rgba(255,255,255,0.12)' : 'transparent'}`,
@@ -334,23 +337,30 @@ function ProjectChip({
         flexShrink: 0,
       }}
     >
-      <span
-        style={{
-          fontSize: 12,
-          fontWeight: 600,
-          color: active ? color.textPrimary : color.textQuaternary,
-          whiteSpace: 'nowrap',
-        }}
+      <button
+        onClick={onCycleColor}
+        title={`${project} のグループカラーを変更（現在: ${colorKey}）`}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 18, height: 18, flexShrink: 0 }}
       >
-        {project}
-      </span>
-      <span
-        className="tab-group-chevron"
-        style={{ display: 'inline-flex', transform: collapsed ? 'rotate(0deg)' : 'rotate(90deg)' }}
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: groupColor[colorKey] }} />
+      </button>
+      <button
+        onClick={onToggle}
+        title={`${project} タブグループを${collapsed ? '展開' : '折りたたむ'}`}
+        style={{ display: 'flex', alignItems: 'center', height: '100%', padding: '0 8px 0 1px' }}
       >
-        <IconChevron size={10} color={active ? color.textSecondary : color.textQuaternary} />
-      </span>
-    </button>
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: active ? color.textPrimary : color.textQuaternary,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {project}
+        </span>
+      </button>
+    </div>
   );
 }
 
@@ -363,11 +373,17 @@ function ProjectChip({
  * the mock already says about those projects elsewhere, so every group has
  * something to show when expanded per the "make every project's tabs
  * visible" request — not real openable files.
+ *
+ * A 2px bar in the group's colour runs along the bottom of the whole group
+ * (chip + tabs together, not per-tab) so it's visible at a glance where one
+ * project's tabs end and the next begins — the boundary the vertical
+ * dividers alone don't make obvious.
  */
 function ProjectGroup({ project }: { project: string }) {
   const wb = useWorkbench();
   const active = project === wb.activeProject;
   const collapsed = wb.collapsedProjects.has(project);
+  const colorKey = wb.groupColors[project] ?? 'gray';
 
   // The real editor tabs (wb.tabs) and the Claude Code / codex tabs are
   // `clair`'s specifically — the workspace behind them never changes with
@@ -407,8 +423,15 @@ function ProjectGroup({ project }: { project: string }) {
         ));
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', alignSelf: 'stretch', flexShrink: 0, minWidth: 0 }}>
-      <ProjectChip project={project} active={active} collapsed={collapsed} onToggle={() => wb.toggleProjectCollapsed(project)} />
+    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', alignSelf: 'stretch', flexShrink: 0, minWidth: 0 }}>
+      <ProjectChip
+        project={project}
+        active={active}
+        collapsed={collapsed}
+        colorKey={colorKey}
+        onToggle={() => wb.toggleProjectCollapsed(project)}
+        onCycleColor={() => wb.cycleGroupColor(project)}
+      />
       <div
         className="tab-group-track"
         style={{
@@ -427,6 +450,7 @@ function ProjectGroup({ project }: { project: string }) {
           ))}
         </div>
       </div>
+      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 2, background: groupColor[colorKey], borderRadius: '1px 1px 0 0' }} />
     </div>
   );
 }
@@ -510,9 +534,13 @@ export function AppTitlebar({ extra }: { extra?: ReactNode }) {
  * Search is deliberately absent: file and symbol search is the titlebar field,
  * so having it here too would give one job two entry points.
  */
+// `graph` has no nav entry of its own: the merge graph is one view inside
+// the source-control tool (see SourceControlModeTabs below), not a separate
+// destination — a git GUI doesn't give its commit graph its own top-level
+// tab distinct from the rest of the tool. The shield icon opens the tool at
+// its `review` (changes) default; `⌃⌘G` does the same.
 const NAV: Array<{ id: string; screen: Screen; label: string; icon: (p: { size?: number }) => ReactNode }> = [
   { id: 'files', screen: 'workspace', label: 'エクスプローラー', icon: IconFolder },
-  { id: 'graph', screen: 'graph', label: 'マージグラフ', icon: IconBranch },
   { id: 'review', screen: 'review', label: '変更を確認', icon: IconShieldCheck },
   { id: 'debug', screen: 'debug', label: '実行とデバッグ', icon: IconBug },
   { id: 'activity', screen: 'activity', label: 'アクティビティ', icon: IconBell },
@@ -521,11 +549,57 @@ const NAV: Array<{ id: string; screen: Screen; label: string; icon: (p: { size?:
 /** Which strip entry the current screen lights up, and which panel it shows. */
 export function navIdFor(screen: Screen): string {
   if (screen === 'debug' || screen === 'debugAgent') return 'debug';
-  if (screen === 'graph') return 'graph';
-  if (screen === 'review') return 'review';
+  if (screen === 'graph' || screen === 'review') return 'review';
   if (screen === 'activity') return 'activity';
   if (screen === 'settings') return 'settings';
   return 'files';
+}
+
+/**
+ * The changes/graph switch inside the source-control tool's own header —
+ * treats the merge graph as a second mode of one tool (git GUI clients do
+ * the same) rather than a separate screen with its own nav entry.
+ */
+export function SourceControlModeTabs() {
+  const wb = useWorkbench();
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'stretch',
+        height: 24,
+        flexShrink: 0,
+        borderRadius: 4,
+        background: color.panel,
+        border: `1px solid ${line.hairline}`,
+        overflow: 'hidden',
+      }}
+    >
+      {([
+        { id: 'review', label: '変更' },
+        { id: 'graph', label: 'グラフ' },
+      ] as const).map((m) => {
+        const on = wb.screen === m.id;
+        return (
+          <button
+            key={m.id}
+            onClick={() => wb.setScreen(m.id)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              padding: '0 12px',
+              background: on ? color.surfaceActive : undefined,
+              color: on ? color.textPrimary : color.textQuaternary,
+              fontSize: 11,
+              fontWeight: on ? 600 : 400,
+            }}
+          >
+            {m.label}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 function SidebarStrip() {

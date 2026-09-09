@@ -11,7 +11,7 @@ import {
   IconTerminalPrompt,
 } from '../icons';
 import { useWorkbench } from '../store';
-import { Chip, MainHeader } from '../chrome';
+import { Chip, MainHeader, SourceControlModeTabs } from '../chrome';
 import { color, line, wash } from '../tokens';
 
 const GRID = '26px 146px 84px 196px 66px 1fr 104px 88px';
@@ -311,7 +311,7 @@ export function MergeGraphMain() {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
       <MainHeader>
-        <span style={{ fontSize: 13, fontWeight: 600 }}>マージグラフ</span>
+        <SourceControlModeTabs />
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 10, color: color.textTertiary }}>
           {(Object.keys(branchColor) as Array<keyof typeof branchColor>).map((b) => (

@@ -65,6 +65,22 @@ export const line = {
   paneDivider: 'rgba(242,244,238,0.15)',
 } as const;
 
+// TAB GROUP COLOURS — the one other place colour is allowed, alongside diff
+// and debug: identifying a project's tab group in the titlebar. Reuses the
+// existing accents (not new hues) so a coloured group still reads as part of
+// the same muted palette. `gray` (== line.stronger) is the uncoloured default.
+export const groupColor = {
+  blue: '#5b88f7',
+  green: '#8acb94',
+  amber: '#e5c07b',
+  red: '#e27b83',
+  purple: '#c678dd',
+  gray: line.stronger,
+} as const;
+
+export type GroupColorKey = keyof typeof groupColor;
+export const GROUP_COLOR_KEYS = Object.keys(groupColor) as GroupColorKey[];
+
 export const wash = {
   faint: 'rgba(242,244,238,0.03)',
   soft: 'rgba(242,244,238,0.04)',
