@@ -6,7 +6,7 @@
 // each drew their own header because an artboard is a single still frame —
 // those are treated as internal parts of this shell, not as separate chrome.
 
-import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
 import { files, projects, type FileKind } from './data';
 import { color, line, mono } from './tokens';
@@ -175,6 +175,11 @@ const fadeRight: CSSProperties = {
   maskImage: `linear-gradient(to right, #000 calc(100% - ${TAB_FADE}px), transparent 100%)`,
 };
 
+/** A faint seam between adjacent tabs — just a short rule, never a box around either. */
+function TabDivider() {
+  return <div style={{ width: 1, height: 18, background: line.chromeSoft, flexShrink: 0 }} />;
+}
+
 /** True while the label is wider than the room the tab gives it. */
 function useClipped(label: string) {
   const ref = useRef<HTMLSpanElement>(null);
@@ -338,22 +343,31 @@ export function AppTitlebar({ extra }: { extra?: ReactNode }) {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', alignSelf: 'stretch', gap: 3, marginLeft: 4, minWidth: 0 }}>
-          {wb.tabs.map((t) => (
-            <FileTab key={t.path} path={t.path} active={t.path === wb.activePath && wb.screen === 'workspace'} />
+          {[
+            ...wb.tabs.map((t) => (
+              <FileTab key={t.path} path={t.path} active={t.path === wb.activePath && wb.screen === 'workspace'} />
+            )),
+            <Tab
+              key="activity"
+              icon={<IconSparkle size={12} color={wb.screen === 'activity' ? color.textPrimary : color.textTertiary} />}
+              label="Claude Code"
+              active={wb.screen === 'activity'}
+              dot
+              onClick={() => wb.setScreen('activity')}
+            />,
+            <Tab
+              key="sessions"
+              icon={<IconCodex size={12} color={wb.screen === 'sessions' ? color.textPrimary : color.textTertiary} />}
+              label="codex"
+              active={wb.screen === 'sessions'}
+              onClick={() => wb.setScreen('sessions')}
+            />,
+          ].map((tab, i) => (
+            <Fragment key={i}>
+              {i > 0 ? <TabDivider /> : null}
+              {tab}
+            </Fragment>
           ))}
-          <Tab
-            icon={<IconSparkle size={12} color={wb.screen === 'activity' ? color.textPrimary : color.textTertiary} />}
-            label="Claude Code"
-            active={wb.screen === 'activity'}
-            dot
-            onClick={() => wb.setScreen('activity')}
-          />
-          <Tab
-            icon={<IconCodex size={12} color={wb.screen === 'sessions' ? color.textPrimary : color.textTertiary} />}
-            label="codex"
-            active={wb.screen === 'sessions'}
-            onClick={() => wb.setScreen('sessions')}
-          />
         </div>
 
         {projects
