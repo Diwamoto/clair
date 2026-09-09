@@ -9,6 +9,7 @@ import { color, line, mono, wash } from '../tokens';
 function Scrim({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
     <div
+      className="overlay-scrim"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -32,6 +33,7 @@ function Scrim({ children, onClose }: { children: React.ReactNode; onClose: () =
 function Panel({ width, children }: { width: number; children: React.ReactNode }) {
   return (
     <div
+      className="overlay-panel"
       style={{
         width: 'min(100%, ' + width + 'px)',
         display: 'flex',
@@ -559,6 +561,7 @@ export function AddAgentOverlay() {
   return (
     <Scrim onClose={() => wb.setOverlay(null)}>
       <div
+        className="overlay-panel"
         style={{
           width: 'min(100%, 620px)',
           margin: '26px 12px 44px',

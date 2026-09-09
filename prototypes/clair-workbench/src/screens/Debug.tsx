@@ -14,7 +14,7 @@ import {
   IconStop,
 } from '../icons';
 import { useWorkbench } from '../store';
-import { StatusBar, TrafficLights, VDivider } from '../ui';
+import { ScreenShell, SidebarStrip, StatusBar, Titlebar } from '../chrome';
 import { color, line, wash } from '../tokens';
 
 const SWIFT_LINES: Array<[number, string]> = [
@@ -156,47 +156,8 @@ export function DebugScreen() {
   const wb = useWorkbench();
 
   return (
-    <div
-      style={{
-        width: '100%',
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        background: color.chrome,
-        color: color.textPrimary,
-        fontSize: 11,
-      }}
-    >
-      <div
-        style={{
-          height: 48,
-          flexShrink: 0,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          padding: '0 16px',
-          backgroundColor: color.chrome,
-          borderBottom: `1px solid ${line.chrome}`,
-        }}
-      >
-        <TrafficLights />
-        <VDivider />
-        <button
-          onClick={() => wb.setScreen('workspace')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            height: 26,
-            padding: '0 9px',
-            borderRadius: 6,
-            background: wash.strong,
-            border: `1px solid ${line.ring}`,
-          }}
-        >
-          <span style={{ fontSize: 12, fontWeight: 600 }}>clair</span>
-        </button>
+    <ScreenShell>
+      <Titlebar project="clair" onProjectClick={() => wb.setScreen('workspace')}>
         <div
           style={{
             display: 'flex',
@@ -237,7 +198,7 @@ export function DebugScreen() {
           <IconDot size={11} />
           {wb.debugRunning ? `ClairApp.swift:${wb.debugLine} で停止` : 'ブレークポイントで停止'}
         </div>
-      </div>
+      </Titlebar>
 
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         <div
@@ -250,6 +211,7 @@ export function DebugScreen() {
             overflow: 'hidden',
           }}
         >
+          <SidebarStrip compact />
           <div style={{ padding: '12px 14px 6px', fontSize: 9, fontWeight: 700, letterSpacing: '0.04em', color: color.textMuted }}>
             ブレークポイント
           </div>
@@ -388,7 +350,7 @@ export function DebugScreen() {
           EditorPane.swift:{wb.debugLine}
         </span>
       </StatusBar>
-    </div>
+    </ScreenShell>
   );
 }
 
@@ -398,46 +360,8 @@ export function DebugAgentScreen() {
   const [applied, setApplied] = useState<null | '却下' | '適用してテスト'>(null);
 
   return (
-    <div
-      style={{
-        width: '100%',
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        background: color.chrome,
-        color: color.textPrimary,
-        fontSize: 11,
-      }}
-    >
-      <div
-        style={{
-          height: 48,
-          flexShrink: 0,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          padding: '0 16px',
-          backgroundColor: color.chrome,
-          borderBottom: `1px solid ${line.chrome}`,
-        }}
-      >
-        <TrafficLights />
-        <VDivider />
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            height: 26,
-            padding: '0 9px',
-            borderRadius: 6,
-            background: wash.strong,
-            border: `1px solid ${line.ring}`,
-          }}
-        >
-          <span style={{ fontSize: 12, fontWeight: 600 }}>api-server</span>
-        </div>
+    <ScreenShell>
+      <Titlebar project="api-server">
         <div
           style={{
             display: 'flex',
@@ -496,7 +420,7 @@ export function DebugAgentScreen() {
           <IconDot size={11} />
           main.go:40 で停止
         </div>
-      </div>
+      </Titlebar>
 
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         <div
@@ -740,6 +664,6 @@ export function DebugAgentScreen() {
         <span style={{ color: color.divider }}>·</span>
         <span style={{ color: color.textMuted }}>Go 1.22</span>
       </StatusBar>
-    </div>
+    </ScreenShell>
   );
 }

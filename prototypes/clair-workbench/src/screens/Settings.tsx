@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { IconCloseThin } from '../icons';
 import { RouteLink } from '../App';
 import { useWorkbench } from '../store';
-import { TrafficLights, VDivider } from '../ui';
+import { ScreenShell, Titlebar } from '../chrome';
 import { color, line } from '../tokens';
 
 const SECTIONS = ['一般', 'AIプロバイダー', 'エディタ', 'ターミナル', 'モバイル', 'アップデート'];
@@ -101,33 +101,8 @@ export function SettingsScreen() {
   const sections = SECTIONS.filter((s) => !query || s.includes(query));
 
   return (
-    <div
-      style={{
-        width: '100%',
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        background: color.chrome,
-        color: color.textPrimary,
-        fontSize: 11,
-      }}
-    >
-      <div
-        style={{
-          height: 48,
-          flexShrink: 0,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          padding: '0 16px',
-          backgroundColor: color.chrome,
-          borderBottom: `1px solid ${line.chrome}`,
-        }}
-      >
-        <TrafficLights />
-        <VDivider />
-        <span style={{ fontSize: 13, fontWeight: 600 }}>設定</span>
+    <ScreenShell>
+      <Titlebar title="設定">
         <div style={{ flex: 1 }} />
         <button
           onClick={() => wb.setScreen('workspace')}
@@ -143,7 +118,7 @@ export function SettingsScreen() {
         >
           <IconCloseThin size={13} />
         </button>
-      </div>
+      </Titlebar>
 
       <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '232px minmax(0,1fr)', minHeight: 0 }}>
         <div
@@ -302,6 +277,6 @@ export function SettingsScreen() {
           </div>
         </div>
       </div>
-    </div>
+    </ScreenShell>
   );
 }

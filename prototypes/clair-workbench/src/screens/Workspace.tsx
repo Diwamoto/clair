@@ -14,7 +14,7 @@ import {
   IconSparkle,
 } from '../icons';
 import { useWorkbench, type PaneNode } from '../store';
-import { QuotaMeter, SidebarStrip, StatusBar, TrafficLights } from '../ui';
+import { QuotaMeter, ScreenShell, Sidebar, StatusBar, Titlebar } from '../chrome';
 import { color, line, mono, wash } from '../tokens';
 
 const byPath = new Map(files.map((f) => [f.path, f]));
@@ -97,32 +97,10 @@ function Tab({ path, active }: { path: string; active: boolean }) {
   );
 }
 
-function Titlebar() {
+function WorkspaceTitlebar() {
   const wb = useWorkbench();
   return (
-    <div
-      style={{
-        height: 48,
-        flexShrink: 0,
-        display: 'flex',
-        alignItems: 'flex-end',
-        backgroundColor: color.chrome,
-        borderBottom: `1px solid ${line.hairline}`,
-      }}
-    >
-      <div
-        style={{
-          width: 76,
-          flexShrink: 0,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: '0 0 18px 20px',
-        }}
-      >
-        <TrafficLights />
-      </div>
-
+    <Titlebar variant="workspace" align="end">
       <div
         className="no-scrollbar"
         style={{
@@ -240,13 +218,13 @@ function Titlebar() {
           <IconGear size={15} />
         </button>
       </div>
-    </div>
+    </Titlebar>
   );
 }
 
 /* ── sidebar ──────────────────────────────────────────────────────────── */
 
-function Sidebar() {
+function WorkspaceSidebar() {
   const wb = useWorkbench();
 
   const hidden = (parent: string | undefined) => {
@@ -259,17 +237,7 @@ function Sidebar() {
   };
 
   return (
-    <div
-      style={{
-        width: 286,
-        flexShrink: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        backgroundColor: color.chrome,
-        borderRight: `1px solid ${line.chrome}`,
-      }}
-    >
-      <SidebarStrip active="files" showSessions={false} />
+    <Sidebar>
       <div className="scroll" style={{ flex: 1, padding: '6px 0' }}>
         {tree.map((node) => {
           if (node.type !== 'project' && hidden(node.parent)) return null;
@@ -358,7 +326,7 @@ function Sidebar() {
           );
         })}
       </div>
-    </div>
+    </Sidebar>
   );
 }
 
@@ -699,21 +667,10 @@ export function WorkspaceScreen() {
     : null;
 
   return (
-    <div
-      style={{
-        width: '100%',
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        background: color.chrome,
-        color: color.textPrimary,
-        fontSize: 11,
-      }}
-    >
-      <Titlebar />
+    <ScreenShell>
+      <WorkspaceTitlebar />
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        <Sidebar />
+        <WorkspaceSidebar />
         <div style={{ flex: 1, display: 'flex', minWidth: 0 }}>
           <Pane node={maximizedNode ?? wb.layout} />
         </div>
@@ -730,7 +687,7 @@ export function WorkspaceScreen() {
           Ln {wb.cursor.line}, Col {wb.cursor.column}
         </span>
       </StatusBar>
-    </div>
+    </ScreenShell>
   );
 }
 

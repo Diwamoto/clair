@@ -112,3 +112,166 @@ textarea {
     opacity: 0;
   }
 }
+
+/* ── screen transitions ───────────────────────────────────────────────────
+   See src/motion.tsx for the model. 200ms comes from the LATENCY BUDGET on
+   the Tokens artboard (Project切替 80 / 200ms); overlays get the palette's
+   80ms budget instead. */
+
+.screen-layer {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 50%;
+  will-change: transform, opacity;
+}
+
+.screen-layer.leave-depth,
+.screen-layer.leave-slide-fwd,
+.screen-layer.leave-slide-back,
+.screen-layer.leave-lift,
+.screen-layer.leave-sheet {
+  pointer-events: none;
+  z-index: 1;
+}
+
+.screen-layer.enter-depth,
+.screen-layer.enter-slide-fwd,
+.screen-layer.enter-slide-back,
+.screen-layer.enter-lift,
+.screen-layer.enter-sheet {
+  z-index: 2;
+}
+
+/* depth — recede into the page, emerge from it */
+.leave-depth {
+  animation: leave-depth 200ms cubic-bezier(0.3, 0, 0.6, 1) both;
+}
+.enter-depth {
+  animation: enter-depth 200ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+@keyframes leave-depth {
+  to {
+    transform: scale(0.93);
+    opacity: 0;
+    filter: blur(3px);
+  }
+}
+@keyframes enter-depth {
+  from {
+    transform: scale(0.93);
+    opacity: 0;
+    filter: blur(3px);
+  }
+}
+
+/* slide — siblings in the sidebar strip move sideways */
+.leave-slide-fwd {
+  animation: leave-slide-fwd 200ms cubic-bezier(0.3, 0, 0.6, 1) both;
+}
+.enter-slide-fwd {
+  animation: enter-slide-fwd 200ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+.leave-slide-back {
+  animation: leave-slide-back 200ms cubic-bezier(0.3, 0, 0.6, 1) both;
+}
+.enter-slide-back {
+  animation: enter-slide-back 200ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+@keyframes leave-slide-fwd {
+  to {
+    transform: translateX(-3%);
+    opacity: 0;
+  }
+}
+@keyframes enter-slide-fwd {
+  from {
+    transform: translateX(3%);
+    opacity: 0;
+  }
+}
+@keyframes leave-slide-back {
+  to {
+    transform: translateX(3%);
+    opacity: 0;
+  }
+}
+@keyframes enter-slide-back {
+  from {
+    transform: translateX(-3%);
+    opacity: 0;
+  }
+}
+
+/* lift — the session rail rises from below */
+.leave-lift {
+  animation: leave-lift 200ms cubic-bezier(0.3, 0, 0.6, 1) both;
+}
+.enter-lift {
+  animation: enter-lift 200ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+@keyframes leave-lift {
+  to {
+    transform: translateY(2%) scale(0.99);
+    opacity: 0;
+  }
+}
+@keyframes enter-lift {
+  from {
+    transform: translateY(3%) scale(0.99);
+    opacity: 0;
+  }
+}
+
+/* sheet — settings comes over the top */
+.leave-sheet {
+  animation: leave-sheet 200ms cubic-bezier(0.3, 0, 0.6, 1) both;
+}
+.enter-sheet {
+  animation: enter-sheet 200ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+@keyframes leave-sheet {
+  to {
+    transform: scale(1.04);
+    opacity: 0;
+  }
+}
+@keyframes enter-sheet {
+  from {
+    transform: scale(1.04);
+    opacity: 0;
+  }
+}
+
+/* overlays — the palette / search / add-agent windows */
+.overlay-scrim {
+  animation: overlay-scrim 90ms linear both;
+}
+.overlay-panel {
+  animation: overlay-panel 90ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+@keyframes overlay-scrim {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes overlay-panel {
+  from {
+    transform: translateY(-6px) scale(0.985);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen-layer,
+  .overlay-scrim,
+  .overlay-panel {
+    animation: none !important;
+    filter: none !important;
+  }
+  .screen-layer[class*='leave-'] {
+    display: none;
+  }
+  .caret {
+    animation: none;
+  }
+}

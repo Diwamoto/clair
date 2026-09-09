@@ -11,7 +11,7 @@ import {
   IconTerminalPrompt,
 } from '../icons';
 import { useWorkbench } from '../store';
-import { Chip, QuotaMeter, StatusBar, TrafficLights, VDivider } from '../ui';
+import { Chip, QuotaMeter, ScreenShell, StatusBar, Titlebar } from '../chrome';
 import { color, line, wash } from '../tokens';
 
 const GRID = '26px 146px 84px 196px 66px 1fr 104px 88px';
@@ -28,18 +28,7 @@ export function SessionsScreen() {
   const attention = wb.sessions.find((s) => s.attention);
 
   return (
-    <div
-      style={{
-        width: '100%',
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        background: color.chrome,
-        color: color.textPrimary,
-        fontSize: 11,
-      }}
-    >
+    <ScreenShell>
       <div
         style={{
           height: 44,
@@ -279,7 +268,7 @@ export function SessionsScreen() {
         <span style={{ color: color.divider }}>·</span>
         <span>{wb.sessions.length} セッション</span>
       </StatusBar>
-    </div>
+    </ScreenShell>
   );
 }
 
@@ -340,48 +329,8 @@ function GraphCell({ kind }: { kind: (typeof commits)[number]['graph'] }) {
 export function MergeGraphScreen() {
   const wb = useWorkbench();
   return (
-    <div
-      style={{
-        width: '100%',
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        background: color.chrome,
-        color: color.textPrimary,
-        fontSize: 11,
-      }}
-    >
-      <div
-        style={{
-          height: 48,
-          flexShrink: 0,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          padding: '0 16px',
-          backgroundColor: color.chrome,
-          borderBottom: `1px solid ${line.chrome}`,
-        }}
-      >
-        <TrafficLights />
-        <VDivider />
-        <button
-          onClick={() => wb.setScreen('workspace')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            height: 26,
-            padding: '0 9px',
-            borderRadius: 6,
-            background: wash.strong,
-            border: `1px solid ${line.ring}`,
-          }}
-        >
-          <span style={{ fontSize: 12, fontWeight: 600 }}>clair</span>
-        </button>
-        <span style={{ fontSize: 13, fontWeight: 600, marginLeft: 4 }}>マージグラフ</span>
+    <ScreenShell>
+      <Titlebar project="clair" onProjectClick={() => wb.setScreen('workspace')} title="マージグラフ">
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 10, color: color.textTertiary }}>
           {(Object.keys(branchColor) as Array<keyof typeof branchColor>).map((b) => (
@@ -391,7 +340,7 @@ export function MergeGraphScreen() {
             </span>
           ))}
         </div>
-      </div>
+      </Titlebar>
 
       <div
         style={{
@@ -459,6 +408,6 @@ export function MergeGraphScreen() {
           </button>
         ))}
       </div>
-    </div>
+    </ScreenShell>
   );
 }

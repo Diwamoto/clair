@@ -25,17 +25,68 @@ EMPTY STATE コンポーネント）だけで作っている。新しい見た�
 キャンバス側が間違っている・足りないと分かったら、**モックで直さずキャンバスを
 直す**。手順は `.claude/skills/clair-design-sync`。
 
+## 共通パーツ
+
+ヘッダー・サイドバー・フッターは `src/chrome.tsx` の1箇所だけにある。各画面は
+それを組み立てるだけで、自前で描き直さない。
+
+- `Titlebar` — 48px。`variant="workspace"` が Main artboard の並列タブ列、
+  既定はそれ以外の画面が使う中央寄せの列。右側は各画面が children で渡す。
+- `Sidebar` / `SidebarStrip` — 286px（Activity のみ 300px）の列と、その中の
+  34px ナビゲーション。activity bar を独立した列にせずここに畳んでいるのが
+  Tokens artboard の chrome budget の主張そのもの。
+- `StatusBar` / `QuotaMeter` — 26px。
+- `ScreenShell` — ヘッダー / 本体 / フッターの縦積み。
+
+これで縦の chrome 予算（48 + 26 = 74px）が1箇所で決まる。
+
+## ナビゲーション
+
+サイドバーのナビゲーションは **エクスプローラー / マージグラフ / 変更を確認 /
+実行とデバッグ / アクティビティ** の5つ。
+
+- **検索はここに置かない。** ファイル・シンボル検索はヘッダーの検索欄に一本化した
+  （`⇧⌘F`、`⌘P` も同じ窓を開く）。1つの仕事に入口が2つあるのを避けるため。
+- **実行とデバッグ（虫アイコン）を追加。** デバッグ画面はここから開く。
+  デバッグ画面自身にも同じナビゲーションが乗るので行き止まりにならない。
+
+この2点はデザインキャンバス側（Main / SourceControl / Activity / Debug の
+各 artboard）にも反映済み。
+
+## 画面遷移
+
+`src/motion.tsx`。軸は1本の z 軸で、ワークスペースが一番手前、他の画面はその
+奥にいる。画面を離れると今の画面が奥へ退き、次の画面が同じ奥から出てくる
+（戻るときはその逆）。ワークスペースとの関係が本当に違う3つだけ別の動きにして
+あり、動きが「どこへ行ったか」を語るようにしている。
+
+| 動き | 画面 | なぜ |
+| --- | --- | --- |
+| `depth` | 既定（ワークスペース・変更を確認・アクティビティ・デバッグ） | 奥へ退き、奥から出る |
+| `slide` | マージグラフ ↔ 変更を確認 | ナビゲーション上の兄弟なので進行方向へ横移動 |
+| `lift` | セッション | 全Project横断の1枚の表なので、奥からではなく下から上がる |
+| `sheet` | 設定 | 奥ではなく手前に被さるシート |
+
+**ランダムには変えていない。** Tokens artboard が「静かで集中しやすい」表示を
+掲げている以上、同じ操作が毎回違う動きをするのは設計の主張と噛み合わない。
+画面ごとに固定なら、動き自体が場所の手がかりになる。変えたければ
+`src/motion.tsx` の `KIND` 表1つを書き換えれば済む。
+
+尺は Tokens artboard の LATENCY BUDGET から取った。Project切替が 80 / 200ms
+なので画面遷移は 200ms、palette表示が 33 / 80ms なのでオーバーレイは 90ms。
+`prefers-reduced-motion: reduce` では全部止まる。
+
 ## 画面
 
 | 画面 | artboard | 入口 |
 | --- | --- | --- |
 | ワークスペース | `Main` | 起動時 / `esc` |
-| 検索 | `Search` | `⇧⌘F`、titlebar の検索欄、sidebar の虫めがね |
+| 検索 | `Search` | `⇧⌘F`、titlebar の検索欄 |
 | コマンドパレット | `CommandPalette` | `⌘K`（ファイルへ移動は `⌘P`） |
 | 変更を確認 | `SourceControl` | sidebar の盾アイコン、`⌃⌘G` |
 | マージグラフ | `MergeGraph` | sidebar のブランチアイコン |
 | アクティビティ | `Activity` | sidebar のベル、titlebar の Claude Code タブ |
-| 実行とデバッグ | `Debug` | `⇧⌘D` |
+| 実行とデバッグ | `Debug` | sidebar の虫アイコン、`⇧⌘D` |
 | Debug + AI統合（検討中） | `DebugAgent` | `⌘K` →「Debug + AI統合」 |
 | セッション | `SessionRail` | `⌃⌘L`、titlebar の codex タブ |
 | Agentを追加 | `AddAgent` | `⌃⌘N`、セッション画面の「Agentを起動」 |

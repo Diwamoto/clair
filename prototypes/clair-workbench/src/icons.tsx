@@ -105,6 +105,18 @@ export const IconShieldCheck = stroke(
   { strokeLinejoin: 'round' },
 );
 
+// Debug. The canvas had no bug glyph; drawn in the same 16px / 1.4-stroke
+// language as every other icon on the Tokens artboard.
+export const IconBug = stroke(
+  <>
+    <path d="M6.1 3.5 5.1 2.4M9.9 3.5l1-1.1" />
+    <rect x="5" y="4.4" width="6" height="7.8" rx="3" />
+    <path d="M5 7.2H2.7M5 10H2.7M11 7.2h2.3M11 10h2.3" />
+  </>,
+  1.4,
+  { strokeLinecap: 'round', strokeLinejoin: 'round' },
+);
+
 export const IconBell = stroke(
   <>
     <path d="M8 2.6a3.5 3.5 0 0 1 3.5 3.5c0 2.9 1.2 3.8 1.2 3.8H3.3s1.2-.9 1.2-3.8A3.5 3.5 0 0 1 8 2.6z" />

@@ -2,7 +2,7 @@ import { changedFiles, diffs, type DiffLine } from '../data';
 import { HighlightedLine } from '../highlight';
 import { IconArrowRight, IconBranch, IconChevron, IconClaude, IconRefresh } from '../icons';
 import { useWorkbench } from '../store';
-import { QuotaMeter, SidebarStrip, StatusBar } from '../ui';
+import { QuotaMeter, ScreenShell, Sidebar, StatusBar } from '../chrome';
 import { color, line, wash } from '../tokens';
 
 function FileRow({
@@ -92,29 +92,9 @@ export function ReviewScreen() {
   const totals = changedFiles.reduce((acc, f) => ({ a: acc.a + f.added, r: acc.r + f.removed }), { a: 0, r: 0 });
 
   return (
-    <div
-      style={{
-        width: '100%',
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        background: color.chrome,
-        color: color.textPrimary,
-        fontSize: 11,
-      }}
-    >
+    <ScreenShell>
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        <div
-          style={{
-            width: 286,
-            flexShrink: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            borderRight: `1px solid ${line.chrome}`,
-          }}
-        >
-          <SidebarStrip active="review" compact showSessions />
+        <Sidebar compact showSessions>
           <div
             style={{
               height: 32,
@@ -174,7 +154,7 @@ export function ReviewScreen() {
               />
             ))}
           </div>
-        </div>
+        </Sidebar>
 
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: color.canvas }}>
           <div
@@ -360,6 +340,6 @@ export function ReviewScreen() {
         <span style={{ color: color.divider }}>·</span>
         <span>{wb.sessions.length} セッション</span>
       </StatusBar>
-    </div>
+    </ScreenShell>
   );
 }

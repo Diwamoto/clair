@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { activityItems } from '../data';
 import { IconGear, IconSearch } from '../icons';
 import { useWorkbench } from '../store';
-import { SidebarStrip, StatusBar, TrafficLights, VDivider } from '../ui';
+import { ScreenShell, Sidebar, StatusBar, Titlebar } from '../chrome';
 import { color, line, wash } from '../tokens';
 
 export function ActivityScreen() {
@@ -21,46 +21,8 @@ export function ActivityScreen() {
   const items = activityItems.filter((i) => !filter || i.title.includes(filter) || i.meta.includes(filter));
 
   return (
-    <div
-      style={{
-        width: '100%',
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        background: color.chrome,
-        color: color.textPrimary,
-        fontSize: 11,
-      }}
-    >
-      <div
-        style={{
-          height: 48,
-          flexShrink: 0,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          padding: '0 16px',
-          backgroundColor: color.chrome,
-          borderBottom: `1px solid ${line.chrome}`,
-        }}
-      >
-        <TrafficLights />
-        <VDivider />
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            height: 26,
-            padding: '0 9px',
-            borderRadius: 6,
-            background: wash.strong,
-            border: `1px solid ${line.ring}`,
-          }}
-        >
-          <span style={{ fontSize: 12, fontWeight: 600 }}>ccedit</span>
-        </div>
+    <ScreenShell>
+      <Titlebar project="ccedit">
         <div style={{ flex: 1 }} />
         <button
           onClick={() => wb.setScreen('settings')}
@@ -76,19 +38,10 @@ export function ActivityScreen() {
         >
           <IconGear size={15} />
         </button>
-      </div>
+      </Titlebar>
 
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        <div
-          style={{
-            width: 300,
-            flexShrink: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            borderRight: `1px solid ${line.chrome}`,
-          }}
-        >
-          <SidebarStrip active="activity" compact />
+        <Sidebar width={300} compact>
           <div
             style={{
               display: 'flex',
@@ -196,7 +149,7 @@ export function ActivityScreen() {
               );
             })}
           </div>
-        </div>
+        </Sidebar>
 
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: color.canvas }}>
           <div ref={feedRef} className="scroll" style={{ minHeight: 0, flex: 1, padding: '26px 0 16px' }}>
@@ -356,6 +309,6 @@ export function ActivityScreen() {
           ccedit · Claude Code
         </span>
       </StatusBar>
-    </div>
+    </ScreenShell>
   );
 }

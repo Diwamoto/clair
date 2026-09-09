@@ -17,6 +17,7 @@ import { MobileApp } from './screens/Mobile';
 import { ReviewScreen } from './screens/Review';
 import { SettingsScreen } from './screens/Settings';
 import { WorkspaceScreen } from './screens/Workspace';
+import { ScreenStage } from './motion';
 import { WorkbenchProvider, useWorkbench } from './store';
 import { color, line } from './tokens';
 
@@ -85,17 +86,31 @@ export function RouteLink({
   );
 }
 
+const measure = () => ({
+  // documentElement is the reliable measure: window.innerWidth can still read
+  // 0 during an emulated resize or a restored background tab.
+  width: document.documentElement.clientWidth || window.innerWidth || 1440,
+  height: document.documentElement.clientHeight || window.innerHeight || 900,
+});
+
 function useViewport() {
-  const [size, setSize] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
+  const [size, setSize] = useState(measure);
+
   useEffect(() => {
-    const onResize = () => setSize({ width: window.innerWidth, height: window.innerHeight });
+    const onResize = () => setSize(measure());
+    onResize();
+
+    const observer = new ResizeObserver(onResize);
+    observer.observe(document.documentElement);
     window.addEventListener('resize', onResize);
     window.addEventListener('orientationchange', onResize);
     return () => {
+      observer.disconnect();
       window.removeEventListener('resize', onResize);
       window.removeEventListener('orientationchange', onResize);
     };
   }, []);
+
   return size;
 }
 
@@ -185,14 +200,16 @@ function Ide() {
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
-      {wb.screen === 'workspace' ? <WorkspaceScreen /> : null}
-      {wb.screen === 'review' ? <ReviewScreen /> : null}
-      {wb.screen === 'graph' ? <MergeGraphScreen /> : null}
-      {wb.screen === 'activity' ? <ActivityScreen /> : null}
-      {wb.screen === 'debug' ? <DebugScreen /> : null}
-      {wb.screen === 'debugAgent' ? <DebugAgentScreen /> : null}
-      {wb.screen === 'settings' ? <SettingsScreen /> : null}
-      {wb.screen === 'sessions' ? <SessionsScreen /> : null}
+      <ScreenStage screen={wb.screen}>
+        {wb.screen === 'workspace' ? <WorkspaceScreen /> : null}
+        {wb.screen === 'review' ? <ReviewScreen /> : null}
+        {wb.screen === 'graph' ? <MergeGraphScreen /> : null}
+        {wb.screen === 'activity' ? <ActivityScreen /> : null}
+        {wb.screen === 'debug' ? <DebugScreen /> : null}
+        {wb.screen === 'debugAgent' ? <DebugAgentScreen /> : null}
+        {wb.screen === 'settings' ? <SettingsScreen /> : null}
+        {wb.screen === 'sessions' ? <SessionsScreen /> : null}
+      </ScreenStage>
 
       {wb.overlay === 'command' || wb.overlay === 'quickOpen' ? <CommandPalette /> : null}
       {wb.overlay === 'search' ? <SearchOverlay /> : null}
@@ -211,7 +228,7 @@ const DESIGN = { width: 1440, height: 900 };
 function ScaledIde({ viewport }: { viewport: { width: number; height: number } }) {
   // Fit to width: the whole layout is visible at once and the viewer zooms in
   // from there. The design itself is never re-laid-out for the narrow screen.
-  const fit = Math.min(1, viewport.width / DESIGN.width);
+  const fit = Math.max(0.2, Math.min(1, viewport.width / DESIGN.width));
   const [scale, setScale] = useState(fit);
   const [autoFit, setAutoFit] = useState(true);
   const stageRef = useRef<HTMLDivElement>(null);
