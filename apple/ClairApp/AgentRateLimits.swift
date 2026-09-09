@@ -204,141 +204,95 @@ enum CodexRateLimitResponseParser {
 }
 
 enum ClaudeRateLimitResponseParser {
-  static func parse(
-    _ output: String,
-    fetchedAt: Date = Date(),
-    calendar: Calendar = .current
-  ) -> AgentRateLimitSnapshot {
-    let definitions: [(label: String, duration: Int)] = [
-      ("Current session", 300),
-      ("Current week (all models)", 10_080),
-    ]
-    let windows = definitions.compactMap { definition in
-      parseWindow(
-        named: definition.label,
-        durationMinutes: definition.duration,
-        in: output,
-        fetchedAt: fetchedAt,
-        calendar: calendar
+  static func parse(_ data: Data, fetchedAt: Date) throws -> AgentRateLimitSnapshot {
+    struct Window: Decodable {
+      let usedPercentage: Double
+      let resetsAt: Double
+    }
+    struct Limits: Decodable {
+      let fiveHour: Window?
+      let sevenDay: Window?
+    }
+    let payload: Limits
+    do {
+      let decoder = JSONDecoder()
+      decoder.keyDecodingStrategy = .convertFromSnakeCase
+      payload = try decoder.decode(Limits.self, from: data)
+    } catch {
+      throw AgentRateLimitError.invalidResponse
+    }
+    let windows = [(payload.fiveHour, 300), (payload.sevenDay, 10_080)].compactMap {
+      rawWindow, duration -> AgentRateLimitWindow? in
+      guard let window = rawWindow, window.usedPercentage.isFinite,
+        window.resetsAt.isFinite, window.resetsAt > 0
+      else { return nil }
+      return AgentRateLimitWindow(
+        usedPercent: window.usedPercentage.clamped(to: 0...100),
+        durationMinutes: duration,
+        resetsAt: Date(timeIntervalSince1970: window.resetsAt)
       )
     }
-
+    guard !windows.isEmpty else { throw AgentRateLimitError.invalidResponse }
     return AgentRateLimitSnapshot(
       id: AgentRateLimitProvider.claudeCode.id,
       displayName: AgentRateLimitProvider.claudeCode.displayName,
-      planType: windows.isEmpty ? "API課金" : "Claude.ai",
-      windows: windows,
-      fetchedAt: fetchedAt,
-      detail: windows.isEmpty ? "サブスクリプションのレート制限はありません" : nil
+      planType: "Claude.ai", windows: windows, fetchedAt: fetchedAt,
+      detail: "取得時点の使用量 · \(fetchedAt.formatted(date: .abbreviated, time: .shortened))"
     )
   }
+}
 
-  private static func parseWindow(
-    named label: String,
-    durationMinutes: Int,
-    in output: String,
-    fetchedAt: Date,
-    calendar: Calendar
-  ) -> AgentRateLimitWindow? {
-    let escapedLabel = NSRegularExpression.escapedPattern(for: label)
-    let pattern =
-      "(?im)^\\s*\(escapedLabel):?\\s*(?:[^\\n]*?\\s)?([0-9]+(?:\\.[0-9]+)?)% used(?:\\s*[·•-]\\s*resets\\s+([^\\r\\n]+))?"
-    guard
-      let expression = try? NSRegularExpression(pattern: pattern),
-      let match = expression.firstMatch(
-        in: output,
-        range: NSRange(output.startIndex..., in: output)
-      ),
-      let percentRange = Range(match.range(at: 1), in: output),
-      let usedPercent = Double(output[percentRange])
-    else {
-      return nil
-    }
-
-    let resetText: String?
-    if match.range(at: 2).location != NSNotFound,
-      let range = Range(match.range(at: 2), in: output)
-    {
-      resetText = String(output[range])
-    } else {
-      resetText = nil
-    }
-    let fallback = fetchedAt.addingTimeInterval(TimeInterval(durationMinutes * 60))
-    return AgentRateLimitWindow(
-      usedPercent: usedPercent.clamped(to: 0...100),
-      durationMinutes: durationMinutes,
-      resetsAt: resetText.flatMap {
-        parseResetDate($0, relativeTo: fetchedAt, calendar: calendar)
-      } ?? fallback
-    )
+/// Reads only status-line output; never starts Claude or accesses its credentials.
+enum ClaudeRateLimitCache {
+  static func fileURL(profile: ClairRuntimeProfile = .current) -> URL {
+    FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+      .appendingPathComponent(profile.applicationSupportDirectoryName)
+      .appendingPathComponent("claude-rate-limits-v1.json")
   }
 
-  private static func parseResetDate(
-    _ rawValue: String,
-    relativeTo now: Date,
-    calendar: Calendar
-  ) -> Date? {
-    var value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
-    var timeZone = calendar.timeZone
-    if let zoneExpression = try? NSRegularExpression(pattern: #"\s*\(([^)]+)\)\s*$"#),
-      let match = zoneExpression.firstMatch(
-        in: value,
-        range: NSRange(value.startIndex..., in: value)
+  static func fetch(fileURL: URL = fileURL()) throws -> AgentRateLimitSnapshot {
+    guard FileManager.default.fileExists(atPath: fileURL.path) else {
+      return AgentRateLimitSnapshot(
+        id: AgentRateLimitProvider.claudeCode.id,
+        displayName: AgentRateLimitProvider.claudeCode.displayName,
+        planType: nil, windows: [], fetchedAt: .distantPast,
+        detail: "未取得 · ClairでClaude Codeを使用すると更新されます"
       )
-    {
-      if let zoneRange = Range(match.range(at: 1), in: value),
-        let parsedZone = TimeZone(identifier: String(value[zoneRange]))
-      {
-        timeZone = parsedZone
-      }
-      if let fullRange = Range(match.range(at: 0), in: value) {
-        value.removeSubrange(fullRange)
-      }
     }
-
-    let datedFormats = ["MMM d 'at' h:mma", "MMM d, h:mma", "MMM d h:mma"]
-    for format in datedFormats {
-      let formatter = resetFormatter(format: format, timeZone: timeZone)
-      formatter.defaultDate = now
-      if let date = formatter.date(from: value) {
-        var parsedCalendar = calendar
-        parsedCalendar.timeZone = timeZone
-        let year = parsedCalendar.component(.year, from: now)
-        var components = parsedCalendar.dateComponents([.month, .day, .hour, .minute], from: date)
-        components.year = year
-        if let candidate = parsedCalendar.date(from: components) {
-          return candidate >= now
-            ? candidate
-            : parsedCalendar.date(byAdding: .year, value: 1, to: candidate)
-        }
-      }
-    }
-
-    for format in ["h:mma", "ha"] {
-      let formatter = resetFormatter(format: format, timeZone: timeZone)
-      if let time = formatter.date(from: value) {
-        var parsedCalendar = calendar
-        parsedCalendar.timeZone = timeZone
-        var components = parsedCalendar.dateComponents([.year, .month, .day], from: now)
-        let timeComponents = parsedCalendar.dateComponents([.hour, .minute], from: time)
-        components.hour = timeComponents.hour
-        components.minute = timeComponents.minute
-        if let candidate = parsedCalendar.date(from: components) {
-          return candidate > now
-            ? candidate
-            : parsedCalendar.date(byAdding: .day, value: 1, to: candidate)
-        }
-      }
-    }
-    return nil
+    let values = try fileURL.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
+    guard let date = values.contentModificationDate, let size = values.fileSize,
+      size <= 65_536
+    else { throw AgentRateLimitError.invalidResponse }
+    return try ClaudeRateLimitResponseParser.parse(Data(contentsOf: fileURL), fetchedAt: date)
   }
 
-  private static func resetFormatter(format: String, timeZone: TimeZone) -> DateFormatter {
-    let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.timeZone = timeZone
-    formatter.dateFormat = format
-    return formatter
+  static func settingsArgument(
+    projectRoot: URL, receiver: URL, cache: URL,
+    userDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+      .appendingPathComponent(".claude")
+  ) throws -> String {
+    var status: [String: Any] = [:]
+    for url in [
+      userDirectory.appendingPathComponent("settings.json"),
+      projectRoot.appendingPathComponent(".claude/settings.json"),
+      projectRoot.appendingPathComponent(".claude/settings.local.json"),
+    ] {
+      guard FileManager.default.fileExists(atPath: url.path) else { continue }
+      let object = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
+      if let value = object?["statusLine"] as? [String: Any] {
+        status.merge(value) { _, new in new }
+      }
+    }
+    let original = status["command"] as? String ?? ""
+    status["type"] = "command"
+    status["command"] = [
+      "/bin/sh", AgentLaunchCommand.shellQuote(receiver.path),
+      "--status-line", AgentLaunchCommand.shellQuote(cache.path),
+      AgentLaunchCommand.shellQuote(original),
+    ].joined(separator: " ")
+    let data = try JSONSerialization.data(
+      withJSONObject: ["statusLine": status], options: [.sortedKeys])
+    return " --settings " + AgentLaunchCommand.shellQuote(String(decoding: data, as: UTF8.self))
   }
 }
 
@@ -413,7 +367,7 @@ struct AgentRateLimitClient: Sendable {
       }
       group.addTask {
         await outcome(for: .claudeCode) {
-          [try ClaudeRateLimitRequest.fetch()]
+          [try ClaudeRateLimitCache.fetch()]
         }
       }
       group.addTask {
@@ -571,17 +525,6 @@ private enum CodexAppServerRateLimitRequest {
   }
 }
 
-private enum ClaudeRateLimitRequest {
-  static func fetch(timeout: TimeInterval = 12) throws -> AgentRateLimitSnapshot {
-    let data = try ProcessOutputRequest.run(
-      shellCommand: "exec claude -p '/usage'",
-      toolName: "Claude Code",
-      timeout: timeout
-    )
-    return ClaudeRateLimitResponseParser.parse(String(decoding: data, as: UTF8.self))
-  }
-}
-
 private enum OpenCodeRateLimitRequest {
   static func fetch() async throws -> AgentRateLimitSnapshot {
     guard let apiKey = try apiKey() else {
@@ -631,48 +574,6 @@ private enum OpenCodeRateLimitRequest {
       return nil
     }
     return key
-  }
-}
-
-private enum ProcessOutputRequest {
-  static func run(
-    shellCommand: String,
-    toolName: String,
-    timeout: TimeInterval
-  ) throws -> Data {
-    let process = Process()
-    let standardOutput = Pipe()
-    let standardError = Pipe()
-    process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-    process.arguments = ["-lc", shellCommand]
-    process.standardOutput = standardOutput
-    process.standardError = standardError
-
-    let finished = DispatchSemaphore(value: 0)
-    process.terminationHandler = { _ in finished.signal() }
-    do {
-      try process.run()
-    } catch {
-      throw AgentRateLimitError.processFailed("\(toolName) CLIが見つかりません。")
-    }
-
-    if finished.wait(timeout: .now() + timeout) == .timedOut {
-      process.terminate()
-      throw AgentRateLimitError.processFailed("\(toolName)の使用量取得がタイムアウトしました。")
-    }
-    let output = standardOutput.fileHandleForReading.readDataToEndOfFile()
-    let errorOutput = standardError.fileHandleForReading.readDataToEndOfFile()
-    guard process.terminationStatus == 0 else {
-      let message = String(decoding: errorOutput, as: UTF8.self)
-        .trimmingCharacters(in: .whitespacesAndNewlines)
-      if message.localizedCaseInsensitiveContains("command not found") {
-        throw AgentRateLimitError.processFailed("\(toolName) CLIが見つかりません。")
-      }
-      throw AgentRateLimitError.processFailed(
-        message.isEmpty ? "\(toolName)から使用量を取得できませんでした。" : message
-      )
-    }
-    return output
   }
 }
 

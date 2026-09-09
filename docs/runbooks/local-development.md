@@ -377,6 +377,21 @@ should appear with their status. Mute the Project, repeat the bell/exit checks, 
 confirm history continues to update without notifications. Unmute the Project and
 verify a session mute can be toggled independently.
 
+Claude usage is collected passively from the official `statusLine` JSON. New Claude
+sessions launched through Clair's agent launcher receive a session-only `--settings`
+override. The receiver preserves the existing user/project/local status-line command
+and its output; it does not edit those settings files. Only `rate_limits` is saved to
+`claude-rate-limits-v1.json` in the channel's Application Support directory, using
+an atomic replacement and owner-only permissions. No Claude process is launched to
+refresh usage, and no credentials are read for this feature.
+
+The first observation requires using a newly launched Claude session that supplies
+rate-limit data. Existing sessions and Claude started manually in a shell are not
+retrofitted. Until then, Clair displays 未取得. Missing data preserves the last
+observation; the UI shows its observation time rather than claiming a fresh reading.
+A managed status-line policy can override the session setting, preventing collection.
+See [Claude's status-line documentation](https://code.claude.com/docs/en/statusline).
+
 For the optional documented hook path, configure the agent hook command shown in the
 panel as `sh "$CLAIR_AGENT_HOOK_RECEIVER"`, then send a small JSON event through that
 command, for example:

@@ -10,6 +10,30 @@
 
 set -eu
 
+# Status-line mode preserves the original command's stdin and stdout. Only the
+# small rate_limits object is persisted, atomically, in Clair's private cache.
+if [ "${1:-}" = "--status-line" ]; then
+  cache=$2
+  original=${3:-}
+  umask 077
+  payload=$(mktemp)
+  limits=""
+  trap 'rm -f "$payload"; [ -z "$limits" ] || rm -f "$limits"' EXIT
+  cat >"$payload"
+  if mkdir -p "$(dirname "$cache")"; then
+    limits=$(mktemp "${cache}.XXXXXX")
+    if /usr/bin/plutil -extract rate_limits json -o "$limits" "$payload" 2>/dev/null &&
+      { /usr/bin/plutil -extract five_hour.used_percentage raw -o /dev/null "$limits" 2>/dev/null ||
+        /usr/bin/plutil -extract seven_day.used_percentage raw -o /dev/null "$limits" 2>/dev/null; }; then
+      mv -f "$limits" "$cache"
+    fi
+  fi
+  if [ -n "$original" ]; then
+    /bin/sh -c "$original" <"$payload"
+  fi
+  exit 0
+fi
+
 hook_file=${CLAIR_AGENT_HOOK_FILE:-}
 if [ -z "$hook_file" ]; then
   cat >/dev/null

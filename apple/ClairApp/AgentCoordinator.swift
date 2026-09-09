@@ -308,7 +308,19 @@ final class AgentWorkflowCoordinator: ObservableObject {
     let exportCommand = exports.map { name, value in
       "export \(name)=\(AgentLaunchCommand.shellQuote(value))"
     }.joined(separator: "; ")
-    let agentCommand = profile.shellCommand(for: projectRoot, modelID: modelID)
+    var agentCommand = profile.shellCommand(for: projectRoot, modelID: modelID)
+    if profile == .claudeCode, let hookReceiverURL,
+      let directory = activityStore.fileURL?.deletingLastPathComponent()
+    {
+      do {
+        agentCommand += try ClaudeRateLimitCache.settingsArgument(
+          projectRoot: projectRoot, receiver: hookReceiverURL,
+          cache: directory.appendingPathComponent("claude-rate-limits-v1.json")
+        )
+      } catch {
+        lastErrorMessage = "Claude使用量の連携設定を読み込めませんでした: \(error.localizedDescription)"
+      }
+    }
     return exportCommand.isEmpty ? agentCommand : "\(exportCommand); \(agentCommand)"
   }
 
