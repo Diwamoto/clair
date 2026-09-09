@@ -57,7 +57,8 @@ extension App {
         try? d.save(to: tempURL)
         let beforeRelease = processFootprintBytes()
         let displayCacheReleased = d.releaseDisplayCache()
-        await pump(0.2)
+        let parserIdleVerified = await d.waitForAnalysisIdle()
+        await pump(0.1)
         let afterRelease = processFootprintBytes()
         try? FileManager.default.removeItem(at: tempURL)
         let result: [String: Any] = [
@@ -73,9 +74,10 @@ extension App {
             "display_lifecycle": d.lifecycleState.display.rawValue,
             "analysis_lifecycle": d.lifecycleState.analysis.rawValue,
             "parser_idle": d.lifecycleState.parserIdle as Any,
+            "parser_idle_verified": parserIdleVerified,
             "fully_released": d.lifecycleState.isFullyReleased,
             "after_release_footprint_bytes": afterRelease,
-            "note": "single process, one fixture, one open/close cycle; display cache release is separate from Tree-sitter idle; parser_idle remains unknown because the pinned dependency exposes no close/join contract; footprint is task resident_size and not a peak or input-to-photon metric"
+            "note": "single process, one fixture, one open/close cycle; close uses the PoC lifecycle patch to cancel and drain the Tree-sitter executor before releasing the provider; footprint is task resident_size and not a peak or input-to-photon metric"
         ]
         if let data = try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]) {
             FileHandle.standardOutput.write(data)
@@ -273,11 +275,13 @@ extension App {
             try lifecycle.save(to: lifecycleURL)
             let released = lifecycle.releaseDisplayCache()
             check("clean tab releases display cache", released && !lifecycle.isDisplayLoaded)
+            let parserIdleVerified = await lifecycle.waitForAnalysisIdle()
             check(
-                "display release does not claim parser idle",
-                lifecycle.lifecycleState == .init(display: .displayCacheReleased, analysis: .closeRequestedIdleUnknown)
-                    && lifecycle.lifecycleState.parserIdle == nil
-                    && !lifecycle.lifecycleState.isFullyReleased
+                "close drain verifies parser idle",
+                parserIdleVerified
+                    && lifecycle.lifecycleState == .init(display: .displayCacheReleased, analysis: .idleVerified)
+                    && lifecycle.lifecycleState.parserIdle == true
+                    && lifecycle.lifecycleState.isFullyReleased
             )
             lifecycle.ensureDisplay()
             check(
@@ -293,6 +297,21 @@ extension App {
         check("dirty tab retains undo-capable display", !lifecycle.releaseDisplayCache() && lifecycle.isDisplayLoaded && lifecycle.hasUndoHistory)
         lifecycle.controller.textView.undoManager?.undo()
         check("retained tab undo restores body", lifecycle.text == "let value = 1\n")
+        let asyncLifecycleText = String(repeating: "let value = 1\n", count: 20_000)
+        let asyncLifecycle = Document(name: "async-lifecycle.swift", text: asyncLifecycleText, language: .swift)
+        asyncLifecycle.loadPendingText()
+        asyncLifecycle.controller.textView._undoManager?.clearStack()
+        asyncLifecycle.requestInitialHighlight()
+        let asyncReleased = asyncLifecycle.releaseDisplayCache()
+        let asyncParserIdle = await asyncLifecycle.waitForAnalysisIdle()
+        check(
+            "async native close drains parser",
+            asyncLifecycle.policyDecision.mode == .asynchronousNative
+                && asyncReleased
+                && asyncParserIdle
+                && asyncLifecycle.lifecycleState == .init(display: .displayCacheReleased, analysis: .idleVerified)
+                && asyncLifecycle.lifecycleState.isFullyReleased
+        )
         let policyBoundary = String(repeating: "a", count: NativeEditorPolicy.maximumSynchronousUTF16Length)
         check("policy sync boundary", NativeEditorPolicy.decide(text: policyBoundary).mode == .synchronousNative)
         check("policy async boundary", NativeEditorPolicy.decide(text: policyBoundary + "a").mode == .asynchronousNative)
@@ -311,6 +330,7 @@ extension App {
             fallbackDocument.isFallback && fallbackDocument.controller == nil
                 && fallbackDocument.lifecycleState.display == .fallback
                 && fallbackDocument.lifecycleState.analysis == .notStarted
+                && fallbackDocument.lifecycleState.isFullyReleased
         )
         results.append(["alternative_TextKit2": textKitProbe(), "note": "basic captures only; incremental syntax, IME and multicursor not validated for alternative"])
         if benchmark { await runBenchmarks(into: &results) }

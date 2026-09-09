@@ -1,28 +1,29 @@
 # NE-05 lifecycle / memory evidence
 
-測定日: 2026-09-08（Apple M4、macOS 26.6.2、arm64、Release build、各fixtureは独立プロセスで1回）
+測定日: 2026-09-09（Apple M4、macOS 26.6.2、arm64、Release build、各fixtureは独立プロセスで1回）
 
 ## 測定境界
 
 - `open_footprint_bytes` と `before_release_footprint_bytes` は、1 fixtureだけを開いたプロセスの `task_info(TASK_VM_INFO).resident_size`。
-- `after_release_footprint_bytes` は `Document.releaseDisplayCache()` 後に0.2秒待って取得した値。peak RSSやinput-to-photonではない。
+- `after_release_footprint_bytes` は `Document.releaseDisplayCache()` 後にparser idleを最大5秒待ち、さらに0.1秒待って取得した値。peak RSSやinput-to-photonではない。
 - 累積値は既存の `benchmark.json` / `poc-measurements.md` の「先行文書を保持した累積max RSS」。単独値と比較して速度・必要メモリ比を主張しない。
 
 ## 2026-09-09 実装後: 表示解放とfallbackの境界
 
-今回の実装では、表示 cache の解放と parser の idle を別状態として記録する。固定したCodeEditSourceEditorにclose用job handle、idle通知、join APIがないため、close時はrevisionを無効化してlate callbackを拒否するが、parser停止完了を推定しない。
+表示 cache の解放と parser の idle を別状態として記録する。固定した upstream revisionには元々 close用job handle／idle通知／join APIがないため、PoC配下の [lifecycle patch](../../../../prototypes/native-editor-poc/upstream-patches/CodeEditSourceEditor-lifecycle.patch) が `TreeSitterExecutor` の queued/running taskをcancelし、queue empty後にだけ `TreeSitterClient.close` を完了させる。close開始時はrevisionを無効化し、旧highlighterのlate callbackは適用しない。
 
-native安全上限（UTF-8 bytes `10,000,000`、UTF-16長 `10,000,000`、最大行UTF-16長 `1,000,000`）のいずれかを超える文書は `webFallback` とし、POCはnative controllerとTree-sitterを生成せず、サイズと理由を表示する。これにより10MB fixtureのような文書を解析jobへ無条件投入しない。上限内でUTF-16長が `250,000` を超える文書は引き続き非同期nativeであり、close後idleは未検証である。
+native安全上限（UTF-8 bytes `10,000,000`、UTF-16長 `10,000,000`、最大行UTF-16長 `1,000,000`）のいずれかを超える文書は `webFallback` とし、POCはnative controllerとTree-sitterを生成せず、サイズと理由を表示する。上限内でUTF-16長が `250,000` を超える文書は非同期nativeとし、1MB fixtureでclose後idleを確認した。
 
 ### 実装後のprobe
 
 | fixture | policy | display lifecycle | analysis lifecycle | parser idle | fully released | native controller |
 |---|---|---|---|---|---|---|
-| `normal.swift` | `synchronousNative` | `displayCacheReleased` | `closeRequestedIdleUnknown` | `null` | `false` | close後に解放要求 |
-| `10mb.swift` | `webFallback` | `fallback` | `notStarted` | `true` | `false` | 生成しない |
-| `long-line.ts` | `webFallback` | `fallback` | `notStarted` | `true` | `false` | 生成しない |
+| `normal.swift` | `synchronousNative` | `displayCacheReleased` | `idleVerified` | `true` | `true` | close後に解放 |
+| `1mb.swift` | `asynchronousNative` | `displayCacheReleased` | `idleVerified` | `true` | `true` | close後に解放 |
+| `10mb.swift` | `webFallback` | `fallback` | `notStarted` | `true` | `true` | 生成しない |
+| `long-line.ts` | `webFallback` | `fallback` | `notStarted` | `true` | `true` | 生成しない |
 
-実行コマンドは `./run.sh --lifecycle-probe -ApplePersistenceIgnoreState YES fixtures/<fixture>`。normalの表示解放は `true` だがparser idleはunknown、10MBはfallbackでexit 0となる。各値は `task_info(TASK_VM_INFO).resident_size` の単独プロセス測定であり、peak RSSやinput-to-photonではない。
+実行コマンドは `python3 prepare-build.py`、`swift build -c release`、`./run.sh --lifecycle-probe -ApplePersistenceIgnoreState YES fixtures/<fixture>`。native 2 fixtureは表示解放とparser drainがともにexit 0で完了し、fallback 2 fixtureはnative資源を生成せずexit 0となる。各値は `task_info(TASK_VM_INFO).resident_size` の単独プロセス測定であり、peak RSSやinput-to-photonではない。
 
 ## 2026-09-08 再調査: close後jobのcancel/idle契約
 
@@ -52,16 +53,16 @@ native安全上限（UTF-8 bytes `10,000,000`、UTF-16長 `10,000,000`、最大�
 
 この再現は既存の10MB lifecycle probe結果に基づく。今回の再調査では同一Macの競合を避けるため、Xcode host testとGUI benchmarkを追加実行していない。必要な解決は、upstreamまたはfork側で job単位のcancel、generation付きcompletion、cancel完了後のidle/joinを公開し、その契約をPoCで検証することである。
 
-## 結果
+## 2026-09-09 実測結果
 
 | fixture | bytes / UTF-16 / 最大行UTF-16 | policy | 単独open footprint | close前 | close後 | 解放API |
 |---|---:|---|---:|---:|---:|---|
-| `normal.swift` | 110 / 81 / 21 | synchronousNative | 116,539,392 | 116,539,392 | 115,687,424 | true |
-| `1mb.swift` | 1,048,554 / 833,466 / 30 | asynchronousNative | 174,555,136 | 175,587,328 | 175,357,952 | true |
-| `10mb.swift` | 10,485,735 / 8,334,815 / 30 | webFallback | 333,856,768 | 323,502,080 | 411,549,696 | true |
-| `long-line.ts` | 1,048,589 / 1,048,589 / 1,048,589 | webFallback | 191,758,336 | 192,839,680 | 192,528,384 | true |
+| `normal.swift` | 110 / 81 / 21 | synchronousNative | 113,754,112 | 113,754,112 | 113,770,496 | true |
+| `1mb.swift` | 1,048,554 / 833,466 / 30 | asynchronousNative | 211,517,440 | 212,549,632 | 212,647,936 | true |
+| `10mb.swift` | 10,485,735 / 8,334,815 / 30 | webFallback | 117,342,208 | 117,342,208 | 117,342,208 | true |
+| `long-line.ts` | 1,048,589 / 1,048,589 / 1,048,589 | webFallback | 102,170,624 | 102,170,624 | 102,170,624 | true |
 
-既存の累積max RSSは `normal.swift` 149.2 MiB、`1mb.swift` 250.3 MiB、`10mb.swift` 1077.7 MiB、`long-line.ts` 1168.4 MiB（`benchmark.json`、同一プロセスで順次保持）である。50追加タブ生成・表示は1,419.08 msだった。
+累積max RSSの既存値は `normal.swift` 149.2 MiB、`1mb.swift` 250.3 MiB、`10mb.swift` 1077.7 MiB、`long-line.ts` 1168.4 MiB（`benchmark.json`、同一プロセスで順次保持）であり、今回の単独probeと混同しない。50追加タブ生成・表示の既存値は1,419.08 msだった。native資源を作らない `fallback/notStarted` も、解放対象が存在しないため `fully_released=true` として扱う。
 
 ## 実装した保持方針
 
@@ -78,6 +79,9 @@ native安全上限（UTF-8 bytes `10,000,000`、UTF-16長 `10,000,000`、最大�
 - いずれかのnative上限を超えたら `webFallback` とし、byte数・UTF-16長・最大行長のどの境界かを記録する。
 - self-testで同期境界、非同期境界、byte上限、最大行上限の各 `N` / `N+1` を検証した。
 
-## 未完了 / blocker
+## 制限・引き継ぎ
 
-`normal.swift`、`1mb.swift`、`long-line.ts`ではcontroller解放後のfootprintが同等か僅かに減少した。一方、10MB probeでは解放API自体はtrueでも0.2秒後のfootprintが `323,502,080` bytes から `411,549,696` bytes へ増えた。Tree-sitterの非同期parse/query jobがcontroller解放後も継続している可能性があり、parser jobのcancel/idle待機をまだ証明できていない。このためNE-05はopenのままとし、10MBはnativeへ無条件投入しない。次に必要なのは解析jobのgeneration/cancellation契約と、close後にjobが保持していたcontroller/parser/delegateが解放されたことを確認する証跡である。
+- lifecycle patchは `Package.resolved` の依存revisionを変更せず、PoCの `.build` checkoutへ `prepare-build.py` が適用するローカル差分である。本番採用時はCodeEditSourceEditor upstreamまたは管理対象forkへ同等の契約を取り込み、upstreamテストを追加する。
+- `TreeSitterExecutor` の実行中operationは協調的にcancelされる。close completionはoperationが戻りqueueから除去されるまで遅延するが、強制停止ではない。
+- footprintは `resident_size` の単独プロセス値であり、ピークRSSや入力から描画までの遅延ではない。今回のnative probeではnormalが `113,754,112 → 113,770,496` bytes、1MBが `211,517,440 → 212,647,936` bytesで、いずれも `idleVerified` まで完了した。10MBと長大行は安全上限によりnative controller／parserを生成しない。
+- dirty本文、Undo/Redo、composition、pending proposalを保持したままのタブ解放は対象外である。これはユーザー状態を無断破棄しないための仕様であり、タブを閉じる最終解放の設計は本番実装時に別途行う。

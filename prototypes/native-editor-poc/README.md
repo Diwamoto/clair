@@ -15,7 +15,7 @@ python3 make-fixtures.py
 ./run.sh fixtures/normal.swift fixtures/sample.rs fixtures/sample.ts fixtures/sample.tsx fixtures/sample.json fixtures/sample.md
 ```
 
-`Package.resolved`とSourceEditorのrevisionを保持すること。初回取得はCodeEditLanguagesのGit履歴で数GB、展開済みバイナリ資産も約588 MBを使った。`prepare-build.py`はPoC配下のSPMチェックアウトのSymbols資産宣言だけを補正する。`package-app.py`はSwift CLI用のbundle配置を補正する。いずれも本番Clairを変更しない。独自Symbolsアイコンの表示は保証しない。
+`Package.resolved`とSourceEditorのrevisionを保持すること。初回取得はCodeEditLanguagesのGit履歴で数GB、展開済みバイナリ資産も約588 MBを使った。`prepare-build.py`はPoC配下のSPMチェックアウトだけを補正し、Symbols資産の宣言と、固定したCodeEditSourceEditor revisionへNE-05のlifecycle patchを冪等に適用する。`package-app.py`はSwift CLI用のbundle配置を補正する。いずれも本番Clairを変更しない。独自Symbolsアイコンの表示は保証しない。lifecycle patchは本番依存へ取り込む前のPoC用upstream差分である。
 
 `run.sh`は専用ロックで重複起動を拒否。Quitまたはウィンドウを閉じて終了する。計測モードは自動終了する。アプリbundleは`.build/Clair Native PoC.app`に生成されるが、再現性と二重起動防止のため`run.sh`を使う。
 
@@ -28,7 +28,7 @@ python3 make-fixtures.py
 - **Apply row / Apply block**: 変更行を選択して部分適用。固定サンプルでは1ブロック＝1編集なので共通経路。**Apply all**は全適用。**Reject**は破棄。
 - 部分適用後の残りは意図的に古いrevisionのまま。再提案が必要。Editorへ戻って編集してから適用すると拒否される。
 - **Save as**: UTF-8で別名保存。IME変換中は拒否。本番の外部変更検出・ローカル履歴との統合はPoC外。
-- **Release tab cache**: clean、Undo/Redo履歴なし、marked textなし、pending proposalなしのタブだけ表示controllerを解放し、本文・selection・scrollを保持して再オープン時に復元する。dirty本文、Undo/Redo、composition、pending proposalは保持する。close時は解析revisionを無効化してlate callbackを拒否するが、固定したCodeEditSourceEditorに解析jobのclose handle/idle待機APIがないため、表示cache解放とTree-sitter idleを同一視しない。
+- **Release tab cache**: clean、Undo/Redo履歴なし、marked textなし、pending proposalなしのタブだけ表示controllerを解放し、本文・selection・scrollを保持して再オープン時に復元する。dirty本文、Undo/Redo、composition、pending proposalは保持する。close時は解析revisionを無効化し、NE-05のlifecycle patchがTree-sitter executorのqueued/running taskをcancelしてqueue emptyまで待つ。providerはdrain完了まで保持し、late callbackは適用しない。再表示時はterminalになったclientを再利用せず新規生成する。
 
 大規模fileのPoC policyは、UTF-8 bytes `10,000,000`、UTF-16長 `10,000,000`、最大行UTF-16長 `1,000,000` をnative上限とする。UTF-16長 `250,000` 超は非同期native、いずれかの上限超過はweb fallbackとして扱い、native controllerとTree-sitterを生成しない。これは採用決定ではなく、[NE-05 lifecycle evidence](../../docs/issues/native-editor/evidence/ne05-lifecycle.md) と `LifecyclePolicy.swift` の回帰境界である。
 
@@ -46,7 +46,7 @@ python3 summarize-results.py
 python3 audit-dependencies.py
 ```
 
-上流そのままの複数カーソルUndoは`expectedFailure: true`として失敗を記録し、PoCアダプター付きの同じ操作は合格を要求する。他の必須テストが失敗した場合、終了コードは1。TextKit 2の小さな代案検証は補足結果として別に保存する。実IME操作の合否を合成marked-text APIテストから推定しない。
+上流そのままの複数カーソルUndoは`expectedFailure: true`として失敗を記録し、PoCアダプター付きの同じ操作は合格を要求する。close中のキャンセルはhighlighterの再試行ループへ戻さず、旧controllerへ空結果として終端させる。他の必須テストが失敗した場合、終了コードは1。TextKit 2の小さな代案検証は補足結果として別に保存する。実IME操作の合否を合成marked-text APIテストから推定しない。
 
 ベンチマークは各サイズの文書を順次保持。各操作20回、起動1回。初期表示の同期処理、可視範囲の色付け検出、編集API、スクロールAPI、2タブ往復を計測する。画面の最終ピクセルが更新されるまでの時間ではない。50タブを開き、大きいdiffの配置計算・表示・スクロールも測る。結果の生データはJSON。NE-04の検証では `--ne04` を追加すると既存証跡を上書きせず `evidence/checks-ne04.json` / `evidence/benchmark-ne04.json` に保存する。
 

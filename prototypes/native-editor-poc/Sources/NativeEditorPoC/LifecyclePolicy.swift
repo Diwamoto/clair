@@ -14,8 +14,11 @@ enum NativeEditorAnalysisLifecycle: String, Equatable {
 }
 
 /// Display memory and parser work have separate completion contracts.
-/// The pinned CodeEditSourceEditor dependency does not expose a close handle
-/// or an idle/join signal, so display release must not imply parser release.
+/// The pinned upstream CodeEditSourceEditor revision does not expose a direct
+/// close handle or an idle/join signal. `prepare-build.py` applies the PoC-only
+/// lifecycle patch that adds this contract, and the PoC records parser release
+/// only after that drain barrier completes; display release alone never implies
+/// parser release.
 struct NativeEditorLifecycleState: Equatable {
     let display: NativeEditorDisplayLifecycle
     let analysis: NativeEditorAnalysisLifecycle
@@ -32,7 +35,14 @@ struct NativeEditorLifecycleState: Equatable {
     }
 
     var isFullyReleased: Bool {
-        display == .displayCacheReleased && analysis == .idleVerified
+        switch display {
+        case .fallback:
+            return analysis == .notStarted
+        case .displayCacheReleased:
+            return analysis == .idleVerified
+        case .loaded:
+            return false
+        }
     }
 }
 

@@ -29,13 +29,37 @@ final class RevisionAwareHighlightProvider: HighlightProviding {
     private(set) var lifecycleState: NativeEditorAnalysisLifecycle = .active
 
     /// Invalidates completions before the display controller is released.
-    /// CodeEditSourceEditor has no cancellable job handle or idle/join callback,
-    /// so this intentionally records an unknown idle state instead of claiming
-    /// that Tree-sitter work has finished.
+    /// This remains the deinitialization fallback; the display-cache release
+    /// path below uses the explicit lifecycle barrier while retaining the
+    /// provider until its executor is idle.
     func requestClose() {
         guard lifecycleState == .active else { return }
         _ = gate.beginEdit()
         lifecycleState = .closeRequestedIdleUnknown
+    }
+
+    /// Requests close through the pinned dependency's lifecycle API. The
+    /// provider remains retained by `Document` until the dependency reports
+    /// that its executor queue is idle.
+    @MainActor func requestClose(completion: @escaping @MainActor (Bool) -> Void) {
+        guard lifecycleState == .active else {
+            completion(lifecycleState == .idleVerified)
+            return
+        }
+
+        _ = gate.beginEdit()
+        lifecycleState = .closeRequestedIdleUnknown
+
+        client.close { [weak self] idleVerified in
+            guard let self, self.lifecycleState == .closeRequestedIdleUnknown else {
+                completion(false)
+                return
+            }
+            if idleVerified {
+                self.lifecycleState = .idleVerified
+            }
+            completion(idleVerified)
+        }
     }
 
     @MainActor func setUp(textView: TextView, codeLanguage: CodeLanguage) {
@@ -56,13 +80,16 @@ final class RevisionAwareHighlightProvider: HighlightProviding {
         completion: @escaping @MainActor (Result<IndexSet, Error>) -> Void
     ) {
         guard lifecycleState == .active else {
-            completion(.failure(HighlightProvidingError.operationCancelled))
+            completion(closingResult(.success(IndexSet())))
             return
         }
         let token = gate.token()
         client.applyEdit(textView: textView, range: range, delta: delta) { [weak self] result in
             guard let self, self.gate.accepts(token) else {
-                completion(.failure(HighlightProvidingError.operationCancelled))
+                completion(
+                    self?.closingResult(.success(IndexSet()))
+                        ?? .failure(HighlightProvidingError.operationCancelled)
+                )
                 return
             }
             completion(result)
@@ -75,16 +102,28 @@ final class RevisionAwareHighlightProvider: HighlightProviding {
         completion: @escaping @MainActor (Result<[HighlightRange], Error>) -> Void
     ) {
         guard lifecycleState == .active else {
-            completion(.failure(HighlightProvidingError.operationCancelled))
+            completion(closingResult(.success([])))
             return
         }
         let token = gate.token()
         client.queryHighlightsFor(textView: textView, range: range) { [weak self] result in
             guard let self, self.gate.accepts(token) else {
-                completion(.failure(HighlightProvidingError.operationCancelled))
+                completion(
+                    self?.closingResult(.success([]))
+                        ?? .failure(HighlightProvidingError.operationCancelled)
+                )
                 return
             }
             completion(result)
+        }
+    }
+
+    private func closingResult<T>(_ closed: Result<T, Error>) -> Result<T, Error> {
+        switch lifecycleState {
+        case .closeRequestedIdleUnknown, .idleVerified:
+            return closed
+        case .active, .notStarted:
+            return .failure(HighlightProvidingError.operationCancelled)
         }
     }
 

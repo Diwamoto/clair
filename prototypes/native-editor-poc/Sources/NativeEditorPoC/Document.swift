@@ -30,6 +30,7 @@ final class Document: NSObject, TextViewCoordinator, NSTextStorageDelegate {
     let policyDecision: NativeEditorDecision
     var controller: TextViewController!
     var pendingText: String?
+    private var closingHighlightProvider: RevisionAwareHighlightProvider?
     private(set) var textSnapshot: String
     private(set) var selectionSnapshot = NSRange(location: 0, length: 0)
     private(set) var scrollOriginSnapshot = NSPoint.zero
@@ -104,6 +105,7 @@ final class Document: NSObject, TextViewCoordinator, NSTextStorageDelegate {
 
     deinit {
         highlightProvider?.requestClose()
+        closingHighlightProvider?.requestClose()
         removeObservers()
     }
     /// Marked-range updates are transient notifications. Keep the adapter's multi-cursor
@@ -163,10 +165,11 @@ final class Document: NSObject, TextViewCoordinator, NSTextStorageDelegate {
         controller.scrollView.reflectScrolledClipView(controller.scrollView.contentView)
     }
 
+    @MainActor
     @discardableResult
     func releaseDisplayCache() -> Bool {
         guard canReleaseDisplayCache, let controller else { return false }
-        highlightProvider?.requestClose()
+        let provider = highlightProvider
         textSnapshot = controller.text
         selectionSnapshot = controller.textView.selectedRange()
         scrollOriginSnapshot = controller.scrollView.contentView.bounds.origin
@@ -175,7 +178,28 @@ final class Document: NSObject, TextViewCoordinator, NSTextStorageDelegate {
         self.controller = nil
         self.highlightProvider = nil
         lifecycleState = .init(display: .displayCacheReleased, analysis: .closeRequestedIdleUnknown)
+        closingHighlightProvider = provider
+        provider?.requestClose { [weak self, weak provider] idleVerified in
+            guard let self, let provider, self.closingHighlightProvider === provider else { return }
+            self.closingHighlightProvider = nil
+            guard self.controller == nil else { return }
+            if idleVerified {
+                self.lifecycleState = .init(display: .displayCacheReleased, analysis: .idleVerified)
+            }
+        }
         return true
+    }
+
+    @MainActor
+    func waitForAnalysisIdle(timeout: TimeInterval = 5.0) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if lifecycleState.analysis == .idleVerified {
+                return true
+            }
+            await pump(0.02)
+        }
+        return lifecycleState.analysis == .idleVerified
     }
     func prepareCoordinator(controller: TextViewController) { controller.textView.addStorageDelegate(self) }
     func textStorage(_ storage: NSTextStorage, didProcessEditing mask: NSTextStorageEditActions,

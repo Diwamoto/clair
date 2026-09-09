@@ -492,7 +492,7 @@
   {
     "expectedFailure" : false,
     "pass" : true,
-    "test" : "display release does not claim parser idle"
+    "test" : "close drain verifies parser idle"
   },
   {
     "expectedFailure" : false,
@@ -513,6 +513,11 @@
     "expectedFailure" : false,
     "pass" : true,
     "test" : "retained tab undo restores body"
+  },
+  {
+    "expectedFailure" : false,
+    "pass" : true,
+    "test" : "async native close drains parser"
   },
   {
     "expectedFailure" : false,
