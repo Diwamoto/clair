@@ -64,6 +64,69 @@ quit_running_dev() {
     return 1
 }
 
+dev_broker_socket_pattern="/Clair Dev/session-broker-v1.sock"
+
+dev_broker_pid() {
+    local pid candidates
+
+    candidates="$(pgrep -f 'clair-ptyhost --broker' 2>/dev/null || true)"
+    for pid in $candidates; do
+        if ps -o command= -p "$pid" 2>/dev/null | grep -qF "$dev_broker_socket_pattern"; then
+            printf '%s\n' "$pid"
+            return 0
+        fi
+    done
+    return 1
+}
+
+descendant_pids() {
+    local frontier="$1"
+    local all="" children pid
+
+    while [[ -n "$frontier" ]]; do
+        children=""
+        for pid in $frontier; do
+            children="$children $(pgrep -P "$pid" 2>/dev/null || true)"
+        done
+        children="$(printf '%s\n' $children | awk 'NF')"
+        if [[ -n "$children" ]]; then
+            all="$all
+$children"
+        fi
+        frontier="$children"
+    done
+
+    printf '%s\n' $all | awk 'NF' | sort -un
+}
+
+cleanup_dev_broker_sessions() {
+    local broker_pid pids remaining pid
+
+    broker_pid="$(dev_broker_pid || true)"
+    if [[ -z "$broker_pid" ]]; then
+        return 0
+    fi
+
+    pids="$(descendant_pids "$broker_pid")"
+    if [[ -z "$pids" ]]; then
+        return 0
+    fi
+
+    printf 'watch-dev: clearing stale Clair Dev broker session shells...\n'
+    printf '%s\n' $pids | xargs kill -TERM 2>/dev/null || true
+    sleep 0.2
+
+    remaining=""
+    for pid in $pids; do
+        if kill -0 "$pid" 2>/dev/null; then
+            remaining="$remaining $pid"
+        fi
+    done
+    if [[ -n "$remaining" ]]; then
+        printf '%s\n' $remaining | xargs kill -KILL 2>/dev/null || true
+    fi
+}
+
 restart_dev() {
     printf 'watch-dev: building Clair Dev...\n'
     if ! "$repo_root/scripts/xcode.sh" build "Clair Dev" dev; then
@@ -78,6 +141,7 @@ restart_dev() {
 
     printf 'watch-dev: launching the new Clair Dev build...\n'
     "$repo_root/scripts/run-app.sh" dev
+    cleanup_dev_broker_sessions
 }
 
 trap 'printf "\nwatch-dev: stopped\n"; exit 0' INT TERM
