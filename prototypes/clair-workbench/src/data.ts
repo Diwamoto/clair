@@ -420,46 +420,27 @@ export type ChangedFile = {
   name: string;
   added: number;
   removed: number;
-  group: 'committed' | 'uncommitted';
   untracked?: boolean;
-  commit?: string;
 };
 
+// Plain working-tree state (like `git status`), not a branch/PR diff — the
+// stage/unstage split below is the interesting part; which commits produced
+// history is the merge graph's job (see SourceControlModeTabs), not this
+// panel's.
 export const changedFiles: ChangedFile[] = [
-  {
-    path: 'apple/ClairApp/ProjectWorkspace.swift',
-    name: 'ProjectWorkspace.swift',
-    added: 42,
-    removed: 9,
-    group: 'committed',
-    commit: 'a4f10c2',
-  },
-  { path: 'apple/ClairApp/PaneSplit.swift', name: 'PaneSplit.swift', added: 88, removed: 0, group: 'committed', commit: '7e2c9a1' },
-  {
-    path: 'apple/ClairApp/ContentView.swift',
-    name: 'ContentView.swift',
-    added: 16,
-    removed: 31,
-    group: 'committed',
-    commit: '3b6f0d4',
-  },
-  {
-    path: 'apple/ClairApp/WorkspaceChrome.swift',
-    name: 'WorkspaceChrome.swift',
-    added: 7,
-    removed: 0,
-    group: 'committed',
-    commit: '7e2c9a1',
-  },
-  {
-    path: 'apple/ClairTests/ProjectKernelTests.swift',
-    name: 'ProjectKernelTests.swift',
-    added: 54,
-    removed: 0,
-    group: 'committed',
-    commit: 'a4f10c2',
-  },
-  { path: 'apple/ClairApp/SessionRail.swift', name: 'SessionRail.swift', added: 0, removed: 0, group: 'uncommitted', untracked: true },
+  { path: 'apple/ClairApp/ProjectWorkspace.swift', name: 'ProjectWorkspace.swift', added: 42, removed: 9 },
+  { path: 'apple/ClairApp/PaneSplit.swift', name: 'PaneSplit.swift', added: 88, removed: 0 },
+  { path: 'apple/ClairApp/ContentView.swift', name: 'ContentView.swift', added: 16, removed: 31 },
+  { path: 'apple/ClairApp/WorkspaceChrome.swift', name: 'WorkspaceChrome.swift', added: 7, removed: 0 },
+  { path: 'apple/ClairTests/ProjectKernelTests.swift', name: 'ProjectKernelTests.swift', added: 54, removed: 0 },
+  { path: 'apple/ClairApp/SessionRail.swift', name: 'SessionRail.swift', added: 0, removed: 0, untracked: true },
+];
+
+// Staged by default: the mock's initial "some reviewed, some not" state.
+export const initiallyStagedPaths = [
+  'apple/ClairApp/ProjectWorkspace.swift',
+  'apple/ClairApp/PaneSplit.swift',
+  'apple/ClairApp/ContentView.swift',
 ];
 
 export type DiffLine = { old?: number; New?: number; sign: ' ' | '+' | '-'; text: string };

@@ -8,7 +8,16 @@ import {
   type ReactNode,
 } from 'react';
 
-import { activityItems, chat, files, sessions, type ChatMessage, type Session } from './data';
+import {
+  activityItems,
+  changedFiles,
+  chat,
+  files,
+  initiallyStagedPaths,
+  sessions,
+  type ChatMessage,
+  type Session,
+} from './data';
 import { GROUP_COLOR_KEYS, type GroupColorKey } from './tokens';
 
 export type Screen =
@@ -146,7 +155,12 @@ function useWorkbenchState() {
   }));
 
   const [reviewFile, setReviewFile] = useState('apple/ClairApp/ProjectWorkspace.swift');
-  const [reviewFilter, setReviewFilter] = useState<'全差分' | 'commit済み' | '未commit'>('全差分');
+  // Working-tree state: which changed files are still pending (haven't been
+  // committed away) and, among those, which are staged. VSCode's model, not
+  // a branch/PR diff — see Review.tsx.
+  const [workingPaths, setWorkingPaths] = useState<Set<string>>(() => new Set(changedFiles.map((f) => f.path)));
+  const [stagedPaths, setStagedPaths] = useState<Set<string>>(() => new Set(initiallyStagedPaths));
+  const [commitMessage, setCommitMessage] = useState('');
 
   const [settingsSection, setSettingsSection] = useState('一般');
   const [toggles, setToggles] = useState<Record<string, boolean>>({
@@ -410,6 +424,33 @@ function useWorkbenchState() {
     });
   }, []);
 
+  const toggleStaged = useCallback((path: string) => {
+    setStagedPaths((current) => {
+      const next = new Set(current);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  }, []);
+
+  const stageAll = useCallback(() => {
+    setStagedPaths(new Set(workingPaths));
+  }, [workingPaths]);
+
+  const unstageAll = useCallback(() => setStagedPaths(new Set()), []);
+
+  // Committing just retires the staged paths from the working set — there's
+  // no history to append to here, that's the merge graph's job.
+  const commitStaged = useCallback(() => {
+    setWorkingPaths((current) => {
+      const next = new Set(current);
+      stagedPaths.forEach((p) => next.delete(p));
+      return next;
+    });
+    setStagedPaths(new Set());
+    setCommitMessage('');
+  }, [stagedPaths]);
+
   const dirtyCount = tabs.filter((t) => t.dirty).length;
 
   return {
@@ -457,8 +498,14 @@ function useWorkbenchState() {
     cycleGroupColor,
     reviewFile,
     setReviewFile,
-    reviewFilter,
-    setReviewFilter,
+    workingPaths,
+    stagedPaths,
+    toggleStaged,
+    stageAll,
+    unstageAll,
+    commitMessage,
+    setCommitMessage,
+    commitStaged,
     settingsSection,
     setSettingsSection,
     toggles,
