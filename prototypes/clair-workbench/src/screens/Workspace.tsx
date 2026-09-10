@@ -139,7 +139,6 @@ function PathBreadcrumb({ path }: { path: string }) {
         gap: 5,
         padding: '0 12px',
         overflow: 'hidden',
-        borderBottom: `1px solid ${line.hairline}`,
         background: color.canvas,
       }}
     >
@@ -222,7 +221,7 @@ function EditorPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
           style={{
             width: 46,
             flexShrink: 0,
-            padding: '20px 0 8px 0',
+            padding: '8px 0',
             textAlign: 'right',
             fontSize: 12,
             lineHeight: '19px',
@@ -243,7 +242,7 @@ function EditorPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
             aria-hidden
             style={{
               margin: 0,
-              padding: '20px 12px 8px 0',
+              padding: '8px 12px 8px 0',
               fontSize: 12,
               lineHeight: '19px',
               color: color.code,
@@ -279,7 +278,7 @@ function EditorPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
               inset: 0,
               width: '100%',
               height: '100%',
-              padding: '20px 12px 8px 0',
+              padding: '8px 12px 8px 0',
               border: 0,
               outline: 'none',
               resize: 'none',
