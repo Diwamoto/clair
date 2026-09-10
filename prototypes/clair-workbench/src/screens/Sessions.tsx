@@ -5,7 +5,6 @@ import {
   IconBrackets,
   IconClose,
   IconCodex,
-  IconInfo,
   IconSession,
   IconSparkle,
   IconTerminalPrompt,
@@ -209,20 +208,6 @@ export function SessionsMain() {
           </div>
         ))}
         <div style={{ background: color.canvas, height: 12 }} />
-      </div>
-
-      <div style={{ flexShrink: 0, padding: '12px 16px', background: color.panelDeep, borderTop: `1px solid ${line.hairline}` }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9, color: color.textQuaternary, fontSize: 10, lineHeight: '15px' }}>
-          <IconInfo size={13} color={color.textTertiary} style={{ marginTop: 1 }} />
-          <span>
-            ここに出す値は全て <b style={{ color: color.textTertiary }}>PTYとprocessから直接得られる事実</b> である。state
-            は{' '}
-            <span className="cl" style={{ color: color.textTertiary }}>
-              TerminalSession.State
-            </span>
-            、signalはbell / exit code / 公式hook、実行contextは起動時に選ばれたcwd。TUIの内容は解釈しない。
-          </span>
-        </div>
       </div>
     </div>
   );
