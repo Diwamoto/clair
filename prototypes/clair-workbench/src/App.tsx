@@ -21,7 +21,7 @@ import {
   DebugPanel,
   DebugStatus,
 } from './screens/Debug';
-import { MergeGraphMain, SessionsMain, SessionsStatus } from './screens/Sessions';
+import { AgentsPanel, MergeGraphMain, SessionsMain, SessionsStatus } from './screens/Sessions';
 import { MobileApp } from './screens/Mobile';
 import { ReviewMain, ReviewPanel, ReviewStatus } from './screens/Review';
 import { SettingsMain, SettingsPanel, SettingsStatus } from './screens/Settings';
@@ -219,8 +219,12 @@ function Ide() {
   const panel =
     panelId === 'review' ? (
       <ReviewPanel />
-    ) : panelId === 'activity' ? (
-      <ActivityPanel />
+    ) : panelId === 'agents' ? (
+      wb.screen === 'activity' ? (
+        <ActivityPanel />
+      ) : (
+        <AgentsPanel />
+      )
     ) : panelId === 'debug' ? (
       wb.screen === 'debugAgent' ? (
         <DebugAgentPanel />
@@ -230,8 +234,6 @@ function Ide() {
     ) : panelId === 'settings' ? (
       <SettingsPanel />
     ) : (
-      // The canvas defines no sidebar panel for the session rail, so the
-      // explorer stays — a gap to fill on the canvas, not to invent here.
       <ExplorerPanel />
     );
 

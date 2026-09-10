@@ -52,11 +52,11 @@ textarea {
 
 /* surfaceHover / surfaceActive from the Tokens artboard. */
 .hoverable:hover {
-  background: #242a31;
+  background: #2e333c;
 }
 
 .hoverable:active {
-  background: #2b333c;
+  background: #383d47;
 }
 
 .act {
@@ -70,7 +70,7 @@ textarea {
 }
 
 .act:hover {
-  background: #242a31;
+  background: #2e333c;
   color: #c9cec8;
 }
 

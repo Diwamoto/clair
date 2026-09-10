@@ -11,7 +11,6 @@ import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type R
 import { files, projectTabs, projects, type FileKind } from './data';
 import { color, groupColor, line, mono, withAlpha, type GroupColorKey } from './tokens';
 import {
-  IconBell,
   IconBranch,
   IconBug,
   IconClaude,
@@ -22,7 +21,6 @@ import {
   IconFolder,
   IconGear,
   IconMarkdown,
-  IconSearch,
   IconSession,
   IconShieldCheck,
   IconSparkle,
@@ -81,7 +79,7 @@ export function Act({
         width,
         height,
         background: active ? color.surfaceActive : undefined,
-        color: active ? color.textPrimary : undefined,
+        color: active ? color.chromeInk : undefined,
       }}
     >
       {children}
@@ -160,14 +158,17 @@ export function MainHeader({ children, height = 44 }: { children: ReactNode; hei
 /* ── titlebar ─────────────────────────────────────────────────────────── */
 
 /**
- * Tabs are a fixed width so the row stays a steady rhythm however long a file
- * name is. A name that does not fit is faded out at its right edge rather than
+ * Tabs share the strip equally — every tab is `flex: 1 1 0`, so they stretch
+ * to whatever the window can spare and stay the same width as each other.
+ * Width is what makes a tab strip calm, so the tabs get all of it and the
+ * titlebar's own controls get none they don't need. 260px is the ceiling, so
+ * a window with two tabs open doesn't hand each of them half the screen.
+ *
+ * A name that does not fit is faded out at its right edge rather than
  * ellipsised: the fade says "there is more" without spending characters on
  * punctuation, and it keeps the label's ink even at the cut.
- *
- * 168px sits inside the 124–210px band the Main artboard specifies.
  */
-const TAB_WIDTH = 168;
+const TAB_MAX_WIDTH = 260;
 const TAB_FADE = 18;
 
 const fadeRight: CSSProperties = {
@@ -212,7 +213,7 @@ function Tab({
   dot?: boolean;
   onClick: () => void;
 }) {
-  const tint = active ? color.textPrimary : color.textTertiary;
+  const tint = active ? color.chromeInk : color.textTertiary;
   const [labelRef, clipped] = useClipped(label);
   return (
     <button
@@ -224,12 +225,16 @@ function Tab({
         alignItems: 'center',
         gap: 7,
         padding: '0 11px',
-        width: TAB_WIDTH,
-        flexShrink: 0,
-        borderRadius: 7,
-        background: 'transparent',
-        height: '100%',
-        alignSelf: 'stretch',
+        flex: '1 1 0',
+        minWidth: 0,
+        maxWidth: TAB_MAX_WIDTH,
+        borderRadius: 8,
+        // The selected tab wears the pane's own colour, so it reads as a hole
+        // through the chrome onto the surface below rather than a marker
+        // painted on top of it.
+        background: active ? color.canvas : 'transparent',
+        height: 38,
+        alignSelf: 'center',
         overflow: 'hidden',
       }}
     >
@@ -263,17 +268,17 @@ function Tab({
         />
       ) : null}
       {active ? (
-        <div
-          style={{
-            position: 'absolute',
-            left: 11,
-            right: 11,
-            bottom: 0,
-            height: 2,
-            background: color.textPrimary,
-            borderRadius: '1px 1px 0 0',
-          }}
-        />
+        <span
+          role="button"
+          aria-label={`${label} を閉じる`}
+          title="閉じる"
+          onClick={(e) => e.stopPropagation()}
+          style={{ display: 'flex', alignItems: 'center', color: color.textTertiary, flexShrink: 0 }}
+        >
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round">
+            <path d="M4 4l8 8M12 4l-8 8" />
+          </svg>
+        </span>
       ) : null}
     </button>
   );
@@ -283,7 +288,7 @@ function FileTab({ path, active }: { path: string; active: boolean }) {
   const wb = useWorkbench();
   const tab = wb.tabs.find((t) => t.path === path);
   const file = byPath.get(path);
-  const tint = active ? color.textPrimary : color.textTertiary;
+  const tint = active ? color.chromeInk : color.textTertiary;
   return (
     <Tab
       icon={file ? <FileIcon kind={file.kind} tint={tint} /> : <IconSparkle size={12} color={tint} />}
@@ -363,7 +368,7 @@ function ProjectChip({
         style={{
           fontSize: 12,
           fontWeight: 600,
-          color: active ? color.textPrimary : uncoloured ? color.textQuaternary : color.textSecondary,
+          color: active ? color.chromeInk : uncoloured ? color.textQuaternary : color.textTertiary,
           whiteSpace: 'nowrap',
         }}
       >
@@ -407,7 +412,7 @@ function ProjectGroup({ project }: { project: string }) {
           )),
           <Tab
             key="activity"
-            icon={<IconSparkle size={12} color={wb.screen === 'activity' ? color.textPrimary : color.textTertiary} />}
+            icon={<IconSparkle size={12} color={wb.screen === 'activity' ? color.chromeInk : color.textTertiary} />}
             label="Claude Code"
             active={wb.screen === 'activity'}
             dot
@@ -415,7 +420,7 @@ function ProjectGroup({ project }: { project: string }) {
           />,
           <Tab
             key="sessions"
-            icon={<IconCodex size={12} color={wb.screen === 'sessions' ? color.textPrimary : color.textTertiary} />}
+            icon={<IconCodex size={12} color={wb.screen === 'sessions' ? color.chromeInk : color.textTertiary} />}
             label="codex"
             active={wb.screen === 'sessions'}
             onClick={() => wb.setScreen('sessions')}
@@ -432,7 +437,18 @@ function ProjectGroup({ project }: { project: string }) {
         ));
 
   return (
-    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', alignSelf: 'stretch', flexShrink: 0, minWidth: 0 }}>
+    <div
+      style={{
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        alignSelf: 'stretch',
+        // One share per tab, so a three-tab group is three times as wide as a
+        // one-tab group and every tab across the strip lands the same width.
+        flex: collapsed ? '0 0 auto' : `${items.length} 1 0`,
+        minWidth: 0,
+      }}
+    >
       <ProjectChip
         project={project}
         active={active}
@@ -447,6 +463,7 @@ function ProjectGroup({ project }: { project: string }) {
           display: 'grid',
           gridTemplateColumns: collapsed ? '0fr' : '1fr',
           alignSelf: 'stretch',
+          flex: collapsed ? '0 0 auto' : 1,
           minWidth: 0,
         }}
       >
@@ -479,12 +496,14 @@ export function AppTitlebar({ extra }: { extra?: ReactNode }) {
         height: 48,
         flexShrink: 0,
         display: 'flex',
-        alignItems: 'flex-end',
+        // Tabs are centred in the bar now that the selected one is a filled
+        // shape rather than an underline hanging off the bottom edge.
+        alignItems: 'center',
         backgroundColor: color.chrome,
         borderBottom: `1px solid ${line.hairline}`,
       }}
     >
-      <div style={{ width: 76, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '0 0 18px 20px' }}>
+      <div style={{ width: 76, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '0 0 0 20px' }}>
         <TrafficLights />
       </div>
 
@@ -498,26 +517,17 @@ export function AppTitlebar({ extra }: { extra?: ReactNode }) {
             <ProjectGroup project={p} />
           </Fragment>
         ))}
+        {/* New tab sits at the end of the strip, where every tabbed app puts
+            it — not among the window actions on the right. */}
+        <Act title="新しいタブ" width={30} height={30}>
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round">
+            <path d="M8 3.5v9M3.5 8h9" />
+          </svg>
+        </Act>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 12px 9px 12px', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 12px', flexShrink: 0 }}>
         {extra}
-        <button
-          onClick={() => wb.setOverlay('search')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 7,
-            width: 200,
-            height: 28,
-            padding: '0 9px',
-            borderRadius: 8,
-            background: 'rgba(0,0,0,0.18)',
-          }}
-        >
-          <IconSearch size={12} color={color.textQuaternary} />
-          <span style={{ fontSize: 11, color: color.textMuted, flex: 1 }}>ファイル、シンボル</span>
-        </button>
         <button className="act" title="コマンドパレット" onClick={() => wb.setOverlay('command')}>
           <IconCommand size={15} />
         </button>
@@ -525,7 +535,7 @@ export function AppTitlebar({ extra }: { extra?: ReactNode }) {
           className="act"
           title="設定"
           onClick={() => wb.setScreen(wb.screen === 'settings' ? 'workspace' : 'settings')}
-          style={wb.screen === 'settings' ? { background: color.surfaceActive, color: color.textPrimary } : undefined}
+          style={wb.screen === 'settings' ? { background: color.surfaceActive, color: color.chromeInk } : undefined}
         >
           <IconGear size={15} />
         </button>
@@ -549,17 +559,19 @@ export function AppTitlebar({ extra }: { extra?: ReactNode }) {
 // tab distinct from the rest of the tool. The shield icon opens the tool at
 // its `review` (changes) default; `⌃⌘G` does the same.
 const NAV: Array<{ id: string; screen: Screen; label: string; icon: (p: { size?: number }) => ReactNode }> = [
-  { id: 'files', screen: 'workspace', label: 'エクスプローラー', icon: IconFolder },
-  { id: 'review', screen: 'review', label: '変更を確認', icon: IconShieldCheck },
-  { id: 'debug', screen: 'debug', label: '実行とデバッグ', icon: IconBug },
-  { id: 'activity', screen: 'activity', label: 'アクティビティ', icon: IconBell },
+  { id: 'files', screen: 'workspace', label: 'File Tree', icon: IconFolder },
+  { id: 'review', screen: 'review', label: 'Source Control', icon: IconShieldCheck },
+  { id: 'agents', screen: 'sessions', label: 'Agents', icon: IconSession },
+  { id: 'debug', screen: 'debug', label: 'Debug', icon: IconBug },
 ];
 
 /** Which strip entry the current screen lights up, and which panel it shows. */
 export function navIdFor(screen: Screen): string {
   if (screen === 'debug' || screen === 'debugAgent') return 'debug';
   if (screen === 'graph' || screen === 'review') return 'review';
-  if (screen === 'activity') return 'activity';
+  // The agent conversation opens from its own titlebar tab; while it is up,
+  // Agents is the entry that owns it.
+  if (screen === 'sessions' || screen === 'activity') return 'agents';
   if (screen === 'settings') return 'settings';
   return 'files';
 }
@@ -598,7 +610,7 @@ export function SourceControlModeTabs() {
               alignItems: 'center',
               padding: '0 12px',
               background: on ? color.surfaceActive : undefined,
-              color: on ? color.textPrimary : color.textQuaternary,
+              color: on ? color.chromeInk : color.textQuaternary,
               fontSize: 11,
               fontWeight: on ? 600 : 400,
             }}
@@ -647,16 +659,6 @@ function SidebarStrip() {
             </Act>
           );
         })}
-        <Act
-          width={38}
-          height={32}
-          title="セッション"
-          active={wb.screen === 'sessions'}
-          underline
-          onClick={() => wb.setScreen('sessions')}
-        >
-          <IconSession size={16} />
-        </Act>
       </div>
       <Act title="その他">
         <IconEllipsis size={13} />
@@ -756,7 +758,7 @@ export function AppShell({
         flexDirection: 'column',
         overflow: 'hidden',
         background: color.chrome,
-        color: color.textPrimary,
+        color: color.chromeInk,
         fontSize: 11,
       }}
     >

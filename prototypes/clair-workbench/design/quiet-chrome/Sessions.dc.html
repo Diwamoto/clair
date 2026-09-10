@@ -1,0 +1,211 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; background: #282c34; color: #b6bcb6; font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "SF Pro Text", system-ui, sans-serif; font-size: 13px; line-height: 20px; -webkit-font-smoothing: antialiased; }
+    a { color: #8fb0fa; text-decoration: none; } a:hover { color: #b3c8fb; }
+    .cl { font-family: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, monospace; }
+    /* Tab bar — equal-width tabs, group pill, active tab wears the content colour. */
+    .tab { display: flex; align-items: center; gap: 9px; flex: 1 1 0; min-width: 0; max-width: 260px; height: 38px; padding: 0 12px; border-radius: 8px; color: #9ba19b; font-size: 12px; }
+    .tab.on { background: #282c34; color: #abb2bf; }
+    .tab span.t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pill { display: flex; align-items: center; height: 24px; padding: 0 9px; border-radius: 6px; font-size: 11px; font-weight: 600; flex-shrink: 0; }
+    .sep { width: 1px; height: 20px; background: rgba(242,244,238,0.09); flex-shrink: 0; }
+    .nav { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 6px; color: #9ba19b; }
+    .nav.on { background: rgba(242,244,238,0.06); color: #b6bcb6; }
+    .tree { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border-radius: 6px; color: #9ba19b; font-size: 13px; }
+    .tree.on { background: rgba(242,244,238,0.06); color: #b6bcb6; }
+    .act { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 7px; color: #9ba19b; }
+    /* Pane internals — the mock's current values, unchanged. */
+    .ln { font-size: 12px; line-height: 19px; color: #4b5561; text-align: right; padding-right: 12px; }
+    .code { font-size: 12px; line-height: 19px; color: #abb2bf; white-space: pre; }
+    .kw { color: #c678dd; } .ty { color: #e5c07b; } .fn { color: #61afef; } .cm { color: #5c6370; } .nu { color: #d19a66; }
+    .term { font-size: 11px; line-height: 17px; color: #abb2bf; white-space: pre; }
+  </style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; flex-direction: column; background: #282c34; overflow: hidden;">
+  <div style="display: flex; align-items: center; height: 48px; padding: 0 14px 0 20px; gap: 12px; background: #31363f; flex-shrink: 0;">
+    <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+      <div style="width: 12px; height: 12px; border-radius: 50%; background: #ff5f57;"></div>
+      <div style="width: 12px; height: 12px; border-radius: 50%; background: #febc2e;"></div>
+      <div style="width: 12px; height: 12px; border-radius: 50%; background: #28c840;"></div>
+    </div>
+
+    <div style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px;">
+      <div class="pill" style="background: rgba(91,136,247,0.18); color: #8fb0fa;">clair</div>
+      <div class="tab on">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 2.5h5L12.5 6.5v7h-9z"/><path d="M8.5 2.5v4h4"/></svg>
+        <span class="t">ProjectWorkspace.swift</span>
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+      </div>
+      <div class="sep"></div>
+      <div class="tab">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5 6 8l-3 3.5M8 11.5h5"/></svg>
+        <span class="t">Claude Code</span>
+      </div>
+      <div class="sep"></div>
+      <div class="tab">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5 6 8l-3 3.5M8 11.5h5"/></svg>
+        <span class="t">codex</span>
+        <span style="width: 6px; height: 6px; border-radius: 50%; background: #e5c07b; flex-shrink: 0;"></span>
+      </div>
+
+      <div class="pill" style="background: rgba(138,203,148,0.16); color: #8acb94; margin-left: 8px;">ccedit</div>
+      <div class="tab">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 2.5h5L12.5 6.5v7h-9z"/><path d="M8.5 2.5v4h4"/></svg>
+        <span class="t">project_layout.rs</span>
+      </div>
+
+      <div class="pill" style="background: rgba(242,244,238,0.08); color: #9ba19b; margin-left: 8px;">clair-releases</div>
+      <div class="tab">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 2.5h5L12.5 6.5v7h-9z"/><path d="M8.5 2.5v4h4"/></svg>
+        <span class="t">CHANGELOG.md</span>
+      </div>
+
+      <div class="act" style="flex-shrink: 0; margin-left: 2px;">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9"/></svg>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
+      <div class="act">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.6" y="5.6" width="4.8" height="4.8"/><circle cx="4.1" cy="4.1" r="1.5"/><circle cx="11.9" cy="4.1" r="1.5"/><circle cx="4.1" cy="11.9" r="1.5"/><circle cx="11.9" cy="11.9" r="1.5"/></svg>
+      </div>
+      <div class="act">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="2.2"/><path d="M8 2.2v1.5M8 12.3v1.5M13.8 8h-1.5M3.7 8H2.2M12.1 3.9l-1.05 1.05M4.95 11.05 3.9 12.1M12.1 12.1l-1.05-1.05M4.95 4.95 3.9 3.9"/></svg>
+      </div>
+    </div>
+  </div>
+
+    <div style="display: flex; flex: 1; min-height: 0;">
+    <div style="width: 260px; flex-shrink: 0; display: flex; flex-direction: column; background: #31363f;">
+      <div style="display: flex; flex-direction: column; gap: 2px; padding: 4px 10px 8px;">
+        <div class="nav"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2.2 4.6A1.4 1.4 0 0 1 3.6 3.2h2.7l1.4 1.9h4.7a1.4 1.4 0 0 1 1.4 1.4v5a1.4 1.4 0 0 1-1.4 1.4H3.6a1.4 1.4 0 0 1-1.4-1.4z"/></svg>File Tree</div>
+        <div class="nav"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="4" cy="4" r="1.5"/><circle cx="4" cy="12" r="1.5"/><circle cx="12" cy="6" r="1.5"/><path d="M4 5.5v5M12 7.5c0 2-3 2.5-6 3"/></svg>Source Control<span style="margin-left: auto; font-size: 11px;">7</span></div>
+        <div class="nav on"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5 6 8l-3 3.5M8 11.5h5"/></svg>Agents<span style="margin-left: auto; width: 6px; height: 6px; border-radius: 50%; background: #e5c07b;"></span></div>
+        <div class="nav"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5.2 6.5a2.8 2.8 0 0 1 5.6 0v3a2.8 2.8 0 0 1-5.6 0z"/><path d="M2.6 7.4h2.6M10.8 7.4h2.6M2.6 11.2h2.6M10.8 11.2h2.6M6.2 4.1 5.2 2.6M9.8 4.1l1-1.5"/></svg>Debug</div>
+      </div>
+      <div style="height: 1px; background: rgba(242,244,238,0.10); margin: 4px 16px 8px;"></div>
+      <div style="padding: 6px 20px 4px; color: #8a908b; font-size: 12px;">Project</div>
+      <div style="display: flex; flex-direction: column; gap: 1px; padding: 0 10px;">
+        <div style="display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px; border-radius: 6px; color: #b6bcb6; background: rgba(242,244,238,0.06); font-size: 13px;"><span style="width: 6px;"></span>すべて<span style="margin-left: auto; font-size: 11px; color: #8a908b;">5</span></div>
+        <div style="display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px; border-radius: 6px; color: #9ba19b; background: transparent; font-size: 13px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #5b88f7; flex-shrink: 0;"></span>clair<span style="margin-left: auto; font-size: 11px; color: #8a908b;">2</span></div>
+        <div style="display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px; border-radius: 6px; color: #9ba19b; background: transparent; font-size: 13px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #8acb94; flex-shrink: 0;"></span>ccedit<span style="margin-left: auto; font-size: 11px; color: #8a908b;">2</span></div>
+        <div style="display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px; border-radius: 6px; color: #9ba19b; background: transparent; font-size: 13px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #8a908b; flex-shrink: 0;"></span>clair-releases<span style="margin-left: auto; font-size: 11px; color: #8a908b;">1</span></div>
+      </div>
+      <div style="padding: 16px 20px 4px; color: #8a908b; font-size: 12px;">状態</div>
+      <div style="display: flex; flex-direction: column; gap: 1px; padding: 0 10px;">
+        <div style="display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px; border-radius: 6px; color: #9ba19b; background: transparent; font-size: 13px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #8a908b; flex-shrink: 0;"></span>実行中<span style="margin-left: auto; font-size: 11px; color: #8a908b;">2</span></div>
+        <div style="display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px; border-radius: 6px; color: #9ba19b; background: transparent; font-size: 13px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #8a908b; flex-shrink: 0;"></span>入力待ち<span style="margin-left: auto; font-size: 11px; color: #8a908b;">2</span></div>
+        <div style="display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px; border-radius: 6px; color: #9ba19b; background: transparent; font-size: 13px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #8a908b; flex-shrink: 0;"></span>終了<span style="margin-left: auto; font-size: 11px; color: #8a908b;">1</span></div>
+      </div>
+    </div>
+
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; background: #282c34;">
+      <div style="display: flex; align-items: center; height: 56px; padding: 0 32px; gap: 12px; border-bottom: 1px solid rgba(242,244,238,0.10);">
+        <span style="color: #9ba19b;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h10v10H3z"/><path d="M6 8h4M8 6v4"/></svg></span>
+        <span style="font-size: 15px; font-weight: 600; color: #b6bcb6;">Agents</span>
+        <span style="margin-left: auto; display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 6px; background: #5b88f7; color: #ffffff; font-size: 13px; font-weight: 500;">+ Agent を起動</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 24px; padding: 28px 32px;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <span style="font-size: 15px; font-weight: 600; color: #b6bcb6;">よく使う起動</span>
+          <span style="display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: 6px; border: 1px solid rgba(242,244,238,0.10); color: #b6bcb6;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h5v10H3zM8 3h5v10H8z"/></svg>プロファイルを管理</span>
+        </div>
+        <div style="display: flex; gap: 16px;">
+          
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 6px; padding: 20px; border-radius: 10px; background: #31363f;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <span style="display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; border: 1px solid rgba(242,244,238,0.10); color: #9ba19b;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h10v10H3z"/><path d="M6 8h4M8 6v4"/></svg></span>
+            <span style="display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid rgba(242,244,238,0.10); color: #b6bcb6; font-size: 13px;">+ 起動</span>
+          </div>
+          <div style="font-weight: 600; font-size: 15px; line-height: 22px; margin-top: 8px; color: #b6bcb6;">いつもの Claude Code</div>
+          <div style="color: #9ba19b; font-size: 13px; line-height: 20px;">Project root で起動。worktree なし、既定モデル</div>
+          <div style="color: #8a908b; font-size: 12px; margin-top: 8px;">直近 12 回 · clair</div>
+        </div>
+          
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 6px; padding: 20px; border-radius: 10px; background: #31363f;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <span style="display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; border: 1px solid rgba(242,244,238,0.10); color: #9ba19b;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h10v10H3z"/><path d="M6 8h4M8 6v4"/></svg></span>
+            <span style="display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid rgba(242,244,238,0.10); color: #b6bcb6; font-size: 13px;">+ 起動</span>
+          </div>
+          <div style="font-weight: 600; font-size: 15px; line-height: 22px; margin-top: 8px; color: #b6bcb6;">隔離して codex</div>
+          <div style="color: #9ba19b; font-size: 13px; line-height: 20px;">新しい worktree を Clair 管理領域に作って起動</div>
+          <div style="color: #8a908b; font-size: 12px; margin-top: 8px;">直近 3 回 · ccedit</div>
+        </div>
+          
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 6px; padding: 20px; border-radius: 10px; background: #31363f;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <span style="display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; border: 1px solid rgba(242,244,238,0.10); color: #9ba19b;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h10v10H3z"/><path d="M6 8h4M8 6v4"/></svg></span>
+            <span style="display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid rgba(242,244,238,0.10); color: #b6bcb6; font-size: 13px;">+ 起動</span>
+          </div>
+          <div style="font-weight: 600; font-size: 15px; line-height: 22px; margin-top: 8px; color: #b6bcb6;">レビューだけ</div>
+          <div style="color: #9ba19b; font-size: 13px; line-height: 20px;">read-only。差分を読んで指摘だけ返す</div>
+          <div style="color: #8a908b; font-size: 12px; margin-top: 8px;">直近 5 回 · すべて</div>
+        </div>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 8px;">
+          <div style="display: flex; align-items: center; gap: 10px;"><span style="font-size: 15px; font-weight: 600; color: #b6bcb6;">実行中と最近のセッション</span><span style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 6px; border: 1px solid rgba(242,244,238,0.10); font-size: 12px; color: #9ba19b;">5</span></div>
+          <div style="display: flex; align-items: center; gap: 8px; height: 36px; width: 320px; padding: 0 12px; border-radius: 6px; border: 1px solid rgba(242,244,238,0.10); color: #8a908b; font-size: 13px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>名前、Project、状態で絞り込み</div>
+        </div>
+        <div style="border-radius: 10px; background: #31363f; overflow: hidden;">
+          <div style="display: grid; grid-template-columns: 240px 200px 180px 180px 1fr 110px; align-items: center; height: 44px; padding: 0 20px; background: rgba(242,244,238,0.06); color: #8a908b; font-size: 12px;">
+            <div>Agent ⌃⌄</div><div>Project ⌃⌄</div><div>実行場所</div><div>状態 ⌃⌄</div><div>根拠</div><div style="text-align: right;">更新 ⌃⌄</div>
+          </div>
+        <div style="display: grid; grid-template-columns: 240px 200px 180px 180px 1fr 110px; align-items: center; height: 44px; padding: 0 20px; border-top: 1px solid rgba(242,244,238,0.10); color: #b6bcb6;">
+          <div style="display: flex; align-items: center; gap: 12px;"><span style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: rgba(242,244,238,0.06); color: #9ba19b;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d='M3 4.5 6 8l-3 3.5M8 11.5h5'/></svg></span><span>codex</span></div>
+          <div style="display: flex; align-items: center; gap: 10px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #5b88f7; flex-shrink: 0;"></span><a href="#">clair</a></div>
+          <div style="color: #8a908b; font-size: 12px;">Project root</div>
+          <div><span style="display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 6px; font-size: 12px; background: #e5c07b22; color: #e5c07b; border: 1px solid #e5c07b55; width: fit-content;">入力待ち</span></div>
+          <div style="color: #9ba19b; font-size: 12px;">terminal bell</div>
+          <div style="color: #8a908b; font-size: 12px; text-align: right;">今</div>
+        </div>
+        <div style="display: grid; grid-template-columns: 240px 200px 180px 180px 1fr 110px; align-items: center; height: 44px; padding: 0 20px; border-top: 1px solid rgba(242,244,238,0.10); color: #b6bcb6;">
+          <div style="display: flex; align-items: center; gap: 12px;"><span style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: rgba(242,244,238,0.06); color: #9ba19b;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d='M3 4.5 6 8l-3 3.5M8 11.5h5'/></svg></span><span>Claude Code</span></div>
+          <div style="display: flex; align-items: center; gap: 10px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #5b88f7; flex-shrink: 0;"></span><a href="#">clair</a></div>
+          <div style="color: #8a908b; font-size: 12px;">worktree · pane-split</div>
+          <div><span style="display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 6px; font-size: 12px; background: #8acb9422; color: #8acb94; border: 1px solid #8acb9455; width: fit-content;">実行中</span></div>
+          <div style="color: #9ba19b; font-size: 12px;">hook · PostToolUse</div>
+          <div style="color: #8a908b; font-size: 12px; text-align: right;">2分前</div>
+        </div>
+        <div style="display: grid; grid-template-columns: 240px 200px 180px 180px 1fr 110px; align-items: center; height: 44px; padding: 0 20px; border-top: 1px solid rgba(242,244,238,0.10); color: #b6bcb6;">
+          <div style="display: flex; align-items: center; gap: 12px;"><span style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: rgba(242,244,238,0.06); color: #9ba19b;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d='M3 4.5 6 8l-3 3.5M8 11.5h5'/></svg></span><span>Claude Code</span></div>
+          <div style="display: flex; align-items: center; gap: 10px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #8acb94; flex-shrink: 0;"></span><a href="#">ccedit</a></div>
+          <div style="color: #8a908b; font-size: 12px;">Project root</div>
+          <div><span style="display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 6px; font-size: 12px; background: #8acb9422; color: #8acb94; border: 1px solid #8acb9455; width: fit-content;">実行中</span></div>
+          <div style="color: #9ba19b; font-size: 12px;">hook · Notification</div>
+          <div style="color: #8a908b; font-size: 12px; text-align: right;">6分前</div>
+        </div>
+        <div style="display: grid; grid-template-columns: 240px 200px 180px 180px 1fr 110px; align-items: center; height: 44px; padding: 0 20px; border-top: 1px solid rgba(242,244,238,0.10); color: #b6bcb6;">
+          <div style="display: flex; align-items: center; gap: 12px;"><span style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: rgba(242,244,238,0.06); color: #9ba19b;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d='M3 4.5 6 8l-3 3.5M8 11.5h5'/></svg></span><span>codex</span></div>
+          <div style="display: flex; align-items: center; gap: 10px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #8acb94; flex-shrink: 0;"></span><a href="#">ccedit</a></div>
+          <div style="color: #8a908b; font-size: 12px;">worktree · profile-review</div>
+          <div><span style="display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 6px; font-size: 12px; background: #e5c07b22; color: #e5c07b; border: 1px solid #e5c07b55; width: fit-content;">承認待ち</span></div>
+          <div style="color: #9ba19b; font-size: 12px;">terminal bell</div>
+          <div style="color: #8a908b; font-size: 12px; text-align: right;">9分前</div>
+        </div>
+        <div style="display: grid; grid-template-columns: 240px 200px 180px 180px 1fr 110px; align-items: center; height: 44px; padding: 0 20px; border-top: 1px solid rgba(242,244,238,0.10); color: #b6bcb6;">
+          <div style="display: flex; align-items: center; gap: 12px;"><span style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: rgba(242,244,238,0.06); color: #9ba19b;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d='M3 4.5 6 8l-3 3.5M8 11.5h5'/></svg></span><span>Claude Code</span></div>
+          <div style="display: flex; align-items: center; gap: 10px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #8a908b; flex-shrink: 0;"></span><a href="#">clair-releases</a></div>
+          <div style="color: #8a908b; font-size: 12px;">Project root</div>
+          <div><span style="display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 6px; font-size: 12px; background: #8a908b22; color: #8a908b; border: 1px solid #8a908b55; width: fit-content;">終了</span></div>
+          <div style="color: #9ba19b; font-size: 12px;">—</div>
+          <div style="color: #8a908b; font-size: 12px; text-align: right;">1時間前</div>
+        </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="display: flex; align-items: center; height: 28px; padding: 0 20px; gap: 20px; background: #31363f; font-size: 12px; color: #9ba19b; flex-shrink: 0;">
+    <span class="cl" style="font-size: 11px;">main</span><span>7 変更</span><span style="margin-left: auto;">5 セッション</span>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

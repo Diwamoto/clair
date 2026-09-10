@@ -3,13 +3,22 @@
 // chosen. Do not add a token that the canvas does not define.
 
 export const color = {
-  // SURFACE — canvas/chrome/surface are deliberately the same flat colour.
-  chrome: '#282c34',
+  // SURFACE — two tiers. The pane (canvas/surface) is the darkest thing in
+  // the window because it is what you read for hours; chrome sits one step
+  // above it so the frame reads as frame and never as content. Dark only —
+  // there is no light theme.
+  chrome: '#31363f',
   canvas: '#282c34',
   surface: '#282c34',
   chromeRaised: '#1e2227',
-  surfaceHover: '#242a31',
-  surfaceActive: '#2b333c',
+  surfaceHover: '#2e333c',
+  surfaceActive: '#383d47',
+
+  // CHROME INK — chrome's own ladder. Its strongest step stays under the
+  // code's own contrast against the pane (6.6:1) so the frame never speaks
+  // louder than the thing being read; textPrimary is content ink only.
+  chromeInk: '#b6bcb6',
+  chromeInkMuted: '#8a908b',
 
   // TEXT
   textPrimary: '#f1f3ef',

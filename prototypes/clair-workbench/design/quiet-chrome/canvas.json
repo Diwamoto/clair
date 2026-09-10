@@ -1,0 +1,12 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "title": "Workspace", "x": 0, "y": 0, "w": 1440, "h": 900 },
+    { "file": "Sessions.dc.html", "title": "Sessions", "x": 1540, "y": 0, "w": 1440, "h": 900 },
+    { "file": "Tokens.dc.html", "title": "Rules", "x": 0, "y": 1080, "w": 1440, "h": 500 }
+  ],
+  "annotations": [
+    { "id": "brief", "x": 0, "y": -230, "w": 600, "text": "Quiet Chrome — 変更は chrome だけ。ダーク専用。\n面は 2 段。ペインは #282c34 のまま、chrome を #31363f に 1 段上げて、一番暗い面が読む面になるようにした。\nchrome の文字はコードの 6.6:1 を超えない範囲に収めてある。\nタブは等幅で伸ばし、Project は色付き pill、選択中のタブだけが本文色をまとう。\n右上はコマンドパレットと設定の 2 つ。通知のまとめは持たない。" },
+    { "id": "panes-note", "x": 660, "y": -160, "w": 380, "text": "エディタとターミナルは現行 mock の実装値そのまま。背景 1 色と 1px の仕切りだけで、ペイン header も入力欄も足さない。" }
+  ],
+  "launch": { "view": "canvas" }
+}

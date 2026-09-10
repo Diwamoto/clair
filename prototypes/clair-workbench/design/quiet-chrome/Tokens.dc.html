@@ -1,0 +1,69 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; background: #282c34; color: #b6bcb6; font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "SF Pro Text", system-ui, sans-serif; font-size: 13px; line-height: 20px; -webkit-font-smoothing: antialiased; }
+    a { color: #8fb0fa; text-decoration: none; } a:hover { color: #b3c8fb; }
+    .cl { font-family: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, monospace; }
+    .h { font-size: 15px; font-weight: 600; line-height: 22px; color: #b6bcb6; }
+    .k { color: #8a908b; font-size: 12px; }
+  </style>
+</helmet>
+<div style="width: 1440px; height: 500px; padding: 32px 40px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 32px; background: #282c34; box-sizing: border-box;">
+
+  <div style="display: flex; flex-direction: column; gap: 14px;">
+    <div class="h">面は 2 段。本文が一番暗い</div>
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <div style="height: 52px; border-radius: 10px; background: #282c34; border: 1px solid rgba(242,244,238,0.10); display: flex; align-items: center; padding: 0 16px; justify-content: space-between;"><span>ペイン・本文 <span class="k">据え置き</span></span><span class="cl k">#282c34</span></div>
+      <div style="height: 52px; border-radius: 10px; background: #31363f; display: flex; align-items: center; padding: 0 16px; justify-content: space-between;"><span>chrome・カード</span><span class="cl k">#31363f</span></div>
+    </div>
+    <div class="k">段差は 1.15:1。一番暗い面が「何時間も読む面」になり、操作系が乗る面は沈まない。One Dark の <span class="cl">#282c34</span> は動かせないので、動かすのは chrome 側だけ。</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 14px;">
+    <div class="h">chrome はコードより静かに</div>
+    <div style="display: flex; flex-direction: column; gap: 8px; padding: 16px; border-radius: 10px; background: #31363f;">
+      <div style="display: flex; align-items: baseline; justify-content: space-between;"><span style="color: #b6bcb6;">選択中・見出し</span><span class="cl k">#b6bcb6 · 6.3:1</span></div>
+      <div style="display: flex; align-items: baseline; justify-content: space-between;"><span style="color: #9ba19b;">通常の項目・本文</span><span class="cl k">#9ba19b · 4.6:1</span></div>
+      <div style="display: flex; align-items: baseline; justify-content: space-between;"><span style="color: #8a908b;">件数・時刻・補助</span><span class="cl k">#8a908b · 3.7:1</span></div>
+      <div style="height: 1px; background: rgba(242,244,238,0.10); margin: 4px 0;"></div>
+      <div style="display: flex; align-items: baseline; justify-content: space-between;"><span class="cl" style="color: #abb2bf; font-size: 12px;">コード（比較用）</span><span class="cl k">#abb2bf · 6.6:1</span></div>
+    </div>
+    <div class="k">chrome の一番強い文字がコードの 6.6:1 を超えないようにする。超えると、受けに回すはずの chrome の方が声が大きくなる。</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 14px;">
+    <div class="h">タブは等幅で広く取る</div>
+    <div style="border-radius: 10px; background: #31363f; padding: 5px 8px; display: flex; align-items: center; gap: 6px;">
+      <div style="display: flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 11px; font-weight: 600; background: rgba(91,136,247,0.18); color: #8fb0fa; flex-shrink: 0;">clair</div>
+      <div style="flex: 1 1 0; min-width: 0; height: 34px; display: flex; align-items: center; padding: 0 10px; border-radius: 8px; background: #282c34; color: #abb2bf; font-size: 12px; overflow: hidden; white-space: nowrap;">Workspace.swift</div>
+      <div style="width: 1px; height: 18px; background: rgba(242,244,238,0.09);"></div>
+      <div style="flex: 1 1 0; min-width: 0; height: 34px; display: flex; align-items: center; padding: 0 10px; border-radius: 8px; color: #9ba19b; font-size: 12px; overflow: hidden; white-space: nowrap;">codex</div>
+    </div>
+    <div class="k">タブは <span class="cl">flex: 1 1 0</span> で等幅に伸ばし、上限 260px。Project は色付きの pill、その後ろにそのプロジェクトのタブが並ぶ。選択中のタブだけが本文色 <span class="cl">#282c34</span> をまとい、下のペインと地続きに見える。仕切りは 1px、閉じるボタンは選択中だけ。</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 14px;">
+    <div class="h">色は意味にだけ</div>
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: center; gap: 12px;"><span style="display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border-radius: 6px; background: #5b88f7; color: #fff; font-weight: 500;">+ Agent を起動</span><span class="k">主操作は画面に 1 つ</span></div>
+      <div style="display: flex; align-items: center; gap: 12px;"><a href="#">clair</a><span class="k">リンクだけが青</span></div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 6px; font-size: 12px; background: #8acb9422; color: #8acb94; border: 1px solid #8acb9455;">実行中</span>
+        <span style="display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 6px; font-size: 12px; background: #e5c07b22; color: #e5c07b; border: 1px solid #e5c07b55;">入力待ち</span>
+        <span style="display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 6px; font-size: 12px; background: #e27b8322; color: #e27b83; border: 1px solid #e27b8355;">失敗</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px;"><span style="display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 11px; font-weight: 600; background: rgba(91,136,247,0.18); color: #8fb0fa;">clair</span><span style="display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 11px; font-weight: 600; background: rgba(138,203,148,0.16); color: #8acb94;">ccedit</span><span class="k">Project は pill</span></div>
+    </div>
+    <div class="k">構文色と diff 色はペイン内のまま。右上はコマンドパレットと設定の 2 つだけ。通知のまとめは持たない。</div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

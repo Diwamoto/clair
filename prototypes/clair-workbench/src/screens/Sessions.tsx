@@ -11,7 +11,7 @@ import {
 } from '../icons';
 import { useWorkbench } from '../store';
 import { Chip, MainHeader, SourceControlModeTabs } from '../chrome';
-import { color, line, wash } from '../tokens';
+import { color, groupColor, line, wash } from '../tokens';
 
 const GRID = '26px 146px 84px 196px 66px 1fr 104px 88px';
 
@@ -30,7 +30,7 @@ export function SessionsMain() {
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
       <MainHeader>
         <IconSession size={15} color={color.textTertiary} />
-        <span style={{ fontSize: 13, fontWeight: 600 }}>セッション</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: color.chromeInk }}>Agents</span>
         <span style={{ fontSize: 10, color: color.textQuaternary }}>全Project · PTYとprocessから得られる事実のみ</span>
         <div style={{ flex: 1 }} />
         <Chip
@@ -209,6 +209,65 @@ export function SessionsMain() {
         ))}
         <div style={{ background: color.canvas, height: 12 }} />
       </div>
+    </div>
+  );
+}
+
+/**
+ * The Agents screen's sidebar panel: the scope the list is read through.
+ * The rail itself is the list of sessions, so the panel narrows it rather
+ * than repeating it — Project first, because "which project is this agent
+ * working in" is the question the rail is answered against.
+ */
+export function AgentsPanel() {
+  const wb = useWorkbench();
+  const byProject = new Map<string, number>();
+  for (const s of wb.sessions) byProject.set(s.project, (byProject.get(s.project) ?? 0) + 1);
+  const byState = new Map<string, number>();
+  for (const s of wb.sessions) byState.set(s.state, (byState.get(s.state) ?? 0) + 1);
+
+  const row = (label: string, count: number, tint: string | undefined, selected: boolean) => (
+    <div
+      key={label}
+      className="hoverable"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        height: 26,
+        margin: '0 8px',
+        padding: '0 8px',
+        borderRadius: 6,
+        background: selected ? 'rgba(242,244,238,0.08)' : undefined,
+        color: selected ? color.chromeInk : color.textTertiary,
+        fontSize: 11,
+      }}
+    >
+      <span
+        style={{
+          width: 6,
+          height: 6,
+          borderRadius: '50%',
+          background: tint ?? 'transparent',
+          flexShrink: 0,
+        }}
+      />
+      <span style={{ flex: 1 }}>{label}</span>
+      <span style={{ fontSize: 10, color: color.chromeInkMuted }}>{count}</span>
+    </div>
+  );
+
+  const heading = (text: string) => (
+    <div style={{ padding: '10px 16px 4px', fontSize: 10, color: color.chromeInkMuted }}>{text}</div>
+  );
+
+  return (
+    <div className="scroll" style={{ position: 'absolute', inset: 0, paddingBottom: 8 }}>
+      {heading('Project')}
+      {row('すべて', wb.sessions.length, undefined, true)}
+      {[...byProject].map(([p, n]) => row(p, n, groupColor[wb.groupColors[p] ?? 'gray'], false))}
+      {heading('状態')}
+      {[...byState].map(([st, n]) => row(st, n, undefined, false))}
     </div>
   );
 }
