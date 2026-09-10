@@ -140,7 +140,7 @@ function PathBreadcrumb({ path }: { path: string }) {
         padding: '0 12px',
         overflow: 'hidden',
         borderBottom: `1px solid ${line.hairline}`,
-        background: color.chromeRaised,
+        background: color.canvas,
       }}
     >
       {parts.map((part, i) => {
