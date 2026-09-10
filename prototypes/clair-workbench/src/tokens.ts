@@ -81,6 +81,17 @@ export const groupColor = {
 export type GroupColorKey = keyof typeof groupColor;
 export const GROUP_COLOR_KEYS = Object.keys(groupColor) as GroupColorKey[];
 
+/** A `groupColor` entry at a given opacity — `gray` already carries its own
+ * alpha (it's `line.stronger`), so it passes through unchanged. */
+export function withAlpha(swatch: string, alpha: number): string {
+  if (!swatch.startsWith('#')) return swatch;
+  const n = parseInt(swatch.slice(1), 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 export const wash = {
   faint: 'rgba(242,244,238,0.03)',
   soft: 'rgba(242,244,238,0.04)',

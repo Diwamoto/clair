@@ -9,7 +9,7 @@
 import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
 import { files, projectTabs, projects, type FileKind } from './data';
-import { color, groupColor, line, mono, type GroupColorKey } from './tokens';
+import { color, groupColor, line, mono, withAlpha, type GroupColorKey } from './tokens';
 import {
   IconBell,
   IconBranch,
@@ -299,13 +299,17 @@ function FileTab({ path, active }: { path: string; active: boolean }) {
 }
 
 /**
- * A titlebar tab group's own label, Chrome's tab-group pill: the name toggles
+ * A titlebar tab group's own label, Chrome's tab-group pill: click toggles
  * that project's tabs open or shut, independent of which project is active.
  * Collapsing does not touch `activeProject` — folding away the group you're
  * working in just hides its tab strip, the way collapsing the active group in
- * Chrome leaves the page alone. The color dot is a second, separate control —
- * click it to cycle the group's identifying colour (`GROUP_COLOR_KEYS`),
- * which is what the underline below the whole group is drawn in.
+ * Chrome leaves the page alone.
+ *
+ * The group's colour lives on the chip itself (its fill and border), not as
+ * a separate round swatch — right-click cycles it through `GROUP_COLOR_KEYS`,
+ * matching how Chrome puts a tab group's colour picker behind a right-click
+ * on the group's own pill rather than a second control next to it. The same
+ * colour is what the underline below the whole group is drawn in.
  */
 function ProjectChip({
   project,
@@ -322,45 +326,50 @@ function ProjectChip({
   onToggle: () => void;
   onCycleColor: () => void;
 }) {
+  const swatch = groupColor[colorKey];
+  const uncoloured = colorKey === 'gray';
+  const background = uncoloured
+    ? active
+      ? 'rgba(255,255,255,0.08)'
+      : 'transparent'
+    : withAlpha(swatch, active ? 0.22 : 0.1);
+  const border = uncoloured
+    ? active
+      ? 'rgba(255,255,255,0.12)'
+      : 'transparent'
+    : withAlpha(swatch, active ? 0.55 : 0.28);
+
   return (
-    <div
+    <button
+      onClick={onToggle}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onCycleColor();
+      }}
+      title={`${project} タブグループを${collapsed ? '展開' : '折りたたむ'}（右クリックで色を変更）`}
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 2,
         height: 26,
-        padding: '0 2px',
+        padding: '0 10px',
         borderRadius: 8,
-        background: active ? 'rgba(255,255,255,0.08)' : 'transparent',
-        border: `1px solid ${active ? 'rgba(255,255,255,0.12)' : 'transparent'}`,
+        background,
+        border: `1px solid ${border}`,
         alignSelf: 'center',
         flexShrink: 0,
       }}
     >
-      <button
-        onClick={onCycleColor}
-        title={`${project} のグループカラーを変更（現在: ${colorKey}）`}
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 18, height: 18, flexShrink: 0 }}
+      <span
+        style={{
+          fontSize: 12,
+          fontWeight: 600,
+          color: active ? color.textPrimary : uncoloured ? color.textQuaternary : color.textSecondary,
+          whiteSpace: 'nowrap',
+        }}
       >
-        <span style={{ width: 8, height: 8, borderRadius: '50%', background: groupColor[colorKey] }} />
-      </button>
-      <button
-        onClick={onToggle}
-        title={`${project} タブグループを${collapsed ? '展開' : '折りたたむ'}`}
-        style={{ display: 'flex', alignItems: 'center', height: '100%', padding: '0 8px 0 1px' }}
-      >
-        <span
-          style={{
-            fontSize: 12,
-            fontWeight: 600,
-            color: active ? color.textPrimary : color.textQuaternary,
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {project}
-        </span>
-      </button>
-    </div>
+        {project}
+      </span>
+    </button>
   );
 }
 
