@@ -215,7 +215,11 @@ export function ReviewPanel() {
           disabled={!canCommit}
           onClick={() => wb.commitStaged()}
           style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             height: 26,
+            padding: '0 10px',
             borderRadius: 4,
             background: canCommit ? color.surfaceActive : color.panel,
             border: `1px solid ${canCommit ? line.stronger : line.hairline}`,
