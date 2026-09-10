@@ -136,7 +136,10 @@ python3 .agents/skills/clair-workbench-sync/scripts/canvas_edit.py \
    same URL), and the canvas as above. Stop any dev server you started.
 9. Report in Japanese: what changed in the mock, what changed on the
    canvas and in which artboards, any judgment call you made and why, any
-   gap you found and left for the canvas, and what you verified.
+   gap you found and left for the canvas, and what you verified. **Always
+   end the report with both artifact links** (mock and canvas, each as a
+   markdown link), even when the URL did not change — the user reads this
+   from a phone and needs the link right there, not something to go dig up.
 
 ## Reporting judgment calls
 

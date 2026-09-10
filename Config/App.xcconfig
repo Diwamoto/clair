@@ -1,5 +1,14 @@
 #include "Base.xcconfig"
 
+// Stable code signing identity so macOS TCC (network volume / protected folder
+// access prompts) can remember grants across rebuilds instead of re-asking
+// every time, per free "3UY66R4X2N" Apple Development personal team.
+CODE_SIGNING_ALLOWED = YES
+CODE_SIGNING_REQUIRED = YES
+CODE_SIGN_STYLE = Automatic
+CODE_SIGN_IDENTITY = Apple Development
+DEVELOPMENT_TEAM = 3UY66R4X2N
+
 CLANG_ENABLE_OBJC_ARC = YES
 COMBINE_HIDPI_IMAGES = YES
 ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon
