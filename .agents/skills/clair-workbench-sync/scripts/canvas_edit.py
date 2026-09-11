@@ -11,8 +11,10 @@ survive a round trip untouched.
     pack     artifact.html  outdir/  new.html
 
 Edit the extracted `.dc.html` files as ordinary HTML, then pack them back.
-Pack only rewrites the JSON payload; the editor bytes around it are copied
-verbatim, so the result stays a working canvas.
+A `.dc.html` in the directory that the doc does not know about yet is added as
+a new artboard, so a new screen is `canvas.json` plus a file. Pack only
+rewrites the JSON payload; the editor bytes around it are copied verbatim, so
+the result stays a working canvas.
 """
 
 from __future__ import annotations
@@ -55,6 +57,13 @@ def pack(artifact: pathlib.Path, indir: pathlib.Path, out: pathlib.Path) -> None
         if body != files[name]:
             changed.append(name)
         files[name] = body
+
+    # Artboards added since the extract: canvas.json already references them,
+    # but they are not in the doc yet, so the loop above never sees them.
+    for source in sorted(indir.glob("*.dc.html")):
+        if source.name not in files:
+            files[source.name] = source.read_text()
+            changed.append(f"{source.name} (new)")
 
     # `<` is escaped so a literal `</script>` inside an artboard cannot end the
     # block early. JSON has no structural `<`, so replacing every one is safe.

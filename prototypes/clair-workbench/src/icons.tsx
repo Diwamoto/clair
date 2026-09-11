@@ -181,6 +181,27 @@ export const IconMarkdown = stroke(
   { strokeLinecap: 'round', strokeLinejoin: 'round' },
 );
 
+export const IconChevronLeft = stroke(<path d="M10 3.5 5.5 8l4.5 4.5" />, 1.7, {
+  strokeLinecap: 'round',
+  strokeLinejoin: 'round',
+});
+
+// From the mobile artboards: the paired Mac, and the QR that pairs a device.
+export const IconHost = stroke(<><rect x="2.1" y="3.1" width="11.8" height="7.6" rx="1.4" /><path d="M4.6 13.2h6.8" /></>, 1.3, {
+  strokeLinejoin: 'round',
+});
+
+export const IconQR = stroke(
+  <>
+    <rect x="2.4" y="2.4" width="4.6" height="4.6" rx="1" />
+    <rect x="9" y="2.4" width="4.6" height="4.6" rx="1" />
+    <rect x="2.4" y="9" width="4.6" height="4.6" rx="1" />
+    <path d="M9 9h2M13.6 9v2M9 13.6h2M13.6 13.6h.01" />
+  </>,
+  1.4,
+  { strokeLinejoin: 'round' },
+);
+
 export const IconChevron = stroke(<path d="M5.5 3.5 10 8l-4.5 4.5" />, 1.7, {
   strokeLinecap: 'round',
   strokeLinejoin: 'round',

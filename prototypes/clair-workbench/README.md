@@ -203,7 +203,12 @@ sidebarの中、breadcrumbはstatus barへ移す。splitしても縦chromeは74p
 | セッション | `SessionRail` | `⌃⌘L`、titlebar の codex タブ |
 | Agentを追加 | `AddAgent` | `⌃⌘N`、セッション画面の「Agentを起動」 |
 | 設定 | `Settings` | `⌘,`、titlebar の歯車 |
-| モバイル | `MobileOverview` | `#/mobile`（設定 →「モバイル」からも） |
+| モバイル · 概要 | `MobileHome` | `#/mobile`（設定 →「モバイル」からも） |
+| モバイル · セッション | `MobileOverview` | モバイルのタブ |
+| モバイル · アクティビティ | `MobileActivity` | モバイルのタブ |
+| モバイル · 設定 | `MobileSettings` | モバイルのタブ |
+| モバイル · ターミナル | `MobileTerminal` | セッション/概要/アクティビティの「ターミナルを開く」 |
+| モバイル · ペアリング | `MobilePairing` | モバイルの設定 →「端末を追加」 |
 
 ## 動くところ
 
@@ -229,6 +234,65 @@ sidebarの中、breadcrumbはstatus barへ移す。splitしても縦chromeは74p
   現在行とコンソールが動く。
 - **セッション** — exit したセッションの再起動、行から画面遷移。
 - **設定** — トグルとセクション切り替えが実際に効く。
+
+## モバイル
+
+モバイルは**デスクトップの縮小版ではない**。仕様
+（`docs/projects/p0020-mobile-agent-remote-control/`）が non-goal として
+「mobile full IDE、source editor、file browser、diff/review」を明示的に外して
+いるので、モバイルが持つのは**席を離れたあと agent を見て返すための経路だけ**。
+IDE をそのまま小さくした画面は作らない。
+
+タブは **概要 / セッション / アクティビティ / 設定** の4つ。ターミナルと
+ペアリングはこの4つの中から push で開く画面で、5つ目のタブにはしない
+（push した画面は tab bar を外して 44px の戻りバーに替える）。
+
+| 画面 | 何を持つか | 仕様の根拠 |
+| --- | --- | --- |
+| 概要 | host identity（endpoint・fingerprint・protocol）、要対応、Project別のセッション数 | `FR-01` `FR-19`、Motivation |
+| セッション | 全Projectのagent/terminalカタログ。exit・worktree を明示 | `FR-08` `FR-13` |
+| アクティビティ | attention の履歴。**どのsessionが呼んだかと時刻だけ** | `FR-11` `QR-02` `AC-07` |
+| 設定 | この端末の scope、経路と fingerprint、ペアリング済み端末と revoke | `FR-17` `FR-18`、pairing records |
+| ターミナル | raw PTY。gap は明示、viewport は client-local | `G-01` `FR-03` `FR-04` `FR-07` |
+| ペアリング | one-time link の指紋読み合わせ。初期 scope は `view` のみ | `FR-16` `FR-09` `AC-11` |
+
+守っている線が3つある。**scope は減った側も見せる**（`terminate` /
+`spawn_session` / `manage_devices` は破線のチップで、付与されていないことが
+見える）。**通知に内容を載せない**（アクティビティに出るのは agent 名・
+Project・signal の種類・時刻だけで、terminal の中身は1文字も出さない）。
+**gap を黙って飛ばさない**（ターミナルの scrollback に「欠落 2.3 KB ·
+保持範囲外」の区切りが入る）。
+
+色は増やしていない。Tokens の「色を持つのはdiff・debug・タブグループだけ」は
+モバイルでも同じで、接続中も入力待ちも要対応もすべてグレースケール。緑の接続
+ドットも赤い revoke ボタンも持たない — 破壊的操作は色ではなく weight 700 で
+区別する（Tokens の CONTROLS の破壊的ボタンそのまま）。
+
+**キャンバスとの差分**: 以前キャンバスにあったモバイル画面は `MobileOverview`
+（セッション）の1枚だけだった。残り5枚は今回キャンバス側に新規追加してある
+（`MobileHome` / `MobileActivity` / `MobileSettings` / `MobileTerminal` /
+`MobilePairing`）。あわせて Tokens artboard に **MOBILE** 節を足し、これまで
+`MobileOverview` の inline style にしか無かったモバイル寸法（390×844、上54pxは
+実機のstatus barの場所、tab bar 78px、gutter 16px、touch 44px、radius は card 10
+/ button・field 8）をルールとして書いた。モバイルの radius が desktop の
+4-6-10 と違うのはこの節が根拠。
+
+### Live / Design 比較
+
+`?review=1` を付けると各画面に Live/Design の切替が出て、走っている実装と
+その画面の artboard を並べて見られる。artboard のスナップショットは
+`src/mobile-artboards.ts` にあるが、**手で書き写していない** —
+キャンバスから機械的に生成する:
+
+```bash
+python3 .claude/skills/clair-workbench-sync/scripts/canvas_edit.py \
+  extract <saved-canvas.html> /tmp/canvas/
+node scripts/mobile-artboards.mjs /tmp/canvas
+```
+
+写経すると比較がキャンバスではなくモックに同意し始めるので、キャンバスが
+変わったら生成し直す。artboard 側の CSS は `.dc-board` の下にスコープして
+あるので、artboard の `.cl` / `.card` が周りの実装に漏れない。
 
 ## スマホから見る
 
