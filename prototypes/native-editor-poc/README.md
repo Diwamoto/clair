@@ -76,3 +76,17 @@ Webハーネスは元のチェックアウトの凍結した`EditorWeb`資産を
 3. コメントの前に改行を追加・削除。対象自体を削除するとorphanになることを確認。PoCはorphanからの自動復元をしない。
 4. 変更行で部分適用し、Undoで全体が戻ることを確認。適用前に文字を入力してから古い提案を適用すると拒否されることを確認。
 5. 同じfixtureで各エディタの初回表示・入力・スクロール・タブ切替を録画/計測する。キー→描画遅延、フレーム落ち、IMEの体感は本JSONから判断しない。
+
+## Optional diagnostics
+
+Normal `--self-test` checks the adapter behavior. Add `--diagnostics` to include
+known upstream limitations, parser/query diagnostics, and the alternative
+TextKit2 probe. These diagnostic results do not gate the self-test.
+
+Functional diff-view checks use 40 lines; `--benchmark` retains the 10,000-line
+measurement. Set `CLAIR_POC_EVIDENCE_PATH` to write results outside the historical
+`evidence/` snapshots, for example:
+
+```sh
+CLAIR_POC_EVIDENCE_PATH=/tmp/clair-poc-checks.json ./run.sh --self-test
+```

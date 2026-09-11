@@ -45,10 +45,12 @@ final class ProjectEditorDocumentTests: XCTestCase {
     let document = ProjectEditorDocumentModel(content: "before")
     let first = ProjectEditorTransaction(
       baseRevision: 0,
-      edits: [ProjectEditorReplacement(
-        range: ProjectEditorUTF16Range(location: 0, length: 0),
-        text: "x"
-      )],
+      edits: [
+        ProjectEditorReplacement(
+          range: ProjectEditorUTF16Range(location: 0, length: 0),
+          text: "x"
+        )
+      ],
       source: .agent,
       undoUnit: .suggestion
     )
@@ -56,10 +58,12 @@ final class ProjectEditorDocumentTests: XCTestCase {
 
     let stale = ProjectEditorTransaction(
       baseRevision: 0,
-      edits: [ProjectEditorReplacement(
-        range: ProjectEditorUTF16Range(location: 0, length: 1),
-        text: "Y"
-      )],
+      edits: [
+        ProjectEditorReplacement(
+          range: ProjectEditorUTF16Range(location: 0, length: 1),
+          text: "Y"
+        )
+      ],
       source: .user,
       undoUnit: .typing
     )
@@ -117,18 +121,15 @@ final class ProjectEditorDocumentTests: XCTestCase {
     XCTAssertEqual(document.revision, 0)
   }
 
-  func testSelectionChangesDoNotAdvanceRevisionOrCaptureSnapshots() throws {
+  func testSelectionChangesDoNotAdvanceRevisionOrRepeatNotifications() throws {
     let document = ProjectEditorDocumentModel(content: "hello🙂")
-    let initialSnapshot = document.snapshot(reason: .initialLoad)
     var selectionEvents = 0
     document.onSelectionChange = { _ in selectionEvents += 1 }
 
     try document.setSelection(ProjectEditorUTF16Range(location: 1, length: 2))
     try document.setSelection(ProjectEditorUTF16Range(location: 1, length: 2))
 
-    XCTAssertEqual(initialSnapshot.revision, 0)
     XCTAssertEqual(document.revision, 0)
-    XCTAssertEqual(document.snapshotCaptureCount, 1)
     XCTAssertEqual(selectionEvents, 1)
     XCTAssertEqual(
       document.selection,
@@ -136,14 +137,4 @@ final class ProjectEditorDocumentTests: XCTestCase {
     )
   }
 
-  func testSnapshotReasonsAreExplicitBoundaries() throws {
-    let document = ProjectEditorDocumentModel(content: "hello")
-    XCTAssertEqual(document.snapshotCaptureCount, 0)
-
-    XCTAssertEqual(document.snapshot(reason: .initialLoad).reason, .initialLoad)
-    XCTAssertEqual(document.snapshot(reason: .save).reason, .save)
-    XCTAssertEqual(document.snapshot(reason: .diff).reason, .diff)
-    XCTAssertEqual(document.snapshotCaptureCount, 3)
-    XCTAssertEqual(document.revision, 0)
-  }
 }

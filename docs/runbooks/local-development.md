@@ -37,8 +37,6 @@ make build-stable
 make build-dev
 make test
 make lint
-make smoke-ffi
-make smoke-app-link
 make smoke
 ```
 
@@ -337,7 +335,7 @@ The automated P08 checks are:
 ```sh
 swift format lint --recursive --parallel --strict apple
 ruby scripts/validate-xcode-project.rb
-scripts/smoke-app-link.sh
+make smoke-bundles
 xcodebuild -project Clair.xcodeproj -scheme "Clair Dev" \
   -destination 'platform=macOS,arch=arm64' -configuration Debug \
   -derivedDataPath .build/xcode/p08-tests CODE_SIGNING_ALLOWED=NO \
@@ -694,3 +692,14 @@ If `make doctor` reports that full Xcode is not selected, fix `xcode-select`
 before retrying. If Cargo cannot install the pinned stable toolchain, restore
 network access or install it explicitly with rustup; do not commit local toolchain
 or generated directories.
+
+## Optional diff measurement
+
+`make test-swift` runs functional tests; the large diff benchmark is skipped by
+default. Run `make benchmark-diff` to measure the 10,000-line / 2,000-replacement
+fixture explicitly. It checks reconstructed content and prints elapsed time,
+without a wall-clock threshold on shared machines.
+
+The FFI check runs in the actual desktop XCTest host. `make smoke-bundles`
+validates both Xcode-built app bundles; the former standalone `smoke-ffi` and
+`smoke-app-link` compilation paths have been removed.

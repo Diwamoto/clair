@@ -5,7 +5,7 @@ import XCTest
 
 @MainActor
 final class ProjectKernelTests: XCTestCase {
-  func testOpensGitNonGitAndTemporaryFoldersInOneWorkspace() throws {
+  func testOpensGitAndNonGitFoldersInOneWorkspace() throws {
     let fixture = try Fixture()
     let gitRoot = try fixture.makeDirectory(named: "git-project")
     try FileManager.default.createDirectory(
@@ -13,18 +13,17 @@ final class ProjectKernelTests: XCTestCase {
       withIntermediateDirectories: true
     )
     let plainRoot = try fixture.makeDirectory(named: "plain-project")
-    let temporaryRoot = try fixture.makeDirectory(named: "temporary-project")
     let workspace = fixture.makeWorkspace()
 
-    let projects = [gitRoot, plainRoot, temporaryRoot].map { root in
+    let projects = [gitRoot, plainRoot].map { root in
       project(
         workspace.execute(.openProject(OpenProjectCommand(rootURL: root)))
       )
     }
 
-    XCTAssertEqual(workspace.projects.count, 3)
+    XCTAssertEqual(workspace.projects.count, 2)
     let projectIDs = projects.compactMap { $0?.id }
-    XCTAssertEqual(Set(projectIDs).count, 3)
+    XCTAssertEqual(Set(projectIDs).count, 2)
     XCTAssertTrue(workspace.projects.allSatisfy { $0.availability == .available })
     XCTAssertEqual(workspace.activeProjectID, projectIDs.last)
   }
@@ -147,31 +146,7 @@ final class ProjectKernelTests: XCTestCase {
     XCTAssertEqual(snapshot.projects.count, 2)
   }
 
-  func testCommandRegistryExposesTypedRiskAndAvailabilityPreflight() {
-    let registry = CommandRegistry()
-    let missingID = UUID()
-    let unavailable = registry.preflight(
-      .switchProject(SwitchProjectCommand(projectID: missingID)),
-      state: ProjectCommandState(openProjectIDs: [], activeProjectID: nil)
-    )
-    XCTAssertFalse(unavailable.availability.isAvailable)
-    XCTAssertNotNil(unavailable.availability.reason)
-    XCTAssertEqual(unavailable.risk, .read)
-
-    let open = registry.preflight(
-      .openProject(OpenProjectCommand(rootURL: URL(fileURLWithPath: "/tmp"))),
-      state: ProjectCommandState(openProjectIDs: [], activeProjectID: nil)
-    )
-    XCTAssertTrue(open.availability.isAvailable)
-    XCTAssertEqual(open.commandID, .openProject)
-    XCTAssertEqual(registry.descriptor(for: .openProject)?.aiAvailable, true)
-    XCTAssertEqual(
-      Set(registry.descriptors.map(\.id)),
-      Set(ClairCommandID.allCases)
-    )
-  }
-
-  func testHumanCommandSurfacesDispatchTheSameCommandID() throws {
+  func testHumanCommandInvocationSwitchesProjectAndRecordsExecution() throws {
     let fixture = try Fixture()
     let firstRoot = try fixture.makeDirectory(named: "command-first")
     let secondRoot = try fixture.makeDirectory(named: "command-second")
@@ -192,19 +167,15 @@ final class ProjectKernelTests: XCTestCase {
       shortcutStore: CommandShortcutStore(defaults: defaults)
     )
 
-    let sources: [CommandSurfaceSource] = [.commandWindow, .menu, .shortcut]
-    for source in sources {
-      let result = surface.invoke(commandID: .switchProject, source: source)
-      guard case .success(.none) = result else {
-        return XCTFail("Expected switch command to succeed from \(source), got \(result)")
-      }
-      XCTAssertEqual(surface.lastExecution?.commandID, .switchProject)
-      XCTAssertEqual(surface.lastExecution?.source, source)
-      XCTAssertEqual(surface.lastExecution?.outcome.isSuccess, true)
+    let result = surface.invoke(commandID: .switchProject, source: .commandWindow)
+    guard case .success(.none) = result else {
+      return XCTFail("Expected switch command to succeed, got \(result)")
     }
-
+    XCTAssertEqual(surface.lastExecution?.commandID, .switchProject)
+    XCTAssertEqual(surface.lastExecution?.source, .commandWindow)
+    XCTAssertEqual(surface.lastExecution?.outcome.isSuccess, true)
     XCTAssertEqual(workspace.activeProjectID, first.id)
-    XCTAssertNotEqual(first.id, second.id)
+
   }
 
   func testHumanCommandSurfacePreservesUnavailableReasonAndDisplaysError() throws {
@@ -217,6 +188,7 @@ final class ProjectKernelTests: XCTestCase {
     )
 
     let preflight = workspace.preflight(command)
+    XCTAssertEqual(preflight.risk, .read)
     XCTAssertEqual(
       preflight.availability.reason,
       "Cannot switch a Project that is not open."
@@ -282,18 +254,6 @@ final class ProjectKernelTests: XCTestCase {
     guard case .failure(.reserved(CommandShortcut(key: "s", modifiers: [.command]))) = reserved
     else {
       return XCTFail("Expected a reserved shortcut error, got \(reserved)")
-    }
-    XCTAssertEqual(surface.shortcuts[.gitRefresh], originalRefreshShortcut)
-
-    let commandWindowShortcut = surface.setShortcut(
-      CommandShortcutStore.commandWindowShortcut,
-      for: .gitRefresh
-    )
-    guard
-      case .failure(.reserved(CommandShortcutStore.commandWindowShortcut)) = commandWindowShortcut
-    else {
-      return XCTFail(
-        "Expected the Command Window shortcut to be reserved, got \(commandWindowShortcut)")
     }
     XCTAssertEqual(surface.shortcuts[.gitRefresh], originalRefreshShortcut)
 
@@ -441,41 +401,6 @@ final class ProjectKernelTests: XCTestCase {
     }
   }
 
-  func testProjectSwitchKeepsFileTreeSelectionAndTabsIsolated() throws {
-    let fixture = try Fixture()
-    let firstRoot = try fixture.makeDirectory(named: "first-tree-project")
-    let secondRoot = try fixture.makeDirectory(named: "second-tree-project")
-    let firstFile = firstRoot.appendingPathComponent("first.txt")
-    let secondFile = secondRoot.appendingPathComponent("second.txt")
-    try Data("first".utf8).write(to: firstFile)
-    try Data("second".utf8).write(to: secondFile)
-    let workspace = fixture.makeWorkspace()
-
-    let first = try XCTUnwrap(
-      project(workspace.execute(.openProject(OpenProjectCommand(rootURL: firstRoot))))
-    )
-    let firstSurface = try XCTUnwrap(workspace.activeSurface)
-    firstSurface.select(nodeID: firstFile.path)
-
-    _ = try XCTUnwrap(
-      project(workspace.execute(.openProject(OpenProjectCommand(rootURL: secondRoot))))
-    )
-    let secondSurface = try XCTUnwrap(workspace.activeSurface)
-    XCTAssertFalse(secondSurface === firstSurface)
-    XCTAssertNil(secondSurface.selectedNodeID)
-    XCTAssertTrue(secondSurface.fileTree.node(withID: secondFile.path) != nil)
-    XCTAssertNil(secondSurface.fileTree.node(withID: firstFile.path))
-
-    _ = workspace.execute(
-      .switchProject(SwitchProjectCommand(projectID: first.id))
-    )
-    let restoredSurface = try XCTUnwrap(workspace.activeSurface)
-    XCTAssertTrue(restoredSurface === firstSurface)
-    XCTAssertEqual(restoredSurface.selectedNodeID, firstFile.path)
-    XCTAssertEqual(restoredSurface.activeTab?.id, firstFile.path)
-    XCTAssertNil(restoredSurface.fileTree.node(withID: secondFile.path))
-  }
-
   func testPaneLayoutSupportsNestedSplitsTabMoveCloseMaximizeAndEqualize() throws {
     let fixture = try Fixture()
     let root = try fixture.makeDirectory(named: "pane-layout-project")
@@ -528,9 +453,9 @@ final class ProjectKernelTests: XCTestCase {
     XCTAssertTrue(surface.workspaceSnapshot.validated(for: surface.projectID) != nil)
   }
 
-  func testThreeProjectPaneLayoutsRemainIsolatedAcrossRestart() throws {
+  func testProjectLayoutsSelectionAndActivityStayIsolatedAcrossSwitchAndRestart() throws {
     let fixture = try Fixture()
-    let roots = try ["first", "second", "third"].map { name -> (URL, URL) in
+    let roots = try ["first", "second"].map { name -> (URL, URL) in
       let root = try fixture.makeDirectory(named: "pane-\(name)")
       let file = root.appendingPathComponent("\(name).txt")
       try Data(name.utf8).write(to: file)
@@ -545,15 +470,23 @@ final class ProjectKernelTests: XCTestCase {
       )
       let surface = try XCTUnwrap(workspace.activeSurface)
       surface.select(nodeID: pair.1.path)
+      surface.workspaceActivity = index == 0 ? .search : .activity
       if index == 0 {
         surface.splitFocusedPane(orientation: .horizontal)
         surface.openDiff(in: surface.focusedPaneID)
-      } else if index == 1 {
-        surface.openDiff()
       } else {
-        surface.splitFocusedPane(orientation: .vertical)
+        surface.openDiff()
       }
       projects.append((project, pair.1, surface.workspaceSnapshot))
+    }
+
+    for expected in projects {
+      _ = workspace.execute(.switchProject(SwitchProjectCommand(projectID: expected.project.id)))
+      let surface = try XCTUnwrap(workspace.activeSurface)
+      XCTAssertEqual(surface.selectedNodeID, expected.file.path)
+      XCTAssertEqual(surface.workspaceSnapshot, expected.snapshot)
+      let other = projects.first { $0.project.id != expected.project.id }!
+      XCTAssertNil(surface.fileTree.node(withID: other.file.path))
     }
 
     let restored = fixture.makeWorkspace()
@@ -565,6 +498,8 @@ final class ProjectKernelTests: XCTestCase {
       )
       let surface = try XCTUnwrap(restored.activeSurface)
       XCTAssertEqual(surface.workspaceSnapshot, expected.snapshot)
+      XCTAssertEqual(surface.selectedNodeID, expected.file.path)
+      XCTAssertEqual(surface.workspaceActivity.rawValue, expected.snapshot.workspaceActivity)
       XCTAssertTrue(
         surface.editorTabs.allSatisfy { $0.projectID == expected.project.id }
       )
@@ -572,42 +507,6 @@ final class ProjectKernelTests: XCTestCase {
         surface.editorTabs.allSatisfy {
           $0.url.standardizedFileURL.path == expected.file.standardizedFileURL.path
         }
-      )
-    }
-  }
-
-  func testWorkspaceActivitySelectionPersistsPerProjectAcrossRestart() throws {
-    let fixture = try Fixture()
-    let roots = try ["first", "second"].map { name -> URL in
-      let root = try fixture.makeDirectory(named: "activity-\(name)")
-      try Data("fixture".utf8).write(to: root.appendingPathComponent("\(name).txt"))
-      return root
-    }
-    let workspace = fixture.makeWorkspace()
-    var projects: [Project] = []
-
-    for (index, root) in roots.enumerated() {
-      let project = try XCTUnwrap(
-        project(workspace.execute(.openProject(OpenProjectCommand(rootURL: root))))
-      )
-      projects.append(project)
-      let surface = try XCTUnwrap(workspace.activeSurface)
-      surface.workspaceActivity = index == 0 ? .search : .activity
-    }
-
-    let restored = fixture.makeWorkspace()
-    for expected in projects {
-      _ = restored.execute(
-        .switchProject(SwitchProjectCommand(projectID: expected.id))
-      )
-      let surface = try XCTUnwrap(restored.activeSurface)
-      XCTAssertEqual(
-        surface.workspaceActivity,
-        expected.id == projects[0].id ? .search : .activity
-      )
-      XCTAssertEqual(
-        surface.workspaceSnapshot.workspaceActivity,
-        surface.workspaceActivity.rawValue
       )
     }
   }

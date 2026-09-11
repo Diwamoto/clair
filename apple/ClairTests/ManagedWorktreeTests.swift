@@ -157,6 +157,7 @@ final class ManagedWorktreeTests: XCTestCase {
       expectedRootURL: worktree.rootURL
     )
     XCTAssertTrue(cleanPlan.canConfirm)
+    XCTAssertTrue(FileManager.default.fileExists(atPath: worktree.rootURL.path))
     try service.confirmCleanup(cleanPlan)
     XCTAssertFalse(FileManager.default.fileExists(atPath: worktree.rootURL.path))
     XCTAssertTrue(try service.list().isEmpty)
@@ -239,28 +240,47 @@ final class ManagedWorktreeTests: XCTestCase {
     let managedRoot = fixture.container.appendingPathComponent("managed-root", isDirectory: true)
     try FileManager.default.createDirectory(at: managedRoot, withIntermediateDirectories: true)
     let tab = ProjectPaneTab.terminal(
-      title: "Agent",
+      title: "Codex",
+      agentProfileID: AgentLaunchProfile.codex.stableID,
       executionRootURL: managedRoot,
       worktreeID: worktreeID
     )
+    let tabStoreURL = fixture.container.appendingPathComponent("terminal.json")
+    try JSONEncoder().encode(tab).write(to: tabStoreURL)
     let decodedTab = try JSONDecoder().decode(
-      ProjectPaneTab.self,
-      from: JSONEncoder().encode(tab)
+      ProjectPaneTab.self, from: Data(contentsOf: tabStoreURL)
     )
 
     XCTAssertEqual(decodedTab.executionRootURL, managedRoot.standardizedFileURL)
     XCTAssertEqual(decodedTab.worktreeID, worktreeID)
+    XCTAssertEqual(decodedTab.sessionID, tab.sessionID)
+    XCTAssertEqual(decodedTab.agentProfileID, "codex")
 
     let agentSession = AgentSession(
       profile: .codex,
+      modelID: "selected-model",
       projectRoot: managedRoot,
       worktreeID: worktreeID
     )
+    let sessionStoreURL = fixture.container.appendingPathComponent("agent.json")
+    try JSONEncoder().encode(agentSession).write(to: sessionStoreURL)
     let decodedAgentSession = try JSONDecoder().decode(
-      AgentSession.self,
-      from: JSONEncoder().encode(agentSession)
+      AgentSession.self, from: Data(contentsOf: sessionStoreURL)
     )
     XCTAssertEqual(decodedAgentSession, agentSession)
+    let legacyJSON =
+      #"{"id":"12345678-90AB-CDEF-1234-567890ABCDEF","profileID":"claude-code","projectRoot":"file:///tmp/legacy","lifecycle":{"state":"exited","exitCode":17}}"#
+    let legacy = try JSONDecoder().decode(AgentSession.self, from: Data(legacyJSON.utf8))
+    XCTAssertEqual(legacy.profile, .claudeCode)
+    XCTAssertEqual(legacy.exitCode, 17)
+    XCTAssertNil(legacy.worktreeID)
+    XCTAssertNil(legacy.modelID)
+    let legacyTerminalJSON =
+      #"{"id":"terminal:12345678-90AB-CDEF-1234-567890ABCDEF","kind":"terminal","title":"Shell","sessionID":"12345678-90AB-CDEF-1234-567890ABCDEF"}"#
+    let legacyTab = try JSONDecoder().decode(
+      ProjectPaneTab.self, from: Data(legacyTerminalJSON.utf8))
+    XCTAssertEqual(legacyTab.sessionID, legacy.id)
+    XCTAssertNil(legacyTab.worktreeID)
 
     let leaf = ProjectPaneLeaf(activeTabID: tab.id)
 
@@ -270,7 +290,7 @@ final class ManagedWorktreeTests: XCTestCase {
       snapshot: ProjectSurfaceSnapshot(
         schemaVersion: ProjectSurfaceSnapshot.currentSchemaVersion,
         projectID: projectID,
-        tabs: [tab],
+        tabs: [decodedTab],
         root: .leaf(leaf),
         focusedPaneID: leaf.id,
         maximizedPaneID: nil,
@@ -303,6 +323,7 @@ final class ManagedWorktreeTests: XCTestCase {
     )
     let managedCommand = coordinator.launchCommand(
       profile: .codex,
+      modelID: "selected-model",
       projectRoot: managedRoot,
       projectID: projectID,
       sessionID: UUID(),

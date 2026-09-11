@@ -483,11 +483,10 @@ The root `Makefile` is the supported local and CI interface. Rust 1.98.0 is
 pinned by `rust-toolchain.toml`. Shell scripts own
 orchestration details, keep DerivedData under `.build/xcode/<purpose>`, and preserve
 underlying tool exit codes. GitHub Actions runs `make ci` rather than maintaining a
-separate command graph. `make smoke-ffi` also compiles a small Swift CLI against the
-Rust static library, so the language boundary can be verified before a full Xcode
-application build. `make smoke-app-link` links the complete shared SwiftUI source
-graph, including the terminal surface, for both channel compile conditions and
-verifies the Rust symbol in each Mach-O executable. The Rust build also emits
+separate command graph. `make test-swift` calls the Rust ABI from the actual XCTest
+host app. `make smoke-bundles` builds both Xcode channels and checks the resulting
+bundle metadata, minimum macOS version, bundled CLI, and Rust symbol. There is no
+separate hand-maintained `swiftc` source graph. The Rust build also emits
 `target/debug/clair` and `target/debug/clair-ptyhost` for local app discovery; the
 Xcode command-line wrapper copies the native CLI into each Debug app bundle, and the
 release workflow copies the optimized CLI into the Release bundle. The Xcode command-line

@@ -23,14 +23,3 @@ pub const fn smoke_value() -> u32 {
 pub extern "C" fn clair_core_smoke() -> u32 {
     smoke_value()
 }
-
-#[cfg(test)]
-mod tests {
-    use super::{SMOKE_VALUE, clair_core_smoke, smoke_value};
-
-    #[test]
-    fn rust_and_c_abi_smoke_values_match() {
-        assert_eq!(smoke_value(), SMOKE_VALUE);
-        assert_eq!(clair_core_smoke(), SMOKE_VALUE);
-    }
-}

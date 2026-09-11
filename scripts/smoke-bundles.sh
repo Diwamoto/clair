@@ -51,6 +51,11 @@ verify_bundle() {
         fi
     fi
 
+    if ! vtool -show-build "$executable" | grep -Eq 'minos[[:space:]]+14\.0'; then
+        printf 'bundle-smoke: unexpected minimum macOS version: %s\n' "$executable" >&2
+        return 1
+    fi
+
     printf 'bundle-smoke: %s (%s) is valid.\n' "$expected_display_name" "$expected_bundle_id"
 }
 

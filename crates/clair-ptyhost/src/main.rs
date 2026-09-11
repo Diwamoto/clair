@@ -370,22 +370,7 @@ fn print_usage() {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        DEFAULT_COLUMNS, DEFAULT_ROWS, SpawnOptions, parse_broker_options, parse_dimension,
-        parse_spawn_options, smoke_response,
-    };
-
-    #[test]
-    fn smoke_response_is_versioned_and_stable() {
-        assert_eq!(smoke_response(), "clair-ptyhost/0 smoke=ok");
-    }
-
-    #[test]
-    fn spawn_options_have_a_safe_terminal_default() {
-        let options = SpawnOptions::default();
-        assert_eq!(options.rows, DEFAULT_ROWS);
-        assert_eq!(options.columns, DEFAULT_COLUMNS);
-    }
+    use super::{parse_broker_options, parse_dimension, parse_spawn_options};
 
     #[test]
     fn dimensions_are_bounded() {

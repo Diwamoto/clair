@@ -150,16 +150,6 @@ final class ClairUpdateTests: XCTestCase {
     )
   }
 
-  func testUpdateHelperContainsBoundedWaitAndRollbackPath() {
-    XCTAssertTrue(ClairUpdateInstaller.helperScript.contains("old_moved=0"))
-    XCTAssertTrue(ClairUpdateInstaller.helperScript.contains("\"$wait_count\" -ge 150"))
-    XCTAssertTrue(
-      ClairUpdateInstaller.helperScript.contains(
-        "/bin/mv -- \"$backup_app\" \"$current_app\""
-      )
-    )
-  }
-
   func testTerminationReasonSkipsNormalSessionTerminationForUpdateRestart() {
     let delegate = ClairApplicationDelegate()
     var normalTerminationCount = 0

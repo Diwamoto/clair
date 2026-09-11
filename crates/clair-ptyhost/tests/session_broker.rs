@@ -319,9 +319,26 @@ fn broker_reports_protocol_errors_after_attach() -> io::Result<()> {
     assert_eq!(kind, ATTACHED);
 
     send_frame(&mut client, OUTPUT, &[0; 8])?;
-    let (kind, payload) = read_frame(&mut client)?;
-    assert_eq!(kind, ERROR);
-    assert_eq!(payload.first().copied(), Some(ERROR_INVALID_REQUEST));
+    // The shell may emit its prompt before the broker processes the invalid request.
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        if remaining.is_zero() {
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "missing broker error",
+            ));
+        }
+        client.set_read_timeout(Some(remaining))?;
+        let (kind, payload) = read_frame(&mut client)?;
+        if kind == OUTPUT {
+            output_payload(&payload)?;
+            continue;
+        }
+        assert_eq!(kind, ERROR);
+        assert_eq!(payload.first().copied(), Some(ERROR_INVALID_REQUEST));
+        break;
+    }
 
     Ok(())
 }
@@ -349,12 +366,7 @@ fn broker_reattaches_running_pty_after_client_disconnect() -> io::Result<()> {
     assert_eq!(first_attachment.epoch, 1);
     assert!(!first_attachment.exited);
     send_frame(&mut first, INPUT, command)?;
-    let (first_output, cursor) = read_output_until(&mut first, b"P07_REATTACH_ONE")?;
-    assert!(
-        first_output
-            .windows(b"P07_REATTACH_ONE".len())
-            .any(|window| { window == b"P07_REATTACH_ONE" })
-    );
+    let (_, cursor) = read_output_until(&mut first, b"P07_REATTACH_ONE")?;
     first.shutdown(Shutdown::Both)?;
     drop(first);
 
@@ -374,11 +386,6 @@ fn broker_reattaches_running_pty_after_client_disconnect() -> io::Result<()> {
 
     send_frame(&mut second, INPUT, b"hello\n")?;
     let (second_output, _) = read_output_until(&mut second, b"P07_REATTACH_TWO:hello")?;
-    assert!(
-        second_output
-            .windows(b"P07_REATTACH_TWO:hello".len())
-            .any(|window| window == b"P07_REATTACH_TWO:hello")
-    );
     assert!(
         !second_output
             .windows(b"P07_REATTACH_ONE".len())

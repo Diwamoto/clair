@@ -1,7 +1,8 @@
 #![cfg(unix)]
 
+use std::fmt::Write as _;
 use std::io::{self, Read, Write};
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Child, ChildStdin, Command, Stdio};
 
 const MAGIC: [u8; 2] = *b"CP";
 const VERSION: u8 = 1;
@@ -13,11 +14,11 @@ const MAX_PAYLOAD_LENGTH: usize = 64 * 1024;
 struct ShellHarness {
     child: Child,
     stdin: ChildStdin,
-    stdout: ChildStdout,
+    frames: std::sync::mpsc::Receiver<io::Result<(u8, Vec<u8>)>>,
 }
 
 impl ShellHarness {
-    fn start(rows: u16, columns: u16) -> io::Result<Self> {
+    fn start(rows: u16, columns: u16, environment: &[(&str, &str)]) -> io::Result<Self> {
         let mut child = Command::new(env!("CARGO_BIN_EXE_clair-ptyhost"))
             .args([
                 "--spawn",
@@ -30,24 +31,34 @@ impl ShellHarness {
                 "--cols",
                 &columns.to_string(),
             ])
+            .envs(environment.iter().copied())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+            .stderr(Stdio::null())
             .spawn()?;
-
-        let stdin = child
-            .stdin
-            .take()
-            .ok_or_else(|| io::Error::other("PTY harness stdin was not piped"))?;
-        let stdout = child
-            .stdout
-            .take()
-            .ok_or_else(|| io::Error::other("PTY harness stdout was not piped"))?;
+        let stdin = child.stdin.take().expect("piped stdin");
+        let mut stdout = child.stdout.take().expect("piped stdout");
+        let (sender, frames) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            loop {
+                let frame = read_frame(&mut stdout);
+                let done = frame.is_err() || matches!(&frame, Ok((EXIT, _)));
+                if sender.send(frame).is_err() || done {
+                    break;
+                }
+            }
+        });
         Ok(Self {
             child,
             stdin,
-            stdout,
+            frames,
         })
+    }
+
+    fn next_frame(&self) -> io::Result<(u8, Vec<u8>)> {
+        self.frames
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .map_err(|error| io::Error::new(io::ErrorKind::TimedOut, error))?
     }
 
     fn send(&mut self, kind: u8, payload: &[u8]) -> io::Result<()> {
@@ -63,28 +74,29 @@ impl ShellHarness {
     fn collect_until_exit(mut self) -> io::Result<Vec<u8>> {
         let mut output = Vec::new();
         loop {
-            let (kind, payload) = read_frame(&mut self.stdout)?;
+            let (kind, payload) = self.next_frame()?;
             match kind {
                 OUTPUT => output.extend_from_slice(&payload),
                 ERROR => {
-                    return Err(io::Error::other(format!(
-                        "PTY host reported an error: {}",
-                        String::from_utf8_lossy(&payload)
-                    )));
+                    return Err(io::Error::other(
+                        String::from_utf8_lossy(&payload).into_owned(),
+                    ));
                 }
                 EXIT => break,
-                other => {
-                    return Err(io::Error::other(format!(
-                        "unexpected PTY host frame 0x{other:02x}"
-                    )));
-                }
+                other => return Err(io::Error::other(format!("unexpected frame {other}"))),
             }
         }
-        let status = self.child.wait()?;
-        if !status.success() {
-            return Err(io::Error::other(format!("PTY host exited with {status}")));
+        if !self.child.wait()?.success() {
+            return Err(io::Error::other("PTY host failed"));
         }
         Ok(output)
+    }
+}
+
+impl Drop for ShellHarness {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
     }
 }
 
@@ -116,152 +128,76 @@ fn read_frame(reader: &mut impl Read) -> io::Result<(u8, Vec<u8>)> {
 }
 
 #[test]
-fn shell_command_round_trips_raw_output_and_resize() -> io::Result<()> {
-    let mut harness = ShellHarness::start(24, 80)?;
+fn shell_preserves_raw_output_and_applies_resize() -> io::Result<()> {
+    let mut harness = ShellHarness::start(24, 80, &[])?;
     harness.send(2, &[0, 40, 0, 120])?;
-    harness.send(1, b"stty size; printf 'CLAIR_SHELL_OK\\n'; exit\n")?;
-
+    // Disable echo before sending the payload so input echo cannot satisfy assertions.
+    harness.send(1, b"stty -echo; printf 'READY_'\"FOR_INPUT\\n\"\n")?;
+    let mut ready = Vec::new();
+    while !ready
+        .windows(b"READY_FOR_INPUT".len())
+        .any(|w| w == b"READY_FOR_INPUT")
+    {
+        let (kind, bytes) = harness.next_frame()?;
+        if kind != OUTPUT {
+            return Err(io::Error::other("shell failed before ready"));
+        }
+        ready.extend_from_slice(&bytes);
+    }
+    harness.send(1, "stty size; printf '\\033]0;clair\\007CJK-日本語\\n'; i=0; while [ \"$i\" -lt 4096 ]; do printf 'raw-%04d\\n' \"$i\"; i=$((i+1)); done; exit\n".as_bytes())?;
     let output = harness.collect_until_exit()?;
+    assert!(output.windows(b"40 120".len()).any(|w| w == b"40 120"));
     assert!(
         output
-            .windows(b"40 120".len())
-            .any(|window| window == b"40 120")
+            .windows("CJK-日本語".len())
+            .any(|w| w == "CJK-日本語".as_bytes())
     );
     assert!(
         output
-            .windows(b"CLAIR_SHELL_OK".len())
-            .any(|window| window == b"CLAIR_SHELL_OK")
+            .windows(b"\x1b]0;clair\x07".len())
+            .any(|w| w == b"\x1b]0;clair\x07")
+    );
+    let mut expected = String::new();
+    for index in 0..4096 {
+        write!(&mut expected, "raw-{index:04}\r\n").expect("write to String");
+    }
+    assert!(
+        output
+            .windows(expected.len())
+            .any(|w| w == expected.as_bytes())
     );
     Ok(())
 }
 
 #[test]
-fn shell_receives_clair_terminal_environment() -> io::Result<()> {
-    let mut harness = ShellHarness::start(24, 80)?;
-    harness.send(
-        1,
-        b"printf 'CLAIR_ENV:%s:%s:%s:%s:%s:%s\\n' \"$TERM\" \"$COLORTERM\" \"$SHELL\" \"${ZDOTDIR-unset}\" \"$TERM_PROGRAM\" \"$PWD\"; exit\n",
+fn shell_rebuilds_terminal_environment_without_inheriting_host_values() -> io::Result<()> {
+    let mut harness = ShellHarness::start(
+        24,
+        80,
+        &[
+            ("CLAIR_SHOULD_NOT_LEAK", "stale"),
+            ("ZDOTDIR", "/tmp/clair-should-not-use"),
+        ],
     )?;
-
+    harness.send(1, b"printf 'CLAIR_ENV:%s:%s:%s:%s:%s:%s:%s\\n' \"$TERM\" \"$COLORTERM\" \"$SHELL\" \"${ZDOTDIR-unset}\" \"$TERM_PROGRAM\" \"$PWD\" \"${CLAIR_SHOULD_NOT_LEAK-unset}\"; exit\n")?;
     let output = harness.collect_until_exit()?;
     let expected = format!(
-        "CLAIR_ENV:xterm-256color:truecolor:/bin/sh:unset:Clair:{}",
+        "CLAIR_ENV:xterm-256color:truecolor:/bin/sh:unset:Clair:{}:unset",
         env!("CARGO_MANIFEST_DIR")
     );
     assert!(
         output
             .windows(expected.len())
-            .any(|window| window == expected.as_bytes()),
-        "shell environment output was: {}",
+            .any(|w| w == expected.as_bytes()),
+        "{}",
         String::from_utf8_lossy(&output)
     );
     Ok(())
 }
 
 #[test]
-fn shell_does_not_inherit_stale_host_environment() -> io::Result<()> {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_clair-ptyhost"))
-        .args([
-            "--spawn",
-            "--cwd",
-            env!("CARGO_MANIFEST_DIR"),
-            "--shell",
-            "/bin/sh",
-            "--rows",
-            "24",
-            "--cols",
-            "80",
-        ])
-        .env("CLAIR_SHOULD_NOT_LEAK", "stale")
-        .env("ZDOTDIR", "/tmp/clair-should-not-use")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
-    let mut stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| io::Error::other("PTY harness stdin was not piped"))?;
-    let mut stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| io::Error::other("PTY harness stdout was not piped"))?;
-    let payload = b"printf 'LEAK:%s:%s\\n' \"${CLAIR_SHOULD_NOT_LEAK-unset}\" \"${ZDOTDIR-unset}\"; exit\n";
-    let mut frame = vec![b'C', b'P', 1, 1];
-    frame.extend_from_slice(&(payload.len() as u32).to_be_bytes());
-    frame.extend_from_slice(payload);
-    stdin.write_all(&frame)?;
-    stdin.flush()?;
-
-    let mut collected = Vec::new();
-    let mut buffer = [0_u8; 4096];
-    loop {
-        let count = stdout.read(&mut buffer)?;
-        if count == 0 {
-            break;
-        }
-        collected.extend_from_slice(&buffer[..count]);
-        if collected.windows(b"LEAK:unset:unset".len()).any(|window| window == b"LEAK:unset:unset")
-        {
-            break;
-        }
-    }
-    let _ = child.wait();
-    assert!(
-        collected
-            .windows(b"LEAK:unset:unset".len())
-            .any(|window| window == b"LEAK:unset:unset"),
-        "shell environment output was: {}",
-        String::from_utf8_lossy(&collected)
-    );
-    Ok(())
-}
-
-#[test]
-fn shell_preserves_cjk_and_osc_bytes() -> io::Result<()> {
-    let mut harness = ShellHarness::start(24, 80)?;
-    let cjk_command = "printf '\\033]0;clair\\007CJK-日本語\\n'; exit\n".to_owned();
-    harness.send(1, cjk_command.as_bytes())?;
-
-    let output = harness.collect_until_exit()?;
-    assert!(
-        output
-            .windows("CJK-日本語".len())
-            .any(|window| window == "CJK-日本語".as_bytes())
-    );
-    assert!(
-        output
-            .windows(b"\x1b]0;clair\x07".len())
-            .any(|window| window == b"\x1b]0;clair\x07")
-    );
-    Ok(())
-}
-
-#[test]
-fn terminal_flood_completes_without_host_crash() -> io::Result<()> {
-    let mut harness = ShellHarness::start(24, 80)?;
-    harness.send(
-        1,
-        b"i=0; while [ \"$i\" -lt 100 ]; do printf 'flood-%03d\\n' \"$i\"; i=$((i+1)); done; printf 'FLOOD_END\\n'; exit\n",
-    )?;
-
-    let output = harness.collect_until_exit()?;
-    assert!(
-        output
-            .windows(b"flood-099".len())
-            .any(|window| window == b"flood-099")
-    );
-    assert!(
-        output
-            .windows(b"FLOOD_END".len())
-            .any(|window| window == b"FLOOD_END")
-    );
-    Ok(())
-}
-
-#[test]
 fn malformed_frame_is_rejected_and_shell_is_reaped() -> io::Result<()> {
-    let mut harness = ShellHarness::start(24, 80)?;
+    let mut harness = ShellHarness::start(24, 80, &[])?;
     harness.stdin.write_all(&MAGIC)?;
     harness.stdin.write_all(&[VERSION, 1])?;
     harness
@@ -271,7 +207,7 @@ fn malformed_frame_is_rejected_and_shell_is_reaped() -> io::Result<()> {
 
     let mut saw_error = false;
     loop {
-        let (kind, _) = read_frame(&mut harness.stdout)?;
+        let (kind, _) = harness.next_frame()?;
         match kind {
             ERROR => saw_error = true,
             EXIT => break,

@@ -5,37 +5,16 @@ import XCTest
 
 @MainActor
 final class ProjectGitTests: XCTestCase {
-  func testStatusSeparatesStagedUnstagedAndUntrackedChanges() throws {
-    let fixture = try GitFixture()
-    let service = ProjectGitService(rootURL: fixture.root)
-
-    try fixture.write("tracked.txt", contents: "working tree\n")
-    try fixture.write("untracked.txt", contents: "new file\n")
-
-    var snapshot = try service.status()
-    XCTAssertTrue(snapshot.isRepository)
-    XCTAssertEqual(snapshot.branch, "main")
-    XCTAssertEqual(snapshot.stagedChanges, [])
-    XCTAssertEqual(snapshot.unstagedChanges.map(\.path), ["tracked.txt"])
-    XCTAssertEqual(snapshot.untrackedChanges.map(\.path), ["untracked.txt"])
-
-    snapshot = try service.stage(path: "tracked.txt")
-    XCTAssertEqual(snapshot.stagedChanges.map(\.path), ["tracked.txt"])
-    XCTAssertEqual(snapshot.unstagedChanges, [])
-
-    try fixture.write("tracked.txt", contents: "staged then working tree\n")
-    snapshot = try service.status()
-    XCTAssertEqual(snapshot.stagedChanges.map(\.path), ["tracked.txt"])
-    XCTAssertEqual(snapshot.unstagedChanges.map(\.path), ["tracked.txt"])
-    XCTAssertEqual(snapshot.untrackedChanges.map(\.path), ["untracked.txt"])
-  }
-
   func testDiffStageUnstageAndCommitPreserveStagedBoundary() throws {
     let fixture = try GitFixture()
     let service = ProjectGitService(rootURL: fixture.root)
 
     try fixture.write("tracked.txt", contents: "changed\n")
+    try fixture.write("untracked.txt", contents: "untracked\n")
     var snapshot = try service.status()
+    XCTAssertEqual(snapshot.stagedChanges, [])
+    XCTAssertEqual(snapshot.unstagedChanges.map(\.path), ["tracked.txt"])
+    XCTAssertEqual(snapshot.untrackedChanges.map(\.path), ["untracked.txt"])
     let tracked = try XCTUnwrap(snapshot.changes.first { $0.path == "tracked.txt" })
     let workingTreeDiff = try service.diff(for: tracked, basis: .workingTree)
     XCTAssertTrue(workingTreeDiff.text.contains("-baseline"))
@@ -46,6 +25,14 @@ final class ProjectGitTests: XCTestCase {
     let stagedDiff = try service.diff(for: stagedChange, basis: .staged)
     XCTAssertTrue(stagedDiff.text.contains("+changed"))
 
+    try fixture.write("tracked.txt", contents: "later working tree\n")
+    snapshot = try service.status()
+    XCTAssertEqual(snapshot.stagedChanges.map(\.path), ["tracked.txt"])
+    XCTAssertEqual(snapshot.unstagedChanges.map(\.path), ["tracked.txt"])
+    XCTAssertEqual(snapshot.untrackedChanges.map(\.path), ["untracked.txt"])
+    XCTAssertTrue(try service.diff(for: tracked, basis: .staged).text.contains("+changed"))
+    XCTAssertTrue(
+      try service.diff(for: tracked, basis: .workingTree).text.contains("+later working tree"))
     snapshot = try service.unstage(path: tracked.path)
     XCTAssertEqual(snapshot.stagedChanges, [])
     XCTAssertEqual(snapshot.unstagedChanges.map(\.path), ["tracked.txt"])
@@ -91,11 +78,8 @@ final class ProjectGitTests: XCTestCase {
       XCTAssertEqual(error as? ProjectGitError, .dirtyWorkingTree)
     }
 
-    try fixture.remove("tracked.txt")
-    var snapshot = try service.status()
-    XCTAssertEqual(snapshot.changes.first?.kind, .deleted)
     try fixture.runGit(["restore", "tracked.txt"])
-    snapshot = try service.status()
+    var snapshot = try service.status()
     XCTAssertTrue(snapshot.changes.isEmpty)
 
     snapshot = try service.switchBranch("feature")
@@ -382,25 +366,6 @@ final class ProjectGitTests: XCTestCase {
         .count,
       1
     )
-  }
-
-  func testCleanupCancellationLeavesManagedWorktreeInPlace() throws {
-    let fixture = try GitFixture()
-    let worktree = try fixture.makeManagedWorktree(
-      branch: "agent/keep",
-      targetName: "keep"
-    )
-    let service = fixture.makeWorktreeService()
-    let plan = try service.prepareCleanup(
-      worktree.id,
-      expectedRootURL: worktree.rootURL
-    )
-
-    XCTAssertTrue(plan.canConfirm)
-    XCTAssertTrue(FileManager.default.fileExists(atPath: worktree.rootURL.path))
-    XCTAssertEqual(try service.inspect(worktree.id).rootURL.path, worktree.rootURL.path)
-    XCTAssertEqual(try service.list().map(\.id), [worktree.id])
-    // Deliberately do not call confirmCleanup: cancellation leaves the worktree intact.
   }
 
   private func project(

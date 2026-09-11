@@ -3,7 +3,7 @@ SHELL := /bin/bash
 
 .PHONY: help doctor workspace-check build-editor-web build-stable build-dev build-mobile-simulator run-stable run-dev watch-dev
 .PHONY: test test-rust test-swift test-mobile lint lint-rust lint-swift analyze
-.PHONY: smoke smoke-ffi smoke-app-link smoke-bundles artifact-check ci clean-artifacts
+.PHONY: smoke smoke-bundles artifact-check ci clean-artifacts
 
 help: ## Show the supported development commands.
 	@awk 'BEGIN {FS = ":.*## "; printf "Clair development commands:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -62,18 +62,16 @@ lint: lint-rust lint-swift analyze workspace-check ## Run all formatting and sta
 smoke-bundles: build-stable build-dev ## Validate app metadata, binaries, and Rust linkage.
 	@./scripts/smoke-bundles.sh
 
-smoke-ffi: ## Compile Stable/Dev Swift-to-Rust CLI smoke executables.
-	@./scripts/smoke-swift-rust.sh
-
-smoke-app-link: ## Link Stable/Dev SwiftUI executables against the Rust core.
-	@./scripts/smoke-app-link.sh
-
 artifact-check: ## Confirm generated and local outputs are ignored.
 	@./scripts/check-ignored-artifacts.sh
 
-smoke: test smoke-ffi smoke-app-link smoke-bundles artifact-check ## Run the complete unsigned local smoke path.
+smoke: test smoke-bundles artifact-check ## Run the complete unsigned local smoke path.
 
 ci: lint smoke build-mobile-simulator ## Run the same complete checks used by GitHub Actions.
 
 clean-artifacts: ## Remove only disposable repository build outputs.
 	@./scripts/clean-artifacts.sh
+
+.PHONY: benchmark-diff
+benchmark-diff: ## Measure the large diff explicitly, outside the normal test run.
+	@CLAIR_RUN_BENCHMARKS=1 TEST_RUNNER_CLAIR_RUN_BENCHMARKS=1 ./scripts/xcode.sh test "Clair Dev" tests -only-testing:ClairTests/ProjectEditorDiffModelTests/testLargeDiffBenchmark

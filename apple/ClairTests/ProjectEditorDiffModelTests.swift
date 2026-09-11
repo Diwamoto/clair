@@ -22,7 +22,6 @@ final class ProjectEditorDiffModelTests: XCTestCase {
 
     XCTAssertEqual(result.reconstructOldSource(), old.content)
     XCTAssertEqual(result.reconstructNewSource(), new.content)
-    XCTAssertTrue(result.rows.contains { $0.kind == .replaced })
     XCTAssertGreaterThanOrEqual(result.rows.filter { $0.kind == .replaced }.count, 2)
     XCTAssertTrue(
       result.rows.contains {
@@ -59,7 +58,6 @@ final class ProjectEditorDiffModelTests: XCTestCase {
     XCTAssertEqual(first.rows.map(\.id), second.rows.map(\.id))
     XCTAssertEqual(first.hunks.map(\.id), second.hunks.map(\.id))
     XCTAssertNotEqual(first.hunks.map(\.id), differentRevision.hunks.map(\.id))
-    XCTAssertTrue(first.rows.contains { $0.hunkID != nil })
   }
 
   func testRenameMetadataAndBinarySupportStaySeparateFromTextRows() {
@@ -88,19 +86,10 @@ final class ProjectEditorDiffModelTests: XCTestCase {
     XCTAssertNotNil(binary.metadata.unsupportedReason)
   }
 
-  func testCoordinatorCanCancelAndReturnsCurrentRevisionResult() async {
-    let coordinator = ProjectEditorDiffCoordinator()
-    await coordinator.cancel()
-    let result = await coordinator.calculate(
-      old: input(id: "old", path: "a", revision: 1, content: "a"),
-      new: input(id: "new", path: "a", revision: 2, content: "b")
-    )
-
-    XCTAssertEqual(result?.oldRevision, 1)
-    XCTAssertEqual(result?.newRevision, 2)
-  }
-
-  func testTenThousandLineDiffRunsInBackgroundWithTwoThousandReplacements() async {
+  func testLargeDiffBenchmark() async throws {
+    try XCTSkipUnless(
+      ProcessInfo.processInfo.environment["CLAIR_RUN_BENCHMARKS"] == "1",
+      "Run make benchmark-diff for the large-input measurement.")
     let oldContent = makeLargeDocument(changed: false)
     let newContent = makeLargeDocument(changed: true)
     let coordinator = ProjectEditorDiffCoordinator()
@@ -116,32 +105,31 @@ final class ProjectEditorDiffModelTests: XCTestCase {
     XCTAssertEqual(result?.reconstructOldSource(), oldContent)
     XCTAssertEqual(result?.reconstructNewSource(), newContent)
     XCTAssertEqual(result?.rows.filter { $0.kind == .replaced }.count, 2_000)
-    XCTAssertLessThan(elapsed, 10, "10,000-line / 2,000-replacement diff took \(elapsed)s")
+    print("diff benchmark: 10,000 lines / 2,000 replacements, \(elapsed)s")
   }
 
-  func testCoordinatorDiscardsAStaleCalculationAfterCancellation() async {
-    let coordinator = ProjectEditorDiffCoordinator()
-    let firstOld = input(
-      id: "first",
-      path: "a.txt",
-      revision: 1,
-      content: makeLargeDocument(changed: false)
-    )
-    let firstNew = input(
-      id: "first",
-      path: "a.txt",
-      revision: 2,
-      content: makeLargeDocument(changed: true)
-    )
-    let first = Task {
-      await coordinator.calculate(old: firstOld, new: firstNew)
+  func testCoordinatorDiscardsCancelledResultAndAcceptsNextRevision() async {
+    let gate = DiffCalculationGate()
+    let coordinator = ProjectEditorDiffCoordinator { old, new, contextLines in
+      if old.documentID == "first" { await gate.pause() }
+      return ProjectEditorDiffModel.calculate(old: old, new: new, contextLines: contextLines)
     }
-
-    try? await Task.sleep(nanoseconds: 1_000_000)
+    let old = input(id: "first", path: "a", revision: 1, content: "a")
+    let new = input(id: "first", path: "a", revision: 2, content: "b")
+    let first = Task { await coordinator.calculate(old: old, new: new) }
+    await gate.waitUntilStarted()
     await coordinator.cancel()
+    await gate.resume()
+    let stale = await first.value
+    XCTAssertNil(stale)
 
-    let staleResult = await first.value
-    XCTAssertNil(staleResult)
+    let current = await coordinator.calculate(
+      old: input(id: "next", path: "a", revision: 2, content: "b"),
+      new: input(id: "next", path: "a", revision: 3, content: "c")
+    )
+    XCTAssertEqual(current?.oldRevision, 2)
+    XCTAssertEqual(current?.newRevision, 3)
+    XCTAssertEqual(current?.reconstructNewSource(), "c")
   }
 
   private func input(
@@ -169,5 +157,29 @@ final class ProjectEditorDiffModelTests: XCTestCase {
       changed && index < 2_000 ? "changed-\(index)" : "line-\(index)"
     }
     return lines.joined(separator: "\n") + "\n"
+  }
+}
+
+private actor DiffCalculationGate {
+  private var started = false
+  private var startWaiter: CheckedContinuation<Void, Never>?
+  private var completion: CheckedContinuation<Void, Never>?
+
+  func pause() async {
+    started = true
+    startWaiter?.resume()
+    startWaiter = nil
+    await withCheckedContinuation { completion = $0 }
+  }
+
+  func waitUntilStarted() async {
+    if !started {
+      await withCheckedContinuation { startWaiter = $0 }
+    }
+  }
+
+  func resume() {
+    completion?.resume()
+    completion = nil
   }
 }

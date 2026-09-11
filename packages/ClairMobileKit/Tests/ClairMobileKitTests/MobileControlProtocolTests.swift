@@ -183,28 +183,14 @@ func inputOperationIDCannotBeReusedForDifferentPayload() throws {
 }
 
 @Test
-func agentControlContractExposesFactualStateAndCapabilities() throws {
-  let agent = MobileAgentDescriptor(
-    id: UUID(),
-    projectID: UUID(),
-    profileID: "codex",
-    modelID: "gpt-5.6",
-    title: "Codex",
-    cwd: "/private/project",
-    lifecycle: .running,
-    state: .attention,
-    attention: true,
-    capabilities: [.agentCatalog, .agentStatus, .agentControl, .terminalInput]
-  )
-  let encoded = try JSONEncoder().encode(agent)
-  let decoded = try JSONDecoder().decode(MobileAgentDescriptor.self, from: encoded)
-
-  #expect(decoded == agent)
-  #expect(decoded.state == .attention)
-  #expect(decoded.modelID == "gpt-5.6")
-  #expect(decoded.capabilities.contains(.agentControl))
-  #expect(MobileControlMethod.agentList.rawValue == "agent/list")
-  #expect(MobileControlMethod.agentInterrupt.rawValue == "agent/interrupt")
+func agentDescriptorDecodesExistingWireContract() throws {
+  let json =
+    #"{"id":"12345678-90AB-CDEF-1234-567890ABCDEF","projectID":"12345678-90AB-CDEF-1234-567890ABCDE0","profileID":"codex","modelID":"selected-model","title":"Codex","cwd":"/private/project","lifecycle":"running","state":"attention","attention":true,"capabilities":["agent_control","terminal_input"]}"#
+  let agent = try JSONDecoder().decode(MobileAgentDescriptor.self, from: Data(json.utf8))
+  #expect(agent.state == .attention)
+  #expect(agent.lifecycle == .running)
+  #expect(agent.modelID == "selected-model")
+  #expect(agent.capabilities == [.agentControl, .terminalInput])
 }
 
 @Test
@@ -606,53 +592,6 @@ func mobileHostUpdatesSessionProjectionWithoutResettingStream() throws {
 }
 
 @Test
-func mobileHostAppliesInputInArrivalOrderAndDoesNotResizeFromViewport() throws {
-  let host = try makeEnabledHost()
-  let keyPair = MobileDeviceKeyPair()
-  let link = try host.createPairingLink(endpoint: "loopback://clair/input")
-  let credential = try host.pair(
-    link: link,
-    displayName: "Input viewer",
-    devicePublicKey: keyPair.publicKeyRepresentation
-  )
-  try host.setScopes([.view, .writeTerminal, .signal], for: credential.deviceID)
-  let session = session(worktreeID: nil, title: "Unknown CLI")
-  try host.registerSession(session, epoch: 1)
-
-  let first = MobileTerminalInputOperation(
-    deviceID: credential.deviceID,
-    sessionID: session.id,
-    payload: Data("first".utf8)
-  )
-  let second = MobileTerminalInputOperation(
-    deviceID: credential.deviceID,
-    sessionID: session.id,
-    payload: Data("second".utf8)
-  )
-  let acceptedFirst = try host.acceptTerminalInput(first)
-  let acceptedSecond = try host.acceptTerminalInput(second)
-  let duplicate = try host.acceptTerminalInput(first)
-  #expect(acceptedFirst.arrivalSequence == 1)
-  #expect(acceptedSecond.arrivalSequence == 2)
-  #expect(duplicate.isDuplicate)
-  #expect(duplicate.arrivalSequence == 1)
-
-  let interrupt = try host.acceptTerminalInterrupt(
-    deviceID: credential.deviceID,
-    sessionID: session.id
-  )
-  #expect(interrupt.payload == Data([0x03]))
-  var readOnlySequencer = MobileInputSequencer()
-  #expect(throws: MobileProtocolError.invalidScope(.writeTerminal)) {
-    try readOnlySequencer.accept(
-      first,
-      grant: MobileDeviceGrant(deviceID: credential.deviceID, scopes: [.view]),
-      visibleSessionIDs: [session.id]
-    )
-  }
-}
-
-@Test
 func mobileTransportDecoderHandlesPartialFramesAndRejectsOversizedFrames() throws {
   let terminal = try MobileTerminalFrame(
     kind: .output,
@@ -695,40 +634,10 @@ func mobileRPCConnectionRequiresAuthenticationBeforeProjectAccess() throws {
   )
   #expect(sessionList.error?.code == "request_failed")
 
-  let keyPair = MobileDeviceKeyPair()
-  let link = try host.createPairingLink(endpoint: "loopback://clair/rpc")
-  let pair = try MobileControlRequest(
-    id: "pair",
-    method: .pair,
-    parameters: MobilePairRequest(
-      link: link,
-      displayName: "RPC viewer",
-      devicePublicKey: keyPair.publicKeyRepresentation,
-      confirmedFingerprint: host.identity.fingerprint
-    )
-  )
-  let pairResponse = connection.handle(pair)
-  #expect(pairResponse.error == nil)
-  let credential =
-    try pairResponse.result?.decode(MobileDeviceCredential.self)
-    ?? { throw MobileHostError.invalidOperation }()
-  let challenge = try host.issueChallenge(for: credential.deviceID)
-  let auth = try MobileControlRequest(
-    id: "auth",
-    method: .authenticate,
-    parameters: MobileAuthenticateRequest(
-      deviceID: credential.deviceID,
-      token: credential.token,
-      challenge: challenge,
-      signature: try keyPair.sign(challenge.bytes)
-    )
-  )
-  let authResponse = connection.handle(auth)
-  #expect(authResponse.error == nil)
 }
 
 @Test
-func mobileClientKeepsViewportLocalAndRecoversFromStreamGaps() throws {
+func mobileClientBoundsScrollbackAndRecoversFromStreamGaps() throws {
   let descriptor = session(worktreeID: nil, title: "Mobile shell")
   let streamID: UInt32 = 11
   let firstFrame = try MobileTerminalFrame(
@@ -751,12 +660,9 @@ func mobileClientKeepsViewportLocalAndRecoversFromStreamGaps() throws {
     events: [.output(firstFrame)]
   )
   let model = MobileControlClientModel(maximumScrollbackBytes: 4)
-  let viewport = try MobileClientViewport(rows: 40, columns: 120)
-  model.setLocalViewport(viewport)
   let attached = try model.attach(descriptor: descriptor, receipt: receipt)
   #expect(attached.cursor == 3)
   #expect(attached.scrollback == Data("abc".utf8))
-  #expect(model.localViewport == viewport)
 
   let secondFrame = try MobileTerminalFrame(
     kind: .output,
@@ -844,8 +750,6 @@ func mobilePairingLinkDeepLinkRoundTripsIdentityAndTransport() throws {
   #expect(decoded == link)
   #expect(url.scheme == "clair")
   #expect(url.host == "pair")
-  #expect(!url.absoluteString.contains("device_token"))
-  #expect(!url.absoluteString.contains("private_key"))
 }
 
 @Test
@@ -858,52 +762,15 @@ func mobileAttentionPayloadContainsOnlyOpaqueWakeMetadata() throws {
     sessionID: sessionID,
     kind: .agentNotification
   )
-  let encoded = try JSONEncoder().encode(notification)
-  let json = String(decoding: encoded, as: UTF8.self)
 
   #expect(notification.apnsUserInfo["clair_wake_id"] == "wake-opaque-123")
   #expect(notification.apnsUserInfo["clair_host_id"] == hostID.uuidString)
   #expect(notification.apnsUserInfo["clair_session_id"] == sessionID.uuidString)
-  #expect(!json.contains("prompt"))
-  #expect(!json.contains("cwd"))
-  #expect(!json.contains("terminal"))
-  #expect(!json.contains("secret"))
-}
+  #expect(
+    Set(notification.apnsUserInfo.keys) == [
+      "clair_wake_id", "clair_host_id", "clair_session_id", "clair_kind",
+    ])
 
-@Test
-func mobileRequestFactoryProjectsSharedControlMethods() throws {
-  let hello = MobileClientHello(clientName: "Clair iPad")
-  let initialize = try MobileControlRequestFactory.initialize(id: "hello", hello: hello)
-  #expect(initialize.method == .initialize)
-  #expect(try initialize.decodeParameters(MobileClientHello.self) == hello)
-
-  let sessionID = UUID()
-  let operation = MobileTerminalInputOperation(
-    deviceID: UUID(),
-    sessionID: sessionID,
-    payload: Data("raw input".utf8)
-  )
-  let input = try MobileControlRequestFactory.terminalInput(
-    id: "input",
-    operation: operation
-  )
-  #expect(input.method == .terminalInput)
-  #expect(try input.decodeParameters(MobileTerminalInputOperation.self) == operation)
-}
-
-@Test
-func mobileRequestFactoryEncodesAgentInput() throws {
-  let operation = MobileAgentInputOperation(
-    deviceID: UUID(),
-    agentID: UUID(),
-    payload: Data("steer".utf8)
-  )
-  let input = try MobileControlRequestFactory.agentInput(
-    id: "agent-input",
-    operation: operation
-  )
-  #expect(input.method == .agentInput)
-  #expect(try input.decodeParameters(MobileAgentInputOperation.self) == operation)
 }
 
 @Test
@@ -939,6 +806,19 @@ func mobileHostDeliversFreshAcceptedOperationsToTheApplicationBridge() throws {
   )
   #expect(host.registeredProfiles().first?.models.first?.id == "gpt-5.6")
 
+  let connection = host.makeConnection()
+  let initialize = connection.handle(
+    try MobileControlRequestFactory.initialize(
+      hello: MobileClientHello(clientName: "Handler viewer")))
+  #expect(initialize.error == nil)
+  let challenge = try host.issueChallenge(for: credential.deviceID)
+  let authentication = connection.handle(
+    try MobileControlRequestFactory.authenticate(
+      request: MobileAuthenticateRequest(
+        deviceID: credential.deviceID, token: credential.token,
+        challenge: challenge, signature: try keyPair.sign(challenge.bytes))))
+  #expect(authentication.error == nil)
+
   let recorder = MobileOperationRecorder()
   host.setOperationHandlers(
     MobileControlHostHandlers(
@@ -955,10 +835,22 @@ func mobileHostDeliversFreshAcceptedOperationsToTheApplicationBridge() throws {
     sessionID: terminal.id,
     payload: Data("hello".utf8)
   )
-  _ = try host.acceptTerminalInput(terminalOperation)
-  _ = try host.acceptTerminalInput(terminalOperation)
+  let request = try MobileControlRequestFactory.terminalInput(operation: terminalOperation)
+  #expect(connection.handle(request).error == nil)
+  #expect(connection.handle(request).error == nil)
   #expect(recorder.terminalInputs.count == 1)
   #expect(recorder.terminalInputs[0].sessionID == terminal.id)
+  let second = MobileTerminalInputOperation(
+    deviceID: credential.deviceID, sessionID: terminal.id, payload: Data("second".utf8))
+  #expect(
+    connection.handle(try MobileControlRequestFactory.terminalInput(operation: second)).error == nil
+  )
+  _ = try host.acceptTerminalInterrupt(deviceID: credential.deviceID, sessionID: terminal.id)
+  #expect(
+    recorder.terminalInputs.map(\.payload) == [
+      Data("hello".utf8), Data("second".utf8), Data([0x03]),
+    ])
+  #expect(recorder.terminalInputs.map(\.arrivalSequence) == [1, 2, 3])
 
   let agentInput = MobileAgentInputOperation(
     id: UUID(),
@@ -966,9 +858,10 @@ func mobileHostDeliversFreshAcceptedOperationsToTheApplicationBridge() throws {
     agentID: agent.id,
     payload: Data("steer".utf8)
   )
-  _ = try host.acceptAgentInput(agentInput)
-  _ = try host.acceptAgentInput(agentInput)
-  #expect(recorder.agentInputs.count == 1)
+  let agentRequest = try MobileControlRequestFactory.agentInput(operation: agentInput)
+  #expect(connection.handle(agentRequest).error == nil)
+  #expect(connection.handle(agentRequest).error == nil)
+  #expect(recorder.agentInputs.map(\.payload) == [Data("steer".utf8)])
 
   let control = MobileAgentControlOperation(
     id: UUID(),

@@ -133,29 +133,7 @@ class ItemLeaseTests(unittest.TestCase):
         primary_released = json.loads(self.helper(self.root, "release", "P01").stdout)
         self.assertTrue(primary_released["released"])
 
-    def test_independent_items_can_be_leased_in_parallel(self) -> None:
-        worker_one = Path(self.temporary.name) / "parallel-one"
-        worker_two = Path(self.temporary.name) / "parallel-two"
-        run(
-            "git",
-            "worktree",
-            "add",
-            "-q",
-            "-b",
-            "parallel-one",
-            str(worker_one),
-            cwd=self.root,
-        )
-        run(
-            "git",
-            "worktree",
-            "add",
-            "-q",
-            "-b",
-            "parallel-two",
-            str(worker_two),
-            cwd=self.root,
-        )
+        # Reuse the same linked worktrees to verify independent leases are allowed.
         first = json.loads(self.helper(worker_one, "acquire", "P01").stdout)
         second = json.loads(self.helper(worker_two, "acquire", "P02").stdout)
         self.assertEqual(first["item_id"], "P01")
@@ -163,6 +141,7 @@ class ItemLeaseTests(unittest.TestCase):
         self.assertEqual(second["other_leases"][0]["item_id"], "P01")
         self.helper(worker_one, "release", "P01")
         self.helper(worker_two, "release", "P02")
+
 
 
 if __name__ == "__main__":

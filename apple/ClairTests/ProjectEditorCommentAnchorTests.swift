@@ -76,7 +76,7 @@ final class ProjectEditorCommentAnchorTests: XCTestCase {
       range: ProjectEditorUTF16Range(location: 10, length: 4)
     )
 
-    let change = try store.apply(
+    _ = try store.apply(
       ProjectEditorTransaction(
         baseRevision: 0,
         edits: [
@@ -91,7 +91,7 @@ final class ProjectEditorCommentAnchorTests: XCTestCase {
           ProjectEditorReplacement(
             range: ProjectEditorUTF16Range(location: 20, length: 2),
             text: ""
-          )
+          ),
         ],
         source: .user,
         undoUnit: .paste
@@ -99,7 +99,6 @@ final class ProjectEditorCommentAnchorTests: XCTestCase {
       resultingRevision: 1
     )
 
-    XCTAssertEqual(change.operation, .apply)
     XCTAssertEqual(
       store.anchor(withID: "multi")?.range,
       ProjectEditorUTF16Range(location: 12, length: 6)
@@ -123,8 +122,7 @@ final class ProjectEditorCommentAnchorTests: XCTestCase {
     )
     XCTAssertEqual(store.anchor(withID: "comment")?.status, .orphan)
 
-    let undo = try store.undo(toDocumentRevision: 2)
-    XCTAssertEqual(undo.operation, .undo)
+    _ = try store.undo(toDocumentRevision: 2)
     XCTAssertEqual(
       store.anchor(withID: "comment"),
       ProjectEditorCommentAnchor(

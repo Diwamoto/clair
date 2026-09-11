@@ -5,6 +5,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 action="${1:?usage: xcode.sh <build|test|analyze> <scheme> <derived-data-key>}"
 scheme="${2:?usage: xcode.sh <build|test|analyze> <scheme> <derived-data-key>}"
 derived_data_key="${3:?usage: xcode.sh <build|test|analyze> <scheme> <derived-data-key>}"
+shift 3
 
 "$repo_root/scripts/doctor.sh" all
 
@@ -27,6 +28,7 @@ xcodebuild \
     -derivedDataPath "$repo_root/.build/xcode/$derived_data_key" \
     CODE_SIGNING_ALLOWED=NO \
     CODE_SIGNING_REQUIRED=NO \
+    "$@" \
     "$action"
 
 if [[ "$action" == "build" ]]; then

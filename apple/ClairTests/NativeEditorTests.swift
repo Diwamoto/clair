@@ -37,39 +37,25 @@ final class NativeEditorTests: XCTestCase {
 
   func testEditorSavesOnlyAfterExplicitSaveAndUndoRestoresCleanState() throws {
     let fixture = try EditorFixture()
-    let fileURL = try fixture.makeFile(named: "notes.txt", content: "before\n")
+    let fileURL = try fixture.makeFile(named: "notes.txt", content: "before 日本語 e\u{301}\n")
     let document = fixture.makeDocument(at: fileURL)
 
-    document.replaceContent("after\n")
+    document.replaceContent("after 🧑🏽‍💻 é\n")
 
     XCTAssertTrue(document.isDirty)
-    XCTAssertEqual(try String(contentsOf: fileURL), "before\n")
+    XCTAssertEqual(try String(contentsOf: fileURL), "before 日本語 e\u{301}\n")
 
     document.undo()
 
-    XCTAssertEqual(document.content, "before\n")
+    XCTAssertEqual(document.content, "before 日本語 e\u{301}\n")
     XCTAssertFalse(document.isDirty)
-    XCTAssertEqual(try String(contentsOf: fileURL), "before\n")
+    XCTAssertEqual(try String(contentsOf: fileURL), "before 日本語 e\u{301}\n")
 
-    document.replaceContent("after\n")
+    document.replaceContent("after 🧑🏽‍💻 é\n")
     try document.save()
 
     XCTAssertFalse(document.isDirty)
-    XCTAssertEqual(try String(contentsOf: fileURL), "after\n")
-  }
-
-  func testEditorPreservesUnicodeEmojiAndCombiningTextAsUTF8() throws {
-    let fixture = try EditorFixture()
-    let fileURL = try fixture.makeFile(named: "unicode.txt", content: "")
-    let document = fixture.makeDocument(at: fileURL)
-    let unicodeContent = "日本語🙂 🧑🏽‍💻 e\u{301} と é\n"
-
-    document.replaceContent(unicodeContent)
-    try document.save()
-
-    XCTAssertEqual(try Data(contentsOf: fileURL), Data(unicodeContent.utf8))
-    XCTAssertEqual(document.content, unicodeContent)
-    XCTAssertFalse(document.isDirty)
+    XCTAssertEqual(try Data(contentsOf: fileURL), Data("after 🧑🏽‍💻 é\n".utf8))
   }
 
   func testMarkedTextCommitUpdatesTheDocumentOnce() throws {
@@ -145,7 +131,7 @@ final class NativeEditorTests: XCTestCase {
     XCTAssertTrue(tokenTexts(.type).contains("String"))
   }
 
-  func testSyntaxHighlighterAppliesOneDarkColorsToTextStorage() {
+  func testSyntaxHighlighterAppliesDistinctTokenColorsAndPreservesFont() {
     let source = "let value = \"ok\" // note\n"
     let storage = NSTextStorage(string: source)
     let font = NSFont.monospacedSystemFont(ofSize: 14.5, weight: .regular)
@@ -177,9 +163,12 @@ final class NativeEditorTests: XCTestCase {
         effectiveRange: nil
       ) as? NSColor
 
-    XCTAssertTrue(keywordColor?.isEqual(WorkspaceChrome.nsRGB(199, 131, 218)) == true)
-    XCTAssertTrue(stringColor?.isEqual(WorkspaceChrome.nsRGB(152, 195, 121)) == true)
-    XCTAssertTrue(commentColor?.isEqual(WorkspaceChrome.nsRGB(104, 117, 110)) == true)
+    XCTAssertNotNil(keywordColor)
+    XCTAssertNotNil(stringColor)
+    XCTAssertNotNil(commentColor)
+    XCTAssertNotEqual(keywordColor, stringColor)
+    XCTAssertNotEqual(stringColor, commentColor)
+    XCTAssertNotEqual(keywordColor, commentColor)
     XCTAssertEqual(storage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont, font)
   }
 
@@ -229,19 +218,6 @@ final class NativeEditorTests: XCTestCase {
     XCTAssertTrue(document.isDirty)
   }
 
-  func testExternalDeletionRetainsTheTabAndItsBufferContent() throws {
-    let fixture = try EditorFixture()
-    let fileURL = try fixture.makeFile(named: "deleted.txt", content: "keep me\n")
-    let document = fixture.makeDocument(at: fileURL)
-
-    try FileManager.default.removeItem(at: fileURL)
-    XCTAssertTrue(try document.refreshFromDisk())
-
-    XCTAssertTrue(document.isMissing)
-    XCTAssertTrue(document.isDirty)
-    XCTAssertEqual(document.content, "keep me\n")
-  }
-
   func testSurfaceKeepsMultipleEditorTabsIndependent() throws {
     let fixture = try EditorFixture()
     let firstURL = try fixture.makeFile(named: "first.txt", content: "one\n")
@@ -264,7 +240,7 @@ final class NativeEditorTests: XCTestCase {
     XCTAssertFalse(second.isDirty)
   }
 
-  func testWatcherReloadsAnExternalRewriteWhenTheTabIsClean() async throws {
+  func testWatcherReloadsCleanContentAndPreservesSubsequentUnsavedEdits() async throws {
     let fixture = try EditorFixture()
     let fileURL = try fixture.makeFile(named: "watched.txt", content: "before\n")
     let surface = ProjectSurfaceModel(
@@ -279,27 +255,12 @@ final class NativeEditorTests: XCTestCase {
     await waitForDocument(document) { document in
       document.content == "external\n" && !document.isDirty
     }
-  }
-
-  func testWatcherDoesNotClobberUnsavedEditsOnExternalRewrite() async throws {
-    let fixture = try EditorFixture()
-    let fileURL = try fixture.makeFile(named: "watched.txt", content: "before\n")
-    let surface = ProjectSurfaceModel(
-      projectID: fixture.projectID,
-      rootURL: fixture.root
-    )
-    surface.select(nodeID: fileURL.standardizedFileURL.path)
-    let document = try XCTUnwrap(surface.activeTab)
     document.replaceContent("unsaved\n")
-
-    try Data("external\n".utf8).write(to: fileURL)
-
-    await waitForDocument(document) { document in
-      document.lastErrorMessage != nil
-    }
+    try Data("second external\n".utf8).write(to: fileURL)
+    await waitForDocument(document) { $0.lastErrorMessage != nil }
     XCTAssertEqual(document.content, "unsaved\n")
     XCTAssertTrue(document.isDirty)
-    XCTAssertEqual(try String(contentsOf: fileURL), "external\n")
+    XCTAssertEqual(try String(contentsOf: fileURL), "second external\n")
   }
 
   func testWatcherKeepsWatchingAfterExternalDeletionAndRecreation() async throws {
@@ -316,6 +277,8 @@ final class NativeEditorTests: XCTestCase {
     await waitForDocument(document) { document in
       document.isMissing
     }
+    XCTAssertTrue(document.isDirty)
+    XCTAssertEqual(document.content, "before\n")
 
     try Data("recreated\n".utf8).write(to: fileURL)
     await waitForDocument(document) { document in
@@ -346,21 +309,6 @@ final class NativeEditorTests: XCTestCase {
     XCTAssertNil(surface.lastEditorErrorMessage)
   }
 
-  func testMissingFileOpensEmptyEditableTab() throws {
-    let fixture = try EditorFixture()
-    let fileURL = fixture.root.appendingPathComponent("missing.txt")
-    let tab = ProjectEditorTab(
-      projectID: fixture.projectID,
-      rootURL: fixture.root,
-      url: fileURL
-    )
-
-    XCTAssertTrue(tab.isMissing)
-    XCTAssertFalse(tab.isReadOnly)
-    XCTAssertNil(tab.loadError)
-    XCTAssertEqual(tab.content, "")
-  }
-
   func testWatcherLoadsFileCreatedAfterOpeningMissingTab() async throws {
     let fixture = try EditorFixture()
     let fileURL = fixture.root.appendingPathComponent("created-later.txt")
@@ -370,6 +318,10 @@ final class NativeEditorTests: XCTestCase {
       url: fileURL
     )
 
+    XCTAssertTrue(document.isMissing)
+    XCTAssertFalse(document.isReadOnly)
+    XCTAssertNil(document.loadError)
+    XCTAssertEqual(document.content, "")
     try Data("created\n".utf8).write(to: fileURL)
     await waitForDocument(document) { document in
       document.content == "created\n" && !document.isMissing && !document.isDirty

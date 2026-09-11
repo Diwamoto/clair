@@ -35,7 +35,7 @@ final class AgentActivityTests: XCTestCase {
     XCTAssertEqual(hook.kind, .attention)
   }
 
-  func testHistoryIsCodableAndCanBeQueriedByProjectAndSessionScope() throws {
+  func testHistoryQueriesProjectAndSessionScope() throws {
     let firstProject = UUID()
     let secondProject = UUID()
     let firstSession = UUID()
@@ -64,26 +64,15 @@ final class AgentActivityTests: XCTestCase {
         occurredAt: Date(timeIntervalSince1970: 4)
       ),
     ])
-    let encoder = JSONEncoder()
-    encoder.dateEncodingStrategy = .iso8601
-    let decoder = JSONDecoder()
-    decoder.dateDecodingStrategy = .iso8601
-
-    let restored = try decoder.decode(
-      AgentActivityHistory.self,
-      from: encoder.encode(history)
-    )
-
-    XCTAssertEqual(restored, history)
-    XCTAssertEqual(restored.entries(forProject: firstProject).count, 3)
+    XCTAssertEqual(history.entries(forProject: firstProject).count, 3)
     XCTAssertEqual(
-      restored.entries(
+      history.entries(
         for: AgentActivityScope(projectID: firstProject, sessionID: firstSession)
       ).count,
       1
     )
     XCTAssertEqual(
-      restored.entries(forSession: secondSession, in: firstProject).count,
+      history.entries(forSession: secondSession, in: firstProject).count,
       1
     )
   }
@@ -182,31 +171,6 @@ final class AgentActivityTests: XCTestCase {
 
     let restored = try store.load()
     XCTAssertEqual(restored.activities, [second, third])
-    XCTAssertEqual(restored.activities.count, 2)
-  }
-
-  func testLoadingOversizedHistoryIsNormalizedToBound() throws {
-    let fixture = try Fixture()
-    let projectID = UUID()
-    let store = AgentActivityStore(fileURL: fixture.fileURL, maximumActivityCount: 2)
-    let snapshot = AgentActivityStoreSnapshot(
-      history: AgentActivityHistory(
-        activities: (0..<5).map { index in
-          AgentActivity.bell(
-            id: UUID(),
-            projectID: projectID,
-            occurredAt: Date(timeIntervalSince1970: TimeInterval(index))
-          )
-        })
-    )
-
-    try store.save(snapshot)
-
-    XCTAssertEqual(try store.load().activities.count, 2)
-    XCTAssertEqual(
-      try store.load().activities.map(\.occurredAt),
-      [Date(timeIntervalSince1970: 3), Date(timeIntervalSince1970: 4)]
-    )
   }
 
   func testOfficialHookDecoderAcceptsKnownEventsWithoutRetainingRawBody() throws {

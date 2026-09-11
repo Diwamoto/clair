@@ -6,15 +6,6 @@ import XCTest
 
 @MainActor
 final class TerminalProtocolTests: XCTestCase {
-  func testTerminalTextViewInitializesAndAcceptsTranscript() {
-    let textView = TerminalTextView(frame: .zero)
-    textView.string = "Terminal ready"
-
-    XCTAssertEqual(textView.string, "Terminal ready")
-    XCTAssertFalse(textView.isEditable)
-    XCTAssertTrue(textView.isSelectable)
-  }
-
   func testTerminalGridRetainsCursorMovesAnsiAttributesAndWideGlyphs() throws {
     let grid = try XCTUnwrap(TerminalGrid(rows: 4, columns: 12))
     grid.feed(Data("abc\u{1b}[2DZ\u{1b}[1;31m!\u{1b}[0m\u{1b}[2;3H日本".utf8))
@@ -51,9 +42,6 @@ final class TerminalProtocolTests: XCTestCase {
 
     let textView = TerminalTextView(frame: .zero)
     textView.render(grid)
-    let expectedHeight =
-      textView.textContainerInset.height * 2 + CGFloat(grid.displayedRows) * textView.cellSize.height
-    XCTAssertEqual(textView.bounds.height, expectedHeight)
     XCTAssertGreaterThan(textView.bounds.height, textView.cellSize.height * CGFloat(grid.rows))
   }
 
@@ -76,7 +64,6 @@ final class TerminalProtocolTests: XCTestCase {
     let frames = try decoder.append(remainder)
 
     XCTAssertEqual(frames, [input, resize])
-    XCTAssertEqual(frames[0].payload, Data("printf '日本語\\n'\n".utf8))
     XCTAssertEqual(frames[1].dimensions?.rows, 40)
     XCTAssertEqual(frames[1].dimensions?.columns, 120)
   }
@@ -218,32 +205,6 @@ final class TerminalProtocolTests: XCTestCase {
     ) { error in
       XCTAssertEqual(error as? SessionBrokerProtocolError, .invalidState)
     }
-  }
-
-  func testTerminalTabPersistsStableSessionID() throws {
-    let sessionID = try XCTUnwrap(UUID(uuidString: "12345678-90ab-cdef-1234-567890abcdef"))
-    let tab = ProjectPaneTab.terminal(id: sessionID)
-    let encoded = try JSONEncoder().encode(tab)
-    let decoded = try JSONDecoder().decode(ProjectPaneTab.self, from: encoded)
-
-    XCTAssertEqual(decoded, tab)
-    XCTAssertEqual(decoded.sessionID, sessionID)
-  }
-
-  func testAgentTerminalTabPersistsProfileMetadata() throws {
-    let sessionID = try XCTUnwrap(UUID(uuidString: "12345678-90ab-cdef-1234-567890abcdef"))
-    let tab = ProjectPaneTab.terminal(
-      id: sessionID,
-      title: "Codex",
-      agentProfileID: AgentLaunchProfile.codex.stableID
-    )
-    let decoded = try JSONDecoder().decode(
-      ProjectPaneTab.self,
-      from: JSONEncoder().encode(tab)
-    )
-
-    XCTAssertEqual(decoded, tab)
-    XCTAssertEqual(decoded.agentProfileID, "codex")
   }
 
   private func appendUInt64(_ value: UInt64, to data: inout Data) {
