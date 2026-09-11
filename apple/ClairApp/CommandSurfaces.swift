@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import Observation
 import SwiftUI
 
 enum CommandSurfaceSource: String, Codable, CaseIterable, Sendable {
@@ -410,7 +411,8 @@ final class CommandSurfaceModel: ObservableObject {
   @Published private(set) var lastShortcutErrorMessage: String?
 
   private var workspaceObservation: AnyCancellable?
-  private var surfaceObservation: AnyCancellable?
+  private weak var observedSurface: ProjectSurfaceModel?
+  private var surfaceObservationGeneration = 0
 
   init(
     workspace: ProjectWorkspaceModel,
@@ -575,9 +577,44 @@ final class CommandSurfaceModel: ObservableObject {
     observeActiveSurface()
   }
 
+  /// `ProjectSurfaceModel` is `@Observable`, so the command surface tracks only
+  /// the surface state its availability rules actually read instead of every
+  /// surface change. Editor input and terminal output no longer republish the
+  /// command surface.
   private func observeActiveSurface() {
-    surfaceObservation = workspace.activeSurface?.objectWillChange.sink { [weak self] _ in
-      self?.objectWillChange.send()
+    guard let surface = workspace.activeSurface else {
+      observedSurface = nil
+      surfaceObservationGeneration += 1
+      return
+    }
+    guard observedSurface !== surface else {
+      return
+    }
+    armSurfaceObservation(surface)
+  }
+
+  /// Observation tracking is one-shot, so each change re-arms it. The
+  /// generation keeps exactly one live chain when the active surface changes or
+  /// a workspace change re-enters this path.
+  private func armSurfaceObservation(_ surface: ProjectSurfaceModel) {
+    observedSurface = surface
+    surfaceObservationGeneration += 1
+    let generation = surfaceObservationGeneration
+    withObservationTracking {
+      _ = surface.gitStatus
+      _ = surface.selectedNodeID
+    } onChange: { [weak self, weak surface] in
+      // `onChange` runs before the new value is applied, so the republish and
+      // the re-arm are scheduled after the mutation lands.
+      Task { @MainActor in
+        guard let self, let surface,
+          generation == self.surfaceObservationGeneration
+        else {
+          return
+        }
+        self.objectWillChange.send()
+        self.armSurfaceObservation(surface)
+      }
     }
   }
 

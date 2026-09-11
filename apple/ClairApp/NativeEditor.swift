@@ -141,7 +141,18 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
   let url: URL
   let title: String
 
-  @Published private(set) var content: String
+  /// The buffer text is deliberately *not* `@Published`: publishing it made
+  /// every keystroke invalidate every view observing the document, which in
+  /// turn re-entered `updateNSView`, compared the whole buffer, and re-ran
+  /// syntax highlighting on the full document. The live editor already holds
+  /// the text it just produced, so only model-sourced replacements need to
+  /// reach the view layer; those bump `contentSyncToken` instead.
+  private(set) var content: String
+  /// Advances when the document text is replaced by something other than the
+  /// live editor: an external-change reload from disk, undo/redo that the
+  /// document itself performs, or a workspace-wide replacement. Typing never
+  /// advances it.
+  @Published private(set) var contentSyncToken: UInt64 = 0
   @Published private(set) var isDirty = false
   @Published private(set) var isMissing = false
   @Published private(set) var isReadOnly = false
@@ -356,9 +367,8 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
 
     let documentChange = try documentModel.apply(change.transaction())
     content = documentModel.content
-    isDirty = content != baselineContent || isMissing
-    canUndo = change.canUndo
-    canRedo = change.canRedo
+    updateDirtyState(content != baselineContent || isMissing)
+    updateUndoState(canUndo: change.canUndo, canRedo: change.canRedo)
     try? documentModel.setSelection(change.selection.range)
     editorSelection = documentModel.selection
     if let scrollTop = change.scrollTop, scrollTop.isFinite {
@@ -374,12 +384,7 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
     if let scrollTop = change.scrollTop, scrollTop.isFinite {
       editorScrollTop = max(0, scrollTop)
     }
-    if canUndo != change.canUndo {
-      canUndo = change.canUndo
-    }
-    if canRedo != change.canRedo {
-      canRedo = change.canRedo
-    }
+    updateUndoState(canUndo: change.canUndo, canRedo: change.canRedo)
     onEditorViewportChange?()
   }
 
@@ -425,8 +430,7 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
     }
     if newContent == content {
       if let embeddedCanUndo, let embeddedCanRedo {
-        canUndo = embeddedCanUndo
-        canRedo = embeddedCanRedo
+        updateUndoState(canUndo: embeddedCanUndo, canRedo: embeddedCanRedo)
       } else {
         refreshUndoState()
       }
@@ -438,8 +442,7 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
       undoUnit: .typing
     )
     if let embeddedCanUndo, let embeddedCanRedo {
-      canUndo = embeddedCanUndo
-      canRedo = embeddedCanRedo
+      updateUndoState(canUndo: embeddedCanUndo, canRedo: embeddedCanRedo)
     } else {
       refreshUndoState()
     }
@@ -546,6 +549,7 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
     if diskContent != content {
       documentModel.replaceSnapshot(content: diskContent)
       content = documentModel.content
+      advanceContentSyncToken()
       editorSelection = documentModel.selection
       editorScrollTop = 0
       onEditorViewportChange?()
@@ -585,6 +589,9 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
       source: .user,
       undoUnit: .typing
     )
+    // The replacement did not come from the live editor, so the view layer has
+    // to be told to pull the new text.
+    advanceContentSyncToken()
     refreshUndoState()
   }
 
@@ -621,7 +628,31 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
       return
     }
     content = documentModel.content
-    isDirty = content != baselineContent || isMissing
+    updateDirtyState(content != baselineContent || isMissing)
+  }
+
+  /// Signals the view layer that the buffer was replaced from outside the live
+  /// editor. Typing must never call this.
+  private func advanceContentSyncToken() {
+    contentSyncToken &+= 1
+  }
+
+  private func updateDirtyState(_ newValue: Bool) {
+    guard isDirty != newValue else {
+      return
+    }
+    isDirty = newValue
+  }
+
+  /// `@Published` republishes on every assignment, equal values included, so
+  /// undo availability is only published when it actually changes.
+  private func updateUndoState(canUndo newCanUndo: Bool, canRedo newCanRedo: Bool) {
+    if canUndo != newCanUndo {
+      canUndo = newCanUndo
+    }
+    if canRedo != newCanRedo {
+      canRedo = newCanRedo
+    }
   }
 
   private func readDiskData() throws -> Data? {
@@ -638,8 +669,7 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
   }
 
   private func refreshUndoState() {
-    canUndo = undoManager.canUndo
-    canRedo = undoManager.canRedo
+    updateUndoState(canUndo: undoManager.canUndo, canRedo: undoManager.canRedo)
   }
 }
 

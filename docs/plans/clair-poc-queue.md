@@ -812,7 +812,7 @@ dependencyとする独立したhigh-priority itemで、現在のactive item完�
 
 ### P33 Workspace state decoupling for engine seams
 
-- Status: `queued`
+- Status: `active`
 - Priority: `high`
 - Depends on: P15C。
 - Outcome: SwiftUIのstate更新がengineのhot pathへ波及しない。表示は変わらない。
@@ -820,6 +820,43 @@ dependencyとする独立したhigh-priority itemで、現在のactive item完�
   `ProjectEditorTab.content`を打鍵ごとに発行する経路の停止、`ContentView.swift`の分割。
 - Functional checks: 既存のXCTest suiteが通ること、表示と操作に差異がないこと、
   editor入力時とterminal出力時に無関係なviewが再評価されないこと、restart後のlayout復元。
+- Implemented (2026-09-11): `ProjectSurfaceModel`を`ObservableObject`から`@Observable`へ移し、
+  published stateを`apple/ClairApp/ProjectSurfaceState.swift`の4つの`@Observable`
+  domain（`ProjectFileTreeState`、`ProjectLayoutState`、`ProjectSearchState`、`ProjectGitState`）へ
+  分割した。surfaceは従来のproperty名をそのまま公開し、各propertyを所有domainへ転送するため
+  文書契約と既存呼び出しは変わらない。runtime map・generation counter・task handleは
+  `@ObservationIgnored`とし、observable surfaceがviewの描画対象と一致する状態にした。
+  hot pathのseamは3点: (1) `ProjectEditorTab.content`の`@Published`を外し、model由来の置換
+  （外部変更reload、document自身のundo/redo、workspace全体置換）だけが`contentSyncToken`を
+  進める。dirty/undo可用性は遷移時だけpublishする（`@Published`は同値代入でも再publishするため）。
+  (2) editorのcaret/scroll位置はviewが描画しないため非observableなtab別mapへ移し、
+  `workspaceSnapshot`生成時にtab descriptorへ畳み込む。保存形式は変更していない。
+  (3) `CommandSurfaceModel`はsurface全体の再publishではなく、availability判定が実際に読む
+  `gitStatus`と`selectedNodeID`だけを`withObservationTracking`で追跡する。
+  さらに`ContentView.swift`（5,839行）をwindow shellと自身のoverlayだけに縮小し（969行）、
+  titlebar、command palette、status bar、agent、pane、Git、navigator、editor host、settingsの
+  各viewを`apple/ClairApp`の同階層fileへ分割してStable/Dev両targetへ登録した。表示と操作の
+  変更は行っていない。
+- Validation (2026-09-11): agent環境がLinuxでSwift/Xcode toolchainを持たないため、
+  `make lint`、`make test-swift`、`make workspace-check`、`ruby scripts/validate-xcode-project.rb`
+  （`plutil`が必要）は実行できていない。実行できた検査はすべて通過した:
+  `ruby scripts/check-textkit-boundary.rb`（ClairTextKitの一方向依存を維持）、
+  `bash -n scripts/check-workspace.sh`、`git diff --check`、および
+  pbxprojのconsistency検査（286 objects、参照未解決なし、id重複なし、group参照fileの実在、
+  Stable/Dev両targetが55 sourceを重複なく含む、`apple/ClairApp`のfileがすべて登録済み）。
+  state移行はgrepで網羅確認した: 4 domainのpropertyへの書き込み134箇所すべてが所有domain経由で、
+  computed forwarder経由の書き込み・in-place mutation・subscript代入の残りは無い。
+  escaping closure内の10箇所は明示`self.`を維持した。
+- Remaining: macOS host上で`make lint`、`make test-swift`、`make workspace-check`、
+  `ruby scripts/validate-xcode-project.rb`を実行してbuild/test evidenceを得ること、および
+  「表示と操作に差異がないこと」「editor入力時とterminal出力時に無関係なviewが再評価されないこと」
+  「restart後のlayout復元」を`Clair Dev`の手動smokeで確認することが残っている。
+  この2点が揃うまでstatusは`active`を維持する。
+- Note: `ProjectWorkspaceModel`は`ObservableObject`のままとした。project一覧とactive project切替は
+  hot pathではなく、`MobileControlRuntimeBridge`と`CommandSurfaceModel`が`objectWillChange`を
+  購読している。surface levelのstateだけを`@Observable`へ移す境界をこのitemの範囲とする。
+- Durable detail: [development workspace architecture](../architecture/development-workspace.md)の
+  「Workspace state observation boundaries」節。
 
 ### P34 Text engine performance gate
 

@@ -23,6 +23,26 @@
 		A00000000000000000000038 /* RustCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000013 /* RustCore.swift */; };
 		A00000000000000000000039 /* BootstrapState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000014 /* BootstrapState.swift */; };
 		A0000000000000000000003A /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000015 /* ContentView.swift */; };
+		A000000000000000000001A0 /* ProjectSurfaceState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000190 /* ProjectSurfaceState.swift */; };
+		A000000000000000000001B0 /* ProjectSurfaceState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000190 /* ProjectSurfaceState.swift */; };
+		A000000000000000000001A1 /* WorkspaceTitlebarViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000191 /* WorkspaceTitlebarViews.swift */; };
+		A000000000000000000001B1 /* WorkspaceTitlebarViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000191 /* WorkspaceTitlebarViews.swift */; };
+		A000000000000000000001A2 /* WorkspaceCommandPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000192 /* WorkspaceCommandPalette.swift */; };
+		A000000000000000000001B2 /* WorkspaceCommandPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000192 /* WorkspaceCommandPalette.swift */; };
+		A000000000000000000001A3 /* WorkspaceStatusViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000193 /* WorkspaceStatusViews.swift */; };
+		A000000000000000000001B3 /* WorkspaceStatusViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000193 /* WorkspaceStatusViews.swift */; };
+		A000000000000000000001A4 /* ProjectAgentViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000194 /* ProjectAgentViews.swift */; };
+		A000000000000000000001B4 /* ProjectAgentViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000194 /* ProjectAgentViews.swift */; };
+		A000000000000000000001A5 /* ProjectPaneViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000195 /* ProjectPaneViews.swift */; };
+		A000000000000000000001B5 /* ProjectPaneViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000195 /* ProjectPaneViews.swift */; };
+		A000000000000000000001A6 /* ProjectGitViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000196 /* ProjectGitViews.swift */; };
+		A000000000000000000001B6 /* ProjectGitViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000196 /* ProjectGitViews.swift */; };
+		A000000000000000000001A7 /* ProjectNavigatorViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000197 /* ProjectNavigatorViews.swift */; };
+		A000000000000000000001B7 /* ProjectNavigatorViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000197 /* ProjectNavigatorViews.swift */; };
+		A000000000000000000001A8 /* ProjectEditorViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000198 /* ProjectEditorViews.swift */; };
+		A000000000000000000001B8 /* ProjectEditorViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000198 /* ProjectEditorViews.swift */; };
+		A000000000000000000001A9 /* WorkspaceSettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000199 /* WorkspaceSettingsViews.swift */; };
+		A000000000000000000001B9 /* WorkspaceSettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000199 /* WorkspaceSettingsViews.swift */; };
 		A0000000000000000000003B /* ClairRuntimeProfileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000017 /* ClairRuntimeProfileTests.swift */; };
 		A0000000000000000000003C /* ProjectModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000001E /* ProjectModel.swift */; };
 		A0000000000000000000003D /* ProjectStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000001F /* ProjectStore.swift */; };
@@ -150,6 +170,16 @@
 		A00000000000000000000013 /* RustCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RustCore.swift; sourceTree = "<group>"; };
 		A00000000000000000000014 /* BootstrapState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BootstrapState.swift; sourceTree = "<group>"; };
 		A00000000000000000000015 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		A00000000000000000000190 /* ProjectSurfaceState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectSurfaceState.swift; sourceTree = "<group>"; };
+		A00000000000000000000191 /* WorkspaceTitlebarViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTitlebarViews.swift; sourceTree = "<group>"; };
+		A00000000000000000000192 /* WorkspaceCommandPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceCommandPalette.swift; sourceTree = "<group>"; };
+		A00000000000000000000193 /* WorkspaceStatusViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceStatusViews.swift; sourceTree = "<group>"; };
+		A00000000000000000000194 /* ProjectAgentViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectAgentViews.swift; sourceTree = "<group>"; };
+		A00000000000000000000195 /* ProjectPaneViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectPaneViews.swift; sourceTree = "<group>"; };
+		A00000000000000000000196 /* ProjectGitViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectGitViews.swift; sourceTree = "<group>"; };
+		A00000000000000000000197 /* ProjectNavigatorViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectNavigatorViews.swift; sourceTree = "<group>"; };
+		A00000000000000000000198 /* ProjectEditorViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectEditorViews.swift; sourceTree = "<group>"; };
+		A00000000000000000000199 /* WorkspaceSettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSettingsViews.swift; sourceTree = "<group>"; };
 		A00000000000000000000016 /* Clair-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Clair-Bridging-Header.h"; sourceTree = "<group>"; };
 		A00000000000000000000017 /* ClairRuntimeProfileTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClairRuntimeProfileTests.swift; sourceTree = "<group>"; };
 		A00000000000000000000018 /* clair_core.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = clair_core.h; sourceTree = "<group>"; };
@@ -333,6 +363,16 @@
 				A00000000000000000000013 /* RustCore.swift */,
 				A00000000000000000000014 /* BootstrapState.swift */,
 				A00000000000000000000015 /* ContentView.swift */,
+				A00000000000000000000190 /* ProjectSurfaceState.swift */,
+				A00000000000000000000191 /* WorkspaceTitlebarViews.swift */,
+				A00000000000000000000192 /* WorkspaceCommandPalette.swift */,
+				A00000000000000000000193 /* WorkspaceStatusViews.swift */,
+				A00000000000000000000194 /* ProjectAgentViews.swift */,
+				A00000000000000000000195 /* ProjectPaneViews.swift */,
+				A00000000000000000000196 /* ProjectGitViews.swift */,
+				A00000000000000000000197 /* ProjectNavigatorViews.swift */,
+				A00000000000000000000198 /* ProjectEditorViews.swift */,
+				A00000000000000000000199 /* WorkspaceSettingsViews.swift */,
 				A0000000000000000000001E /* ProjectModel.swift */,
 				A0000000000000000000001F /* ProjectStore.swift */,
 				A00000000000000000000020 /* CommandRegistry.swift */,
@@ -684,6 +724,16 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A000000000000000000001A0 /* ProjectSurfaceState.swift in Sources */,
+				A000000000000000000001A1 /* WorkspaceTitlebarViews.swift in Sources */,
+				A000000000000000000001A2 /* WorkspaceCommandPalette.swift in Sources */,
+				A000000000000000000001A3 /* WorkspaceStatusViews.swift in Sources */,
+				A000000000000000000001A4 /* ProjectAgentViews.swift in Sources */,
+				A000000000000000000001A5 /* ProjectPaneViews.swift in Sources */,
+				A000000000000000000001A6 /* ProjectGitViews.swift in Sources */,
+				A000000000000000000001A7 /* ProjectNavigatorViews.swift in Sources */,
+				A000000000000000000001A8 /* ProjectEditorViews.swift in Sources */,
+				A000000000000000000001A9 /* WorkspaceSettingsViews.swift in Sources */,
 				A00000000000000000000031 /* ClairApp.swift in Sources */,
 				A00000000000000000000032 /* ClairRuntimeProfile.swift in Sources */,
 				A00000000000000000000033 /* RustCore.swift in Sources */,
@@ -736,6 +786,16 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A000000000000000000001B0 /* ProjectSurfaceState.swift in Sources */,
+				A000000000000000000001B1 /* WorkspaceTitlebarViews.swift in Sources */,
+				A000000000000000000001B2 /* WorkspaceCommandPalette.swift in Sources */,
+				A000000000000000000001B3 /* WorkspaceStatusViews.swift in Sources */,
+				A000000000000000000001B4 /* ProjectAgentViews.swift in Sources */,
+				A000000000000000000001B5 /* ProjectPaneViews.swift in Sources */,
+				A000000000000000000001B6 /* ProjectGitViews.swift in Sources */,
+				A000000000000000000001B7 /* ProjectNavigatorViews.swift in Sources */,
+				A000000000000000000001B8 /* ProjectEditorViews.swift in Sources */,
+				A000000000000000000001B9 /* WorkspaceSettingsViews.swift in Sources */,
 				A00000000000000000000036 /* ClairApp.swift in Sources */,
 				A00000000000000000000037 /* ClairRuntimeProfile.swift in Sources */,
 				A00000000000000000000038 /* RustCore.swift in Sources */,

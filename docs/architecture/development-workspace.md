@@ -263,6 +263,45 @@ pane. A malformed or unsupported top-level snapshot leaves the Project catalog i
 and starts the affected surface from the same default; malformed individual surface
 entries are discarded while valid Project surfaces remain available.
 
+## Workspace state observation boundaries
+
+`ProjectSurfaceModel` is `@Observable` rather than an `ObservableObject`, and its
+published state is split by domain into four `@Observable` objects declared in
+`ProjectSurfaceState.swift`: `ProjectFileTreeState` (tree snapshot, selected node),
+`ProjectLayoutState` (tab store, pane tree, focus, maximized pane, editor error,
+workspace activity), `ProjectSearchState` (Quick Open, search, replacement, navigation
+messages), and `ProjectGitState` (status, selected diff, Git error). The surface keeps
+the property names it always exposed and forwards each one to its owning domain, so a
+Git refresh no longer re-evaluates the file tree and a pane change no longer
+re-evaluates search results. Views read the properties they render and SwiftUI tracks
+exactly those, instead of every view observing one object that republished on any
+change. The surface's runtime maps and generation counters are `@ObservationIgnored`,
+so the observable surface is exactly the state views render.
+
+Three seams keep SwiftUI state updates off the editor and terminal hot paths:
+
+- The buffer text on `ProjectEditorTab` is not `@Published`. Publishing it made every
+  keystroke invalidate every view observing the document, which re-entered
+  `updateNSView`, compared the whole buffer, and re-ran syntax highlighting over the
+  full document. The live editor already holds the text it produced; only a
+  model-sourced replacement (external-change reload, a document-performed undo/redo,
+  or a workspace-wide replacement) advances the published `contentSyncToken` that tells
+  the view layer to pull new text. Dirty and undo availability publish on transitions
+  only, because `@Published` republishes on every assignment.
+- Editor caret and scroll position are persisted but rendered by no view, so they are
+  held in a non-observed per-tab map and folded into `workspaceSnapshot` when it is
+  written. Writing them into the observable tab store made every caret move
+  re-evaluate the titlebar tab strip and the panes. The stored snapshot contract is
+  unchanged.
+- `CommandSurfaceModel` tracks the surface state its availability rules actually read
+  (Git status and the selected node) through `withObservationTracking` instead of
+  republishing on every surface change.
+
+The SwiftUI shell is split by surface: `ContentView.swift` holds the window shell and
+its own overlay, while the titlebar, command palette, status bar, agent, pane, Git,
+navigator, editor-host, and settings views live in sibling files in `apple/ClairApp`.
+None of this changes what the app displays.
+
 ## Raw agent workflow and attention
 
 P09 keeps agent execution inside the existing local PTY path. The fixed launch profiles

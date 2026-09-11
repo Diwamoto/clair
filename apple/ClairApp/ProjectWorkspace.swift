@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import SwiftUI
 
 private final class ProjectFileManagerBox: @unchecked Sendable {
@@ -501,7 +502,13 @@ final class ProjectWorkspaceModel: ObservableObject {
     )
     do {
       try store.saveWorkspace(workspaceSnapshot)
-      lastErrorMessage = nil
+      // `@Published` republishes on every assignment, so clearing the message
+      // unconditionally made each layout, caret, or expansion write re-evaluate
+      // the whole shell. Snapshot writes happen on the editor and terminal hot
+      // paths, so only a real transition publishes.
+      if lastErrorMessage != nil {
+        lastErrorMessage = nil
+      }
     } catch let error as ProjectError {
       lastErrorMessage = error.localizedDescription
     } catch {
@@ -549,54 +556,71 @@ struct ProjectTabCloseRequest: Equatable, Sendable {
 }
 
 @MainActor
-final class ProjectSurfaceModel: ObservableObject {
+@Observable
+final class ProjectSurfaceModel {
   let projectID: UUID
   let rootURL: URL
   let debugSession: DebugSessionModel
 
-  @Published private(set) var fileTree: ProjectFileTreeSnapshot
-  @Published private(set) var tabStore: [ProjectPaneTab]
-  @Published private(set) var layout: ProjectPaneNode
-  @Published private(set) var focusedPaneID: UUID
-  @Published private(set) var maximizedPaneID: UUID?
-  @Published private(set) var selectedNodeID: String?
-  @Published private(set) var lastEditorErrorMessage: String?
-  @Published private(set) var searchResults: [ProjectSearchMatch] = []
-  @Published private(set) var quickOpenResults: [ProjectQuickOpenItem] = []
-  @Published private(set) var quickOpenIsLoading = false
-  @Published private(set) var searchIsLoading = false
-  @Published private(set) var replacementIsLoading = false
-  @Published private(set) var replacementPreview: ProjectSearchReplacementPreview?
-  @Published private(set) var lastNavigationErrorMessage: String?
-  @Published private(set) var lastNavigationStatusMessage: String?
-  @Published private(set) var gitStatus: ProjectGitSnapshot?
-  @Published private(set) var selectedGitDiff: ProjectGitDiff?
-  @Published private(set) var lastGitErrorMessage: String?
-  @Published var workspaceActivityRawValue: String
+  /// Domain-split observable state. Views observe the domain they read, so a
+  /// Git refresh no longer re-evaluates the file tree and a pane change no
+  /// longer re-evaluates search results.
+  let fileTreeState: ProjectFileTreeState
+  let layoutState: ProjectLayoutState
+  let searchState: ProjectSearchState
+  let gitState: ProjectGitState
+
+  var fileTree: ProjectFileTreeSnapshot { fileTreeState.fileTree }
+  var selectedNodeID: String? { fileTreeState.selectedNodeID }
+  var tabStore: [ProjectPaneTab] { layoutState.tabStore }
+  var layout: ProjectPaneNode { layoutState.layout }
+  var focusedPaneID: UUID { layoutState.focusedPaneID }
+  var maximizedPaneID: UUID? { layoutState.maximizedPaneID }
+  var lastEditorErrorMessage: String? { layoutState.lastEditorErrorMessage }
+  var searchResults: [ProjectSearchMatch] { searchState.searchResults }
+  var quickOpenResults: [ProjectQuickOpenItem] { searchState.quickOpenResults }
+  var quickOpenIsLoading: Bool { searchState.quickOpenIsLoading }
+  var searchIsLoading: Bool { searchState.searchIsLoading }
+  var replacementIsLoading: Bool { searchState.replacementIsLoading }
+  var replacementPreview: ProjectSearchReplacementPreview? {
+    searchState.replacementPreview
+  }
+  var lastNavigationErrorMessage: String? { searchState.lastNavigationErrorMessage }
+  var lastNavigationStatusMessage: String? { searchState.lastNavigationStatusMessage }
+  var gitStatus: ProjectGitSnapshot? { gitState.gitStatus }
+  var selectedGitDiff: ProjectGitDiff? { gitState.selectedGitDiff }
+  var lastGitErrorMessage: String? { gitState.lastGitErrorMessage }
+  var workspaceActivityRawValue: String {
+    get { layoutState.workspaceActivityRawValue }
+    set { layoutState.workspaceActivityRawValue = newValue }
+  }
 
   private let rootChecker: any ProjectRootChecking
   private let fileManager: FileManager
   private let gitService: ProjectGitService
   private let onSnapshotChange: ((ProjectSurfaceSnapshot) -> Void)?
-  private var activeSearchQuery = ""
-  private var expandedNodeIDs: Set<String> = []
-  private var loadedDirectoryPaths: Set<String> = []
-  private var directoryEntryLimits: [String: Int] = [:]
+  @ObservationIgnored private var activeSearchQuery = ""
+  @ObservationIgnored private var loadedDirectoryPaths: Set<String> = []
+  @ObservationIgnored private var directoryEntryLimits: [String: Int] = [:]
+  @ObservationIgnored
   private var directoryCache: [String: ProjectFileTreeDirectoryListing] = [:]
-  private var editorDocuments: [String: ProjectEditorTab] = [:]
-  private var terminalSessions: [String: TerminalSession] = [:]
-  private var watcher: ProjectFileSystemWatcher?
-  private var treeLoadTask: Task<Void, Never>?
-  private var quickOpenTask: Task<Void, Never>?
-  private var searchTask: Task<Void, Never>?
-  private var replacementTask: Task<Void, Never>?
-  private var directoryCacheTask: Task<Void, Never>?
-  private var treeLoadGeneration = 0
-  private var directoryCacheGeneration = 0
-  private var quickOpenGeneration = 0
-  private var searchGeneration = 0
-  private var replacementGeneration = 0
-  private var editorViewportPersistTask: Task<Void, Never>?
+  @ObservationIgnored private var editorDocuments: [String: ProjectEditorTab] = [:]
+  @ObservationIgnored private var terminalSessions: [String: TerminalSession] = [:]
+  @ObservationIgnored private var watcher: ProjectFileSystemWatcher?
+  @ObservationIgnored private var treeLoadTask: Task<Void, Never>?
+  @ObservationIgnored private var quickOpenTask: Task<Void, Never>?
+  @ObservationIgnored private var searchTask: Task<Void, Never>?
+  @ObservationIgnored private var replacementTask: Task<Void, Never>?
+  @ObservationIgnored private var directoryCacheTask: Task<Void, Never>?
+  @ObservationIgnored private var treeLoadGeneration = 0
+  @ObservationIgnored private var directoryCacheGeneration = 0
+  @ObservationIgnored private var quickOpenGeneration = 0
+  @ObservationIgnored private var searchGeneration = 0
+  @ObservationIgnored private var replacementGeneration = 0
+  @ObservationIgnored private var editorViewportPersistTask: Task<Void, Never>?
+  /// Editor caret/scroll state per tab ID. Persisted with the workspace
+  /// snapshot, never observed, so caret movement does not re-evaluate views.
+  @ObservationIgnored private var editorViewports: [String: ProjectEditorViewportState] = [:]
 
   init(
     projectID: UUID,
@@ -617,19 +641,25 @@ final class ProjectSurfaceModel: ObservableObject {
     let initialSnapshot =
       snapshot?.validated(for: projectID)
       ?? ProjectSurfaceSnapshot.empty(for: projectID)
-    self.tabStore = initialSnapshot.tabs
-    self.layout = initialSnapshot.root
-    self.focusedPaneID = initialSnapshot.focusedPaneID
-    self.maximizedPaneID = initialSnapshot.maximizedPaneID
-    self.selectedNodeID = initialSnapshot.selectedNodeID
-    self.expandedNodeIDs = Set(initialSnapshot.expandedNodeIDs)
-    self.workspaceActivityRawValue =
-      initialSnapshot.workspaceActivity ?? WorkspaceActivity.files.rawValue
+    self.layoutState = ProjectLayoutState(
+      tabStore: initialSnapshot.tabs,
+      layout: initialSnapshot.root,
+      focusedPaneID: initialSnapshot.focusedPaneID,
+      maximizedPaneID: initialSnapshot.maximizedPaneID,
+      workspaceActivityRawValue: initialSnapshot.workspaceActivity
+        ?? WorkspaceActivity.files.rawValue
+    )
+    self.searchState = ProjectSearchState()
+    self.gitState = ProjectGitState()
     let canonicalRootURL = rootChecker.canonicalURL(for: rootURL)
     self.loadedDirectoryPaths = [canonicalRootURL.path]
-    self.fileTree = ProjectFileTreeSnapshot.empty(
-      for: rootChecker.availability(for: rootURL),
-      isLoading: true
+    self.fileTreeState = ProjectFileTreeState(
+      fileTree: ProjectFileTreeSnapshot.empty(
+        for: rootChecker.availability(for: rootURL),
+        isLoading: true
+      ),
+      selectedNodeID: initialSnapshot.selectedNodeID,
+      expandedNodeIDs: Set(initialSnapshot.expandedNodeIDs)
     )
 
     restoreRuntimeTabs()
@@ -643,7 +673,7 @@ final class ProjectSurfaceModel: ObservableObject {
       )
       applyTreeSnapshot(initialTree)
     } else {
-      fileTree = ProjectFileTreeSnapshot.empty(
+      fileTreeState.fileTree = ProjectFileTreeSnapshot.empty(
         for: rootChecker.availability(for: rootURL)
       )
     }
@@ -735,14 +765,29 @@ final class ProjectSurfaceModel: ObservableObject {
     ProjectSurfaceSnapshot(
       schemaVersion: ProjectSurfaceSnapshot.currentSchemaVersion,
       projectID: projectID,
-      tabs: tabStore,
+      tabs: tabsWithEditorViewports,
       root: layout,
       focusedPaneID: focusedPaneID,
       maximizedPaneID: maximizedPaneID,
       selectedNodeID: selectedNodeID,
-      expandedNodeIDs: expandedNodeIDs.sorted(),
+      expandedNodeIDs: fileTreeState.expandedNodeIDs.sorted(),
       workspaceActivity: workspaceActivityRawValue
     )
+  }
+
+  /// The tab store with the live caret/scroll state folded back in. Only the
+  /// persisted snapshot needs it; the observable tab store stays free of
+  /// per-caret churn.
+  private var tabsWithEditorViewports: [ProjectPaneTab] {
+    tabStore.map { tab in
+      guard tab.kind == .editor, let viewport = editorViewports[tab.id] else {
+        return tab
+      }
+      var updated = tab
+      updated.editorSelection = viewport.selection
+      updated.editorScrollTop = viewport.scrollTop
+      return updated
+    }
   }
 
   func tabs(in paneID: UUID) -> [ProjectPaneTab] {
@@ -800,7 +845,7 @@ final class ProjectSurfaceModel: ObservableObject {
     guard layout.leafIDs.contains(paneID), focusedPaneID != paneID else {
       return
     }
-    focusedPaneID = paneID
+    layoutState.focusedPaneID = paneID
     notifySnapshotChanged()
   }
 
@@ -823,13 +868,13 @@ final class ProjectSurfaceModel: ObservableObject {
       first: .leaf(currentLeaf),
       second: .leaf(newLeaf)
     )
-    layout = replacingLeaf(
+    layoutState.layout = replacingLeaf(
       in: layout,
       leafID: focusedPaneID,
       with: replacement
     )
-    focusedPaneID = newLeaf.id
-    maximizedPaneID = nil
+    layoutState.focusedPaneID = newLeaf.id
+    layoutState.maximizedPaneID = nil
     notifySnapshotChanged()
   }
 
@@ -843,17 +888,17 @@ final class ProjectSurfaceModel: ObservableObject {
       return
     }
 
-    layout = updatingLeaf(in: layout, leafID: focusedPaneID) { leaf in
+    layoutState.layout = updatingLeaf(in: layout, leafID: focusedPaneID) { leaf in
       var next = leaf
       next.activeTabID = fallbackTabID(excluding: activeTabID, currentlyShownIn: leaf.id)
       return next
     }
-    layout = updatingLeaf(in: layout, leafID: paneID) { leaf in
+    layoutState.layout = updatingLeaf(in: layout, leafID: paneID) { leaf in
       var next = leaf
       next.activeTabID = activeTabID
       return next
     }
-    focusedPaneID = paneID
+    layoutState.focusedPaneID = paneID
     notifySnapshotChanged()
   }
 
@@ -865,18 +910,18 @@ final class ProjectSurfaceModel: ObservableObject {
     guard let nextLayout = removingLeaf(in: layout, leafID: paneID) else {
       return
     }
-    layout = nextLayout
+    layoutState.layout = nextLayout
     if focusedPaneID == paneID || !layout.leafIDs.contains(focusedPaneID) {
-      focusedPaneID = layout.leafIDs[0]
+      layoutState.focusedPaneID = layout.leafIDs[0]
     }
     if let maximizedPane = maximizedPaneID, !layout.leafIDs.contains(maximizedPane) {
-      maximizedPaneID = nil
+      layoutState.maximizedPaneID = nil
     }
     notifySnapshotChanged()
   }
 
   func toggleMaximizeFocusedPane() {
-    maximizedPaneID = isFocusedPaneMaximized ? nil : focusedPaneID
+    layoutState.maximizedPaneID = isFocusedPaneMaximized ? nil : focusedPaneID
     notifySnapshotChanged()
   }
 
@@ -885,7 +930,7 @@ final class ProjectSurfaceModel: ObservableObject {
     guard equalized != layout else {
       return
     }
-    layout = equalized
+    layoutState.layout = equalized
     notifySnapshotChanged()
   }
 
@@ -912,13 +957,13 @@ final class ProjectSurfaceModel: ObservableObject {
       executionRootURL: executionRootURL,
       worktreeID: worktreeID
     )
-    tabStore.append(newTab)
-    layout = updatingLeaf(in: layout, leafID: targetPaneID) { leaf in
+    layoutState.tabStore.append(newTab)
+    layoutState.layout = updatingLeaf(in: layout, leafID: targetPaneID) { leaf in
       var next = leaf
       next.activeTabID = newTab.id
       return next
     }
-    focusedPaneID = targetPaneID
+    layoutState.focusedPaneID = targetPaneID
     startTerminal(tabID: newTab.id)
     return newTab.id
   }
@@ -927,7 +972,7 @@ final class ProjectSurfaceModel: ObservableObject {
     guard layout.leaf(withID: paneID) != nil else {
       return
     }
-    focusedPaneID = paneID
+    layoutState.focusedPaneID = paneID
     let terminalTab = tabStore.first { $0.kind == .terminal }
     let tabID: String
     if let terminalTab {
@@ -935,7 +980,7 @@ final class ProjectSurfaceModel: ObservableObject {
     } else {
       let newTab = ProjectPaneTab.terminal()
       tabID = newTab.id
-      tabStore.append(newTab)
+      layoutState.tabStore.append(newTab)
     }
     setActiveTab(tabID, in: paneID, revealEditor: false)
     startTerminal(tabID: tabID)
@@ -945,7 +990,7 @@ final class ProjectSurfaceModel: ObservableObject {
     guard let location = tabLocation(for: tabID), location.tab.kind == .terminal else {
       return
     }
-    focusedPaneID = location.paneID
+    layoutState.focusedPaneID = location.paneID
     setActiveTab(tabID, in: location.paneID, revealEditor: false)
     if terminalSessions[tabID] == nil {
       let session = TerminalSession(
@@ -979,7 +1024,7 @@ final class ProjectSurfaceModel: ObservableObject {
         revealEditor: fallback?.kind == .editor
       )
     } else if layout.leaf(withID: focusedPaneID)?.activeTabID != nil {
-      layout = updatingLeaf(in: layout, leafID: focusedPaneID) { leaf in
+      layoutState.layout = updatingLeaf(in: layout, leafID: focusedPaneID) { leaf in
         var next = leaf
         next.activeTabID = nil
         return next
@@ -1008,26 +1053,26 @@ final class ProjectSurfaceModel: ObservableObject {
       return
     }
     let tab = ProjectPaneTab.diff(relativePath: relativePath, basis: basis)
-    tabStore.append(tab)
-    layout = updatingLeaf(in: layout, leafID: paneID) { leaf in
+    layoutState.tabStore.append(tab)
+    layoutState.layout = updatingLeaf(in: layout, leafID: paneID) { leaf in
       var next = leaf
       next.activeTabID = tab.id
       return next
     }
-    focusedPaneID = paneID
+    layoutState.focusedPaneID = paneID
     notifySnapshotChanged()
   }
 
   func dismissEditorError() {
-    lastEditorErrorMessage = nil
+    layoutState.lastEditorErrorMessage = nil
   }
 
   func dismissNavigationError() {
-    lastNavigationErrorMessage = nil
+    searchState.lastNavigationErrorMessage = nil
   }
 
   func dismissGitError() {
-    lastGitErrorMessage = nil
+    gitState.lastGitErrorMessage = nil
   }
 
   func refreshGitStatus() {
@@ -1038,16 +1083,16 @@ final class ProjectSurfaceModel: ObservableObject {
   func refreshGitStatusThrowing() throws -> ProjectGitSnapshot {
     do {
       let snapshot = try gitService.status()
-      gitStatus = snapshot
-      lastGitErrorMessage = nil
+      gitState.gitStatus = snapshot
+      gitState.lastGitErrorMessage = nil
       if let selectedGitDiff,
         !snapshot.changes.contains(where: { $0.id == selectedGitDiff.change.id })
       {
-        self.selectedGitDiff = nil
+        gitState.selectedGitDiff = nil
       }
       return snapshot
     } catch {
-      lastGitErrorMessage = error.localizedDescription
+      gitState.lastGitErrorMessage = error.localizedDescription
       throw error
     }
   }
@@ -1060,12 +1105,12 @@ final class ProjectSurfaceModel: ObservableObject {
     do {
       let change = try currentGitChange(relativePath: relativePath)
       let diff = try gitService.diff(for: change, basis: basis)
-      selectedGitDiff = diff
-      lastGitErrorMessage = nil
+      gitState.selectedGitDiff = diff
+      gitState.lastGitErrorMessage = nil
       openDiff(relativePath: relativePath, basis: basis)
       return diff
     } catch {
-      lastGitErrorMessage = error.localizedDescription
+      gitState.lastGitErrorMessage = error.localizedDescription
       throw error
     }
   }
@@ -1075,12 +1120,12 @@ final class ProjectSurfaceModel: ObservableObject {
     do {
       _ = try currentGitChange(relativePath: relativePath)
       let snapshot = try gitService.stage(path: relativePath)
-      gitStatus = snapshot
-      selectedGitDiff = nil
-      lastGitErrorMessage = nil
+      gitState.gitStatus = snapshot
+      gitState.selectedGitDiff = nil
+      gitState.lastGitErrorMessage = nil
       return snapshot
     } catch {
-      lastGitErrorMessage = error.localizedDescription
+      gitState.lastGitErrorMessage = error.localizedDescription
       throw error
     }
   }
@@ -1090,12 +1135,12 @@ final class ProjectSurfaceModel: ObservableObject {
     do {
       _ = try currentGitChange(relativePath: relativePath)
       let snapshot = try gitService.unstage(path: relativePath)
-      gitStatus = snapshot
-      selectedGitDiff = nil
-      lastGitErrorMessage = nil
+      gitState.gitStatus = snapshot
+      gitState.selectedGitDiff = nil
+      gitState.lastGitErrorMessage = nil
       return snapshot
     } catch {
-      lastGitErrorMessage = error.localizedDescription
+      gitState.lastGitErrorMessage = error.localizedDescription
       throw error
     }
   }
@@ -1104,12 +1149,12 @@ final class ProjectSurfaceModel: ObservableObject {
   func commitGitChanges(message: String) throws -> ProjectGitSnapshot {
     do {
       let snapshot = try gitService.commit(message: message)
-      gitStatus = snapshot
-      selectedGitDiff = nil
-      lastGitErrorMessage = nil
+      gitState.gitStatus = snapshot
+      gitState.selectedGitDiff = nil
+      gitState.lastGitErrorMessage = nil
       return snapshot
     } catch {
-      lastGitErrorMessage = error.localizedDescription
+      gitState.lastGitErrorMessage = error.localizedDescription
       throw error
     }
   }
@@ -1118,13 +1163,13 @@ final class ProjectSurfaceModel: ObservableObject {
   func switchGitBranch(_ branch: String) throws -> ProjectGitSnapshot {
     do {
       let snapshot = try gitService.switchBranch(branch)
-      gitStatus = snapshot
-      selectedGitDiff = nil
-      lastGitErrorMessage = nil
+      gitState.gitStatus = snapshot
+      gitState.selectedGitDiff = nil
+      gitState.lastGitErrorMessage = nil
       reload()
       return snapshot
     } catch {
-      lastGitErrorMessage = error.localizedDescription
+      gitState.lastGitErrorMessage = error.localizedDescription
       throw error
     }
   }
@@ -1134,18 +1179,18 @@ final class ProjectSurfaceModel: ObservableObject {
       let fileURL = ProjectNavigation.fileURL(for: relativePath, rootURL: rootURL),
       isRegularFile(fileURL)
     else {
-      lastNavigationErrorMessage =
+      searchState.lastNavigationErrorMessage =
         "The changed file is unavailable in the Project tree: \(relativePath)"
       return
     }
-    lastNavigationErrorMessage = nil
+    searchState.lastNavigationErrorMessage = nil
     if let node = fileTree.node(withID: fileURL.path) {
       select(nodeID: node.id)
       return
     }
 
     revealPathWithoutOpening(fileURL)
-    selectedNodeID = fileURL.path
+    fileTreeState.selectedNodeID = fileURL.path
     _ = openEditorTab(for: fileURL, title: fileURL.lastPathComponent)
     notifySnapshotChanged()
   }
@@ -1178,7 +1223,7 @@ final class ProjectSurfaceModel: ObservableObject {
     quickOpenGeneration += 1
     let generation = quickOpenGeneration
     quickOpenTask?.cancel()
-    quickOpenIsLoading = true
+    searchState.quickOpenIsLoading = true
 
     let rootURL = self.rootURL
     quickOpenTask = Task { [weak self] in
@@ -1189,8 +1234,8 @@ final class ProjectSurfaceModel: ObservableObject {
       guard !Task.isCancelled, let self, generation == self.quickOpenGeneration else {
         return
       }
-      self.quickOpenResults = items
-      self.quickOpenIsLoading = false
+      self.searchState.quickOpenResults = items
+      self.searchState.quickOpenIsLoading = false
       self.quickOpenTask = nil
     }
   }
@@ -1201,17 +1246,17 @@ final class ProjectSurfaceModel: ObservableObject {
       fileURL.path == item.filePath,
       isRegularFile(fileURL)
     else {
-      lastNavigationErrorMessage = "The Quick Open result is no longer available."
+      searchState.lastNavigationErrorMessage = "The Quick Open result is no longer available."
       return
     }
-    lastNavigationErrorMessage = nil
+    searchState.lastNavigationErrorMessage = nil
     if let node = fileTree.node(withID: item.filePath) {
       select(nodeID: node.id)
       return
     }
 
     revealPathWithoutOpening(fileURL)
-    selectedNodeID = fileURL.path
+    fileTreeState.selectedNodeID = fileURL.path
     _ = openEditorTab(for: fileURL, title: item.title)
     notifySnapshotChanged()
   }
@@ -1219,15 +1264,15 @@ final class ProjectSurfaceModel: ObservableObject {
   func search(query: String) {
     searchGeneration += 1
     searchTask?.cancel()
-    searchIsLoading = false
+    searchState.searchIsLoading = false
     replacementGeneration += 1
     replacementTask?.cancel()
-    replacementIsLoading = false
+    searchState.replacementIsLoading = false
     activeSearchQuery = query
-    replacementPreview = nil
-    lastNavigationErrorMessage = nil
-    lastNavigationStatusMessage = nil
-    searchResults = ProjectNavigation.search(
+    searchState.replacementPreview = nil
+    searchState.lastNavigationErrorMessage = nil
+    searchState.lastNavigationStatusMessage = nil
+    searchState.searchResults = ProjectNavigation.search(
       query: query,
       rootURL: rootURL,
       fileManager: fileManager
@@ -1237,11 +1282,11 @@ final class ProjectSurfaceModel: ObservableObject {
   func requestSearch(query: String) {
     replacementGeneration += 1
     replacementTask?.cancel()
-    replacementIsLoading = false
+    searchState.replacementIsLoading = false
     activeSearchQuery = query
-    replacementPreview = nil
-    lastNavigationErrorMessage = nil
-    lastNavigationStatusMessage = nil
+    searchState.replacementPreview = nil
+    searchState.lastNavigationErrorMessage = nil
+    searchState.lastNavigationStatusMessage = nil
     requestSearchRefresh()
   }
 
@@ -1251,12 +1296,12 @@ final class ProjectSurfaceModel: ObservableObject {
     searchTask?.cancel()
 
     guard !activeSearchQuery.isEmpty else {
-      searchResults = []
-      searchIsLoading = false
+      searchState.searchResults = []
+      searchState.searchIsLoading = false
       return
     }
 
-    searchIsLoading = true
+    searchState.searchIsLoading = true
     let query = activeSearchQuery
     let rootURL = self.rootURL
     searchTask = Task { [weak self] in
@@ -1267,8 +1312,8 @@ final class ProjectSurfaceModel: ObservableObject {
       guard !Task.isCancelled, let self, generation == self.searchGeneration else {
         return
       }
-      self.searchResults = results
-      self.searchIsLoading = false
+      self.searchState.searchResults = results
+      self.searchState.searchIsLoading = false
       self.searchTask = nil
     }
   }
@@ -1276,13 +1321,13 @@ final class ProjectSurfaceModel: ObservableObject {
   func previewReplacement(query: String, replacement: String) {
     replacementGeneration += 1
     replacementTask?.cancel()
-    replacementIsLoading = false
+    searchState.replacementIsLoading = false
     searchGeneration += 1
     searchTask?.cancel()
-    searchIsLoading = false
+    searchState.searchIsLoading = false
     activeSearchQuery = query
-    lastNavigationErrorMessage = nil
-    lastNavigationStatusMessage = nil
+    searchState.lastNavigationErrorMessage = nil
+    searchState.lastNavigationStatusMessage = nil
     do {
       let preview = try ProjectNavigation.previewReplacement(
         query: query,
@@ -1290,11 +1335,11 @@ final class ProjectSurfaceModel: ObservableObject {
         rootURL: rootURL,
         fileManager: fileManager
       )
-      replacementPreview = preview
-      searchResults = preview.matches
+      searchState.replacementPreview = preview
+      searchState.searchResults = preview.matches
     } catch {
-      replacementPreview = nil
-      lastNavigationErrorMessage = error.localizedDescription
+      searchState.replacementPreview = nil
+      searchState.lastNavigationErrorMessage = error.localizedDescription
     }
   }
 
@@ -1304,11 +1349,11 @@ final class ProjectSurfaceModel: ObservableObject {
     replacementTask?.cancel()
     searchGeneration += 1
     searchTask?.cancel()
-    searchIsLoading = false
+    searchState.searchIsLoading = false
     activeSearchQuery = query
-    lastNavigationErrorMessage = nil
-    lastNavigationStatusMessage = nil
-    replacementIsLoading = true
+    searchState.lastNavigationErrorMessage = nil
+    searchState.lastNavigationStatusMessage = nil
+    searchState.replacementIsLoading = true
     let rootURL = self.rootURL
     replacementTask = Task { [weak self] in
       do {
@@ -1320,18 +1365,18 @@ final class ProjectSurfaceModel: ObservableObject {
         guard !Task.isCancelled, let self, generation == self.replacementGeneration else {
           return
         }
-        self.replacementPreview = preview
-        self.searchResults = preview.matches
-        self.replacementIsLoading = false
+        self.searchState.replacementPreview = preview
+        self.searchState.searchResults = preview.matches
+        self.searchState.replacementIsLoading = false
         self.replacementTask = nil
       } catch {
         guard !Task.isCancelled, let self, generation == self.replacementGeneration else {
           return
         }
-        self.replacementPreview = nil
-        self.replacementIsLoading = false
+        self.searchState.replacementPreview = nil
+        self.searchState.replacementIsLoading = false
         self.replacementTask = nil
-        self.lastNavigationErrorMessage = error.localizedDescription
+        self.searchState.lastNavigationErrorMessage = error.localizedDescription
       }
     }
   }
@@ -1353,7 +1398,7 @@ final class ProjectSurfaceModel: ObservableObject {
         currentData == file.originalData,
         let replacementContent = String(data: file.replacementData, encoding: .utf8)
       else {
-        lastNavigationErrorMessage =
+        searchState.lastNavigationErrorMessage =
           "\(file.relativePath) の置換プレビューが古くなっています。もう一度プレビューしてください。"
         return
       }
@@ -1373,7 +1418,7 @@ final class ProjectSurfaceModel: ObservableObject {
           title: target.fileURL.lastPathComponent
         )
       else {
-        lastNavigationErrorMessage =
+        searchState.lastNavigationErrorMessage =
           "置換対象が利用できなくなりました: \(target.fileURL.lastPathComponent)"
         return
       }
@@ -1382,10 +1427,10 @@ final class ProjectSurfaceModel: ObservableObject {
     }
 
     activeSearchQuery = preview.query
-    replacementPreview = nil
-    searchResults = []
-    lastNavigationErrorMessage = nil
-    lastNavigationStatusMessage =
+    searchState.replacementPreview = nil
+    searchState.searchResults = []
+    searchState.lastNavigationErrorMessage = nil
+    searchState.lastNavigationStatusMessage =
       "エディタバッファ\(changedFiles)件に置換を適用しました。ディスクに書き込むにはタブを保存してください。"
   }
 
@@ -1395,15 +1440,15 @@ final class ProjectSurfaceModel: ObservableObject {
       fileURL.path == match.filePath,
       isRegularFile(fileURL)
     else {
-      lastNavigationErrorMessage = "検索結果は利用できなくなりました。"
+      searchState.lastNavigationErrorMessage = "検索結果は利用できなくなりました。"
       return
     }
-    lastNavigationErrorMessage = nil
+    searchState.lastNavigationErrorMessage = nil
     if let node = fileTree.node(withID: match.filePath) {
       select(nodeID: node.id)
     } else {
       revealPathWithoutOpening(fileURL)
-      selectedNodeID = fileURL.path
+      fileTreeState.selectedNodeID = fileURL.path
       _ = openEditorTab(for: fileURL, title: fileURL.lastPathComponent)
       notifySnapshotChanged()
     }
@@ -1421,13 +1466,13 @@ final class ProjectSurfaceModel: ObservableObject {
     let rootPath = rootURL.standardizedFileURL.path
     let rootPrefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
     guard fileURL.path.hasPrefix(rootPrefix), isRegularFile(fileURL) else {
-      lastNavigationErrorMessage = "デバッガがProject外のソース位置を返したため、開きませんでした。"
+      searchState.lastNavigationErrorMessage = "デバッガがProject外のソース位置を返したため、開きませんでした。"
       return
     }
 
-    lastNavigationErrorMessage = nil
+    searchState.lastNavigationErrorMessage = nil
     revealPathWithoutOpening(fileURL)
-    selectedNodeID = fileURL.path
+    fileTreeState.selectedNodeID = fileURL.path
     let document = openEditorTab(for: fileURL, title: fileURL.lastPathComponent)
     document?.requestSelection(line: location.line, column: location.column, length: 0)
     notifySnapshotChanged()
@@ -1440,9 +1485,9 @@ final class ProjectSurfaceModel: ObservableObject {
 
     do {
       try tab.save()
-      lastEditorErrorMessage = nil
+      layoutState.lastEditorErrorMessage = nil
     } catch {
-      lastEditorErrorMessage = error.localizedDescription
+      layoutState.lastEditorErrorMessage = error.localizedDescription
     }
   }
 
@@ -1468,15 +1513,15 @@ final class ProjectSurfaceModel: ObservableObject {
 
     if activeSearchQuery.isEmpty {
       searchTask?.cancel()
-      searchResults = []
-      searchIsLoading = false
+      searchState.searchResults = []
+      searchState.searchIsLoading = false
     } else {
       requestSearchRefresh()
     }
-    replacementPreview = nil
+    searchState.replacementPreview = nil
     replacementGeneration += 1
     replacementTask?.cancel()
-    replacementIsLoading = false
+    searchState.replacementIsLoading = false
     refreshGitStatus()
   }
 
@@ -1490,7 +1535,7 @@ final class ProjectSurfaceModel: ObservableObject {
     let directoryEntryLimits = self.directoryEntryLimits
     let directoryCache = self.directoryCache
     let fileManager = ProjectFileManagerBox(self.fileManager)
-    fileTree = ProjectFileTreeSnapshot(
+    fileTreeState.fileTree = ProjectFileTreeSnapshot(
       root: fileTree.root,
       availability: fileTree.availability,
       isLoading: true
@@ -1561,27 +1606,27 @@ final class ProjectSurfaceModel: ObservableObject {
 
   private func applyTreeSnapshot(_ snapshot: ProjectFileTreeSnapshot) {
     treeLoadTask = nil
-    fileTree = ProjectFileTreeSnapshot(
+    fileTreeState.fileTree = ProjectFileTreeSnapshot(
       root: snapshot.root,
       availability: snapshot.availability,
       isLoading: false
     )
 
     guard let root = snapshot.root else {
-      expandedNodeIDs.removeAll()
-      selectedNodeID = nil
+      fileTreeState.expandedNodeIDs.removeAll()
+      fileTreeState.selectedNodeID = nil
       watcher?.updateWatchedDirectories(loadedDirectoryURLs())
       return
     }
 
-    expandedNodeIDs.formIntersection(root.allNodeIDs)
-    expandedNodeIDs.insert(root.id)
+    fileTreeState.expandedNodeIDs.formIntersection(root.allNodeIDs)
+    fileTreeState.expandedNodeIDs.insert(root.id)
 
     let availableNodeIDs = root.allNodeIDs
     if let selectedNodeID, !availableNodeIDs.contains(selectedNodeID) {
       var isDirectory = ObjCBool(false)
       if !fileManager.fileExists(atPath: selectedNodeID, isDirectory: &isDirectory) {
-        self.selectedNodeID = nil
+        fileTreeState.selectedNodeID = nil
       }
     }
 
@@ -1606,9 +1651,9 @@ final class ProjectSurfaceModel: ObservableObject {
 
     let nextLayout = filteringUnavailableEditorTabs(in: layout)
     if nextLayout != layout {
-      layout = nextLayout
+      layoutState.layout = nextLayout
       if !layout.leafIDs.contains(focusedPaneID) {
-        focusedPaneID = layout.leafIDs[0]
+        layoutState.focusedPaneID = layout.leafIDs[0]
       }
     }
   }
@@ -1616,7 +1661,7 @@ final class ProjectSurfaceModel: ObservableObject {
   private func enqueueUnloadedExpandedDirectories(in root: ProjectFileTreeNode) -> Bool {
     var didEnqueue = false
 
-    for nodeID in expandedNodeIDs {
+    for nodeID in fileTreeState.expandedNodeIDs {
       guard
         let node = root.node(withID: nodeID),
         node.isDirectory,
@@ -1638,7 +1683,7 @@ final class ProjectSurfaceModel: ObservableObject {
   }
 
   func isExpanded(_ nodeID: String) -> Bool {
-    expandedNodeIDs.contains(nodeID)
+    fileTreeState.expandedNodeIDs.contains(nodeID)
   }
 
   func toggleExpansion(for nodeID: String) {
@@ -1646,9 +1691,9 @@ final class ProjectSurfaceModel: ObservableObject {
       return
     }
     if isExpanded(nodeID) {
-      expandedNodeIDs.remove(nodeID)
+      fileTreeState.expandedNodeIDs.remove(nodeID)
     } else {
-      expandedNodeIDs.insert(nodeID)
+      fileTreeState.expandedNodeIDs.insert(nodeID)
       if node.children == nil {
         loadedDirectoryPaths.insert(node.id)
         directoryEntryLimits[node.id] = max(
@@ -1679,7 +1724,7 @@ final class ProjectSurfaceModel: ObservableObject {
     guard let node = fileTree.node(withID: nodeID) else {
       return
     }
-    selectedNodeID = node.id
+    fileTreeState.selectedNodeID = node.id
     if !node.isDirectory {
       openEditorTab(for: node)
     }
@@ -1701,9 +1746,9 @@ final class ProjectSurfaceModel: ObservableObject {
     }
     let targetPaneID = paneID(showing: id) ?? focusedPaneID
     if maximizedPaneID != nil, maximizedPaneID != targetPaneID {
-      maximizedPaneID = nil
+      layoutState.maximizedPaneID = nil
     }
-    focusedPaneID = targetPaneID
+    layoutState.focusedPaneID = targetPaneID
     setActiveTab(
       id,
       in: targetPaneID,
@@ -1736,9 +1781,10 @@ final class ProjectSurfaceModel: ObservableObject {
       terminalSessions[id] = nil
     } else if tab.kind == .editor {
       editorDocuments[id] = nil
+      editorViewports[id] = nil
     }
-    tabStore.removeAll { $0.id == id }
-    layout = mappingLeaves(in: layout) { leaf in
+    layoutState.tabStore.removeAll { $0.id == id }
+    layoutState.layout = mappingLeaves(in: layout) { leaf in
       var next = leaf
       if next.activeTabID == id {
         next.activeTabID = fallbackTabID(excluding: id, currentlyShownIn: leaf.id)
@@ -1746,9 +1792,9 @@ final class ProjectSurfaceModel: ObservableObject {
       return next
     }
     if let activeEditorPath = activeTabDescriptor?.filePath {
-      selectedNodeID = activeEditorPath
+      fileTreeState.selectedNodeID = activeEditorPath
     } else if activeTabDescriptor == nil {
-      selectedNodeID = nil
+      fileTreeState.selectedNodeID = nil
     }
     notifySnapshotChanged()
   }
@@ -1785,8 +1831,8 @@ final class ProjectSurfaceModel: ObservableObject {
       return editorDocuments[fileURL.path]
     }
     let tab = ProjectPaneTab.editor(path: fileURL.path, title: title)
-    tabStore.append(tab)
-    layout = updatingLeaf(in: layout, leafID: focusedPaneID) { leaf in
+    layoutState.tabStore.append(tab)
+    layoutState.layout = updatingLeaf(in: layout, leafID: focusedPaneID) { leaf in
       var next = leaf
       next.activeTabID = tab.id
       return next
@@ -1817,7 +1863,7 @@ final class ProjectSurfaceModel: ObservableObject {
       do {
         _ = try tab.refreshFromDisk()
       } catch {
-        lastEditorErrorMessage = error.localizedDescription
+        layoutState.lastEditorErrorMessage = error.localizedDescription
       }
     }
   }
@@ -1846,6 +1892,10 @@ final class ProjectSurfaceModel: ObservableObject {
     }
   }
 
+  /// Caret and scroll position are persisted, but no view renders them, so they
+  /// are kept out of the observable tab store. Writing them into `tabStore`
+  /// made every caret move re-evaluate the titlebar tab strip and the panes;
+  /// `workspaceSnapshot` folds them back in when the snapshot is written.
   private func updateEditorViewport(
     tabID: String,
     selection: ProjectEditorUTF16Range?,
@@ -1857,13 +1907,15 @@ final class ProjectSurfaceModel: ObservableObject {
       guard !Task.isCancelled, let self else {
         return
       }
-      guard let index = self.tabStore.firstIndex(where: { $0.id == tabID }),
-        self.tabStore[index].kind == .editor
+      guard let tab = self.tabStore.first(where: { $0.id == tabID }),
+        tab.kind == .editor
       else {
         return
       }
-      self.tabStore[index].editorSelection = selection
-      self.tabStore[index].editorScrollTop = max(0, scrollTop)
+      self.editorViewports[tabID] = ProjectEditorViewportState(
+        selection: selection,
+        scrollTop: max(0, scrollTop)
+      )
       self.notifySnapshotChanged()
     }
   }
@@ -1891,6 +1943,12 @@ final class ProjectSurfaceModel: ObservableObject {
           fileManager: fileManager
         )
         editorDocuments[tab.id] = document
+        if tab.editorSelection != nil || tab.editorScrollTop != nil {
+          editorViewports[tab.id] = ProjectEditorViewportState(
+            selection: tab.editorSelection,
+            scrollTop: tab.editorScrollTop
+          )
+        }
         document.restoreEditorViewport(
           selection: tab.editorSelection,
           scrollTop: tab.editorScrollTop
@@ -1913,24 +1971,24 @@ final class ProjectSurfaceModel: ObservableObject {
           if let change = try? currentGitChange(relativePath: relativePath),
             let diff = try? gitService.diff(for: change, basis: basis)
           {
-            selectedGitDiff = diff
+            gitState.selectedGitDiff = diff
           }
         }
         restoredTabs.append(tab)
       }
     }
-    tabStore = restoredTabs
+    layoutState.tabStore = restoredTabs
     let restoredIDs = Set(restoredTabs.map(\.id))
-    layout = mappingLeaves(in: layout) { leaf in
+    layoutState.layout = mappingLeaves(in: layout) { leaf in
       let activeTabID =
         leaf.activeTabID.flatMap { restoredIDs.contains($0) ? $0 : nil }
       return ProjectPaneLeaf(id: leaf.id, activeTabID: activeTabID)
     }
     if !layout.leafIDs.contains(focusedPaneID) {
-      focusedPaneID = layout.leafIDs[0]
+      layoutState.focusedPaneID = layout.leafIDs[0]
     }
     if let maximizedPaneID, !layout.leafIDs.contains(maximizedPaneID) {
-      self.maximizedPaneID = nil
+      layoutState.maximizedPaneID = nil
     }
   }
 
@@ -1951,7 +2009,7 @@ final class ProjectSurfaceModel: ObservableObject {
   }
 
   private func filteringUnavailableEditorTabs(in node: ProjectPaneNode) -> ProjectPaneNode {
-    tabStore.removeAll { tab in
+    layoutState.tabStore.removeAll { tab in
       tab.kind == .editor && editorDocuments[tab.id] == nil
     }
     let remainingIDs = Set(tabStore.map(\.id))
@@ -1971,7 +2029,7 @@ final class ProjectSurfaceModel: ObservableObject {
     var changed = false
     while directory.standardizedFileURL.path != rootPath {
       let path = directory.standardizedFileURL.path
-      expandedNodeIDs.insert(path)
+      fileTreeState.expandedNodeIDs.insert(path)
       if loadedDirectoryPaths.insert(path).inserted {
         directoryEntryLimits[path] = ProjectFileTreeScanner.maxChildrenPerDirectory
         changed = true
@@ -1982,7 +2040,7 @@ final class ProjectSurfaceModel: ObservableObject {
       }
       directory = parent
     }
-    expandedNodeIDs.insert(rootPath)
+    fileTreeState.expandedNodeIDs.insert(rootPath)
     if changed {
       scheduleTreeReload()
     }
@@ -1997,8 +2055,8 @@ final class ProjectSurfaceModel: ObservableObject {
     else {
       return
     }
-    focusedPaneID = paneID
-    layout = updatingLeaf(in: layout, leafID: paneID) { leaf in
+    layoutState.focusedPaneID = paneID
+    layoutState.layout = updatingLeaf(in: layout, leafID: paneID) { leaf in
       var next = leaf
       next.activeTabID = tabID
       return next
@@ -2009,7 +2067,7 @@ final class ProjectSurfaceModel: ObservableObject {
         notifySnapshotChanged()
         return
       }
-      selectedNodeID = fileURL.path
+      fileTreeState.selectedNodeID = fileURL.path
       revealPathWithoutOpening(fileURL)
     }
     notifySnapshotChanged()
