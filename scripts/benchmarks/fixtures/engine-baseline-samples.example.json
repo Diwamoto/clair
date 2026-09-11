@@ -1,0 +1,553 @@
+{
+  "schema_version": 1,
+  "profile": "clair-text-engine-baseline",
+  "capture": {
+    "kind": "example",
+    "captured_at_utc": "2026-09-11T00:00:00Z",
+    "note": "Synthetic shape example for summarize-engine-baseline.rb. The values are an arithmetic ramp, not a measurement of any build."
+  },
+  "source": {
+    "repository": "Diwamoto/clair",
+    "commit": "0000000000000000000000000000000000000000",
+    "build": {
+      "mode": "release",
+      "channel": "dev",
+      "bundle_identifier": "com.diwamoto.clair.bench"
+    }
+  },
+  "environment": {
+    "hardware": {
+      "architecture": "arm64",
+      "model": "MacExample1,1",
+      "memory_gib": 24
+    },
+    "os": {
+      "name": "macOS",
+      "version": "26.0"
+    },
+    "display": {
+      "identity": "example built-in display",
+      "window_points": {
+        "width": 1280,
+        "height": 800
+      },
+      "backing_scale": 2,
+      "refresh_rate_hz": 120
+    },
+    "session": {
+      "screen_locked": false
+    },
+    "privacy": {
+      "host_name_recorded": false,
+      "user_name_recorded": false,
+      "process_ids_recorded": false,
+      "absolute_paths_recorded": false
+    }
+  },
+  "workload": {
+    "fixtures": [
+      {
+        "id": "text-10mib",
+        "description": "corpus large-files/text-10MiB.txt, exactly 10,485,760 deterministic bytes",
+        "bytes": 10485760,
+        "lines": 180000,
+        "sha256": "991dd308a193e26ac89e5504e5e27b3f0287a5a0b5abef001266a07ad7062ba2"
+      },
+      {
+        "id": "unicode-fixture",
+        "description": "corpus unicode/unicode-fixture.txt, CJK, emoji, combining, and full-width rendering fixture",
+        "bytes": 262144,
+        "lines": 4096,
+        "sha256": "20293fe515e46ec87b730415817e4c05a5ef3db57f6ee50cbfa34ddb9acd235c"
+      },
+      {
+        "id": "flood-1mib",
+        "description": "corpus terminal/flood-1MiB.txt, replayed 100 times by run-terminal-flood.sh",
+        "bytes": 1048576,
+        "lines": 16384,
+        "sha256": "d082618cc8fbb2d96714ab36a08add58e356cf24d9fbcfd648823fa9b8c19ec3"
+      }
+    ]
+  },
+  "not_measured_reason": "The ClairTextKit surfaces are measured at the P34 gate, not in this example.",
+  "observations": [
+    {
+      "id": "editor.codemirror.input-to-glyph.text-10mib",
+      "surface": "editor.codemirror",
+      "fixture_id": "text-10mib",
+      "metric": "surface.input_to_glyph",
+      "samples": [
+        10.0,
+        11.0,
+        12.0,
+        13.0,
+        14.0,
+        15.0,
+        16.0,
+        17.0,
+        18.0,
+        19.0,
+        20.0,
+        21.0,
+        22.0,
+        23.0,
+        24.0,
+        25.0,
+        26.0,
+        27.0,
+        28.0,
+        29.0
+      ],
+      "provenance": {
+        "kind": "instruments",
+        "tool": "Instruments Time Profiler",
+        "artifact_sha256": "80c2efb69b9eec12b8dfdf6fa99f1dad999912701f7ab8721f8c54c8578599d2"
+      }
+    },
+    {
+      "id": "editor.codemirror.frame-time.text-10mib",
+      "surface": "editor.codemirror",
+      "fixture_id": "text-10mib",
+      "metric": "surface.frame_time",
+      "samples": [
+        8.0,
+        8.5,
+        9.0,
+        9.5,
+        10.0,
+        10.5,
+        11.0,
+        11.5,
+        12.0,
+        12.5,
+        13.0,
+        13.5,
+        14.0,
+        14.5,
+        15.0,
+        15.5,
+        16.0,
+        16.5,
+        17.0,
+        17.5
+      ],
+      "provenance": {
+        "kind": "instruments",
+        "tool": "Instruments Core Animation",
+        "artifact_sha256": "5191c9180143ed334f093ad440df3009bd6c7bbe7545be69c0b1dcd182934b6c"
+      }
+    },
+    {
+      "id": "editor.codemirror.scroll-frame-time.unicode-fixture",
+      "surface": "editor.codemirror",
+      "fixture_id": "unicode-fixture",
+      "metric": "surface.scroll_frame_time",
+      "samples": [
+        12.0,
+        13.0,
+        14.0,
+        15.0,
+        16.0,
+        17.0,
+        18.0,
+        19.0,
+        20.0,
+        21.0,
+        22.0,
+        23.0,
+        24.0,
+        25.0,
+        26.0,
+        27.0,
+        28.0,
+        29.0,
+        30.0,
+        31.0
+      ],
+      "provenance": {
+        "kind": "instruments",
+        "tool": "Instruments Core Animation",
+        "artifact_sha256": "5191c9180143ed334f093ad440df3009bd6c7bbe7545be69c0b1dcd182934b6c"
+      }
+    },
+    {
+      "id": "editor.codemirror.dropped-frame-ratio.unicode-fixture",
+      "surface": "editor.codemirror",
+      "fixture_id": "unicode-fixture",
+      "metric": "surface.dropped_frame_ratio",
+      "samples": [
+        0.02,
+        0.03,
+        0.04,
+        0.05,
+        0.06
+      ],
+      "provenance": {
+        "kind": "instruments",
+        "tool": "Instruments Core Animation",
+        "artifact_sha256": "5191c9180143ed334f093ad440df3009bd6c7bbe7545be69c0b1dcd182934b6c"
+      }
+    },
+    {
+      "id": "editor.codemirror.first-paint.unicode-fixture",
+      "surface": "editor.codemirror",
+      "fixture_id": "unicode-fixture",
+      "metric": "surface.first_paint",
+      "samples": [
+        900.0,
+        950.0,
+        1000.0,
+        1050.0,
+        1100.0
+      ],
+      "provenance": {
+        "kind": "instruments",
+        "tool": "clair-bench trace",
+        "artifact_sha256": "3cf344db3462d5e4c268d66aa9058bfd3a1e3ce0d005f4d12e0b9f1093914395"
+      }
+    },
+    {
+      "id": "editor.codemirror.first-highlight.unicode-fixture",
+      "surface": "editor.codemirror",
+      "fixture_id": "unicode-fixture",
+      "metric": "surface.first_highlight",
+      "samples": [
+        4000.0,
+        4100.0,
+        4200.0,
+        4300.0,
+        4400.0
+      ],
+      "provenance": {
+        "kind": "instruments",
+        "tool": "clair-bench trace",
+        "artifact_sha256": "3cf344db3462d5e4c268d66aa9058bfd3a1e3ce0d005f4d12e0b9f1093914395"
+      }
+    },
+    {
+      "id": "editor.codemirror.idle-rss.text-10mib",
+      "surface": "editor.codemirror",
+      "fixture_id": "text-10mib",
+      "metric": "surface.idle_rss",
+      "samples": [
+        400.0,
+        401.0,
+        402.0,
+        403.0,
+        404.0,
+        405.0,
+        406.0,
+        407.0,
+        408.0,
+        409.0,
+        410.0,
+        411.0,
+        412.0,
+        413.0,
+        414.0,
+        415.0,
+        416.0,
+        417.0,
+        418.0,
+        419.0,
+        420.0,
+        421.0,
+        422.0,
+        423.0,
+        424.0,
+        425.0,
+        426.0,
+        427.0,
+        428.0,
+        429.0
+      ],
+      "provenance": {
+        "kind": "instruments",
+        "tool": "footprint sampler",
+        "artifact_sha256": "f4f4d0e487cf8c078150a5eb878d0bedae1c943b17b527ea251340e2cde4b9c4"
+      }
+    },
+    {
+      "id": "editor.codemirror.idle-process-count.text-10mib",
+      "surface": "editor.codemirror",
+      "fixture_id": "text-10mib",
+      "metric": "surface.idle_process_count",
+      "samples": [
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4
+      ],
+      "provenance": {
+        "kind": "instruments",
+        "tool": "footprint sampler",
+        "artifact_sha256": "f4f4d0e487cf8c078150a5eb878d0bedae1c943b17b527ea251340e2cde4b9c4"
+      }
+    },
+    {
+      "id": "terminal.appkit-grid.input-to-glyph.flood-1mib",
+      "surface": "terminal.appkit-grid",
+      "fixture_id": "flood-1mib",
+      "metric": "surface.input_to_glyph",
+      "samples": [
+        20.0,
+        21.0,
+        22.0,
+        23.0,
+        24.0,
+        25.0,
+        26.0,
+        27.0,
+        28.0,
+        29.0,
+        30.0,
+        31.0,
+        32.0,
+        33.0,
+        34.0,
+        35.0,
+        36.0,
+        37.0,
+        38.0,
+        39.0
+      ],
+      "provenance": {
+        "kind": "instruments",
+        "tool": "Instruments Time Profiler",
+        "artifact_sha256": "80c2efb69b9eec12b8dfdf6fa99f1dad999912701f7ab8721f8c54c8578599d2"
+      }
+    },
+    {
+      "id": "terminal.appkit-grid.frame-time.flood-1mib",
+      "surface": "terminal.appkit-grid",
+      "fixture_id": "flood-1mib",
+      "metric": "surface.frame_time",
+      "samples": [
+        15.0,
+        16.0,
+        17.0,
+        18.0,
+        19.0,
+        20.0,
+        21.0,
+        22.0,
+        23.0,
+        24.0,
+        25.0,
+        26.0,
+        27.0,
+        28.0,
+        29.0,
+        30.0,
+        31.0,
+        32.0,
+        33.0,
+        34.0
+      ],
+      "provenance": {
+        "kind": "instruments",
+        "tool": "Instruments Core Animation",
+        "artifact_sha256": "5191c9180143ed334f093ad440df3009bd6c7bbe7545be69c0b1dcd182934b6c"
+      }
+    },
+    {
+      "id": "terminal.appkit-grid.scroll-frame-time.flood-1mib",
+      "surface": "terminal.appkit-grid",
+      "fixture_id": "flood-1mib",
+      "metric": "surface.scroll_frame_time",
+      "samples": [
+        14.0,
+        15.0,
+        16.0,
+        17.0,
+        18.0,
+        19.0,
+        20.0,
+        21.0,
+        22.0,
+        23.0,
+        24.0,
+        25.0,
+        26.0,
+        27.0,
+        28.0,
+        29.0,
+        30.0,
+        31.0,
+        32.0,
+        33.0
+      ],
+      "provenance": {
+        "kind": "instruments",
+        "tool": "Instruments Core Animation",
+        "artifact_sha256": "5191c9180143ed334f093ad440df3009bd6c7bbe7545be69c0b1dcd182934b6c"
+      }
+    },
+    {
+      "id": "terminal.appkit-grid.dropped-frame-ratio.flood-1mib",
+      "surface": "terminal.appkit-grid",
+      "fixture_id": "flood-1mib",
+      "metric": "surface.dropped_frame_ratio",
+      "samples": [
+        0.05,
+        0.06,
+        0.07,
+        0.08,
+        0.09
+      ],
+      "provenance": {
+        "kind": "instruments",
+        "tool": "Instruments Core Animation",
+        "artifact_sha256": "5191c9180143ed334f093ad440df3009bd6c7bbe7545be69c0b1dcd182934b6c"
+      }
+    },
+    {
+      "id": "terminal.appkit-grid.first-paint.flood-1mib",
+      "surface": "terminal.appkit-grid",
+      "fixture_id": "flood-1mib",
+      "metric": "surface.first_paint",
+      "samples": [
+        100.0,
+        110.0,
+        120.0,
+        130.0,
+        140.0
+      ],
+      "provenance": {
+        "kind": "instruments",
+        "tool": "clair-bench trace",
+        "artifact_sha256": "3cf344db3462d5e4c268d66aa9058bfd3a1e3ce0d005f4d12e0b9f1093914395"
+      }
+    },
+    {
+      "id": "terminal.appkit-grid.idle-rss.flood-1mib",
+      "surface": "terminal.appkit-grid",
+      "fixture_id": "flood-1mib",
+      "metric": "surface.idle_rss",
+      "samples": [
+        120.0,
+        121.0,
+        122.0,
+        123.0,
+        124.0,
+        125.0,
+        126.0,
+        127.0,
+        128.0,
+        129.0,
+        130.0,
+        131.0,
+        132.0,
+        133.0,
+        134.0,
+        135.0,
+        136.0,
+        137.0,
+        138.0,
+        139.0,
+        140.0,
+        141.0,
+        142.0,
+        143.0,
+        144.0,
+        145.0,
+        146.0,
+        147.0,
+        148.0,
+        149.0
+      ],
+      "provenance": {
+        "kind": "instruments",
+        "tool": "footprint sampler",
+        "artifact_sha256": "f4f4d0e487cf8c078150a5eb878d0bedae1c943b17b527ea251340e2cde4b9c4"
+      }
+    },
+    {
+      "id": "terminal.appkit-grid.idle-process-count.flood-1mib",
+      "surface": "terminal.appkit-grid",
+      "fixture_id": "flood-1mib",
+      "metric": "surface.idle_process_count",
+      "samples": [
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2
+      ],
+      "provenance": {
+        "kind": "instruments",
+        "tool": "footprint sampler",
+        "artifact_sha256": "f4f4d0e487cf8c078150a5eb878d0bedae1c943b17b527ea251340e2cde4b9c4"
+      }
+    },
+    {
+      "id": "terminal.appkit-grid.flood-cpu.flood-1mib",
+      "surface": "terminal.appkit-grid",
+      "fixture_id": "flood-1mib",
+      "metric": "surface.flood_cpu",
+      "samples": [
+        60.0,
+        65.0,
+        70.0,
+        75.0,
+        80.0
+      ],
+      "provenance": {
+        "kind": "instruments",
+        "tool": "footprint sampler",
+        "artifact_sha256": "f4f4d0e487cf8c078150a5eb878d0bedae1c943b17b527ea251340e2cde4b9c4"
+      }
+    }
+  ]
+}

@@ -1,0 +1,134 @@
+{
+  "schema_version": 1,
+  "contract_id": "clair-text-engine-baseline-v1",
+  "missing_evidence": "not-measured",
+  "comparison_rule": "compare only identical surface role pairs measured on the same host, display, window size, fixture, build mode, metric name, and unit",
+  "surfaces": {
+    "editor.codemirror": {
+      "role": "current-default",
+      "component": "editor",
+      "description": "CodeMirror 6 editor hosted in WKWebView, the Stable default"
+    },
+    "terminal.appkit-grid": {
+      "role": "current-default",
+      "component": "terminal",
+      "description": "libvterm grid drawn by the NSTextView-derived terminal surface"
+    },
+    "editor.clair-text-engine": {
+      "role": "engine",
+      "component": "editor",
+      "description": "ClairTextKit editor surface"
+    },
+    "terminal.clair-text-engine": {
+      "role": "engine",
+      "component": "terminal",
+      "description": "ClairTextKit terminal surface"
+    }
+  },
+  "metrics": {
+    "surface.input_to_glyph": {
+      "unit": "ms",
+      "sample_policy": "at least 20 timestamp-correlated key-event/frame pairs",
+      "aggregation": ["median", "p95"],
+      "better": "lower",
+      "surfaces": [
+        "editor.codemirror",
+        "terminal.appkit-grid",
+        "editor.clair-text-engine",
+        "terminal.clair-text-engine"
+      ]
+    },
+    "surface.frame_time": {
+      "unit": "ms/frame",
+      "sample_policy": "at least 20 rendered-frame samples inside one fixed window",
+      "aggregation": ["median", "p95"],
+      "better": "lower",
+      "surfaces": [
+        "editor.codemirror",
+        "terminal.appkit-grid",
+        "editor.clair-text-engine",
+        "terminal.clair-text-engine"
+      ]
+    },
+    "surface.scroll_frame_time": {
+      "unit": "ms/frame",
+      "sample_policy": "at least 20 rendered-frame samples during one fixed scroll pass",
+      "aggregation": ["median", "p95"],
+      "better": "lower",
+      "surfaces": [
+        "editor.codemirror",
+        "terminal.appkit-grid",
+        "editor.clair-text-engine",
+        "terminal.clair-text-engine"
+      ]
+    },
+    "surface.dropped_frame_ratio": {
+      "unit": "ratio",
+      "sample_policy": "5 fixed windows of the same duration",
+      "aggregation": ["median", "max"],
+      "better": "lower",
+      "surfaces": [
+        "editor.codemirror",
+        "terminal.appkit-grid",
+        "editor.clair-text-engine",
+        "terminal.clair-text-engine"
+      ]
+    },
+    "surface.first_paint": {
+      "unit": "ms",
+      "sample_policy": "1 excluded warm-up plus 5 trials per fixture",
+      "aggregation": ["median", "max"],
+      "better": "lower",
+      "surfaces": [
+        "editor.codemirror",
+        "terminal.appkit-grid",
+        "editor.clair-text-engine",
+        "terminal.clair-text-engine"
+      ]
+    },
+    "surface.first_highlight": {
+      "unit": "ms",
+      "sample_policy": "1 excluded warm-up plus 5 trials per fixture",
+      "aggregation": ["median", "max"],
+      "better": "lower",
+      "surfaces": ["editor.codemirror", "editor.clair-text-engine"]
+    },
+    "surface.idle_rss": {
+      "unit": "MiB",
+      "sample_policy": "1 Hz for at least 30 seconds after the surface settles",
+      "aggregation": ["median", "max"],
+      "better": "lower",
+      "surfaces": [
+        "editor.codemirror",
+        "terminal.appkit-grid",
+        "editor.clair-text-engine",
+        "terminal.clair-text-engine"
+      ]
+    },
+    "surface.idle_process_count": {
+      "unit": "count",
+      "sample_policy": "same snapshots as the idle resource samples",
+      "aggregation": ["median", "max"],
+      "better": "lower",
+      "surfaces": [
+        "editor.codemirror",
+        "terminal.appkit-grid",
+        "editor.clair-text-engine",
+        "terminal.clair-text-engine"
+      ]
+    },
+    "surface.flood_cpu": {
+      "unit": "%",
+      "sample_policy": "5 fixed terminal flood trials of the same byte count",
+      "aggregation": ["median", "max"],
+      "better": "lower",
+      "surfaces": ["terminal.appkit-grid", "terminal.clair-text-engine"]
+    }
+  },
+  "percentile_rule": {
+    "method": "nearest-rank",
+    "minimum_sample_count": 20,
+    "formula": "sorted[ceil(0.95 * n) - 1]"
+  },
+  "minimum_sample_count_for_max": 5
+}

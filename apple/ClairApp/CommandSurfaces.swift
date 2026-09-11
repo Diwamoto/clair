@@ -1039,6 +1039,14 @@ struct ClairCommandMenu: Commands {
         modifiers: CommandShortcutStore.openSettingsShortcut.modifiers.eventModifiers
       )
 
+      if TextSurfaceHarness.isAvailable {
+        Divider()
+
+        Button("Text Surface Harness") {
+          TextSurfaceHarnessWindowController.present()
+        }
+      }
+
       Divider()
 
       ForEach(surface.menuMatches) { match in

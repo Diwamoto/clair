@@ -455,6 +455,50 @@ Application Support file `editor-history-v1.json` (schema version 1), with at mo
 P05 provides durable pane/tab layout restoration; P06 owns a searchable file-history
 browser, while P04 provides the recovery snapshots needed by those later surfaces.
 
+## Shared text surface (ClairTextKit)
+
+`apple/ClairTextKit` is the Clair-owned text surface that the editor and the terminal
+share, per [ADR-0014](../decisions/0014-clair-owned-text-engine.md) and the
+[p0028 design](../projects/p0028-clair-text-engine/design.md). It is built into the same
+app targets as the rest of Clair, but the dependency direction is one-way: the app maps
+its palette and its rows onto the engine, and the engine references no Project,
+workspace, or theme type. `scripts/check-textkit-boundary.rb` enforces that direction and
+the frameworks the engine is allowed to import; `make workspace-check` runs it.
+
+The foundation has four parts:
+
+- `TextSurfaceSource` supplies the rows a surface is about to draw, as spans of text with
+  a style. `TextBuffer` (editor) and `TerminalGridSource` (terminal) adopt it later; the
+  layers above never learn which one is in use.
+- `TextFontMetrics` owns font metrics, the single-width ASCII glyph table, the bounded
+  CoreText run cache, and fallback resolution for CJK, emoji, and combining clusters. The
+  cell is snapped to a half-point grid so both surfaces place columns identically.
+- `TextDisplayWidth` decides terminal cell width per grapheme cluster: full-width and
+  emoji clusters take two cells, combining marks and control characters take none. A
+  family emoji joined by zero-width joiners stays one cluster.
+- `TextSurfaceRenderer` turns damage into a draw plan and draws it. Rows of single-width
+  ASCII take the glyph-table fast path; anything CJK, emoji, combining, or ligature-shaped
+  goes through CoreText, and a full-width cluster is positioned on its own so it stays on
+  the grid.
+
+Damage is always a bounded set of row ranges: `TextSurfaceDamage` has no "everything"
+case, and the renderer intersects the damage with the exposed rectangle before drawing.
+Neither a document-wide nor a grid-wide repaint path exists, which is the direct answer to
+the current terminal surface ignoring `dirtyRect`. `TextSurfaceView` turns each damaged
+range into a dirty rectangle and never marks the whole view as needing display.
+
+Drawing, invalidation, and row access are main-actor work. Parsing, file IO, and search
+stay off the main thread in later items, and results are gated by document revision so a
+stale parse cannot be applied. A missing glyph, a missing fallback font, or a failed atlas
+entry falls back to shaped drawing instead of drawing nothing.
+
+Performance for this program is measured per slice against the current defaults rather
+than deferred to `L01`; the procedure and contract are
+[text engine surface baseline](../benchmarks/clair-text-engine-baseline.md).
+A Dev-only harness window (Commands → Text Surface Harness) draws the fixtures on the
+surface and shows visible rows, drawn rows, damage rectangles, path split, and run cache
+size. Stable does not expose it.
+
 ## Project navigation, search, replacement, and history
 
 `ProjectNavigation` is the project-scoped read/navigation service used by the active
@@ -547,7 +591,10 @@ disk writes, project-scoped history ordering, and Project-root path validation.
 - The terminal surface renders through libvterm on the same broker; reattach, frame
   bounds, and slow-consumer backpressure continue to be correctness-tested, while
   formal terminal benchmarks remain L01. The editor does not yet provide syntax
-  highlighting, LSP, or multi-cursor editing. The P08/P10/P11/P12/P13 Git and
+  highlighting, LSP, or multi-cursor editing. ClairTextKit currently provides the shared
+  font, damage, and drawing foundation with a Dev-only fixture harness; layout, input,
+  selection, accessibility, and both model layers are later queue items, and neither
+  production surface uses it yet. The P08/P10/P11/P12/P13 Git and
   command loop currently uses the local `/usr/bin/git` bridge; discard, blame, review
   comments, and AI briefs remain later queue items.
 - Formal app icons, Apple Developer ID signing, and notarization are not present.

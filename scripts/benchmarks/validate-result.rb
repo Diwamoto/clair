@@ -133,11 +133,280 @@ def validate_distribution!(metric, values, location, p95_allowed:)
   end
 end
 
+def scan_private_paths(value, location = "result")
+  case value
+  when Hash
+    value.each { |key, child| scan_private_paths(child, "#{location}.#{key}") }
+  when Array
+    value.each_with_index { |child, index| scan_private_paths(child, "#{location}[#{index}]") }
+  when String
+    if value.include?("/Users/") || value.include?("/private/tmp/") || value.match?(%r{(?:^|\s)/tmp/})
+      fail!("#{location} contains a host-local absolute path")
+    end
+  end
+end
+
 def local_contract(repo_root, relative_path, location)
   raw = File.binread(File.join(repo_root, relative_path))
   [JSON.parse(raw), Digest::SHA256.hexdigest(raw)]
 rescue Errno::ENOENT, JSON::ParserError => error
   fail!("cannot load #{location}: #{error.message}")
+end
+
+ENGINE_BASELINE_PROFILE = "clair-text-engine-baseline"
+ENGINE_CONTRACT_PATH = "docs/benchmarks/text-engine-metric-contract.json"
+ENGINE_CAPTURE_KINDS = %w[measured example].freeze
+ENGINE_BUILD_CHANNELS = %w[stable dev].freeze
+ENGINE_PROVENANCE_KINDS = %w[manual instruments automated].freeze
+ENGINE_OBSERVATION_KEYS = %w[
+  id
+  surface
+  fixture_id
+  metric
+  unit
+  samples
+  sample_count
+  aggregation
+  median
+  provenance
+].freeze
+
+def engine_surface_metrics(contract, surface_id)
+  contract.fetch("metrics").select { |_name, metric| Array(metric["surfaces"]).include?(surface_id) }.keys
+end
+
+def engine_expected_aggregation(contract, metric_name, sample_count)
+  metric = contract.fetch("metrics").fetch(metric_name)
+  minimum = contract.dig("percentile_rule", "minimum_sample_count")
+  if Array(metric["aggregation"]).include?("p95") && sample_count >= minimum
+    %w[median p95]
+  else
+    %w[median max]
+  end
+end
+
+def validate_engine_distribution!(entry, values, location, contract, metric_name)
+  entry = object!(entry, location)
+  close!(entry["median"], median(values), "#{location}.median")
+  aggregation = engine_expected_aggregation(contract, metric_name, values.length)
+  synthetic = entry.merge("status" => "measured", "value" => entry["median"])
+  validate_distribution!(synthetic, values, location, p95_allowed: aggregation == %w[median p95])
+end
+
+def validate_engine_identity!(result, contract, contract_sha)
+  exact_keys!(
+    result,
+    %w[schema_version profile capture source environment workload observations summary coverage],
+    "result"
+  )
+  fail!("schema_version must be 1") unless result["schema_version"] == 1
+
+  capture = object!(result["capture"], "capture")
+  exact_keys!(capture, %w[kind captured_at_utc note], "capture")
+  fail!("capture.kind must be measured or example") unless ENGINE_CAPTURE_KINDS.include?(capture["kind"])
+  rfc3339!(capture["captured_at_utc"], "capture.captured_at_utc")
+  nonempty_string!(capture["note"], "capture.note")
+
+  source = object!(result["source"], "source")
+  exact_keys!(source, %w[repository commit build], "source")
+  fail!("source.repository must be Diwamoto/clair") unless source["repository"] == "Diwamoto/clair"
+  commit = nonempty_string!(source["commit"], "source.commit")
+  fail!("source.commit must be a full Git commit SHA") unless commit.match?(/\A[0-9a-f]{40}\z/)
+  build = object!(source["build"], "source.build")
+  exact_keys!(build, %w[mode channel bundle_identifier], "source.build")
+  fail!("source.build.mode must be release") unless build["mode"] == "release"
+  unless ENGINE_BUILD_CHANNELS.include?(build["channel"])
+    fail!("source.build.channel must be stable or dev")
+  end
+  bundle_id = nonempty_string!(build["bundle_identifier"], "source.build.bundle_identifier")
+  unless bundle_id.match?(/\A[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?\z/) && !bundle_id.include?("..")
+    fail!("source.build.bundle_identifier is unsafe")
+  end
+
+  environment = object!(result["environment"], "environment")
+  exact_keys!(environment, %w[hardware os display session privacy], "environment")
+  hardware = object!(environment["hardware"], "environment.hardware")
+  exact_keys!(hardware, %w[architecture model memory_gib], "environment.hardware")
+  fail!("environment.hardware.architecture must be arm64") unless hardware["architecture"] == "arm64"
+  nonempty_string!(hardware["model"], "environment.hardware.model")
+  positive_number!(hardware["memory_gib"], "environment.hardware.memory_gib")
+  os = object!(environment["os"], "environment.os")
+  exact_keys!(os, %w[name version], "environment.os")
+  nonempty_string!(os["name"], "environment.os.name")
+  nonempty_string!(os["version"], "environment.os.version")
+  display = object!(environment["display"], "environment.display")
+  exact_keys!(display, %w[identity window_points backing_scale refresh_rate_hz], "environment.display")
+  nonempty_string!(display["identity"], "environment.display.identity")
+  window = object!(display["window_points"], "environment.display.window_points")
+  exact_keys!(window, %w[width height], "environment.display.window_points")
+  %w[width height].each do |dimension|
+    positive_number!(window[dimension], "environment.display.window_points.#{dimension}")
+  end
+  positive_number!(display["backing_scale"], "environment.display.backing_scale")
+  positive_number!(display["refresh_rate_hz"], "environment.display.refresh_rate_hz")
+  session = object!(environment["session"], "environment.session")
+  exact_keys!(session, ["screen_locked"], "environment.session")
+  fail!("environment.session.screen_locked must be false") unless session["screen_locked"] == false
+  privacy = object!(environment["privacy"], "environment.privacy")
+  %w[host_name_recorded user_name_recorded process_ids_recorded absolute_paths_recorded].each do |key|
+    fail!("environment.privacy.#{key} must be false") unless privacy[key] == false
+  end
+
+  workload = object!(result["workload"], "workload")
+  exact_keys!(workload, %w[metric_contract fixtures], "workload")
+  identity = object!(workload["metric_contract"], "workload.metric_contract")
+  exact_keys!(identity, %w[schema_version contract_id sha256], "workload.metric_contract")
+  fail!("metric contract schema mismatch") unless identity["schema_version"] == contract["schema_version"]
+  fail!("metric contract id mismatch") unless identity["contract_id"] == contract["contract_id"]
+  fail!("metric contract SHA-256 mismatch") unless identity["sha256"] == contract_sha
+
+  fixtures = array!(workload["fixtures"], "workload.fixtures")
+  fail!("workload.fixtures must not be empty") if fixtures.empty?
+  fixture_ids = fixtures.each_with_index.map do |fixture, index|
+    location = "workload.fixtures[#{index}]"
+    fixture = object!(fixture, location)
+    exact_keys!(fixture, %w[id description bytes lines sha256], location)
+    nonempty_string!(fixture["description"], "#{location}.description")
+    positive_integer!(fixture["bytes"], "#{location}.bytes")
+    positive_integer!(fixture["lines"], "#{location}.lines")
+    sha256!(fixture["sha256"], "#{location}.sha256")
+    nonempty_string!(fixture["id"], "#{location}.id")
+  end
+  fail!("workload.fixtures contains duplicate ids") unless fixture_ids.uniq.length == fixture_ids.length
+  fixture_ids
+end
+
+def validate_engine_observations!(result, contract, fixture_ids)
+  surfaces = object!(contract["surfaces"], "contract surfaces")
+  metrics = object!(contract["metrics"], "contract metrics")
+  minimum_max = positive_integer!(
+    contract["minimum_sample_count_for_max"],
+    "contract minimum_sample_count_for_max"
+  )
+  minimum_p95 = positive_integer!(
+    contract.dig("percentile_rule", "minimum_sample_count"),
+    "contract percentile_rule.minimum_sample_count"
+  )
+
+  observations = array!(result["observations"], "observations")
+  fail!("observations must not be empty") if observations.empty?
+  seen_ids = {}
+  observations.each_with_index do |observation, index|
+    location = "observations[#{index}]"
+    observation = object!(observation, location)
+    samples = array!(observation["samples"], "#{location}.samples")
+    aggregation = array!(observation["aggregation"], "#{location}.aggregation")
+    expected_keys = ENGINE_OBSERVATION_KEYS + [aggregation.last.to_s]
+    exact_keys!(observation, expected_keys, location)
+
+    observation_id = nonempty_string!(observation["id"], "#{location}.id")
+    fail!("duplicate observation id #{observation_id}") if seen_ids[observation_id]
+    seen_ids[observation_id] = true
+
+    surface_id = nonempty_string!(observation["surface"], "#{location}.surface")
+    fail!("#{location}.surface is unknown: #{surface_id}") unless surfaces.key?(surface_id)
+    fixture_id = nonempty_string!(observation["fixture_id"], "#{location}.fixture_id")
+    fail!("#{location}.fixture_id is unknown: #{fixture_id}") unless fixture_ids.include?(fixture_id)
+    metric_name = nonempty_string!(observation["metric"], "#{location}.metric")
+    metric = metrics[metric_name]
+    fail!("#{location}.metric is unknown: #{metric_name}") unless metric
+    unless Array(metric["surfaces"]).include?(surface_id)
+      fail!("#{location}.metric #{metric_name} is not defined for #{surface_id}")
+    end
+    unless observation["unit"] == metric["unit"]
+      fail!("#{location}.unit must equal #{metric['unit'].inspect}")
+    end
+
+    minimum = Array(metric["aggregation"]).include?("p95") ? minimum_p95 : minimum_max
+    if samples.length < minimum
+      fail!("#{location}.samples must contain at least #{minimum} values for #{metric_name}")
+    end
+    samples.each_with_index do |sample, sample_index|
+      finite_nonnegative!(sample, "#{location}.samples[#{sample_index}]")
+    end
+    validate_engine_distribution!(observation, samples, location, contract, metric_name)
+
+    provenance = object!(observation["provenance"], "#{location}.provenance")
+    exact_keys!(provenance, %w[kind tool artifact_sha256], "#{location}.provenance")
+    unless ENGINE_PROVENANCE_KINDS.include?(provenance["kind"])
+      fail!("#{location}.provenance.kind must be manual, instruments, or automated")
+    end
+    nonempty_string!(provenance["tool"], "#{location}.provenance.tool")
+    sha256!(provenance["artifact_sha256"], "#{location}.provenance.artifact_sha256")
+  end
+  observations
+end
+
+def validate_engine_summary!(result, contract, observations)
+  surfaces = object!(contract["surfaces"], "contract surfaces")
+  summary = object!(result["summary"], "summary")
+  unless summary.keys.sort == surfaces.keys.sort
+    fail!("summary must contain every contract surface exactly once")
+  end
+
+  expected_coverage = []
+  surfaces.keys.each do |surface_id|
+    surface_summary = object!(summary[surface_id], "summary.#{surface_id}")
+    metric_names = engine_surface_metrics(contract, surface_id)
+    unless surface_summary.keys.sort == metric_names.sort
+      fail!("summary.#{surface_id} must contain every metric defined for that surface")
+    end
+
+    metric_names.each do |metric_name|
+      location = "summary.#{surface_id}.#{metric_name}"
+      entry = object!(surface_summary[metric_name], location)
+      matching = observations.select do |observation|
+        observation["surface"] == surface_id && observation["metric"] == metric_name
+      end
+      values = matching.flat_map { |observation| observation["samples"] }
+      if values.empty?
+        exact_keys!(entry, %w[status reason], location)
+        fail!("#{location} must be not-measured without samples") unless entry["status"] == "not-measured"
+        nonempty_string!(entry["reason"], "#{location}.reason")
+        expected_coverage << {
+          "surface" => surface_id,
+          "metric" => metric_name,
+          "status" => "not-measured",
+          "reason" => entry["reason"]
+        }
+        next
+      end
+
+      aggregation = engine_expected_aggregation(contract, metric_name, values.length)
+      expected_keys = %w[status unit median sample_count aggregation observation_ids] + [aggregation.last]
+      exact_keys!(entry, expected_keys, location)
+      fail!("#{location} must be measured with samples") unless entry["status"] == "measured"
+      unless entry["unit"] == contract.dig("metrics", metric_name, "unit")
+        fail!("#{location}.unit does not match the contract")
+      end
+      observation_ids = matching.map { |observation| observation["id"] }
+      unless entry["observation_ids"] == observation_ids
+        fail!("#{location}.observation_ids must list the matching observations in order")
+      end
+      validate_engine_distribution!(entry, values, location, contract, metric_name)
+      expected_coverage << {
+        "surface" => surface_id,
+        "metric" => metric_name,
+        "status" => "measured",
+        "observation_ids" => observation_ids,
+        "sample_count" => values.length
+      }
+    end
+  end
+
+  coverage = array!(result["coverage"], "coverage")
+  unless coverage == expected_coverage
+    fail!("coverage must restate every surface and metric with the same status as the summary")
+  end
+end
+
+def validate_engine_baseline!(result, repo_root)
+  contract, contract_sha = local_contract(repo_root, ENGINE_CONTRACT_PATH, "text engine metric contract")
+  fixture_ids = validate_engine_identity!(result, contract, contract_sha)
+  observations = validate_engine_observations!(result, contract, fixture_ids)
+  validate_engine_summary!(result, contract, observations)
+  scan_private_paths(result)
+  result.dig("capture", "kind")
 end
 
 result_path = ARGV.fetch(0) do
@@ -153,6 +422,17 @@ rescue JSON::ParserError, Errno::ENOENT => error
 end
 
 repo_root = File.expand_path("../..", __dir__)
+
+# Two profiles share this validator. The default profile is the ccedit V1 parity
+# capture used by L01. Results that declare the text engine profile are the
+# ADR-0014 surface baselines: the same identity, raw-sample, and aggregation
+# discipline, against the text engine metric contract instead.
+if result.is_a?(Hash) && result["profile"] == ENGINE_BASELINE_PROFILE
+  capture_kind = validate_engine_baseline!(result, repo_root)
+  puts "valid text engine baseline (#{capture_kind}): #{result_path}"
+  exit 0
+end
+
 metric_contract, metric_contract_sha = local_contract(repo_root, "docs/benchmarks/metric-contract.json", "metric contract")
 operation_script, operation_script_sha = local_contract(repo_root, "docs/benchmarks/workloads/v1-parity-operation-script.json", "operation script")
 
@@ -542,19 +822,6 @@ coverage.each_with_index do |entry, index|
     end
   else
     nonempty_string!(entry["reason"], "coverage[#{index}].reason")
-  end
-end
-
-def scan_private_paths(value, location = "result")
-  case value
-  when Hash
-    value.each { |key, child| scan_private_paths(child, "#{location}.#{key}") }
-  when Array
-    value.each_with_index { |child, index| scan_private_paths(child, "#{location}[#{index}]") }
-  when String
-    if value.include?("/Users/") || value.include?("/private/tmp/") || value.match?(%r{(?:^|\s)/tmp/})
-      fail!("#{location} contains a host-local absolute path")
-    end
   end
 end
 

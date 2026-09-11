@@ -615,7 +615,7 @@ dependencyとする独立したhigh-priority itemで、現在のactive item完�
 
 ### P17 Shared text surface foundation
 
-- Status: `queued`
+- Status: `active`
 - Priority: `high`
 - Depends on: P15A、P15C。
 - Outcome: Dev harnessがClair所有surfaceでfixtureを描画し、既定経路の性能基準値が記録されている。
@@ -627,8 +627,33 @@ dependencyとする独立したhigh-priority itemで、現在のactive item完�
   全角が2セル幅を占める。家族絵文字と結合文字が1クラスタとして描かれる。再描画がdamage矩形だけに限定され、
   全面再描画の経路が存在しない。基準値JSONが`scripts/benchmarks/validate-result.rb`を通る。
 - Rule: ADR-0014によりengine itemはslice単位の計測evidenceを持つ。基準値の取得をこのitemの完了条件に含める。
+- Implemented (2026-09-11): `apple/ClairTextKit`に`TextSurfaceSource`（row/span/style契約とdamage）、
+  `TextDisplayWidth`（cluster幅とfast path判定）、`TextFontMetrics`（font metrics、ASCII glyph table、
+  bounded run cache、fallback解決）、`TextSurfaceRenderer`（damage planとCoreText/fast pathの描画）、
+  `TextSurfaceView`、fixtureを追加し、Stable/Dev両targetへ登録した。`TextSurfaceDamage`に全面指定の表現は無く、
+  rendererはdamage∩exposed rectだけを描く。Dev限定のharness window（Commands → Text Surface Harness）で
+  fixtureを描画し、可視行数・描画行数・damage矩形数・path内訳・run cache件数を表示する。
+  app → ClairTextKitの一方向依存は`scripts/check-textkit-boundary.rb`が検査し、`make workspace-check`が呼ぶ。
+- Baseline tooling (2026-09-11): [text engine metric contract](../benchmarks/text-engine-metric-contract.json)、
+  [取得手順](../benchmarks/clair-text-engine-baseline.md)、`scripts/benchmarks/summarize-engine-baseline.rb`、
+  および`scripts/benchmarks/validate-result.rb`の`clair-text-engine-baseline` profileを追加した。
+  raw sampleから中央値・p95・max・summary・coverageを機械的に導出し、validatorが再計算して検証する。
+  V1 profileの挙動は変更していない。
+- Validation (2026-09-11): agent環境がLinuxでSwift/Xcode toolchainを持たないため、`make lint`、
+  `make test-swift`、`make workspace-check`は実行できていない。実行できた検査はすべて通過した:
+  `ruby scripts/check-textkit-boundary.rb`、`bash -n scripts/check-workspace.sh`、
+  両benchmark scriptの`ruby -c`、example sampleに対する
+  `summarize-engine-baseline.rb` → `validate-result.rb`のend-to-end、
+  および改変10種（median、observation id、unit、locked session、host-local path、contract digest、
+  未知metric、sample不足、coverage不一致、surface不一致）の拒否確認、Xcode project参照とfile pathの整合確認。
+- Remaining: 現行既定（`editor.codemirror`、`terminal.appkit-grid`）の基準値実測はApple Silicon macOS hostを
+  要するため未実施であり、`docs/benchmarks/results/`にcaptureは無い。macOS上で`make lint`と`make test-swift`を
+  実行してSwift側のbuild/test evidenceを得ることも残っている。この2点が揃うまでstatusは`active`を維持する。
+- Deferred: 可視範囲limited layout（P18）、入力とIME（P19）、選択とpointer（P20）、accessibility（P21）、
+  `TextBuffer`（P22）と`TerminalGridSource`（P30）。本itemではproduction surfaceを置き換えない。
 - Durable detail: [p0028 design](../projects/p0028-clair-text-engine/design.md)、
-  [ADR-0014](../decisions/0014-clair-owned-text-engine.md)。
+  [ADR-0014](../decisions/0014-clair-owned-text-engine.md)、
+  [development workspace architecture](../architecture/development-workspace.md)。
 
 ### P18 Viewport-limited layout and scrolling
 

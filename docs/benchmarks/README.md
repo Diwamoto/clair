@@ -8,10 +8,18 @@ ccedit V1とのformal comparisonは
 [PoC queueの`L01`](../plans/clair-poc-queue.md#l01-final-load-and-performance)で一度まとめて行います。
 Contract、generator、validatorは将来のL01用toolingとして独立してversion管理し、result取得済みとは扱いません。
 
+[ADR-0014](../decisions/0014-clair-owned-text-engine.md)のtext engine program（`P17`〜`P34`）だけは例外で、
+slice単位のsurface計測を行います。手順とcontractは
+[text engine surface baseline](clair-text-engine-baseline.md)を正本とし、
+`scripts/benchmarks/summarize-engine-baseline.rb`で集計して
+`scripts/benchmarks/validate-result.rb`で検証します。この例外を他のitemへ広げません。
+
 Current benchmark contract:
 
 - [ccedit V1 baseline procedure and metric contract](clair-v1-baseline.md)
 - [Machine-readable metric contract](metric-contract.json)
+- [Clair text engine surface baseline procedure](clair-text-engine-baseline.md)
+- [Machine-readable text engine metric contract](text-engine-metric-contract.json)
 - [Versioned operation workload](workloads/README.md)
 - [Clair / ccedit feature parity matrix](feature-parity-matrix.md)
 - [Deterministic corpus recipe](corpus/README.md)
