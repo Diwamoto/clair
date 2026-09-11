@@ -120,6 +120,7 @@
 		A00000000000000000000163 /* TextSurfaceRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000153 /* TextSurfaceRenderer.swift */; };
 		A00000000000000000000164 /* TextSurfaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000154 /* TextSurfaceView.swift */; };
 		A00000000000000000000165 /* TextSurfaceFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000155 /* TextSurfaceFixtures.swift */; };
+		A00000000000000000000167 /* TextBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000159 /* TextBuffer.swift */; };
 		A00000000000000000000166 /* TextSurfaceHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000156 /* TextSurfaceHarness.swift */; };
 		A00000000000000000000170 /* TextSurfaceSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000150 /* TextSurfaceSource.swift */; };
 		A00000000000000000000171 /* TextDisplayWidth.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000151 /* TextDisplayWidth.swift */; };
@@ -127,8 +128,10 @@
 		A00000000000000000000173 /* TextSurfaceRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000153 /* TextSurfaceRenderer.swift */; };
 		A00000000000000000000174 /* TextSurfaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000154 /* TextSurfaceView.swift */; };
 		A00000000000000000000175 /* TextSurfaceFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000155 /* TextSurfaceFixtures.swift */; };
+		A00000000000000000000177 /* TextBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000159 /* TextBuffer.swift */; };
 		A00000000000000000000176 /* TextSurfaceHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000156 /* TextSurfaceHarness.swift */; };
 		A00000000000000000000180 /* ClairTextKitTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000157 /* ClairTextKitTests.swift */; };
+		A00000000000000000000181 /* TextBufferTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000015A /* TextBufferTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -225,8 +228,10 @@
 		A00000000000000000000153 /* TextSurfaceRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextSurfaceRenderer.swift; sourceTree = "<group>"; };
 		A00000000000000000000154 /* TextSurfaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextSurfaceView.swift; sourceTree = "<group>"; };
 		A00000000000000000000155 /* TextSurfaceFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextSurfaceFixtures.swift; sourceTree = "<group>"; };
+		A00000000000000000000159 /* TextBuffer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextBuffer.swift; sourceTree = "<group>"; };
 		A00000000000000000000156 /* TextSurfaceHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextSurfaceHarness.swift; sourceTree = "<group>"; };
 		A00000000000000000000157 /* ClairTextKitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClairTextKitTests.swift; sourceTree = "<group>"; };
+		A0000000000000000000015A /* TextBufferTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextBufferTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -408,6 +413,7 @@
 				A0000000000000000000011F /* ProjectEditorWebNativeIntegrationTests.swift */,
 				A00000000000000000000131 /* ProjectEditorSuggestionTests.swift */,
 				A00000000000000000000157 /* ClairTextKitTests.swift */,
+				A0000000000000000000015A /* TextBufferTests.swift */,
 			);
 			path = ClairTests;
 			sourceTree = "<group>";
@@ -429,6 +435,7 @@
 				A00000000000000000000153 /* TextSurfaceRenderer.swift */,
 				A00000000000000000000154 /* TextSurfaceView.swift */,
 				A00000000000000000000155 /* TextSurfaceFixtures.swift */,
+				A00000000000000000000159 /* TextBuffer.swift */,
 			);
 			path = ClairTextKit;
 			sourceTree = "<group>";
@@ -728,6 +735,7 @@
 				A00000000000000000000163 /* TextSurfaceRenderer.swift in Sources */,
 				A00000000000000000000164 /* TextSurfaceView.swift in Sources */,
 				A00000000000000000000165 /* TextSurfaceFixtures.swift in Sources */,
+				A00000000000000000000167 /* TextBuffer.swift in Sources */,
 				A00000000000000000000166 /* TextSurfaceHarness.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -780,6 +788,7 @@
 				A00000000000000000000173 /* TextSurfaceRenderer.swift in Sources */,
 				A00000000000000000000174 /* TextSurfaceView.swift in Sources */,
 				A00000000000000000000175 /* TextSurfaceFixtures.swift in Sources */,
+				A00000000000000000000177 /* TextBuffer.swift in Sources */,
 				A00000000000000000000176 /* TextSurfaceHarness.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -807,6 +816,7 @@
 				A00000000000000000000120 /* ProjectEditorWebNativeIntegrationTests.swift in Sources */,
 				A00000000000000000000134 /* ProjectEditorSuggestionTests.swift in Sources */,
 				A00000000000000000000180 /* ClairTextKitTests.swift in Sources */,
+				A00000000000000000000181 /* TextBufferTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

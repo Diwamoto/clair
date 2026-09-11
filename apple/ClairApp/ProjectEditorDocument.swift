@@ -114,25 +114,51 @@ struct ProjectEditorDocumentChange: Equatable, Sendable {
 /// Transactions use one revision and one coordinate space: every edit in a
 /// transaction addresses the document at `baseRevision`. Validation happens
 /// before mutation so a failed transaction cannot partially change the text.
+///
+/// The text itself lives in a `TextBuffer` piece table, so applying a
+/// transaction costs the size of the edit rather than the size of the document.
+/// The contract above the model is unchanged: revisions, UTF-16 ranges, the
+/// validation order, and the change notification are exactly what they were when
+/// the model held a `String`.
 final class ProjectEditorDocumentModel {
-  private(set) var content: String
+  private let buffer: TextBuffer
+  private var materializedContent: String?
   private(set) var revision: UInt64
   private(set) var selection: ProjectEditorUTF16Range?
 
-  /// This counter is intentionally observable for contract tests. Production
-  /// callers should use `snapshot(reason:)` only at load/save/diff boundaries.
+  /// These counters are intentionally observable for contract tests. Production
+  /// callers should use `snapshot(reason:)` only at load/save/diff boundaries,
+  /// and applying a transaction must not materialize the whole document.
   private(set) var snapshotCaptureCount = 0
+  private(set) var contentMaterializationCount = 0
 
   var onChange: ((ProjectEditorDocumentChange) -> Void)?
   var onSelectionChange: ((ProjectEditorUTF16Range?) -> Void)?
 
   init(content: String, revision: UInt64 = 0) {
-    self.content = content
+    self.buffer = TextBuffer(content)
+    self.materializedContent = content
     self.revision = revision
   }
 
+  /// The whole document as a string. It is rebuilt from the buffer only after an
+  /// edit, and then cached, so repeated reads between edits stay free.
+  var content: String {
+    if let materializedContent {
+      return materializedContent
+    }
+    let text = buffer.content
+    materializedContent = text
+    contentMaterializationCount += 1
+    return text
+  }
+
   var utf16Length: Int {
-    content.utf16.count
+    buffer.utf16Length
+  }
+
+  var lineCount: Int {
+    buffer.lineCount
   }
 
   func snapshot(reason: ProjectEditorSnapshotReason) -> ProjectEditorSnapshot {
@@ -151,9 +177,34 @@ final class ProjectEditorDocumentModel {
   /// the caller supplies the revision that the next bridge snapshot should
   /// advertise (or lets the model advance it once).
   func replaceSnapshot(content newContent: String, revision newRevision: UInt64? = nil) {
-    content = newContent
+    buffer.replaceAll(with: newContent)
+    materializedContent = newContent
     revision = newRevision ?? revision &+ 1
     selection = nil
+  }
+
+  /// 1-based line and column for a UTF-16 offset, the coordinate space gutters,
+  /// diffs, and `clair open path:line:column` use.
+  func position(forUTF16Offset offset: Int) -> TextBufferPosition? {
+    buffer.position(forUTF16Offset: offset)
+  }
+
+  func utf16Offset(for position: TextBufferPosition) -> Int? {
+    buffer.utf16Offset(for: position)
+  }
+
+  /// Grapheme-cluster boundaries for caret motion. Callers must move the caret
+  /// with these rather than by adding UTF-16 units.
+  func characterBoundary(after offset: Int) -> Int? {
+    buffer.characterBoundary(after: offset)
+  }
+
+  func characterBoundary(before offset: Int) -> Int? {
+    buffer.characterBoundary(before: offset)
+  }
+
+  func text(in range: ProjectEditorUTF16Range) -> String? {
+    buffer.text(inUTF16Range: range.location..<range.end)
   }
 
   func setSelection(_ nextSelection: ProjectEditorUTF16Range?) throws {
@@ -205,10 +256,13 @@ final class ProjectEditorDocumentModel {
       }
     }
 
-    let updatedContent = NSMutableString(string: content)
+    // Applying from the end keeps every remaining edit addressed in the
+    // transaction's pre-edit coordinate space. Every range has already been
+    // bounds- and boundary-checked above, which is what lets the buffer mutate
+    // here without any risk of a half-applied transaction.
     for item in sortedEdits.reversed() {
-      updatedContent.replaceCharacters(
-        in: item.edit.range.nsRange,
+      try buffer.replace(
+        utf16Range: item.edit.range.location..<item.edit.range.end,
         with: item.edit.text
       )
     }
@@ -227,7 +281,7 @@ final class ProjectEditorDocumentModel {
       offsetDelta += replacementLength - item.edit.range.length
     }
 
-    content = updatedContent as String
+    materializedContent = nil
     revision += 1
     let change = ProjectEditorDocumentChange(
       revision: revision,
@@ -262,13 +316,6 @@ final class ProjectEditorDocumentModel {
   }
 
   private func isUTF16Boundary(_ offset: Int) -> Bool {
-    guard offset >= 0, offset <= utf16Length else {
-      return false
-    }
-    let utf16Index = content.utf16.index(
-      content.utf16.startIndex,
-      offsetBy: offset
-    )
-    return String.Index(utf16Index, within: content) != nil
+    buffer.isCharacterBoundary(utf16Offset: offset)
   }
 }

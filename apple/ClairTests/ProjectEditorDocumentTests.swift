@@ -137,4 +137,64 @@ final class ProjectEditorDocumentTests: XCTestCase {
     )
   }
 
+  /// The reason P22 exists: applying a transaction must cost the size of the
+  /// edit, not the size of the document. The model proves that by never
+  /// rebuilding the whole string while edits are applied.
+  func testApplyingTransactionsNeverMaterializesTheWholeDocument() throws {
+    let line = "let value = 0 // 日本語のコメント\n"
+    let document = ProjectEditorDocumentModel(content: String(repeating: line, count: 5_000))
+    XCTAssertEqual(document.contentMaterializationCount, 0)
+
+    for index in 0..<20 {
+      let transaction = ProjectEditorTransaction(
+        baseRevision: UInt64(index),
+        edits: [
+          ProjectEditorReplacement(
+            range: ProjectEditorUTF16Range(location: 0, length: 0),
+            text: "x"
+          )
+        ],
+        source: .user,
+        undoUnit: .typing
+      )
+      _ = try document.apply(transaction)
+    }
+
+    XCTAssertEqual(document.revision, 20)
+    XCTAssertEqual(document.contentMaterializationCount, 0)
+
+    // Reading the text rebuilds it once, and the result is cached until the
+    // next edit, so a save or diff boundary pays the cost a single time.
+    XCTAssertTrue(document.content.hasPrefix(String(repeating: "x", count: 20)))
+    XCTAssertEqual(document.contentMaterializationCount, 1)
+    _ = document.content
+    XCTAssertEqual(document.contentMaterializationCount, 1)
+  }
+
+  /// Line/column and grapheme motion are the coordinate spaces the gutter,
+  /// `clair open path:line:column`, and caret movement need from the buffer.
+  func testExposesLinePositionsAndGraphemeBoundaries() throws {
+    let document = ProjectEditorDocumentModel(content: "let a = 1\n日本語🙂\nlast")
+
+    XCTAssertEqual(document.lineCount, 3)
+    XCTAssertEqual(
+      document.position(forUTF16Offset: 0),
+      TextBufferPosition(line: 1, column: 1)
+    )
+
+    let secondLineStart = try XCTUnwrap(
+      document.utf16Offset(for: TextBufferPosition(line: 2, column: 1))
+    )
+    XCTAssertEqual(secondLineStart, 10)
+    XCTAssertEqual(
+      document.text(in: ProjectEditorUTF16Range(location: secondLineStart, length: 3)),
+      "日本語"
+    )
+
+    // The emoji is one grapheme cluster of two UTF-16 units, so the caret
+    // crosses it in a single step in both directions.
+    let emoji = secondLineStart + 3
+    XCTAssertEqual(document.characterBoundary(after: emoji), emoji + 2)
+    XCTAssertEqual(document.characterBoundary(before: emoji + 2), emoji)
+  }
 }

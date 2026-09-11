@@ -701,7 +701,7 @@ dependencyとする独立したhigh-priority itemで、現在のactive item完�
 
 ### P22 Editor text buffer and coordinate bridge
 
-- Status: `queued`
+- Status: `active`
 - Priority: `high`
 - Depends on: P04、P06。
 - Outcome: piece tableベースの`TextBuffer`が既存の文書契約へ接続され、UIを変えずに既存testが通る。
@@ -709,6 +709,30 @@ dependencyとする独立したhigh-priority itemで、現在のactive item完�
   変換API、`ProjectEditorDocumentModel`のtransaction適用先の差し替え。文書契約そのものは変更しない。
 - Functional checks: 既存の`ProjectEditorDocumentTests`と`NativeEditorTests`が通る、10MBの編集が文書長に比例しないこと、
   grapheme境界でのcaret移動、CRLFと末尾改行の保持、非UTF-8の拒否、外部変更reloadとlocal historyの継続動作。
+- Implemented (2026-09-11): `apple/ClairTextKit/TextBuffer.swift`にpiece table storageを追加した。
+  append-only な original/add ストアが1024 byte blockごとにUTF-16数と改行数の要約を持ち、
+  piece列の前置和が行索引を兼ねる。これにより UTF-8 byte / UTF-16 / grapheme / line-column の変換が
+  文書長ではなく1 blockに比例する。`ProjectEditorDocumentModel`の保持を`String`から`TextBuffer`へ差し替え、
+  transaction適用時に全文を組み立てないようにした。`content`は編集後の最初の読み出しでだけ再構築して
+  cacheし、`contentMaterializationCount`で観測できる。revision、UTF-16レンジ、検証順序、変更通知という
+  文書契約は変更していない。連続入力は直前のadd pieceを延長し、1打鍵ごとにpieceを増やさない。
+  grapheme問い合わせはASCII anchorで前後512 byteに窓を切るため、1MB長行でもcaret移動が行長に依存しない。
+- Tests added (2026-09-11): `apple/ClairTests/TextBufferTests.swift`（10件）がUTF-8検証、piece分割、
+  座標変換、surrogate分割の拒否、grapheme境界、行範囲とCRLF、`replaceAll`、編集コストのmetricsを覆う。
+  `ProjectEditorDocumentTests`へ2件追加し、20回のtransaction適用後も`contentMaterializationCount`が0で
+  あること、および行位置とgrapheme境界のpassthroughを検証する。
+- Validation (2026-09-11): agent環境がLinuxでSwift/Xcode toolchainを持たないため、`make lint`と
+  `make test-swift`は実行できていない。実行できた検査は通過した: `ruby scripts/check-textkit-boundary.rb`
+  （`TextBuffer`がapp型を参照しないこと）、Xcode projectのobject ID重複と括弧整合の確認、
+  testが参照する全APIが実装に存在することの照合。
+- Fixed during handoff (2026-09-11): `TextBuffer.swift`と`TextBufferTests.swift`が
+  `Clair.xcodeproj/project.pbxproj`へ未登録だった。Stable/Devのsources phaseとClairTestsへ登録し、
+  他のClairTextKit fileと同じ参照数になることを確認した。登録前の状態ではmacOS上のbuildが失敗する。
+- Remaining: macOS上で`make lint`と`make test-swift`を実行し、既存の`ProjectEditorDocumentTests`、
+  `NativeEditorTests`、`ProjectEditorWebBridgeTests`を含む全suiteの通過を確認すること。
+  これが揃うまでstatusは`active`を維持する。
+- Deferred: 編集primitiveとUndo（P24）、syntax highlight（P23）、wrapとfolding（P26）。
+  本itemはstorageと座標変換だけを差し替え、UIとviewは変更しない。
 
 ### P23 Incremental syntax highlighting
 
