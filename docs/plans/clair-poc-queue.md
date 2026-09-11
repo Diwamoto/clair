@@ -19,7 +19,9 @@ discussionや外部共有が必要な場合だけ使い、通常のPoC実装で�
 - `final-only`: dogfooding可能になるまで実行しない統合検証。
 
 通常のitemではtargeted build、lint、unit、integration、manual functional smokeだけを行う。
-Benchmark corpus、反復timing、Instruments、percentile、ccedit V1比較は行わない。Crash、data loss、
+Benchmark corpus、反復timing、Instruments、percentile、ccedit V1比較は行わない。
+[ADR-0014](../decisions/0014-clair-owned-text-engine.md)のtext engine item（`P17`〜`P34`）だけは例外とし、
+`P17`で取得した現行既定の基準値との同条件比較をslice単位で行う。この例外を他のitemへ広げない。Crash、data loss、
 corrupt state fallback、protocol/frame boundは安全性のcorrectness testとして通常itemに含める。
 
 P12以降は、利用者が起動できるoperationをview固有callbackだけで実装しない。各operationはstableな
@@ -52,6 +54,23 @@ P06 -> P15B
 P13 -> P15D
 {P07, P09, P10, P13} -> P16
 {P14, P15C, P15D} -> P15 -> L01
+
+# Clair text engine program (ADR-0014)
+{P15A, P15C} -> P17
+{P04, P06} -> P22
+P15C -> P33
+{P17, P22} -> P18
+P17 -> P19
+{P18, P19} -> P20 -> P21
+P22 -> P23
+{P20, P22} -> P24
+{P18, P23} -> P25 -> P26
+{P24, P26} -> P27
+{P24, P25} -> P28
+{P18, P33} -> P30
+{P20, P30} -> P31 -> P32
+{P21, P23, P24, P26, P27, P28, P33} -> P29
+{P29, P32} -> P34
 ```
 
 P02とP03、P06/P07/P08は独立agentまたは別worktreeで並列実装できる。P12のCommand Registryは
@@ -62,6 +81,11 @@ P01から最小kernelを育て、後から既存featureを別実装へ置き換�
 P14はADR-0009でdecision blockerを解消して完了した。P15Dはdecision blockerが解消されるまでworkerへ
 割り当てない。P15CはP15A/P15Bの統合後、P15はP14/P15C/P15Dの統合後にだけ開始する。P16はP07/P09/P10/P13を
 dependencyとする独立したhigh-priority itemで、現在のactive item完了後に着手する。
+
+`P17`〜`P34`は[ADR-0014](../decisions/0014-clair-owned-text-engine.md)が決めたClair text engineの実装単位であり、
+設計の正本は[p0028](../projects/p0028-clair-text-engine/design.md)である。依存が解けている`P17`、`P22`、`P33`は
+同時に着手できる。並列実行する各workerは別のlinked worktreeを使い、自itemだけをcommitする。
+`P19`はprojectのriskが集中するため、他のeditor機能より先に完了させる。
 
 ## Active queue
 
@@ -588,6 +612,200 @@ dependencyとする独立したhigh-priority itemで、現在のactive item完�
 - Validation (2026-09-04): StableでClair sourceとGit差分を開き、Stable内ターミナルからDevの既存プロセスを再利用して起動した。macOSのcase-insensitive filesystemでStable実行ファイルを上書きしていたbundle CLIの配置を`Contents/Resources/clair`へ修正し、Stable/Dev bundle smoke、`cargo test -p clair-cli --locked`（6件）、Xcode project consistency、shell syntax、`git diff --check`を通過した。
 - Resolution: `make test-swift`はXCTest host終了時の環境側runner通信不調で完走せず中断したが、P15の対象であるbundle/CLI/Dev cutover経路は独立した検証で確認済み。P15のleaseはcommit後に解放する。
 - Legacy issue coverage: #19。
+
+### P17 Shared text surface foundation
+
+- Status: `queued`
+- Priority: `high`
+- Depends on: P15A、P15C。
+- Outcome: Dev harnessがClair所有surfaceでfixtureを描画し、既定経路の性能基準値が記録されている。
+- Scope: `ClairTextKit` moduleの新設。`TextFontMetrics`（font metrics、glyph atlas、run cache、CJK/絵文字/結合文字のfallback解決）、
+  `TextSurfaceRenderer`（damage矩形だけを描くCoreText run描画とtheme色）、`TextSurfaceSource` protocolの確定。
+  入力とmodelは含めない。着手時に現行既定であるCodeMirror editorと現行terminal surfaceの基準値を同一hostで取得し、
+  `docs/benchmarks/results/`へ保存する。
+- Functional checks: 単一幅ASCII行がfast path、CJK・絵文字・結合文字・合字を含む行がCoreText経路で描画される。
+  全角が2セル幅を占める。家族絵文字と結合文字が1クラスタとして描かれる。再描画がdamage矩形だけに限定され、
+  全面再描画の経路が存在しない。基準値JSONが`scripts/benchmarks/validate-result.rb`を通る。
+- Rule: ADR-0014によりengine itemはslice単位の計測evidenceを持つ。基準値の取得をこのitemの完了条件に含める。
+- Durable detail: [p0028 design](../projects/p0028-clair-text-engine/design.md)、
+  [ADR-0014](../decisions/0014-clair-owned-text-engine.md)。
+
+### P18 Viewport-limited layout and scrolling
+
+- Status: `queued`
+- Depends on: P17、P22。
+- Outcome: 10MBと長行のfixtureでも可視範囲だけがlayoutされ、scrollが滑らかでメモリが可視行数に比例する。
+- Scope: `TextSurfaceGeometry`。line indexに基づく可視範囲layout、近傍先読み、layout cacheの上限とeviction、
+  scrollとhit test、position↔point変換。文書全体のlayoutを保持しない。
+- Functional checks: 10MB fixtureのopenとscroll、1MB長行fixture、layout cache件数が可視行数に比例すること、
+  scroll中にmain threadが解析完了を待たないこと、文書末尾へのjump、window resize後の再layout。
+
+### P19 Text input and Japanese IME
+
+- Status: `queued`
+- Priority: `high`
+- Depends on: P17。
+- Outcome: surfaceが`NSTextInputClient`として正しく振る舞い、実機の日本語IMEで変換・確定・取消・再変換が破綻しない。
+- Scope: `TextInputSurface`。`NSTextInputClient`の全メソッド、marked textの表示、`firstRect(forCharacterRange:)`による
+  候補window位置、確定と取消、再変換、dead key、key event経路、UTF-16境界の厳密な扱い。
+- Functional checks: 実機の日本語IMEで候補windowが正しい位置に出る、確定、Escapeによる取消、確定済みテキストの再変換、
+  composition中のtab切替とProject切替で文書が壊れない、絵文字と結合文字の入力、marked text中のcaret位置。
+  実施手順と結果を[local development runbook](../runbooks/local-development.md)へ記録する。
+- Rule: このitemにprojectのriskが集中する。合成APIテストだけで完了にしない。実機IMEの手動確認を必須とする。
+  二度の実装反復で要件を満たせない場合は`blocked`とし、ADR-0014のrevisit条件へ戻す。
+
+### P20 Selection, carets, and pointer interaction
+
+- Status: `queued`
+- Depends on: P18、P19。
+- Outcome: 選択とcaret操作が、wrapと全角文字を含む実際のコードで正しく動く。
+- Scope: 選択矩形、caret描画と点滅、語・行・段落選択、CJKの語境界、drag選択とautoscroll、複数caretのgeometry、
+  pasteboard連携。編集操作そのものは含めない。
+- Functional checks: 全角と絵文字を跨ぐdrag選択、double/triple click、wrapした行の選択矩形、複数caretの表示、
+  autoscroll、コピー内容がgrapheme単位で壊れないこと。
+
+### P21 Accessibility and macOS text services
+
+- Status: `queued`
+- Depends on: P20。
+- Outcome: VoiceOverでeditorの行、選択、caret位置を読み上げられ、macOS標準のtext serviceが動く。
+- Scope: `NSAccessibility`のtext protocol、VoiceOver、services menu、辞書引き、drag and drop、
+  spellとautocorrectの抑制方針。
+- Functional checks: VoiceOverでの行移動と選択読み上げ、caret位置の通知、services menuからの操作、
+  テキストのdrag and drop、コードに対してautocorrectが働かないこと。
+
+### P22 Editor text buffer and coordinate bridge
+
+- Status: `queued`
+- Priority: `high`
+- Depends on: P04、P06。
+- Outcome: piece tableベースの`TextBuffer`が既存の文書契約へ接続され、UIを変えずに既存testが通る。
+- Scope: piece table（UTF-8 storage）、行頭offset索引の増分更新、UTF-8 byte / UTF-16 / grapheme / line-column の
+  変換API、`ProjectEditorDocumentModel`のtransaction適用先の差し替え。文書契約そのものは変更しない。
+- Functional checks: 既存の`ProjectEditorDocumentTests`と`NativeEditorTests`が通る、10MBの編集が文書長に比例しないこと、
+  grapheme境界でのcaret移動、CRLFと末尾改行の保持、非UTF-8の拒否、外部変更reloadとlocal historyの継続動作。
+
+### P23 Incremental syntax highlighting
+
+- Status: `queued`
+- Depends on: P22。
+- Outcome: 編集中も色が追従し、解析がmain threadを占有しない。
+- Scope: Tree-sitterのSwift binding導入、増分解析のmain thread外実行、revision gate、行単位のspan cache、injection、
+  grammar資産の配布許諾確認と`THIRD_PARTY_NOTICES.md`更新。許諾を確保できない言語はplain textへfallbackする。
+- Functional checks: 対象言語のtoken色、Markdown内のコード fence、連続編集とtab切替で古い色が後から適用されないこと、
+  10MB fixtureで解析中も入力できること、grammar不在時に編集経路が止まらないこと。
+- Rule: 許諾を確保できない言語があってもitem全体を`blocked`にしない。確保できた言語だけで完了とし、
+  未確保の言語と理由を明記する。
+
+### P24 Editing primitives, undo, and multi-cursor
+
+- Status: `queued`
+- Depends on: P20、P22。
+- Outcome: 複数caretを含む日常的な編集操作が、一貫したUndo単位で動く。
+- Scope: 挿入と削除、indent、comment toggle、複数caret編集、column選択、paste、Undo grouping、
+  IMEを跨ぐcoalescing境界。
+- Functional checks: 3カーソルへの入力が一回のUndoで復元される、IME確定を跨ぐUndo境界、
+  大量pasteのUndo、indentとcomment toggleが選択範囲に対して正しい。
+
+### P25 Gutter, rails, and decorations
+
+- Status: `queued`
+- Depends on: P18、P23。
+- Outcome: line number、git状態、breakpoint、コメントanchorが同じgutter規約の上に並ぶ。
+- Scope: line number、git gutter、breakpoint（既存の`Debugging.swift`と接続）、コメントanchorのrail、
+  行背景とinline装飾の描画契約。
+- Functional checks: 行番号とgit状態の整合、breakpointのtoggleと復元、anchorのrail表示、
+  装飾が可視範囲外を再描画しないこと。
+
+### P26 Soft wrap and code folding
+
+- Status: `queued`
+- Depends on: P25。
+- Outcome: wrapとfoldingを有効にしても、行操作とrailとanchorの位置が正しい。
+- Scope: wrap geometry、fold region、wrap時とfold時の行高、anchorとrailの位置整合、hit testとcaret移動。
+- Functional checks: wrap on/offの切替、長行のwrap表示、fold中の行番号とanchor、
+  fold境界を跨ぐ選択と編集、wrap時のcaret上下移動。
+
+### P27 Native diff and merge on the engine
+
+- Status: `queued`
+- Depends on: P24、P26。
+- Outcome: diffとmergeがengine上で描画され、hunk単位の操作が完結する。
+- Scope: 既存の`ProjectEditorDiffModel`を用いたunifiedと左右diff、hunk単位のstage/unstage、three-way merge editor、
+  scroll同期、空行と末尾改行とCRLFとrenameの扱い。diff modelの再実装は行わない。
+- Functional checks: 大規模diffの表示とscroll、hunk単位のstageとunstage、conflictの解決、
+  stale文書に対する操作の拒否、diff上のUndo。
+
+### P28 Inline AI suggestion and comment surfaces
+
+- Status: `queued`
+- Depends on: P24、P25。
+- Outcome: AI提案と行コメントが、bridge越しではなくsurface上で直接操作できる。
+- Scope: 既存の`ProjectEditorSuggestion`のinline表示と部分適用、revision検証によるstale拒否、
+  コメントanchorのorphan表示と復元導線。modelの再実装は行わない。
+- Functional checks: 提案の全適用と部分適用、適用後の残り提案の再計算、編集後のstale提案の拒否、
+  一回のUndoでの復元、anchorのorphan化と表示。
+
+### P29 Editor default cutover
+
+- Status: `queued`
+- Depends on: P21、P23、P24、P26、P27、P28、P33。
+- Outcome: 通常のファイル編集がengine既定になり、CodeMirrorはfallbackとしてだけ残る。
+- Scope: `clair.editor.native-v1`の既定反転、CodeMirror経路のfallback保持、WKWebViewをhot pathから外すこと、
+  大規模fileのfallback閾値、tab状態の保存と復元。
+- Functional checks: 既定でengineが使われること、設定での切り戻し、restart後のtab復元、
+  保存と外部変更とlocal historyの継続動作、閾値超過fileのfallback。
+
+### P30 Terminal grid on the shared surface
+
+- Status: `queued`
+- Priority: `high`
+- Depends on: P18、P33。
+- Outcome: terminalが共有surfaceで描画され、変更セルだけを再描画する。
+- Scope: `TerminalGridSource`、libvterm gridからのdamage通知、変更セルのみの再描画、
+  transcriptの毎frame再デコードの除去、`updateNSView`からのlayout強制の除去。broker protocolは変更しない。
+- Functional checks: flood時のCPUとframe、alternate screenのenterとexit、色と属性、wide glyph、
+  reattach後のreplay、resize後のgrid再構成。
+
+### P31 Terminal input, selection, and scrollback
+
+- Status: `queued`
+- Depends on: P20、P30。
+- Outcome: terminalの入力と選択とscrollbackが、editorと同じ入力層の上で動く。
+- Scope: terminalのIME、選択とコピー、OSC 52、mouse reporting、bounded scrollback、resize時のreflow。
+- Functional checks: CJK入力とIME確定、scrollback内の選択とコピー、OSC 52、
+  mouse reportingを使うTUI、resize時のreflowとscrollback保持。
+
+### P32 Terminal default cutover and agent TUI validation
+
+- Status: `queued`
+- Depends on: P31。
+- Outcome: 現行terminal surfaceが置き換わり、agent TUIが日常利用できる。
+- Scope: 現行surfaceの置換、Claude CodeとCodexとOpenCodeのTUI検証、reattachとlifecycleの回帰確認。
+- Functional checks: 3種のagent TUIの表示と操作、flood中の入力取りこぼしがないこと、
+  window closeとupdate restartを跨ぐreattach、複数terminalの同時動作。
+
+### P33 Workspace state decoupling for engine seams
+
+- Status: `queued`
+- Priority: `high`
+- Depends on: P15C。
+- Outcome: SwiftUIのstate更新がengineのhot pathへ波及しない。表示は変わらない。
+- Scope: `ProjectSurfaceModel`のfileTree、git、search、layoutへの分割、`@Observable`移行、
+  `ProjectEditorTab.content`を打鍵ごとに発行する経路の停止、`ContentView.swift`の分割。
+- Functional checks: 既存のXCTest suiteが通ること、表示と操作に差異がないこと、
+  editor入力時とterminal出力時に無関係なviewが再評価されないこと、restart後のlayout復元。
+
+### P34 Text engine performance gate
+
+- Status: `queued`
+- Depends on: P29、P32。
+- Outcome: engine既定が現行既定と同等以上であることが、同条件の計測で確認されている。
+- Scope: `P17`で取得した基準値との同条件比較。input-to-glyph、frame timeとdrop frame、初回表示と初回色付け、
+  idle RSS、flood CPU、実機IMEとVoiceOverの手動確認。不合格の項目は該当itemへ差し戻す。
+- Functional checks: 全metricのraw sampleとsummaryが保存され、validatorを通ること。
+  engineが全metricで同等以上、かつ大規模fixtureで明確に優位であること。
+- Rule: これは`L01`とは別のgateである。`L01`はcutover全体の判断として引き続き`final-only`とする。
 
 ### L01 Final load and performance
 

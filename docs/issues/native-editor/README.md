@@ -2,6 +2,18 @@
 
 2026-09-08。PoCの残検証から本番実装・既定移行まで24件に分解した。GitHub IssueやCodexタスクは追加作成せず、このディレクトリを作業キューとする。NE-00で共有PoCの取り込み、NE-02で本番ホストから独立した文書契約の基礎実装、NE-06/08でコメントanchorと任意差分モデル、NE-10で安全なAI部分適用モデル、NE-14でWeb bridgeの差分同期を完了した。NE-11は依存ゲート未達のため `blocked` と記録し、本番CodeEditのopt-in接続と既定切替は開始していない。検証用のDev-only AppKit adapter接続はNE-11に記録した。
 
+## 2026-09-11: CodeEdit本番採用はADR-0014で置き換えた
+
+[ADR-0014](../../decisions/0014-clair-owned-text-engine.md)により、Clairはeditorとterminalが共有する
+自前のtext engineを実装する方針へ転換した。これに伴い、CodeEdit系を本番へ接続する経路である
+NE-11とNE-15〜NE-23は`superseded`とし、着手しない。実装単位は
+[queueの`P17`〜`P34`](../../plans/clair-poc-queue.md)、設計の正本は
+[p0028](../../projects/p0028-clair-text-engine/design.md)である。
+
+NE-00〜NE-10とNE-14の成果は破棄せず前提として使う。特に文書契約（NE-02）、コメントanchor（NE-06）、
+任意差分model（NE-08）、安全な部分適用model（NE-10）はengine非依存であり、新engineがそのまま利用する。
+本ディレクトリの記録と証跡は、転換の根拠として保持する。
+
 ## 現時点の結論
 
 CodeEdit系は条件付き候補。実IME未検証、上流複数カーソルUndoにadapterが必要、10MB初回色付け約4.7秒、累積RSS約1.1GiB。本番でVS Code相当との判定は未達。diffは共通2列表と固定提案の検証であり、任意差分の編集機能の完成ではない。測定境界が違うAPI時間から速度比を出さない。
@@ -21,20 +33,20 @@ CodeEdit系は条件付き候補。実IME未検証、上流複数カーソルUnd
 | [NE-08](NE-08.md) | 任意差分の行・hunkモデルを作る | NE-02 | done |
 | [NE-09](NE-09.md) | ネイティブread-only diff表示を完成させる | NE-04, NE-08 | done |
 | [NE-10](NE-10.md) | 任意の行・hunkに対するAI部分適用を実装する | NE-02, NE-08 | done |
-| [NE-11](NE-11.md) | 通常エディタを本番ホストへopt-inで接続する | NE-01, NE-02, NE-03, NE-04, NE-05 | blocked |
-| [NE-12](NE-12.md) | Clair全体とVS Codeを同条件で測定する | NE-11, NE-14 | open |
-| [NE-13](NE-13.md) | diff操作とコメントを統合して採用判定を残す | NE-07, NE-09, NE-10, NE-12 | open |
+| [NE-11](NE-11.md) | 通常エディタを本番ホストへopt-inで接続する | NE-01, NE-02, NE-03, NE-04, NE-05 | superseded |
+| [NE-12](NE-12.md) | Clair全体とVS Codeを同条件で測定する | NE-11, NE-14 | superseded |
+| [NE-13](NE-13.md) | diff操作とコメントを統合して採用判定を残す | NE-07, NE-09, NE-10, NE-12 | superseded |
 | [NE-14](NE-14.md) | Web側の全文通知を減らしタブ状態を保持する | NE-00, NE-02 | done |
 
-| [NE-15](NE-15.md) | 本番用エディタ依存・資産をビルドへ組み込む | NE-01, NE-13 | open |
-| [NE-16](NE-16.md) | 本番の保存・外部更新・履歴を差分文書へ移行する | NE-11, NE-15 | open |
-| [NE-17](NE-17.md) | 通常エディタの操作・設定・タブ復元を製品へ接続する | NE-03, NE-04, NE-05, NE-16 | open |
-| [NE-18](NE-18.md) | 行操作と永続コメントを本番エディタへ接続する | NE-06, NE-07, NE-17 | open |
-| [NE-19](NE-19.md) | Git・履歴のdiff表示を本番ネイティブビューへ接続する | NE-09, NE-15, NE-16 | open |
-| [NE-20](NE-20.md) | 本番AI要求を行・範囲と安全な提案適用へ接続する | NE-10, NE-18, NE-19 | open |
-| [NE-21](NE-21.md) | 最終本番構成で性能・回帰ゲートを確認する | NE-17, NE-18, NE-19, NE-20 | open |
-| [NE-22](NE-22.md) | 通常エディタとdiffをネイティブ既定へ切り替える | NE-21 | open |
-| [NE-23](NE-23.md) | 旧native実装と移行用コードを整理する | NE-22 | open |
+| [NE-15](NE-15.md) | 本番用エディタ依存・資産をビルドへ組み込む | NE-01, NE-13 | superseded |
+| [NE-16](NE-16.md) | 本番の保存・外部更新・履歴を差分文書へ移行する | NE-11, NE-15 | superseded |
+| [NE-17](NE-17.md) | 通常エディタの操作・設定・タブ復元を製品へ接続する | NE-03, NE-04, NE-05, NE-16 | superseded |
+| [NE-18](NE-18.md) | 行操作と永続コメントを本番エディタへ接続する | NE-06, NE-07, NE-17 | superseded |
+| [NE-19](NE-19.md) | Git・履歴のdiff表示を本番ネイティブビューへ接続する | NE-09, NE-15, NE-16 | superseded |
+| [NE-20](NE-20.md) | 本番AI要求を行・範囲と安全な提案適用へ接続する | NE-10, NE-18, NE-19 | superseded |
+| [NE-21](NE-21.md) | 最終本番構成で性能・回帰ゲートを確認する | NE-17, NE-18, NE-19, NE-20 | superseded |
+| [NE-22](NE-22.md) | 通常エディタとdiffをネイティブ既定へ切り替える | NE-21 | superseded |
+| [NE-23](NE-23.md) | 旧native実装と移行用コードを整理する | NE-22 | superseded |
 
 ## 着手順と並行作業
 

@@ -14,6 +14,8 @@
   `L01 Final load and performance`で一度まとめて行う。
 - Crash、data loss、unbounded allocation、protocol frame bound等の安全性はperformanceではなく
   correctnessとして各sliceで検証する。
+- 例外は[ADR-0014](../decisions/0014-clair-owned-text-engine.md)のClair text engine（`P17`〜`P34`）で、
+  engineは性能そのものが受け入れ条件のため、slice単位で基準値との比較を行う。`L01`はcutover全体の判断として残す。
 
 ## Milestone 0: Product alignment
 
@@ -68,6 +70,24 @@ Go editorやdebuggerを待たず、自宅Macで動くClairのagentをiPhone/iPad
 
 Initial scopeはsingle-user・自所有device・raw terminalに限定する。semantic approval、vendor adapter、branch review、
 public relay/E2EEはこのmilestoneのexit criteriaに含めず、後続sliceで個別に判断する。
+
+## Milestone 1.7: Clair text engine
+
+### Outcome
+
+editorとterminalがひとつのClair所有surface engineを共有し、体感がcceditとVS Code + Ghostty併用の双方に対して
+明確に優れている。判断は[ADR-0014](../decisions/0014-clair-owned-text-engine.md)、設計は
+[p0028](../projects/p0028-clair-text-engine/README.md)、実装単位は[queueの`P17`〜`P34`](clair-poc-queue.md)。
+
+### Exit criteria
+
+- editorとterminalの双方が`ClairTextKit` surface上で動作する。
+- 実機の日本語IMEとVoiceOverが両surfaceで通る。
+- 10MBと長行のfixtureで初回表示、scroll、編集応答が現行既定より改善している。
+- Claude Code、Codex、OpenCodeのTUIが正しく描画され、floodで入力を取りこぼさない。
+- `P34`のgateで全metricが現行既定と同等以上であり、大規模fixtureで明確に優位である。
+
+Go language intelligenceとdebuggerはこのmilestoneのexit criteriaに含めない。
 
 ## Milestone 2: Go daily-driver editor
 
