@@ -12,11 +12,6 @@ final class TextRunCache {
   struct Key: Hashable {
     let text: String
     let style: TextCellStyle
-
-    init(text: String, style: TextCellStyle) {
-      self.text = text
-      self.style = style
-    }
   }
 
   let capacity: Int

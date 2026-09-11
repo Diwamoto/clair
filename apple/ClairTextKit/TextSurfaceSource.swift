@@ -51,20 +51,6 @@ struct TextSurfaceTheme: Equatable, Hashable, Sendable {
   let selectionForeground: TextSurfaceColor
   let caret: TextSurfaceColor
 
-  init(
-    background: TextSurfaceColor,
-    foreground: TextSurfaceColor,
-    selectionBackground: TextSurfaceColor,
-    selectionForeground: TextSurfaceColor,
-    caret: TextSurfaceColor
-  ) {
-    self.background = background
-    self.foreground = foreground
-    self.selectionBackground = selectionBackground
-    self.selectionForeground = selectionForeground
-    self.caret = caret
-  }
-
   /// One Dark, the appearance the workspace already uses. The app passes its own
   /// palette in production; this keeps the Dev harness self-contained.
   static let oneDark = TextSurfaceTheme(
@@ -113,11 +99,6 @@ struct TextCellStyle: Equatable, Hashable, Sendable {
 struct TextSurfaceSpan: Equatable, Hashable, Sendable {
   let text: String
   let style: TextCellStyle
-
-  init(text: String, style: TextCellStyle) {
-    self.text = text
-    self.style = style
-  }
 }
 
 /// One visible row supplied by a source. The engine never asks a source for the

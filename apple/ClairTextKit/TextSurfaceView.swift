@@ -108,10 +108,8 @@ final class TextSurfaceView: NSView, TextSurfaceSourceObserver {
   }
 
   private func updateDiagnostics(plan: TextSurfaceRenderer.Plan, exposedRows: Range<Int>) {
-    diagnostics.visibleRowCount = renderer.rowRange(
-      intersecting: visibleRect,
-      rowCount: source.rowCount
-    ).count
+    let visibleRows = renderer.rowRange(intersecting: visibleRect, rowCount: source.rowCount)
+    diagnostics.visibleRowCount = visibleRows.count
     diagnostics.drawnRowCount = plan.rows.count
     diagnostics.damageRectCount = max(pendingDamage.rowRanges.count, exposedRows.isEmpty ? 0 : 1)
     diagnostics.fastPathRowCount = plan.rows.filter { $0.path == .fastASCII }.count
