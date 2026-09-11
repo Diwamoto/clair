@@ -279,7 +279,7 @@ export const commands: Command[] = [
   { title: 'ペインを閉じる', id: 'clair.pane.close', shortcut: '⌃⌘W', risk: '破壊的' },
   { title: '変更を確認', id: 'clair.review.open', shortcut: '⌃⌘G', risk: '読み取り' },
   { title: 'マージグラフを開く', id: 'clair.graph.open', shortcut: '', risk: '読み取り' },
-  { title: 'アクティビティを開く', id: 'clair.activity.open', shortcut: '', risk: '読み取り' },
+  { title: 'Agents を開く', id: 'clair.activity.open', shortcut: '', risk: '読み取り' },
   { title: 'セッションを開く', id: 'clair.sessions.open', shortcut: '⌃⌘L', risk: '読み取り' },
   { title: '実行とデバッグ', id: 'clair.debug.open', shortcut: '⇧⌘D', risk: '読み取り' },
   { title: 'Debug + AI統合（検討中）', id: 'clair.debug.agent', shortcut: '', risk: '読み取り' },

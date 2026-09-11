@@ -549,7 +549,7 @@ const AGENTS = [
 export function AddAgentOverlay() {
   const wb = useWorkbench();
   const [agent, setAgent] = useState('OpenCode');
-  const [place, setPlace] = useState<'ターミナル' | 'アクティビティ'>('ターミナル');
+  const [place, setPlace] = useState<'ターミナル' | 'Agents'>('ターミナル');
   const [worktree, setWorktree] = useState<'現在のProject' | '新しいworktree'>('新しいworktree');
   const [branch, setBranch] = useState('agent-session');
   const [prompt, setPrompt] = useState('');
@@ -760,7 +760,7 @@ export function AddAgentOverlay() {
               {(
                 [
                   ['ターミナル', 'ワークスペースの隣で実行', '⌁'],
-                  ['アクティビティ', '会話画面を開く', '◌'],
+                  ['Agents', '会話画面を開く', '◌'],
                 ] as const
               ).map(([name, sub, glyph]) => {
                 const on = place === name;

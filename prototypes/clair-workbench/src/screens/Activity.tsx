@@ -32,7 +32,7 @@ export function ActivityPanel() {
             <input
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              placeholder="アクティビティを絞り込む"
+              placeholder="Agents を絞り込む"
               style={{
                 flex: 1,
                 minWidth: 0,

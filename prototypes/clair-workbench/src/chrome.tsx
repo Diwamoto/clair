@@ -21,8 +21,8 @@ import {
   IconFolder,
   IconGear,
   IconMarkdown,
+  IconSearch,
   IconSession,
-  IconShieldCheck,
   IconSparkle,
 } from './icons';
 import { useWorkbench, type Screen } from './store';
@@ -158,17 +158,17 @@ export function MainHeader({ children, height = 44 }: { children: ReactNode; hei
 /* ── titlebar ─────────────────────────────────────────────────────────── */
 
 /**
- * Tabs share the strip equally — every tab is `flex: 1 1 0`, so they stretch
- * to whatever the window can spare and stay the same width as each other.
- * Width is what makes a tab strip calm, so the tabs get all of it and the
- * titlebar's own controls get none they don't need. 260px is the ceiling, so
- * a window with two tabs open doesn't hand each of them half the screen.
+ * Tabs are a fixed width, left to right, and never stretch. Width is what
+ * makes a tab strip calm, so 200px is generous — the titlebar's own controls
+ * were cut back to pay for it — but it is the same 200px however many tabs
+ * are open and however wide the window is. A tab that moved or resized every
+ * time a sibling opened would cost more than the tidy right edge is worth.
  *
  * A name that does not fit is faded out at its right edge rather than
  * ellipsised: the fade says "there is more" without spending characters on
  * punctuation, and it keeps the label's ink even at the cut.
  */
-const TAB_MAX_WIDTH = 260;
+const TAB_WIDTH = 200;
 const TAB_FADE = 18;
 
 const fadeRight: CSSProperties = {
@@ -225,9 +225,8 @@ function Tab({
         alignItems: 'center',
         gap: 7,
         padding: '0 11px',
-        flex: '1 1 0',
-        minWidth: 0,
-        maxWidth: TAB_MAX_WIDTH,
+        width: TAB_WIDTH,
+        flexShrink: 0,
         borderRadius: 8,
         // The selected tab wears the pane's own colour, so it reads as a hole
         // through the chrome onto the surface below rather than a marker
@@ -443,9 +442,7 @@ function ProjectGroup({ project }: { project: string }) {
         display: 'flex',
         alignItems: 'center',
         alignSelf: 'stretch',
-        // One share per tab, so a three-tab group is three times as wide as a
-        // one-tab group and every tab across the strip lands the same width.
-        flex: collapsed ? '0 0 auto' : `${items.length} 1 0`,
+        flexShrink: 0,
         minWidth: 0,
       }}
     >
@@ -463,7 +460,6 @@ function ProjectGroup({ project }: { project: string }) {
           display: 'grid',
           gridTemplateColumns: collapsed ? '0fr' : '1fr',
           alignSelf: 'stretch',
-          flex: collapsed ? '0 0 auto' : 1,
           minWidth: 0,
         }}
       >
@@ -509,7 +505,10 @@ export function AppTitlebar({ extra }: { extra?: ReactNode }) {
 
       <div
         className="no-scrollbar"
-        style={{ flex: 1, height: 48, display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, overflow: 'hidden' }}
+        // Fixed-width tabs overflow rather than shrink, so the strip has to
+        // scroll — otherwise a narrow window puts the last tabs out of reach.
+        // The scrollbar itself stays hidden; this is chrome, not content.
+        style={{ flex: 1, height: 48, display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, overflowX: 'auto', overflowY: 'hidden' }}
       >
         {projects.map((p, i) => (
           <Fragment key={p}>
@@ -528,6 +527,38 @@ export function AppTitlebar({ extra }: { extra?: ReactNode }) {
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 12px', flexShrink: 0 }}>
         {extra}
+        {/* The field itself, back in the tab bar. A magnifier on its own said
+            "there is a search somewhere"; the field says what it searches and
+            gives the shortcut, and the fixed-width tabs mean the 200px it
+            takes costs nothing else on the row. It is painted like the commit
+            message box — panel over a hairline, darker than the chrome around
+            it — because both are the same thing: somewhere you type. A text
+            field is a well cut into the frame, not a button raised out of it,
+            and the two should not be lit differently for sitting in different
+            parts of the window. */}
+        <button
+          onClick={() => wb.setOverlay('search')}
+          title="検索"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 7,
+            width: 200,
+            height: 28,
+            padding: '0 9px',
+            borderRadius: 8,
+            background: color.panel,
+            border: `1px solid ${line.hairline}`,
+          }}
+        >
+          <IconSearch size={12} color={color.textQuaternary} />
+          <span style={{ fontSize: 11, color: color.chromeInkMuted, flex: 1, textAlign: 'left' }}>
+            ファイル、シンボル
+          </span>
+          <span className="cl" style={{ fontSize: 10, color: color.textQuaternary }}>
+            ⌘⇧F
+          </span>
+        </button>
         <button className="act" title="コマンドパレット" onClick={() => wb.setOverlay('command')}>
           <IconCommand size={15} />
         </button>
@@ -560,7 +591,7 @@ export function AppTitlebar({ extra }: { extra?: ReactNode }) {
 // its `review` (changes) default; `⌃⌘G` does the same.
 const NAV: Array<{ id: string; screen: Screen; label: string; icon: (p: { size?: number }) => ReactNode }> = [
   { id: 'files', screen: 'workspace', label: 'File Tree', icon: IconFolder },
-  { id: 'review', screen: 'review', label: 'Source Control', icon: IconShieldCheck },
+  { id: 'review', screen: 'review', label: 'Source Control', icon: IconBranch },
   { id: 'agents', screen: 'sessions', label: 'Agents', icon: IconSession },
   { id: 'debug', screen: 'debug', label: 'Debug', icon: IconBug },
 ];
