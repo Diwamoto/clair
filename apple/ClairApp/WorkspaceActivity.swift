@@ -1,50 +1,77 @@
 import Foundation
 import SwiftUI
 
-/// First-class workspace activities surfaced by the native shell.
+/// The tools the sidebar strip can show.
 ///
-/// The Interaction Lab contract keeps Files, Search, Git, Review, and
-/// Notifications as the only always-present core navigation. Advanced
-/// tools (Quick Open overlay, Command Window, Agent launcher, pane layout
-/// actions) stay out of the default rail.
+/// The design canvas gives the strip four destinations — File Tree, Source
+/// Control, Agents and Debug. The debug destination owns a Project-scoped
+/// Go/Delve session. Two cases stay in the model without a strip entry of
+/// their own:
+///
+/// - `search` moved to the titlebar's search field, so file and symbol search
+///   has exactly one entry point.
+/// - `review` became a *mode* of `git` rather than a separate destination, the
+///   way a git GUI keeps history inside its one source-control tool instead of
+///   giving it a top-level tab.
 enum WorkspaceActivity: String, CaseIterable, Identifiable, Codable, Sendable {
   case files
   case search
   case git
   case review
+  case debug
   case activity
+
+  /// The entries the sidebar strip actually draws, in order.
+  static let navigationCases: [WorkspaceActivity] = [.files, .git, .activity, .debug]
 
   var id: String {
     rawValue
   }
 
+  /// The strip entry a given activity lights up. `search` and `review` have no
+  /// entry of their own, so they light the tool they now live inside.
+  var navigationEntry: WorkspaceActivity {
+    switch self {
+    case .search:
+      .files
+    case .review:
+      .git
+    default:
+      self
+    }
+  }
+
   var title: String {
     switch self {
     case .files:
-      "エクスプローラー"
+      "File Tree"
     case .search:
       "検索"
     case .git:
-      "ソース管理"
+      "Source Control"
     case .review:
-      "変更を確認"
+      "レビュー"
+    case .debug:
+      "Debug"
     case .activity:
-      "アクティビティ"
+      "Agents"
     }
   }
 
   var accessibilityHint: String {
     switch self {
     case .files:
-      "Projectエクスプローラーを表示"
+      "File Tree"
     case .search:
       "Project全体を検索・置換"
     case .git:
-      "ProjectのGitワークツリーを開く"
+      "Source Control"
     case .review:
       "管理対象worktreeのブランチを確認"
+    case .debug:
+      "Debug"
     case .activity:
-      "通知、Agentのアクティビティを表示"
+      "Agents"
     }
   }
 
@@ -57,9 +84,11 @@ enum WorkspaceActivity: String, CaseIterable, Identifiable, Codable, Sendable {
     case .git:
       "arrow.triangle.branch"
     case .review:
-      "checkmark.shield"
+      "arrow.triangle.branch"
+    case .debug:
+      "ladybug"
     case .activity:
-      "bell"
+      "terminal"
     }
   }
 }

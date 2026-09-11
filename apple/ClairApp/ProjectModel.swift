@@ -9,8 +9,23 @@ enum ProjectColor: String, CaseIterable, Codable, Hashable, Sendable {
   case red
   case gray
 
+  /// The GROUP COLORS names from the Tokens artboard. `orange` is the canvas'
+  /// amber, and `gray` is the uncoloured default rather than a colour choice.
   var displayName: String {
-    rawValue.capitalized
+    switch self {
+    case .blue:
+      "ブルー"
+    case .purple:
+      "パープル"
+    case .orange:
+      "アンバー"
+    case .green:
+      "グリーン"
+    case .red:
+      "レッド"
+    case .gray:
+      "なし"
+    }
   }
 }
 

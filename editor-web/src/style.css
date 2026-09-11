@@ -1,6 +1,6 @@
 :root {
   color-scheme: dark;
-  background: #121416;
+  background: #282c34;
 }
 
 html,
@@ -10,13 +10,13 @@ body,
   height: 100%;
   margin: 0;
   overflow: hidden;
-  background: #121416;
+  background: #282c34;
 }
 
 .cm-editor {
   height: 100%;
   color: #f1f3ef !important;
-  background: #121416;
+  background: #282c34;
 }
 
 .cm-scroller {
@@ -35,7 +35,20 @@ body,
 .cm-lineNumbers .cm-gutterElement {
   min-width: 4ch;
   padding: 0 8px 0 6px;
-  color: #707871;
+  color: #4b5561;
+}
+
+.cm-breakpoint-gutter .cm-gutterElement {
+  width: 12px;
+  padding: 0;
+  color: transparent;
+  text-align: center;
+  cursor: pointer;
+}
+
+.cm-breakpoint-gutter .cm-gutterElement:hover,
+.cm-breakpoint-gutter .cm-breakpoint-marker {
+  color: #e06c75;
 }
 
 .cm-foldGutter .cm-gutterElement {
@@ -44,7 +57,8 @@ body,
 }
 
 .cm-activeLineGutter {
-  background: rgba(91, 136, 247, 0.08);
+  background: rgba(242, 244, 238, 0.04);
+  color: #9ba19b;
 }
 
 .cm-selectionBackground,
@@ -54,5 +68,5 @@ body,
 
 .cm-tooltip {
   border: 1px solid rgba(242, 244, 238, 0.16);
-  background: #1e2227;
+  background: #181b1f;
 }

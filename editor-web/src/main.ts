@@ -12,9 +12,18 @@ import {
 } from "@codemirror/commands";
 import { searchKeymap } from "@codemirror/search";
 import { bracketMatching, codeFolding, foldGutter, foldKeymap, indentOnInput } from "@codemirror/language";
-import { Compartment, EditorState, type Extension } from "@codemirror/state";
+import { Compartment, EditorState, RangeSetBuilder, type Extension } from "@codemirror/state";
 import { oneDark } from "@codemirror/theme-one-dark";
-import { drawSelection, EditorView, highlightActiveLine, keymap, lineNumbers, type ViewUpdate } from "@codemirror/view";
+import {
+  drawSelection,
+  EditorView,
+  GutterMarker,
+  gutter,
+  highlightActiveLine,
+  keymap,
+  lineNumbers,
+  type ViewUpdate,
+} from "@codemirror/view";
 import { detectLanguageId, loadLanguageExtension } from "./language";
 import type { NativeBridge } from "./native-bridge";
 
@@ -37,6 +46,7 @@ type EditorConfig = {
   textColor: string;
   wordWrap: boolean;
   readOnly: boolean;
+  breakpoints: number[];
 };
 
 type NativeMessage =
@@ -57,6 +67,7 @@ type NativeMessage =
       canUndo: boolean;
       canRedo: boolean;
     }
+  | { type: "breakpoint"; line: number }
   | { type: "save" };
 
 declare global {
@@ -79,14 +90,16 @@ if (!host) throw new Error("Clair editor host was not found");
 const languageCompartment = new Compartment();
 const appearanceCompartment = new Compartment();
 const editabilityCompartment = new Compartment();
+const breakpointCompartment = new Compartment();
 let config: EditorConfig = {
   path: "",
   fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
   fontSize: 13,
-  background: "#121416",
+  background: "#282c34",
   textColor: "#f1f3ef",
   wordWrap: false,
   readOnly: false,
+  breakpoints: [],
 };
 let languageRequest = 0;
 let suppressNativeChanges = false;
@@ -206,6 +219,49 @@ function notifyChange(update: ViewUpdate): void {
   });
 }
 
+class BreakpointMarker extends GutterMarker {
+  toDOM(): HTMLElement {
+    const marker = document.createElement("span");
+    marker.className = "cm-breakpoint-marker";
+    marker.textContent = "●";
+    return marker;
+  }
+}
+
+const breakpointMarker = new BreakpointMarker();
+
+function breakpointMarkers(view: EditorView) {
+  const builder = new RangeSetBuilder<GutterMarker>();
+  const lines = new Set(
+    (config.breakpoints ?? []).filter(
+      (line) => Number.isInteger(line) && line >= 1 && line <= view.state.doc.lines,
+    ),
+  );
+  for (const lineNumber of [...lines].sort((left, right) => left - right)) {
+    const line = view.state.doc.line(lineNumber);
+    builder.add(line.from, line.from, breakpointMarker);
+  }
+  return builder.finish();
+}
+
+function breakpointGutter(): Extension {
+  return gutter({
+    class: "cm-breakpoint-gutter",
+    markers: breakpointMarkers,
+    initialSpacer: () => breakpointMarker,
+    domEventHandlers: {
+      mousedown(view, line, event) {
+        post({
+          type: "breakpoint",
+          line: view.state.doc.lineAt(line.from).number,
+        });
+        event.preventDefault();
+        return true;
+      },
+    },
+  });
+}
+
 function buildState(doc = ""): EditorState {
   return EditorState.create({
     doc,
@@ -229,6 +285,7 @@ function buildState(doc = ""): EditorState {
       ]),
       appearanceCompartment.of(appearanceTheme()),
       editabilityCompartment.of(editability()),
+      breakpointCompartment.of(breakpointGutter()),
       languageCompartment.of(languageExtension),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) notifyChange(update);
@@ -284,6 +341,7 @@ window.clairEditor = {
       effects: [
         appearanceCompartment.reconfigure(appearanceTheme()),
         editabilityCompartment.reconfigure(editability()),
+        breakpointCompartment.reconfigure(breakpointGutter()),
       ],
     });
   },

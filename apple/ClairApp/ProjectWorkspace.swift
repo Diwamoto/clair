@@ -311,7 +311,7 @@ final class ProjectWorkspaceModel: ObservableObject {
       id: UUID(),
       rootPath: canonicalURL.path,
       name: name,
-      color: .blue,
+      color: Self.nextGroupColor(after: records),
       isOpen: true,
       order: openRecords.count
     )
@@ -319,6 +319,19 @@ final class ProjectWorkspaceModel: ObservableObject {
     nextRecords.append(record)
     try commit(nextRecords, activeID: record.id)
     return try project(id: record.id)
+  }
+
+  /// A new Project takes the next colour in the palette rather than always
+  /// blue: the titlebar's group underline is only useful as a boundary if
+  /// adjacent groups do not share a colour. The user can still pick one from
+  /// the chip's context menu.
+  static func nextGroupColor(after records: [ProjectRecord]) -> ProjectColor {
+    let palette: [ProjectColor] = [.blue, .green, .orange, .purple, .red]
+    let used = records.filter(\.isOpen).map(\.color)
+    if let unused = palette.first(where: { !used.contains($0) }) {
+      return unused
+    }
+    return palette[used.count % palette.count]
   }
 
   private func switchProject(to projectID: UUID) throws {
@@ -539,6 +552,7 @@ struct ProjectTabCloseRequest: Equatable, Sendable {
 final class ProjectSurfaceModel: ObservableObject {
   let projectID: UUID
   let rootURL: URL
+  let debugSession: DebugSessionModel
 
   @Published private(set) var fileTree: ProjectFileTreeSnapshot
   @Published private(set) var tabStore: [ProjectPaneTab]
@@ -594,6 +608,7 @@ final class ProjectSurfaceModel: ObservableObject {
   ) {
     self.projectID = projectID
     self.rootURL = rootURL
+    self.debugSession = DebugSessionModel(projectID: projectID, projectRootURL: rootURL)
     self.rootChecker = rootChecker
     self.fileManager = fileManager
     self.gitService = ProjectGitService(rootURL: rootURL, fileManager: fileManager)
@@ -1399,6 +1414,25 @@ final class ProjectSurfaceModel: ObservableObject {
     )
   }
 
+  /// Opens a source location reported by the Project's debugger without
+  /// allowing an adapter path to escape the Project root.
+  func revealDebugLocation(_ location: DebugSourceLocation) {
+    let fileURL = URL(fileURLWithPath: location.path).standardizedFileURL
+    let rootPath = rootURL.standardizedFileURL.path
+    let rootPrefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
+    guard fileURL.path.hasPrefix(rootPrefix), isRegularFile(fileURL) else {
+      lastNavigationErrorMessage = "デバッガがProject外のソース位置を返したため、開きませんでした。"
+      return
+    }
+
+    lastNavigationErrorMessage = nil
+    revealPathWithoutOpening(fileURL)
+    selectedNodeID = fileURL.path
+    let document = openEditorTab(for: fileURL, title: fileURL.lastPathComponent)
+    document?.requestSelection(line: location.line, column: location.column, length: 0)
+    notifySnapshotChanged()
+  }
+
   func save(tabID: String? = nil) {
     guard let tab = editorTab(withID: tabID) else {
       return
@@ -1817,21 +1851,20 @@ final class ProjectSurfaceModel: ObservableObject {
     selection: ProjectEditorUTF16Range?,
     scrollTop: Double
   ) {
-    guard let index = tabStore.firstIndex(where: { $0.id == tabID }),
-      tabStore[index].kind == .editor
-    else {
-      return
-    }
-    tabStore[index].editorSelection = selection
-    tabStore[index].editorScrollTop = max(0, scrollTop)
-
     editorViewportPersistTask?.cancel()
     editorViewportPersistTask = Task { @MainActor [weak self] in
       try? await Task.sleep(for: .milliseconds(150))
-      guard !Task.isCancelled else {
+      guard !Task.isCancelled, let self else {
         return
       }
-      self?.notifySnapshotChanged()
+      guard let index = self.tabStore.firstIndex(where: { $0.id == tabID }),
+        self.tabStore[index].kind == .editor
+      else {
+        return
+      }
+      self.tabStore[index].editorSelection = selection
+      self.tabStore[index].editorScrollTop = max(0, scrollTop)
+      self.notifySnapshotChanged()
     }
   }
 

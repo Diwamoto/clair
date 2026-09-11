@@ -89,6 +89,8 @@ struct CodeMirrorEditorView: NSViewRepresentable {
   let selection: ProjectEditorSelection?
   let fontSize: CGFloat
   let wordWrap: Bool
+  let breakpoints: [Int]
+  let onToggleBreakpoint: ((Int) -> Void)?
   let onSave: () -> Void
 
   init(
@@ -96,12 +98,16 @@ struct CodeMirrorEditorView: NSViewRepresentable {
     selection: ProjectEditorSelection? = nil,
     fontSize: CGFloat = 13,
     wordWrap: Bool = false,
+    breakpoints: [Int] = [],
+    onToggleBreakpoint: ((Int) -> Void)? = nil,
     onSave: @escaping () -> Void
   ) {
     self.document = document
     self.selection = selection
     self.fontSize = fontSize
     self.wordWrap = wordWrap
+    self.breakpoints = breakpoints
+    self.onToggleBreakpoint = onToggleBreakpoint
     self.onSave = onSave
   }
 
@@ -136,6 +142,8 @@ struct CodeMirrorEditorView: NSViewRepresentable {
       selection: selection,
       fontSize: fontSize,
       wordWrap: wordWrap,
+      breakpoints: breakpoints,
+      onToggleBreakpoint: onToggleBreakpoint,
       onSave: onSave
     )
 
@@ -143,7 +151,7 @@ struct CodeMirrorEditorView: NSViewRepresentable {
       webView.load(URLRequest(url: URL(string: "clair-editor://editor/index.html")!))
     } else {
       webView.loadHTMLString(
-        "<html><body style=\"background:#121416;color:#f1f3ef;font:13px monospace\">Editor resource is missing.</body></html>",
+        "<html><body style=\"background:#282c34;color:#f1f3ef;font:13px monospace\">Editor resource is missing.</body></html>",
         baseURL: nil
       )
     }
@@ -157,6 +165,8 @@ struct CodeMirrorEditorView: NSViewRepresentable {
       selection: selection,
       fontSize: fontSize,
       wordWrap: wordWrap,
+      breakpoints: breakpoints,
+      onToggleBreakpoint: onToggleBreakpoint,
       onSave: onSave
     )
   }
@@ -181,8 +191,10 @@ struct CodeMirrorEditorView: NSViewRepresentable {
     private var lastEditorSelection: WebEditorSelection?
     private var lastEditorScrollTop: Double?
     private var onSave: (() -> Void)?
+    private var onToggleBreakpoint: ((Int) -> Void)?
     private var requestedFontSize: CGFloat = 13
     private var requestedWordWrap = false
+    private var requestedBreakpoints: [Int] = []
 
     init(document: ProjectEditorTab) {
       self.document = document
@@ -193,6 +205,8 @@ struct CodeMirrorEditorView: NSViewRepresentable {
       selection: ProjectEditorSelection?,
       fontSize: CGFloat,
       wordWrap: Bool,
+      breakpoints: [Int],
+      onToggleBreakpoint: ((Int) -> Void)?,
       onSave: @escaping () -> Void
     ) {
       if self.document.id != document.id {
@@ -207,8 +221,10 @@ struct CodeMirrorEditorView: NSViewRepresentable {
         attachCommandHandler()
       }
       self.onSave = onSave
+      self.onToggleBreakpoint = onToggleBreakpoint
       requestedFontSize = fontSize
       requestedWordWrap = wordWrap
+      requestedBreakpoints = breakpoints
       guard isReady else {
         return
       }
@@ -217,10 +233,11 @@ struct CodeMirrorEditorView: NSViewRepresentable {
         path: document.url.path,
         fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
         fontSize: fontSize,
-        background: "#121416",
+        background: "#282c34",
         textColor: "#f1f3ef",
         wordWrap: wordWrap,
-        readOnly: document.isMissing || document.isReadOnly || document.loadError != nil
+        readOnly: document.isMissing || document.isReadOnly || document.loadError != nil,
+        breakpoints: Array(Set(breakpoints)).sorted()
       )
       if lastConfiguration != nextConfiguration {
         lastConfiguration = nextConfiguration
@@ -252,6 +269,7 @@ struct CodeMirrorEditorView: NSViewRepresentable {
       }
       document.detachEditorCommandHandler()
       onSave = nil
+      onToggleBreakpoint = nil
       webView = nil
       isReady = false
     }
@@ -278,6 +296,8 @@ struct CodeMirrorEditorView: NSViewRepresentable {
           selection: lastSelectionRequest,
           fontSize: requestedFontSize,
           wordWrap: requestedWordWrap,
+          breakpoints: requestedBreakpoints,
+          onToggleBreakpoint: onToggleBreakpoint,
           onSave: onSave ?? {}
         )
       case "change":
@@ -309,6 +329,11 @@ struct CodeMirrorEditorView: NSViewRepresentable {
           to: change.selection.to
         )
         lastEditorScrollTop = change.scrollTop
+      case "breakpoint":
+        guard let line = (body["line"] as? NSNumber)?.intValue, line > 0 else {
+          return
+        }
+        onToggleBreakpoint?(line)
       case "save":
         onSave?()
       default:
@@ -469,6 +494,7 @@ private struct WebEditorConfiguration: Codable, Equatable {
   let textColor: String
   let wordWrap: Bool
   let readOnly: Bool
+  let breakpoints: [Int]
 }
 
 private struct WebEditorDocument: Codable {
@@ -542,7 +568,7 @@ struct CodeMirrorDiffView: NSViewRepresentable {
       webView.load(URLRequest(url: URL(string: "clair-editor://editor/diff.html")!))
     } else {
       webView.loadHTMLString(
-        "<html><body style=\"background:#121416;color:#f1f3ef;font:13px monospace\">Editor resource is missing.</body></html>",
+        "<html><body style=\"background:#282c34;color:#f1f3ef;font:13px monospace\">Editor resource is missing.</body></html>",
         baseURL: nil
       )
     }
@@ -581,7 +607,7 @@ struct CodeMirrorDiffView: NSViewRepresentable {
         path: path,
         fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
         fontSize: fontSize,
-        background: "#121416",
+        background: "#282c34",
         textColor: "#f1f3ef",
         wordWrap: false
       )

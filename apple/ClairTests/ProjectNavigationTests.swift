@@ -215,6 +215,76 @@ final class ProjectNavigationTests: XCTestCase {
     XCTAssertNil(ProjectNavigation.fileURL(for: "../outside.txt", rootURL: fixture.root))
     XCTAssertNil(ProjectNavigation.fileURL(for: "/tmp/outside.txt", rootURL: fixture.root))
   }
+
+  func testDAPFrameDecoderHandlesFragmentedAndCoalescedMessages() throws {
+    let firstPayload = try JSONSerialization.data(
+      withJSONObject: ["type": "event", "event": "initialized"]
+    )
+    let secondPayload = try JSONSerialization.data(
+      withJSONObject: ["type": "response", "request_seq": 3, "success": true]
+    )
+    let firstFrame = try DebugDAPFrameDecoder.encode(payload: firstPayload)
+    let secondFrame = try DebugDAPFrameDecoder.encode(payload: secondPayload)
+    var decoder = DebugDAPFrameDecoder()
+
+    let split = firstFrame.index(firstFrame.startIndex, offsetBy: 9)
+    XCTAssertEqual(try decoder.append(Data(firstFrame[..<split])), [])
+
+    var remaining = Data(firstFrame[split...])
+    remaining.append(secondFrame)
+    let payloads = try decoder.append(remaining)
+
+    XCTAssertEqual(payloads, [firstPayload, secondPayload])
+  }
+
+  func testDAPFrameDecoderRejectsOversizedFrames() throws {
+    let oversizedPayload = Data(repeating: 0x20, count: DebugDAPFrameDecoder.maximumFrameSize + 1)
+    XCTAssertThrowsError(try DebugDAPFrameDecoder.encode(payload: oversizedPayload)) { error in
+      XCTAssertEqual(error as? DebugDAPError, .frameTooLarge)
+    }
+  }
+
+  func testDebugSourceLocationRevealsOnlyFilesInsideProject() throws {
+    let fixture = try NavigationFixture()
+    let source = fixture.root.appendingPathComponent("main.go")
+    try Data("package main\nfunc main() {}\n".utf8).write(to: source)
+    let surface = ProjectSurfaceModel(
+      projectID: UUID(),
+      rootURL: fixture.root
+    )
+
+    surface.revealDebugLocation(
+      DebugSourceLocation(path: source.path, line: 2, column: 5)
+    )
+
+    XCTAssertEqual(surface.activeTab?.id, source.path)
+    XCTAssertEqual(
+      surface.activeTab?.selectionRequest,
+      ProjectEditorSelection(line: 2, column: 5, length: 0)
+    )
+
+    surface.revealDebugLocation(
+      DebugSourceLocation(path: fixture.root.deletingLastPathComponent().path, line: 1)
+    )
+    XCTAssertEqual(
+      surface.lastNavigationErrorMessage,
+      "デバッガがProject外のソース位置を返したため、開きませんでした。"
+    )
+  }
+
+  func testDebugSessionStoresAndTogglesProjectBreakpoints() throws {
+    let fixture = try NavigationFixture()
+    let source = fixture.root.appendingPathComponent("main.go")
+    let session = DebugSessionModel(projectID: UUID(), projectRootURL: fixture.root)
+
+    session.toggleBreakpoint(sourcePath: source.path, line: 3)
+    XCTAssertEqual(session.breakpoints.count, 1)
+    XCTAssertEqual(session.breakpoints.first?.sourcePath, source.path)
+    XCTAssertEqual(session.breakpoints.first?.line, 3)
+
+    session.toggleBreakpoint(sourcePath: source.path, line: 3)
+    XCTAssertTrue(session.breakpoints.isEmpty)
+  }
 }
 
 @MainActor

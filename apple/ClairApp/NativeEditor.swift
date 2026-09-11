@@ -153,8 +153,10 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
   /// The editor viewport state belongs to the document, rather than to a
   /// particular WKWebView instance. This keeps the caret and scroll position
   /// when SwiftUI tears down and recreates a tab's view.
-  @Published private(set) var editorSelection: ProjectEditorUTF16Range?
-  @Published private(set) var editorScrollTop: Double = 0
+  /// Viewport is persisted separately and must not be `@Published`; publishing
+  /// it would re-render the editor on every scroll frame.
+  private(set) var editorSelection: ProjectEditorUTF16Range?
+  private(set) var editorScrollTop: Double = 0
   var onEditorViewportChange: (() -> Void)?
 
   let projectID: UUID
@@ -372,8 +374,12 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
     if let scrollTop = change.scrollTop, scrollTop.isFinite {
       editorScrollTop = max(0, scrollTop)
     }
-    canUndo = change.canUndo
-    canRedo = change.canRedo
+    if canUndo != change.canUndo {
+      canUndo = change.canUndo
+    }
+    if canRedo != change.canRedo {
+      canRedo = change.canRedo
+    }
     onEditorViewportChange?()
   }
 
@@ -908,7 +914,7 @@ enum ProjectSourceSyntaxHighlighter {
       textStorage.setAttributes(
         [
           .font: baseFont,
-          .foregroundColor: WorkspaceChrome.nsTextPrimary,
+          .foregroundColor: WorkspaceChrome.nsCode,
         ],
         range: fullRange
       )
@@ -927,24 +933,26 @@ enum ProjectSourceSyntaxHighlighter {
     textStorage.endEditing()
   }
 
+  /// One Dark, from the Tokens artboard's editor colours. Types are amber and
+  /// functions blue, the way One Dark itself assigns them.
   private static func color(for kind: ProjectSourceSyntaxTokenKind) -> NSColor {
     switch kind {
     case .comment:
-      WorkspaceChrome.nsRGB(104, 117, 110)
+      WorkspaceChrome.nsRGB(92, 99, 112)
     case .string:
       WorkspaceChrome.nsRGB(152, 195, 121)
     case .number:
       WorkspaceChrome.nsRGB(209, 154, 102)
     case .keyword:
-      WorkspaceChrome.nsRGB(199, 131, 218)
+      WorkspaceChrome.nsRGB(198, 120, 221)
     case .type:
-      WorkspaceChrome.nsRGB(97, 175, 239)
-    case .function:
       WorkspaceChrome.nsRGB(229, 192, 123)
+    case .function:
+      WorkspaceChrome.nsRGB(97, 175, 239)
     case .attribute:
       WorkspaceChrome.nsRGB(229, 192, 123)
     case .constant:
-      WorkspaceChrome.nsRGB(224, 108, 117)
+      WorkspaceChrome.nsRGB(209, 154, 102)
     }
   }
 
@@ -1169,7 +1177,6 @@ struct ProjectSourceEditorView: NSViewRepresentable {
       }
     }
     textView.applySyntaxHighlighting(for: document.url.pathExtension)
-    context.coordinator.restoreEditorViewport()
     applySelectionIfNeeded(to: textView, context: context)
   }
 
@@ -1181,7 +1188,7 @@ struct ProjectSourceEditorView: NSViewRepresentable {
     textView.font = font
     textView.typingAttributes = [
       .font: font,
-      .foregroundColor: WorkspaceChrome.nsTextPrimary,
+      .foregroundColor: WorkspaceChrome.nsCode,
     ]
     textView.isHorizontallyResizable = !wordWrap
     textView.textContainer?.widthTracksTextView = wordWrap
@@ -1364,7 +1371,7 @@ private final class ProjectSourceTextView: NSTextView {
     guard needsUpdate else {
       typingAttributes = [
         .font: baseFont,
-        .foregroundColor: WorkspaceChrome.nsTextPrimary,
+        .foregroundColor: WorkspaceChrome.nsCode,
       ]
       return
     }
@@ -1379,7 +1386,7 @@ private final class ProjectSourceTextView: NSTextView {
     )
     typingAttributes = [
       .font: baseFont,
-      .foregroundColor: WorkspaceChrome.nsTextPrimary,
+      .foregroundColor: WorkspaceChrome.nsCode,
     ]
     highlightedContent = string
     highlightedFileExtension = normalizedExtension

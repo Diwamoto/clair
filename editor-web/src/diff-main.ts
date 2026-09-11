@@ -52,7 +52,7 @@ let config: DiffConfig = {
   path: "",
   fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
   fontSize: 13,
-  background: "#121416",
+  background: "#282c34",
   textColor: "#f1f3ef",
   wordWrap: false,
 };

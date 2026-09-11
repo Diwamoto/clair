@@ -107,6 +107,8 @@
 		A00000000000000000000132 /* ProjectEditorSuggestion.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000130 /* ProjectEditorSuggestion.swift */; };
 		A00000000000000000000133 /* ProjectEditorSuggestion.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000130 /* ProjectEditorSuggestion.swift */; };
 		A00000000000000000000134 /* ProjectEditorSuggestionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000131 /* ProjectEditorSuggestionTests.swift */; };
+		A00000000000000000000140 /* Debugging.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000142 /* Debugging.swift */; };
+		A00000000000000000000141 /* Debugging.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000142 /* Debugging.swift */; };
 		A000000000000000000000DA /* MobileClientSecureStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000E0 /* MobileClientSecureStore.swift */; };
 		A000000000000000000000DB /* MobileControlAppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000E1 /* MobileControlAppModel.swift */; };
 		A000000000000000000000DC /* MobileControlAppView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000E2 /* MobileControlAppView.swift */; };
@@ -195,6 +197,7 @@
 		A0000000000000000000011F /* ProjectEditorWebNativeIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectEditorWebNativeIntegrationTests.swift; sourceTree = "<group>"; };
 		A00000000000000000000130 /* ProjectEditorSuggestion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectEditorSuggestion.swift; sourceTree = "<group>"; };
 		A00000000000000000000131 /* ProjectEditorSuggestionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectEditorSuggestionTests.swift; sourceTree = "<group>"; };
+		A00000000000000000000142 /* Debugging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Debugging.swift; sourceTree = "<group>"; };
 		A000000000000000000000E0 /* MobileClientSecureStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileClientSecureStore.swift; sourceTree = "<group>"; };
 		A000000000000000000000E1 /* MobileControlAppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileControlAppModel.swift; sourceTree = "<group>"; };
 		A000000000000000000000E2 /* MobileControlAppView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileControlAppView.swift; sourceTree = "<group>"; };
@@ -340,6 +343,7 @@
 				A00000000000000000000114 /* ProjectEditorDiffModel.swift */,
 				A0000000000000000000011A /* ProjectEditorWebBridge.swift */,
 				A00000000000000000000130 /* ProjectEditorSuggestion.swift */,
+				A00000000000000000000142 /* Debugging.swift */,
 				A00000000000000000000101 /* EditorWeb */,
 			);
 			path = ClairApp;
@@ -678,6 +682,7 @@
 				A00000000000000000000117 /* ProjectEditorDiffModel.swift in Sources */,
 				A0000000000000000000011B /* ProjectEditorWebBridge.swift in Sources */,
 				A00000000000000000000132 /* ProjectEditorSuggestion.swift in Sources */,
+				A00000000000000000000140 /* Debugging.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -722,6 +727,7 @@
 				A00000000000000000000118 /* ProjectEditorDiffModel.swift in Sources */,
 				A0000000000000000000011C /* ProjectEditorWebBridge.swift in Sources */,
 				A00000000000000000000133 /* ProjectEditorSuggestion.swift in Sources */,
+				A00000000000000000000141 /* Debugging.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

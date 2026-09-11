@@ -137,7 +137,8 @@ enum ProjectEditorDiffModel {
       renameFrom: new.renameFrom ?? old.renameFrom,
       renameTo: new.renameTo ?? old.renameTo,
       isBinary: old.isBinary || new.isBinary,
-      unsupportedReason: old.isBinary || new.isBinary ? "Binary documents are not supported by the text diff model." : nil
+      unsupportedReason: old.isBinary || new.isBinary
+        ? "Binary documents are not supported by the text diff model." : nil
     )
 
     guard !metadata.isBinary, let oldContent = old.content, let newContent = new.content else {
@@ -255,7 +256,10 @@ enum ProjectEditorDiffModel {
           terminator = String(scalar)
           cursor = next
         }
-        result.append(LineValue(text: String(scalars[lineStart..<cursor].dropLast(terminator.unicodeScalars.count)), terminator: terminator))
+        result.append(
+          LineValue(
+            text: String(scalars[lineStart..<cursor].dropLast(terminator.unicodeScalars.count)),
+            terminator: terminator))
         lineStart = cursor
       } else {
         cursor = scalars.index(after: cursor)
@@ -332,7 +336,8 @@ enum ProjectEditorDiffModel {
         let diagonal = oldIndex - newIndex
         let previousDiagonal: Int
         if diagonal == -currentDistance
-          || (diagonal != currentDistance && previous[offset + diagonal - 1] < previous[offset + diagonal + 1])
+          || (diagonal != currentDistance
+            && previous[offset + diagonal - 1] < previous[offset + diagonal + 1])
         {
           previousDiagonal = diagonal + 1
         } else {
@@ -399,7 +404,8 @@ enum ProjectEditorDiffModel {
     spans.append((start, end))
 
     return spans.enumerated().map { hunkIndex, span in
-      let id = "\(pairID):old:\(oldRevision):new:\(newRevision):hunk:\(hunkIndex):\(span.start)-\(span.end)"
+      let id =
+        "\(pairID):old:\(oldRevision):new:\(newRevision):hunk:\(hunkIndex):\(span.start)-\(span.end)"
       let range = span.start...span.end
       let oldNumbers = range.compactMap { rows[$0].oldLineNumber }
       let newNumbers = range.compactMap { rows[$0].newLineNumber }
@@ -435,6 +441,21 @@ enum ProjectEditorDiffModel {
 actor ProjectEditorDiffCoordinator {
   private var generation = 0
   private var activeTask: Task<ProjectEditorDiffResult?, Never>?
+  private let calculation:
+    @Sendable (
+      ProjectEditorDiffInput, ProjectEditorDiffInput, Int
+    ) async -> ProjectEditorDiffResult
+
+  init(
+    calculation:
+      @escaping @Sendable (
+        ProjectEditorDiffInput, ProjectEditorDiffInput, Int
+      ) async -> ProjectEditorDiffResult = { old, new, contextLines in
+        ProjectEditorDiffModel.calculate(old: old, new: new, contextLines: contextLines)
+      }
+  ) {
+    self.calculation = calculation
+  }
 
   func cancel() {
     generation += 1
@@ -449,13 +470,10 @@ actor ProjectEditorDiffCoordinator {
   ) async -> ProjectEditorDiffResult? {
     cancel()
     let requestedGeneration = generation
+    let calculation = calculation
     let task: Task<ProjectEditorDiffResult?, Never> = Task.detached(priority: .userInitiated) {
       guard !Task.isCancelled else { return nil }
-      let result = ProjectEditorDiffModel.calculate(
-        old: old,
-        new: new,
-        contextLines: contextLines
-      )
+      let result = await calculation(old, new, contextLines)
       return Task.isCancelled ? nil : result
     }
     activeTask = task

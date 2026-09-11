@@ -4,11 +4,11 @@
 }
 
 .cm-diff-add-line {
-  background: rgba(84, 184, 120, 0.14);
+  background: rgba(138, 203, 148, 0.1);
 }
 
 .cm-diff-remove-line {
-  background: rgba(224, 113, 126, 0.14);
+  background: rgba(226, 123, 131, 0.1);
 }
 
 .cm-diff-gutter-old,
@@ -16,7 +16,7 @@
   min-width: 4ch;
   padding: 0 6px;
   text-align: right;
-  color: #707871;
+  color: #4b5561;
   user-select: none;
 }
 
@@ -31,13 +31,13 @@
 .cm-diff-gutter-old.cm-diff-marker-add,
 .cm-diff-gutter-new.cm-diff-marker-add,
 .cm-diff-gutter-marker.cm-diff-marker-add {
-  color: #54b878;
+  color: #8acb94;
 }
 
 .cm-diff-gutter-old.cm-diff-marker-remove,
 .cm-diff-gutter-new.cm-diff-marker-remove,
 .cm-diff-gutter-marker.cm-diff-marker-remove {
-  color: #e0717e;
+  color: #e27b83;
 }
 
 .cm-diff-gutter-old.cm-diff-marker-hunk,
