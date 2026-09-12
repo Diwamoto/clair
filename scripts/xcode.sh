@@ -21,11 +21,19 @@ esac
 # Use the project directly for command-line builds. The checked-in workspace is
 # still available for opening the project in Xcode, while direct project builds
 # work reliably with the current Xcode command-line tools.
+xcodebuild_args=(
+    -project "$repo_root/Clair.xcodeproj"
+    -scheme "$scheme"
+    -configuration Debug
+    -derivedDataPath "$repo_root/.build/xcode/$derived_data_key"
+)
+
+if [[ "$action" == "test" ]]; then
+    xcodebuild_args+=(-parallel-testing-enabled YES)
+fi
+
 xcodebuild \
-    -project "$repo_root/Clair.xcodeproj" \
-    -scheme "$scheme" \
-    -configuration Debug \
-    -derivedDataPath "$repo_root/.build/xcode/$derived_data_key" \
+    "${xcodebuild_args[@]}" \
     CODE_SIGNING_ALLOWED=NO \
     CODE_SIGNING_REQUIRED=NO \
     "$@" \
