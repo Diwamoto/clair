@@ -68,11 +68,6 @@ enum ProjectEditorSnapshotReason: String, Codable, Equatable, Sendable {
 struct ProjectEditorReplacement: Codable, Equatable, Sendable {
   let range: ProjectEditorUTF16Range
   let text: String
-
-  init(range: ProjectEditorUTF16Range, text: String) {
-    self.range = range
-    self.text = text
-  }
 }
 
 struct ProjectEditorTransaction: Codable, Equatable, Sendable {
@@ -80,18 +75,6 @@ struct ProjectEditorTransaction: Codable, Equatable, Sendable {
   let edits: [ProjectEditorReplacement]
   let source: ProjectEditorChangeSource
   let undoUnit: ProjectEditorUndoUnit
-
-  init(
-    baseRevision: UInt64,
-    edits: [ProjectEditorReplacement],
-    source: ProjectEditorChangeSource,
-    undoUnit: ProjectEditorUndoUnit
-  ) {
-    self.baseRevision = baseRevision
-    self.edits = edits
-    self.source = source
-    self.undoUnit = undoUnit
-  }
 }
 
 struct ProjectEditorSnapshot: Codable, Equatable, Sendable {

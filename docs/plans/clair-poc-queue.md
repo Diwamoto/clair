@@ -701,7 +701,7 @@ dependencyとする独立したhigh-priority itemで、現在のactive item完�
 
 ### P22 Editor text buffer and coordinate bridge
 
-- Status: `active`
+- Status: `done`
 - Priority: `high`
 - Depends on: P04、P06。
 - Outcome: piece tableベースの`TextBuffer`が既存の文書契約へ接続され、UIを変えずに既存testが通る。
@@ -721,16 +721,23 @@ dependencyとする独立したhigh-priority itemで、現在のactive item完�
   座標変換、surrogate分割の拒否、grapheme境界、行範囲とCRLF、`replaceAll`、編集コストのmetricsを覆う。
   `ProjectEditorDocumentTests`へ2件追加し、20回のtransaction適用後も`contentMaterializationCount`が0で
   あること、および行位置とgrapheme境界のpassthroughを検証する。
-- Validation (2026-09-11): agent環境がLinuxでSwift/Xcode toolchainを持たないため、`make lint`と
-  `make test-swift`は実行できていない。実行できた検査は通過した: `ruby scripts/check-textkit-boundary.rb`
-  （`TextBuffer`がapp型を参照しないこと）、Xcode projectのobject ID重複と括弧整合の確認、
-  testが参照する全APIが実装に存在することの照合。
+- Validation (2026-09-12): `xcodebuild -project Clair.xcodeproj -scheme "Clair Dev" -configuration Debug
+  -derivedDataPath .build/xcode/p22-full -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO
+  CODE_SIGNING_REQUIRED=NO test` passed (169 tests, 1 skipped, 0 failures), including
+  `ProjectEditorDocumentTests`, `NativeEditorTests`, `ProjectEditorWebBridgeTests`, and the 10
+  `TextBufferTests`. The focused command with `-only-testing:ClairTests/TextBufferTests` also passed all 10
+  tests. `swift format lint apple/ClairApp/ProjectEditorDocument.swift apple/ClairTextKit/TextBuffer.swift
+  apple/ClairTests/TextBufferTests.swift apple/ClairTests/ProjectEditorDocumentTests.swift`,
+  `ruby scripts/check-textkit-boundary.rb`, `bash scripts/check-workspace.sh`, and `git diff --check` passed.
+  The repository-wide Swift format check still reports pre-existing findings in unrelated files; the P22
+  files are clean.
 - Fixed during handoff (2026-09-11): `TextBuffer.swift`と`TextBufferTests.swift`が
   `Clair.xcodeproj/project.pbxproj`へ未登録だった。Stable/Devのsources phaseとClairTestsへ登録し、
   他のClairTextKit fileと同じ参照数になることを確認した。登録前の状態ではmacOS上のbuildが失敗する。
-- Remaining: macOS上で`make lint`と`make test-swift`を実行し、既存の`ProjectEditorDocumentTests`、
-  `NativeEditorTests`、`ProjectEditorWebBridgeTests`を含む全suiteの通過を確認すること。
-  これが揃うまでstatusは`active`を維持する。
+- Completed (2026-09-12): document storage, coordinate bridge, regression tests, and the existing editor
+  contract are verified on the macOS host. CRLF line counting, half-open replacement ranges, and the
+  large-document edit fixture now assert the actual UTF-8/UTF-16 contract rather than the earlier test-only
+  assumptions.
 - Deferred: 編集primitiveとUndo（P24）、syntax highlight（P23）、wrapとfolding（P26）。
   本itemはstorageと座標変換だけを差し替え、UIとviewは変更しない。
 

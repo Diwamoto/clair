@@ -159,12 +159,14 @@ final class TextBufferTests: XCTestCase {
       try buffer.replace(utf16Range: location..<end, with: insertion)
       reference.replaceSubrange(startIndex..<endIndex, with: insertion)
 
+      let expectedLineCount = reference.utf8.reduce(into: 1) { count, byte in
+        if byte == 0x0A {
+          count += 1
+        }
+      }
       XCTAssertEqual(Data(buffer.content.utf8), Data(reference.utf8))
       XCTAssertEqual(buffer.utf16Length, reference.utf16.count)
-      XCTAssertEqual(
-        buffer.lineCount,
-        reference.split(separator: "\n", omittingEmptySubsequences: false).count
-      )
+      XCTAssertEqual(buffer.lineCount, expectedLineCount)
     }
   }
 
@@ -174,11 +176,11 @@ final class TextBufferTests: XCTestCase {
     XCTAssertGreaterThan(large.utf8.count, 10 * 1024 * 1024)
 
     let largeBuffer = TextBuffer(large)
-    let smallBuffer = TextBuffer(line)
+    let smallBuffer = TextBuffer("header\n" + line)
     XCTAssertEqual(largeBuffer.metrics.pieceCount, 1)
 
     let largeCaret = try XCTUnwrap(largeBuffer.utf16Offset(forLine: 250_000))
-    let smallCaret = try XCTUnwrap(smallBuffer.utf16Offset(forLine: 1))
+    let smallCaret = try XCTUnwrap(smallBuffer.utf16Offset(forLine: 2))
     let typed = "日本 text"
     var largeOffset = largeCaret
     var smallOffset = smallCaret
@@ -193,7 +195,7 @@ final class TextBufferTests: XCTestCase {
     // The only thing an edit costs is the edit: the original bytes are never
     // rewritten and the appended bytes are exactly what was typed. Both buffers
     // land on identical storage metrics even though one document is 10MB and the
-    // other is one line.
+    // other is only two lines.
     XCTAssertEqual(largeBuffer.metrics.appendedByteCount, Data(typed.utf8).count)
     XCTAssertEqual(
       largeBuffer.metrics.appendedByteCount,
@@ -220,7 +222,7 @@ final class TextBufferTests: XCTestCase {
     XCTAssertEqual(buffer.content, "0-1-2-3-4-5-6-7-8-9-")
     XCTAssertGreaterThan(buffer.metrics.pieceCount, 10)
 
-    try buffer.replace(utf16Range: 3..<17, with: "…")
+    try buffer.replace(utf16Range: 3..<16, with: "…")
     XCTAssertEqual(buffer.content, "0-1…8-9-")
     XCTAssertEqual(buffer.utf16Length, 8)
     XCTAssertEqual(buffer.byteOffset(forUTF16Offset: 8), buffer.byteLength)
