@@ -1,8 +1,10 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 
+import { targetRing, useContextMenu } from '../contextMenu';
 import { files, tree } from '../data';
 import { HighlightedLine } from '../highlight';
 import { IconBranchSmall } from '../icons';
+import { copyText, editorMenu, fileMenu, folderMenu, readClipboard, streamMenu } from '../menus';
 import { useWorkbench, type PaneNode } from '../store';
 import { FileIcon } from '../chrome';
 import { color, line, mono } from '../tokens';
@@ -15,6 +17,20 @@ const INDENT: Record<number, number> = { 0: 10, 1: 22, 2: 36, 3: 55 };
 
 export function ExplorerPanel() {
   const wb = useWorkbench();
+  const menu = useContextMenu();
+
+  // A row whose menu is open wears a ring, inset from the sidebar edge the
+  // way the selected row already is.
+  const ringed = (id: string, indent: number, base: string) =>
+    wb.contextMenu?.target === id
+      ? {
+          width: 'calc(100% - 16px)',
+          margin: '0 8px',
+          padding: `0 10px 0 ${indent - 8}px`,
+          borderRadius: 7,
+          boxShadow: targetRing,
+        }
+      : { width: '100%', padding: base };
 
   const hidden = (parent: string | undefined) => {
     let cursor = parent;
@@ -36,13 +52,13 @@ export function ExplorerPanel() {
               <button
                 key={node.id}
                 onClick={() => wb.toggleFolder(node.id)}
+                onContextMenu={(event) => menu(event, (w) => folderMenu(w, node.id, node.name, true), node.id)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: 5,
                   height: 24,
-                  width: '100%',
-                  padding: '0 10px',
+                  ...ringed(node.id, 10, '0 10px'),
                   color: color.attention,
                 }}
               >
@@ -59,13 +75,13 @@ export function ExplorerPanel() {
               <button
                 key={node.id}
                 onClick={() => wb.toggleFolder(node.id)}
+                onContextMenu={(event) => menu(event, (w) => folderMenu(w, node.id, node.name, false), node.id)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: 5,
                   height: 24,
-                  width: '100%',
-                  padding: `0 10px 0 ${INDENT[node.depth] ?? 22}px`,
+                  ...ringed(node.id, INDENT[node.depth] ?? 22, `0 10px 0 ${INDENT[node.depth] ?? 22}px`),
                   color: color.textSecondary,
                 }}
               >
@@ -79,21 +95,25 @@ export function ExplorerPanel() {
           const selected = wb.activePath === node.path;
           const dirty = wb.tabs.find((t) => t.path === node.path)?.dirty;
           const status = dirty ? 'M' : file?.status;
+          const targeted = wb.contextMenu?.target === node.id;
+          const framed = selected || targeted;
           return (
             <button
               key={node.id}
               className={selected ? undefined : 'hoverable'}
               onClick={() => wb.openFile(node.path)}
+              onContextMenu={(event) => menu(event, (w) => fileMenu(w, node.path, 'tree'), node.id)}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: 6,
-                width: selected ? 'calc(100% - 16px)' : '100%',
+                width: framed ? 'calc(100% - 16px)' : '100%',
                 height: selected ? 28 : 26,
-                padding: `0 10px 0 ${(INDENT[node.depth] ?? 36) - (selected ? 8 : 0)}px`,
-                margin: selected ? '0 8px' : undefined,
-                borderRadius: selected ? 7 : undefined,
+                padding: `0 10px 0 ${(INDENT[node.depth] ?? 36) - (framed ? 8 : 0)}px`,
+                margin: framed ? '0 8px' : undefined,
+                borderRadius: framed ? 7 : undefined,
                 background: selected ? 'rgba(255,255,255,0.08)' : undefined,
+                boxShadow: targeted ? targetRing : undefined,
                 color: selected ? color.textPrimary : color.textTertiary,
               }}
             >
@@ -179,6 +199,48 @@ function EditorPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
   const preRef = useRef<HTMLPreElement>(null);
   const gutterRef = useRef<HTMLDivElement>(null);
   const [caretLine, setCaretLine] = useState(1);
+  const menu = useContextMenu();
+
+  // The selection is read when the menu opens, not when an item runs: by
+  // then focus has moved into the menu and back.
+  const openMenu = (event: React.MouseEvent) => {
+    const area = areaRef.current;
+    if (!area) return;
+    const start = area.selectionStart;
+    const end = area.selectionEnd;
+    const selection = area.value.slice(start, end);
+    const first = area.value.slice(0, start).split('\n').length;
+    const refocus = (caret?: number) =>
+      requestAnimationFrame(() => {
+        area.focus();
+        if (caret !== undefined) area.setSelectionRange(caret, caret);
+      });
+
+    menu(event, (w) =>
+      editorMenu(w, {
+        paneId: node.id,
+        path,
+        selection,
+        lines: [first, first + selection.split('\n').length - 1],
+        copy: () => {
+          copyText(selection);
+          refocus();
+        },
+        cut: () => {
+          copyText(selection);
+          w.editFile(path, area.value.slice(0, start) + area.value.slice(end));
+          refocus(start);
+        },
+        paste: () => {
+          void readClipboard().then((text) => {
+            if (text === null) return refocus();
+            w.editFile(path, area.value.slice(0, start) + text + area.value.slice(end));
+            refocus(start + text.length);
+          });
+        },
+      }),
+    );
+  };
 
   // The highlighted layer and the gutter follow the textarea's own scroll.
   const syncScroll = useCallback(() => {
@@ -266,6 +328,7 @@ function EditorPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
             }}
             onKeyUp={syncCaret}
             onClick={syncCaret}
+            onContextMenu={openMenu}
             onScroll={syncScroll}
             onKeyDown={(e) => {
               if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
@@ -297,6 +360,13 @@ function EditorPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
   );
 }
 
+/** The text selected inside this pane — not a selection left in another one. */
+function selectionWithin(pane: HTMLElement) {
+  const selection = window.getSelection();
+  if (!selection?.anchorNode || !pane.contains(selection.anchorNode)) return '';
+  return selection.toString();
+}
+
 function LogLine({ text, tone }: { text: string; tone?: string }) {
   const tint =
     tone === 'add' ? color.success : tone === 'del' ? color.danger : tone === 'dim' ? color.codeComment : undefined;
@@ -305,9 +375,14 @@ function LogLine({ text, tone }: { text: string; tone?: string }) {
 
 function AgentPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
   const wb = useWorkbench();
+  const menu = useContextMenu();
   return (
     <div
       onMouseDown={() => wb.setFocusedPane(node.id)}
+      onContextMenu={(event) => {
+        const selection = selectionWithin(event.currentTarget);
+        menu(event, (w) => streamMenu(w, { paneId: node.id, kind: 'agent', selection }));
+      }}
       className="cl scroll"
       style={{
         flex: 1,
@@ -332,6 +407,7 @@ function TerminalPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const menu = useContextMenu();
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -343,9 +419,27 @@ function TerminalPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
   return (
     <div
       ref={scrollRef}
-      onMouseDown={() => {
+      onMouseDown={(event) => {
         wb.setFocusedPane(node.id);
-        inputRef.current?.focus();
+        // A right-click must not move focus into the prompt: that would drop
+        // the text selection the menu is about to copy.
+        if (event.button !== 2 && !event.ctrlKey) inputRef.current?.focus();
+      }}
+      onContextMenu={(event) => {
+        const selection = selectionWithin(event.currentTarget);
+        menu(event, (w) =>
+          streamMenu(w, {
+            paneId: node.id,
+            kind: 'terminal',
+            selection,
+            paste: () => {
+              void readClipboard().then((text) => {
+                if (text) setInput((current) => current + text.replace(/\n/g, ' '));
+                requestAnimationFrame(() => inputRef.current?.focus());
+              });
+            },
+          }),
+        );
       }}
       className="cl scroll"
       style={{

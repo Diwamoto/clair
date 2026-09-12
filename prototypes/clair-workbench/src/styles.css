@@ -259,7 +259,21 @@ textarea {
   }
 }
 
+/* context menu — opens from the corner nearest the pointer (transform-origin
+   is set per panel), on the same overlay budget; it closes without animating
+   so a chosen item takes effect at once. */
+.ctx-menu {
+  animation: ctx-menu 90ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+@keyframes ctx-menu {
+  from {
+    transform: scale(0.97);
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .ctx-menu,
   .screen-layer,
   .overlay-scrim,
   .overlay-panel {

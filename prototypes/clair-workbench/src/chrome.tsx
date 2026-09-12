@@ -8,7 +8,9 @@
 
 import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
-import { files, projectTabs, projects, type FileKind } from './data';
+import { targetRing, useContextMenu } from './contextMenu';
+import { files, projectTabs, type FileKind } from './data';
+import { fileMenu, projectMenu, sessionTabMenu, standInTabMenu } from './menus';
 import { color, groupColor, line, mono, withAlpha, type GroupColorKey } from './tokens';
 import {
   IconBranch,
@@ -205,6 +207,8 @@ function Tab({
   active,
   dot,
   onClick,
+  onContextMenu,
+  targeted,
 }: {
   icon: ReactNode;
   label: string;
@@ -212,14 +216,19 @@ function Tab({
   /** The unsaved / running marker the Main artboard draws after the label. */
   dot?: boolean;
   onClick: () => void;
+  onContextMenu?: (event: React.MouseEvent) => void;
+  /** Its context menu is open. */
+  targeted?: boolean;
 }) {
   const tint = active ? color.chromeInk : color.textTertiary;
   const [labelRef, clipped] = useClipped(label);
   return (
     <button
       onClick={onClick}
+      onContextMenu={onContextMenu}
       title={label}
       style={{
+        boxShadow: targeted ? targetRing : undefined,
         position: 'relative',
         display: 'flex',
         alignItems: 'center',
@@ -285,19 +294,23 @@ function Tab({
 
 function FileTab({ path, active }: { path: string; active: boolean }) {
   const wb = useWorkbench();
+  const menu = useContextMenu();
   const tab = wb.tabs.find((t) => t.path === path);
   const file = byPath.get(path);
   const tint = active ? color.chromeInk : color.textTertiary;
+  const target = `tab:${path}`;
   return (
     <Tab
       icon={file ? <FileIcon kind={file.kind} tint={tint} /> : <IconSparkle size={12} color={tint} />}
       label={file?.name ?? path}
       active={active}
       dot={tab?.dirty}
+      targeted={wb.contextMenu?.target === target}
       onClick={() => {
         wb.setActivePath(path);
         wb.openFile(path);
       }}
+      onContextMenu={(event) => menu(event, (w) => fileMenu(w, path, 'tab'), target)}
     />
   );
 }
@@ -310,25 +323,36 @@ function FileTab({ path, active }: { path: string; active: boolean }) {
  * Chrome leaves the page alone.
  *
  * The group's colour lives on the chip itself (its fill and border), not as
- * a separate round swatch — right-click cycles it through `GROUP_COLOR_KEYS`,
- * matching how Chrome puts a tab group's colour picker behind a right-click
- * on the group's own pill rather than a second control next to it. The same
- * colour is what the underline below the whole group is drawn in.
+ * a separate round swatch. Right-click opens the chip's context menu, whose
+ * first row is the colour swatches — how Chrome puts a tab group's colour
+ * picker behind a right-click on the group's own pill rather than a second
+ * control next to it. The same colour is what the underline below the whole
+ * group is drawn in.
  */
 function ProjectChip({
   project,
+  label,
   active,
   collapsed,
   colorKey,
+  renaming,
+  targeted,
   onToggle,
-  onCycleColor,
+  onMenu,
+  onRename,
+  onCancelRename,
 }: {
   project: string;
+  label: string;
   active: boolean;
   collapsed: boolean;
   colorKey: GroupColorKey;
+  renaming: boolean;
+  targeted: boolean;
   onToggle: () => void;
-  onCycleColor: () => void;
+  onMenu: (event: React.MouseEvent) => void;
+  onRename: (name: string) => void;
+  onCancelRename: () => void;
 }) {
   const swatch = groupColor[colorKey];
   const uncoloured = colorKey === 'gray';
@@ -343,37 +367,93 @@ function ProjectChip({
       : 'transparent'
     : withAlpha(swatch, active ? 0.55 : 0.28);
 
+  const frame: CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    height: 26,
+    padding: '0 10px',
+    borderRadius: 8,
+    background,
+    border: `1px solid ${border}`,
+    alignSelf: 'center',
+    flexShrink: 0,
+    // The chip already has a border of its own, so the "menu is open on
+    // this" ring sits outside it instead of inset.
+    boxShadow: targeted ? `0 0 0 2px ${color.chrome}, 0 0 0 3px ${line.ring}` : undefined,
+  };
+  const text: CSSProperties = {
+    fontSize: 12,
+    fontWeight: 600,
+    color: active ? color.chromeInk : uncoloured ? color.textQuaternary : color.textTertiary,
+    whiteSpace: 'nowrap',
+  };
+
+  if (renaming) {
+    return <ChipNameField label={label} frame={frame} text={text} onCommit={onRename} onCancel={onCancelRename} />;
+  }
+
   return (
     <button
       onClick={onToggle}
-      onContextMenu={(e) => {
-        e.preventDefault();
-        onCycleColor();
-      }}
-      title={`${project} タブグループを${collapsed ? '展開' : '折りたたむ'}（右クリックで色を変更）`}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        height: 26,
-        padding: '0 10px',
-        borderRadius: 8,
-        background,
-        border: `1px solid ${border}`,
-        alignSelf: 'center',
-        flexShrink: 0,
-      }}
+      onContextMenu={onMenu}
+      title={`${project} タブグループを${collapsed ? '展開' : '折りたたむ'}（右クリックでメニュー）`}
+      style={frame}
     >
-      <span
-        style={{
-          fontSize: 12,
-          fontWeight: 600,
-          color: active ? color.chromeInk : uncoloured ? color.textQuaternary : color.textTertiary,
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {project}
-      </span>
+      <span style={text}>{label}</span>
     </button>
+  );
+}
+
+/**
+ * Renaming happens in place: the chip becomes its own name field, painted
+ * as a focused field (the palette input's ring) in the chip's shape.
+ * ↵ or clicking away keeps the name, esc puts the old one back.
+ */
+function ChipNameField({
+  label,
+  frame,
+  text,
+  onCommit,
+  onCancel,
+}: {
+  label: string;
+  frame: CSSProperties;
+  text: CSSProperties;
+  onCommit: (name: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(label);
+  const cancelled = useRef(false);
+  return (
+    <input
+      autoFocus
+      aria-label="Project名"
+      value={value}
+      onFocus={(event) => event.currentTarget.select()}
+      onChange={(event) => setValue(event.target.value)}
+      onKeyDown={(event) => {
+        // The field owns every key while it is open — esc must not also
+        // send the window back to the workspace.
+        event.stopPropagation();
+        if (event.key === 'Enter') onCommit(value);
+        if (event.key === 'Escape') {
+          cancelled.current = true;
+          onCancel();
+        }
+      }}
+      onBlur={() => {
+        if (!cancelled.current) onCommit(value);
+      }}
+      style={{
+        ...frame,
+        ...text,
+        width: `calc(${Math.max(4, value.length)}ch + 22px)`,
+        background: color.panel,
+        border: `1px solid ${line.ring}`,
+        color: color.textPrimary,
+        outline: 'none',
+      }}
+    />
   );
 }
 
@@ -394,6 +474,8 @@ function ProjectChip({
  */
 function ProjectGroup({ project }: { project: string }) {
   const wb = useWorkbench();
+  const menu = useContextMenu();
+  const targeted = (id: string) => wb.contextMenu?.target === id;
   const active = project === wb.activeProject;
   const collapsed = wb.collapsedProjects.has(project);
   const colorKey = wb.groupColors[project] ?? 'gray';
@@ -415,14 +497,18 @@ function ProjectGroup({ project }: { project: string }) {
             label="Claude Code"
             active={wb.screen === 'activity'}
             dot
+            targeted={targeted('tab:activity')}
             onClick={() => wb.setScreen('activity')}
+            onContextMenu={(event) => menu(event, (w) => sessionTabMenu(w, 'Claude Code', 'activity'), 'tab:activity')}
           />,
           <Tab
             key="sessions"
             icon={<IconCodex size={12} color={wb.screen === 'sessions' ? color.chromeInk : color.textTertiary} />}
             label="codex"
             active={wb.screen === 'sessions'}
+            targeted={targeted('tab:sessions')}
             onClick={() => wb.setScreen('sessions')}
+            onContextMenu={(event) => menu(event, (w) => sessionTabMenu(w, 'codex', 'sessions'), 'tab:sessions')}
           />,
         ]
       : (projectTabs[project] ?? []).map((f) => (
@@ -431,7 +517,11 @@ function ProjectGroup({ project }: { project: string }) {
             icon={<FileIcon kind={f.kind} tint={color.textTertiary} />}
             label={f.name}
             active={false}
+            targeted={targeted(`tab:${project}:${f.path}`)}
             onClick={() => wb.setActiveProject(project)}
+            onContextMenu={(event) =>
+              menu(event, (w) => standInTabMenu(w, project, f), `tab:${project}:${f.path}`)
+            }
           />
         ));
 
@@ -448,11 +538,16 @@ function ProjectGroup({ project }: { project: string }) {
     >
       <ProjectChip
         project={project}
+        label={wb.projectLabels[project] ?? project}
         active={active}
         collapsed={collapsed}
         colorKey={colorKey}
+        renaming={wb.renamingProject === project}
+        targeted={targeted(`chip:${project}`)}
         onToggle={() => wb.toggleProjectCollapsed(project)}
-        onCycleColor={() => wb.cycleGroupColor(project)}
+        onMenu={(event) => menu(event, (w) => projectMenu(w, project), `chip:${project}`)}
+        onRename={(name) => wb.renameProject(project, name)}
+        onCancelRename={() => wb.setRenamingProject(null)}
       />
       <div
         className="tab-group-track"
@@ -510,7 +605,7 @@ export function AppTitlebar({ extra }: { extra?: ReactNode }) {
         // The scrollbar itself stays hidden; this is chrome, not content.
         style={{ flex: 1, height: 48, display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, overflowX: 'auto', overflowY: 'hidden' }}
       >
-        {projects.map((p, i) => (
+        {wb.projectOrder.map((p, i) => (
           <Fragment key={p}>
             {i > 0 ? <div style={{ width: 1, height: 22, background: 'rgba(242,244,238,0.09)', margin: '0 5px', flexShrink: 0 }} /> : null}
             <ProjectGroup project={p} />

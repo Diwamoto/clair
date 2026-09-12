@@ -14,11 +14,12 @@ import {
   chat,
   files,
   initiallyStagedPaths,
+  projects,
   sessions,
   type ChatMessage,
   type Session,
 } from './data';
-import { GROUP_COLOR_KEYS, type GroupColorKey } from './tokens';
+import type { GroupColorKey } from './tokens';
 
 export type Screen =
   | 'workspace'
@@ -44,6 +45,10 @@ export type TerminalLine = { text: string; tone?: 'add' | 'del' | 'dim' | 'accen
 
 let uid = 0;
 const nextId = () => `n${++uid}`;
+
+// Each opened context menu gets a fresh id, so opening a second one remounts
+// the layer and replays its entrance instead of sliding the old panel over.
+let menuSeq = 0;
 
 // The pane tree the Main artboard draws: editor on the left, agent output over
 // a terminal on the right.
@@ -153,6 +158,24 @@ function useWorkbenchState() {
     ccedit: 'green',
     'clair-releases': 'amber',
   }));
+  // The titlebar's group order, and the names a project chip has been renamed
+  // to — both only ever changed from the chip's context menu.
+  const [projectOrder, setProjectOrder] = useState<string[]>(() => [...projects]);
+  const [projectLabels, setProjectLabels] = useState<Record<string, string>>({});
+  const [renamingProject, setRenamingProject] = useState<string | null>(null);
+
+  // `build` is a MenuBuilder (contextMenu.tsx). It is typed `unknown` here
+  // because a MenuBuilder takes the Workbench, whose type is inferred from
+  // this very function.
+  // `target` names the row, tab or chip that was right-clicked, so it can
+  // keep a ring while its menu is open.
+  const [contextMenu, setContextMenu] = useState<{
+    id: number;
+    x: number;
+    y: number;
+    build: unknown;
+    target?: string;
+  } | null>(null);
 
   const [reviewFile, setReviewFile] = useState('apple/ClairApp/ProjectWorkspace.swift');
   // Working-tree state: which changed files are still pending (haven't been
@@ -204,6 +227,49 @@ function useWorkbenchState() {
     [activePath],
   );
 
+  const closeOtherTabs = useCallback((path: string) => {
+    setTabs((current) => current.filter((t) => t.path === path));
+    setActivePath(path);
+  }, []);
+
+  const closeTabsToRight = useCallback(
+    (path: string) => {
+      const index = tabs.findIndex((t) => t.path === path);
+      if (index < 0) return;
+      const next = tabs.slice(0, index + 1);
+      setTabs(next);
+      if (!next.some((t) => t.path === activePath)) setActivePath(path);
+    },
+    [activePath, tabs],
+  );
+
+  // Opens a file beside the editor it would otherwise replace, rather than
+  // cloning whichever pane happens to have focus.
+  const openInSplit = useCallback(
+    (path: string, orientation: 'horizontal' | 'vertical') => {
+      setTabs((current) => (current.some((t) => t.path === path) ? current : [...current, { path, dirty: false }]));
+      setActivePath(path);
+      setScreen('workspace');
+      setOverlay(null);
+      setMaximized(null);
+      const cloneId = nextId();
+      setLayout((current) => {
+        const editors = leavesInOrder(current).filter((l) => l.pane === 'editor');
+        const target = editors.find((l) => l.id === focusedPane) ?? editors[0] ?? firstLeaf(current);
+        return mapNode(current, target.id, (n) => ({
+          id: `split-${cloneId}`,
+          kind: 'split',
+          orientation,
+          ratio: 0.5,
+          first: n,
+          second: { id: cloneId, kind: 'leaf', pane: 'editor', filePath: path },
+        }));
+      });
+      setFocusedPane(cloneId);
+    },
+    [focusedPane],
+  );
+
   const editFile = useCallback((path: string, value: string) => {
     setContents((current) => ({ ...current, [path]: value }));
     setTabs((current) => current.map((t) => (t.path === path ? { ...t, dirty: true } : t)));
@@ -213,10 +279,12 @@ function useWorkbenchState() {
     setTabs((current) => current.map((t) => (t.path === path ? { ...t, dirty: false } : t)));
   }, []);
 
+  // `paneId` lets a pane's own context menu name itself instead of relying on
+  // focus having moved there first.
   const splitPane = useCallback(
-    (orientation: 'horizontal' | 'vertical') => {
+    (orientation: 'horizontal' | 'vertical', paneId?: string) => {
       setLayout((current) => {
-        const leaf = findLeaf(current, focusedPane) ?? firstLeaf(current);
+        const leaf = findLeaf(current, paneId ?? focusedPane) ?? firstLeaf(current);
         const cloneId = nextId();
         return mapNode(current, leaf.id, (n) => {
           const original = n as Extract<PaneNode, { kind: 'leaf' }>;
@@ -235,10 +303,10 @@ function useWorkbenchState() {
     [focusedPane],
   );
 
-  const closePane = useCallback(() => {
+  const closePane = useCallback((paneId?: string) => {
     setLayout((current) => {
       if (current.kind === 'leaf') return current;
-      const next = removeLeaf(current, focusedPane);
+      const next = removeLeaf(current, paneId ?? focusedPane);
       if (!next) return current;
       setFocusedPane(firstLeaf(next).id);
       return next;
@@ -415,14 +483,44 @@ function useWorkbenchState() {
     });
   }, []);
 
-  const cycleGroupColor = useCallback((project: string) => {
-    setGroupColors((current) => {
-      const now = current[project] ?? 'gray';
-      const idx = GROUP_COLOR_KEYS.indexOf(now);
-      const next = GROUP_COLOR_KEYS[(idx + 1) % GROUP_COLOR_KEYS.length];
-      return { ...current, [project]: next };
+  const setGroupColor = useCallback((project: string, key: GroupColorKey) => {
+    setGroupColors((current) => ({ ...current, [project]: key }));
+  }, []);
+
+  const moveProject = useCallback((project: string, delta: number) => {
+    setProjectOrder((current) => {
+      const from = current.indexOf(project);
+      const to = from + delta;
+      if (from < 0 || to < 0 || to >= current.length) return current;
+      const next = [...current];
+      next.splice(from, 1);
+      next.splice(to, 0, project);
+      return next;
     });
   }, []);
+
+  const closeProject = useCallback(
+    (project: string) => {
+      const next = projectOrder.filter((p) => p !== project);
+      if (!next.length) return;
+      setProjectOrder(next);
+      if (activeProject === project) setActiveProject(next[0]);
+    },
+    [activeProject, projectOrder],
+  );
+
+  const renameProject = useCallback((project: string, label: string) => {
+    const name = label.trim();
+    setProjectLabels((current) => ({ ...current, [project]: name || project }));
+    setRenamingProject(null);
+  }, []);
+
+  const openContextMenu = useCallback((x: number, y: number, build: unknown, target?: string) => {
+    menuSeq += 1;
+    setContextMenu({ id: menuSeq, x, y, build, target });
+  }, []);
+
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
   const toggleStaged = useCallback((path: string) => {
     setStagedPaths((current) => {
@@ -464,6 +562,9 @@ function useWorkbenchState() {
     contents,
     openFile,
     closeTab,
+    closeOtherTabs,
+    closeTabsToRight,
+    openInSplit,
     editFile,
     saveFile,
     collapsed,
@@ -495,7 +596,17 @@ function useWorkbenchState() {
     collapsedProjects,
     toggleProjectCollapsed,
     groupColors,
-    cycleGroupColor,
+    setGroupColor,
+    projectOrder,
+    moveProject,
+    closeProject,
+    projectLabels,
+    renamingProject,
+    setRenamingProject,
+    renameProject,
+    contextMenu,
+    openContextMenu,
+    closeContextMenu,
     reviewFile,
     setReviewFile,
     workingPaths,

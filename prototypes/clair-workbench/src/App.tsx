@@ -9,6 +9,7 @@ import {
   useState,
 } from 'react';
 
+import { ContextMenuLayer } from './contextMenu';
 import { AddAgentOverlay, CommandPalette, SearchOverlay } from './screens/Overlays';
 import { ActivityMain, ActivityPanel, ActivityStatus } from './screens/Activity';
 import {
@@ -277,7 +278,16 @@ function Ide() {
     wb.screen === 'debug' ? <DebugBadge /> : wb.screen === 'debugAgent' ? <DebugAgentBadge /> : null;
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+    <div
+      // An app, not a page: nowhere in the IDE shows the browser's own menu.
+      // A surface with a menu of its own has already claimed the event.
+      onContextMenu={(event) => {
+        if (event.defaultPrevented) return;
+        event.preventDefault();
+        wb.closeContextMenu();
+      }}
+      style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}
+    >
       <AppShell
         titlebarExtra={titlebarExtra}
         statusContext={status}
@@ -288,6 +298,7 @@ function Ide() {
       {wb.overlay === 'command' || wb.overlay === 'quickOpen' ? <CommandPalette /> : null}
       {wb.overlay === 'search' ? <SearchOverlay /> : null}
       {wb.overlay === 'addAgent' ? <AddAgentOverlay /> : null}
+      <ContextMenuLayer />
     </div>
   );
 }
