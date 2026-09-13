@@ -1,6 +1,6 @@
 # Clair v2 roadmap
 
-> Status: historical. 2026-09-13 の native rewrite decision により、この roadmap の実装順と PWA milestone は superseded された。現在の正本は [Clair v2 native rewrite plan](clair-v2-native-rewrite.md) と [task queue](clair-v2-native-rewrite-queue.md) を参照する。
+> Status: historical. 2026-09-13 の native rewrite decision と [ADR-0015](../decisions/0015-native-mobile-apns.md) により、この roadmap の実装順と PWA milestone は superseded された。host/pairing/sessionのv1 evidenceは保持し、現在の正本は [Clair v2 native rewrite plan](clair-v2-native-rewrite.md) と [task queue](clair-v2-native-rewrite-queue.md) を参照する。
 
 ## Purpose
 

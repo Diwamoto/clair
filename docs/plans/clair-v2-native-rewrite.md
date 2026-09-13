@@ -5,6 +5,8 @@ Date: 2026-09-13
 
 Detailed execution order: [Clair v2 native rewrite task queue](clair-v2-native-rewrite-queue.md)
 
+Mobile platform decision: [ADR-0015: Native iPhone/iPad clientとAPNsを製品経路に採用する](../decisions/0015-native-mobile-apns.md)。
+
 ## 1. Decision
 
 Clair v2 は、現在の Clair を段階的に延命するのではなく、編集・ターミナル・AI レビューの基盤を含めて作り直す。

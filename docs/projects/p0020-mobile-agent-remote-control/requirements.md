@@ -1,5 +1,7 @@
 # Requirements
 
+> Historical scope note (2026-09-14): このbundleのPWA配布・通知要件は [ADR-0015](../../decisions/0015-native-mobile-apns.md) によりsupersededとなった。以下はv1のhost/pairing/session contractを保存するevidenceであり、Clair v2のsupported client、APNs、signing、TestFlightのcurrent requirementではない。
+
 ## Motivation
 
 利用者はClairのterminalでcoding agentを長時間動かす。席を離れた後も、どのProject/sessionが動いているかを

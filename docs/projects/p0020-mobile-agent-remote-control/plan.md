@@ -1,5 +1,7 @@
 # Implementation plan
 
+> Historical scope note (2026-09-14): このplanのPWA Slice 3、Web Push、PWA配布順は [ADR-0015](../../decisions/0015-native-mobile-apns.md) によりsupersededとなった。以下のhost/pairing/session実装とnative referenceの検証結果はv1 evidenceとして保持し、Clair v2の実行順は [Clair v2 native rewrite task queue](../../plans/clair-v2-native-rewrite-queue.md) を参照する。
+
 ## Acceptance mapping
 
 | Acceptance | Slice | Validation |

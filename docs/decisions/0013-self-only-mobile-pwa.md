@@ -1,7 +1,7 @@
 ---
 id: ADR-0013
 title: "自所有mobile clientをPWAとして配布する"
-status: accepted
+status: superseded
 date: 2026-09-06
 deciders:
   - "Daiki"
@@ -11,10 +11,13 @@ related_issues:
   - "https://github.com/Diwamoto/clair/issues/20"
 supersedes:
   - "ADR-0011 (client distribution and notification portions)"
-superseded_by: []
+superseded_by:
+  - "ADR-0015 (native mobile client and APNs distribution/notification portions)"
 ---
 
-> Revisit notice (2026-09-13): background notification quality が必須要件になり、Apple Developer Program を利用する判断へ変わったため、この PWA decision は Clair v2 の実装には使用しない。後継 native mobile ADR は [rewrite task queue `B02`](../plans/clair-v2-native-rewrite-queue.md) で作成する。
+> Superseded notice (2026-09-14): background notification quality が必須要件になり、Apple Developer Program を利用する判断へ変わったため、
+> このPWA distribution/notification decisionはClair v2では使用しない。[ADR-0015](0015-native-mobile-apns.md)がnative mobile client、APNs、
+> signing、entitlement、TestFlightの後継方針を定める。P0020のhost/pairing/session protocolに関する過去のevidenceは保持する。
 
 # ADR-0013: 自所有mobile clientをPWAとして配布する
 

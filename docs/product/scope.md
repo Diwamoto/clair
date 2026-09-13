@@ -82,12 +82,13 @@ Mobileからagentの状態を確認し、必要な入力を返せることは、
 M1のlocal session/agent基盤に依存するが、Go editorやdebuggerの完了を待たずに実装する。最初の対象は
 single-user・自所有device・private networkに限定する。
 
-- native iPhone/iPad appはreference clientとして保持し、supported self-only clientはHTTPSで提供するPWAとする。
-- App Store、TestFlight、Ad Hoc、Apple Developer Programをmobile clientの配布前提にしない。
-- SafariからPWAをホーム画面へ追加し、web UIの更新でclientを更新できるようにする。
+- supported self-only clientは署名済みのiOS/iPadOS native appとする。[ADR-0015](../decisions/0015-native-mobile-apns.md)が配布・通知の正本であり、
+  PWA優先の旧方針はsupersededとする。Web UIは開発用の検証・診断に限定する。
+- Apple Developerのbundle ID、signing、push entitlement、TestFlightをmobile clientの実機検証とprivate配布の責任境界に含める。
+- APNsはforeground/background/terminated lifecycleの通知経路とし、payloadはopaqueなwake/resource metadataに限定する。詳細状態は認証済みchannelから取得する。
 - Cloudflare One ClientとCloudflare Tunnel private network routeを初期transportにする。
 - MacのQRを使うdevice-key pairingと端末単位のrevokeを行う。
-- PWAはforeground復帰時にprivate channelからattentionを取得する。Web Pushは後続判断とする。
+- native appはforeground/background/terminatedから復帰し、private channelでrevisionを検証する。
 - Project/terminal選択、current screenとbounded scrollback、raw terminal入力、registered agent profile起動を提供する。
 - Macとmobileの入力はbroker到着順で同じPTYへ適用する。
 - mobileにはterminal outputやdiffを永続cacheしない。

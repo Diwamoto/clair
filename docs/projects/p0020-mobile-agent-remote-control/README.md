@@ -5,7 +5,7 @@ status: in-progress
 source_issue: "https://github.com/Diwamoto/clair/issues/20"
 suggested_branch: "project/p0020-mobile-agent-remote-control"
 created: 2026-08-27
-updated: 2026-09-06
+updated: 2026-09-14
 owners:
   - "Daiki"
 related_adrs:
@@ -17,13 +17,16 @@ related_adrs:
   - "../../decisions/0004-outbound-e2ee-relay.md"
   - "../../decisions/0012-orca-style-mobile-pairing.md"
   - "../../decisions/0013-self-only-mobile-pwa.md"
+  - "../../decisions/0015-native-mobile-apns.md"
 related_investigations:
   - "../../investigations/p0020-protocol-landscape/README.md"
   - "../../investigations/p0020-terminal-snapshot-spike/README.md"
   - "../../investigations/p0020-secure-link-spike/README.md"
 ---
 
-> Supersession notice: この project の host/pairing/session protocol は v1 evidence として参照できるが、PWA を supported client とする方針と実装順は 2026-09-13 の [Clair v2 native rewrite plan](../../plans/clair-v2-native-rewrite.md) および [task queue](../../plans/clair-v2-native-rewrite-queue.md) により置き換えられた。正式な native mobile ADR は queue `B02` で作成する。
+> Supersession notice (2026-09-14): このprojectのhost/pairing/session protocolはv1 evidenceとして参照できるが、PWAをsupported clientとする
+> 配布・通知方針とその実装順は [ADR-0015](../../decisions/0015-native-mobile-apns.md) および [Clair v2 native rewrite plan](../../plans/clair-v2-native-rewrite.md)
+> によりsupersededとなった。P0020のrequirements/design/planにあるPWA記述はv1 evidenceとして保持し、Clair v2のcurrent implementation inputにはしない。
 
 # Clair terminal上のcoding agentをmobileから操作するprotocol
 
@@ -49,7 +52,8 @@ device token/grant、端末単位のrevokeをClairが所有する。PWAのforegr
 - [Implementation plan](plan.md)
 - Accepted product scope: [Early mobile agent control](../../product/scope.md#early-mobile-agent-control)
 - Priority decision: [ADR-0011](../../decisions/0011-early-mobile-agent-control.md)
-- Distribution decision: [ADR-0013](../../decisions/0013-self-only-mobile-pwa.md)
+- Historical distribution decision: [ADR-0013 (superseded)](../../decisions/0013-self-only-mobile-pwa.md)
+- Current native mobile/APNs decision: [ADR-0015](../../decisions/0015-native-mobile-apns.md)
 
 ## Context
 
