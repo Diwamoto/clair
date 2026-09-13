@@ -84,3 +84,20 @@ credentials are not part of this contract.
 
 The v1 packages may remain evidence or fixture sources for their own tasks,
 but no 'ClairV2Core' target imports them.
+
+## H02 read-only workspace runtime
+
+`ClairV2Workspace` provides `ClairV2WorkspaceRuntime` for the Mac daemon's
+read-only workspace surface. A caller registers a typed `ProjectID` with an
+absolute `ClairV2ProjectRoot`; the runtime discovers the repository root and
+Git worktrees without modifying the checkout. Catalog entries retain typed
+`WorktreeID` values and report missing, inaccessible, non-directory, and
+symlink roots explicitly.
+
+`ClairV2WorkspacePath` accepts only bounded relative paths. Resolution checks
+each component with `lstat` and opens text files through `openat` with
+`O_NOFOLLOW`, so absolute paths, parent traversal, and symlink traversal fail
+closed. File reads reject files above the configured byte bound, binary data,
+and invalid UTF-8. File-tree and Git changed-file responses carry explicit
+entry/file/output limits and an `isTruncated` marker; Git status is collected
+with `GIT_OPTIONAL_LOCKS=0` and no write operation.

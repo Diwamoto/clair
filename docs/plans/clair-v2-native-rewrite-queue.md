@@ -136,7 +136,7 @@ G2 -> U01 -> U02
 | ID | Status | Difficulty | Depends on | Task and completion evidence |
 |---|---|---:|---|---|
 | `H01` | `done` | `D4` | `B03` | GUI から独立して動く `ClairDaemon` lifecycle、single-instance ownership、local control channel、health/version endpoint を実装する。GUI を閉じても daemon が生存し、二重起動せず、安全に停止・再起動できること。 |
-| `H02` | `active` | `D3` | `H01` | project/worktree catalog、file tree、bounded file read、changed-file summary を read-only API として提供する。symlink、permission、missing root、巨大 file の境界 test が通ること。 |
+| `H02` | `done` | `D3` | `H01` | project/worktree catalog、file tree、bounded file read、changed-file summary を read-only API として提供する。symlink、permission、missing root、巨大 file の境界 test が通ること。 |
 | `H03` | `active` | `D5` | `B02`, `B03`, `H01` | native client transport、one-time pairing、device key、host fingerprint、grant scope、revoke を実装する。default-deny、expiry、replay、stolen token、revoked active connection の threat tests が通ること。 |
 | `H04` | `queued` | `D5` | `H02` | OpenCode を provider adapter の第一実装として起動・再開・停止し、project/worktree/session identity に関連付ける。provider upgrade、abnormal exit、duplicate launch、cwd mismatch を型付きで扱うこと。 |
 | `H05` | `queued` | `D5` | `H04` | OpenCode の streaming event を provider-independent な conversation、tool call、attention、completion、usage event に正規化する。順序、重複、partial event、unknown event を deterministic に処理すること。 |
@@ -277,3 +277,11 @@ UI の正本は [Clair UI Design canvas と Workbench](../../prototypes/clair-wo
 - result: native SwiftUI composition root and environment/state foundation added in `ClairV2MobileKit`, with transport-neutral lifecycle, connection state, command reducer, navigation destinations, separated app/unit/UI smoke targets, and signed-device/TestFlight runbook
 - external dependency: physical signing and TestFlight smoke remain unexecuted pending Apple Developer/App Store Connect access, certificates, provisioning profile, and a registered device; APNs, Keychain, and transport remain in later N02/N07 tasks
 - remaining: typed client, pairing, host/project/session browsing, conversation UI, APNs/deep links, and production visual design remain in later queue tasks; no push/publication
+
+### H02 — 2026-09-14
+
+- integration commit (worker source): `8c6d3d87fb55889cfd1d786ca9cd555dbe0c8615` (integrated into `rewrite/clair-v2` by the controller)
+- source range: `3e7f310bb63843f70df79f0477b85bbaaf93061b..8c6d3d87fb55889cfd1d786ca9cd555dbe0c8615`
+- verification: `make v2-foundation` passed with all v2 targets, iOS Simulator cross-build, Core 29 tests, and Apps 1 test; strict Swift format lint passed; staged and commit `git diff --check` passed; symlink, permission, missing root, path escape, large/binary/invalid UTF-8, tree/read bounds, and Git catalog/status boundary tests passed
+- result: `ClairV2Workspace` provides typed project/worktree catalog, bounded lazy file-tree enumeration, fail-closed path/symlink-safe file reads, and bounded Git changed-file summaries; Codable decode revalidates root and limits, and outputs remain read-only
+- remaining: provider runtime, secure transport/pairing, journal/reconnect, APNs relay, native client UI, and device/TestFlight work remain in later queue tasks; no push/publication
