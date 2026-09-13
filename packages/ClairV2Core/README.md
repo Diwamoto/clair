@@ -101,3 +101,28 @@ closed. File reads reject files above the configured byte bound, binary data,
 and invalid UTF-8. File-tree and Git changed-file responses carry explicit
 entry/file/output limits and an `isTruncated` marker; Git status is collected
 with `GIT_OPTIONAL_LOCKS=0` and no write operation.
+
+## H03 transport and device authorization
+
+`ClairV2Transport` owns the transport-neutral native client and host security
+seam. It uses CryptoKit P-256 device/host keys, SHA-256 host fingerprints,
+short-lived one-time bootstrap secrets, fresh challenge proofs, expiring opaque
+device credentials (the host retains only a token digest), generation-bound
+grants, typed visible scopes, and actor-serialized revocation. Pending
+challenges have both global and per-device quotas, and the selected resource
+scope is included in the signed challenge. The default pairing grant is `view`
+only; B03 operation-kind capability mapping remains authoritative.
+
+Live connections expose a Codable `ClairConnectionInfo` DTO for wire metadata,
+while the authority keeps a separate in-memory handle that cannot be forged by
+decoding that DTO. H03 also exposes a generation-checked
+`ClairAuthorizationTicket`/`validateDispatch` seam for H06. H03 issues and
+revalidates the ticket; H06 owns effect dispatch and the atomicity boundary with
+revoke. The client provides explicit channel invalidation and authority-state
+refresh so `isConnected` is not treated as an asynchronous revoke notification.
+
+The target has no network listener, TLS credential, Keychain/Secure Enclave
+storage, APNs provider credential, or public relay. A future connection layer
+implements `ClairNativeTransportChannel` and carries its bounded frames over
+Network.framework/TLS while keeping this authority and the same threat-tested
+state machine.

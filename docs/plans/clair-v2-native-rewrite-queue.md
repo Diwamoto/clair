@@ -137,7 +137,7 @@ G2 -> U01 -> U02
 |---|---|---:|---|---|
 | `H01` | `done` | `D4` | `B03` | GUI から独立して動く `ClairDaemon` lifecycle、single-instance ownership、local control channel、health/version endpoint を実装する。GUI を閉じても daemon が生存し、二重起動せず、安全に停止・再起動できること。 |
 | `H02` | `done` | `D3` | `H01` | project/worktree catalog、file tree、bounded file read、changed-file summary を read-only API として提供する。symlink、permission、missing root、巨大 file の境界 test が通ること。 |
-| `H03` | `active` | `D5` | `B02`, `B03`, `H01` | native client transport、one-time pairing、device key、host fingerprint、grant scope、revoke を実装する。default-deny、expiry、replay、stolen token、revoked active connection の threat tests が通ること。 |
+| `H03` | `done` | `D5` | `B02`, `B03`, `H01` | native client transport、one-time pairing、device key、host fingerprint、grant scope、revoke を実装する。default-deny、expiry、replay、stolen token、revoked active connection の threat tests が通ること。 |
 | `H04` | `queued` | `D5` | `H02` | OpenCode を provider adapter の第一実装として起動・再開・停止し、project/worktree/session identity に関連付ける。provider upgrade、abnormal exit、duplicate launch、cwd mismatch を型付きで扱うこと。 |
 | `H05` | `queued` | `D5` | `H04` | OpenCode の streaming event を provider-independent な conversation、tool call、attention、completion、usage event に正規化する。順序、重複、partial event、unknown event を deterministic に処理すること。 |
 | `H06` | `queued` | `D5` | `H03`, `H05` | prompt、approval、deny、interrupt、stop を scoped command として実装する。operation ID による exactly-once effect、stale approval rejection、audit metadata、disconnect race の tests が通ること。 |
@@ -285,3 +285,12 @@ UI の正本は [Clair UI Design canvas と Workbench](../../prototypes/clair-wo
 - verification: `make v2-foundation` passed with all v2 targets, iOS Simulator cross-build, Core 29 tests, and Apps 1 test; strict Swift format lint passed; staged and commit `git diff --check` passed; symlink, permission, missing root, path escape, large/binary/invalid UTF-8, tree/read bounds, and Git catalog/status boundary tests passed
 - result: `ClairV2Workspace` provides typed project/worktree catalog, bounded lazy file-tree enumeration, fail-closed path/symlink-safe file reads, and bounded Git changed-file summaries; Codable decode revalidates root and limits, and outputs remain read-only
 - remaining: provider runtime, secure transport/pairing, journal/reconnect, APNs relay, native client UI, and device/TestFlight work remain in later queue tasks; no push/publication
+
+### H03 — 2026-09-14
+
+- integration commits (worker source): `f3eb18e08fb2b599e412c2e8069688c7fcaf31b0`, `6556d9803d2c06cfa68181cfe36f89bc9ab637c3` (integrated into `rewrite/clair-v2` by the controller)
+- source range: `3e7f310bb63843f70df79f0477b85bbaaf93061b..6556d9803d2c06cfa68181cfe36f89bc9ab637c3`
+- independent D5 review: first review required fixes for timestamp conversion overflow, token-backed challenge exhaustion, reconnect connection leakage, forgeable connection handles, and missing token expiry; the repair commit also added scope binding, bounded Codable paths, H06 generation tickets, client invalidation, and regression coverage; a fresh review approved with no P0/P1 findings and recorded only follow-up P2 hardening
+- verification: worker H03 tests 25 passed and Core 47 tests passed; v2 foundation all targets, Apps, iOS Simulator, and v1 dependency boundary passed; strict Swift format and `git diff --check` passed; fresh reviewer independently confirmed the same tests/build/boundary checks and a clean read-only worktree
+- result: `ClairV2Transport` provides CryptoKit P-256 device/host identity, SHA-256 host fingerprints, one-time pairing, challenge proofs, expiring token digests, bounded per-device challenge admission, typed exact scopes/capabilities, generation-checked H06 tickets, reconnect replacement, internal connection handles, actor-serialized revocation, bounded frames/Codable inputs, and client invalidation
+- remaining: Network.framework/TLS connection plumbing, Keychain/Secure Enclave persistence, APNs/relay production credentials, durable storage, and H06 dispatch/revoke atomicity remain external or later boundaries; per-device connection quotas, refresh/re-pair cleanup, and generic B03 `ProtocolOffer` decode bounds remain P2 hardening follow-ups; no push/publication

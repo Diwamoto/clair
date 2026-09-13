@@ -11,6 +11,7 @@ core_targets=(
   ClairV2Agent
   ClairV2Review
   ClairV2Terminal
+  ClairV2Transport
   ClairV2DaemonKit
   ClairV2MobileKit
   ClairV2AppKit
