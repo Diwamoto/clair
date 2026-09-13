@@ -16,4 +16,5 @@ development、release、migration、rollback、recoveryなど、人またはagen
 Current runbooks:
 
 - [Local development](local-development.md)
+- [Clair v2 native mobile build and TestFlight smoke](native-mobile-v2.md)
 - [Stable release and update](stable-release.md)

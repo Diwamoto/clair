@@ -150,7 +150,7 @@ G2 -> U01 -> U02
 
 | ID | Status | Difficulty | Depends on | Task and completion evidence |
 |---|---|---:|---|---|
-| `N01` | `active` | `D3` | `B01`, `B02` | SwiftUI native app、composition root、environment、shared package、unit/UI test target を作る。signed physical-device build と TestFlight smoke の手順を確立すること。旧 `ClairMobileApp` は reference に留める。 |
+| `N01` | `done` | `D3` | `B01`, `B02` | SwiftUI native app、composition root、environment、shared package、unit/UI test target を作る。signed physical-device build と TestFlight smoke の手順を確立すること。旧 `ClairMobileApp` は reference に留める。 |
 | `N02` | `queued` | `D4` | `B03`, `H03`, `N01` | typed client、Keychain device identity、pairing handshake、certificate/host pin、capability negotiation を実装する。credential を log/UI stateへ漏らさず、再起動後に安全に reconnect できること。 |
 | `N03` | `queued` | `D3` | `N02` | host list、pair/re-pair、connection state、device scope、revoke UI を最小 native UI で実装する。offline、expired QR、fingerprint change、revoked device を区別できること。 |
 | `N04` | `queued` | `D3` | `H02`, `N03` | project/worktree/session browser と recent destination を実装する。複数 project を混線せず、missing root と permission error を明示すること。 |
@@ -268,3 +268,12 @@ UI の正本は [Clair UI Design canvas と Workbench](../../prototypes/clair-wo
 - verification: `make v2-foundation` passed; Core 18 tests passed; Apps package tests and separate-process daemon lifecycle fixture passed; strict Swift format lint passed; `git diff --check` passed; v1 dependency/runtime boundary passed
 - result: `ClairV2DaemonKit` provides GUI-independent lifecycle, single-instance ownership, owner-only runtime directory and Unix control socket, typed health/version/shutdown control, bounded request framing, restart and signal cleanup; bind-failure cleanup is ownership-aware
 - remaining: project/worktree catalog, transport/pairing, provider runtime, journal/reconnect, APNs relay, native client UI, and device/TestFlight work remain in later queue tasks; no push/publication
+
+### N01 — 2026-09-14
+
+- integration commit (worker source): `c3646d67802b38d7f274df29736eb0033c177ea3` (integrated into `rewrite/clair-v2` by the controller; shared app README conflict resolved by retaining both H01 and N01 seams)
+- source range: `29e3335a58446b7fb261cd5c1e39398818d95025..c3646d67802b38d7f274df29736eb0033c177ea3`
+- verification: `make v2-foundation` passed with all targets, iOS cross-build, and 17 package tests; `ClairV2Mobile.xcodeproj` app build and unit/UI build-for-testing passed; strict Swift format lint passed; `git diff --check` passed; old `ClairMobileApp` runtime import boundary passed
+- result: native SwiftUI composition root and environment/state foundation added in `ClairV2MobileKit`, with transport-neutral lifecycle, connection state, command reducer, navigation destinations, separated app/unit/UI smoke targets, and signed-device/TestFlight runbook
+- external dependency: physical signing and TestFlight smoke remain unexecuted pending Apple Developer/App Store Connect access, certificates, provisioning profile, and a registered device; APNs, Keychain, and transport remain in later N02/N07 tasks
+- remaining: typed client, pairing, host/project/session browsing, conversation UI, APNs/deep links, and production visual design remain in later queue tasks; no push/publication
