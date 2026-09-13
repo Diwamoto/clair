@@ -129,7 +129,7 @@ G2 -> U01 -> U02
 | `B00` | `done` | `D2` | — | 現在の dirty worktree を整理して pre-v2 checkpoint commit と archive tag を作る。plan/queue を含む状態を Git から復元でき、旧ファイルを物理コピーしていないこと。 |
 | `B01` | `done` | `D3` | `B00` | v2 の Swift packages、macOS app、iOS/iPadOS app、daemon executable の空 target と build/test lane を作る。旧 runtime module を link せず全 target が build すること。 |
 | `B02` | `done` | `D3` | `B00` | native mobile + APNs 方針の ADR を作り、PWA 優先の ADR/P0020/roadmap を superseded として接続する。bundle ID、signing、TestFlight、push entitlement の ownership を記録すること。 |
-| `B03` | `active` | `D5` | `B01` | `ProjectID`、`WorktreeID`、`SessionID`、revision、operation ID、capability、error、event envelope の共有 protocol と invariants を定義する。version negotiation、unknown field、frame bound、replay の golden tests が通ること。 |
+| `B03` | `done` | `D5` | `B01` | `ProjectID`、`WorktreeID`、`SessionID`、revision、operation ID、capability、error、event envelope の共有 protocol と invariants を定義する。version negotiation、unknown field、frame bound、replay の golden tests が通ること。 |
 
 ## P0-B: Mac host and server
 
@@ -251,3 +251,12 @@ UI の正本は [Clair UI Design canvas と Workbench](../../prototypes/clair-wo
 - verification: worker and controller `git diff --check` passed; changed document references and supersession links were reviewed; the worker diff contains documentation only
 - result: accepted ADR-0015 records native iPhone/iPad, APNs, bundle ID, signing, entitlement, device-token, credential, and TestFlight ownership; ADR-0013, P0020, product scope, and roadmap are connected as superseded or historical inputs
 - remaining: native APNs relay, entitlements, signed device build, TestFlight smoke, and runtime implementation remain in later queue tasks; no push/publication
+
+### B03 — 2026-09-14
+
+- integration commits (worker source): `1ff70b6663a0ae1bba012d40e594dc4854cf0fb7`, `cd88610e98b986ce82772ba20f15e1d55f34e79c`, `7b3010faef421633f34c1143da847d698da273fb` (integrated into `rewrite/clair-v2` by the controller)
+- source range: `c299561bdd8da5fcb18b83a33e8a51cd5d892fd0..7b3010faef421633f34c1143da847d698da273fb`
+- independent D5 review: first review found and required fixes for capability mismatch and decoder chunk bounds; repair review found and required fixes for terminal grant mapping and non-exact session scopes; final fresh review approved with no P0/P1/P2 findings
+- verification: worker and independent reviewer protocol tests passed (final worker 12 tests, reviewer focused 10 tests); `make v2-foundation` passed with all v2 targets, macOS/iOS cross-build, Core 12 tests, and Apps 1 test; strict Swift format lint passed; `git diff --check` passed; v1 boundary check passed
+- result: `ClairV2Shared` now owns typed identity, scope, capability, version, error, event, replay, and operation contracts; unknown fields/codes remain forward-compatible; frame decoding is fail-closed before allocation; operation capability mapping is authoritative; session scope containment is exact across optional worktree presence
+- remaining: transport, daemon, pairing, APNs, UI, provider runtime, and device/TestFlight work remain in later queue tasks; repo-wide pre-existing Swift lint findings outside B03 were not changed; no push/publication
