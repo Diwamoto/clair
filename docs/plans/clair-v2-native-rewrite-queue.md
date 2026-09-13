@@ -135,7 +135,7 @@ G2 -> U01 -> U02
 
 | ID | Status | Difficulty | Depends on | Task and completion evidence |
 |---|---|---:|---|---|
-| `H01` | `active` | `D4` | `B03` | GUI から独立して動く `ClairDaemon` lifecycle、single-instance ownership、local control channel、health/version endpoint を実装する。GUI を閉じても daemon が生存し、二重起動せず、安全に停止・再起動できること。 |
+| `H01` | `done` | `D4` | `B03` | GUI から独立して動く `ClairDaemon` lifecycle、single-instance ownership、local control channel、health/version endpoint を実装する。GUI を閉じても daemon が生存し、二重起動せず、安全に停止・再起動できること。 |
 | `H02` | `queued` | `D3` | `H01` | project/worktree catalog、file tree、bounded file read、changed-file summary を read-only API として提供する。symlink、permission、missing root、巨大 file の境界 test が通ること。 |
 | `H03` | `queued` | `D5` | `B02`, `B03`, `H01` | native client transport、one-time pairing、device key、host fingerprint、grant scope、revoke を実装する。default-deny、expiry、replay、stolen token、revoked active connection の threat tests が通ること。 |
 | `H04` | `queued` | `D5` | `H02` | OpenCode を provider adapter の第一実装として起動・再開・停止し、project/worktree/session identity に関連付ける。provider upgrade、abnormal exit、duplicate launch、cwd mismatch を型付きで扱うこと。 |
@@ -260,3 +260,11 @@ UI の正本は [Clair UI Design canvas と Workbench](../../prototypes/clair-wo
 - verification: worker and independent reviewer protocol tests passed (final worker 12 tests, reviewer focused 10 tests); `make v2-foundation` passed with all v2 targets, macOS/iOS cross-build, Core 12 tests, and Apps 1 test; strict Swift format lint passed; `git diff --check` passed; v1 boundary check passed
 - result: `ClairV2Shared` now owns typed identity, scope, capability, version, error, event, replay, and operation contracts; unknown fields/codes remain forward-compatible; frame decoding is fail-closed before allocation; operation capability mapping is authoritative; session scope containment is exact across optional worktree presence
 - remaining: transport, daemon, pairing, APNs, UI, provider runtime, and device/TestFlight work remain in later queue tasks; repo-wide pre-existing Swift lint findings outside B03 were not changed; no push/publication
+
+### H01 — 2026-09-14
+
+- integration commit (worker source): `81be339ea3c7b546bca229b73ec5e6248ba2609b` (integrated into `rewrite/clair-v2` by the controller)
+- source range: `29e3335a58446b7fb261cd5c1e39398818d95025..81be339ea3c7b546bca229b73ec5e6248ba2609b`
+- verification: `make v2-foundation` passed; Core 18 tests passed; Apps package tests and separate-process daemon lifecycle fixture passed; strict Swift format lint passed; `git diff --check` passed; v1 dependency/runtime boundary passed
+- result: `ClairV2DaemonKit` provides GUI-independent lifecycle, single-instance ownership, owner-only runtime directory and Unix control socket, typed health/version/shutdown control, bounded request framing, restart and signal cleanup; bind-failure cleanup is ownership-aware
+- remaining: project/worktree catalog, transport/pairing, provider runtime, journal/reconnect, APNs relay, native client UI, and device/TestFlight work remain in later queue tasks; no push/publication
