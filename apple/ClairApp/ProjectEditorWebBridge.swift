@@ -25,6 +25,10 @@ struct ProjectEditorWebEdit: Codable, Equatable, Sendable {
       text: insert
     )
   }
+
+  var isWellFormed: Bool {
+    from >= 0 && to >= from
+  }
 }
 
 struct ProjectEditorWebSelection: Codable, Equatable, Sendable {
@@ -41,6 +45,10 @@ struct ProjectEditorWebSelection: Codable, Equatable, Sendable {
       location: from,
       length: to - from
     )
+  }
+
+  var isWellFormed: Bool {
+    from >= 0 && to >= from
   }
 }
 
@@ -108,6 +116,11 @@ extension ProjectEditorWebChange {
     else {
       return nil
     }
+    guard decoded.changes.allSatisfy(\ProjectEditorWebEdit.isWellFormed),
+      decoded.selection.isWellFormed
+    else {
+      return nil
+    }
     self = decoded
   }
 }
@@ -118,6 +131,9 @@ extension ProjectEditorWebSelectionChange {
       let data = try? JSONSerialization.data(withJSONObject: messageBody),
       let decoded = try? JSONDecoder().decode(Self.self, from: data)
     else {
+      return nil
+    }
+    guard decoded.selection.isWellFormed else {
       return nil
     }
     self = decoded

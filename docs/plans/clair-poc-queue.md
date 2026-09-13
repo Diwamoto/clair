@@ -1,5 +1,7 @@
 # Clair PoC feature development queue
 
+> Status: frozen v1 execution record. Clair v2 の新規実装順には使用しない。現在の正本は [Clair v2 native rewrite plan](clair-v2-native-rewrite.md) と [task queue](clair-v2-native-rewrite-queue.md) を参照する。
+
 ## Purpose
 
 このqueueはM1 Clair-on-Clair cutoverとearly mobile agent controlの実装順序と状態の正本である。GitHub issueは

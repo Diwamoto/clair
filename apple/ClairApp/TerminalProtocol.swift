@@ -161,6 +161,39 @@ struct TerminalDimensions: Equatable, Sendable {
   let columns: UInt16
 }
 
+struct TerminalOutputQueue: Equatable, Sendable {
+  static let defaultBatchByteLimit = 256 * 1024
+
+  private var data = Data()
+
+  var isEmpty: Bool {
+    data.isEmpty
+  }
+
+  mutating func append(_ output: Data) {
+    guard !output.isEmpty else {
+      return
+    }
+    data.append(output)
+  }
+
+  mutating func removeNextBatch(
+    maximumBytes: Int = Self.defaultBatchByteLimit
+  ) -> Data {
+    guard maximumBytes > 0, !data.isEmpty else {
+      return Data()
+    }
+    let count = min(maximumBytes, data.count)
+    let batch = Data(data.prefix(count))
+    data.removeFirst(count)
+    return batch
+  }
+
+  mutating func removeAll() {
+    data.removeAll(keepingCapacity: true)
+  }
+}
+
 struct TerminalOutputEffects: Equatable, Sendable {
   let filtered: Data
   let bellCount: Int

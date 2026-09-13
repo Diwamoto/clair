@@ -591,8 +591,13 @@ final class ProjectSurfaceModel: ObservableObject {
   private var searchTask: Task<Void, Never>?
   private var replacementTask: Task<Void, Never>?
   private var directoryCacheTask: Task<Void, Never>?
+  private var navigationIndexTask: Task<Void, Never>?
+  private var pendingExternalReloadTask: Task<Void, Never>?
+  private var navigationFileIndex: ProjectNavigationFileIndex?
+  private var navigationSearchIndex: ProjectNavigationSearchIndex?
   private var treeLoadGeneration = 0
   private var directoryCacheGeneration = 0
+  private var navigationIndexGeneration = 0
   private var quickOpenGeneration = 0
   private var searchGeneration = 0
   private var replacementGeneration = 0
@@ -653,12 +658,13 @@ final class ProjectSurfaceModel: ObservableObject {
       fileManager: fileManager
     ) { [weak self] in
       Task { @MainActor [weak self] in
-        self?.reload()
+        self?.scheduleExternalReload()
       }
     }
     watcher?.updateWatchedDirectories(loadedDirectoryURLs())
     watcher?.start()
     startDirectoryCachePrefetch()
+    startNavigationIndexBuild()
   }
 
   deinit {
@@ -667,6 +673,8 @@ final class ProjectSurfaceModel: ObservableObject {
     searchTask?.cancel()
     replacementTask?.cancel()
     directoryCacheTask?.cancel()
+    navigationIndexTask?.cancel()
+    pendingExternalReloadTask?.cancel()
     editorViewportPersistTask?.cancel()
     watcher?.stop()
   }
@@ -1167,6 +1175,9 @@ final class ProjectSurfaceModel: ObservableObject {
   }
 
   func quickOpenItems(matching query: String) -> [ProjectQuickOpenItem] {
+    if let navigationFileIndex {
+      return ProjectNavigation.quickOpenItems(query: query, index: navigationFileIndex)
+    }
     return ProjectNavigation.quickOpenItems(
       query: query,
       rootURL: rootURL,
@@ -1180,13 +1191,35 @@ final class ProjectSurfaceModel: ObservableObject {
     quickOpenTask?.cancel()
     quickOpenIsLoading = true
 
-    let rootURL = self.rootURL
+    let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
     quickOpenTask = Task { [weak self] in
+      do {
+        try await Task.sleep(for: .milliseconds(120))
+      } catch {
+        guard let self, generation == self.quickOpenGeneration else {
+          return
+        }
+        self.quickOpenIsLoading = false
+        self.quickOpenTask = nil
+        return
+      }
+      guard !Task.isCancelled, let self else {
+        return
+      }
+      guard let index = await self.navigationIndex() else {
+        guard generation == self.quickOpenGeneration else {
+          return
+        }
+        self.quickOpenResults = []
+        self.quickOpenIsLoading = false
+        self.quickOpenTask = nil
+        return
+      }
       let items = await ProjectNavigation.quickOpenItemsAsync(
-        query: query,
-        rootURL: rootURL
+        query: normalizedQuery,
+        index: index
       )
-      guard !Task.isCancelled, let self, generation == self.quickOpenGeneration else {
+      guard !Task.isCancelled, generation == self.quickOpenGeneration else {
         return
       }
       self.quickOpenResults = items
@@ -1227,11 +1260,21 @@ final class ProjectSurfaceModel: ObservableObject {
     replacementPreview = nil
     lastNavigationErrorMessage = nil
     lastNavigationStatusMessage = nil
-    searchResults = ProjectNavigation.search(
-      query: query,
-      rootURL: rootURL,
-      fileManager: fileManager
-    )
+    if let navigationSearchIndex {
+      searchResults = navigationSearchIndex.search(query: query)
+    } else if let navigationFileIndex {
+      searchResults = ProjectNavigation.search(
+        query: query,
+        index: navigationFileIndex,
+        fileManager: fileManager
+      )
+    } else {
+      searchResults = ProjectNavigation.search(
+        query: query,
+        rootURL: rootURL,
+        fileManager: fileManager
+      )
+    }
   }
 
   func requestSearch(query: String) {
@@ -1250,21 +1293,39 @@ final class ProjectSurfaceModel: ObservableObject {
     let generation = searchGeneration
     searchTask?.cancel()
 
-    guard !activeSearchQuery.isEmpty else {
+    let query = activeSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !query.isEmpty else {
       searchResults = []
       searchIsLoading = false
       return
     }
 
     searchIsLoading = true
-    let query = activeSearchQuery
-    let rootURL = self.rootURL
     searchTask = Task { [weak self] in
-      let results = await ProjectNavigation.searchAsync(
-        query: query,
-        rootURL: rootURL
-      )
-      guard !Task.isCancelled, let self, generation == self.searchGeneration else {
+      do {
+        try await Task.sleep(for: .milliseconds(120))
+      } catch {
+        guard let self, generation == self.searchGeneration else {
+          return
+        }
+        self.searchIsLoading = false
+        self.searchTask = nil
+        return
+      }
+      guard !Task.isCancelled, let self else {
+        return
+      }
+      guard let index = await self.searchIndex() else {
+        guard generation == self.searchGeneration else {
+          return
+        }
+        self.searchResults = []
+        self.searchIsLoading = false
+        self.searchTask = nil
+        return
+      }
+      let results = await ProjectNavigation.searchAsync(query: query, index: index)
+      guard !Task.isCancelled, generation == self.searchGeneration else {
         return
       }
       self.searchResults = results
@@ -1461,9 +1522,17 @@ final class ProjectSurfaceModel: ObservableObject {
   }
 
   func reload() {
+    pendingExternalReloadTask?.cancel()
+    pendingExternalReloadTask = nil
     refreshEditorDocumentsFromDisk()
+    quickOpenGeneration += 1
+    quickOpenTask?.cancel()
+    quickOpenResults = []
+    quickOpenIsLoading = false
+    invalidateNavigationIndex()
     directoryCache.removeAll(keepingCapacity: true)
     startDirectoryCachePrefetch()
+    startNavigationIndexBuild()
     scheduleTreeReload()
 
     if activeSearchQuery.isEmpty {
@@ -1480,6 +1549,18 @@ final class ProjectSurfaceModel: ObservableObject {
     refreshGitStatus()
   }
 
+  private func scheduleExternalReload() {
+    pendingExternalReloadTask?.cancel()
+    pendingExternalReloadTask = Task { @MainActor [weak self] in
+      try? await Task.sleep(for: .milliseconds(250))
+      guard !Task.isCancelled, let self else {
+        return
+      }
+      self.pendingExternalReloadTask = nil
+      self.reload()
+    }
+  }
+
   private func scheduleTreeReload() {
     treeLoadGeneration += 1
     let generation = treeLoadGeneration
@@ -1493,7 +1574,7 @@ final class ProjectSurfaceModel: ObservableObject {
     fileTree = ProjectFileTreeSnapshot(
       root: fileTree.root,
       availability: fileTree.availability,
-      isLoading: true
+      isLoading: fileTree.root == nil
     )
 
     treeLoadTask = Task { [weak self] in
@@ -1520,17 +1601,69 @@ final class ProjectSurfaceModel: ObservableObject {
     }
   }
 
+  private func invalidateNavigationIndex() {
+    navigationIndexGeneration += 1
+    navigationIndexTask?.cancel()
+    navigationIndexTask = nil
+    navigationFileIndex = nil
+    navigationSearchIndex = nil
+  }
+
+  private func startNavigationIndexBuild() {
+    navigationIndexGeneration += 1
+    let generation = navigationIndexGeneration
+    navigationIndexTask?.cancel()
+    navigationFileIndex = nil
+    navigationSearchIndex = nil
+    let rootURL = rootChecker.canonicalURL(for: self.rootURL)
+    navigationIndexTask = Task { [weak self] in
+      let index = await ProjectNavigation.fileIndexAsync(rootURL: rootURL)
+      guard
+        !Task.isCancelled,
+        let self,
+        generation == self.navigationIndexGeneration
+      else {
+        return
+      }
+      self.navigationFileIndex = index
+      self.navigationSearchIndex = ProjectNavigationSearchIndex(files: index.files)
+      self.navigationIndexTask = nil
+    }
+  }
+
+  private func navigationIndex() async -> ProjectNavigationFileIndex? {
+    if let navigationFileIndex {
+      return navigationFileIndex
+    }
+    if let navigationIndexTask {
+      await navigationIndexTask.value
+    }
+    return navigationFileIndex
+  }
+
+  private func searchIndex() async -> ProjectNavigationSearchIndex? {
+    if let navigationSearchIndex {
+      return navigationSearchIndex
+    }
+    if let navigationIndexTask {
+      await navigationIndexTask.value
+    }
+    return navigationSearchIndex
+  }
+
   private func startDirectoryCachePrefetch() {
     directoryCacheGeneration += 1
     let generation = directoryCacheGeneration
     directoryCacheTask?.cancel()
 
     let rootURL = rootChecker.canonicalURL(for: self.rootURL)
+    let loadedDirectoryPaths = self.loadedDirectoryPaths
     let fileManager = ProjectFileManagerBox(self.fileManager)
     directoryCacheTask = Task { [weak self] in
       let cacheTask = Task.detached(priority: .utility) {
         ProjectFileTreeScanner.prefetchDirectoryCache(
           rootURL: rootURL,
+          directoryPaths: loadedDirectoryPaths,
           fileManager: fileManager.value
         )
       }
@@ -1570,6 +1703,8 @@ final class ProjectSurfaceModel: ObservableObject {
     guard let root = snapshot.root else {
       expandedNodeIDs.removeAll()
       selectedNodeID = nil
+      loadedDirectoryPaths = [rootURL.standardizedFileURL.path]
+      directoryEntryLimits.removeAll(keepingCapacity: true)
       watcher?.updateWatchedDirectories(loadedDirectoryURLs())
       return
     }

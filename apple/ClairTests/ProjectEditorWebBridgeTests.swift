@@ -32,4 +32,18 @@ final class ProjectEditorWebBridgeTests: XCTestCase {
     XCTAssertFalse(selection.canUndo)
     XCTAssertTrue(selection.canRedo)
   }
+
+  func testRejectsNegativeAndReversedUTF16Coordinates() throws {
+    let reversedEditJSON =
+      #"{"baseRevision":0,"changes":[{"from":4,"to":2,"insert":"x"}],"selection":{"from":0,"to":0},"canUndo":true,"canRedo":false}"#
+    let reversedEditBody = try XCTUnwrap(
+      JSONSerialization.jsonObject(with: Data(reversedEditJSON.utf8)) as? [String: Any])
+    XCTAssertNil(ProjectEditorWebChange(messageBody: reversedEditBody))
+
+    let negativeSelectionJSON =
+      #"{"selection":{"from":-1,"to":0},"canUndo":false,"canRedo":false}"#
+    let negativeSelectionBody = try XCTUnwrap(
+      JSONSerialization.jsonObject(with: Data(negativeSelectionJSON.utf8)) as? [String: Any])
+    XCTAssertNil(ProjectEditorWebSelectionChange(messageBody: negativeSelectionBody))
+  }
 }

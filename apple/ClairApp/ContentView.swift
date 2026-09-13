@@ -1112,6 +1112,7 @@ private struct WindowZoomDoubleClickHandler: NSViewRepresentable {
 private final class WindowZoomDoubleClickView: NSView {
   private var eventMonitor: Any?
   private var windowObservers: [NSObjectProtocol] = []
+  private var trafficLightLayoutPending = false
 
   override func viewDidMoveToWindow() {
     super.viewDidMoveToWindow()
@@ -1119,7 +1120,7 @@ private final class WindowZoomDoubleClickView: NSView {
 
     guard let window else { return }
     startWindowObservers(window)
-    layoutTrafficLights(in: window)
+    scheduleTrafficLightLayout()
     eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) {
       [weak self] event in
       guard
@@ -1148,10 +1149,7 @@ private final class WindowZoomDoubleClickView: NSView {
 
   override func layout() {
     super.layout()
-    DispatchQueue.main.async { [weak self] in
-      guard let self, let window = self.window else { return }
-      self.layoutTrafficLights(in: window)
-    }
+    scheduleTrafficLightLayout()
   }
 
   func stopMonitoring() {
@@ -1161,6 +1159,7 @@ private final class WindowZoomDoubleClickView: NSView {
     }
     windowObservers.forEach(NotificationCenter.default.removeObserver)
     windowObservers = []
+    trafficLightLayoutPending = false
   }
 
   private func startWindowObservers(_ window: NSWindow) {
@@ -1173,10 +1172,27 @@ private final class WindowZoomDoubleClickView: NSView {
     windowObservers = names.map { name in
       center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
         MainActor.assumeIsolated {
-          guard let self, let window = self.window else { return }
-          self.layoutTrafficLights(in: window)
+          self?.scheduleTrafficLightLayout()
         }
       }
+    }
+  }
+
+  private func scheduleTrafficLightLayout() {
+    guard window != nil, !trafficLightLayoutPending else {
+      return
+    }
+
+    trafficLightLayoutPending = true
+    DispatchQueue.main.async { [weak self] in
+      guard let self else {
+        return
+      }
+      self.trafficLightLayoutPending = false
+      guard let window = self.window else {
+        return
+      }
+      self.layoutTrafficLights(in: window)
     }
   }
 
@@ -1211,12 +1227,14 @@ private final class WindowZoomDoubleClickView: NSView {
       )
       let targetCenter = NSPoint(x: currentCenter.x, y: midYInContent)
       let originInSuper = superview.convert(targetCenter, from: contentView)
-      button.setFrameOrigin(
-        NSPoint(
-          x: button.frame.origin.x,
-          y: originInSuper.y - button.frame.height / 2
-        )
+      let targetOrigin = NSPoint(
+        x: button.frame.origin.x,
+        y: originInSuper.y - button.frame.height / 2
       )
+      guard abs(button.frame.minY - targetOrigin.y) > 0.25 else {
+        continue
+      }
+      button.setFrameOrigin(targetOrigin)
     }
   }
 }
@@ -1745,7 +1763,7 @@ private struct ProjectTabGroup: View {
   /// than a separate round swatch, and a left click folds the group toward it
   /// — no disclosure glyph, because the chip itself is the toggle.
   private var chip: some View {
-    Button(action: onToggleCollapsed) {
+    Button(action: activateOrToggle) {
       Text(project.name)
         .font(WorkspaceChrome.chromeFont(size: 12, weight: .semibold))
         .lineLimit(1)
@@ -1761,10 +1779,22 @@ private struct ProjectTabGroup: View {
     }
     .buttonStyle(.plain)
     .foregroundStyle(chipText)
-    .help("\(project.name) タブグループを\(isCollapsed ? "展開" : "折りたたむ")")
+    .help(
+      isActive
+        ? "\(project.name) タブグループを\(isCollapsed ? "展開" : "折りたたむ")"
+        : "\(project.name) Projectに切り替える"
+    )
     .accessibilityLabel("Project \(project.name)")
     .accessibilityValue(isCollapsed ? "折りたたみ" : "展開")
     .contextMenu { menu }
+  }
+
+  private func activateOrToggle() {
+    if isActive {
+      onToggleCollapsed()
+    } else {
+      onSelectProject(project.id)
+    }
   }
 
   private var chipFill: Color {
@@ -1789,19 +1819,6 @@ private struct ProjectTabGroup: View {
       ? WorkspaceChrome.textQuaternary : WorkspaceChrome.textSecondary
   }
 
-  private var groupColorBinding: Binding<ProjectColor> {
-    Binding(
-      get: { project.color },
-      set: { color in
-        _ = workspace.execute(
-          .setProjectColor(
-            SetProjectColorCommand(projectID: project.id, color: color)
-          )
-        )
-      }
-    )
-  }
-
   @ViewBuilder
   private var menu: some View {
     if !isActive {
@@ -1813,9 +1830,20 @@ private struct ProjectTabGroup: View {
     Button("Project名を変更") {
       onRenameProject(project)
     }
-    Picker("グループカラー", selection: groupColorBinding) {
+    Menu("グループカラー") {
       ForEach(ProjectColor.allCases, id: \.self) { color in
-        Text(color.displayName).tag(color)
+        Button {
+          _ = workspace.execute(
+            .setProjectColor(
+              SetProjectColorCommand(projectID: project.id, color: color)
+            )
+          )
+        } label: {
+          Label(
+            color.displayName,
+            systemImage: project.color == color ? "checkmark" : "circle.fill"
+          )
+        }
       }
     }
     Divider()
@@ -1910,6 +1938,7 @@ private struct WorkspaceTabStrip: View {
       .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
     .buttonStyle(.plain)
+    .hoverableRow(isSelected: isActive, selectedColor: WorkspaceChrome.canvas, cornerRadius: 8)
     // Only the selected tab carries a close control. An × on every tab turns
     // the strip into a row of buttons; on one tab it is an action for the
     // thing you are already looking at.
@@ -2154,17 +2183,67 @@ private struct WorkspaceStatusBar: View {
   @ViewBuilder
   private var branchState: some View {
     if let gitStatus = surface.gitStatus, gitStatus.isRepository {
-      HStack(spacing: 5) {
-        Image(systemName: "arrow.triangle.branch")
-          .font(.system(size: 11, weight: .medium))
-        Text(gitStatus.branch ?? "HEAD")
-          .lineLimit(1)
+      Menu {
+        if gitStatus.branches.isEmpty {
+          Text("ブランチがありません")
+        } else {
+          Section("ブランチ") {
+            ForEach(gitStatus.branches, id: \.self) { branch in
+              Button {
+                switchBranch(branch)
+              } label: {
+                Label(
+                  branch,
+                  systemImage: branch == gitStatus.branch
+                    ? "checkmark" : "arrow.triangle.branch"
+                )
+              }
+              .disabled(branch == gitStatus.branch)
+            }
+          }
+        }
+        Divider()
+        Button("Gitを開く") {
+          surface.workspaceActivity = .git
+        }
+        Button("Gitを更新") {
+          refreshGit()
+        }
+      } label: {
+        HStack(spacing: 5) {
+          Image(systemName: "arrow.triangle.branch")
+            .font(.system(size: 11, weight: .medium))
+          Text(gitStatus.branch ?? "HEAD")
+            .lineLimit(1)
+          Image(systemName: "chevron.down")
+            .font(.system(size: 8, weight: .semibold))
+        }
+        .foregroundStyle(WorkspaceChrome.textTertiary)
+        .contentShape(Rectangle())
       }
-      Text("↓\(gitStatus.behind) ↑\(gitStatus.ahead)")
-        .monospaced()
-        .font(WorkspaceChrome.chromeFont(size: 10))
-        .foregroundStyle(WorkspaceChrome.textMuted)
-      Text("\(gitStatus.changes.count) 変更")
+      .menuStyle(.borderlessButton)
+      .help("ブランチを切り替える")
+      .accessibilityLabel("ブランチ \(gitStatus.branch ?? "HEAD")")
+
+      Button {
+        surface.workspaceActivity = .git
+      } label: {
+        Text("↓\(gitStatus.behind) ↑\(gitStatus.ahead)")
+          .monospaced()
+          .font(WorkspaceChrome.chromeFont(size: 10))
+          .foregroundStyle(WorkspaceChrome.textMuted)
+      }
+      .buttonStyle(.plain)
+      .help("Gitを開く")
+
+      Button {
+        surface.workspaceActivity = .git
+      } label: {
+        Text("\(gitStatus.changes.count) 変更")
+      }
+      .buttonStyle(.plain)
+      .foregroundStyle(WorkspaceChrome.textTertiary)
+      .help("変更を開く")
     } else {
       Text(project.rootURL.path)
         .lineLimit(1)
@@ -2179,7 +2258,7 @@ private struct WorkspaceStatusBar: View {
   private var screenContext: some View {
     switch surface.workspaceActivity {
     case .files, .search, .review:
-      if let tab = surface.activeTab(in: surface.focusedPaneID) {
+      if let tab = surface.activeTab(in: surface.focusedPaneID), tab.kind == .editor {
         separator
         Text(tab.title).lineLimit(1).truncationMode(.middle)
       }
@@ -2222,6 +2301,21 @@ private struct WorkspaceStatusBar: View {
     .buttonStyle(.plain)
     .foregroundStyle(WorkspaceChrome.textTertiary)
     .help("Agent追加画面を開く")
+  }
+
+  private func switchBranch(_ branch: String) {
+    guard branch != surface.gitStatus?.branch else {
+      return
+    }
+    _ = workspace.execute(
+      .gitSwitchBranch(
+        GitSwitchBranchCommand(projectID: project.id, branch: branch)
+      )
+    )
+  }
+
+  private func refreshGit() {
+    _ = workspace.execute(.gitRefresh(GitRefreshCommand(projectID: project.id)))
   }
 }
 
@@ -2672,19 +2766,28 @@ private struct ProjectAgentView: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
-      HStack(spacing: 10) {
-        Label("Agentワークフロー", systemImage: "person.2")
-          .font(.title3.weight(.semibold))
+      MainHeader {
+        Image(systemName: "person.2")
+          .font(.system(size: 13, weight: .semibold))
+          .foregroundStyle(WorkspaceChrome.accent)
+        Text("Agents")
+          .font(WorkspaceChrome.chromeFont(size: 14, weight: .semibold))
+          .foregroundStyle(WorkspaceChrome.textPrimary)
         Text(project.name)
-          .foregroundStyle(.secondary)
+          .font(WorkspaceChrome.chromeFont(size: 11))
+          .foregroundStyle(WorkspaceChrome.textTertiary)
           .lineLimit(1)
-        Spacer()
-        Button("閉じる", action: dismiss.callAsFunction)
-          .buttonStyle(.tactile)
+        Spacer(minLength: 0)
+        ChromeActionButton(
+          width: 24,
+          height: 24,
+          help: "Agentsを閉じる",
+          action: dismiss.callAsFunction
+        ) {
+          Image(systemName: "xmark")
+            .font(.system(size: 10, weight: .semibold))
+        }
       }
-      .padding(12)
-
-      Divider()
 
       ScrollView {
         VStack(alignment: .leading, spacing: 16) {
@@ -2699,6 +2802,8 @@ private struct ProjectAgentView: View {
       }
     }
     .frame(minWidth: 680, minHeight: 560)
+    .foregroundStyle(WorkspaceChrome.textPrimary)
+    .background(WorkspaceChrome.canvas)
     .background {
       ThinScrollbarsInstaller()
     }
@@ -2798,6 +2903,7 @@ private struct ProjectAgentView: View {
       .buttonStyle(.borderedProminent)
       .disabled(!hasValidModelSelection)
     }
+    .agentWorkflowCard()
   }
 
   private var worktreeSection: some View {
@@ -2848,6 +2954,7 @@ private struct ProjectAgentView: View {
         }
       }
     }
+    .agentWorkflowCard()
   }
 
   private func managedWorktreeRow(_ worktree: ManagedWorktree) -> some View {
@@ -3006,6 +3113,7 @@ private struct ProjectAgentView: View {
       }
       .buttonStyle(.bordered)
     }
+    .agentWorkflowCard()
   }
 
   @ViewBuilder
@@ -3023,6 +3131,7 @@ private struct ProjectAgentView: View {
         }
       }
     }
+    .agentWorkflowCard()
   }
 
   private func agentSessionRow(_ session: AgentWorkflowSession) -> some View {
@@ -3038,8 +3147,8 @@ private struct ProjectAgentView: View {
             .compactMap { $0 }
             .joined(separator: " · ")
         )
-          .font(.caption)
-          .foregroundStyle(.secondary)
+        .font(.caption)
+        .foregroundStyle(.secondary)
       }
       Spacer()
       Button("表示") {
@@ -3111,6 +3220,7 @@ private struct ProjectAgentView: View {
         }
       }
     }
+    .agentWorkflowCard()
   }
 
   @ViewBuilder
@@ -3129,6 +3239,7 @@ private struct ProjectAgentView: View {
           .foregroundStyle(.secondary)
           .textSelection(.enabled)
       }
+      .agentWorkflowCard()
     }
   }
 
@@ -3166,11 +3277,24 @@ private struct ProjectAgentView: View {
   }
 }
 
+extension View {
+  /// Agent surfaces use the same quiet raised panel as the workspace settings
+  /// instead of falling back to AppKit's default sheet styling.
+  fileprivate func agentWorkflowCard() -> some View {
+    padding(14)
+      .background(
+        WorkspaceChrome.surface.opacity(0.72),
+        in: RoundedRectangle(cornerRadius: WorkspaceChrome.Radius.card, style: .continuous)
+      )
+      .overlay {
+        RoundedRectangle(cornerRadius: WorkspaceChrome.Radius.card, style: .continuous)
+          .stroke(WorkspaceChrome.borderStrong, lineWidth: 1)
+      }
+  }
+}
+
 private struct ProjectTerminalPanel: View {
-  let project: Project
   @ObservedObject var session: TerminalSession
-  let onHide: () -> Void
-  let onEnd: () -> Void
   let onRecover: () -> Void
 
   var body: some View {
@@ -3192,14 +3316,6 @@ private struct ProjectTerminalPanel: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
         }
-        Button("エディタ", action: onHide)
-          .buttonStyle(.tactile)
-          .font(WorkspaceChrome.chromeFont(size: 11))
-          .foregroundStyle(WorkspaceChrome.textTertiary)
-        Button("終了", action: onEnd)
-          .buttonStyle(.tactile)
-          .font(WorkspaceChrome.chromeFont(size: 11))
-          .foregroundStyle(WorkspaceChrome.danger)
       }
       .padding(.horizontal, 10)
       .padding(.vertical, 6)
@@ -3375,7 +3491,6 @@ private struct PathBreadcrumb<Trailing: View>: View {
 /// 24px on its file, not 82.
 private struct ProjectEditorBreadcrumbActions: View {
   @ObservedObject var tab: ProjectEditorTab
-  @ObservedObject var surface: ProjectSurfaceModel
 
   var body: some View {
     HStack(spacing: 6) {
@@ -3386,36 +3501,6 @@ private struct ProjectEditorBreadcrumbActions: View {
       } else if tab.isDirty {
         marker("未保存", tint: WorkspaceChrome.attention)
       }
-
-      Menu {
-        Button("元に戻す") {
-          surface.undoActiveTab()
-        }
-        .disabled(!tab.canUndo)
-        Button("やり直す") {
-          surface.redoActiveTab()
-        }
-        .disabled(!tab.canRedo)
-        Button("ツリーで表示") {
-          surface.reveal(nodeID: tab.id)
-        }
-        Divider()
-        Button("保存") {
-          surface.save(tabID: tab.id)
-        }
-        .disabled(!tab.isDirty || tab.isMissing || tab.isReadOnly)
-      } label: {
-        Image(systemName: "ellipsis")
-          .font(.system(size: 11, weight: .semibold))
-          .foregroundStyle(WorkspaceChrome.textQuaternary)
-          .frame(width: 20, height: 18)
-          .contentShape(Rectangle())
-      }
-      .menuStyle(.borderlessButton)
-      .menuIndicator(.hidden)
-      .fixedSize()
-      .help("エディタの操作")
-      .accessibilityLabel("エディタの操作")
     }
   }
 
@@ -3474,7 +3559,7 @@ private struct ProjectPaneView: View {
               path: tab.filePath ?? tab.title,
               rootURL: project.rootURL
             ) {
-              ProjectEditorBreadcrumbActions(tab: document, surface: surface)
+              ProjectEditorBreadcrumbActions(tab: document)
             }
             ProjectNativeEditorTab(
               tab: document,
@@ -3495,10 +3580,7 @@ private struct ProjectPaneView: View {
       case .terminal:
         if let session = surface.terminalSession(tabID: tab.id) {
           ProjectTerminalPanel(
-            project: project,
             session: session,
-            onHide: surface.hideTerminal,
-            onEnd: surface.endTerminal,
             onRecover: { surface.recoverTerminal(tabID: tab.id) }
           )
         } else {
@@ -3615,17 +3697,40 @@ private struct ProjectGitView: View {
   @ObservedObject var surface: ProjectSurfaceModel
   let onDismiss: () -> Void
   @State private var commitMessage = ""
+  @State private var showsGraph = false
+  @State private var graphSnapshot: ProjectGitGraphSnapshot?
+  @State private var graphErrorMessage: String?
+  @State private var isGraphLoading = false
+  @State private var graphTask: Task<Void, Never>?
 
   var body: some View {
     VStack(spacing: 0) {
       SidebarPanelHeader(title: WorkspaceActivity.git.title) {
-        ChromeActionButton(width: 20, height: 20, help: "更新", action: refresh) {
-          Image(systemName: "arrow.clockwise")
-            .font(.system(size: 11, weight: .medium))
+        HStack(spacing: 3) {
+          ChromeActionButton(
+            width: 20,
+            height: 20,
+            help: showsGraph ? "変更一覧を表示" : "Git Graphを表示",
+            action: toggleGraph
+          ) {
+            Image(systemName: showsGraph ? "list.bullet" : "arrow.triangle.branch")
+              .font(.system(size: 11, weight: .medium))
+          }
+          ChromeActionButton(width: 20, height: 20, help: "更新", action: refresh) {
+            Image(systemName: "arrow.clockwise")
+              .font(.system(size: 11, weight: .medium))
+          }
         }
       }
 
-      if let status = surface.gitStatus, status.isRepository {
+      if showsGraph {
+        ProjectGitGraphView(
+          snapshot: graphSnapshot,
+          isLoading: isGraphLoading,
+          errorMessage: graphErrorMessage,
+          onReload: loadGraph
+        )
+      } else if let status = surface.gitStatus, status.isRepository {
         commitBox(status)
         if status.changes.isEmpty {
           ChromeEmptyState(
@@ -3657,6 +3762,9 @@ private struct ProjectGitView: View {
     .background(WorkspaceChrome.chrome)
     .onAppear {
       refresh()
+    }
+    .onDisappear {
+      graphTask?.cancel()
     }
   }
 
@@ -3802,6 +3910,35 @@ private struct ProjectGitView: View {
 
   private func refresh() {
     _ = workspace.execute(.gitRefresh(GitRefreshCommand(projectID: projectID)))
+    if showsGraph {
+      loadGraph()
+    }
+  }
+
+  private func toggleGraph() {
+    showsGraph.toggle()
+    if showsGraph {
+      loadGraph()
+    }
+  }
+
+  private func loadGraph() {
+    graphTask?.cancel()
+    isGraphLoading = true
+    graphErrorMessage = nil
+    let rootURL = surface.rootURL
+    graphTask = Task { @MainActor in
+      let snapshot = await Task.detached(priority: .utility) {
+        try? ProjectGitService(rootURL: rootURL).graph()
+      }.value
+      guard !Task.isCancelled else {
+        return
+      }
+      graphSnapshot = snapshot
+      graphErrorMessage = snapshot == nil ? "Git履歴を取得できませんでした。" : nil
+      isGraphLoading = false
+      graphTask = nil
+    }
   }
 
   private func commit() {
@@ -3831,6 +3968,204 @@ private struct ProjectGitView: View {
     _ = workspace.execute(
       .gitUnstage(GitUnstageCommand(projectID: projectID, relativePath: change.path))
     )
+  }
+}
+
+private struct ProjectGitGraphView: View {
+  let snapshot: ProjectGitGraphSnapshot?
+  let isLoading: Bool
+  let errorMessage: String?
+  let onReload: () -> Void
+
+  var body: some View {
+    Group {
+      if let snapshot, snapshot.isRepository {
+        VStack(alignment: .leading, spacing: 0) {
+          graphSummary(snapshot)
+          if snapshot.commits.isEmpty {
+            ChromeEmptyState(
+              symbol: "point.3.connected.trianglepath.dotted",
+              title: "コミット履歴はありません",
+              message: "このProjectにはまだ表示できるコミットがありません。"
+            )
+            Spacer(minLength: 0)
+          } else {
+            ScrollView {
+              LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(snapshot.commits.enumerated()), id: \.element.id) { index, commit in
+                  ProjectGitGraphCommitRow(
+                    commit: commit,
+                    hasFollowingCommit: index + 1 < snapshot.commits.count
+                  )
+                }
+              }
+              .padding(.vertical, 4)
+            }
+            .scrollIndicators(.automatic)
+            if snapshot.isTruncated {
+              Text("表示上限 (snapshot.commits.count)件に達しています")
+                .font(WorkspaceChrome.chromeFont(size: 10))
+                .foregroundStyle(WorkspaceChrome.textQuaternary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+            }
+          }
+        }
+      } else if let snapshot {
+        ChromeEmptyState(
+          symbol: "arrow.triangle.branch",
+          title: "Git Graphを利用できません",
+          message: snapshot.message ?? "このProjectはGitリポジトリではありません。"
+        )
+        Spacer(minLength: 0)
+      } else if isLoading {
+        ChromeEmptyState(
+          symbol: "arrow.triangle.2.circlepath",
+          title: "Git Graphを読み込み中",
+          message: "履歴を取得しています。"
+        )
+        Spacer(minLength: 0)
+      } else if let errorMessage {
+        VStack(spacing: 10) {
+          ChromeEmptyState(
+            symbol: "exclamationmark.triangle",
+            title: "Git Graphを開けません",
+            message: errorMessage
+          )
+          Button("再読み込み", action: onReload)
+            .buttonStyle(.tactile)
+            .font(WorkspaceChrome.chromeFont(size: 11))
+        }
+        Spacer(minLength: 0)
+      } else {
+        ChromeEmptyState(
+          symbol: "arrow.triangle.branch",
+          title: "Git Graphを読み込み中",
+          message: "履歴を取得しています。"
+        )
+        Spacer(minLength: 0)
+      }
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    .background(WorkspaceChrome.chrome)
+  }
+
+  private func graphSummary(_ snapshot: ProjectGitGraphSnapshot) -> some View {
+    VStack(alignment: .leading, spacing: 7) {
+      HStack(spacing: 6) {
+        Image(systemName: "arrow.triangle.branch")
+          .font(.system(size: 11, weight: .medium))
+          .foregroundStyle(WorkspaceChrome.accent)
+        Text(snapshot.branch ?? "detached HEAD")
+          .font(WorkspaceChrome.chromeFont(size: 11, weight: .semibold))
+          .foregroundStyle(WorkspaceChrome.textPrimary)
+          .lineLimit(1)
+        Spacer(minLength: 4)
+        Text("(snapshot.commits.count) commits")
+          .font(.system(size: 10, design: .monospaced))
+          .foregroundStyle(WorkspaceChrome.textQuaternary)
+      }
+      if !snapshot.refs.isEmpty {
+        ScrollView(.horizontal, showsIndicators: false) {
+          HStack(spacing: 5) {
+            ForEach(snapshot.refs) { ref in
+              Text(ref.name)
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundStyle(
+                  ref.isCurrent ? WorkspaceChrome.textPrimary : WorkspaceChrome.textTertiary
+                )
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(
+                  ref.isCurrent ? WorkspaceChrome.washSelected : WorkspaceChrome.washFaint,
+                  in: RoundedRectangle(cornerRadius: 3, style: .continuous)
+                )
+            }
+          }
+        }
+      }
+    }
+    .padding(.horizontal, 12)
+    .padding(.vertical, 9)
+    .overlay(alignment: .bottom) {
+      Rectangle()
+        .fill(WorkspaceChrome.border)
+        .frame(height: 1)
+    }
+  }
+}
+
+private struct ProjectGitGraphCommitRow: View {
+  let commit: ProjectGitGraphCommit
+  let hasFollowingCommit: Bool
+
+  private var laneColor: Color {
+    commit.parentRevisions.count > 1 ? WorkspaceChrome.attention : WorkspaceChrome.accent
+  }
+
+  var body: some View {
+    HStack(alignment: .top, spacing: 7) {
+      ZStack(alignment: .top) {
+        if hasFollowingCommit {
+          Rectangle()
+            .fill(laneColor.opacity(0.56))
+            .frame(width: 2)
+            .padding(.top, 10)
+        }
+        Circle()
+          .fill(WorkspaceChrome.chrome)
+          .frame(width: 10, height: 10)
+          .overlay {
+            Circle()
+              .stroke(laneColor, lineWidth: 2)
+          }
+          .padding(.top, 4)
+      }
+      .frame(minWidth: 18, maxWidth: 18, minHeight: 58)
+
+      VStack(alignment: .leading, spacing: 4) {
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
+          Text(commit.subject)
+            .font(WorkspaceChrome.chromeFont(size: 11, weight: .medium))
+            .foregroundStyle(WorkspaceChrome.textPrimary)
+            .lineLimit(2)
+          Spacer(minLength: 3)
+          Text(commit.shortRevision)
+            .font(.system(size: 9, design: .monospaced))
+            .foregroundStyle(WorkspaceChrome.textQuaternary)
+        }
+        HStack(spacing: 6) {
+          Text(commit.author)
+            .font(WorkspaceChrome.chromeFont(size: 10))
+            .foregroundStyle(WorkspaceChrome.textTertiary)
+            .lineLimit(1)
+          Text(commit.authoredAt.prefix(10))
+            .font(.system(size: 9, design: .monospaced))
+            .foregroundStyle(WorkspaceChrome.textQuaternary)
+        }
+        if !commit.refs.isEmpty {
+          HStack(spacing: 4) {
+            ForEach(commit.refs) { ref in
+              Text(ref.name)
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundStyle(
+                  ref.isCurrent ? WorkspaceChrome.textPrimary : WorkspaceChrome.textTertiary
+                )
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(
+                  ref.isCurrent ? WorkspaceChrome.accent.opacity(0.18) : WorkspaceChrome.washFaint,
+                  in: RoundedRectangle(cornerRadius: 3, style: .continuous)
+                )
+            }
+          }
+        }
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+    }
+    .padding(.horizontal, 13)
+    .padding(.vertical, 7)
+    .contentShape(Rectangle())
   }
 }
 
@@ -5213,7 +5548,7 @@ private struct ProjectFileTreeRow: View {
       selectedColor: WorkspaceChrome.washSelected,
       cornerRadius: isSelected ? 7 : 0
     )
-    .padding(.horizontal, isSelected ? 8 : 0)
+    .padding(.horizontal, 8)
     .contentShape(Rectangle())
     .onTapGesture {
       if node.isDirectory {

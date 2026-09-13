@@ -45,6 +45,9 @@ final class TerminalGrid {
   }
 
   func resize(rows: UInt16, columns: UInt16) {
+    guard rows > 0, columns > 0, Int(rows) != self.rows || Int(columns) != self.columns else {
+      return
+    }
     clair_vterm_resize(handle, Int32(rows), Int32(columns))
   }
 
@@ -101,11 +104,16 @@ struct TerminalSurfaceView: NSViewRepresentable {
 }
 @MainActor
 final class NativeTerminalView: NSView {
+  private static let outputFlushDelayNanoseconds: UInt64 = 8_000_000
+
   private let scrollView: NSScrollView
   private let textView: TerminalTextView
   private let session: TerminalSession
   private let grid: TerminalGrid
   private var eventObserverID: UUID?
+  private var layoutDimensions: TerminalDimensions?
+  private var pendingOutput = TerminalOutputQueue()
+  private var outputFlushTask: Task<Void, Never>?
 
   init(session: TerminalSession) {
     self.session = session
@@ -175,6 +183,11 @@ final class NativeTerminalView: NSView {
     }
     let columns = UInt16(max(2, min(1_000, Int(contentSize.width / cell.width))))
     let rows = UInt16(max(2, min(1_000, Int(contentSize.height / cell.height))))
+    let nextDimensions = TerminalDimensions(rows: rows, columns: columns)
+    guard layoutDimensions != nextDimensions else {
+      return
+    }
+    layoutDimensions = nextDimensions
     grid.resize(rows: rows, columns: columns)
     textView.render(grid)
     session.resize(rows: rows, columns: columns)
@@ -185,23 +198,65 @@ final class NativeTerminalView: NSView {
       session.removeEventObserver(eventObserverID)
       self.eventObserverID = nil
     }
+    outputFlushTask?.cancel()
+    outputFlushTask = nil
+    pendingOutput.removeAll()
     textView.inputHandler = nil
   }
 
   private func render(_ output: Data) {
+    pendingOutput.append(output)
+    scheduleOutputFlush()
+  }
+
+  private func reset(with marker: Data) {
+    flushPendingOutputImmediately()
+    grid.reset()
+    grid.feed(marker)
+    textView.render(grid)
+    scrollToBottom()
+  }
+
+  private func scheduleOutputFlush() {
+    guard outputFlushTask == nil else {
+      return
+    }
+    outputFlushTask = Task { @MainActor [weak self] in
+      do {
+        try await Task.sleep(nanoseconds: Self.outputFlushDelayNanoseconds)
+      } catch {
+        return
+      }
+      guard let self, !Task.isCancelled else {
+        return
+      }
+      self.outputFlushTask = nil
+      self.flushPendingOutput()
+    }
+  }
+
+  private func flushPendingOutputImmediately() {
+    outputFlushTask?.cancel()
+    outputFlushTask = nil
+    while !pendingOutput.isEmpty {
+      flushPendingOutput(scheduleNext: false)
+    }
+  }
+
+  private func flushPendingOutput(scheduleNext: Bool = true) {
+    guard !pendingOutput.isEmpty else {
+      return
+    }
     let wasAtBottom = isPinnedToBottom()
+    let output = pendingOutput.removeNextBatch()
     grid.feed(output)
     textView.render(grid)
     if wasAtBottom {
       scrollToBottom()
     }
-  }
-
-  private func reset(with marker: Data) {
-    grid.reset()
-    grid.feed(marker)
-    textView.render(grid)
-    scrollToBottom()
+    if scheduleNext, !pendingOutput.isEmpty {
+      scheduleOutputFlush()
+    }
   }
 
   private func isPinnedToBottom() -> Bool {
@@ -237,9 +292,13 @@ final class TerminalTextView: NSTextView {
   private let terminalTextStorage: NSTextStorage
   private let terminalLayoutManager: NSLayoutManager
   private let terminalTextContainer: NSTextContainer
+  private let normalFont = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+  private let boldFont = NSFont.monospacedSystemFont(ofSize: 13, weight: .bold)
   private var markedTextValue = ""
   private var selectionAnchor: GridPosition?
   private var selectionEnd: GridPosition?
+  private var rowCache: [Int: [ClairVTermCell]] = [:]
+  private var colorCache: [UInt32: NSColor] = [:]
 
   let cellSize: CGSize = {
     let font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
@@ -335,7 +394,7 @@ final class TerminalTextView: NSTextView {
     }
     markedTextValue = ""
     inputHandler?(Data(text.utf8))
-    needsDisplay = true
+    invalidateVisibleArea()
   }
 
   override func setMarkedText(
@@ -350,12 +409,12 @@ final class TerminalTextView: NSTextView {
     } else {
       markedTextValue = ""
     }
-    needsDisplay = true
+    invalidateVisibleArea()
   }
 
   override func unmarkText() {
     markedTextValue = ""
-    needsDisplay = true
+    invalidateVisibleArea()
   }
 
   override func hasMarkedText() -> Bool {
@@ -402,7 +461,7 @@ final class TerminalTextView: NSTextView {
     selectionAnchor = position
     selectionEnd = position
     window?.makeFirstResponder(self)
-    needsDisplay = true
+    invalidateVisibleArea()
   }
 
   override func mouseDragged(with event: NSEvent) {
@@ -411,13 +470,13 @@ final class TerminalTextView: NSTextView {
       return
     }
     selectionEnd = position
-    needsDisplay = true
+    invalidateVisibleArea()
   }
 
   override func mouseUp(with event: NSEvent) {
     if let position = gridPosition(for: event), selectionAnchor != nil {
       selectionEnd = position
-      needsDisplay = true
+      invalidateVisibleArea()
       return
     }
     super.mouseUp(with: event)
@@ -427,7 +486,7 @@ final class TerminalTextView: NSTextView {
     WorkspaceChrome.nsCanvas.setFill()
     dirtyRect.fill()
     if let grid {
-      draw(grid: grid)
+      draw(grid: grid, in: dirtyRect)
     }
     guard !markedTextValue.isEmpty else {
       return
@@ -449,24 +508,57 @@ final class TerminalTextView: NSTextView {
   }
 
   func render(_ grid: TerminalGrid) {
+    rowCache.removeAll(keepingCapacity: true)
+    colorCache.removeAll(keepingCapacity: true)
     let size = NSSize(
       width: textContainerInset.width * 2 + CGFloat(grid.columns) * cellSize.width,
       height: textContainerInset.height * 2 + CGFloat(grid.displayedRows) * cellSize.height
     )
     minSize = size
     setFrameSize(size)
-    enclosingScrollView?.contentView.needsDisplay = true
-    needsDisplay = true
+    let viewport = visibleRect.isEmpty ? bounds : visibleRect
+    var invalidationRect = viewport.insetBy(dx: -cellSize.width, dy: -cellSize.height)
+    if let clipView = enclosingScrollView?.contentView {
+      let bottomY = max(0, bounds.height - clipView.bounds.height)
+      let bottomRect = NSRect(
+        x: 0,
+        y: bottomY,
+        width: bounds.width,
+        height: min(bounds.height, clipView.bounds.height + cellSize.height)
+      )
+      invalidationRect = invalidationRect.union(bottomRect)
+    }
+    setNeedsDisplay(invalidationRect)
   }
 
-  private func draw(grid: TerminalGrid) {
-    let normalFont = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
-    let boldFont = NSFont.monospacedSystemFont(ofSize: 13, weight: .bold)
+  private func draw(grid: TerminalGrid, in dirtyRect: NSRect) {
     let cursor = grid.cursor
     let liveGridStart = grid.scrollbackRows
-    for row in 0..<grid.displayedRows {
-      for column in 0..<grid.columns {
-        guard let cell = grid.displayedCell(row: row, column: column), cell.width > 0 else {
+    let minimumRow = max(
+      0,
+      Int(floor((dirtyRect.minY - textContainerInset.height) / cellSize.height)) - 1
+    )
+    let maximumRow = min(
+      grid.displayedRows - 1,
+      Int(ceil((dirtyRect.maxY - textContainerInset.height) / cellSize.height)) + 1
+    )
+    let minimumColumn = max(
+      0,
+      Int(floor((dirtyRect.minX - textContainerInset.width) / cellSize.width)) - 1
+    )
+    let maximumColumn = min(
+      grid.columns - 1,
+      Int(ceil((dirtyRect.maxX - textContainerInset.width) / cellSize.width)) + 1
+    )
+    guard minimumRow <= maximumRow, minimumColumn <= maximumColumn else {
+      return
+    }
+
+    for row in minimumRow...maximumRow {
+      let cells = cachedCells(for: row, grid: grid)
+      for column in minimumColumn...maximumColumn {
+        let cell = cells[column]
+        guard cell.width > 0 else {
           continue
         }
         let width = CGFloat(cell.width) * cellSize.width
@@ -534,12 +626,36 @@ final class TerminalTextView: NSTextView {
     guard !isDefault else {
       return fallback
     }
-    return NSColor(
+    let key = UInt32(red) << 16 | UInt32(green) << 8 | UInt32(blue)
+    if let cached = colorCache[key] {
+      return cached
+    }
+    let color = NSColor(
       srgbRed: CGFloat(red) / 255,
       green: CGFloat(green) / 255,
       blue: CGFloat(blue) / 255,
       alpha: 1
     )
+    colorCache[key] = color
+    return color
+  }
+
+  private func cachedCells(for row: Int, grid: TerminalGrid) -> [ClairVTermCell] {
+    if let cached = rowCache[row], cached.count == grid.columns {
+      return cached
+    }
+    var cells: [ClairVTermCell] = []
+    cells.reserveCapacity(grid.columns)
+    for column in 0..<grid.columns {
+      cells.append(grid.displayedCell(row: row, column: column) ?? ClairVTermCell())
+    }
+    rowCache[row] = cells
+    return cells
+  }
+
+  private func invalidateVisibleArea() {
+    let viewport = visibleRect.isEmpty ? bounds : visibleRect
+    setNeedsDisplay(viewport.insetBy(dx: -cellSize.width, dy: -cellSize.height))
   }
 
   private func gridPosition(for event: NSEvent) -> GridPosition? {

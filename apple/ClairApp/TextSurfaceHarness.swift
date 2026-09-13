@@ -6,12 +6,30 @@ import Foundation
 /// It draws fixtures on the Clair-owned surface before either model layer
 /// exists, which is how the foundation is exercised without touching the
 /// production editor or terminal. Stable never opens it.
+enum TextSurfaceHarnessPresentationError: Error, Equatable, LocalizedError, Sendable {
+  case unavailable(String)
+  case windowUnavailable
+
+  var errorDescription: String? {
+    switch self {
+    case .unavailable(let reason):
+      reason
+    case .windowUnavailable:
+      "Clair could not create the Text Surface Harness window."
+    }
+  }
+}
+
 enum TextSurfaceHarness {
   static var isAvailable: Bool {
+    availability.isAvailable
+  }
+
+  static var availability: CommandAvailability {
     #if CLAIR_DEV
-      return true
+      return .available
     #else
-      return false
+      return .unavailable("Text Surface Harness is available in Clair Dev only.")
     #endif
   }
 
@@ -62,14 +80,25 @@ final class TextSurfaceHarnessWindowController: NSWindowController, NSWindowDele
   private var fixtureSource: TextFixtureSource
   private var editCounter = 0
 
-  static func present() {
-    guard TextSurfaceHarness.isAvailable else {
-      return
+  @discardableResult
+  static func present() -> Result<Void, TextSurfaceHarnessPresentationError> {
+    guard TextSurfaceHarness.availability.isAvailable else {
+      return .failure(
+        .unavailable(
+          TextSurfaceHarness.availability.reason
+            ?? "Text Surface Harness is unavailable."
+        )
+      )
     }
     let controller = current ?? TextSurfaceHarnessWindowController(fixture: .mixed)
     current = controller
+    guard let window = controller.window else {
+      return .failure(.windowUnavailable)
+    }
+    NSApp.activate(ignoringOtherApps: true)
     controller.showWindow(nil)
-    controller.window?.makeKeyAndOrderFront(nil)
+    window.makeKeyAndOrderFront(nil)
+    return .success(())
   }
 
   init(fixture: TextSurfaceFixture) {
@@ -87,6 +116,7 @@ final class TextSurfaceHarnessWindowController: NSWindowController, NSWindowDele
     )
     window.title = "Text Surface Harness"
     window.isReleasedWhenClosed = false
+    window.center()
     super.init(window: window)
     window.delegate = self
     configureContent()

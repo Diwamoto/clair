@@ -4,11 +4,13 @@
 }
 
 .cm-diff-add-line {
-  background: rgba(138, 203, 148, 0.1);
+  background: rgba(138, 203, 148, 0.2);
+  box-shadow: inset 3px 0 rgba(138, 203, 148, 0.72);
 }
 
 .cm-diff-remove-line {
-  background: rgba(226, 123, 131, 0.1);
+  background: rgba(226, 123, 131, 0.2);
+  box-shadow: inset 3px 0 rgba(226, 123, 131, 0.72);
 }
 
 .cm-diff-gutter-old,

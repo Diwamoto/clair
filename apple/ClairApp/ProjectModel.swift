@@ -797,6 +797,9 @@ enum ProjectFileTreeScanner {
     directoryCache: [String: ProjectFileTreeDirectoryListing] = [:],
     fileManager: FileManager = .default
   ) -> ProjectFileTreeSnapshot {
+    if Task.isCancelled {
+      return .empty(for: .available, isLoading: true)
+    }
     let rootURL = rootURL.standardizedFileURL
     var isDirectory = ObjCBool(false)
     guard fileManager.fileExists(atPath: rootURL.path, isDirectory: &isDirectory) else {
@@ -828,6 +831,8 @@ enum ProjectFileTreeScanner {
         isRoot: true
       )
       return ProjectFileTreeSnapshot(root: root, availability: .available)
+    } catch is CancellationError {
+      return .empty(for: .available, isLoading: true)
     } catch {
       return .empty(for: .unreadable)
     }
@@ -838,6 +843,7 @@ enum ProjectFileTreeScanner {
   /// remains lazy; only lightweight directory listings are prefetched.
   static func prefetchDirectoryCache(
     rootURL: URL,
+    directoryPaths: Set<String>? = nil,
     fileManager: FileManager = .default
   ) -> [String: ProjectFileTreeDirectoryListing] {
     let rootURL = rootURL.standardizedFileURL
@@ -851,7 +857,16 @@ enum ProjectFileTreeScanner {
     }
 
     var cache: [String: ProjectFileTreeDirectoryListing] = [:]
-    var pending = [rootURL]
+    let shouldTraverse = directoryPaths == nil
+    let pendingPaths =
+      directoryPaths?
+      .map { URL(fileURLWithPath: $0, isDirectory: true).standardizedFileURL }
+      .filter { url in
+        url.path == rootURL.path || url.path.hasPrefix(rootURL.path + "/")
+      }
+      .sorted { $0.path < $1.path }
+      ?? [rootURL]
+    var pending = pendingPaths
     var pendingIndex = 0
     var cachedEntryCount = 0
 
@@ -874,6 +889,9 @@ enum ProjectFileTreeScanner {
           fileManager: fileManager
         )
       else {
+        if Task.isCancelled {
+          break
+        }
         continue
       }
       cache[directoryPath] = listing
@@ -882,6 +900,9 @@ enum ProjectFileTreeScanner {
         break
       }
 
+      guard shouldTraverse else {
+        continue
+      }
       for entry in listing.entries where entry.isDirectory && !entry.isSymbolicLink {
         guard !shouldIgnoreDirectory(named: entry.name) else {
           continue
@@ -1040,6 +1061,9 @@ enum ProjectFileTreeScanner {
     isRoot: Bool,
     cachedEntry: ProjectFileTreeDirectoryEntry? = nil
   ) throws -> ProjectFileTreeNode {
+    if Task.isCancelled {
+      throw CancellationError()
+    }
     let standardizedURL: URL
     let isDirectory: Bool
     let isSymbolicLink: Bool
@@ -1118,6 +1142,9 @@ enum ProjectFileTreeScanner {
     }
     let entries = Array(listing.entries.prefix(limit))
     let children = entries.compactMap { entry -> ProjectFileTreeNode? in
+      guard !Task.isCancelled else {
+        return nil
+      }
       guard !shouldIgnoreDirectory(named: entry.name) else {
         return nil
       }
@@ -1148,6 +1175,9 @@ enum ProjectFileTreeScanner {
     limit: Int,
     fileManager: FileManager
   ) -> ProjectFileTreeDirectoryListing? {
+    guard !Task.isCancelled else {
+      return nil
+    }
     guard
       let enumerator = fileManager.enumerator(
         at: directoryURL,
@@ -1158,11 +1188,15 @@ enum ProjectFileTreeScanner {
       return nil
     }
 
-    let directoryModificationTime = (try? directoryURL.resourceValues(
-      forKeys: [.contentModificationDateKey]
-    ))?.contentModificationDate?.timeIntervalSinceReferenceDate
+    let directoryModificationTime =
+      (try? directoryURL.resourceValues(
+        forKeys: [.contentModificationDateKey]
+      ))?.contentModificationDate?.timeIntervalSinceReferenceDate
     var entries: [ProjectFileTreeDirectoryEntry] = []
     while let url = enumerator.nextObject() as? URL {
+      if Task.isCancelled {
+        return nil
+      }
       let standardizedURL = url.standardizedFileURL
       guard
         let values = try? standardizedURL.resourceValues(
@@ -1201,9 +1235,10 @@ enum ProjectFileTreeScanner {
     directoryURL: URL,
     fileManager: FileManager
   ) -> Bool {
-    let currentTime = (try? directoryURL.resourceValues(
-      forKeys: [.contentModificationDateKey]
-    ))?.contentModificationDate?.timeIntervalSinceReferenceDate
+    let currentTime =
+      (try? directoryURL.resourceValues(
+        forKeys: [.contentModificationDateKey]
+      ))?.contentModificationDate?.timeIntervalSinceReferenceDate
     return currentTime == listing.directoryModificationTime
   }
 

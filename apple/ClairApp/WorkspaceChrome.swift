@@ -644,14 +644,9 @@ extension View {
   }
 }
 
-/// A single-line label that fades at its trailing edge only when the text
-/// actually runs past the room it is given. One that fits keeps its last
-/// letters at full ink — the fade has to mean "there is more", so it cannot
-/// appear on a label that is complete.
-///
-/// `ViewThatFits` decides that during layout. Measuring the string in `body`
-/// instead cost ~8µs per label on every single re-evaluation, which the
-/// titlebar pays once per tab every time any Project's surface publishes.
+/// A single-line label constrained by its parent and faded at the trailing
+/// edge. The mask lives on the available frame rather than on the text's
+/// intrinsic width, so long tab titles cannot escape the tab button.
 struct FadingLabel: View {
   let text: String
   var size: CGFloat = 11
@@ -659,18 +654,15 @@ struct FadingLabel: View {
   var fadeWidth: CGFloat = 18
 
   var body: some View {
-    ViewThatFits(in: .horizontal) {
-      label
-      label.fadingTrailingEdge(fadeWidth)
-    }
-    .frame(maxWidth: .infinity, alignment: .leading)
+    label
+      .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+      .fadingTrailingEdge(fadeWidth)
   }
 
   private var label: some View {
     Text(text)
       .font(.system(size: size, weight: weight))
       .lineLimit(1)
-      .fixedSize(horizontal: true, vertical: false)
   }
 }
 

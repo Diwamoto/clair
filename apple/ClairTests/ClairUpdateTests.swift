@@ -118,6 +118,35 @@ final class ClairUpdateTests: XCTestCase {
     XCTAssertEqual(coordinator.state, .disabled("Dev builds do not use the Stable update feed."))
   }
 
+  func testCLIInstallerTreatsMissingDirectoryAsMissingAndCreatesItBeforeInstall() throws {
+    let fileManager = FileManager.default
+    let root = fileManager.temporaryDirectory
+      .appendingPathComponent("ClairCLIInstallerTests-\(UUID().uuidString)", isDirectory: true)
+    let sourceURL = root.appendingPathComponent("clair", isDirectory: false)
+    let homeDirectory = root.appendingPathComponent("home", isDirectory: true)
+    defer { try? fileManager.removeItem(at: root) }
+
+    try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
+    try Data("#!/bin/sh\nexit 0\n".utf8).write(to: sourceURL)
+    try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: sourceURL.path)
+
+    let installer = ClairCLIInstaller(
+      fileManager: fileManager,
+      homeDirectory: homeDirectory,
+      environment: [:],
+      bundledCLIURL: sourceURL
+    )
+
+    XCTAssertEqual(installer.status().destination, .missing)
+    XCTAssertFalse(fileManager.fileExists(atPath: installer.installDirectoryURL.path))
+
+    try installer.install()
+
+    XCTAssertTrue(fileManager.fileExists(atPath: installer.installDirectoryURL.path))
+    XCTAssertTrue(fileManager.isExecutableFile(atPath: installer.installURL.path))
+    XCTAssertEqual(installer.status().destination, .installed)
+  }
+
   func testPendingUpdateWritesStartupSuccessOnlyForMatchingStableLaunch() throws {
     let root = FileManager.default.temporaryDirectory
       .appendingPathComponent("ClairUpdateTests-\(UUID().uuidString)", isDirectory: true)

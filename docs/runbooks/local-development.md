@@ -45,7 +45,9 @@ make smoke
 ## Verify the Project kernel
 
 Start the Dev watcher with `make run-dev`; it performs the initial build and launch
-and keeps watching native sources in the foreground. Select **Open Folder** in the
+and keeps watching native sources in the foreground. The watcher shares the app's
+lifecycle: quitting Clair Dev stops the watcher, and `Ctrl-C` quits Clair Dev.
+Select **Open Folder** in the
 Projects sidebar. Open one Git repository, one ordinary non-Git folder, and one
 temporary folder. Confirm that all three appear in the same process and that
 selecting a row changes the active Project and displayed root.

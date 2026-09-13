@@ -14,6 +14,8 @@ supersedes:
 superseded_by: []
 ---
 
+> Revisit notice (2026-09-13): background notification quality が必須要件になり、Apple Developer Program を利用する判断へ変わったため、この PWA decision は Clair v2 の実装には使用しない。後継 native mobile ADR は [rewrite task queue `B02`](../plans/clair-v2-native-rewrite-queue.md) で作成する。
+
 # ADR-0013: 自所有mobile clientをPWAとして配布する
 
 ## Context

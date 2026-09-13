@@ -1,5 +1,7 @@
 # Clair v2 roadmap
 
+> Status: historical. 2026-09-13 の native rewrite decision により、この roadmap の実装順と PWA milestone は superseded された。現在の正本は [Clair v2 native rewrite plan](clair-v2-native-rewrite.md) と [task queue](clair-v2-native-rewrite-queue.md) を参照する。
+
 ## Purpose
 
 このroadmapは、cceditからClairへcutoverし、その後personal daily-driver IDEを完成させるmilestone順とexit criteriaを定義する。M1の実装順序は

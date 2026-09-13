@@ -23,6 +23,8 @@ related_investigations:
   - "../../investigations/p0020-secure-link-spike/README.md"
 ---
 
+> Supersession notice: この project の host/pairing/session protocol は v1 evidence として参照できるが、PWA を supported client とする方針と実装順は 2026-09-13 の [Clair v2 native rewrite plan](../../plans/clair-v2-native-rewrite.md) および [task queue](../../plans/clair-v2-native-rewrite-queue.md) により置き換えられた。正式な native mobile ADR は queue `B02` で作成する。
+
 # Clair terminal上のcoding agentをmobileから操作するprotocol
 
 ## Outcome

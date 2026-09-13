@@ -45,6 +45,20 @@ final class TerminalProtocolTests: XCTestCase {
     XCTAssertGreaterThan(textView.bounds.height, textView.cellSize.height * CGFloat(grid.rows))
   }
 
+  func testTerminalOutputQueueBatchesWithoutDroppingOutput() {
+    var queue = TerminalOutputQueue()
+    let output = Data((String(repeating: "a", count: 7) + "日本語").utf8)
+    queue.append(output)
+
+    let first = queue.removeNextBatch(maximumBytes: 5)
+    let second = queue.removeNextBatch(maximumBytes: 5)
+    let third = queue.removeNextBatch(maximumBytes: 5)
+    let fourth = queue.removeNextBatch(maximumBytes: 5)
+
+    XCTAssertEqual(first + second + third + fourth, output)
+    XCTAssertTrue(queue.isEmpty)
+  }
+
   func testTerminalControlKeyMappingSendsRawPtyBytes() {
     XCTAssertEqual(TerminalKeySequence.controlByte(forKeyCode: 0), 0x01)
     XCTAssertEqual(TerminalKeySequence.controlByte(forKeyCode: 8), 0x03)

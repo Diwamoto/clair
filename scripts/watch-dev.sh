@@ -4,6 +4,9 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 process_name="Clair Dev"
 poll_interval="${CLAIR_WATCH_INTERVAL:-1}"
+# PID of the Clair Dev process this watcher launched. The watcher shares its
+# lifecycle: when this process exits outside a hot restart, the watcher stops.
+app_pid=""
 
 watch_paths=(
     "$repo_root/apple"
@@ -127,6 +130,29 @@ cleanup_dev_broker_sessions() {
     fi
 }
 
+track_app_pid() {
+    app_pid=""
+    for _ in $(seq 1 50); do
+        app_pid="$(pgrep -nx "$process_name" 2>/dev/null || true)"
+        if [[ -n "$app_pid" ]]; then
+            return 0
+        fi
+        sleep 0.2
+    done
+
+    printf 'watch-dev: could not find the launched %s process\n' "$process_name" >&2
+    return 1
+}
+
+stop_if_app_exited() {
+    if [[ -z "$app_pid" ]] || kill -0 "$app_pid" 2>/dev/null; then
+        return 0
+    fi
+
+    printf 'watch-dev: %s exited; stopping the watcher\n' "$process_name"
+    exit 0
+}
+
 restart_dev() {
     printf 'watch-dev: building Clair Dev...\n'
     if ! "$repo_root/scripts/xcode.sh" build "Clair Dev" dev; then
@@ -134,26 +160,44 @@ restart_dev() {
         return 1
     fi
 
+    # The app may have been quit while the build was running.
+    stop_if_app_exited
+
+    # Forget the old PID first so a hot restart is not mistaken for a user quit.
+    app_pid=""
     if ! quit_running_dev; then
         printf 'watch-dev: restart cancelled; keeping the current app running\n' >&2
+        track_app_pid || true
         return 1
     fi
 
     printf 'watch-dev: launching the new Clair Dev build...\n'
     "$repo_root/scripts/run-app.sh" dev
+    track_app_pid || true
     cleanup_dev_broker_sessions
 }
 
-trap 'printf "\nwatch-dev: stopped\n"; exit 0' INT TERM
+on_interrupt() {
+    trap - INT TERM
+    printf '\nwatch-dev: stopping %s and the watcher...\n' "$process_name"
+    app_pid=""
+    quit_running_dev || true
+    printf 'watch-dev: stopped\n'
+    exit 0
+}
+
+trap on_interrupt INT TERM
 
 printf 'watch-dev: watching native sources (poll interval: %ss)\n' "$poll_interval"
-printf 'watch-dev: press Ctrl-C to stop watching\n'
+printf 'watch-dev: quit %s or press Ctrl-C to stop\n' "$process_name"
 
 last_snapshot="$(snapshot)"
 restart_dev || true
 
 while true; do
     sleep "$poll_interval"
+    stop_if_app_exited
+
     current_snapshot="$(snapshot)"
     if [[ "$current_snapshot" == "$last_snapshot" ]]; then
         continue

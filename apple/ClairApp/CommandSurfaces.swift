@@ -133,7 +133,8 @@ enum CommandShortcutValidationError: Error, Equatable, LocalizedError, Sendable 
 }
 
 private struct CommandShortcutStoreSnapshot: Codable, Equatable, Sendable {
-  static let currentSchemaVersion = 1
+  static let currentSchemaVersion = 2
+  static let supportedSchemaVersions: Set<Int> = [1, currentSchemaVersion]
 
   let schemaVersion: Int
   let bindings: [Binding]
@@ -185,6 +186,19 @@ final class CommandShortcutStore {
   static let toggleTerminalShortcut = CommandShortcut(
     key: "`",
     modifiers: [.control]
+  )
+  /// Opens the existing terminal in the focused pane, or focuses it when it
+  /// is already present. This is intentionally distinct from the legacy
+  /// terminal visibility toggle above.
+  static let terminalOpenShortcut = CommandShortcut(
+    key: "j",
+    modifiers: [.command]
+  )
+  /// Splits the focused pane horizontally. Git diff keeps its Cmd+Shift+D
+  /// binding, so this command does not share a key chord with Git operations.
+  static let paneSplitShortcut = CommandShortcut(
+    key: "d",
+    modifiers: [.command]
   )
   static let splitEditorShortcut = CommandShortcut(
     key: "\\",
@@ -242,10 +256,6 @@ final class CommandShortcutStore {
     key: "r",
     modifiers: [.command, .option]
   )
-  static let selectNextOccurrenceShortcut = CommandShortcut(
-    key: "d",
-    modifiers: [.command]
-  )
   static let selectLineShortcut = CommandShortcut(
     key: "l",
     modifiers: [.command]
@@ -292,7 +302,6 @@ final class CommandShortcutStore {
     openSettingsShortcut,
     copyActiveFilePathShortcut,
     revealActiveFileShortcut,
-    selectNextOccurrenceShortcut,
     selectLineShortcut,
     toggleLineCommentShortcut,
     indentLineShortcut,
@@ -302,8 +311,14 @@ final class CommandShortcutStore {
 
   static let defaultShortcuts: [ClairCommandID: CommandShortcut] = [
     .openProject: CommandShortcut(key: "o", modifiers: [.command]),
+    .terminalOpen: terminalOpenShortcut,
+    .paneSplit: paneSplitShortcut,
     .gitRefresh: CommandShortcut(key: "r", modifiers: [.command, .shift]),
     .gitShowDiff: CommandShortcut(key: "d", modifiers: [.command, .shift]),
+  ]
+  static let schemaV2AddedShortcuts: [ClairCommandID: CommandShortcut] = [
+    .terminalOpen: terminalOpenShortcut,
+    .paneSplit: paneSplitShortcut,
   ]
 
   private let defaults: UserDefaults
@@ -322,12 +337,34 @@ final class CommandShortcutStore {
     guard
       let data = defaults.data(forKey: Self.defaultsKey),
       let snapshot = try? decoder.decode(CommandShortcutStoreSnapshot.self, from: data),
-      snapshot.schemaVersion == CommandShortcutStoreSnapshot.currentSchemaVersion,
+      CommandShortcutStoreSnapshot.supportedSchemaVersions.contains(snapshot.schemaVersion),
       let bindings = try? validatedBindings(snapshot.bindings)
     else {
       return Self.defaultShortcuts
     }
-    return Dictionary(uniqueKeysWithValues: bindings.map { ($0.commandID, $0.shortcut) })
+
+    var loaded = Dictionary(uniqueKeysWithValues: bindings.map { ($0.commandID, $0.shortcut) })
+    guard snapshot.schemaVersion < CommandShortcutStoreSnapshot.currentSchemaVersion else {
+      return loaded
+    }
+
+    // v1 did not include the keyboard-first terminal and pane commands. Add
+    // only those new defaults; an absent v1 binding can mean that the user
+    // intentionally cleared an older shortcut, so older defaults must not be
+    // restored during migration. Existing bindings remain authoritative and
+    // an explicitly occupied chord is never overwritten.
+    var occupied = Set(loaded.values)
+    for (commandID, shortcut) in Self.schemaV2AddedShortcuts where loaded[commandID] == nil {
+      guard occupied.insert(shortcut).inserted else {
+        continue
+      }
+      loaded[commandID] = shortcut
+    }
+    // Keep the migration durable. Otherwise every launch would reinterpret
+    // the old payload, and a later save could accidentally be based on a
+    // stale v1 snapshot again.
+    try? save(loaded)
+    return loaded
   }
 
   func save(_ shortcuts: [ClairCommandID: CommandShortcut]) throws {
@@ -460,6 +497,8 @@ final class CommandSurfaceModel: ObservableObject {
       ).availability
     case .command(let command):
       return workspace.preflight(command).availability
+    case .surface:
+      return .available
     case .unavailable(let reason):
       return .unavailable(reason)
     }
@@ -486,6 +525,8 @@ final class CommandSurfaceModel: ObservableObject {
       )
     case .command(let command):
       return dispatch(command, source: source)
+    case .surface(let action):
+      return execute(action, commandID: commandID, source: source)
     case .unavailable(let reason):
       return recordUnavailable(commandID: commandID, source: source, reason: reason)
     }
@@ -584,7 +625,15 @@ final class CommandSurfaceModel: ObservableObject {
   private enum ResolvedAction {
     case openProject
     case command(ClairCommand)
+    case surface(SurfaceCommand)
     case unavailable(String)
+  }
+
+  private enum SurfaceCommand {
+    case openTerminal
+    case splitPane
+    case stopTerminal(tabID: String)
+    case recoverTerminal(tabID: String)
   }
 
   private func resolvedAction(for commandID: ClairCommandID) -> ResolvedAction {
@@ -603,6 +652,37 @@ final class CommandSurfaceModel: ObservableObject {
         return .unavailable(unavailableReason(for: unavailableCommand))
       }
       return .command(.switchProject(SwitchProjectCommand(projectID: nextProject.id)))
+    case .paneSplit:
+      guard activeProjectID != nil else {
+        return .unavailable("Open a Project before splitting a pane.")
+      }
+      guard workspace.activeSurface != nil else {
+        return .unavailable("The active Project surface is not ready to split.")
+      }
+      return .surface(.splitPane)
+    case .terminalOpen:
+      guard activeProjectID != nil else {
+        return .unavailable("Open a Project before opening a terminal.")
+      }
+      guard workspace.activeSurface != nil else {
+        return .unavailable("The active Project surface is not ready to open a terminal.")
+      }
+      return .surface(.openTerminal)
+    case .terminalStop:
+      guard let surface = workspace.activeSurface, surface.isTerminalVisible,
+        let tabID = surface.activeTabID
+      else {
+        return .unavailable("Focus a terminal before stopping it.")
+      }
+      return .surface(.stopTerminal(tabID: tabID))
+    case .terminalRecover:
+      guard let surface = workspace.activeSurface,
+        let tab = surface.activeTab(in: surface.focusedPaneID),
+        tab.kind == .terminal
+      else {
+        return .unavailable("Focus a terminal before recovering its session.")
+      }
+      return .surface(.recoverTerminal(tabID: tab.id))
     case .renameProject, .setProjectColor, .reorderProject, .closeProject:
       guard workspace.activeProject != nil else {
         return .unavailable("Open a Project before using this command.")
@@ -706,6 +786,101 @@ final class CommandSurfaceModel: ObservableObject {
     workspace.preflight(command).availability.reason ?? "The command is not available."
   }
 
+  @discardableResult
+  private func execute(
+    _ action: SurfaceCommand,
+    commandID: ClairCommandID,
+    source: CommandSurfaceSource
+  ) -> Result<ClairCommandResult, CommandError> {
+    guard let surface = workspace.activeSurface else {
+      return recordUnavailable(
+        commandID: commandID,
+        source: source,
+        reason: "The active Project surface is not ready."
+      )
+    }
+
+    let result: Result<ClairCommandResult, CommandError>
+    switch action {
+    case .openTerminal:
+      guard !surface.paneIDs.isEmpty else {
+        return recordUnavailable(
+          commandID: commandID,
+          source: source,
+          reason: "The active Project has no pane available for a terminal."
+        )
+      }
+      surface.showTerminal()
+      guard surface.isTerminalVisible, let tabID = surface.activeTabID else {
+        return recordUnavailable(
+          commandID: commandID,
+          source: source,
+          reason: "Clair could not open or focus a terminal in the active pane."
+        )
+      }
+      result = .success(
+        .adapter(.terminal(projectID: surface.projectID, tabID: tabID))
+      )
+    case .splitPane:
+      let paneCount = surface.paneIDs.count
+      surface.splitFocusedPane(orientation: .horizontal)
+      guard surface.paneIDs.count == paneCount + 1 else {
+        return recordUnavailable(
+          commandID: commandID,
+          source: source,
+          reason: "Clair could not split the focused pane."
+        )
+      }
+      result = .success(
+        .adapter(
+          .pane(
+            projectID: surface.projectID,
+            focusedPaneID: surface.focusedPaneID,
+            paneCount: surface.paneIDs.count
+          )
+        )
+      )
+    case .stopTerminal(let tabID):
+      guard surface.isTerminalVisible, surface.activeTabID == tabID else {
+        return recordUnavailable(
+          commandID: commandID,
+          source: source,
+          reason: "The terminal to stop is no longer focused."
+        )
+      }
+      surface.endTerminal()
+      guard !surface.tabStore.contains(where: { $0.id == tabID }) else {
+        return recordUnavailable(
+          commandID: commandID,
+          source: source,
+          reason: "Clair could not stop the focused terminal."
+        )
+      }
+      result = .success(
+        .adapter(.terminal(projectID: surface.projectID, tabID: tabID))
+      )
+    case .recoverTerminal(let tabID):
+      guard surface.tabStore.contains(where: { $0.id == tabID && $0.kind == .terminal }) else {
+        return recordUnavailable(
+          commandID: commandID,
+          source: source,
+          reason: "The terminal session is no longer available to recover."
+        )
+      }
+      surface.recoverTerminal(tabID: tabID)
+      result = .success(
+        .adapter(.terminal(projectID: surface.projectID, tabID: tabID))
+      )
+    }
+
+    lastExecution = CommandSurfaceExecution(
+      commandID: commandID,
+      source: source,
+      outcome: outcome(for: result)
+    )
+    return result
+  }
+
   private func outcome(
     for result: Result<ClairCommandResult, CommandError>
   ) -> CommandSurfaceOutcome {
@@ -729,6 +904,10 @@ final class CommandSurfaceModel: ObservableObject {
       switch result {
       case .status(let message):
         message
+      case .pane(_, _, let paneCount):
+        "Pane split complete (\(paneCount) panes)."
+      case .terminal(_, _):
+        "Terminal ready."
       default:
         "Command completed."
       }
@@ -1039,13 +1218,16 @@ struct ClairCommandMenu: Commands {
         modifiers: CommandShortcutStore.openSettingsShortcut.modifiers.eventModifiers
       )
 
-      if TextSurfaceHarness.isAvailable {
-        Divider()
+      Divider()
 
-        Button("Text Surface Harness") {
-          TextSurfaceHarnessWindowController.present()
-        }
+      Button("Text Surface Harness") {
+        _ = TextSurfaceHarnessWindowController.present()
       }
+      .disabled(!TextSurfaceHarness.availability.isAvailable)
+      .help(
+        TextSurfaceHarness.availability.reason
+          ?? "Open the shared text surface diagnostics window."
+      )
 
       Divider()
 

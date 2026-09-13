@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Foundation
 import XCTest
 
@@ -58,6 +59,47 @@ final class NativeEditorTests: XCTestCase {
     XCTAssertEqual(try Data(contentsOf: fileURL), Data("after 🧑🏽‍💻 é\n".utf8))
   }
 
+  func testTypingDoesNotPublishBufferForEveryKeystroke() throws {
+    let fixture = try EditorFixture()
+    let fileURL = try fixture.makeFile(named: "typing.txt", content: "")
+    let document = fixture.makeDocument(at: fileURL)
+    var publicationCount = 0
+    let cancellable = document.objectWillChange.sink { _ in
+      publicationCount += 1
+    }
+
+    _ = try document.applyEditorChange(
+      ProjectEditorWebChange(
+        baseRevision: document.editorRevision,
+        changes: [ProjectEditorWebEdit(from: 0, to: 0, insert: "日")],
+        selection: ProjectEditorWebSelection(from: 1, to: 1),
+        canUndo: true,
+        canRedo: false
+      ))
+    let firstEditPublicationCount = publicationCount
+
+    _ = try document.applyEditorChange(
+      ProjectEditorWebChange(
+        baseRevision: document.editorRevision,
+        changes: [ProjectEditorWebEdit(from: 1, to: 1, insert: "本")],
+        selection: ProjectEditorWebSelection(from: 2, to: 2),
+        canUndo: true,
+        canRedo: false
+      ))
+
+    XCTAssertGreaterThan(firstEditPublicationCount, 0)
+    XCTAssertEqual(publicationCount, firstEditPublicationCount)
+    XCTAssertEqual(document.content, "日本")
+
+    let tokenBeforeReplacement = document.contentSyncToken
+    document.replaceContent("外部置換")
+    XCTAssertEqual(document.content, "外部置換")
+    XCTAssertGreaterThan(document.contentSyncToken, tokenBeforeReplacement)
+    XCTAssertGreaterThan(publicationCount, firstEditPublicationCount)
+
+    withExtendedLifetime(cancellable) {}
+  }
+
   func testMarkedTextCommitUpdatesTheDocumentOnce() throws {
     let fixture = try EditorFixture()
     let fileURL = try fixture.makeFile(named: "ime.txt", content: "")
@@ -81,6 +123,64 @@ final class NativeEditorTests: XCTestCase {
     XCTAssertFalse(textView.hasMarkedText())
     XCTAssertEqual(textView.string, "日本語")
     XCTAssertEqual(document.content, "日本語")
+  }
+
+  func testAppKitFallbackLineNumberModelHandlesEmptyAndMultilineText() {
+    XCTAssertEqual(
+      ProjectSourceLineNumberRulerView.lineNumber(
+        atCharacterIndex: 0,
+        in: "" as NSString
+      ),
+      1
+    )
+    XCTAssertEqual(
+      ProjectSourceLineNumberRulerView.lineNumber(
+        atCharacterIndex: 4,
+        in: "one\n日本\nlast" as NSString
+      ),
+      2
+    )
+    XCTAssertEqual(
+      ProjectSourceLineNumberRulerView.lineNumber(
+        atCharacterIndex: 8,
+        in: "one\n日本\nlast" as NSString
+      ),
+      3
+    )
+  }
+
+  func testAppKitFallbackLineNumbersUseAStableDedicatedRuler() {
+    let scrollView = NSScrollView(frame: .zero)
+    let textView = NSTextView(frame: .zero)
+    scrollView.documentView = textView
+    let ruler = ProjectSourceLineNumberRulerView(
+      scrollView: scrollView,
+      textView: textView
+    )
+    scrollView.verticalRulerView = ruler
+
+    XCTAssertTrue(ruler.clientView === textView)
+    XCTAssertEqual(ruler.ruleThickness, ProjectSourceLineNumberRulerView.ruleThickness)
+  }
+
+  func testAppKitFallbackModelSyncClampsCaretWithoutReenteringDelegate() throws {
+    let fixture = try EditorFixture()
+    let fileURL = try fixture.makeFile(named: "sync.txt", content: "long buffer\n")
+    let document = fixture.makeDocument(at: fileURL)
+    let coordinator = ProjectSourceEditorView.Coordinator(document: document)
+    let textView = NSTextView(frame: .zero)
+    textView.string = document.content
+    textView.delegate = coordinator
+    coordinator.textView = textView
+    textView.setSelectedRange(NSRange(location: textView.string.utf16.count, length: 0))
+
+    document.replaceContent("短")
+    coordinator.synchronizeTextViewFromModel(textView)
+
+    XCTAssertEqual(textView.string, "短")
+    XCTAssertEqual(textView.selectedRange(), NSRange(location: 1, length: 0))
+    XCTAssertEqual(document.content, "短")
+    XCTAssertFalse(coordinator.isUpdatingFromModel)
   }
 
   func testSearchSelectionConvertsLineAndCharacterColumnToUTF16Range() throws {

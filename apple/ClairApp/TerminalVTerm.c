@@ -1,5 +1,6 @@
 #include "TerminalVTerm.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 #include <vterm.h>
@@ -68,27 +69,32 @@ static int clair_vterm_scrollback_pushline(int columns, const VTermScreenCell *c
   }
 
   size_t line_index;
+  bool replacing = terminal->scrollback_count == CLAIR_VTERM_SCROLLBACK_LIMIT;
   if (terminal->scrollback_count == CLAIR_VTERM_SCROLLBACK_LIMIT) {
     line_index = terminal->scrollback_start;
-    free(terminal->scrollback[line_index].cells);
-    terminal->scrollback_start = (terminal->scrollback_start + 1) % CLAIR_VTERM_SCROLLBACK_LIMIT;
   } else {
     line_index =
       (terminal->scrollback_start + terminal->scrollback_count) % CLAIR_VTERM_SCROLLBACK_LIMIT;
-    terminal->scrollback_count++;
   }
 
-  ClairVTermCell *line = calloc((size_t)columns, sizeof(*line));
-  if (line == NULL) {
-    return 1;
+  ClairVTermScrollbackLine *slot = &terminal->scrollback[line_index];
+  ClairVTermCell *line = slot->cells;
+  if (slot->columns != columns || line == NULL) {
+    ClairVTermCell *resized = realloc(line, (size_t)columns * sizeof(*line));
+    if (resized == NULL) {
+      return 1;
+    }
+    line = resized;
   }
   for (int column = 0; column < columns; column++) {
     clair_vterm_copy_cell(terminal, cells + column, line + column);
   }
-  terminal->scrollback[line_index] = (ClairVTermScrollbackLine){
-    .columns = columns,
-    .cells = line,
-  };
+  *slot = (ClairVTermScrollbackLine){.columns = columns, .cells = line};
+  if (replacing) {
+    terminal->scrollback_start = (terminal->scrollback_start + 1) % CLAIR_VTERM_SCROLLBACK_LIMIT;
+  } else {
+    terminal->scrollback_count++;
+  }
   return 1;
 }
 
@@ -197,6 +203,9 @@ void clair_vterm_feed(ClairVTerm *terminal, const uint8_t *bytes, size_t length)
 
 void clair_vterm_resize(ClairVTerm *terminal, int rows, int columns) {
   if (terminal == NULL || rows <= 0 || columns <= 0) {
+    return;
+  }
+  if (terminal->rows == rows && terminal->columns == columns) {
     return;
   }
   vterm_set_size(terminal->vterm, rows, columns);

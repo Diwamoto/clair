@@ -184,6 +184,7 @@ struct CodeMirrorEditorView: NSViewRepresentable {
     private(set) var document: ProjectEditorTab
     weak var webView: WKWebView?
     private var isReady = false
+    private var isApplyingEditorChange = false
     private var lastRenderedContent: String?
     private var lastRenderedRevision: UInt64?
     private var lastConfiguration: WebEditorConfiguration?
@@ -225,7 +226,7 @@ struct CodeMirrorEditorView: NSViewRepresentable {
       requestedFontSize = fontSize
       requestedWordWrap = wordWrap
       requestedBreakpoints = breakpoints
-      guard isReady else {
+      guard isReady, !isApplyingEditorChange else {
         return
       }
 
@@ -306,14 +307,15 @@ struct CodeMirrorEditorView: NSViewRepresentable {
           return
         }
         do {
+          isApplyingEditorChange = true
+          defer { isApplyingEditorChange = false }
           _ = try document.applyEditorChange(change)
           lastRenderedContent = document.content
           lastRenderedRevision = document.editorRevision
-          lastEditorSelection = WebEditorSelection(
-            from: change.selection.from,
-            to: change.selection.to
-          )
-          lastEditorScrollTop = change.scrollTop
+          lastEditorSelection = document.editorSelection.map {
+            WebEditorSelection(from: $0.location, to: $0.end)
+          }
+          lastEditorScrollTop = document.editorScrollTop
         } catch {
           // A stale or malformed transaction must not be silently dropped.
           // Send the authoritative native snapshot back to the web editor.
@@ -324,11 +326,10 @@ struct CodeMirrorEditorView: NSViewRepresentable {
           return
         }
         document.applyEditorSelection(change)
-        lastEditorSelection = WebEditorSelection(
-          from: change.selection.from,
-          to: change.selection.to
-        )
-        lastEditorScrollTop = change.scrollTop
+        lastEditorSelection = document.editorSelection.map {
+          WebEditorSelection(from: $0.location, to: $0.end)
+        }
+        lastEditorScrollTop = document.editorScrollTop
       case "breakpoint":
         guard let line = (body["line"] as? NSNumber)?.intValue, line > 0 else {
           return
@@ -455,9 +456,11 @@ struct CodeMirrorEditorView: NSViewRepresentable {
         return nil
       }
       let length = document.content.utf16.count
+      let from = min(max(lastEditorSelection.from, 0), length)
+      let to = min(max(lastEditorSelection.to, from), length)
       return WebEditorSelection(
-        from: min(lastEditorSelection.from, length),
-        to: min(lastEditorSelection.to, length)
+        from: from,
+        to: to
       )
     }
 

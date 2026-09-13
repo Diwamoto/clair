@@ -145,6 +145,135 @@ final class ProjectGitTests: XCTestCase {
     XCTAssertEqual(snapshot, .notRepository)
   }
 
+  func testGraphReadsCommitParentsRefsAndMetadataWithoutChangingWorkingTree() throws {
+    let fixture = try GitFixture()
+    let service = ProjectGitService(rootURL: fixture.root)
+
+    try fixture.runGit(["branch", "feature"])
+    try fixture.write("main.txt", contents: "main branch\n")
+    let mainHead = try fixture.commit(in: fixture.root, message: "main change")
+
+    try fixture.runGit(["switch", "feature"])
+    try fixture.write("feature.txt", contents: "feature branch\n")
+    let featureHead = try fixture.commit(in: fixture.root, message: "feature change")
+
+    try fixture.runGit(["switch", "main"])
+    try fixture.runGit(["merge", "--no-ff", "--no-edit", "feature"])
+    let mergeHead = try fixture.headRevision(in: fixture.root)
+    try fixture.runGit(
+      ["tag", "-a", "v-feature", "-m", "feature release", featureHead]
+    )
+    try fixture.runGit(["tag", "v-main", mainHead])
+    try fixture.runGit(["update-ref", "refs/remotes/origin/main", mainHead])
+    try fixture.write("dirty.txt", contents: "not committed\n")
+
+    let before = try service.status()
+    let graph = try service.graph()
+    let after = try service.status()
+
+    XCTAssertTrue(graph.isRepository)
+    XCTAssertEqual(graph.branch, "main")
+    XCTAssertEqual(graph.headRevision, mergeHead)
+    XCTAssertEqual(graph.commits.count, 4)
+    XCTAssertFalse(graph.isTruncated)
+    XCTAssertEqual(before, after)
+
+    let refsByName = Dictionary(uniqueKeysWithValues: graph.refs.map { ($0.name, $0) })
+    XCTAssertEqual(refsByName["main"]?.kind, .localBranch)
+    XCTAssertTrue(refsByName["main"]?.isCurrent == true)
+    XCTAssertEqual(refsByName["feature"]?.kind, .localBranch)
+    XCTAssertEqual(refsByName["origin/main"]?.kind, .remoteBranch)
+    XCTAssertEqual(refsByName["v-feature"]?.kind, .tag)
+    XCTAssertEqual(refsByName["v-main"]?.kind, .tag)
+    XCTAssertEqual(refsByName["v-main"]?.targetRevision, mainHead)
+    XCTAssertEqual(graph.branches.map(\.name), ["feature", "main", "origin/main"])
+
+    let mergeCommit = try XCTUnwrap(graph.commits.first { $0.revision == mergeHead })
+    XCTAssertEqual(mergeCommit.parentRevisions, [mainHead, featureHead])
+    XCTAssertTrue(mergeCommit.subject.contains("feature"))
+    XCTAssertEqual(mergeCommit.refs.map(\.name), ["main"])
+    XCTAssertEqual(mergeCommit.author, "Clair Test")
+    XCTAssertNotNil(ISO8601DateFormatter().date(from: mergeCommit.authoredAt))
+
+    let featureCommit = try XCTUnwrap(
+      graph.commits.first { $0.revision == featureHead }
+    )
+    XCTAssertEqual(
+      Set(featureCommit.refs.map(\.name)),
+      Set(["feature", "v-feature"])
+    )
+    XCTAssertTrue(
+      graph.commits.allSatisfy { commit in
+        commit.parentRevisions.allSatisfy { parent in
+          graph.commits.contains { $0.revision == parent }
+        }
+      }
+    )
+  }
+
+  func testGraphLimitIsBoundedAndNonGitProjectIsSafe() throws {
+    let fixture = try GitFixture()
+    let service = ProjectGitService(rootURL: fixture.root)
+
+    for index in 1...3 {
+      try fixture.write("file-\(index).txt", contents: "\(index)\n")
+      _ = try fixture.commit(in: fixture.root, message: "change \(index)")
+    }
+
+    let graph = try service.graph(limit: 2)
+    XCTAssertEqual(graph.commits.count, 2)
+    XCTAssertTrue(graph.isTruncated)
+
+    let lowerBoundaryGraph = try service.graph(limit: 1)
+    XCTAssertEqual(lowerBoundaryGraph.commits.count, 1)
+    XCTAssertTrue(lowerBoundaryGraph.isTruncated)
+
+    let exactBoundaryGraph = try service.graph(limit: 4)
+    XCTAssertEqual(exactBoundaryGraph.commits.count, 4)
+    XCTAssertFalse(exactBoundaryGraph.isTruncated)
+
+    XCTAssertThrowsError(try service.graph(limit: 0)) { error in
+      XCTAssertEqual(error as? ProjectGitError, .invalidGraphLimit(0))
+    }
+    XCTAssertThrowsError(
+      try service.graph(limit: ProjectGitService.maximumGraphLimit + 1)
+    ) { error in
+      XCTAssertEqual(
+        error as? ProjectGitError,
+        .invalidGraphLimit(ProjectGitService.maximumGraphLimit + 1)
+      )
+    }
+
+    let nonGitFixture = try GitFixture(createRepository: false)
+    let nonGitGraph = try ProjectGitService(rootURL: nonGitFixture.root).graph()
+    XCTAssertEqual(nonGitGraph, .notRepository)
+
+    let emptyGitFixture = try GitFixture(createRepository: false)
+    try emptyGitFixture.runGit(["init", "--quiet", "-b", "main"])
+    let emptyGraph = try ProjectGitService(rootURL: emptyGitFixture.root).graph()
+    XCTAssertTrue(emptyGraph.isRepository)
+    XCTAssertEqual(emptyGraph.branch, "main")
+    XCTAssertNil(emptyGraph.headRevision)
+    XCTAssertTrue(emptyGraph.refs.isEmpty)
+    XCTAssertTrue(emptyGraph.commits.isEmpty)
+  }
+
+  func testGraphIncludesDetachedHeadWhenNoRefsReachIt() throws {
+    let fixture = try GitFixture()
+    let head = try fixture.headRevision(in: fixture.root)
+    try fixture.runGit(["switch", "--detach", "--quiet", head])
+    try fixture.runGit(["branch", "-D", "--quiet", "main"])
+
+    let graph = try ProjectGitService(rootURL: fixture.root).graph(limit: 1)
+
+    XCTAssertTrue(graph.isRepository)
+    XCTAssertNil(graph.branch)
+    XCTAssertEqual(graph.headRevision, head)
+    XCTAssertTrue(graph.refs.isEmpty)
+    XCTAssertEqual(graph.commits.map(\.revision), [head])
+    XCTAssertFalse(graph.isTruncated)
+  }
+
   func testBranchWideReviewSeparatesCommittedAndUncommittedChangesAndGatesAdoption() throws {
     let fixture = try GitFixture()
     var source = try fixture.makeManagedWorktree(

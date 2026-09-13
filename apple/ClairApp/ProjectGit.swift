@@ -152,6 +152,70 @@ struct ProjectGitDiff: Identifiable, Equatable, Sendable {
   }
 }
 
+enum ProjectGitGraphRefKind: String, CaseIterable, Equatable, Sendable {
+  case localBranch
+  case remoteBranch
+  case tag
+  case other
+}
+
+struct ProjectGitGraphRef: Identifiable, Equatable, Sendable {
+  let name: String
+  let fullName: String
+  let targetRevision: String
+  let kind: ProjectGitGraphRefKind
+  let isCurrent: Bool
+
+  var id: String {
+    fullName
+  }
+}
+
+struct ProjectGitGraphCommit: Identifiable, Equatable, Sendable {
+  let revision: String
+  let parentRevisions: [String]
+  let author: String
+  let authoredAt: String
+  let subject: String
+  let refs: [ProjectGitGraphRef]
+
+  var id: String {
+    revision
+  }
+
+  var shortRevision: String {
+    String(revision.prefix(8))
+  }
+}
+
+struct ProjectGitGraphSnapshot: Equatable, Sendable {
+  let availability: ProjectGitAvailability
+  let branch: String?
+  let headRevision: String?
+  let refs: [ProjectGitGraphRef]
+  let commits: [ProjectGitGraphCommit]
+  let isTruncated: Bool
+  let message: String?
+
+  var isRepository: Bool {
+    availability == .available
+  }
+
+  var branches: [ProjectGitGraphRef] {
+    refs.filter { $0.kind == .localBranch || $0.kind == .remoteBranch }
+  }
+
+  static let notRepository = ProjectGitGraphSnapshot(
+    availability: .notRepository,
+    branch: nil,
+    headRevision: nil,
+    refs: [],
+    commits: [],
+    isTruncated: false,
+    message: "This Project is not a Git repository."
+  )
+}
+
 enum ProjectBranchReviewChangeKind: String, CaseIterable, Codable, Equatable, Sendable {
   case added
   case modified
@@ -817,6 +881,7 @@ enum ProjectGitError: Error, Equatable, LocalizedError, Sendable {
   case notRepository(path: String)
   case repositoryOutsideProject(projectPath: String, repositoryPath: String)
   case invalidPath(String)
+  case invalidGraphLimit(Int)
   case changeNotFound(String)
   case dirtyWorkingTree
   case invalidCommitMessage
@@ -835,6 +900,9 @@ enum ProjectGitError: Error, Equatable, LocalizedError, Sendable {
         "The Project folder \(projectPath) is inside another repository at \(repositoryPath); Git operations are limited to a repository root."
     case .invalidPath(let path):
       return "The Git path is outside the Project: \(path)"
+    case .invalidGraphLimit(let limit):
+      return
+        "Git graph history limit must be between 1 and \(ProjectGitService.maximumGraphLimit) (got \(limit))."
     case .changeNotFound(let path):
       return "The Git change is no longer present: \(path)"
     case .dirtyWorkingTree:
@@ -857,6 +925,8 @@ enum ProjectGitError: Error, Equatable, LocalizedError, Sendable {
 }
 
 struct ProjectGitService {
+  static let maximumGraphLimit = 1_000
+
   let rootURL: URL
   private let fileManager: FileManager
   private let gitURL = URL(fileURLWithPath: "/usr/bin/git")
@@ -887,6 +957,45 @@ struct ProjectGitService {
     )
     let snapshot = try Self.parseStatus(output.data, rootURL: rootURL)
     return snapshot.withBranches(try branchNames())
+  }
+
+  func graph(
+    limit: Int = 200
+  ) throws -> ProjectGitGraphSnapshot {
+    guard (1...Self.maximumGraphLimit).contains(limit) else {
+      throw ProjectGitError.invalidGraphLimit(limit)
+    }
+    guard fileManager.isExecutableFile(atPath: gitURL.path) else {
+      throw ProjectGitError.gitUnavailable
+    }
+
+    guard let repositoryRoot = try repositoryRoot() else {
+      return .notRepository
+    }
+    guard repositoryRoot.path == rootURL.path else {
+      throw ProjectGitError.repositoryOutsideProject(
+        projectPath: rootURL.path,
+        repositoryPath: repositoryRoot.path
+      )
+    }
+
+    let branch = try currentBranchName()
+    let refs = try graphRefs(currentBranch: branch)
+    let headRevision = try graphHeadRevision()
+    let result = try graphCommits(
+      limit: limit,
+      refs: refs,
+      headRevision: headRevision
+    )
+    return ProjectGitGraphSnapshot(
+      availability: .available,
+      branch: branch,
+      headRevision: headRevision,
+      refs: refs,
+      commits: result.commits,
+      isTruncated: result.isTruncated,
+      message: nil
+    )
   }
 
   func diff(for change: ProjectGitChange, basis: ProjectGitDiffBasis) throws -> ProjectGitDiff {
@@ -996,6 +1105,172 @@ struct ProjectGitService {
       .sorted()
   }
 
+  private func currentBranchName() throws -> String? {
+    let output = try run(["branch", "--show-current"], operation: "read current branch")
+    let branch = output.text.trimmingCharacters(in: .whitespacesAndNewlines)
+    return branch.isEmpty ? nil : branch
+  }
+
+  private func graphHeadRevision() throws -> String? {
+    let output = try run(
+      ["rev-parse", "--verify", "--quiet", "--end-of-options", "HEAD^{commit}"],
+      operation: "read graph HEAD",
+      allowedExitStatuses: [0, 1, 128]
+    )
+    guard output.status == 0 else {
+      return nil
+    }
+    let revision = output.text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !revision.isEmpty else {
+      throw ProjectGitError.unreadableOutput(operation: "read graph HEAD")
+    }
+    return revision
+  }
+
+  private func graphRefs(currentBranch: String?) throws -> [ProjectGitGraphRef] {
+    let output = try run(
+      [
+        "for-each-ref",
+        "--format=%(refname)%00%(refname:short)%00%(objectname)%00%(*objectname)%00%(objecttype)%00%(*objecttype)%1e",
+        "refs",
+      ],
+      operation: "list graph refs"
+    )
+    guard String(data: output.data, encoding: .utf8) != nil else {
+      throw ProjectGitError.unreadableOutput(operation: "list graph refs")
+    }
+
+    let records =
+      output.data
+      .split(separator: 0x1e, omittingEmptySubsequences: true)
+      .map { $0.drop(while: { $0 == 0x0a || $0 == 0x0d }) }
+      .filter { !$0.isEmpty }
+    var refs: [ProjectGitGraphRef] = []
+    for record in records {
+      let fields =
+        record
+        .split(separator: 0, omittingEmptySubsequences: false)
+        .map { String(decoding: $0, as: UTF8.self) }
+      guard fields.count == 6 else {
+        throw ProjectGitError.unreadableOutput(operation: "list graph refs")
+      }
+
+      let fullName = fields[0]
+      let name = fields[1]
+      let objectRevision = fields[2]
+      let peeledRevision = fields[3]
+      let objectType = fields[4]
+      let peeledType = fields[5]
+      guard fullName.hasPrefix("refs/"), !name.isEmpty else {
+        throw ProjectGitError.unreadableOutput(operation: "list graph refs")
+      }
+
+      let targetRevision: String?
+      if objectType == "commit" {
+        targetRevision = objectRevision
+      } else if peeledType == "commit" {
+        targetRevision = peeledRevision
+      } else {
+        targetRevision = nil
+      }
+      guard let targetRevision, !targetRevision.isEmpty else {
+        continue
+      }
+
+      let kind = graphRefKind(for: fullName)
+      refs.append(
+        ProjectGitGraphRef(
+          name: name,
+          fullName: fullName,
+          targetRevision: targetRevision,
+          kind: kind,
+          isCurrent: kind == .localBranch && name == currentBranch
+        )
+      )
+    }
+    return refs.sorted { $0.fullName < $1.fullName }
+  }
+
+  private func graphCommits(
+    limit: Int,
+    refs: [ProjectGitGraphRef],
+    headRevision: String?
+  ) throws -> (commits: [ProjectGitGraphCommit], isTruncated: Bool) {
+    var arguments = [
+      "log",
+      "--all",
+      "--topo-order",
+      "--no-decorate",
+      "--max-count=\(limit + 1)",
+      "--format=%H%x00%P%x00%an%x00%aI%x00%s%x1e",
+    ]
+    if let headRevision {
+      // --all does not promise to include an otherwise unreachable detached HEAD.
+      // The revision was resolved by Git above, so it is safe to pass as a revision.
+      arguments.append(headRevision)
+    }
+    arguments.append("--")
+
+    let output = try run(
+      arguments,
+      operation: "list graph commits"
+    )
+    guard String(data: output.data, encoding: .utf8) != nil else {
+      throw ProjectGitError.unreadableOutput(operation: "list graph commits")
+    }
+
+    let refsByRevision = Dictionary(grouping: refs, by: \.targetRevision)
+    let records =
+      output.data
+      .split(separator: 0x1e, omittingEmptySubsequences: true)
+      .map { $0.drop(while: { $0 == 0x0a || $0 == 0x0d }) }
+      .filter { !$0.isEmpty }
+    let parsedCommits = try records.map { record -> ProjectGitGraphCommit in
+      let fields =
+        record
+        .split(separator: 0, omittingEmptySubsequences: false)
+        .map { String(decoding: $0, as: UTF8.self) }
+      guard fields.count == 5 else {
+        throw ProjectGitError.unreadableOutput(operation: "list graph commits")
+      }
+
+      let revision = fields[0]
+      let parentRevisions = fields[1].split(whereSeparator: \.isWhitespace).map(String.init)
+      let author = fields[2]
+      let authoredAt = fields[3]
+      let subject = fields[4]
+      guard !revision.isEmpty, !author.isEmpty, !authoredAt.isEmpty else {
+        throw ProjectGitError.unreadableOutput(operation: "list graph commits")
+      }
+      return ProjectGitGraphCommit(
+        revision: revision,
+        parentRevisions: parentRevisions,
+        author: author,
+        authoredAt: authoredAt,
+        subject: subject,
+        refs: refsByRevision[revision, default: []]
+      )
+    }
+
+    return (
+      commits: Array(parsedCommits.prefix(limit)),
+      isTruncated: parsedCommits.count > limit
+    )
+  }
+
+  private func graphRefKind(for fullName: String) -> ProjectGitGraphRefKind {
+    if fullName.hasPrefix("refs/heads/") {
+      return .localBranch
+    }
+    if fullName.hasPrefix("refs/remotes/") {
+      return .remoteBranch
+    }
+    if fullName.hasPrefix("refs/tags/") {
+      return .tag
+    }
+    return .other
+  }
+
   private func validatedRelativePath(_ path: String) throws -> String {
     guard !path.isEmpty, !path.hasPrefix("/") else {
       throw ProjectGitError.invalidPath(path)
@@ -1049,10 +1324,11 @@ struct ProjectGitService {
         message: message
       )
     }
-    return GitCommandOutput(data: data)
+    return GitCommandOutput(status: process.terminationStatus, data: data)
   }
 
   private struct GitCommandOutput {
+    let status: Int32
     let data: Data
 
     var text: String {

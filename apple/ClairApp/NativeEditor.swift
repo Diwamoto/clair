@@ -101,7 +101,8 @@ final class ProjectEditorFileWatcher: @unchecked Sendable {
     // Keep watching the file while it exists, but fall back to its parent
     // directory after an unlink/rename. Atomic saves replace the inode, and a
     // file-only watcher cannot observe the file being recreated afterwards.
-    let watchURL = FileManager.default.fileExists(atPath: fileURL.path)
+    let watchURL =
+      FileManager.default.fileExists(atPath: fileURL.path)
       ? fileURL
       : parentURL
     let descriptor = Darwin.open(watchURL.path, O_EVTONLY)
@@ -141,7 +142,17 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
   let url: URL
   let title: String
 
-  @Published private(set) var content: String
+  /// The buffer text is deliberately not `@Published`. Publishing it for every
+  /// keystroke invalidates the surrounding SwiftUI hierarchy while the editor
+  /// is still processing the same input, which can re-enter `updateNSView` and
+  /// replace the live selection. The live editor already owns the text it just
+  /// produced; only model-sourced replacements need to notify the view layer.
+  private(set) var content: String
+  /// Advances when the document text is replaced outside the live editor, such
+  /// as an external reload, undo/redo in the AppKit fallback, or a workspace
+  /// replacement. This keeps those paths synchronized without publishing each
+  /// typed character.
+  @Published private(set) var contentSyncToken: UInt64 = 0
   @Published private(set) var isDirty = false
   @Published private(set) var isMissing = false
   @Published private(set) var isReadOnly = false
@@ -356,9 +367,8 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
 
     let documentChange = try documentModel.apply(change.transaction())
     content = documentModel.content
-    isDirty = content != baselineContent || isMissing
-    canUndo = change.canUndo
-    canRedo = change.canRedo
+    updateDirtyState(content != baselineContent || isMissing)
+    updateUndoState(canUndo: change.canUndo, canRedo: change.canRedo)
     try? documentModel.setSelection(change.selection.range)
     editorSelection = documentModel.selection
     if let scrollTop = change.scrollTop, scrollTop.isFinite {
@@ -374,12 +384,7 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
     if let scrollTop = change.scrollTop, scrollTop.isFinite {
       editorScrollTop = max(0, scrollTop)
     }
-    if canUndo != change.canUndo {
-      canUndo = change.canUndo
-    }
-    if canRedo != change.canRedo {
-      canRedo = change.canRedo
-    }
+    updateUndoState(canUndo: change.canUndo, canRedo: change.canRedo)
     onEditorViewportChange?()
   }
 
@@ -425,8 +430,7 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
     }
     if newContent == content {
       if let embeddedCanUndo, let embeddedCanRedo {
-        canUndo = embeddedCanUndo
-        canRedo = embeddedCanRedo
+        updateUndoState(canUndo: embeddedCanUndo, canRedo: embeddedCanRedo)
       } else {
         refreshUndoState()
       }
@@ -438,8 +442,7 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
       undoUnit: .typing
     )
     if let embeddedCanUndo, let embeddedCanRedo {
-      canUndo = embeddedCanUndo
-      canRedo = embeddedCanRedo
+      updateUndoState(canUndo: embeddedCanUndo, canRedo: embeddedCanRedo)
     } else {
       refreshUndoState()
     }
@@ -546,6 +549,7 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
     if diskContent != content {
       documentModel.replaceSnapshot(content: diskContent)
       content = documentModel.content
+      advanceContentSyncToken()
       editorSelection = documentModel.selection
       editorScrollTop = 0
       onEditorViewportChange?()
@@ -585,6 +589,9 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
       source: .user,
       undoUnit: .typing
     )
+    // This replacement did not come from the live editor, so attached views
+    // must pull the new buffer contents.
+    advanceContentSyncToken()
     refreshUndoState()
   }
 
@@ -621,7 +628,31 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
       return
     }
     content = documentModel.content
-    isDirty = content != baselineContent || isMissing
+    updateDirtyState(content != baselineContent || isMissing)
+  }
+
+  /// Signals a view that the buffer changed outside its live editing surface.
+  /// Typing through CodeMirror or NSTextView must not call this.
+  private func advanceContentSyncToken() {
+    contentSyncToken &+= 1
+  }
+
+  private func updateDirtyState(_ newValue: Bool) {
+    guard isDirty != newValue else {
+      return
+    }
+    isDirty = newValue
+  }
+
+  /// `@Published` emits on every assignment, including equal values. Keep the
+  /// hot typing path quiet once the undo state has reached its new value.
+  private func updateUndoState(canUndo newCanUndo: Bool, canRedo newCanRedo: Bool) {
+    if canUndo != newCanUndo {
+      canUndo = newCanUndo
+    }
+    if canRedo != newCanRedo {
+      canRedo = newCanRedo
+    }
   }
 
   private func readDiskData() throws -> Data? {
@@ -638,8 +669,7 @@ final class ProjectEditorTab: ObservableObject, Identifiable {
   }
 
   private func refreshUndoState() {
-    canUndo = undoManager.canUndo
-    canRedo = undoManager.canRedo
+    updateUndoState(canUndo: undoManager.canUndo, canRedo: undoManager.canRedo)
   }
 }
 
@@ -1141,10 +1171,16 @@ struct ProjectSourceEditorView: NSViewRepresentable {
     scrollView.borderType = .noBorder
     scrollView.hasVerticalScroller = true
     scrollView.hasHorizontalScroller = true
+    scrollView.hasVerticalRuler = true
+    scrollView.rulersVisible = true
     scrollView.autohidesScrollers = true
     scrollView.drawsBackground = true
     scrollView.backgroundColor = WorkspaceChrome.nsCanvas
     scrollView.documentView = textView
+    scrollView.verticalRulerView = ProjectSourceLineNumberRulerView(
+      scrollView: scrollView,
+      textView: textView
+    )
     WorkspaceChrome.configureThinScrollbars(in: scrollView)
     context.coordinator.textView = textView
     context.coordinator.scrollView = scrollView
@@ -1160,22 +1196,9 @@ struct ProjectSourceEditorView: NSViewRepresentable {
 
     textView.onSave = onSave
     configure(textView)
+    scrollView.verticalRulerView?.needsDisplay = true
     textView.isEditable = !document.isMissing && !document.isReadOnly
-    if textView.string != document.content {
-      let selectedRange = textView.selectedRange()
-      context.coordinator.isUpdatingFromModel = true
-      textView.string = document.content
-      context.coordinator.isUpdatingFromModel = false
-
-      if selectedRange.location != NSNotFound {
-        let location = min(selectedRange.location, document.content.utf16.count)
-        let length = min(
-          selectedRange.length,
-          document.content.utf16.count - location
-        )
-        textView.setSelectedRange(NSRange(location: location, length: length))
-      }
-    }
+    context.coordinator.synchronizeTextViewFromModel(textView)
     textView.applySyntaxHighlighting(for: document.url.pathExtension)
     applySelectionIfNeeded(to: textView, context: context)
   }
@@ -1299,6 +1322,30 @@ struct ProjectSourceEditorView: NSViewRepresentable {
       document.updateEditorViewport(selection: selection, scrollTop: scrollTop)
     }
 
+    /// Pulls a model-owned replacement into the AppKit view without allowing
+    /// the assignment to re-enter the delegate and without leaving the caret
+    /// outside the new UTF-16 buffer.
+    func synchronizeTextViewFromModel(_ textView: NSTextView) {
+      guard textView.string != document.content else {
+        return
+      }
+
+      let selectedRange = textView.selectedRange()
+      let documentLength = document.content.utf16.count
+      isUpdatingFromModel = true
+      textView.string = document.content
+      if selectedRange.location != NSNotFound {
+        let location = min(max(0, selectedRange.location), documentLength)
+        let length = min(
+          max(0, selectedRange.length),
+          documentLength - location
+        )
+        textView.setSelectedRange(NSRange(location: location, length: length))
+      }
+      isUpdatingFromModel = false
+      scrollView?.verticalRulerView?.needsDisplay = true
+    }
+
     func textViewDidChange(_ notification: Notification) {
       guard !isUpdatingFromModel, let textView else {
         return
@@ -1310,6 +1357,7 @@ struct ProjectSourceEditorView: NSViewRepresentable {
       (textView as? ProjectSourceTextView)?.applySyntaxHighlighting(
         for: document.url.pathExtension
       )
+      scrollView?.verticalRulerView?.needsDisplay = true
     }
 
     func textViewDidChangeSelection(_ notification: Notification) {
@@ -1345,6 +1393,124 @@ struct ProjectSourceEditorView: NSViewRepresentable {
       }
       document.clearSelectionRequest()
     }
+  }
+}
+
+/// The AppKit fallback keeps line numbers in the scroll view's ruler so the
+/// text itself retains normal NSTextView layout and selection behaviour.
+@MainActor
+final class ProjectSourceLineNumberRulerView: NSRulerView {
+  static let ruleThickness: CGFloat = 44
+
+  private weak var observedTextView: NSTextView?
+  private let numberFont = NSFont.monospacedDigitSystemFont(
+    ofSize: 11,
+    weight: .regular
+  )
+
+  init(scrollView: NSScrollView, textView: NSTextView) {
+    observedTextView = textView
+    super.init(scrollView: scrollView, orientation: .verticalRuler)
+    clientView = textView
+    ruleThickness = Self.ruleThickness
+  }
+
+  required init(coder: NSCoder) {
+    observedTextView = nil
+    super.init(coder: coder)
+    ruleThickness = Self.ruleThickness
+  }
+
+  override func drawHashMarksAndLabels(in rect: NSRect) {
+    guard let textView = observedTextView,
+      let layoutManager = textView.layoutManager,
+      let textContainer = textView.textContainer
+    else {
+      return
+    }
+
+    WorkspaceChrome.nsCanvas.setFill()
+    rect.fill()
+
+    let dividerRect = NSRect(
+      x: rect.maxX - 1,
+      y: rect.minY,
+      width: 1,
+      height: rect.height
+    )
+    WorkspaceChrome.nsLineNumber.setFill()
+    dividerRect.fill()
+
+    layoutManager.ensureLayout(for: textContainer)
+    let visibleRect = textView.visibleRect
+    let glyphRange = layoutManager.glyphRange(
+      forBoundingRect: visibleRect,
+      in: textContainer
+    )
+    let text = textView.string as NSString
+    let attributes: [NSAttributedString.Key: Any] = [
+      .font: numberFont,
+      .foregroundColor: WorkspaceChrome.nsLineNumber,
+    ]
+
+    if glyphRange.length == 0 {
+      drawLineNumber(1, at: textView.textContainerOrigin.y, attributes: attributes)
+      return
+    }
+
+    var glyphIndex = glyphRange.location
+    var lastLineNumber = 0
+    while glyphIndex < NSMaxRange(glyphRange) {
+      var fragmentRange = NSRange(location: 0, length: 0)
+      let lineRect = layoutManager.lineFragmentRect(
+        forGlyphAt: glyphIndex,
+        effectiveRange: &fragmentRange
+      )
+      let characterIndex = min(
+        layoutManager.characterIndexForGlyph(at: glyphIndex),
+        text.length
+      )
+      let lineNumber = Self.lineNumber(
+        atCharacterIndex: characterIndex,
+        in: text
+      )
+      if lineNumber != lastLineNumber {
+        drawLineNumber(
+          lineNumber,
+          at: lineRect.minY + textView.textContainerOrigin.y,
+          attributes: attributes
+        )
+        lastLineNumber = lineNumber
+      }
+      glyphIndex = max(NSMaxRange(fragmentRange), glyphIndex + 1)
+    }
+  }
+
+  static func lineNumber(atCharacterIndex index: Int, in text: NSString) -> Int {
+    let clampedIndex = min(max(0, index), text.length)
+    var lineNumber = 1
+    var cursor = 0
+    while cursor < clampedIndex {
+      if text.character(at: cursor) == 10 {
+        lineNumber += 1
+      }
+      cursor += 1
+    }
+    return lineNumber
+  }
+
+  private func drawLineNumber(
+    _ lineNumber: Int,
+    at y: CGFloat,
+    attributes: [NSAttributedString.Key: Any]
+  ) {
+    let label = NSString(string: "\(lineNumber)")
+    let size = label.size(withAttributes: attributes)
+    let point = NSPoint(
+      x: ruleThickness - size.width - 10,
+      y: y + 2
+    )
+    label.draw(at: point, withAttributes: attributes)
   }
 }
 

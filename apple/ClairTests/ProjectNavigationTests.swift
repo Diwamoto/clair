@@ -114,6 +114,43 @@ final class ProjectNavigationTests: XCTestCase {
     XCTAssertEqual(snapshot.node(withID: file.path)?.name, "main.swift")
   }
 
+  func testScopedDirectoryPrefetchDoesNotWalkUnloadedDirectories() throws {
+    let fixture = try NavigationFixture()
+    let loaded = fixture.root.appendingPathComponent("Loaded", isDirectory: true)
+    let unloaded = fixture.root.appendingPathComponent("Unloaded", isDirectory: true)
+    try FileManager.default.createDirectory(at: loaded, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: unloaded, withIntermediateDirectories: true)
+    try Data("loaded".utf8).write(to: loaded.appendingPathComponent("loaded.txt"))
+    try Data("unloaded".utf8).write(to: unloaded.appendingPathComponent("unloaded.txt"))
+
+    let cache = ProjectFileTreeScanner.prefetchDirectoryCache(
+      rootURL: fixture.root,
+      directoryPaths: [fixture.root.path, loaded.path]
+    )
+
+    XCTAssertNotNil(cache[fixture.root.path])
+    XCTAssertNotNil(cache[loaded.path])
+    XCTAssertNil(cache[unloaded.path])
+  }
+
+  func testNavigationIndexCanBeSharedByQuickOpenAndSearch() throws {
+    let fixture = try NavigationFixture()
+    let file = fixture.root.appendingPathComponent("Sources.swift")
+    try Data("needle\n".utf8).write(to: file)
+
+    let index = ProjectNavigation.fileIndex(rootURL: fixture.root)
+    XCTAssertEqual(index.files.map(\.relativePath), ["Sources.swift"])
+
+    let quickOpen = ProjectNavigation.quickOpenItems(query: "sources", index: index)
+    XCTAssertEqual(quickOpen.map(\.relativePath), ["Sources.swift"])
+
+    let searchIndex = ProjectNavigationSearchIndex(files: index.files)
+    let firstSearch = searchIndex.search(query: "needle")
+    let secondSearch = searchIndex.search(query: "NEEDLE")
+    XCTAssertEqual(firstSearch, secondSearch)
+    XCTAssertEqual(secondSearch.first?.relativePath, "Sources.swift")
+  }
+
   func testWatcherGraphIsLimitedToLoadedDirectories() throws {
     let fixture = try NavigationFixture()
     var loadedPaths: Set<String> = [fixture.root.path]

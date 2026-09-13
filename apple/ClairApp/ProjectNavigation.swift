@@ -7,6 +7,19 @@ struct ProjectQuickOpenItem: Identifiable, Equatable, Sendable {
   let title: String
 }
 
+struct ProjectNavigationFile: Equatable, Sendable {
+  let url: URL
+  let relativePath: String
+
+  var title: String {
+    url.lastPathComponent
+  }
+}
+
+struct ProjectNavigationFileIndex: Equatable, Sendable {
+  let files: [ProjectNavigationFile]
+}
+
 struct ProjectSearchMatch: Identifiable, Equatable, Sendable {
   let id: String
   let filePath: String
@@ -62,6 +75,81 @@ enum ProjectNavigationLimits {
   static let maximumQuickOpenResults = 200
 }
 
+/// Shares the expensive file walk between Quick Open and in-Project search.
+/// Search content is cached only for the lifetime of a surface and is bounded
+/// so a large Project cannot grow the app's memory without limit.
+final class ProjectNavigationSearchIndex: @unchecked Sendable {
+  private static let maximumCachedFileBytes = 4 * 1024 * 1024
+  private static let maximumCachedContentBytes = 64 * 1024 * 1024
+
+  private let files: [ProjectNavigationFile]
+  private var contentCache: [String: String] = [:]
+  private var cachedContentBytes = 0
+  private let lock = NSLock()
+
+  init(files: [ProjectNavigationFile]) {
+    self.files = files
+  }
+
+  func search(query: String) -> [ProjectSearchMatch] {
+    let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !normalizedQuery.isEmpty else {
+      return []
+    }
+
+    var results: [ProjectSearchMatch] = []
+    for file in files {
+      guard !Task.isCancelled, results.count < ProjectNavigationLimits.maximumMatches else {
+        break
+      }
+      guard let content = content(for: file) else {
+        continue
+      }
+      results.append(
+        contentsOf: ProjectNavigation.matches(
+          in: content,
+          query: normalizedQuery,
+          filePath: file.url.path,
+          relativePath: file.relativePath,
+          maximumResults: ProjectNavigationLimits.maximumMatches - results.count
+        )
+      )
+    }
+    return results
+  }
+
+  private func content(for file: ProjectNavigationFile) -> String? {
+    lock.lock()
+    if let cached = contentCache[file.url.path] {
+      lock.unlock()
+      return cached
+    }
+    lock.unlock()
+    guard
+      let data = try? Data(contentsOf: file.url),
+      let content = String(data: data, encoding: .utf8)
+    else {
+      return nil
+    }
+
+    let byteCount = data.count
+    if byteCount <= Self.maximumCachedFileBytes,
+      byteCount <= Self.maximumCachedContentBytes
+    {
+      lock.lock()
+      defer { lock.unlock() }
+      if let cached = contentCache[file.url.path] {
+        return cached
+      }
+      if cachedContentBytes + byteCount <= Self.maximumCachedContentBytes {
+        contentCache[file.url.path] = content
+        cachedContentBytes += byteCount
+      }
+    }
+    return content
+  }
+}
+
 enum ProjectNavigation {
   static func quickOpenItems(
     from root: ProjectFileTreeNode,
@@ -98,31 +186,76 @@ enum ProjectNavigation {
     rootURL: URL,
     fileManager: FileManager = .default
   ) -> [ProjectQuickOpenItem] {
-    let items = projectFiles(
-      rootURL: rootURL,
-      fileManager: fileManager,
-      maximumFiles: ProjectNavigationLimits.maximumFiles
-    ).map { file in
+    quickOpenItems(
+      query: query,
+      index: fileIndex(
+        rootURL: rootURL,
+        fileManager: fileManager
+      )
+    )
+  }
+
+  static func quickOpenItems(
+    query: String,
+    index: ProjectNavigationFileIndex
+  ) -> [ProjectQuickOpenItem] {
+    let items = index.files.map { file in
       ProjectQuickOpenItem(
         id: file.url.path,
         filePath: file.url.path,
         relativePath: file.relativePath,
-        title: file.url.lastPathComponent
+        title: file.title
       )
     }
     return rankedQuickOpenItems(items, query: query)
+  }
+
+  static func fileIndex(
+    rootURL: URL,
+    fileManager: FileManager = .default
+  ) -> ProjectNavigationFileIndex {
+    ProjectNavigationFileIndex(
+      files: projectFiles(
+        rootURL: rootURL,
+        fileManager: fileManager,
+        maximumFiles: ProjectNavigationLimits.maximumFiles
+      )
+    )
+  }
+
+  static func fileIndexAsync(rootURL: URL) async -> ProjectNavigationFileIndex {
+    let task = Task.detached(priority: .utility) {
+      fileIndex(
+        rootURL: rootURL,
+        fileManager: FileManager()
+      )
+    }
+    return await withTaskCancellationHandler(
+      operation: {
+        await task.value
+      },
+      onCancel: {
+        task.cancel()
+      })
   }
 
   static func quickOpenItemsAsync(
     query: String,
     rootURL: URL
   ) async -> [ProjectQuickOpenItem] {
+    let index = await fileIndexAsync(rootURL: rootURL)
+    guard !Task.isCancelled else {
+      return []
+    }
+    return await quickOpenItemsAsync(query: query, index: index)
+  }
+
+  static func quickOpenItemsAsync(
+    query: String,
+    index: ProjectNavigationFileIndex
+  ) async -> [ProjectQuickOpenItem] {
     let task = Task.detached(priority: .userInitiated) {
-      quickOpenItems(
-        query: query,
-        rootURL: rootURL,
-        fileManager: FileManager()
-      )
+      quickOpenItems(query: query, index: index)
     }
     return await withTaskCancellationHandler(
       operation: {
@@ -138,16 +271,24 @@ enum ProjectNavigation {
     rootURL: URL,
     fileManager: FileManager = .default
   ) -> [ProjectSearchMatch] {
+    search(
+      query: query,
+      index: fileIndex(rootURL: rootURL, fileManager: fileManager),
+      fileManager: fileManager
+    )
+  }
+
+  static func search(
+    query: String,
+    index: ProjectNavigationFileIndex,
+    fileManager: FileManager = .default
+  ) -> [ProjectSearchMatch] {
     guard !query.isEmpty else {
       return []
     }
 
     var results: [ProjectSearchMatch] = []
-    for file in projectFiles(
-      rootURL: rootURL,
-      fileManager: fileManager,
-      maximumFiles: ProjectNavigationLimits.maximumFiles
-    ) {
+    for file in index.files {
       if Task.isCancelled || results.count >= ProjectNavigationLimits.maximumMatches {
         break
       }
@@ -173,12 +314,35 @@ enum ProjectNavigation {
     query: String,
     rootURL: URL
   ) async -> [ProjectSearchMatch] {
+    let index = await fileIndexAsync(rootURL: rootURL)
+    guard !Task.isCancelled else {
+      return []
+    }
+    return await searchAsync(query: query, index: index)
+  }
+
+  static func searchAsync(
+    query: String,
+    index: ProjectNavigationFileIndex
+  ) async -> [ProjectSearchMatch] {
     let task = Task.detached(priority: .userInitiated) {
-      search(
-        query: query,
-        rootURL: rootURL,
-        fileManager: FileManager()
-      )
+      search(query: query, index: index, fileManager: FileManager())
+    }
+    return await withTaskCancellationHandler(
+      operation: {
+        await task.value
+      },
+      onCancel: {
+        task.cancel()
+      })
+  }
+
+  static func searchAsync(
+    query: String,
+    index: ProjectNavigationSearchIndex
+  ) async -> [ProjectSearchMatch] {
+    let task = Task.detached(priority: .userInitiated) {
+      index.search(query: query)
     }
     return await withTaskCancellationHandler(
       operation: {
@@ -404,7 +568,7 @@ enum ProjectNavigation {
     rootURL: URL,
     fileManager: FileManager,
     maximumFiles: Int
-  ) -> [(url: URL, relativePath: String)] {
+  ) -> [ProjectNavigationFile] {
     let root = rootURL.standardizedFileURL
     var isDirectory = ObjCBool(false)
     guard
@@ -419,7 +583,7 @@ enum ProjectNavigation {
       return []
     }
 
-    var files: [(url: URL, relativePath: String)] = []
+    var files: [ProjectNavigationFile] = []
     for case let url as URL in enumerator {
       if Task.isCancelled {
         break
@@ -463,7 +627,7 @@ enum ProjectNavigation {
         continue
       }
       files.append(
-        (
+        ProjectNavigationFile(
           url: standardizedURL,
           relativePath: relativePath(for: standardizedURL, rootURL: root)
         )
@@ -478,7 +642,7 @@ enum ProjectNavigation {
     }
   }
 
-  private static func matches(
+  fileprivate static func matches(
     in content: String,
     query: String,
     filePath: String,

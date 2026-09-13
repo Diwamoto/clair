@@ -68,6 +68,253 @@ enum WorkspaceSettingsSection: String, CaseIterable, Identifiable {
   }
 }
 
+enum ClairCLIInstallerError: Error, Equatable, LocalizedError {
+  case bundledCLIUnavailable
+  case bundledCLIIsNotExecutable
+  case installDirectoryOutsideHome
+  case installDestinationIsUnsafe
+  case installFailed(String)
+
+  var errorDescription: String? {
+    switch self {
+    case .bundledCLIUnavailable:
+      "このアプリにはインストール可能なCLIが同梱されていません。"
+    case .bundledCLIIsNotExecutable:
+      "同梱CLIを実行可能ファイルとして確認できません。"
+    case .installDirectoryOutsideHome:
+      "インストール先がホームディレクトリの外に解決されるため中止しました。"
+    case .installDestinationIsUnsafe:
+      "インストール先にシンボリックリンクまたはディレクトリがあるため、安全のため中止しました。"
+    case .installFailed(let message):
+      "CLIをインストールできませんでした: \(message)"
+    }
+  }
+}
+
+struct ClairCLIInstallationStatus: Equatable {
+  enum Destination: Equatable {
+    case missing
+    case installed
+    case replaceable
+    case unsafe
+  }
+
+  let sourceAvailable: Bool
+  let destination: Destination
+  let pathConfigured: Bool
+
+  var isInstalled: Bool {
+    destination == .installed
+  }
+}
+
+struct ClairCLIInstaller {
+  let fileManager: FileManager
+  let homeDirectory: URL
+  let environment: [String: String]
+  let bundledCLIURL: URL?
+
+  init(
+    fileManager: FileManager = .default,
+    bundle: Bundle = .main,
+    homeDirectory: URL? = nil,
+    environment: [String: String] = ProcessInfo.processInfo.environment,
+    bundledCLIURL: URL? = nil
+  ) {
+    self.fileManager = fileManager
+    let resolvedHomeDirectory = homeDirectory ?? fileManager.homeDirectoryForCurrentUser
+    self.homeDirectory = resolvedHomeDirectory.standardizedFileURL
+    self.environment = environment
+    self.bundledCLIURL =
+      bundledCLIURL
+      ?? bundle.resourceURL?.appendingPathComponent("clair", isDirectory: false)
+  }
+
+  var installDirectoryURL: URL {
+    homeDirectory.appendingPathComponent(".local/bin", isDirectory: true)
+  }
+
+  var installURL: URL {
+    installDirectoryURL.appendingPathComponent("clair", isDirectory: false)
+  }
+
+  var installPathDisplay: String {
+    abbreviatedPath(installURL.path)
+  }
+
+  func status() -> ClairCLIInstallationStatus {
+    ClairCLIInstallationStatus(
+      sourceAvailable: sourceIsUsable,
+      destination: destinationStatus,
+      pathConfigured: isInstallDirectoryOnPath
+    )
+  }
+
+  func install() throws {
+    guard let sourceURL = bundledCLIURL else {
+      throw ClairCLIInstallerError.bundledCLIUnavailable
+    }
+    guard sourceIsUsable else {
+      throw ClairCLIInstallerError.bundledCLIIsNotExecutable
+    }
+    guard isWithinHome(installDirectoryURL.resolvingSymlinksInPath()) else {
+      throw ClairCLIInstallerError.installDirectoryOutsideHome
+    }
+
+    do {
+      try fileManager.createDirectory(
+        at: installDirectoryURL,
+        withIntermediateDirectories: true,
+        attributes: [.posixPermissions: 0o700]
+      )
+    } catch {
+      throw ClairCLIInstallerError.installFailed(error.localizedDescription)
+    }
+
+    guard directoryIsSafe else {
+      throw ClairCLIInstallerError.installDestinationIsUnsafe
+    }
+
+    let destination = destinationStatus
+    switch destination {
+    case .missing, .installed, .replaceable:
+      break
+    case .unsafe:
+      throw ClairCLIInstallerError.installDestinationIsUnsafe
+    }
+
+    let temporaryURL = installDirectoryURL.appendingPathComponent(
+      ".clair-\(UUID().uuidString).tmp",
+      isDirectory: false
+    )
+    defer { try? fileManager.removeItem(at: temporaryURL) }
+
+    do {
+      try fileManager.copyItem(at: sourceURL, to: temporaryURL)
+      try fileManager.setAttributes(
+        [.posixPermissions: 0o755],
+        ofItemAtPath: temporaryURL.path
+      )
+
+      switch destination {
+      case .missing:
+        try fileManager.moveItem(at: temporaryURL, to: installURL)
+      case .installed, .replaceable:
+        try _ = fileManager.replaceItemAt(
+          installURL,
+          withItemAt: temporaryURL,
+          backupItemName: nil,
+          options: [.usingNewMetadataOnly]
+        )
+      case .unsafe:
+        throw ClairCLIInstallerError.installDestinationIsUnsafe
+      }
+    } catch let error as ClairCLIInstallerError {
+      throw error
+    } catch {
+      throw ClairCLIInstallerError.installFailed(error.localizedDescription)
+    }
+  }
+
+  private var sourceIsUsable: Bool {
+    guard let bundledCLIURL,
+      !isSymbolicLink(bundledCLIURL),
+      let attributes = try? fileManager.attributesOfItem(atPath: bundledCLIURL.path),
+      let type = attributes[.type] as? FileAttributeType,
+      type == .typeRegular
+    else {
+      return false
+    }
+    return fileManager.isReadableFile(atPath: bundledCLIURL.path)
+      && fileManager.isExecutableFile(atPath: bundledCLIURL.path)
+  }
+
+  private var destinationStatus: ClairCLIInstallationStatus.Destination {
+    guard isWithinHome(installDirectoryURL.resolvingSymlinksInPath()) else {
+      return .unsafe
+    }
+    if isSymbolicLink(installDirectoryURL) {
+      return .unsafe
+    }
+    let directoryAttributes: [FileAttributeKey: Any]
+    do {
+      directoryAttributes = try fileManager.attributesOfItem(atPath: installDirectoryURL.path)
+    } catch {
+      // The installer creates this directory on demand. A missing directory is
+      // not unsafe; its parent is checked again after creation in install().
+      return .missing
+    }
+    guard let directoryType = directoryAttributes[.type] as? FileAttributeType,
+      directoryType == .typeDirectory
+    else {
+      return .unsafe
+    }
+    if isSymbolicLink(installURL) {
+      return .unsafe
+    }
+    guard let attributes = try? fileManager.attributesOfItem(atPath: installURL.path),
+      let type = attributes[.type] as? FileAttributeType
+    else {
+      return .missing
+    }
+    guard type == .typeRegular else {
+      return .unsafe
+    }
+    return fileManager.isExecutableFile(atPath: installURL.path) ? .installed : .replaceable
+  }
+
+  private var directoryIsSafe: Bool {
+    guard !isSymbolicLink(installDirectoryURL),
+      let attributes = try? fileManager.attributesOfItem(atPath: installDirectoryURL.path),
+      let type = attributes[.type] as? FileAttributeType
+    else {
+      return false
+    }
+    return type == .typeDirectory
+      && isWithinHome(installDirectoryURL.resolvingSymlinksInPath())
+  }
+
+  private var isInstallDirectoryOnPath: Bool {
+    let expectedPath = installDirectoryURL.standardizedFileURL.path
+    return (environment["PATH"] ?? "").split(separator: ":").contains { entry in
+      let rawEntry = String(entry)
+      let expandedEntry: String
+      if rawEntry == "$HOME" || rawEntry == "~" {
+        expandedEntry = homeDirectory.path
+      } else if rawEntry.hasPrefix("$HOME/") {
+        expandedEntry = homeDirectory.path + String(rawEntry.dropFirst("$HOME".count))
+      } else if rawEntry.hasPrefix("~/") {
+        expandedEntry = homeDirectory.path + String(rawEntry.dropFirst(1))
+      } else {
+        expandedEntry = rawEntry
+      }
+      guard expandedEntry.hasPrefix("/") else { return false }
+      return URL(fileURLWithPath: expandedEntry, isDirectory: true)
+        .standardizedFileURL.path == expectedPath
+    }
+  }
+
+  private func isWithinHome(_ url: URL) -> Bool {
+    let rootPath: String
+    if homeDirectory.path.hasSuffix("/") {
+      rootPath = homeDirectory.path
+    } else {
+      rootPath = homeDirectory.path + "/"
+    }
+    let path = url.standardizedFileURL.path
+    return path == homeDirectory.path || path.hasPrefix(rootPath)
+  }
+
+  private func isSymbolicLink(_ url: URL) -> Bool {
+    (try? fileManager.destinationOfSymbolicLink(atPath: url.path)) != nil
+  }
+
+  private func abbreviatedPath(_ path: String) -> String {
+    guard path.hasPrefix(homeDirectory.path) else { return path }
+    return "~" + path.dropFirst(homeDirectory.path.count)
+  }
+}
+
 struct WorkspaceSettingsView: View {
   @ObservedObject var workspace: ProjectWorkspaceModel
   @ObservedObject var agentWorkflow: AgentWorkflowCoordinator
@@ -77,6 +324,13 @@ struct WorkspaceSettingsView: View {
 
   @State private var section: WorkspaceSettingsSection = .general
   @State private var query = ""
+  @State private var cliInstallationStatus = ClairCLIInstallationStatus(
+    sourceAvailable: false,
+    destination: .missing,
+    pathConfigured: false
+  )
+  @State private var cliInstallationMessage: String?
+  @State private var isInstallingCLI = false
 
   @AppStorage("clair.general.language-v1") private var language = "ja-JP"
   @AppStorage("clair.general.theme-v1") private var theme = "one-dark"
@@ -355,8 +609,8 @@ struct WorkspaceSettingsView: View {
   private var agentsContent: some View {
     VStack(spacing: 18) {
       ClairSettingsCard(
-        title: "接続済みのAgent",
-        description: "各Agentは専用ターミナルで実行し、ここにアクティビティを報告します。"
+        title: "Agentプロバイダー",
+        description: "登録済みのAgentをClairのワークスペースから実行します。"
       ) {
         VStack(spacing: 0) {
           ForEach(settingsAgentProfiles) { profile in
@@ -376,55 +630,259 @@ struct WorkspaceSettingsView: View {
           label: "既定のエージェント",
           description: "新しいターミナルを開いたときに選択されるエージェントです。"
         ) {
-          Picker("既定のエージェント", selection: $defaultAgent) {
-            Text("Codex").tag("codex")
-            Text("Claude Code").tag("claude-code")
-            Text("OpenCode").tag("opencode")
-          }
-          .labelsHidden()
-          .pickerStyle(.menu)
-          .controlSize(.small)
+          ClairSettingsMenu(
+            title: "既定のエージェント",
+            selection: $defaultAgent,
+            options: [
+              ("codex", "Codex"),
+              ("claude-code", "Claude Code"),
+              ("opencode", "OpenCode"),
+            ]
+          )
         }
         ClairSettingsRow(
           label: "Codex モデル",
           description: "Codex セッションで優先して使用するモデルです。"
         ) {
-          Picker("Codex モデル", selection: $codexModel) {
-            Text("GPT-5.6").tag("gpt-5.6")
-            Text("GPT-5.5").tag("gpt-5.5")
-          }
-          .labelsHidden()
-          .pickerStyle(.menu)
-          .controlSize(.small)
+          ClairSettingsMenu(
+            title: "Codex モデル",
+            selection: $codexModel,
+            options: [("gpt-5.6", "GPT-5.6"), ("gpt-5.5", "GPT-5.5")]
+          )
         }
         ClairSettingsRow(
           label: "Claude Code のコマンド",
           description: "ターミナルから Claude Code を起動するときのコマンドです。"
         ) {
-          TextField("Claude Code のコマンド", text: $claudeCommand)
-            .textFieldStyle(.roundedBorder)
-            .controlSize(.small)
-            .frame(width: 150)
-            .accessibilityLabel("Claude Code のコマンド")
+          ClairAgentCommandField(label: "Claude Code のコマンド", text: $claudeCommand)
         }
         ClairSettingsRow(
           label: "OpenCode のコマンド",
           description: "ターミナルから OpenCode を起動するときのコマンドです。"
         ) {
-          TextField("OpenCode のコマンド", text: $opencodeCommand)
-            .textFieldStyle(.roundedBorder)
-            .controlSize(.small)
-            .frame(width: 150)
-            .accessibilityLabel("OpenCode のコマンド")
+          ClairAgentCommandField(label: "OpenCode のコマンド", text: $opencodeCommand)
         }
         ClairSettingsRow(
           label: "レート制限を表示",
           description: "エージェントごとの使用量ポップオーバーを有効にします。"
         ) {
-          ClairSettingsToggle(label: "レート制限を表示", isOn: $showRateLimits)
+          ClairAgentToggle(label: "レート制限を表示", isOn: $showRateLimits)
+        }
+      }
+
+      cliInstallationContent
+    }
+    .onAppear(perform: refreshCLIInstallationStatus)
+  }
+
+  private var cliInstallationContent: some View {
+    ClairSettingsCard(
+      title: "Clair CLI",
+      description: "ターミナルや外部ツールからClairのワークスペースを操作するコマンドです。"
+    ) {
+      VStack(alignment: .leading, spacing: 15) {
+        HStack(alignment: .center, spacing: 12) {
+          ZStack {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+              .fill(WorkspaceChrome.accent.opacity(0.13))
+            Image(systemName: "terminal")
+              .font(.system(size: 16, weight: .semibold))
+              .foregroundStyle(WorkspaceChrome.accent)
+          }
+          .frame(width: 36, height: 36)
+          .overlay {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+              .stroke(WorkspaceChrome.accent.opacity(0.38), lineWidth: 1)
+          }
+
+          VStack(alignment: .leading, spacing: 4) {
+            Text(cliInstallationTitle)
+              .font(WorkspaceChrome.chromeFont(size: 13, weight: .semibold))
+              .foregroundStyle(cliInstallationColor)
+            Text("同梱されたCLIをユーザー専用の場所へコピーします。")
+              .font(WorkspaceChrome.chromeFont(size: 11.5))
+              .foregroundStyle(WorkspaceChrome.textTertiary)
+          }
+          .frame(maxWidth: .infinity, alignment: .leading)
+
+          Button(
+            isInstallingCLI ? "インストール中…" : cliInstallationStatus.isInstalled ? "更新" : "インストール"
+          ) {
+            installCLI()
+          }
+          .buttonStyle(.tactile)
+          .font(WorkspaceChrome.chromeFont(size: 11, weight: .medium))
+          .foregroundStyle(WorkspaceChrome.textPrimary)
+          .padding(.horizontal, 12)
+          .padding(.vertical, 7)
+          .background(
+            WorkspaceChrome.accent.opacity(isInstallingCLI ? 0.14 : 0.24),
+            in: RoundedRectangle(cornerRadius: 5, style: .continuous)
+          )
+          .overlay {
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+              .stroke(WorkspaceChrome.accent.opacity(0.62), lineWidth: 1)
+          }
+          .disabled(
+            isInstallingCLI
+              || !cliInstallationStatus.sourceAvailable
+              || cliInstallationStatus.destination == .unsafe
+          )
+          .accessibilityLabel("Clair CLIをインストール")
+        }
+
+        VStack(alignment: .leading, spacing: 8) {
+          ClairCLIPathRow(title: "インストール先", value: ClairCLIInstaller().installPathDisplay)
+          ClairCLIPathRow(
+            title: "PATH",
+            value: cliInstallationStatus.pathConfigured
+              ? "このアプリが確認できるPATHに含まれています"
+              : "未設定（PATHは自動変更しません）"
+          )
+        }
+        .padding(12)
+        .background(WorkspaceChrome.canvas.opacity(0.72), in: RoundedRectangle(cornerRadius: 5))
+        .overlay {
+          RoundedRectangle(cornerRadius: 5)
+            .stroke(WorkspaceChrome.border, lineWidth: 1)
+        }
+
+        if !cliInstallationStatus.pathConfigured {
+          HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "info.circle")
+              .foregroundStyle(WorkspaceChrome.textTertiary)
+            Text("PATHを勝手に変更せず、必要な場合だけ設定できます。次回以降も `clair` と呼ぶには、設定コマンドをターミナルで実行してください。")
+              .font(WorkspaceChrome.chromeFont(size: 11))
+              .foregroundStyle(WorkspaceChrome.textTertiary)
+              .fixedSize(horizontal: false, vertical: true)
+          }
+        }
+
+        HStack(spacing: 8) {
+          Button("PATH設定コマンドをコピー") {
+            copyCLIPathCommand()
+          }
+          .buttonStyle(.tactile)
+          .font(WorkspaceChrome.chromeFont(size: 11))
+          .foregroundStyle(WorkspaceChrome.textSecondary)
+          .padding(.horizontal, 10)
+          .padding(.vertical, 6)
+          .background(WorkspaceChrome.chrome, in: RoundedRectangle(cornerRadius: 4))
+          .overlay {
+            RoundedRectangle(cornerRadius: 4)
+              .stroke(WorkspaceChrome.borderStrong, lineWidth: 1)
+          }
+
+          Button("インストール先を表示") {
+            NSWorkspace.shared.open(ClairCLIInstaller().installDirectoryURL)
+          }
+          .buttonStyle(.tactile)
+          .font(WorkspaceChrome.chromeFont(size: 11))
+          .foregroundStyle(WorkspaceChrome.textSecondary)
+          .padding(.horizontal, 10)
+          .padding(.vertical, 6)
+          .background(WorkspaceChrome.chrome, in: RoundedRectangle(cornerRadius: 4))
+          .overlay {
+            RoundedRectangle(cornerRadius: 4)
+              .stroke(WorkspaceChrome.borderStrong, lineWidth: 1)
+          }
+        }
+
+        if let cliInstallationMessage {
+          Text(cliInstallationMessage)
+            .font(WorkspaceChrome.chromeFont(size: 11))
+            .foregroundStyle(cliInstallationColor)
+            .fixedSize(horizontal: false, vertical: true)
         }
       }
     }
+  }
+
+  private var cliInstallationTitle: String {
+    guard cliInstallationStatus.sourceAvailable else {
+      return "CLIを利用できません"
+    }
+    switch cliInstallationStatus.destination {
+    case .installed:
+      return "CLIをインストール済み"
+    case .unsafe:
+      return "インストール先を確認してください"
+    case .missing, .replaceable:
+      return "CLIは未インストール"
+    }
+  }
+
+  private var cliInstallationColor: Color {
+    guard cliInstallationStatus.sourceAvailable else {
+      return WorkspaceChrome.attention
+    }
+    switch cliInstallationStatus.destination {
+    case .installed:
+      return WorkspaceChrome.success
+    case .unsafe:
+      return WorkspaceChrome.attention
+    case .missing, .replaceable:
+      return WorkspaceChrome.textSecondary
+    }
+  }
+
+  private func refreshCLIInstallationStatus() {
+    let installer = ClairCLIInstaller()
+    cliInstallationStatus = installer.status()
+  }
+
+  private func installCLI() {
+    guard !isInstallingCLI else { return }
+
+    let installer = ClairCLIInstaller()
+    let status = installer.status()
+    guard status.sourceAvailable else {
+      cliInstallationStatus = status
+      let error: ClairCLIInstallerError =
+        installer.bundledCLIURL == nil
+        ? .bundledCLIUnavailable
+        : .bundledCLIIsNotExecutable
+      cliInstallationMessage = error.localizedDescription
+      return
+    }
+
+    let sourceURL = installer.bundledCLIURL
+    let homeDirectory = installer.homeDirectory
+    let environment = installer.environment
+    isInstallingCLI = true
+    cliInstallationMessage = nil
+
+    Task { @MainActor in
+      let failureMessage = await Task.detached(priority: .userInitiated) {
+        let worker = ClairCLIInstaller(
+          fileManager: FileManager(),
+          homeDirectory: homeDirectory,
+          environment: environment,
+          bundledCLIURL: sourceURL
+        )
+        do {
+          try worker.install()
+          return Optional<String>.none
+        } catch {
+          return error.localizedDescription
+        }
+      }.value
+
+      let refreshedInstaller = ClairCLIInstaller()
+      cliInstallationStatus = refreshedInstaller.status()
+      cliInstallationMessage =
+        failureMessage ?? "CLIを \(refreshedInstaller.installPathDisplay) にインストールしました。"
+      isInstallingCLI = false
+    }
+  }
+
+  private func copyCLIPathCommand() {
+    let command =
+      "grep -qxF 'export PATH=\"$HOME/.local/bin:$PATH\"' ~/.zprofile 2>/dev/null || "
+      + "printf '%s\\n' 'export PATH=\"$HOME/.local/bin:$PATH\"' >> ~/.zprofile"
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(command, forType: .string)
+    cliInstallationMessage = "PATH設定コマンドをコピーしました。内容を確認してターミナルで実行してください。"
   }
 
   private var editorContent: some View {
@@ -846,6 +1304,137 @@ private struct ClairSettingsSegmentedControl: View {
   }
 }
 
+private struct ClairSettingsMenu: View {
+  let title: String
+  @Binding var selection: String
+  let options: [(String, String)]
+
+  private var selectedTitle: String {
+    options.first(where: { $0.0 == selection })?.1 ?? selection
+  }
+
+  var body: some View {
+    Menu {
+      ForEach(options, id: \.0) { option in
+        Button {
+          selection = option.0
+        } label: {
+          HStack(spacing: 7) {
+            if selection == option.0 {
+              Image(systemName: "checkmark")
+                .frame(width: 12)
+            } else {
+              Color.clear
+                .frame(width: 12, height: 1)
+            }
+            Text(option.1)
+          }
+        }
+      }
+    } label: {
+      HStack(spacing: 8) {
+        Text(selectedTitle)
+          .font(WorkspaceChrome.chromeFont(size: 11))
+          .foregroundStyle(WorkspaceChrome.textPrimary)
+          .lineLimit(1)
+        Spacer(minLength: 4)
+        Image(systemName: "chevron.down")
+          .font(.system(size: 9, weight: .semibold))
+          .foregroundStyle(WorkspaceChrome.textTertiary)
+      }
+      .frame(width: 174, alignment: .leading)
+      .padding(.horizontal, 9)
+      .padding(.vertical, 7)
+      .background(WorkspaceChrome.chrome, in: RoundedRectangle(cornerRadius: 5))
+      .overlay {
+        RoundedRectangle(cornerRadius: 5)
+          .stroke(WorkspaceChrome.borderStrong, lineWidth: 1)
+      }
+    }
+    .menuStyle(.borderlessButton)
+    .fixedSize()
+    .accessibilityLabel(title)
+    .accessibilityValue(selectedTitle)
+  }
+}
+
+private struct ClairAgentCommandField: View {
+  let label: String
+  @Binding var text: String
+
+  var body: some View {
+    TextField(label, text: $text)
+      .textFieldStyle(.plain)
+      .font(.system(size: 11, design: .monospaced))
+      .foregroundStyle(WorkspaceChrome.textPrimary)
+      .padding(.horizontal, 9)
+      .padding(.vertical, 7)
+      .frame(width: 174)
+      .background(WorkspaceChrome.chrome, in: RoundedRectangle(cornerRadius: 5))
+      .overlay {
+        RoundedRectangle(cornerRadius: 5)
+          .stroke(WorkspaceChrome.borderStrong, lineWidth: 1)
+      }
+      .accessibilityLabel(label)
+  }
+}
+
+private struct ClairAgentToggle: View {
+  let label: String
+  @Binding var isOn: Bool
+
+  var body: some View {
+    Button {
+      isOn.toggle()
+    } label: {
+      HStack(spacing: 8) {
+        Text(isOn ? "オン" : "オフ")
+          .font(.system(size: 10, weight: .medium, design: .monospaced))
+          .foregroundStyle(isOn ? WorkspaceChrome.textPrimary : WorkspaceChrome.textTertiary)
+        ZStack(alignment: isOn ? .trailing : .leading) {
+          Capsule()
+            .fill(isOn ? WorkspaceChrome.accent.opacity(0.36) : WorkspaceChrome.canvas)
+            .frame(width: 38, height: 22)
+          Circle()
+            .fill(isOn ? WorkspaceChrome.accent : WorkspaceChrome.textQuaternary)
+            .frame(width: 16, height: 16)
+            .padding(3)
+        }
+      }
+      .padding(.horizontal, 8)
+      .padding(.vertical, 4)
+      .background(WorkspaceChrome.chrome, in: RoundedRectangle(cornerRadius: 5))
+      .overlay {
+        RoundedRectangle(cornerRadius: 5)
+          .stroke(WorkspaceChrome.borderStrong, lineWidth: 1)
+      }
+    }
+    .buttonStyle(.tactile)
+    .accessibilityLabel(label)
+    .accessibilityValue(isOn ? "オン" : "オフ")
+  }
+}
+
+private struct ClairCLIPathRow: View {
+  let title: String
+  let value: String
+
+  var body: some View {
+    HStack(alignment: .firstTextBaseline, spacing: 10) {
+      Text(title)
+        .font(WorkspaceChrome.chromeFont(size: 10.5, weight: .medium))
+        .foregroundStyle(WorkspaceChrome.textQuaternary)
+      Spacer(minLength: 8)
+      Text(value)
+        .font(.system(size: 10, design: .monospaced))
+        .foregroundStyle(WorkspaceChrome.textTertiary)
+        .lineLimit(1)
+        .truncationMode(.middle)
+        .multilineTextAlignment(.trailing)
+    }
+  }
+}
+
 private struct ClairAgentSettingsRow: View {
   let profile: AgentLaunchProfile
   let activeSessionCount: Int
@@ -868,7 +1457,7 @@ private struct ClairAgentSettingsRow: View {
           .foregroundStyle(WorkspaceChrome.textPrimary)
         Text(
           activeSessionCount == 0
-            ? "利用可能"
+            ? "セッション待機中"
             : "\(activeSessionCount)件のセッションが実行中"
         )
         .font(.system(size: 11, design: .monospaced))
@@ -877,7 +1466,7 @@ private struct ClairAgentSettingsRow: View {
 
       Spacer(minLength: 12)
 
-      Text(activeSessionCount == 0 ? "接続済み" : "使用中")
+      Text(activeSessionCount == 0 ? "待機中" : "使用中")
         .font(.system(size: 11, design: .monospaced))
         .foregroundStyle(WorkspaceChrome.textTertiary)
         .padding(.horizontal, 8)

@@ -178,6 +178,183 @@ final class ProjectKernelTests: XCTestCase {
 
   }
 
+  func testKeyboardFirstShortcutsKeepPaneAndTerminalCommandsDistinctFromGitDiff() throws {
+    let suiteName = "clair-command-shortcuts-defaults-\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+
+    let shortcuts = CommandShortcutStore(defaults: defaults).load()
+
+    XCTAssertEqual(shortcuts[.terminalOpen], CommandShortcutStore.terminalOpenShortcut)
+    XCTAssertEqual(shortcuts[.paneSplit], CommandShortcutStore.paneSplitShortcut)
+    XCTAssertEqual(
+      shortcuts[.gitShowDiff],
+      CommandShortcut(key: "d", modifiers: [.command, .shift])
+    )
+    XCTAssertEqual(Set(shortcuts.values).count, shortcuts.count)
+    XCTAssertNotEqual(shortcuts[.paneSplit], shortcuts[.gitShowDiff])
+    XCTAssertFalse(
+      CommandShortcutStore.reservedShortcuts.contains(CommandShortcut(key: "d"))
+    )
+  }
+
+  func testLegacyV1ShortcutsMigrateAndPersistKeyboardFirstDefaults() throws {
+    struct StoredSnapshot: Codable {
+      let schemaVersion: Int
+      let bindings: [Binding]
+
+      struct Binding: Codable {
+        let commandID: ClairCommandID
+        let shortcut: CommandShortcut
+      }
+    }
+
+    let suiteName = "clair-command-shortcuts-v1-migration-\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+
+    let legacy = StoredSnapshot(
+      schemaVersion: 1,
+      bindings: [
+        StoredSnapshot.Binding(
+          commandID: .openProject,
+          shortcut: CommandShortcut(key: "o", modifiers: [.command])
+        ),
+        StoredSnapshot.Binding(
+          commandID: .gitShowDiff,
+          shortcut: CommandShortcut(key: "d", modifiers: [.command, .shift])
+        ),
+      ]
+    )
+    defaults.set(try JSONEncoder().encode(legacy), forKey: CommandShortcutStore.defaultsKey)
+
+    let store = CommandShortcutStore(defaults: defaults)
+    let loaded = store.load()
+
+    XCTAssertEqual(loaded[.terminalOpen], CommandShortcutStore.terminalOpenShortcut)
+    XCTAssertEqual(loaded[.paneSplit], CommandShortcutStore.paneSplitShortcut)
+    XCTAssertNil(loaded[.gitRefresh])
+
+    let migratedData = try XCTUnwrap(
+      defaults.data(forKey: CommandShortcutStore.defaultsKey)
+    )
+    let migrated = try JSONDecoder().decode(StoredSnapshot.self, from: migratedData)
+    XCTAssertEqual(migrated.schemaVersion, 2)
+    XCTAssertEqual(Set(migrated.bindings.map(\.commandID)), Set(loaded.keys))
+  }
+
+  func testV1MigrationKeepsAnExistingShortcutWithoutCreatingADuplicate() throws {
+    struct StoredSnapshot: Codable {
+      let schemaVersion: Int
+      let bindings: [Binding]
+
+      struct Binding: Codable {
+        let commandID: ClairCommandID
+        let shortcut: CommandShortcut
+      }
+    }
+
+    let suiteName = "clair-command-shortcuts-v1-conflict-\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let occupiedShortcut = CommandShortcut(key: "d", modifiers: [.command])
+    let legacy = StoredSnapshot(
+      schemaVersion: 1,
+      bindings: [
+        StoredSnapshot.Binding(commandID: .gitRefresh, shortcut: occupiedShortcut)
+      ]
+    )
+    defaults.set(try JSONEncoder().encode(legacy), forKey: CommandShortcutStore.defaultsKey)
+
+    let loaded = CommandShortcutStore(defaults: defaults).load()
+
+    XCTAssertEqual(loaded[.gitRefresh], occupiedShortcut)
+    XCTAssertNil(loaded[.paneSplit])
+    XCTAssertEqual(
+      loaded.values.filter { $0 == occupiedShortcut }.count,
+      1
+    )
+  }
+
+  func testHumanCommandSurfaceSplitsTheFocusedPane() throws {
+    let fixture = try Fixture()
+    let root = try fixture.makeDirectory(named: "command-pane-project")
+    let workspace = fixture.makeWorkspace()
+    let project = try XCTUnwrap(
+      project(workspace.execute(.openProject(OpenProjectCommand(rootURL: root))))
+    )
+    let surface = try XCTUnwrap(workspace.activeSurface)
+    let commandSurface = CommandSurfaceModel(workspace: workspace)
+
+    XCTAssertEqual(commandSurface.availability(for: .paneSplit), .available)
+    let result = commandSurface.invoke(commandID: .paneSplit, source: .shortcut)
+
+    guard
+      case .success(.adapter(.pane(let projectID, let focusedPaneID, let paneCount))) = result
+    else {
+      return XCTFail("Expected the pane split command to succeed, got \(result)")
+    }
+    XCTAssertEqual(projectID, project.id)
+    XCTAssertEqual(paneCount, 2)
+    XCTAssertEqual(surface.paneIDs.count, 2)
+    XCTAssertTrue(surface.paneIDs.contains(focusedPaneID))
+    XCTAssertEqual(commandSurface.lastExecution?.commandID, .paneSplit)
+    XCTAssertEqual(commandSurface.lastExecution?.source, .shortcut)
+    XCTAssertEqual(
+      commandSurface.lastExecution?.outcome,
+      .success("Pane split complete (2 panes).")
+    )
+  }
+
+  func testHumanCommandSurfaceOpensAndFocusesATerminal() throws {
+    let fixture = try Fixture()
+    let root = try fixture.makeDirectory(named: "command-terminal-project")
+    let workspace = fixture.makeWorkspace()
+    _ = workspace.execute(.openProject(OpenProjectCommand(rootURL: root)))
+    let surface = try XCTUnwrap(workspace.activeSurface)
+    let commandSurface = CommandSurfaceModel(workspace: workspace)
+    defer { workspace.terminateAllTerminalSessions() }
+
+    XCTAssertEqual(commandSurface.availability(for: .terminalOpen), .available)
+    let result = commandSurface.invoke(commandID: .terminalOpen, source: .shortcut)
+
+    guard
+      case .success(.adapter(.terminal(let projectID, let tabID))) = result,
+      let tabID
+    else {
+      return XCTFail("Expected the terminal open command to succeed, got \(result)")
+    }
+    XCTAssertEqual(projectID, try XCTUnwrap(workspace.activeProjectID))
+    XCTAssertTrue(surface.isTerminalVisible)
+    XCTAssertEqual(surface.activeTabID, tabID)
+    XCTAssertEqual(commandSurface.lastExecution?.commandID, .terminalOpen)
+    XCTAssertEqual(commandSurface.lastExecution?.source, .shortcut)
+    XCTAssertEqual(commandSurface.lastExecution?.outcome, .success("Terminal ready."))
+  }
+
+  func testHumanCommandSurfaceExplainsUnavailableTerminalCommand() throws {
+    let fixture = try Fixture()
+    let workspace = fixture.makeWorkspace()
+    let commandSurface = CommandSurfaceModel(workspace: workspace)
+
+    let availability = commandSurface.availability(for: .terminalOpen)
+    XCTAssertFalse(availability.isAvailable)
+    XCTAssertEqual(availability.reason, "Open a Project before opening a terminal.")
+
+    let result = commandSurface.invoke(commandID: .terminalOpen, source: .commandWindow)
+    guard case .failure(.unavailable(let commandID, let reason)) = result else {
+      return XCTFail("Expected an unavailable terminal command, got \(result)")
+    }
+    XCTAssertEqual(commandID, .terminalOpen)
+    XCTAssertEqual(reason, availability.reason)
+    XCTAssertEqual(
+      commandSurface.lastExecution?.outcome,
+      .failure(
+        "Command terminal.open is unavailable: Open a Project before opening a terminal."
+      )
+    )
+  }
+
   func testHumanCommandSurfacePreservesUnavailableReasonAndDisplaysError() throws {
     let fixture = try Fixture()
     let workspace = fixture.makeWorkspace()
@@ -244,6 +421,23 @@ final class ProjectKernelTests: XCTestCase {
       ) = conflict
     else {
       return XCTFail("Expected a conflicting shortcut error, got \(conflict)")
+    }
+    XCTAssertEqual(surface.shortcuts[.gitRefresh], originalRefreshShortcut)
+
+    let paneSplitShortcut = try XCTUnwrap(surface.shortcuts[.paneSplit])
+    let paneSplitConflict = surface.setShortcut(paneSplitShortcut, for: .gitRefresh)
+    guard
+      case .failure(
+        .conflict(
+          existing: .paneSplit,
+          requested: .gitRefresh,
+          shortcut: paneSplitShortcut
+        )
+      ) = paneSplitConflict
+    else {
+      return XCTFail(
+        "Expected Cmd+D to remain exclusive to pane splitting, got \(paneSplitConflict)"
+      )
     }
     XCTAssertEqual(surface.shortcuts[.gitRefresh], originalRefreshShortcut)
 
@@ -389,7 +583,7 @@ final class ProjectKernelTests: XCTestCase {
     try FileManager.default.removeItem(at: root)
 
     await waitForFileTree(surface) { snapshot in
-      snapshot.availability == .missing
+      snapshot.availability == .missing && !snapshot.isLoading
     }
 
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -397,6 +591,7 @@ final class ProjectKernelTests: XCTestCase {
     try Data("restored".utf8).write(to: restoredFile)
     await waitForFileTree(surface) { snapshot in
       snapshot.availability == .available
+        && !snapshot.isLoading
         && snapshot.node(withID: restoredFile.path) != nil
     }
   }
@@ -596,6 +791,37 @@ final class ProjectKernelTests: XCTestCase {
     XCTAssertTrue(surface.searchResults.isEmpty)
     surface.search(query: "after")
     XCTAssertEqual(surface.searchResults.first?.relativePath, "watched.txt")
+  }
+
+  func testSearchRequestsOnlyPublishTheLatestQuery() async throws {
+    let fixture = try Fixture()
+    let root = try fixture.makeDirectory(named: "latest-search-project")
+    let first = root.appendingPathComponent("first.txt")
+    let second = root.appendingPathComponent("second.txt")
+    try Data("first needle\n".utf8).write(to: first)
+    try Data("second needle\n".utf8).write(to: second)
+    let surface = ProjectSurfaceModel(projectID: UUID(), rootURL: root)
+
+    surface.requestSearch(query: "first")
+    surface.requestSearch(query: "second")
+
+    await waitForSearch(surface) { results in
+      results.count == 1 && results.first?.relativePath == "second.txt"
+    }
+    XCTAssertFalse(surface.searchIsLoading)
+  }
+
+  func testBlankSearchRequestClearsResultsWithoutLoading() async throws {
+    let fixture = try Fixture()
+    let root = try fixture.makeDirectory(named: "blank-search-project")
+    try Data("needle\n".utf8).write(to: root.appendingPathComponent("file.txt"))
+    let surface = ProjectSurfaceModel(projectID: UUID(), rootURL: root)
+
+    surface.requestSearch(query: "needle")
+    surface.requestSearch(query: "   ")
+
+    XCTAssertTrue(surface.searchResults.isEmpty)
+    XCTAssertFalse(surface.searchIsLoading)
   }
 
   private func splitRatios(in node: ProjectPaneNode) -> [Double] {

@@ -538,7 +538,7 @@ struct CommandRegistry: Sendable {
       ),
       CommandDescriptor(
         id: .terminalOpen,
-        title: "ターミナルを開く",
+        title: "ターミナルを開く / フォーカス",
         risk: .additive,
         aiAvailable: true
       ),
