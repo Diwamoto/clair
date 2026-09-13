@@ -126,7 +126,7 @@ G2 -> U01 -> U02
 
 | ID | Status | Difficulty | Depends on | Task and completion evidence |
 |---|---|---:|---|---|
-| `B00` | `next` | `D2` | — | 現在の dirty worktree を整理して pre-v2 checkpoint commit と archive tag を作る。plan/queue を含む状態を Git から復元でき、旧ファイルを物理コピーしていないこと。 |
+| `B00` | `done` | `D2` | — | 現在の dirty worktree を整理して pre-v2 checkpoint commit と archive tag を作る。plan/queue を含む状態を Git から復元でき、旧ファイルを物理コピーしていないこと。 |
 | `B01` | `queued` | `D3` | `B00` | v2 の Swift packages、macOS app、iOS/iPadOS app、daemon executable の空 target と build/test lane を作る。旧 runtime module を link せず全 target が build すること。 |
 | `B02` | `queued` | `D3` | `B00` | native mobile + APNs 方針の ADR を作り、PWA 優先の ADR/P0020/roadmap を superseded として接続する。bundle ID、signing、TestFlight、push entitlement の ownership を記録すること。 |
 | `B03` | `queued` | `D5` | `B01` | `ProjectID`、`WorktreeID`、`SessionID`、revision、operation ID、capability、error、event envelope の共有 protocol と invariants を定義する。version negotiation、unknown field、frame bound、replay の golden tests が通ること。 |
@@ -228,4 +228,10 @@ UI の正本は [Clair UI Design canvas と Workbench](../../prototypes/clair-wo
 
 `clair-v2-orchestrator` の controller だけが、統合済み task の status と実行記録を更新する。各記録には task ID、統合日、integration commit、検証結果、明示的な残課題を含める。worker branch の完了だけでは記録しない。
 
-No v2 task has been integrated yet.
+### B00 — 2026-09-14
+
+- integration commit: `882505339461471a20b647d05a5e57dc6dc313cf`
+- archive tag: `archive/clair-v1-2026-09-14`
+- verification: `git diff --cached --check` passed; `python3 .agents/skills/clair-v2-orchestrator/scripts/test_task_lease.py` passed (3 tests); queue validation passed before checkpoint
+- restored scope: current tracked changes and 9 explicitly listed untracked repository files, including the v2 plan, queue, and orchestrator skill; ignored build/machine output was excluded
+- remaining: no v2 implementation task is integrated yet; no push or publication performed
