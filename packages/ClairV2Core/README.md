@@ -126,3 +126,21 @@ storage, APNs provider credential, or public relay. A future connection layer
 implements `ClairNativeTransportChannel` and carries its bounded frames over
 Network.framework/TLS while keeping this authority and the same threat-tested
 state machine.
+
+## N02 native mobile client
+
+`ClairV2MobileKit` owns the typed mobile client state machine and the protected
+identity boundary. `ClairKeychainDeviceIdentityStore` stores the device signer
+and opaque credential as one device-only Keychain record; tests use the
+deterministic `ClairInMemoryDeviceIdentityStore`. Locked, unavailable,
+corrupt, and key-rotation failures are typed and redacted. The explicit
+Secure Enclave and Network.framework/TLS adapters fail closed until the H03
+signer/channel contracts support those production implementations.
+
+The client persists only safe host identity metadata alongside the protected
+record, keeps endpoint updates separate from the host pin, and can persist an
+observed TLS certificate fingerprint as a second pin. Reconnect requires both
+the host identity and certificate pin when present, negotiates B03 protocol
+versions/capabilities before pairing or reconnect, and uses a fresh H03
+challenge after restart. Its public state contains no token, private key,
+pairing secret, terminal bytes, prompt, or working-directory content.

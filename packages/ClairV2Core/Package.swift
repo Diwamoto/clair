@@ -57,6 +57,7 @@ let package = Package(
         "ClairV2Agent",
         "ClairV2Review",
         "ClairV2Shared",
+        "ClairV2Transport",
         "ClairV2Workspace",
       ]
     ),

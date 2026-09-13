@@ -25,5 +25,7 @@ smoke target, UI smoke target, device signing, and TestFlight archiving. The
 runbook in `docs/runbooks/native-mobile-v2.md` records the account-side steps.
 
 The app and test targets never import the v1 `ClairMobileKit` or the reference
-`apple/ClairMobileApp` runtime. Pairing, Keychain identity, transport, APNs,
-and production UI remain owned by later queue tasks.
+`apple/ClairMobileApp` runtime. N02 owns the typed client, protected identity,
+pairing, certificate/host pin, and reconnect seam in `ClairV2MobileKit`; APNs, the concrete
+Network.framework/TLS channel, and production UI remain owned by later queue
+tasks.

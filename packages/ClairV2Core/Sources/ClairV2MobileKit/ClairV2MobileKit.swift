@@ -1,6 +1,7 @@
 import ClairV2Agent
 import ClairV2Review
 import ClairV2Shared
+import ClairV2Transport
 import ClairV2Workspace
 
 public enum ClairV2MobileModule {
