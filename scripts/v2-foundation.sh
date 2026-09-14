@@ -6,6 +6,8 @@ core_package="$repo_root/packages/ClairV2Core"
 apps_package="$repo_root/packages/ClairV2Apps"
 
 core_targets=(
+  ClairV2Push
+  ClairPushRelay
   ClairV2Shared
   ClairV2Workspace
   ClairV2Agent

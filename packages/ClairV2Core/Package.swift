@@ -9,6 +9,8 @@ let package = Package(
     .macOS(.v14),
   ],
   products: [
+    .library(name: "ClairV2Push", targets: ["ClairV2Push"]),
+    .library(name: "ClairPushRelay", targets: ["ClairPushRelay"]),
     .library(name: "ClairV2Shared", targets: ["ClairV2Shared"]),
     .library(name: "ClairV2Workspace", targets: ["ClairV2Workspace"]),
     .library(name: "ClairV2Agent", targets: ["ClairV2Agent"]),
@@ -21,6 +23,8 @@ let package = Package(
   ],
   targets: [
     .target(name: "ClairV2Shared"),
+    .target(name: "ClairV2Push"),
+    .target(name: "ClairPushRelay", dependencies: ["ClairV2Push"]),
     .target(
       name: "ClairV2Workspace",
       dependencies: ["ClairV2Shared"]
@@ -47,6 +51,7 @@ let package = Package(
     .target(
       name: "ClairV2DaemonKit",
       dependencies: [
+        "ClairV2Push",
         "ClairV2Agent",
         "ClairV2Shared",
         "ClairV2Terminal",
@@ -78,6 +83,8 @@ let package = Package(
     .testTarget(
       name: "ClairV2CoreTests",
       dependencies: [
+        "ClairV2Push",
+        "ClairPushRelay",
         "ClairV2Agent",
         "ClairV2AppKit",
         "ClairV2DaemonKit",
