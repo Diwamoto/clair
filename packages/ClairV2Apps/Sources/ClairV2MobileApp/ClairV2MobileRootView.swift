@@ -17,6 +17,7 @@ struct ClairV2MobileRootView: View {
   @Environment(\.scenePhase) private var scenePhase
   @State private var store = ClairV2MobileStore()
   @State private var hostManagement = ClairMobileHostManagementState()
+  @State private var destinationBrowser = ClairMobileDestinationBrowserState()
   @State private var showingPairing = false
   @State private var pairingCode = ""
 
@@ -24,6 +25,7 @@ struct ClairV2MobileRootView: View {
     NavigationStack {
       List {
         hostSection
+        destinationBrowserSection
         connectionSection
         navigationSection
         surfaceSection
@@ -109,6 +111,98 @@ struct ClairV2MobileRootView: View {
         store.send(.disconnectRequested)
       }
       .disabled(store.state.connection == .disconnected)
+    }
+  }
+
+  private var destinationBrowserSection: some View {
+    Section("Projects") {
+      if destinationBrowser.projects.isEmpty {
+        ContentUnavailableView(
+          "No available Projects",
+          systemImage: "folder",
+          description: Text("Connect to a paired host to browse its read-only Project catalog.")
+        )
+      } else {
+        ForEach(destinationBrowser.projects, id: \.id) { project in
+          Button {
+            _ = destinationBrowser.selectProject(project.id)
+          } label: {
+            HStack {
+              VStack(alignment: .leading) {
+                Text(project.rootURL.lastPathComponent)
+                Text(project.state.rawValue.replacingOccurrences(of: "_", with: " "))
+                  .font(.caption)
+                  .foregroundStyle(project.state == .available ? Color.secondary : Color.orange)
+              }
+              Spacer()
+              if destinationBrowser.selectedScope?.projectID == project.id {
+                Image(systemName: "checkmark")
+                  .accessibilityHidden(true)
+              }
+            }
+          }
+          .disabled(project.state != .available)
+          .accessibilityIdentifier("project-\(project.id)")
+
+          ForEach(destinationBrowser.worktrees(for: project.id), id: \.id) { worktree in
+            Button {
+              _ = destinationBrowser.selectWorktree(projectID: project.id, worktreeID: worktree.id)
+            } label: {
+              HStack {
+                Image(systemName: "arrow.triangle.branch")
+                  .foregroundStyle(.secondary)
+                Text(worktree.branch ?? worktree.rootURL.lastPathComponent)
+                Spacer()
+                Text(worktree.state.rawValue.replacingOccurrences(of: "_", with: " "))
+                  .font(.caption)
+                  .foregroundStyle(worktree.state == .available ? Color.secondary : Color.orange)
+              }
+            }
+            .disabled(worktree.state != .available)
+            .accessibilityIdentifier("worktree-\(worktree.id)")
+          }
+
+          ForEach(destinationBrowser.sessions(forProjectID: project.id)) { session in
+            Button {
+              _ = destinationBrowser.selectSession(session.id)
+            } label: {
+              HStack {
+                Image(systemName: "terminal")
+                  .foregroundStyle(.secondary)
+                VStack(alignment: .leading) {
+                  Text(session.displayName)
+                  Text(session.status)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if destinationBrowser.selectedScope == session.scope {
+                  Image(systemName: "checkmark")
+                    .accessibilityHidden(true)
+                }
+              }
+            }
+            .accessibilityIdentifier("session-\(session.id)")
+          }
+        }
+      }
+
+      if let recent = destinationBrowser.recentDestination {
+        Button("Clear recent destination", role: .destructive) {
+          destinationBrowser.clearRecentDestination()
+        }
+        .accessibilityIdentifier("clear-recent-destination")
+        Text(verbatim: "Recent: \(recent.scope.projectID.description)")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+
+      if let error = destinationBrowser.lastError {
+        Label(error.localizedDescription, systemImage: "exclamationmark.triangle")
+          .font(.footnote)
+          .foregroundStyle(.orange)
+          .accessibilityIdentifier("destination-browser-error")
+      }
     }
   }
 
