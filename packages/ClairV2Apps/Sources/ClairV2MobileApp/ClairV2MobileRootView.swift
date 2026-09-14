@@ -20,12 +20,17 @@ struct ClairV2MobileRootView: View {
   @State private var destinationBrowser = ClairMobileDestinationBrowserState()
   @State private var showingPairing = false
   @State private var pairingCode = ""
+  @State private var conversation = ClairV2MobileConversationController()
+  @State private var conversationSnapshot = ClairV2MobileConversationState()
+  @State private var conversationDraft = ""
+  @State private var conversationError: String?
 
   var body: some View {
     NavigationStack {
       List {
         hostSection
         destinationBrowserSection
+        conversationSection
         connectionSection
         navigationSection
         surfaceSection
@@ -38,6 +43,95 @@ struct ClairV2MobileRootView: View {
     }
     .onChange(of: scenePhase) { _, phase in
       store.send(command(for: phase))
+      if phase == .active {
+        // A response streamed while backgrounded is already folded by the
+        // actor regardless of scene phase; returning to the foreground only
+        // needs to refresh this view's snapshot of that state.
+        Task { await refreshConversation() }
+      }
+    }
+  }
+
+  private var conversationSection: some View {
+    Section("Conversation") {
+      guard destinationBrowser.selectedScope?.isSessionScope == true else {
+        return AnyView(
+          ContentUnavailableView(
+            "No session selected",
+            systemImage: "bubble.left.and.bubble.right",
+            description: Text("Select a session above to open its conversation.")
+          )
+        )
+      }
+      return AnyView(
+        VStack(alignment: .leading, spacing: 12) {
+          if conversationSnapshot.messages.isEmpty {
+            Text("No messages yet.")
+              .font(.footnote)
+              .foregroundStyle(.secondary)
+          } else {
+            ForEach(conversationSnapshot.messages) { message in
+              VStack(alignment: .leading, spacing: 2) {
+                Text(message.role.rawValue.capitalized)
+                  .font(.caption)
+                  .foregroundStyle(.secondary)
+                Text(message.text)
+                  .font(.body)
+              }
+              .accessibilityIdentifier("conversation-message-\(message.id)")
+            }
+          }
+
+          ForEach(conversationSnapshot.pendingApprovals) { approval in
+            HStack {
+              VStack(alignment: .leading) {
+                Text("Approval requested")
+                  .font(.subheadline)
+                Text(approval.kind.rawValue.capitalized)
+                  .font(.caption)
+                  .foregroundStyle(.secondary)
+              }
+              Spacer()
+              Button("Approve") {
+                respondToApproval(requestID: approval.requestID, approve: true)
+              }
+              .accessibilityIdentifier("approve-\(approval.requestID)")
+              Button("Deny", role: .destructive) {
+                respondToApproval(requestID: approval.requestID, approve: false)
+              }
+              .accessibilityIdentifier("deny-\(approval.requestID)")
+            }
+          }
+
+          HStack {
+            TextField("Message", text: $conversationDraft)
+              .accessibilityIdentifier("conversation-composer")
+            Button("Send") {
+              submitPrompt()
+            }
+            .disabled(conversationDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .accessibilityIdentifier("conversation-send")
+          }
+
+          HStack {
+            Button("Interrupt") {
+              dispatchLifecycleCommand { try await conversation.interrupt() }
+            }
+            .accessibilityIdentifier("conversation-interrupt")
+            Button("Stop", role: .destructive) {
+              dispatchLifecycleCommand { try await conversation.stop() }
+            }
+            .accessibilityIdentifier("conversation-stop")
+          }
+
+          if let conversationError {
+            Label(conversationError, systemImage: "exclamationmark.triangle")
+              .font(.footnote)
+              .foregroundStyle(.orange)
+              .accessibilityIdentifier("conversation-error")
+          }
+        }
+      )
     }
   }
 
@@ -256,5 +350,40 @@ struct ClairV2MobileRootView: View {
     @unknown default:
       .sceneBecameInactive
     }
+  }
+
+  private func submitPrompt() {
+    let text = conversationDraft
+    conversationDraft = ""
+    dispatchLifecycleCommand { _ = try await conversation.submitPrompt(text) }
+  }
+
+  private func respondToApproval(requestID: String, approve: Bool) {
+    dispatchLifecycleCommand {
+      if approve {
+        _ = try await conversation.approve(requestID: requestID)
+      } else {
+        _ = try await conversation.deny(requestID: requestID)
+      }
+    }
+  }
+
+  /// Wraps one scoped-command action: clears any previous error, awaits the
+  /// actor (which owns duplicate/in-flight de-duplication on its own), then
+  /// refreshes this view's snapshot. Errors are surfaced, never thrown away.
+  private func dispatchLifecycleCommand(_ action: @escaping () async throws -> Void) {
+    conversationError = nil
+    Task {
+      do {
+        try await action()
+      } catch {
+        conversationError = error.localizedDescription
+      }
+      await refreshConversation()
+    }
+  }
+
+  private func refreshConversation() async {
+    conversationSnapshot = await conversation.state
   }
 }
