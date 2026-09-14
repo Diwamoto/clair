@@ -153,7 +153,7 @@ G2 -> U01 -> U02
 | `N01` | `done` | `D3` | `B01`, `B02` | SwiftUI native app、composition root、environment、shared package、unit/UI test target を作る。signed physical-device build と TestFlight smoke の手順を確立すること。旧 `ClairMobileApp` は reference に留める。 |
 | `N02` | `done` | `D4` | `B03`, `H03`, `N01` | typed client、Keychain device identity、pairing handshake、certificate/host pin、capability negotiation を実装する。credential を log/UI stateへ漏らさず、再起動後に安全に reconnect できること。 |
 | `N03` | `done` | `D3` | `N02` | host list、pair/re-pair、connection state、device scope、revoke UI を最小 native UI で実装する。offline、expired QR、fingerprint change、revoked device を区別できること。 |
-| `N04` | `active` | `D3` | `H02`, `N03` | project/worktree/session browser と recent destination を実装する。複数 project を混線せず、missing root と permission error を明示すること。 |
+| `N04` | `done` | `D3` | `H02`, `N03` | project/worktree/session browser と recent destination を実装する。複数 project を混線せず、missing root と permission error を明示すること。 |
 | `N05` | `queued` | `D4` | `H05`, `H06`, `N04` | OpenCode conversation stream、prompt composer、attention、approval/deny/interrupt を native app へ接続する。重複 tap、background 中の response、stale approval が安全であること。 |
 | `N06` | `queued` | `D4` | `H07`, `N05` | changed-file list、native diff、hunk navigation と review follow-up を実装する。binary/large/truncated diff を明示し、表示だけで working tree を変更しないこと。 |
 | `N07` | `queued` | `D4` | `H08`, `H09`, `N03` | APNs registration、notification category、deep link、scene lifecycle、background reconnect を実装する。foreground/background/terminated から正しい host/session/revision へ戻る実機 smoke が通ること。 |
@@ -302,7 +302,7 @@ UI の正本は [Clair UI Design canvas と Workbench](../../prototypes/clair-wo
 - verification: N02 focused tests 10/10 passed; Core 64/64 and Apps 1/1 passed; iOS Simulator cross-build passed; strict Swift format lint, `git diff --check`, v1 boundary check, and source redaction scan passed; no `print`/`debugPrint` in N02 source
 - result: `ClairV2MobileKit` now provides typed disconnected/connecting/pairing/authenticated/reconnecting/failed client state, injectable Keychain/Secure Enclave identity storage with in-memory test fake, H03/B03 pairing and capability reuse, base64 persistence envelope, certificate/host pin fail-closed validation, restart reconnect, cancellation/race/idempotency handling, and credential/private-key redaction
 - external dependency: production Network.framework/TLS channel and Secure Enclave signer remain explicit fail-closed boundaries pending later transport integration; no push/publication
-- remaining: host/project/session browsing, conversation UI, APNs/deep links, and production visual design remain in later queue tasks
+- remaining: conversation UI, APNs/deep links, and production visual design remain in later queue tasks
 
 ### H04 — 2026-09-14
 
@@ -321,7 +321,7 @@ UI の正本は [Clair UI Design canvas と Workbench](../../prototypes/clair-wo
 - verification: N03 focused tests, ClairV2Apps tests, and ClairV2MobileApp build passed; strict Swift format and `git diff --check` passed; worker worktree was clean
 - result: `ClairV2MobileApp` now exposes a minimal native host-management surface for host list, pair/re-pair, connection state, device scope, and local pairing revoke; offline, QR expiry, fingerprint change, and revoked states are distinct, with credential/private-key redaction tests
 - boundary: remote revoke RPC remains outside the existing H03 transport contract, so N03 keeps revoke local to protected pairing state; physical iOS signing and TestFlight smoke remain external
-- remaining: project/worktree/session browser, conversation UI, APNs/deep links, and production visual design remain in later queue tasks
+- remaining: conversation UI, APNs/deep links, and production visual design remain in later queue tasks
 
 ### H07 — 2026-09-14
 
@@ -340,3 +340,12 @@ UI の正本は [Clair UI Design canvas と Workbench](../../prototypes/clair-wo
 - result: `ClairV2Agent` now normalizes bounded OpenCode NDJSON/SSE conversation, tool-call, attention, completion, and usage events while preserving project/worktree/session scope and epoch/revision; deterministic identity/dedupe/conflict handling, partial UTF-8 chunks, completion/usage ordering, exact unknown-event drop, Codable limits validation, and provider-payload privacy are covered
 - known limitation: SwiftPM global cache paths required temporary redirection to `/private/tmp`; all reruns succeeded; no push/publication
 - remaining: scoped commands/approvals, session journal/reconnect, APNs relay, and native client UI remain in later queue tasks
+
+### N04 — 2026-09-14
+
+- integration commit (controller): `5294c5d53cb2fe8c61765bc9bae2684e68557713`
+- integration commit (worker source): `431bd925f422b050c0000a34840037e752590297`
+- verification: N04 focused tests 6/6 passed; ClairV2Core 127 tests passed in the worker's single-worker run; ClairV2Apps 1/1 passed; `make v2-check` and `make v2-build` including iOS Simulator passed; strict Swift format, `git diff --check`, v1 boundary, and print/debugPrint/redaction scans passed
+- result: `ClairV2MobileKit` and `ClairV2MobileApp` now provide a read-only project/worktree/session destination browser using typed identity and `ResourceScope`, recent destination restore/clear, multi-project isolation, stale-selection filtering, explicit missing/permission states, and zero transport side effects
+- known limitation: controller `make v2-foundation` full parallel test reruns reproduced unrelated pre-existing H04 process-group/daemon timing failures; all N04 tests and the affected build/package checks passed, and no N04 source is implicated
+- remaining: conversation stream UI, scoped commands/approvals, APNs/deep links, and production visual design remain in later queue tasks
