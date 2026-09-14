@@ -16,10 +16,14 @@ struct ClairV2MobileRootView: View {
   @Environment(\.clairV2Mobile) private var environment
   @Environment(\.scenePhase) private var scenePhase
   @State private var store = ClairV2MobileStore()
+  @State private var hostManagement = ClairMobileHostManagementState()
+  @State private var showingPairing = false
+  @State private var pairingCode = ""
 
   var body: some View {
     NavigationStack {
       List {
+        hostSection
         connectionSection
         navigationSection
         surfaceSection
@@ -32,6 +36,65 @@ struct ClairV2MobileRootView: View {
     }
     .onChange(of: scenePhase) { _, phase in
       store.send(command(for: phase))
+    }
+  }
+
+  private var hostSection: some View {
+    Section("Hosts") {
+      if hostManagement.hosts.isEmpty {
+        ContentUnavailableView("No paired hosts", systemImage: "desktopcomputer")
+      } else {
+        ForEach(hostManagement.hosts) { host in
+          VStack(alignment: .leading, spacing: 6) {
+            HStack {
+              Text(host.displayName ?? host.id.description)
+                .font(.headline)
+              Spacer()
+              Text(host.connection.rawValue.capitalized)
+                .foregroundStyle(host.connection == .connected ? .green : .secondary)
+            }
+            Text("Fingerprint: \(host.fingerprint.description.prefix(16))…")
+              .font(.caption.monospaced())
+              .foregroundStyle(.secondary)
+            Text(host.scopes.isEmpty ? "No device scope" : "\(host.scopes.count) device scope(s)")
+              .font(.caption)
+            if host.connection == .fingerprintChanged {
+              Label(
+                "Fingerprint changed — re-pair required", systemImage: "exclamationmark.triangle"
+              )
+              .foregroundStyle(.orange)
+            }
+            Button("Revoke device", role: .destructive) {
+              hostManagement.markRevoked(hostID: host.id)
+            }
+            .disabled(host.connection == .revoked)
+          }
+          .accessibilityElement(children: .contain)
+          .accessibilityIdentifier("host-\(host.id)")
+        }
+      }
+      Button("Pair or re-pair host", systemImage: "qrcode") {
+        showingPairing = true
+      }
+      .accessibilityIdentifier("pair-host")
+    }
+    .sheet(isPresented: $showingPairing) {
+      NavigationStack {
+        Form {
+          Section("Pairing QR") {
+            TextField("Paste pairing link", text: $pairingCode)
+            Text(
+              "Pairing links are one-time and expire. Confirm the host fingerprint before trusting it."
+            )
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+          }
+          Section {
+            Button("Cancel", role: .cancel) { showingPairing = false }
+          }
+        }
+        .navigationTitle("Pair host")
+      }
     }
   }
 

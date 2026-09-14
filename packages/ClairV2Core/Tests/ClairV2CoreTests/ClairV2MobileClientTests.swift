@@ -176,6 +176,50 @@ func n02PairingPersistsOpaqueIdentityAndReconnectsAfterClientRestart() async thr
 }
 
 @Test
+func n03PairingPresentationDistinguishesExpiredLinksAndFingerprintChanges() async throws {
+  let fixture = try N02Fixture.make()
+  let link = try await fixture.authority.issuePairingLink(lifetime: 60)
+  let ready = ClairMobilePairingPresentation(
+    link: link,
+    now: Date(timeIntervalSince1970: 0)
+  )
+  #expect(ready.state == .ready)
+
+  let expired = ClairMobilePairingPresentation(
+    link: link,
+    now: link.expiresAt.addingTimeInterval(1)
+  )
+  #expect(expired.state == .expired)
+
+  let changedHost = try ClairPairingAuthority(
+    hostID: try ClairHostID("n03-other-host"),
+    endpoint: try ClairTransportEndpoint("wss://other.example.test/mobile")
+  )
+  let changed = ready.validating(presentation: await changedHost.presentation())
+  #expect(changed.state == .fingerprintChanged)
+}
+
+@Test
+func n03HostManagementKeepsScopeAndMarksRevokedWithoutCredentialMaterial() async throws {
+  let fixture = try N02Fixture.make()
+  let client = try fixture.makeClient()
+  let link = try await fixture.authority.issuePairingLink(lifetime: 60)
+  _ = try await client.pair(using: link, displayName: "N03 device", confirmHostFingerprint: true)
+  let identity = try #require(await fixture.store.load())
+
+  var management = ClairMobileHostManagementState()
+  management.update(identity: identity, clientState: .disconnected)
+  let host = try #require(management.hosts.first)
+  #expect(host.scopes == identity.credential.grant.visibleScopes)
+  #expect(
+    !String(reflecting: management).contains(
+      identity.credential.token.rawRepresentation.base64EncodedString()))
+
+  management.markRevoked(hostID: host.id)
+  #expect(management.hosts.first?.connection == .revoked)
+}
+
+@Test
 func n02StoredIdentityRoundTripsAndRequiresExplicitKeyRotation() async throws {
   let fixture = try N02Fixture.make()
   let client = try fixture.makeClient()
