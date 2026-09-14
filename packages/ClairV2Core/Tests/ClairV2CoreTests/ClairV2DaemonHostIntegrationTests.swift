@@ -146,12 +146,16 @@ private struct H10Stack {
   static func make(
     hostSuffix: String = UUID().uuidString,
     hostKey: ClairHostSigningKey = ClairHostSigningKey(),
-    hostLimits: ClairDaemonHostLimits = .standard
+    hostLimits: ClairDaemonHostLimits = .standard,
+    includeProject: Bool = true
   ) throws -> Self {
     let project = try H10ProjectFixture()
     let projectID = try ProjectID("h10-project")
+    let projects = includeProject
+      ? [try ClairV2ProjectRoot(id: projectID, rootURL: project.rootURL)]
+      : []
     let workspace = try ClairV2WorkspaceRuntime(
-      projects: [try ClairV2ProjectRoot(id: projectID, rootURL: project.rootURL)]
+      projects: projects
     )
     let projectScope = try ResourceScope(projectID: projectID)
     let clock = H10Clock()
@@ -227,6 +231,21 @@ private struct H10Stack {
 
 private func h10Digest(_ value: String) -> String {
   SHA256.hash(data: Data(value.utf8)).map { String(format: "%02x", $0) }.joined()
+}
+
+@Test
+func h10CatalogValidatesTheConnectionEvenWhenTheWorkspaceHasNoProjects() async throws {
+  let stack = try H10Stack.make(includeProject: false)
+  defer { stack.remove() }
+  let (_, connection) = try await stack.pairedConnection()
+
+  let catalog = try await stack.host.catalog(on: connection)
+  #expect(catalog.projects.isEmpty)
+
+  await stack.authority.close(connection)
+  await #expect(throws: ClairDaemonHostError.unauthorized) {
+    _ = try await stack.host.catalog(on: connection)
+  }
 }
 
 private func h10Event(

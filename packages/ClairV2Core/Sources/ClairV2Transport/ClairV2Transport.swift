@@ -1526,6 +1526,15 @@ public actor ClairPairingAuthority {
     try authorize(scope: scope, requiring: .view, on: connection)
   }
 
+  /// Validates an authenticated connection even when an operation has no
+  /// concrete resource scope to authorize (for example, an empty workspace
+  /// catalog). This keeps connection liveness, revocation, generation, and
+  /// token-expiry checks on the same H03 authority path as scoped operations.
+  public func validateConnection(_ connection: ClairAuthenticatedConnection) throws {
+    let storedGrant = try currentGrant(for: connection)
+    try markUsed(storedGrant, at: clock.now())
+  }
+
   /// The single real authorization path for "does this connection currently
   /// hold `capability` over `scope`". `authorizeRead(scope:on:)` above is a
   /// thin `.view`-specific wrapper over this; every other capability check in

@@ -295,6 +295,14 @@ public actor ClairDaemonHost {
   public func catalog(
     on connection: ClairAuthenticatedConnection
   ) async throws -> ClairV2WorkspaceCatalog {
+    do {
+      // Validate the connection even if this workspace has no projects; the
+      // per-project loop below cannot provide that guarantee for an empty
+      // catalog.
+      try await authority.validateConnection(connection)
+    } catch {
+      throw ClairDaemonHostError.unauthorized
+    }
     let full = try workspace.catalog()
     var visible: [ClairV2ProjectCatalogEntry] = []
     for project in full.projects {
