@@ -140,7 +140,7 @@ G2 -> U01 -> U02
 | `H03` | `done` | `D5` | `B02`, `B03`, `H01` | native client transport、one-time pairing、device key、host fingerprint、grant scope、revoke を実装する。default-deny、expiry、replay、stolen token、revoked active connection の threat tests が通ること。 |
 | `H04` | `done` | `D5` | `H02` | OpenCode を provider adapter の第一実装として起動・再開・停止し、project/worktree/session identity に関連付ける。provider upgrade、abnormal exit、duplicate launch、cwd mismatch を型付きで扱うこと。 |
 | `H05` | `done` | `D5` | `H04` | OpenCode の streaming event を provider-independent な conversation、tool call、attention、completion、usage event に正規化する。順序、重複、partial event、unknown event を deterministic に処理すること。 |
-| `H06` | `active` | `D5` | `H03`, `H05` | prompt、approval、deny、interrupt、stop を scoped command として実装する。operation ID による exactly-once effect、stale approval rejection、audit metadata、disconnect race の tests が通ること。 |
+| `H06` | `done` | `D5` | `H03`, `H05` | prompt、approval、deny、interrupt、stop を scoped command として実装する。operation ID による exactly-once effect、stale approval rejection、audit metadata、disconnect race の tests が通ること。 |
 | `H07` | `done` | `D4` | `H02` | Git status、changed-file list、text/binary diff、hunk metadata を mobile API に追加する。untracked、rename、large diff、invalid encoding、worktree race を壊さず表示できること。 |
 | `H08` | `queued` | `D5` | `H03`, `H05`, `H06` | session journal、subscriber cursor、gap/resync、revision snapshot、idempotency window を実装する。network switch、slow client、daemon restart、out-of-range cursor で silent data loss がないこと。 |
 | `H09` | `done` | `D4` | `B02`, `H03` | 最小 `ClairPushRelay` と APNs provider boundary を実装する。opaque event だけを送り、credential rotation、device token replacement、revoke、TTL、sandbox/production 分離を検証すること。 |
@@ -358,3 +358,13 @@ UI の正本は [Clair UI Design canvas と Workbench](../../prototypes/clair-wo
 - result: `ClairV2Push` defines bounded opaque wake events with strict decoding; `ClairDaemonPushRegistry` binds token generations and scope admission to H03 authority, expiry, replacement, revoke, environment isolation, and H05 attention/completion projection; `ClairPushRelay` provides bounded digest idempotency; APNs request and protected credential-store seams classify provider failures without secret echo
 - external dependency: no Apple credential, durable protected store, APNs JWT/HTTP2 transport, or real notification was used; N07 owns mobile registration/actions/deep links and physical-device/TestFlight smoke remains pending Apple Developer access
 - remaining: scoped commands/approvals, session journal/reconnect, native conversation UI, and production APNs/device integration remain in later queue tasks; no push/publication
+
+### H06 — 2026-09-14
+
+- integration commits (controller): `f3e49c7d4673f963f6d2e34bb13afb9e1df8bba2`, `4a9c1c5d751ca1459e58404643ad1ca028536a8d`, `67aa937a260cef3e1a5d9fb0d194880e0ea24523`
+- integration commits (worker source): `824385ac3cfd1876288e0e38010092bd30466797`, `08ab3db6f00aa0e2dbd7604546fe9b8455462482`, `2731b1e787c9909a1733d65930b35a81c332fe42`
+- independent D5 review: first fresh review required fixes for missing/uncorrelated approval IDs, attention-kind replacement, and command description redaction; the repair added explicit optional correlation, OpenCode `properties.id` / `properties.requestID` extraction, fail-closed approval-window invalidation, and whole-command redaction; a final fresh review approved with no P0/P1/P2 findings
+- verification: H06 focused tests 24/24 and full ClairV2Core 152/152 passed in the worker/reviewer; controller H06 focused tests passed; controller serial rerun passed all 162 tests except one unrelated pre-existing H04 process-group fixture timing failure, which passed when rerun alone; ClairV2Apps 1/1, `make v2-check`, `make v2-build` including all v2 targets and iOS Simulator, strict Swift format, `git diff --check`, and v1 boundary checks passed
+- result: `ClairV2Agent` and `ClairV2DaemonKit` now provide exact scoped prompt/approval/deny/interrupt/stop commands with H03 authorization-before-effect, generation/epoch/session binding, H05 event replay and attention lifecycle, B03 digest-only exactly-once ledger, bounded audit, and provider/prompt/raw-ID redaction; missing or uncorrelated attention cannot leave an executable stale approval
+- external dependency: concrete provider effect wiring and durable command recovery remain later integration; no external credential or push publication was introduced by H06
+- remaining: session journal/reconnect, native conversation UI, and H10 server integration remain in later queue tasks; no push/publication
