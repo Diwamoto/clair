@@ -1535,6 +1535,21 @@ public actor ClairPairingAuthority {
     try markUsed(storedGrant, at: clock.now())
   }
 
+  /// Checks a capability before a caller supplies the concrete resource scope
+  /// needed by a later operation (for example, resume first needs to resolve
+  /// an existing session). The exact scope is still authorized by the
+  /// scoped overload before any effect occurs.
+  public func authorize(
+    capability: Capability,
+    on connection: ClairAuthenticatedConnection
+  ) throws {
+    let storedGrant = try currentGrant(for: connection)
+    guard storedGrant.grant.capabilities.contains(capability) else {
+      throw ProtocolError.capabilityDenied(capability)
+    }
+    try markUsed(storedGrant, at: clock.now())
+  }
+
   /// The single real authorization path for "does this connection currently
   /// hold `capability` over `scope`". `authorizeRead(scope:on:)` above is a
   /// thin `.view`-specific wrapper over this; every other capability check in

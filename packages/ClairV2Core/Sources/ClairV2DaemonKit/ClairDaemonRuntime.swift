@@ -13,12 +13,32 @@
     private var instanceLock: ClairDaemonInstanceLock?
     private var controlServer: ClairDaemonControlServer?
     private var startedAt = Date()
+    /// H01 owns the control socket and lock, while H10 owns provider
+    /// processes and their dependent in-memory state. Stopping the daemon
+    /// must fence both lifecycles.
+    private let shutdownHandler: (@Sendable () async -> Void)?
     /// Regenerated on every successful `start()` (see H10). This is the
     /// daemon-restart signal reported in `ClairDaemonHealth.instanceID`.
     private var instanceID = UUID()
 
-    public init(configuration: ClairDaemonConfiguration) {
+    public init(
+      configuration: ClairDaemonConfiguration,
+      shutdownHandler: (@Sendable () async -> Void)? = nil
+    ) {
       self.configuration = configuration
+      self.shutdownHandler = shutdownHandler
+    }
+
+    /// Convenience composition initializer for the real H10 daemon host.
+    /// The host remains injected so H01's filesystem/control-channel runtime
+    /// does not invent workspace or credential configuration of its own.
+    public convenience init(
+      configuration: ClairDaemonConfiguration,
+      host: ClairDaemonHost
+    ) {
+      self.init(configuration: configuration) {
+        await host.shutdown()
+      }
     }
 
     public var state: ClairDaemonLifecycleState {
@@ -123,6 +143,7 @@
       lifecycleState = .stopping
       let server = controlServer
       let instanceLock = self.instanceLock
+      let shutdownHandler = self.shutdownHandler
       controlServer = nil
       self.instanceLock = nil
       condition.unlock()
@@ -132,6 +153,14 @@
         try server?.stop()
       } catch {
         cleanupError = error
+      }
+      if let shutdownHandler {
+        let completion = DispatchSemaphore(value: 0)
+        Task.detached {
+          await shutdownHandler()
+          completion.signal()
+        }
+        completion.wait()
       }
       if let instanceLock {
         releaseLock(instanceLock)

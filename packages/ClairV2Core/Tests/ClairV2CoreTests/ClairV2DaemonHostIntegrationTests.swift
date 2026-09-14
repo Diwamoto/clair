@@ -147,7 +147,9 @@ private struct H10Stack {
     hostSuffix: String = UUID().uuidString,
     hostKey: ClairHostSigningKey = ClairHostSigningKey(),
     hostLimits: ClairDaemonHostLimits = .standard,
-    includeProject: Bool = true
+    includeProject: Bool = true,
+    commandLimits: ClairV2AgentCommandLimits = .standard,
+    journalLimits: ClairV2SessionJournalLimits = .standard
   ) throws -> Self {
     let project = try H10ProjectFixture()
     let projectID = try ProjectID("h10-project")
@@ -192,6 +194,8 @@ private struct H10Stack {
       agentRuntime: agentRuntime,
       pushRelay: relay,
       limits: hostLimits,
+      commandLimits: commandLimits,
+      journalLimits: journalLimits,
       pushClock: clock
     )
     return Self(
@@ -545,6 +549,62 @@ func h10AdmitsExactlyOneSessionWhenStartSessionIsCalledConcurrentlyAgainstACapOf
 }
 
 @Test
+func h10FailedAttachStopsTheProviderAndReturnsTheHostAndCommandSlots() async throws {
+  let stack = try H10Stack.make(
+    hostLimits: try ClairDaemonHostLimits(maximumTotalAgentSessions: 3),
+    commandLimits: try ClairV2AgentCommandLimits(maximumSessions: 1),
+    journalLimits: try ClairV2SessionJournalLimits(maximumSessions: 2)
+  )
+  defer { stack.remove() }
+  let (_, connection) = try await stack.pairedConnection()
+  let target = ClairV2AgentTarget(projectID: stack.projectID)
+  let firstID = try SessionID("h10-attach-first")
+  let first = try await stack.host.startSession(
+    providerID: .openCode, target: target, sessionID: firstID, endpoint: H10FixtureEndpoint(),
+    on: connection
+  )
+
+  let secondID = try SessionID("h10-attach-fails")
+  await #expect(throws: ClairV2AgentCommandError.sessionCapacity) {
+    _ = try await stack.host.startSession(
+      providerID: .openCode, target: target, sessionID: secondID,
+      endpoint: H10FixtureEndpoint(), on: connection
+    )
+  }
+
+  let failedAttach = try await stack.agentRuntime.session(sessionID: secondID)
+  #expect(failedAttach.lifecycle == .stopped)
+  #expect(failedAttach.processID == nil)
+
+  let firstEpoch = try SessionEpoch(first.processGeneration)
+  let stop = try OperationRequest(
+    operationID: OperationID("op-h10-attach-first-stop"), scope: first.identity.sessionScope,
+    kind: .agentStop, capability: .terminate,
+    payload: ClairV2AgentCommandPayload(
+      epoch: firstEpoch, processGeneration: first.processGeneration, action: .stop
+    )
+  )
+  _ = try await stack.host.stopSession(stop, on: connection)
+
+  let third = try await stack.host.startSession(
+    providerID: .openCode, target: target, sessionID: try SessionID("h10-attach-third"),
+    endpoint: H10FixtureEndpoint(), on: connection
+  )
+  #expect(third.lifecycle == .running)
+  let thirdEpoch = try SessionEpoch(third.processGeneration)
+  _ = try await stack.host.stopSession(
+    try OperationRequest(
+      operationID: OperationID("op-h10-attach-third-stop"), scope: third.identity.sessionScope,
+      kind: .agentStop, capability: .terminate,
+      payload: ClairV2AgentCommandPayload(
+        epoch: thirdEpoch, processGeneration: third.processGeneration, action: .stop
+      )
+    ),
+    on: connection
+  )
+}
+
+@Test
 func h10RejectsAdditionalJournalSubscribersOnceTheDaemonWideCapIsReached() async throws {
   let stack = try H10Stack.make(
     hostLimits: try ClairDaemonHostLimits(maximumTotalJournalSubscribers: 1)
@@ -831,6 +891,41 @@ func h10EveryDependentComponentFailsClosedAfterASimulatedDaemonRestart() async t
 // MARK: - Process-level crash recovery (H01, real separate process)
 
 #if os(macOS)
+
+  @Test
+  func h10DaemonRuntimeStopShutsDownTheComposedHostProviderRuntime() async throws {
+    let stack = try H10Stack.make()
+    defer { stack.remove() }
+    let (_, connection) = try await stack.pairedConnection()
+    let target = ClairV2AgentTarget(projectID: stack.projectID)
+    let running = try await stack.host.startSession(
+      providerID: .openCode, target: target, sessionID: try SessionID("h10-runtime-stop"),
+      endpoint: H10FixtureEndpoint(), on: connection
+    )
+    let processID = try #require(running.processID)
+    let directory = URL(fileURLWithPath: "/private/tmp")
+      .appendingPathComponent("clair-v2-h10-runtime-(UUID().uuidString)", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let configuration = try ClairDaemonConfiguration(
+      paths: ClairDaemonPaths(directoryURL: directory)
+    )
+    let daemon = ClairDaemonRuntime(configuration: configuration, host: stack.host)
+    try daemon.start()
+    try daemon.stop()
+
+    var processGone = false
+    for _ in 0..<200 {
+      if Darwin.kill(processID, 0) == -1, errno == ESRCH {
+        processGone = true
+        break
+      }
+      try await Task.sleep(nanoseconds: 10_000_000)
+    }
+    #expect(processGone)
+    let diagnostics = await stack.host.diagnostics()
+    #expect(diagnostics.agentSessionCounts.running == 0)
+    #expect(diagnostics.journalOpenSessionCount == 0)
+  }
 
   /// Simulates a real, ungraceful daemon crash at the OS level: a *separate*
   /// real process (not this test process, and not cleaned up by any Swift

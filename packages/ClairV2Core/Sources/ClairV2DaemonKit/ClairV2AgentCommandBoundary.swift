@@ -75,6 +75,17 @@ public final class ClairV2AgentCommandBoundary: Sendable {
     state.invalidate(identity: identity, processGeneration: processGeneration)
   }
 
+  /// Removes an attachment that never became usable by a client. This is
+  /// intentionally separate from `invalidate`: normal terminal sessions keep
+  /// their fenced record for stale-command rejection, while an H10 attach
+  /// rollback must return the bounded session slot to the boundary.
+  public func uninstall(
+    identity: ClairV2AgentSessionIdentity,
+    processGeneration: UInt64
+  ) {
+    state.uninstall(identity: identity, processGeneration: processGeneration)
+  }
+
   public func ingest(_ event: ClairV2AgentNormalizedEvent) throws {
     try state.ingest(event)
   }
@@ -212,6 +223,15 @@ private final class CommandState: @unchecked Sendable {
       session.active = false
       session.pending.removeAll()
       sessions[identity.sessionID] = session
+    }
+  }
+
+  func uninstall(identity: ClairV2AgentSessionIdentity, processGeneration: UInt64) {
+    lock.withLock {
+      guard let session = sessions[identity.sessionID], session.identity == identity,
+        session.generation == processGeneration
+      else { return }
+      sessions.removeValue(forKey: identity.sessionID)
     }
   }
 
