@@ -138,7 +138,7 @@ G2 -> U01 -> U02
 | `H01` | `done` | `D4` | `B03` | GUI から独立して動く `ClairDaemon` lifecycle、single-instance ownership、local control channel、health/version endpoint を実装する。GUI を閉じても daemon が生存し、二重起動せず、安全に停止・再起動できること。 |
 | `H02` | `done` | `D3` | `H01` | project/worktree catalog、file tree、bounded file read、changed-file summary を read-only API として提供する。symlink、permission、missing root、巨大 file の境界 test が通ること。 |
 | `H03` | `done` | `D5` | `B02`, `B03`, `H01` | native client transport、one-time pairing、device key、host fingerprint、grant scope、revoke を実装する。default-deny、expiry、replay、stolen token、revoked active connection の threat tests が通ること。 |
-| `H04` | `active` | `D5` | `H02` | OpenCode を provider adapter の第一実装として起動・再開・停止し、project/worktree/session identity に関連付ける。provider upgrade、abnormal exit、duplicate launch、cwd mismatch を型付きで扱うこと。 |
+| `H04` | `done` | `D5` | `H02` | OpenCode を provider adapter の第一実装として起動・再開・停止し、project/worktree/session identity に関連付ける。provider upgrade、abnormal exit、duplicate launch、cwd mismatch を型付きで扱うこと。 |
 | `H05` | `queued` | `D5` | `H04` | OpenCode の streaming event を provider-independent な conversation、tool call、attention、completion、usage event に正規化する。順序、重複、partial event、unknown event を deterministic に処理すること。 |
 | `H06` | `queued` | `D5` | `H03`, `H05` | prompt、approval、deny、interrupt、stop を scoped command として実装する。operation ID による exactly-once effect、stale approval rejection、audit metadata、disconnect race の tests が通ること。 |
 | `H07` | `queued` | `D4` | `H02` | Git status、changed-file list、text/binary diff、hunk metadata を mobile API に追加する。untracked、rename、large diff、invalid encoding、worktree race を壊さず表示できること。 |
@@ -303,3 +303,13 @@ UI の正本は [Clair UI Design canvas と Workbench](../../prototypes/clair-wo
 - result: `ClairV2MobileKit` now provides typed disconnected/connecting/pairing/authenticated/reconnecting/failed client state, injectable Keychain/Secure Enclave identity storage with in-memory test fake, H03/B03 pairing and capability reuse, base64 persistence envelope, certificate/host pin fail-closed validation, restart reconnect, cancellation/race/idempotency handling, and credential/private-key redaction
 - external dependency: production Network.framework/TLS channel and Secure Enclave signer remain explicit fail-closed boundaries pending later transport integration; no push/publication
 - remaining: host/project/session browsing, conversation UI, APNs/deep links, and production visual design remain in later queue tasks
+
+### H04 — 2026-09-14
+
+- integration commit (controller): `930f10dedce01bd67b36447d0681f549d64ccb3c`
+- source range (worker): `aefe0b92d96595fb10d3e305f4d6571af7c653c5..388ad232d112a8491e7905c16b61033c220740bd`
+- independent D5 review: fresh review approved with no P1/P2 findings after checking the earlier lifecycle fixes and the review-7 repair scope; cold-cache parallel timing failures did not reproduce in the warm-cache parallel rerun
+- verification: H04 focused 31/31 passed; full Core 88/88 passed serially and in the warm-cache parallel rerun; Apps passed; `make v2-foundation` warm rerun passed; strict H04 format, `git diff --check`, v1 boundary, iOS Simulator build, descriptor/FD inheritance, PGID reuse, claim/cleanup race, waitid recovery, closed-stdin, invalid-callback, and no-residual-process checks passed
+- result: OpenCode provider lifecycle now has typed identity and launch bounds, descriptor-held cwd validation, keeper-backed process-group ownership, bounded waitid recovery without actor blocking, CLOEXEC fd normalization for stdin/stdout/stderr collisions, exactly-once kill/reap tracking, upgrade/duplicate/abnormal-exit handling, shutdown fencing, and cleanup-pending retention for unproven callbacks
+- known limitation: repository-wide Apple strict format still reports pre-existing violations in unchanged `apple/ClairApp` and `apple/ClairMobileApp`; no H04 files are implicated
+- remaining: streaming event normalization, scoped commands/approvals, session journal/reconnect, Git diff API, APNs relay, and native client UI remain in later queue tasks
