@@ -139,7 +139,7 @@ G2 -> U01 -> U02
 | `H02` | `done` | `D3` | `H01` | project/worktree catalog、file tree、bounded file read、changed-file summary を read-only API として提供する。symlink、permission、missing root、巨大 file の境界 test が通ること。 |
 | `H03` | `done` | `D5` | `B02`, `B03`, `H01` | native client transport、one-time pairing、device key、host fingerprint、grant scope、revoke を実装する。default-deny、expiry、replay、stolen token、revoked active connection の threat tests が通ること。 |
 | `H04` | `done` | `D5` | `H02` | OpenCode を provider adapter の第一実装として起動・再開・停止し、project/worktree/session identity に関連付ける。provider upgrade、abnormal exit、duplicate launch、cwd mismatch を型付きで扱うこと。 |
-| `H05` | `active` | `D5` | `H04` | OpenCode の streaming event を provider-independent な conversation、tool call、attention、completion、usage event に正規化する。順序、重複、partial event、unknown event を deterministic に処理すること。 |
+| `H05` | `done` | `D5` | `H04` | OpenCode の streaming event を provider-independent な conversation、tool call、attention、completion、usage event に正規化する。順序、重複、partial event、unknown event を deterministic に処理すること。 |
 | `H06` | `queued` | `D5` | `H03`, `H05` | prompt、approval、deny、interrupt、stop を scoped command として実装する。operation ID による exactly-once effect、stale approval rejection、audit metadata、disconnect race の tests が通ること。 |
 | `H07` | `done` | `D4` | `H02` | Git status、changed-file list、text/binary diff、hunk metadata を mobile API に追加する。untracked、rename、large diff、invalid encoding、worktree race を壊さず表示できること。 |
 | `H08` | `queued` | `D5` | `H03`, `H05`, `H06` | session journal、subscriber cursor、gap/resync、revision snapshot、idempotency window を実装する。network switch、slow client、daemon restart、out-of-range cursor で silent data loss がないこと。 |
@@ -312,7 +312,7 @@ UI の正本は [Clair UI Design canvas と Workbench](../../prototypes/clair-wo
 - verification: H04 focused 31/31 passed; full Core 88/88 passed serially and in the warm-cache parallel rerun; Apps passed; `make v2-foundation` warm rerun passed; strict H04 format, `git diff --check`, v1 boundary, iOS Simulator build, descriptor/FD inheritance, PGID reuse, claim/cleanup race, waitid recovery, closed-stdin, invalid-callback, and no-residual-process checks passed
 - result: OpenCode provider lifecycle now has typed identity and launch bounds, descriptor-held cwd validation, keeper-backed process-group ownership, bounded waitid recovery without actor blocking, CLOEXEC fd normalization for stdin/stdout/stderr collisions, exactly-once kill/reap tracking, upgrade/duplicate/abnormal-exit handling, shutdown fencing, and cleanup-pending retention for unproven callbacks
 - known limitation: repository-wide Apple strict format still reports pre-existing violations in unchanged `apple/ClairApp` and `apple/ClairMobileApp`; no H04 files are implicated
-- remaining: streaming event normalization, scoped commands/approvals, session journal/reconnect, Git diff API, APNs relay, and native client UI remain in later queue tasks
+- remaining: scoped commands/approvals, session journal/reconnect, APNs relay, and native client UI remain in later queue tasks
 
 ### N03 — 2026-09-14
 
@@ -330,4 +330,13 @@ UI の正本は [Clair UI Design canvas と Workbench](../../prototypes/clair-wo
 - verification: H07 focused tests 13/13 passed; ClairV2Apps 1/1 and `make v2-check` passed; strict Swift format, `git diff --check`, redaction scan, and worker-contract checks passed; worker worktree was clean
 - result: `ClairV2Workspace` now exposes bounded read-only Git status, changed-file records, text/binary unified diff results, and deterministic hunk metadata; untracked/rename/binary/large/invalid-encoding cases, root identity races, missing roots, permission failures, and output bounds fail closed
 - known limitation: the worker's full Core rerun retained one unrelated pre-existing H04 waitid fixture failure; all H07 tests and affected Apps checks passed, and H07 did not alter H04 runtime code
-- remaining: H05 streaming normalization, scoped commands/approvals, session journal/reconnect, APNs relay, and native client UI remain in later queue tasks
+- remaining: scoped commands/approvals, session journal/reconnect, APNs relay, and native client UI remain in later queue tasks
+
+### H05 — 2026-09-14
+
+- integration commits (worker source): `f1192d4bdf779b0ff2218360343b6f7f80c0f44f`, `c7c4bc166223173cf4397f4bd9aea7835b338da2` (integrated into `rewrite/clair-v2` as `70d710d` and `d989e72`)
+- independent D5 review: the first fresh review required fixes for unknown-provider substring classification, limits `Codable` validation bypass, and semantic reordering; the repair commit added exact allowlist/drop behavior, decode-time hard bounds, and non-terminal input-order preservation; a second fresh review approved with no P1/P2 findings
+- verification: worker and reviewer H05 focused tests 18/18, full ClairV2Core 116/116, and ClairV2Apps 1/1 passed; `make v2-foundation` passed after controller integration with all v2 targets, macOS/iOS builds, package tests, and the H04 closed-stdin fixture; strict Swift format, `git diff --check`, v1 boundary, redaction/logging, and worker-contract checks passed
+- result: `ClairV2Agent` now normalizes bounded OpenCode NDJSON/SSE conversation, tool-call, attention, completion, and usage events while preserving project/worktree/session scope and epoch/revision; deterministic identity/dedupe/conflict handling, partial UTF-8 chunks, completion/usage ordering, exact unknown-event drop, Codable limits validation, and provider-payload privacy are covered
+- known limitation: SwiftPM global cache paths required temporary redirection to `/private/tmp`; all reruns succeeded; no push/publication
+- remaining: scoped commands/approvals, session journal/reconnect, APNs relay, and native client UI remain in later queue tasks
