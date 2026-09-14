@@ -423,6 +423,121 @@
     }
   }
 
+  @Test
+  func gitDiffReportsTextBinaryRenameAndHunkMetadata() throws {
+    let fixture = try WorkspaceFixture(gitRepository: true)
+    defer { fixture.remove() }
+    try fixture.writeText("tracked.txt", "one\nchanged\n")
+    try fixture.writeText("untracked.txt", "new line\n")
+    try fixture.writeData("binary.dat", Data([0, 1, 2, 3]))
+
+    let projectID = try ProjectID("project-h07-diff")
+    let project = try ClairV2ProjectRoot(id: projectID, rootURL: fixture.rootURL)
+    let runtime = try ClairV2WorkspaceRuntime(projects: [project])
+    let trackedPath = try ClairV2WorkspacePath("tracked.txt")
+    let trackedDiff = try runtime.gitDiff(projectID: projectID, path: trackedPath)
+    #expect(trackedDiff.kind == .text)
+    #expect(trackedDiff.text?.contains("+changed") == true)
+    let trackedHunk = try #require(trackedDiff.hunks.first)
+    #expect(trackedHunk.oldStart == 1)
+    #expect(trackedHunk.newStart == 1)
+    #expect(trackedHunk.newCount == 2)
+
+    let untrackedDiff = try runtime.gitDiff(
+      projectID: projectID,
+      path: try ClairV2WorkspacePath("untracked.txt")
+    )
+    #expect(untrackedDiff.kind == .text)
+    #expect(untrackedDiff.text?.contains("+new line") == true)
+    #expect(!untrackedDiff.hunks.isEmpty)
+
+    let binaryDiff = try runtime.gitDiff(
+      projectID: projectID,
+      path: try ClairV2WorkspacePath("binary.dat")
+    )
+    #expect(binaryDiff.kind == .binary)
+    #expect(binaryDiff.text == nil)
+    #expect(binaryDiff.hunks.isEmpty)
+
+    try fixture.runGit(["mv", "tracked.txt", "renamed.txt"])
+    let renameDiff = try runtime.gitDiff(
+      projectID: projectID,
+      path: try ClairV2WorkspacePath("renamed.txt")
+    )
+    #expect(renameDiff.originalPath?.rawValue == "tracked.txt")
+    #expect(renameDiff.path.rawValue == "renamed.txt")
+  }
+
+  @Test
+  func gitDiffSupportsStagedChangesAndBoundedLargeOutput() throws {
+    let fixture = try WorkspaceFixture(gitRepository: true)
+    defer { fixture.remove() }
+    try fixture.writeText("tracked.txt", "staged\n")
+    try fixture.runGit(["add", "tracked.txt"])
+
+    let projectID = try ProjectID("project-h07-staged")
+    let project = try ClairV2ProjectRoot(id: projectID, rootURL: fixture.rootURL)
+    let runtime = try ClairV2WorkspaceRuntime(projects: [project])
+    let path = try ClairV2WorkspacePath("tracked.txt")
+    let staged = try runtime.gitDiff(
+      projectID: projectID,
+      path: path,
+      basis: .staged
+    )
+    #expect(staged.kind == .text)
+    #expect(staged.text?.contains("+staged") == true)
+
+    try fixture.writeText("tracked.txt", String(repeating: "large line\n", count: 80))
+    let boundedLimits = try ClairV2WorkspaceLimits(
+      maximumFileReadBytes: 1_024,
+      maximumTreeEntries: 256,
+      maximumTreeDepth: 4,
+      maximumChangedFiles: 32,
+      maximumChangedOutputBytes: 96,
+      maximumGitOutputBytes: 1_024
+    )
+    let boundedRuntime = try ClairV2WorkspaceRuntime(
+      projects: [project],
+      limits: boundedLimits
+    )
+    let bounded = try boundedRuntime.gitDiff(projectID: projectID, path: path)
+    #expect(bounded.isTruncated)
+    #expect(bounded.outputBytes <= bounded.maximumOutputBytes)
+  }
+
+  @Test
+  func gitDiffRejectsInvalidEncodingAndCatalogRootRace() throws {
+    let fixture = try WorkspaceFixture(gitRepository: true)
+    defer { fixture.remove() }
+    try fixture.writeData("invalid.txt", Data([0xff, 0xfe, 0x0a]))
+
+    let projectID = try ProjectID("project-h07-race")
+    let project = try ClairV2ProjectRoot(id: projectID, rootURL: fixture.rootURL)
+    let runtime = try ClairV2WorkspaceRuntime(projects: [project])
+    do {
+      _ = try runtime.gitDiff(
+        projectID: projectID,
+        path: try ClairV2WorkspacePath("invalid.txt")
+      )
+      Issue.record("Invalid UTF-8 diff output was unexpectedly returned.")
+    } catch let error as ClairV2WorkspaceError {
+      #expect(error == .gitOutputInvalidEncoding(operation: "read working_tree diff"))
+    }
+
+    let catalog = try runtime.catalog()
+    let movedURL = fixture.rootURL.deletingLastPathComponent()
+      .appendingPathComponent("clair-v2-h07-moved-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.moveItem(at: fixture.rootURL, to: movedURL)
+    defer { try? FileManager.default.removeItem(at: movedURL) }
+    try FileManager.default.createDirectory(at: fixture.rootURL, withIntermediateDirectories: false)
+    do {
+      _ = try runtime.gitStatus(projectID: projectID, catalog: catalog)
+      Issue.record("A catalog root replaced during selection was unexpectedly accepted.")
+    } catch let error as ClairV2WorkspaceError {
+      #expect(error == .rootIdentityChanged(fixture.rootURL.standardizedFileURL))
+    }
+  }
+
   private final class WorkspaceFixture {
     let rootURL: URL
 

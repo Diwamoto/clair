@@ -519,6 +519,75 @@ public struct ClairV2ChangedFileSummary: Codable, Equatable, Sendable {
   }
 }
 
+public enum ClairV2GitDiffBasis: String, Codable, Equatable, Sendable {
+  case workingTree = "working_tree"
+  case staged
+}
+
+public enum ClairV2GitDiffKind: String, Codable, Equatable, Sendable {
+  case text
+  case binary
+}
+
+public struct ClairV2GitDiffHunk: Codable, Equatable, Sendable {
+  public let id: String
+  public let header: String
+  public let oldStart: Int
+  public let oldCount: Int
+  public let newStart: Int
+  public let newCount: Int
+
+  public init(
+    id: String,
+    header: String,
+    oldStart: Int,
+    oldCount: Int,
+    newStart: Int,
+    newCount: Int
+  ) {
+    self.id = id
+    self.header = header
+    self.oldStart = oldStart
+    self.oldCount = oldCount
+    self.newStart = newStart
+    self.newCount = newCount
+  }
+}
+
+public struct ClairV2GitDiff: Codable, Equatable, Sendable {
+  public let path: ClairV2WorkspacePath
+  public let originalPath: ClairV2WorkspacePath?
+  public let basis: ClairV2GitDiffBasis
+  public let kind: ClairV2GitDiffKind
+  public let text: String?
+  public let hunks: [ClairV2GitDiffHunk]
+  public let isTruncated: Bool
+  public let outputBytes: Int
+  public let maximumOutputBytes: Int
+
+  public init(
+    path: ClairV2WorkspacePath,
+    originalPath: ClairV2WorkspacePath? = nil,
+    basis: ClairV2GitDiffBasis,
+    kind: ClairV2GitDiffKind,
+    text: String?,
+    hunks: [ClairV2GitDiffHunk],
+    isTruncated: Bool,
+    outputBytes: Int,
+    maximumOutputBytes: Int
+  ) {
+    self.path = path
+    self.originalPath = originalPath
+    self.basis = basis
+    self.kind = kind
+    self.text = text
+    self.hunks = hunks
+    self.isTruncated = isTruncated
+    self.outputBytes = outputBytes
+    self.maximumOutputBytes = maximumOutputBytes
+  }
+}
+
 public enum ClairV2WorkspaceError: Error, Equatable, LocalizedError, Sendable {
   case invalidLimits
   case invalidProjectRoot
@@ -537,6 +606,7 @@ public enum ClairV2WorkspaceError: Error, Equatable, LocalizedError, Sendable {
   case gitOutputTooLarge(operation: String, maximumBytes: Int)
   case gitOutputInvalidEncoding(operation: String)
   case gitOutputMalformed(operation: String)
+  case gitPathNotChanged(ClairV2WorkspacePath)
   case invalidPath
   case pathEscapesRoot
   case pathNotFound(ClairV2WorkspacePath)
@@ -585,6 +655,8 @@ public enum ClairV2WorkspaceError: Error, Equatable, LocalizedError, Sendable {
       "Git \(operation) returned invalid UTF-8 output."
     case .gitOutputMalformed(let operation):
       "Git \(operation) returned malformed output."
+    case .gitPathNotChanged(let path):
+      "The workspace path has no Git change to display: \(path)."
     case .invalidPath:
       "The workspace path is invalid."
     case .pathEscapesRoot:
@@ -823,10 +895,15 @@ public struct ClairV2WorkspaceRuntime: Sendable {
 
   public func changedFileSummary(
     projectID: ProjectID,
-    worktreeID: WorktreeID? = nil
+    worktreeID: WorktreeID? = nil,
+    catalog: ClairV2WorkspaceCatalog? = nil
   ) throws -> ClairV2ChangedFileSummary {
     #if os(macOS)
-      let root = try resolveRoot(projectID: projectID, worktreeID: worktreeID)
+      let root = try resolveRoot(
+        projectID: projectID,
+        worktreeID: worktreeID,
+        catalog: catalog
+      )
       return try ClairV2WorkspaceGit.changedFileSummary(
         projectID: projectID,
         root: root,
@@ -837,44 +914,147 @@ public struct ClairV2WorkspaceRuntime: Sendable {
     #endif
   }
 
-  public func changedFiles(
+  public func changedFileSummary(
+    from catalog: ClairV2WorkspaceCatalog,
     projectID: ProjectID,
     worktreeID: WorktreeID? = nil
   ) throws -> ClairV2ChangedFileSummary {
-    try changedFileSummary(projectID: projectID, worktreeID: worktreeID)
+    try changedFileSummary(
+      projectID: projectID,
+      worktreeID: worktreeID,
+      catalog: catalog
+    )
+  }
+
+  public func changedFiles(
+    projectID: ProjectID,
+    worktreeID: WorktreeID? = nil,
+    catalog: ClairV2WorkspaceCatalog? = nil
+  ) throws -> ClairV2ChangedFileSummary {
+    try changedFileSummary(
+      projectID: projectID,
+      worktreeID: worktreeID,
+      catalog: catalog
+    )
+  }
+
+  /// Returns the current read-only Git status for a registered root.
+  public func gitStatus(
+    projectID: ProjectID,
+    worktreeID: WorktreeID? = nil,
+    catalog: ClairV2WorkspaceCatalog? = nil
+  ) throws -> ClairV2ChangedFileSummary {
+    try changedFileSummary(
+      projectID: projectID,
+      worktreeID: worktreeID,
+      catalog: catalog
+    )
+  }
+
+  public func gitStatus(
+    from catalog: ClairV2WorkspaceCatalog,
+    projectID: ProjectID,
+    worktreeID: WorktreeID? = nil
+  ) throws -> ClairV2ChangedFileSummary {
+    try gitStatus(
+      projectID: projectID,
+      worktreeID: worktreeID,
+      catalog: catalog
+    )
+  }
+
+  /// Returns the bounded changed-file list without exposing any Git command
+  /// output or filesystem path outside the registered root.
+  public func changedFileList(
+    projectID: ProjectID,
+    worktreeID: WorktreeID? = nil,
+    catalog: ClairV2WorkspaceCatalog? = nil
+  ) throws -> [ClairV2ChangedFile] {
+    try changedFileSummary(
+      projectID: projectID,
+      worktreeID: worktreeID,
+      catalog: catalog
+    ).files
+  }
+
+  public func gitDiff(
+    projectID: ProjectID,
+    worktreeID: WorktreeID? = nil,
+    path: ClairV2WorkspacePath,
+    basis: ClairV2GitDiffBasis = .workingTree,
+    catalog: ClairV2WorkspaceCatalog? = nil
+  ) throws -> ClairV2GitDiff {
+    #if os(macOS)
+      let root = try resolveRoot(
+        projectID: projectID,
+        worktreeID: worktreeID,
+        catalog: catalog
+      )
+      return try ClairV2WorkspaceGit.diff(
+        root: root,
+        path: path,
+        basis: basis,
+        limits: limits
+      )
+    #else
+      throw ClairV2WorkspaceError.unsupportedPlatform
+    #endif
+  }
+
+  public func gitDiff(
+    from catalog: ClairV2WorkspaceCatalog,
+    projectID: ProjectID,
+    worktreeID: WorktreeID? = nil,
+    path: ClairV2WorkspacePath,
+    basis: ClairV2GitDiffBasis = .workingTree
+  ) throws -> ClairV2GitDiff {
+    try gitDiff(
+      projectID: projectID,
+      worktreeID: worktreeID,
+      path: path,
+      basis: basis,
+      catalog: catalog
+    )
+  }
+
+  public func diff(
+    projectID: ProjectID,
+    worktreeID: WorktreeID? = nil,
+    path: ClairV2WorkspacePath,
+    basis: ClairV2GitDiffBasis = .workingTree,
+    catalog: ClairV2WorkspaceCatalog? = nil
+  ) throws -> ClairV2GitDiff {
+    try gitDiff(
+      projectID: projectID,
+      worktreeID: worktreeID,
+      path: path,
+      basis: basis,
+      catalog: catalog
+    )
   }
 
   #if os(macOS)
 
     private func resolveRoot(
       projectID: ProjectID,
-      worktreeID: WorktreeID?
+      worktreeID: WorktreeID?,
+      catalog: ClairV2WorkspaceCatalog? = nil
     ) throws -> ClairV2WorkspaceRootReference {
-      guard let project = projectsByID[projectID] else {
+      guard projectsByID[projectID] != nil else {
         throw ClairV2WorkspaceError.projectNotFound(projectID)
       }
-      if let worktreeID {
-        let entry = try ClairV2WorkspaceCatalogReader(limits: limits).worktree(
-          project: project,
-          id: worktreeID
-        )
-        guard entry.state == .available else {
-          throw ClairV2WorkspaceError.worktreeRootUnavailable(worktreeID, entry.state)
-        }
-        return ClairV2WorkspaceRootReference(
-          projectID: projectID,
-          worktreeID: worktreeID,
-          rootURL: entry.rootURL
-        )
-      }
-      let state = ClairV2WorkspacePOSIX.rootState(at: project.rootURL)
-      guard state == .available else {
-        throw ClairV2WorkspaceError.projectRootUnavailable(projectID, state)
-      }
+      let snapshot = try catalog ?? self.catalog()
+      let capability = try launchRootCapability(
+        from: snapshot,
+        projectID: projectID,
+        worktreeID: worktreeID
+      )
       return ClairV2WorkspaceRootReference(
         projectID: projectID,
-        worktreeID: nil,
-        rootURL: project.rootURL
+        worktreeID: worktreeID,
+        rootURL: capability.rootURL,
+        device: capability.device,
+        inode: capability.inode
       )
     }
 
@@ -887,6 +1067,8 @@ public struct ClairV2WorkspaceRuntime: Sendable {
     let projectID: ProjectID
     let worktreeID: WorktreeID?
     let rootURL: URL
+    let device: UInt64
+    let inode: UInt64
   }
 
   private enum ClairV2WorkspacePOSIXFileKind {
@@ -1533,9 +1715,11 @@ public struct ClairV2WorkspaceRuntime: Sendable {
       root: ClairV2WorkspaceRootReference,
       limits: ClairV2WorkspaceLimits
     ) throws -> ClairV2ChangedFileSummary {
+      try verifyRoot(root)
       guard try repositoryRoot(at: root.rootURL, limits: limits) != nil else {
         throw ClairV2WorkspaceError.repositoryNotFound(projectID)
       }
+      try verifyRoot(root)
       let operation = "summarize changed files"
       let output: ClairV2GitCommandOutput
       do {
@@ -1551,6 +1735,8 @@ public struct ClairV2WorkspaceRuntime: Sendable {
         throw ClairV2WorkspaceError.gitCommandFailed(operation: operation, status: status)
       }
 
+      try verifyRoot(root)
+
       let parsed = try parseChanges(
         output.data,
         isTruncated: output.isTruncated,
@@ -1565,11 +1751,249 @@ public struct ClairV2WorkspaceRuntime: Sendable {
       )
     }
 
+    static func diff(
+      root: ClairV2WorkspaceRootReference,
+      path: ClairV2WorkspacePath,
+      basis: ClairV2GitDiffBasis,
+      limits: ClairV2WorkspaceLimits
+    ) throws -> ClairV2GitDiff {
+      try verifyRoot(root)
+      guard try repositoryRoot(at: root.rootURL, limits: limits) != nil else {
+        throw ClairV2WorkspaceError.repositoryNotFound(root.projectID)
+      }
+      try verifyRoot(root)
+
+      let status = try changedFileSummary(
+        projectID: root.projectID,
+        root: root,
+        limits: limits
+      )
+      let changedFile = status.files.first { file in
+        file.path == path || file.originalPath == path
+      }
+      guard let changedFile else {
+        throw ClairV2WorkspaceError.gitPathNotChanged(path)
+      }
+
+      let operation = "read \(basis.rawValue) diff"
+      var arguments = [
+        "--literal-pathspecs",
+        "diff",
+        "--no-ext-diff",
+        "--no-color",
+        "--full-index",
+        "--find-renames",
+        "--find-copies",
+        "--unified=3",
+      ]
+      if basis == .staged {
+        arguments.append("--cached")
+      }
+
+      let output: ClairV2GitCommandOutput
+      let isUntracked = changedFile.kind == .untracked
+      if isUntracked {
+        guard basis == .workingTree else {
+          return ClairV2GitDiff(
+            path: path,
+            basis: basis,
+            kind: .text,
+            text: "",
+            hunks: [],
+            isTruncated: false,
+            outputBytes: 0,
+            maximumOutputBytes: limits.maximumChangedOutputBytes
+          )
+        }
+        output = try run(
+          [
+            "--literal-pathspecs",
+            "diff",
+            "--no-index",
+            "--no-ext-diff",
+            "--no-color",
+            "--unified=3",
+            "--",
+            "/dev/null",
+            path.rawValue,
+          ],
+          at: root.rootURL,
+          operation: operation,
+          maximumOutputBytes: limits.maximumChangedOutputBytes,
+          acceptableStatuses: [0, 1]
+        )
+      } else {
+        arguments.append(contentsOf: ["--", path.rawValue])
+        output = try run(
+          arguments,
+          at: root.rootURL,
+          operation: operation,
+          maximumOutputBytes: limits.maximumChangedOutputBytes
+        )
+      }
+
+      try verifyRoot(root)
+      let text = try decodeGitOutput(
+        output.data,
+        isTruncated: output.isTruncated,
+        operation: operation
+      )
+      let parsed = try parseDiff(
+        text,
+        path: path,
+        originalPath: changedFile.originalPath,
+        basis: basis,
+        isTruncated: output.isTruncated
+      )
+      return ClairV2GitDiff(
+        path: parsed.path,
+        originalPath: parsed.originalPath,
+        basis: basis,
+        kind: parsed.kind,
+        text: parsed.kind == .binary ? nil : text,
+        hunks: parsed.hunks,
+        isTruncated: output.isTruncated || parsed.isTruncated,
+        outputBytes: output.data.count,
+        maximumOutputBytes: limits.maximumChangedOutputBytes
+      )
+    }
+
+    private static func verifyRoot(_ root: ClairV2WorkspaceRootReference) throws {
+      let probe = ClairV2WorkspacePOSIX.rootProbe(at: root.rootURL)
+      guard probe.state == .available,
+        probe.device == root.device,
+        probe.inode == root.inode
+      else {
+        throw ClairV2WorkspaceError.rootIdentityChanged(root.rootURL)
+      }
+    }
+
+    private static func decodeGitOutput(
+      _ data: Data,
+      isTruncated: Bool,
+      operation: String
+    ) throws -> String {
+      if let text = String(data: data, encoding: .utf8) {
+        return text
+      }
+      guard isTruncated else {
+        throw ClairV2WorkspaceError.gitOutputInvalidEncoding(operation: operation)
+      }
+
+      // A bounded read is allowed to stop in the middle of a UTF-8 scalar.
+      // Remove only an incomplete trailing scalar; invalid bytes earlier in
+      // the output remain a typed failure.
+      for suffixLength in 1...3 where data.count >= suffixLength {
+        let prefix = data.dropLast(suffixLength)
+        if let text = String(data: prefix, encoding: .utf8) {
+          return text
+        }
+      }
+      throw ClairV2WorkspaceError.gitOutputInvalidEncoding(operation: operation)
+    }
+
+    private static func parseDiff(
+      _ text: String,
+      path: ClairV2WorkspacePath,
+      originalPath: ClairV2WorkspacePath?,
+      basis: ClairV2GitDiffBasis,
+      isTruncated: Bool
+    ) throws -> (
+      path: ClairV2WorkspacePath,
+      originalPath: ClairV2WorkspacePath?,
+      kind: ClairV2GitDiffKind,
+      hunks: [ClairV2GitDiffHunk],
+      isTruncated: Bool
+    ) {
+      let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+      var resolvedPath = path
+      var resolvedOriginalPath = originalPath
+      var hunks: [ClairV2GitDiffHunk] = []
+      var parserTruncated = false
+      var isBinary = false
+
+      for line in lines {
+        if line.hasPrefix("Binary files ") || line == "GIT binary patch" {
+          isBinary = true
+          continue
+        }
+        if line.hasPrefix("rename from ") {
+          let rawPath = String(line.dropFirst("rename from ".count))
+          resolvedOriginalPath = try? ClairV2WorkspacePath(rawPath)
+          continue
+        }
+        if line.hasPrefix("rename to ") {
+          let rawPath = String(line.dropFirst("rename to ".count))
+          if let renamePath = try? ClairV2WorkspacePath(rawPath) {
+            resolvedPath = renamePath
+          }
+          continue
+        }
+        guard line.hasPrefix("@@ ") else { continue }
+        guard let hunk = parseHunkHeader(line, index: hunks.count) else {
+          if isTruncated {
+            parserTruncated = true
+            break
+          }
+          throw ClairV2WorkspaceError.gitOutputMalformed(operation: "read \(basis.rawValue) diff")
+        }
+        hunks.append(hunk)
+      }
+
+      return (
+        resolvedPath,
+        resolvedOriginalPath,
+        isBinary ? .binary : .text,
+        hunks,
+        parserTruncated
+      )
+    }
+
+    private static func parseHunkHeader(
+      _ line: String,
+      index: Int
+    ) -> ClairV2GitDiffHunk? {
+      guard line.hasPrefix("@@ "), let end = line.range(of: " @@") else {
+        return nil
+      }
+      let range = line[line.index(line.startIndex, offsetBy: 3)..<end.lowerBound]
+      let sides = range.split(separator: " ")
+      guard sides.count == 2,
+        let old = parseHunkSide(String(sides[0]), prefix: "-"),
+        let new = parseHunkSide(String(sides[1]), prefix: "+")
+      else {
+        return nil
+      }
+      return ClairV2GitDiffHunk(
+        id: "hunk-\(index)",
+        header: line,
+        oldStart: old.start,
+        oldCount: old.count,
+        newStart: new.start,
+        newCount: new.count
+      )
+    }
+
+    private static func parseHunkSide(
+      _ value: String,
+      prefix: String
+    ) -> (start: Int, count: Int)? {
+      guard value.hasPrefix(prefix) else { return nil }
+      let components = value.dropFirst().split(separator: ",")
+      guard !components.isEmpty, let start = Int(components[0]), start >= 0 else {
+        return nil
+      }
+      let count = components.count == 2 ? Int(components[1]) : 1
+      guard let count, count >= 0 else { return nil }
+      return (start, count)
+    }
+
     private static func run(
       _ arguments: [String],
       at rootURL: URL,
       operation: String,
-      maximumOutputBytes: Int
+      maximumOutputBytes: Int,
+      acceptableStatuses: Set<Int32> = [0]
     ) throws -> ClairV2GitCommandOutput {
       let executableCandidates = [
         "/usr/bin/git",
@@ -1589,6 +2013,16 @@ public struct ClairV2WorkspaceRuntime: Sendable {
       process.arguments = arguments
       process.currentDirectoryURL = rootURL
       var environment = ProcessInfo.processInfo.environment
+      for key in [
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_COMMON_DIR",
+        "GIT_DIR",
+        "GIT_INDEX_FILE",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_WORK_TREE",
+      ] {
+        environment.removeValue(forKey: key)
+      }
       environment["GIT_OPTIONAL_LOCKS"] = "0"
       environment["LC_ALL"] = "C"
       process.environment = environment
@@ -1623,7 +2057,7 @@ public struct ClairV2WorkspaceRuntime: Sendable {
       }
       process.waitUntilExit()
 
-      guard isTruncated || process.terminationStatus == 0 else {
+      guard isTruncated || acceptableStatuses.contains(process.terminationStatus) else {
         throw ClairV2GitCommandError.failed(
           operation: operation,
           status: process.terminationStatus
