@@ -151,7 +151,8 @@ private struct H10Stack {
   ) throws -> Self {
     let project = try H10ProjectFixture()
     let projectID = try ProjectID("h10-project")
-    let projects = includeProject
+    let projects =
+      includeProject
       ? [try ClairV2ProjectRoot(id: projectID, rootURL: project.rootURL)]
       : []
     let workspace = try ClairV2WorkspaceRuntime(
