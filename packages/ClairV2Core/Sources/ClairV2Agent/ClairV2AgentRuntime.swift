@@ -3321,6 +3321,7 @@ public actor ClairV2AgentRuntime {
         pending.lifecycle = .cleanupPending
         pending.failure = .cleanupPending
         sessions[sessionID] = pending
+        lifecycleObserver?(pending.snapshot())
         return
       }
     }
@@ -3362,6 +3363,9 @@ public actor ClairV2AgentRuntime {
           processGeneration: processGeneration,
           process: process
         )
+        if let pending = sessions[sessionID] {
+          lifecycleObserver?(pending.snapshot())
+        }
       }
       return
     }

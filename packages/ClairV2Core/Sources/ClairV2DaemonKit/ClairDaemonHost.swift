@@ -662,7 +662,8 @@ public actor ClairDaemonHost {
     var transitioned: [ClairV2AgentSessionSnapshot] = []
     for snapshot in sessions {
       let id = snapshot.identity.sessionID
-      guard isTerminal(snapshot.lifecycle) else { continue }
+      let cleanupPending = snapshot.lifecycle == .cleanupPending
+      guard isTerminal(snapshot.lifecycle) || cleanupPending else { continue }
       let wasAttached = openJournalSessions.contains(id)
       // Also release a daemon-wide agent-session cap slot (Finding #2) for a
       // session that reserved one but never reached `attach`'s `.running`
@@ -675,23 +676,27 @@ public actor ClairDaemonHost {
         commandBoundary.invalidate(
           identity: snapshot.identity, processGeneration: snapshot.processGeneration
         )
-        commandBoundary.uninstall(
-          identity: snapshot.identity, processGeneration: snapshot.processGeneration
-        )
         _ = try? journal.updateLifecycle(
           identity: snapshot.identity,
           processGeneration: snapshot.processGeneration,
           lifecycle: snapshot.lifecycle
         )
-        journal.close(
-          identity: snapshot.identity, processGeneration: snapshot.processGeneration
-        )
-        openJournalSessions.remove(id)
-        journalProcessGenerations.removeValue(forKey: id)
+        if isTerminal(snapshot.lifecycle) {
+          commandBoundary.uninstall(
+            identity: snapshot.identity, processGeneration: snapshot.processGeneration
+          )
+          journal.close(
+            identity: snapshot.identity, processGeneration: snapshot.processGeneration
+          )
+          openJournalSessions.remove(id)
+          journalProcessGenerations.removeValue(forKey: id)
+        }
       }
-      removeSubscriberKeys(for: id)
-      releaseAgentSessionSlot(for: id)
-      transitioned.append(snapshot)
+      if isTerminal(snapshot.lifecycle) {
+        removeSubscriberKeys(for: id)
+        releaseAgentSessionSlot(for: id)
+        transitioned.append(snapshot)
+      }
     }
     return transitioned
   }

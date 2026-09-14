@@ -756,17 +756,7 @@ func h10CleanupPendingAttachmentKeepsTheHostSlotUntilH04CleanupCompletes() async
     endpoint: H10FixtureEndpoint(), on: connection
   )
   #expect(third.lifecycle == .running)
-  let thirdEpoch = try SessionEpoch(third.processGeneration)
-  _ = try await stack.host.stopSession(
-    try OperationRequest(
-      operationID: OperationID("op-h10-pending-third-stop"), scope: third.identity.sessionScope,
-      kind: .agentStop, capability: .terminate,
-      payload: ClairV2AgentCommandPayload(
-        epoch: thirdEpoch, processGeneration: third.processGeneration, action: .stop
-      )
-    ),
-    on: connection
-  )
+  await stack.host.shutdown()
 }
 
 @Test
