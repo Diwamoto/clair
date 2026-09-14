@@ -144,7 +144,7 @@ G2 -> U01 -> U02
 | `H07` | `done` | `D4` | `H02` | Git status、changed-file list、text/binary diff、hunk metadata を mobile API に追加する。untracked、rename、large diff、invalid encoding、worktree race を壊さず表示できること。 |
 | `H08` | `done` | `D5` | `H03`, `H05`, `H06` | session journal、subscriber cursor、gap/resync、revision snapshot、idempotency window を実装する。network switch、slow client、daemon restart、out-of-range cursor で silent data loss がないこと。 |
 | `H09` | `done` | `D4` | `B02`, `H03` | 最小 `ClairPushRelay` と APNs provider boundary を実装する。opaque event だけを送り、credential rotation、device token replacement、revoke、TTL、sandbox/production 分離を検証すること。 |
-| `H10` | `queued` | `D5` | `H06`, `H07`, `H08`, `H09` | daemon の crash recovery、resource limits、structured diagnostics と server integration suite を完成させる。Mac GUI なしで G1 の全 server operation を fixture client から再現できること。 |
+| `H10` | `active` | `D5` | `H06`, `H07`, `H08`, `H09` | daemon の crash recovery、resource limits、structured diagnostics と server integration suite を完成させる。Mac GUI なしで G1 の全 server operation を fixture client から再現できること。 |
 
 ## P0-C: Native iPhone / iPad app
 
