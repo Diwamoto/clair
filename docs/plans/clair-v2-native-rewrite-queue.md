@@ -141,7 +141,7 @@ G2 -> U01 -> U02
 | `H04` | `done` | `D5` | `H02` | OpenCode を provider adapter の第一実装として起動・再開・停止し、project/worktree/session identity に関連付ける。provider upgrade、abnormal exit、duplicate launch、cwd mismatch を型付きで扱うこと。 |
 | `H05` | `active` | `D5` | `H04` | OpenCode の streaming event を provider-independent な conversation、tool call、attention、completion、usage event に正規化する。順序、重複、partial event、unknown event を deterministic に処理すること。 |
 | `H06` | `queued` | `D5` | `H03`, `H05` | prompt、approval、deny、interrupt、stop を scoped command として実装する。operation ID による exactly-once effect、stale approval rejection、audit metadata、disconnect race の tests が通ること。 |
-| `H07` | `active` | `D4` | `H02` | Git status、changed-file list、text/binary diff、hunk metadata を mobile API に追加する。untracked、rename、large diff、invalid encoding、worktree race を壊さず表示できること。 |
+| `H07` | `done` | `D4` | `H02` | Git status、changed-file list、text/binary diff、hunk metadata を mobile API に追加する。untracked、rename、large diff、invalid encoding、worktree race を壊さず表示できること。 |
 | `H08` | `queued` | `D5` | `H03`, `H05`, `H06` | session journal、subscriber cursor、gap/resync、revision snapshot、idempotency window を実装する。network switch、slow client、daemon restart、out-of-range cursor で silent data loss がないこと。 |
 | `H09` | `queued` | `D4` | `B02`, `H03` | 最小 `ClairPushRelay` と APNs provider boundary を実装する。opaque event だけを送り、credential rotation、device token replacement、revoke、TTL、sandbox/production 分離を検証すること。 |
 | `H10` | `queued` | `D5` | `H06`, `H07`, `H08`, `H09` | daemon の crash recovery、resource limits、structured diagnostics と server integration suite を完成させる。Mac GUI なしで G1 の全 server operation を fixture client から再現できること。 |
@@ -322,3 +322,12 @@ UI の正本は [Clair UI Design canvas と Workbench](../../prototypes/clair-wo
 - result: `ClairV2MobileApp` now exposes a minimal native host-management surface for host list, pair/re-pair, connection state, device scope, and local pairing revoke; offline, QR expiry, fingerprint change, and revoked states are distinct, with credential/private-key redaction tests
 - boundary: remote revoke RPC remains outside the existing H03 transport contract, so N03 keeps revoke local to protected pairing state; physical iOS signing and TestFlight smoke remain external
 - remaining: project/worktree/session browser, conversation UI, APNs/deep links, and production visual design remain in later queue tasks
+
+### H07 — 2026-09-14
+
+- integration commit (controller): `87d2c99a58284614fdce28f72cc321816e427cbc`
+- integration commit (worker source): `dd4acf167e921c96c55951344bd2f416ffe47b76`
+- verification: H07 focused tests 13/13 passed; ClairV2Apps 1/1 and `make v2-check` passed; strict Swift format, `git diff --check`, redaction scan, and worker-contract checks passed; worker worktree was clean
+- result: `ClairV2Workspace` now exposes bounded read-only Git status, changed-file records, text/binary unified diff results, and deterministic hunk metadata; untracked/rename/binary/large/invalid-encoding cases, root identity races, missing roots, permission failures, and output bounds fail closed
+- known limitation: the worker's full Core rerun retained one unrelated pre-existing H04 waitid fixture failure; all H07 tests and affected Apps checks passed, and H07 did not alter H04 runtime code
+- remaining: H05 streaming normalization, scoped commands/approvals, session journal/reconnect, APNs relay, and native client UI remain in later queue tasks
