@@ -152,7 +152,7 @@ G2 -> U01 -> U02
 |---|---|---:|---|---|
 | `N01` | `done` | `D3` | `B01`, `B02` | SwiftUI native app、composition root、environment、shared package、unit/UI test target を作る。signed physical-device build と TestFlight smoke の手順を確立すること。旧 `ClairMobileApp` は reference に留める。 |
 | `N02` | `done` | `D4` | `B03`, `H03`, `N01` | typed client、Keychain device identity、pairing handshake、certificate/host pin、capability negotiation を実装する。credential を log/UI stateへ漏らさず、再起動後に安全に reconnect できること。 |
-| `N03` | `active` | `D3` | `N02` | host list、pair/re-pair、connection state、device scope、revoke UI を最小 native UI で実装する。offline、expired QR、fingerprint change、revoked device を区別できること。 |
+| `N03` | `done` | `D3` | `N02` | host list、pair/re-pair、connection state、device scope、revoke UI を最小 native UI で実装する。offline、expired QR、fingerprint change、revoked device を区別できること。 |
 | `N04` | `queued` | `D3` | `H02`, `N03` | project/worktree/session browser と recent destination を実装する。複数 project を混線せず、missing root と permission error を明示すること。 |
 | `N05` | `queued` | `D4` | `H05`, `H06`, `N04` | OpenCode conversation stream、prompt composer、attention、approval/deny/interrupt を native app へ接続する。重複 tap、background 中の response、stale approval が安全であること。 |
 | `N06` | `queued` | `D4` | `H07`, `N05` | changed-file list、native diff、hunk navigation と review follow-up を実装する。binary/large/truncated diff を明示し、表示だけで working tree を変更しないこと。 |
@@ -313,3 +313,12 @@ UI の正本は [Clair UI Design canvas と Workbench](../../prototypes/clair-wo
 - result: OpenCode provider lifecycle now has typed identity and launch bounds, descriptor-held cwd validation, keeper-backed process-group ownership, bounded waitid recovery without actor blocking, CLOEXEC fd normalization for stdin/stdout/stderr collisions, exactly-once kill/reap tracking, upgrade/duplicate/abnormal-exit handling, shutdown fencing, and cleanup-pending retention for unproven callbacks
 - known limitation: repository-wide Apple strict format still reports pre-existing violations in unchanged `apple/ClairApp` and `apple/ClairMobileApp`; no H04 files are implicated
 - remaining: streaming event normalization, scoped commands/approvals, session journal/reconnect, Git diff API, APNs relay, and native client UI remain in later queue tasks
+
+### N03 — 2026-09-14
+
+- integration commit (controller): `4cd2880a76c8184e46caab4acc8cd749cce58509`
+- integration commit (worker source): `274c8ad618be90fbd86a7935cd4ac79e5c7f588e`
+- verification: N03 focused tests, ClairV2Apps tests, and ClairV2MobileApp build passed; strict Swift format and `git diff --check` passed; worker worktree was clean
+- result: `ClairV2MobileApp` now exposes a minimal native host-management surface for host list, pair/re-pair, connection state, device scope, and local pairing revoke; offline, QR expiry, fingerprint change, and revoked states are distinct, with credential/private-key redaction tests
+- boundary: remote revoke RPC remains outside the existing H03 transport contract, so N03 keeps revoke local to protected pairing state; physical iOS signing and TestFlight smoke remain external
+- remaining: project/worktree/session browser, conversation UI, APNs/deep links, and production visual design remain in later queue tasks
