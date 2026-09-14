@@ -435,6 +435,95 @@ func h10RejectsSessionStartOnceTheDaemonWideAgentSessionCapIsReached() async thr
   _ = try? await stack.agentRuntime.stop(sessionID: try SessionID("h10-cap-session-1"))
 }
 
+/// Reproduces the Finding #2 TOCTOU race directly: two `startSession` calls
+/// issued *truly concurrently* (`async let`, not sequential `await`s)
+/// against a daemon-wide cap of 1. The former `admitNewAgentSession()`
+/// re-derived the live count from `await agentRuntime.allSessions()` — a
+/// real suspension point across the `agentRuntime` actor boundary — so both
+/// concurrent calls could observe the same pre-start count and both pass the
+/// guard, spawning two real processes against a cap of one. This test would
+/// fail (either both succeeding, or `sessions.count == 2`) against that
+/// implementation; against the fix (a synchronous, no-`await`
+/// check-and-reserve on `ClairDaemonHost`'s own actor-local state) exactly
+/// one call succeeds and the other is rejected. The sibling sequential test
+/// above (`h10RejectsSessionStartOnceTheDaemonWideAgentSessionCapIsReached`)
+/// cannot catch this: sequential `await`s never overlap the race window.
+@Test
+func h10AdmitsExactlyOneSessionWhenStartSessionIsCalledConcurrentlyAgainstACapOfOne()
+  async throws
+{
+  let stack = try H10Stack.make(
+    hostLimits: try ClairDaemonHostLimits(maximumTotalAgentSessions: 1)
+  )
+  defer { stack.remove() }
+  let (_, connection) = try await stack.pairedConnection()
+  let target = ClairV2AgentTarget(projectID: stack.projectID)
+  // `H10Stack` itself is not `Sendable` (it owns a plain `H10ProjectFixture`
+  // class for its disposable Git root), so each concurrent closure below
+  // captures only the actor reference it needs — `ClairDaemonHost` is an
+  // actor and therefore safely `Sendable` to share across the two truly
+  // concurrent tasks — rather than the whole non-Sendable fixture struct.
+  let host = stack.host
+
+  // Each `async let` initializer below is its own independent closure
+  // (rather than one shared closure value handed to two concurrent call
+  // sites), so Swift's strict concurrency checker can verify there is no
+  // shared mutable state crossing the two truly-concurrent tasks: both only
+  // read the immutable `host`/`target`/`connection` locals and each starts
+  // a distinct, uniquely-identified session.
+  async let firstAttempt: Result<ClairV2AgentSessionSnapshot, Error> = {
+    do {
+      let snapshot = try await host.startSession(
+        providerID: .openCode, target: target, sessionID: try SessionID("h10-race-session-1"),
+        endpoint: H10FixtureEndpoint(), on: connection
+      )
+      return .success(snapshot)
+    } catch {
+      return .failure(error)
+    }
+  }()
+  async let secondAttempt: Result<ClairV2AgentSessionSnapshot, Error> = {
+    do {
+      let snapshot = try await host.startSession(
+        providerID: .openCode, target: target, sessionID: try SessionID("h10-race-session-2"),
+        endpoint: H10FixtureEndpoint(), on: connection
+      )
+      return .success(snapshot)
+    } catch {
+      return .failure(error)
+    }
+  }()
+  let outcomes = await [firstAttempt, secondAttempt]
+
+  var successes: [ClairV2AgentSessionSnapshot] = []
+  var capacityRejections = 0
+  for outcome in outcomes {
+    switch outcome {
+    case .success(let snapshot):
+      successes.append(snapshot)
+    case .failure(let error as ClairDaemonHostError) where error == .agentSessionCapacityExceeded:
+      capacityRejections += 1
+    case .failure(let error):
+      Issue.record("Unexpected concurrent startSession failure: \(error)")
+    }
+  }
+
+  #expect(successes.count == 1, "Expected exactly one concurrent start to be admitted.")
+  #expect(
+    capacityRejections == 1,
+    "Expected exactly one concurrent start to be rejected with agentSessionCapacityExceeded."
+  )
+
+  // The cap must not have leaked a second real process: exactly one session
+  // is known to H04 regardless of which of the two concurrent calls won.
+  let sessions = await stack.agentRuntime.allSessions()
+  #expect(sessions.count == 1)
+
+  for snapshot in successes {
+    _ = try? await stack.agentRuntime.stop(sessionID: snapshot.identity.sessionID)
+  }
+}
+
 @Test
 func h10RejectsAdditionalJournalSubscribersOnceTheDaemonWideCapIsReached() async throws {
   let stack = try H10Stack.make(
@@ -537,6 +626,93 @@ func h10StructuredDiagnosticsCarryOnlyCountsNoPromptOrIdentityContent() async th
     ),
     on: connection
   )
+}
+
+/// Finding #3: `activeConnectionCount` must be the real number of currently
+/// open connections, not a re-expression of `pairedDeviceCount` (both used
+/// to just count non-revoked grants, which are mathematically identical).
+/// This test proves the two fields can differ in both directions: a paired
+/// (non-revoked) device with zero open connections, and a single device
+/// holding multiple simultaneous connections. It opens two independent
+/// authenticated connections for the same device directly against
+/// `ClairPairingAuthority` (mirroring the raw handshake
+/// `ClairNativeClientTransport.reconnect` performs) rather than going
+/// through the client's own `reconnect`, because `reconnect` always closes
+/// its previous connection first and so can never hold two at once.
+@Test
+func h10DiagnosticsActiveConnectionCountDiffersFromPairedDeviceCountInBothDirections()
+  async throws
+{
+  let stack = try H10Stack.make()
+  defer { stack.remove() }
+
+  // Direction 1: a paired, non-revoked device with zero active connections.
+  // `updateGrant` closes any connections the device had (there are none yet
+  // for a freshly paired device), so pairing alone paires the device without
+  // opening a connection.
+  let disconnectedClient = ClairNativeClientTransport(deviceKey: ClairDeviceKey())
+  let disconnectedLink = try await stack.authority.issuePairingLink(lifetime: 60)
+  let disconnectedPaired = try await disconnectedClient.pair(
+    using: disconnectedLink, with: stack.authority, displayName: "H10 disconnected device",
+    confirmHostFingerprint: true
+  )
+  _ = try await stack.authority.updateGrant(
+    deviceID: disconnectedPaired.credential.grant.deviceID,
+    capabilities: CapabilitySet([.view]),
+    visibleScopes: [try stack.projectScope]
+  )
+
+  var diagnostics = await stack.host.diagnostics()
+  #expect(diagnostics.pairedDeviceCount == 1)
+  #expect(diagnostics.activeConnectionCount == 0)
+
+  // Direction 2: a second paired device holding two simultaneous open
+  // connections.
+  let multiConnectionDeviceKey = ClairDeviceKey()
+  let multiConnectionClient = ClairNativeClientTransport(deviceKey: multiConnectionDeviceKey)
+  let multiConnectionLink = try await stack.authority.issuePairingLink(lifetime: 60)
+  let multiConnectionPaired = try await multiConnectionClient.pair(
+    using: multiConnectionLink, with: stack.authority,
+    displayName: "H10 multi-connection device", confirmHostFingerprint: true
+  )
+  _ = try await stack.authority.updateGrant(
+    deviceID: multiConnectionPaired.credential.grant.deviceID,
+    capabilities: CapabilitySet([.view]),
+    visibleScopes: [try stack.projectScope]
+  )
+  let presentation = await stack.authority.presentation()
+
+  func openConnection() async throws -> ClairAuthenticatedConnection {
+    let request = ClairReconnectRequest(
+      hostID: presentation.hostID,
+      hostFingerprint: presentation.fingerprint,
+      deviceID: multiConnectionPaired.credential.grant.deviceID,
+      token: multiConnectionPaired.credential.token
+    )
+    let challenge = try await stack.authority.beginAuthentication(request)
+    let proof = try challenge.makeProof(using: multiConnectionDeviceKey)
+    return try await stack.authority.authenticate(proof)
+  }
+
+  let connectionA = try await openConnection()
+  let connectionB = try await openConnection()
+
+  diagnostics = await stack.host.diagnostics()
+  #expect(diagnostics.pairedDeviceCount == 2)
+  #expect(diagnostics.activeConnectionCount == 2)
+
+  // Closing one of the two connections leaves exactly one active connection
+  // while both devices remain paired — confirming the two fields are
+  // tracked independently rather than being the same expression.
+  await stack.authority.close(connectionA)
+  diagnostics = await stack.host.diagnostics()
+  #expect(diagnostics.pairedDeviceCount == 2)
+  #expect(diagnostics.activeConnectionCount == 1)
+
+  await stack.authority.close(connectionB)
+  diagnostics = await stack.host.diagnostics()
+  #expect(diagnostics.pairedDeviceCount == 2)
+  #expect(diagnostics.activeConnectionCount == 0)
 }
 
 // MARK: - Crash recovery: every dependent component fails closed (H10)

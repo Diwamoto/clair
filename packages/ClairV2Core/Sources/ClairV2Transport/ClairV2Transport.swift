@@ -1523,13 +1523,31 @@ public actor ClairPairingAuthority {
     scope: ResourceScope,
     on connection: ClairAuthenticatedConnection
   ) throws {
+    try authorize(scope: scope, requiring: .view, on: connection)
+  }
+
+  /// The single real authorization path for "does this connection currently
+  /// hold `capability` over `scope`". `authorizeRead(scope:on:)` above is a
+  /// thin `.view`-specific wrapper over this; every other capability check in
+  /// `ClairDaemonHost` (H10) must also call through here rather than
+  /// re-deriving grant validity, token expiry, or connection-scope
+  /// containment itself. Checks, in order: the connection is still open and
+  /// its device grant is unrevoked/current-generation/token-unexpired
+  /// (`currentGrant(for:)`), the connection's own (possibly narrower) scope
+  /// contains `scope` (`authorizeConnectionScope`), and the device grant's
+  /// capabilities/visible scopes actually admit `capability` over `scope`.
+  public func authorize(
+    scope: ResourceScope,
+    requiring capability: Capability,
+    on connection: ClairAuthenticatedConnection
+  ) throws {
     let storedGrant = try currentGrant(for: connection)
     try authorizeConnectionScope(scope, on: connection)
     let boundary = try AccessBoundary(
       capabilities: storedGrant.grant.capabilities,
       visibleScopes: storedGrant.grant.visibleScopes
     )
-    try boundary.authorize(scope: scope, requiring: .view)
+    try boundary.authorize(scope: scope, requiring: capability)
     try markUsed(storedGrant, at: clock.now())
   }
 
@@ -1683,6 +1701,18 @@ public actor ClairPairingAuthority {
 
   public func allGrants() -> [ClairDeviceGrant] {
     grants.values.map(\.grant).sorted { $0.deviceID.rawValue < $1.deviceID.rawValue }
+  }
+
+  /// The real number of currently-open authenticated connections across
+  /// every device grant, independent of how many devices are paired. A
+  /// paired (non-revoked) device with no open connection contributes zero; a
+  /// single device holding multiple simultaneous connections contributes one
+  /// per connection. `connections` is the authoritative live-connection map
+  /// (every `authenticate()` success inserts into it and every `close`/
+  /// `closeConnections(for:)` removes from it in lockstep with each grant's
+  /// own `activeConnections` set), so its count is exact.
+  public func activeConnectionCount() -> Int {
+    connections.count
   }
 
   public func isConnectionActive(_ connection: ClairAuthenticatedConnection) -> Bool {

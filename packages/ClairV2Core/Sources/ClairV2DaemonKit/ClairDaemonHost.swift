@@ -234,6 +234,25 @@ public actor ClairDaemonHost {
   private var openJournalSessions: Set<SessionID> = []
   private var subscriberKeys: Set<SubscriberKey> = []
 
+  /// Race-free admission bookkeeping for the daemon-wide agent-session cap
+  /// (Finding #2). `reservedAgentSessionSlots` is the actor-local source of
+  /// truth for how many slots are currently spoken for; it is checked and
+  /// incremented in one synchronous (no-`await`) step in
+  /// `reserveAgentSessionSlot()`, so two concurrent `startSession`/
+  /// `resumeSession` calls can never both observe capacity and both admit a
+  /// session, unlike re-deriving the count from `agentRuntime.allSessions()`
+  /// after an `await`. A slot starts as an anonymous reservation token
+  /// (`Set<UUID>`) because the real `SessionID` is not known until after the
+  /// awaited `agentRuntime.start`/`resume` call returns; once it is known and
+  /// the resulting session is live (`.starting`/`.running`), the token is
+  /// additionally indexed by `SessionID` in `agentSessionSlotsBySessionID` so
+  /// `stopSession`/`reapExitedSessions` can release it later by session
+  /// identity. A slot that never reaches `.starting`/`.running` (immediate
+  /// launch failure, or the awaited call throwing) is released immediately
+  /// instead of being indexed.
+  private var reservedAgentSessionSlots: Set<UUID> = []
+  private var agentSessionSlotsBySessionID: [SessionID: UUID] = [:]
+
   private struct SubscriberKey: Hashable {
     let sessionID: SessionID?
     let subscriberID: ClairV2JournalSubscriberID
@@ -277,16 +296,32 @@ public actor ClairDaemonHost {
     on connection: ClairAuthenticatedConnection
   ) async throws -> ClairV2WorkspaceCatalog {
     let full = try workspace.catalog()
-    guard let grant = await authority.grant(for: connection.deviceID),
-      !grant.isRevoked, grant.generation == connection.generation,
-      await authority.isConnectionActive(connection)
-    else { throw ClairDaemonHostError.unauthorized }
-    let boundary = try AccessBoundary(
-      capabilities: grant.capabilities, visibleScopes: grant.visibleScopes
-    )
-    let visible = try full.projects.filter { project in
+    var visible: [ClairV2ProjectCatalogEntry] = []
+    for project in full.projects {
       let scope = try ResourceScope(projectID: project.id)
-      return (try? boundary.authorize(scope: scope, requiring: .view)) != nil
+      do {
+        // The real H03 path: this enforces token expiry and per-connection
+        // scope restriction (see `ClairV2Transport.authorizeRead`), not just
+        // grant revocation/generation, before a project is ever listed.
+        try await authority.authorizeRead(scope: scope, on: connection)
+      } catch ProtocolError.scopeDenied, ProtocolError.capabilityDenied {
+        // This one project is outside the grant's visible scopes or
+        // capabilities: omit it, matching read-scoping semantics elsewhere
+        // in the daemon (a project the grant cannot view is left out rather
+        // than surfaced as an authorization error).
+        continue
+      } catch ClairTransportError.protocolFailure(.scopeDenied) {
+        // This one project is outside *this connection's* narrower scope
+        // (H03 `authorizeConnectionScope`), even though the device grant
+        // covers it: also omit it rather than fail the whole catalog.
+        continue
+      } catch {
+        // Any other failure (connection closed, device revoked, generation
+        // mismatch, expired token) means the connection itself is not
+        // currently authorized at all, independent of any one project.
+        throw ClairDaemonHostError.unauthorized
+      }
+      visible.append(project)
     }
     return ClairV2WorkspaceCatalog(projects: visible, isTruncated: full.isTruncated)
   }
@@ -333,10 +368,17 @@ public actor ClairDaemonHost {
     on connection: ClairAuthenticatedConnection
   ) async throws -> ClairV2AgentSessionSnapshot {
     try await requireCapability(.spawnSession, scope: target.resourceScope, on: connection)
-    try await admitNewAgentSession()
-    let snapshot = try await agentRuntime.start(
-      providerID: providerID, target: target, sessionID: sessionID
-    )
+    let slot = try reserveAgentSessionSlot()
+    let snapshot: ClairV2AgentSessionSnapshot
+    do {
+      snapshot = try await agentRuntime.start(
+        providerID: providerID, target: target, sessionID: sessionID
+      )
+    } catch {
+      releaseAgentSessionSlot(slot)
+      throw error
+    }
+    resolveAgentSessionSlot(slot, for: snapshot)
     try attach(snapshot: snapshot, endpoint: endpoint)
     return snapshot
   }
@@ -352,19 +394,69 @@ public actor ClairDaemonHost {
     try await requireCapability(
       .spawnSession, scope: existing.identity.sessionScope, on: connection
     )
-    try await admitNewAgentSession()
-    let snapshot = try await agentRuntime.resume(sessionID: sessionID)
+    let slot = try reserveAgentSessionSlot()
+    let snapshot: ClairV2AgentSessionSnapshot
+    do {
+      snapshot = try await agentRuntime.resume(sessionID: sessionID)
+    } catch {
+      releaseAgentSessionSlot(slot)
+      throw error
+    }
+    resolveAgentSessionSlot(slot, for: snapshot)
     try attach(snapshot: snapshot, endpoint: endpoint)
     return snapshot
   }
 
-  private func admitNewAgentSession() async throws {
-    let liveCount = await agentRuntime.allSessions()
-      .filter { $0.lifecycle == .starting || $0.lifecycle == .running }
-      .count
-    guard liveCount < limits.maximumTotalAgentSessions else {
+  /// Checks and reserves one daemon-wide agent-session slot in a single
+  /// synchronous (no `await`) actor-isolated step. Because this method never
+  /// suspends, two concurrent `startSession`/`resumeSession` calls cannot
+  /// both observe available capacity and both reserve a slot: an actor only
+  /// yields to another call at an `await`, and there is none between the
+  /// capacity check and the reservation insert here. This replaces the
+  /// former `admitNewAgentSession()`, which re-derived the live count from
+  /// `await agentRuntime.allSessions()` — a real cross-actor suspension point
+  /// that let concurrent callers race past the same stale count (Finding
+  /// #2).
+  private func reserveAgentSessionSlot() throws -> UUID {
+    guard reservedAgentSessionSlots.count < limits.maximumTotalAgentSessions else {
       throw ClairDaemonHostError.agentSessionCapacityExceeded
     }
+    let slot = UUID()
+    reservedAgentSessionSlots.insert(slot)
+    return slot
+  }
+
+  /// Releases a reservation outright: used when the awaited H04 call itself
+  /// threw (no session was ever created) or when it returned a snapshot that
+  /// never reached `.starting`/`.running` (H04 already reports a terminal
+  /// snapshot on its own in that case; see `attach`).
+  private func releaseAgentSessionSlot(_ slot: UUID) {
+    reservedAgentSessionSlots.remove(slot)
+  }
+
+  /// Converts a pending reservation into a durable one indexed by the real
+  /// `SessionID` once H04 has returned a live snapshot, so a later
+  /// `stopSession`/`reapExitedSessions` transition can find and release it by
+  /// session identity. A snapshot that is not `.starting`/`.running` releases
+  /// the slot immediately instead: there is no live process occupying it.
+  private func resolveAgentSessionSlot(
+    _ slot: UUID, for snapshot: ClairV2AgentSessionSnapshot
+  ) {
+    guard snapshot.lifecycle == .starting || snapshot.lifecycle == .running else {
+      releaseAgentSessionSlot(slot)
+      return
+    }
+    agentSessionSlotsBySessionID[snapshot.identity.sessionID] = slot
+  }
+
+  /// Releases a slot previously resolved to a live session, once that
+  /// session has left `.starting`/`.running` for good (explicit stop, or a
+  /// crash-recovery transition detected by `reapExitedSessions`). A no-op if
+  /// the session never held a slot (e.g. it was never admitted through
+  /// `startSession`/`resumeSession`).
+  private func releaseAgentSessionSlot(for sessionID: SessionID) {
+    guard let slot = agentSessionSlotsBySessionID.removeValue(forKey: sessionID) else { return }
+    reservedAgentSessionSlots.remove(slot)
   }
 
   private func attach(
@@ -419,6 +511,7 @@ public actor ClairDaemonHost {
           lifecycle: snapshot.lifecycle
         )
         openJournalSessions.remove(sessionID)
+        releaseAgentSessionSlot(for: sessionID)
       }
     }
     return result
@@ -454,17 +547,27 @@ public actor ClairDaemonHost {
     var transitioned: [ClairV2AgentSessionSnapshot] = []
     for snapshot in sessions {
       let id = snapshot.identity.sessionID
-      guard openJournalSessions.contains(id) else { continue }
       guard snapshot.lifecycle != .starting, snapshot.lifecycle != .running else { continue }
-      commandBoundary.invalidate(
-        identity: snapshot.identity, processGeneration: snapshot.processGeneration
-      )
-      _ = try? journal.updateLifecycle(
-        identity: snapshot.identity,
-        processGeneration: snapshot.processGeneration,
-        lifecycle: snapshot.lifecycle
-      )
-      openJournalSessions.remove(id)
+      let wasAttached = openJournalSessions.contains(id)
+      // Also release a daemon-wide agent-session cap slot (Finding #2) for a
+      // session that reserved one but never reached `attach`'s `.running`
+      // requirement (it stayed `.starting` until it failed/exited): such a
+      // session is not in `openJournalSessions` and would otherwise never be
+      // reaped, permanently leaking its slot.
+      let heldSlot = agentSessionSlotsBySessionID[id] != nil
+      guard wasAttached || heldSlot else { continue }
+      if wasAttached {
+        commandBoundary.invalidate(
+          identity: snapshot.identity, processGeneration: snapshot.processGeneration
+        )
+        _ = try? journal.updateLifecycle(
+          identity: snapshot.identity,
+          processGeneration: snapshot.processGeneration,
+          lifecycle: snapshot.lifecycle
+        )
+        openJournalSessions.remove(id)
+      }
+      releaseAgentSessionSlot(for: id)
       transitioned.append(snapshot)
     }
     return transitioned
@@ -537,10 +640,16 @@ public actor ClairDaemonHost {
   public func diagnostics() async -> ClairDaemonDiagnosticsSnapshot {
     let sessions = await agentRuntime.allSessions()
     let grants = await authority.allGrants()
+    // `activeConnectionCount` is the real number of currently-open H03
+    // connections (Finding #3): it is independent of `pairedDeviceCount` and
+    // must be able to differ from it in both directions (a paired device
+    // with zero open connections; one device holding multiple simultaneous
+    // connections), unlike re-deriving it from grant revocation status.
+    let activeConnectionCount = await authority.activeConnectionCount()
     return ClairDaemonDiagnosticsSnapshot(
       instanceID: instanceID,
       pairedDeviceCount: grants.filter { !$0.isRevoked }.count,
-      activeConnectionCount: grants.reduce(0) { $0 + ($1.isRevoked ? 0 : 1) },
+      activeConnectionCount: activeConnectionCount,
       agentSessionCounts: ClairDaemonAgentSessionCounts(tallying: sessions),
       journalOpenSessionCount: openJournalSessions.count,
       journalSubscriberCount: subscriberKeys.count,
@@ -550,6 +659,12 @@ public actor ClairDaemonHost {
 
   // MARK: - Authorization helpers
 
+  /// Both helpers below are thin wrappers over the single real H03
+  /// authorization path (`ClairPairingAuthority.authorize(scope:requiring:on:)`,
+  /// which `authorizeRead` itself also just calls with `.view`). Neither
+  /// re-derives grant validity, token expiry, or connection-scope
+  /// containment locally: there is exactly one authorization implementation,
+  /// in H03, and every capability check here goes through it.
   private func requireReadAccess(
     scope: ResourceScope, on connection: ClairAuthenticatedConnection
   ) async throws {
@@ -563,13 +678,8 @@ public actor ClairDaemonHost {
   private func requireCapability(
     _ capability: Capability, scope: ResourceScope, on connection: ClairAuthenticatedConnection
   ) async throws {
-    guard let grant = await authority.grant(for: connection.deviceID),
-      !grant.isRevoked, grant.generation == connection.generation,
-      await authority.isConnectionActive(connection)
-    else { throw ClairDaemonHostError.unauthorized }
     do {
-      try AccessBoundary(capabilities: grant.capabilities, visibleScopes: grant.visibleScopes)
-        .authorize(scope: scope, requiring: capability)
+      try await authority.authorize(scope: scope, requiring: capability, on: connection)
     } catch {
       throw ClairDaemonHostError.unauthorized
     }
