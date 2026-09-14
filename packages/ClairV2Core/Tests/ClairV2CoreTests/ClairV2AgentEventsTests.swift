@@ -248,6 +248,23 @@ func h05OrdersCompletionAfterUsageEvenWhenProviderReversesThem() throws {
 }
 
 @Test
+func h05PreservesNonTerminalSemanticOrderAroundUsage() throws {
+  let identity = try h05Identity()
+  var normalizer = ClairV2OpenCodeStreamNormalizer(
+    identity: identity,
+    epoch: try SessionEpoch(1)
+  )
+  let input = h05Data(
+    #"{"type":"message.part.updated","event_id":"part-usage","part":{"type":"text","role":"assistant","text":"first","tokens":{"input":1,"output":2}}}"#
+      + "\n"
+  )
+
+  let events = try normalizer.append(input)
+  #expect(events.map(\.kind.rawValue) == ["agent.conversation", "agent.usage"])
+  #expect(events.compactMap { $0.revision?.value } == [1, 2])
+}
+
+@Test
 func h05MapsOpenCodeSessionStatusOnlyWhenItBecomesTerminal() throws {
   let identity = try h05Identity()
   var normalizer = ClairV2OpenCodeStreamNormalizer(
@@ -312,6 +329,34 @@ func h05IgnoresUnknownEventsWithoutRevisionOrPayloadRetention() throws {
   #expect(events.isEmpty)
   #expect(normalizer.revision == .zero)
   #expect(normalizer.unknownEventCount == 1)
+}
+
+@Test
+func h05DropsUnknownTypeSubstringAndSuffixVariants() throws {
+  let identity = try h05Identity()
+  var normalizer = ClairV2OpenCodeStreamNormalizer(
+    identity: identity,
+    epoch: try SessionEpoch(1)
+  )
+  let input =
+    [
+      #"{"type":"future.completed","secret":"credential-value"}"#,
+      #"{"type":"future.message.completed","status":"done"}"#,
+      #"{"type":"future.tool","name":"private-tool"}"#,
+      #"{"type":"future.text.delta","delta":"private text"}"#,
+      #"{"type":"future.permission.asked","permission_id":"private-request"}"#,
+      #"{"type":"future.usage","usage":{"input_tokens":1}}"#,
+    ].joined(separator: "\n") + "\n"
+
+  let events = try normalizer.append(h05Data(input))
+  #expect(events.isEmpty)
+  #expect(normalizer.revision == .zero)
+  #expect(normalizer.unknownEventCount == 6)
+  #expect(try normalizer.finish().isEmpty)
+  let wire = try ProtocolCodec.encode(events)
+  let wireText = String(decoding: wire, as: UTF8.self)
+  #expect(wireText.contains("credential-value") == false)
+  #expect(wireText.contains("private text") == false)
 }
 
 @Test
@@ -436,6 +481,37 @@ func h05EnforcesInputRecordTextEventAndProviderBounds() throws {
     try truncatedOutput.append(
       rawOutput: ClairV2AgentRawOutput(stdout: h05Data("{}\n"), isTruncated: true)
     )
+  }
+}
+
+@Test
+func h05ValidatesStreamLimitsWhenDecodedFromJSON() throws {
+  let valid = try ClairV2AgentEventStreamLimits(
+    frameLimits: try FrameLimits(maximumPayloadBytes: 128),
+    maximumInputBytes: 256,
+    maximumEvents: 4,
+    maximumTextBytes: 32,
+    maximumIdentifierBytes: 16
+  )
+  let encoded = try JSONEncoder().encode(valid)
+  #expect(try JSONDecoder().decode(ClairV2AgentEventStreamLimits.self, from: encoded) == valid)
+
+  let oversizedEvents = Data(
+    """
+    {"frame_limits":{"maximum_payload_bytes":128},"maximum_input_bytes":256,"maximum_events":\(ClairV2AgentEventStreamLimits.hardMaximumEvents + 1),"maximum_text_bytes":32,"maximum_identifier_bytes":16}
+    """.utf8
+  )
+  #expect(throws: ClairV2AgentStreamError.invalidLimits) {
+    try JSONDecoder().decode(ClairV2AgentEventStreamLimits.self, from: oversizedEvents)
+  }
+
+  let oversizedInput = Data(
+    """
+    {"frame_limits":{"maximum_payload_bytes":128},"maximum_input_bytes":\(ClairV2AgentEventStreamLimits.hardMaximumInputBytes + 1),"maximum_events":4,"maximum_text_bytes":32,"maximum_identifier_bytes":16}
+    """.utf8
+  )
+  #expect(throws: ClairV2AgentStreamError.invalidLimits) {
+    try JSONDecoder().decode(ClairV2AgentEventStreamLimits.self, from: oversizedInput)
   }
 }
 

@@ -315,6 +315,17 @@ public struct ClairV2AgentEventStreamLimits: Codable, Equatable, Sendable {
     case maximumTextBytes = "maximum_text_bytes"
     case maximumIdentifierBytes = "maximum_identifier_bytes"
   }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    try self.init(
+      frameLimits: try container.decode(FrameLimits.self, forKey: .frameLimits),
+      maximumInputBytes: try container.decode(Int.self, forKey: .maximumInputBytes),
+      maximumEvents: try container.decode(Int.self, forKey: .maximumEvents),
+      maximumTextBytes: try container.decode(Int.self, forKey: .maximumTextBytes),
+      maximumIdentifierBytes: try container.decode(Int.self, forKey: .maximumIdentifierBytes)
+    )
+  }
 }
 
 /// Incrementally decodes OpenCode's newline/SSE JSON stream into the v2 event
@@ -602,11 +613,29 @@ public struct ClairV2OpenCodeStreamNormalizer: Sendable {
     }
     seenEvents[providerKey] = fingerprint
 
-    let orderedSemantics = semantics.enumerated().sorted { lhs, rhs in
-      let lhsPriority = lhs.element.kind == .usage ? 0 : lhs.element.kind == .completion ? 2 : 1
-      let rhsPriority = rhs.element.kind == .usage ? 0 : rhs.element.kind == .completion ? 2 : 1
-      if lhsPriority == rhsPriority { return lhs.offset < rhs.offset }
-      return lhsPriority < rhsPriority
+    // Input order is authoritative for every non-terminal semantic. The only
+    // permitted relocation is moving a completion marker after usage when a
+    // single provider record carries both in the reverse order.
+    var orderedSemantics = Array(semantics.enumerated())
+    while let completionIndex = orderedSemantics.firstIndex(
+      where: { $0.element.kind == .completion }
+    ) {
+      guard
+        orderedSemantics.indices.dropFirst(completionIndex + 1).contains(where: {
+          orderedSemantics[$0].element.kind == .usage
+        })
+      else {
+        break
+      }
+      let completion = orderedSemantics.remove(at: completionIndex)
+      guard
+        let lastUsageIndex = orderedSemantics.indices.last(where: {
+          orderedSemantics[$0].element.kind == .usage
+        })
+      else {
+        break
+      }
+      orderedSemantics.insert(completion, at: lastUsageIndex + 1)
     }
 
     var events: [ClairV2AgentNormalizedEvent] = []
@@ -865,17 +894,16 @@ private struct H05RawEvent: Decodable, Sendable {
     guard !canonicalType.isEmpty else { return [] }
 
     var semantics: [H05Semantic] = []
-    let usage = try usageEvent(type: canonicalType, limits: limits)
-    if let usage {
-      semantics.append(.usage(usage))
-    }
-
     if isAttention(canonicalType) {
       semantics.append(.attention(try attentionEvent(type: canonicalType, limits: limits)))
     } else if isToolCall(canonicalType, partType: partType) {
       semantics.append(.toolCall(try toolCallEvent(limits: limits)))
     } else if isConversation(canonicalType, partType: partType) {
       semantics.append(.conversation(try conversationEvent(type: canonicalType, limits: limits)))
+    }
+
+    if let usage = try usageEvent(type: canonicalType, limits: limits) {
+      semantics.append(.usage(usage))
     }
 
     if isCompletion(canonicalType) {
@@ -885,27 +913,43 @@ private struct H05RawEvent: Decodable, Sendable {
   }
 
   private func isAttention(_ type: String) -> Bool {
-    type.contains("permission")
-      || type.contains("approval")
-      || type.contains("question")
-      || type.contains("attention")
-      || type.contains("input_required")
-      || type.contains("auth_required")
+    switch type {
+    case "permission.asked", "permission.updated", "permission.replied",
+      "approval.asked", "approval.updated", "approval.replied",
+      "question.asked", "question.updated", "question.replied",
+      "attention.asked", "attention.updated", "attention.required",
+      "input_required", "auth_required":
+      true
+    default:
+      false
+    }
   }
 
   private func isToolCall(_ type: String, partType: String?) -> Bool {
-    type.contains("tool")
-      || type.contains("command")
-      || partType == "tool"
-      || partType == "tool_call"
+    switch type {
+    case "tool", "tool_call", "tool_use",
+      "tool.started", "tool.running", "tool.completed", "tool.failed", "tool.cancelled",
+      "tool_call.started", "tool_call.running", "tool_call.completed", "tool_call.failed",
+      "command", "command.started", "command.running", "command.completed", "command.failed":
+      true
+    case "message.part.updated":
+      partType == "tool" || partType == "tool_call"
+    default:
+      false
+    }
   }
 
   private func isConversation(_ type: String, partType: String?) -> Bool {
-    type == "text"
-      || type.contains("text.delta")
-      || type == "message.part.updated" && (partType == "text" || partType == "reasoning")
-      || type == "message.updated"
-        && value(paths: [["text"], ["content"], ["message", "text"]]) != nil
+    switch type {
+    case "text", "text.delta", "message.text.delta":
+      true
+    case "message.part.updated":
+      partType == "text" || partType == "reasoning"
+    case "message.updated":
+      value(paths: [["text"], ["content"], ["message", "text"]]) != nil
+    default:
+      false
+    }
   }
 
   private func isCompletion(_ type: String) -> Bool {
@@ -925,22 +969,14 @@ private struct H05RawEvent: Decodable, Sendable {
         || status == "failed"
         || status == "error"
     }
-    return type == "[done]"
-      || type == "done"
-      || type == "complete"
-      || type == "completed"
-      || type == "finish"
-      || type == "finished"
-      || type == "step_finish"
-      || type == "step-finish"
-      || type == "step.finish"
-      || type == "session.idle"
-      || type == "session.completed"
-      || type == "message.completed"
-      || type.hasSuffix(".completed")
-      || type.hasSuffix(".finished")
-      || type.hasSuffix(".complete")
-      || type == "error"
+    switch type {
+    case "[done]", "done", "complete", "completed", "finish", "finished",
+      "step_finish", "step-finish", "step.finish", "session.idle",
+      "session.completed", "message.completed", "error":
+      return true
+    default:
+      return false
+    }
   }
 
   private func conversationEvent(
@@ -988,7 +1024,7 @@ private struct H05RawEvent: Decodable, Sendable {
     return ClairV2AgentConversationEvent(
       role: role,
       text: text,
-      isDelta: delta != nil || type.contains("delta")
+      isDelta: delta != nil || type == "text.delta" || type == "message.text.delta"
     )
   }
 
@@ -1084,13 +1120,16 @@ private struct H05RawEvent: Decodable, Sendable {
         maximumBytes: limits.maximumIdentifierBytes
       ) ?? type
     let kind: ClairV2AgentAttentionKind
-    if type.contains("permission") || type.contains("approval") {
+    if [
+      "permission.asked", "permission.updated", "permission.replied",
+      "approval.asked", "approval.updated", "approval.replied",
+    ].contains(type) {
       kind = .approval
-    } else if type.contains("question") {
+    } else if ["question.asked", "question.updated", "question.replied"].contains(type) {
       kind = .question
-    } else if type.contains("auth") {
+    } else if type == "auth_required" {
       kind = .authentication
-    } else if type.contains("input") {
+    } else if type == "input_required" {
       kind = .input
     } else {
       kind = .informational
@@ -1121,9 +1160,7 @@ private struct H05RawEvent: Decodable, Sendable {
     if type == "error" || status == "error" || status == "failed" || status == "failure" {
       return ClairV2AgentCompletionEvent(status: .failed)
     }
-    if status == "cancelled" || status == "canceled" || status == "interrupt"
-      || type.contains("interrupt")
-    {
+    if status == "cancelled" || status == "canceled" || status == "interrupt" {
       return ClairV2AgentCompletionEvent(status: .cancelled)
     }
     if status == "stopped" || status == "stop" {
@@ -1154,13 +1191,19 @@ private struct H05RawEvent: Decodable, Sendable {
       ["payload", "part", "tokens"],
       ["info", "usage"],
     ]
-    let hasUsageType =
-      type == "usage" || type == "token_usage" || type == "tokens"
-      || type.contains(".usage")
+    let hasUsageType: Bool
+    switch type {
+    case "usage", "token_usage", "tokens", "message.usage", "session.usage", "response.usage":
+      hasUsageType = true
+    default:
+      hasUsageType = false
+    }
+    let hasUsageCarrierFields = type == "message.part.updated" || type == "message.updated"
     let hasUsageFields =
-      value(paths: usagePaths) != nil
-      || value(paths: [["input_tokens"], ["inputTokens"], ["prompt_tokens"]]) != nil
-      || value(paths: [["output_tokens"], ["outputTokens"], ["completion_tokens"]]) != nil
+      hasUsageCarrierFields
+      && (value(paths: usagePaths) != nil
+        || value(paths: [["input_tokens"], ["inputTokens"], ["prompt_tokens"]]) != nil
+        || value(paths: [["output_tokens"], ["outputTokens"], ["completion_tokens"]]) != nil)
     guard hasUsageType || hasUsageFields else { return nil }
 
     func number(_ names: [[String]]) throws -> UInt64? {
