@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 private func readBigEndianUInt32(_ data: Data, at offset: Int) -> UInt32 {
@@ -1012,6 +1013,9 @@ public struct OperationKind: RawRepresentable, Codable, Hashable, Comparable, Se
   public static let terminalInput = Self(unchecked: "terminal.input")
   public static let terminalInterrupt = Self(unchecked: "terminal.interrupt")
   public static let agentInput = Self(unchecked: "agent.input")
+  public static let agentApprove = Self(unchecked: "agent.approve")
+  public static let agentDeny = Self(unchecked: "agent.deny")
+  public static let agentInterrupt = Self(unchecked: "agent.interrupt")
   public static let agentStop = Self(unchecked: "agent.stop")
   public static let reviewApply = Self(unchecked: "review.apply")
 
@@ -1025,6 +1029,10 @@ public struct OperationKind: RawRepresentable, Codable, Hashable, Comparable, Se
       .signal
     case Self.agentInput.rawValue:
       .steerAgent
+    case Self.agentApprove.rawValue, Self.agentDeny.rawValue:
+      .approve
+    case Self.agentInterrupt.rawValue:
+      .signal
     case Self.agentStop.rawValue:
       .terminate
     case Self.reviewApply.rawValue:
@@ -1167,7 +1175,7 @@ public struct OperationLedger: Sendable {
   public mutating func register<Payload: Codable & Sendable>(
     _ operation: OperationRequest<Payload>
   ) throws -> OperationReceipt {
-    let fingerprint = try ProtocolCodec.encode(
+    let canonical = try ProtocolCodec.encode(
       OperationFingerprint(
         scope: operation.scope,
         kind: operation.kind,
@@ -1177,6 +1185,8 @@ public struct OperationLedger: Sendable {
       )
     )
 
+    // Keep only a digest: canonical command bodies can contain private prompts.
+    let fingerprint = Data(SHA256.hash(data: canonical))
     if let existing = fingerprints[operation.operationID] {
       guard existing == fingerprint, let sequence = sequences[operation.operationID] else {
         throw ProtocolError.operationIDReuse(operation.operationID)

@@ -86,22 +86,42 @@ public enum ClairV2AgentAttentionKind: String, Codable, Equatable, Sendable {
   case informational
 }
 
+public enum ClairV2AgentAttentionStatus: String, Codable, Equatable, Sendable {
+  case pending
+  case resolved
+  case unknown
+}
+
 public struct ClairV2AgentAttentionEvent: Codable, Equatable, Sendable {
   /// A stable digest of the provider request identity.
   public let kind: ClairV2AgentAttentionKind
   public let requestID: String
+  public let status: ClairV2AgentAttentionStatus
 
   public init(
     kind: ClairV2AgentAttentionKind,
-    requestID: String
+    requestID: String,
+    status: ClairV2AgentAttentionStatus = .unknown
   ) {
     self.kind = kind
     self.requestID = requestID
+    self.status = status
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.init(
+      kind: try container.decode(ClairV2AgentAttentionKind.self, forKey: .kind),
+      requestID: try container.decode(String.self, forKey: .requestID),
+      status: try container.decodeIfPresent(ClairV2AgentAttentionStatus.self, forKey: .status)
+        ?? .unknown
+    )
   }
 
   private enum CodingKeys: String, CodingKey {
     case kind
     case requestID = "request_id"
+    case status
   }
 }
 
@@ -1136,7 +1156,8 @@ private struct H05RawEvent: Decodable, Sendable {
     }
     return ClairV2AgentAttentionEvent(
       kind: kind,
-      requestID: digestIdentifier(rawRequestID)
+      requestID: digestIdentifier(rawRequestID),
+      status: type.hasSuffix(".replied") ? .resolved : .pending
     )
   }
 
