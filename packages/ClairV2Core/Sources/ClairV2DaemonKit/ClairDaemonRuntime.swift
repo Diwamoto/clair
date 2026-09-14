@@ -13,6 +13,9 @@
     private var instanceLock: ClairDaemonInstanceLock?
     private var controlServer: ClairDaemonControlServer?
     private var startedAt = Date()
+    /// Regenerated on every successful `start()` (see H10). This is the
+    /// daemon-restart signal reported in `ClairDaemonHealth.instanceID`.
+    private var instanceID = UUID()
 
     public init(configuration: ClairDaemonConfiguration) {
       self.configuration = configuration
@@ -32,6 +35,7 @@
       condition.lock()
       let lifecycle = lifecycleState
       let startedAt = self.startedAt
+      let instanceID = self.instanceID
       condition.unlock()
 
       let status: ClairDaemonHealthStatus
@@ -52,7 +56,8 @@
         lifecycle: lifecycle,
         processID: ProcessInfo.processInfo.processIdentifier,
         version: configuration.version,
-        uptimeSeconds: uptime
+        uptimeSeconds: uptime,
+        instanceID: instanceID
       )
     }
 
@@ -89,6 +94,7 @@
         instanceLock = acquiredLock
         controlServer = newServer
         startedAt = Date()
+        instanceID = UUID()
         lifecycleState = .running
         condition.broadcast()
         condition.unlock()

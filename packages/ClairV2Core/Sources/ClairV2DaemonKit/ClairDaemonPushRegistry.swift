@@ -264,6 +264,15 @@ public final class ClairDaemonPushRegistry: @unchecked Sendable,
     return grant
   }
 
+  /// A count only, for H10 structured diagnostics. Never exposes a device
+  /// identity, token, or scope. `records` is otherwise only ever touched
+  /// while isolated to `authority` (every mutating method above runs inside
+  /// `authority.withPushAdmission`), so this read joins the same isolation
+  /// domain instead of racing those mutations from an arbitrary caller task.
+  public func registrationCount() async -> Int {
+    await authority.withPushAdmission { _ in self.records.count }
+  }
+
   public var description: String { "ClairDaemonPushRegistry(<protected>)" }
   public var debugDescription: String { description }
   public var customMirror: Mirror { Mirror(self, children: [:]) }

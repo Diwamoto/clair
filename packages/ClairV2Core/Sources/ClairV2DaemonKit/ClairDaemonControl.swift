@@ -48,19 +48,30 @@
     public let processID: Int32
     public let version: ClairDaemonVersion
     public let uptimeSeconds: UInt64
+    /// A fresh identifier generated every time `ClairDaemonRuntime.start()`
+    /// succeeds (see H10). Every daemon-owned in-memory subsystem (H03
+    /// grants, H04 sessions, H06/H08 attachments, H09 registrations) is
+    /// reset on a restart, so a client that sees this value change across
+    /// two health checks has a typed, positive signal that it must treat
+    /// all previously-observed daemon-side state as invalid rather than
+    /// inferring a restart indirectly from a changed `processID` (which a
+    /// reused PID could not rule out) or from a decreased `uptimeSeconds`.
+    public let instanceID: UUID
 
     public init(
       status: ClairDaemonHealthStatus,
       lifecycle: ClairDaemonLifecycleState,
       processID: Int32,
       version: ClairDaemonVersion,
-      uptimeSeconds: UInt64
+      uptimeSeconds: UInt64,
+      instanceID: UUID
     ) {
       self.status = status
       self.lifecycle = lifecycle
       self.processID = processID
       self.version = version
       self.uptimeSeconds = uptimeSeconds
+      self.instanceID = instanceID
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -69,6 +80,7 @@
       case processID = "process_id"
       case version
       case uptimeSeconds = "uptime_seconds"
+      case instanceID = "instance_id"
     }
   }
 
