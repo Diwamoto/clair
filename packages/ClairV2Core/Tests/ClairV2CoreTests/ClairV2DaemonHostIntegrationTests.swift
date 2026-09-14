@@ -149,7 +149,9 @@ private struct H10Stack {
     hostLimits: ClairDaemonHostLimits = .standard,
     includeProject: Bool = true,
     commandLimits: ClairV2AgentCommandLimits = .standard,
-    journalLimits: ClairV2SessionJournalLimits = .standard
+    journalLimits: ClairV2SessionJournalLimits = .standard,
+    processFactory: any ClairV2AgentProcessFactory = ClairV2SystemAgentProcessFactory(),
+    providerArguments: [String] = ["-c", "sleep 300"]
   ) throws -> Self {
     let project = try H10ProjectFixture()
     let projectID = try ProjectID("h10-project")
@@ -178,9 +180,9 @@ private struct H10Stack {
     let provider = try ClairV2OpenCodeProvider(
       executableURL: URL(fileURLWithPath: "/bin/sh"),
       version: try ClairV2ProviderVersion("h10-fixture"),
-      arguments: ["-c", "sleep 300"],
+      arguments: providerArguments,
       outputPolicy: .discard,
-      processFactory: ClairV2SystemAgentProcessFactory()
+      processFactory: processFactory
     )
     let agentRuntime = try ClairV2AgentRuntime(
       workspace: workspace,
@@ -459,6 +461,112 @@ func h10RejectsSessionStartOnceTheDaemonWideAgentSessionCapIsReached() async thr
   _ = try? await stack.agentRuntime.stop(sessionID: try SessionID("h10-cap-session-1"))
 }
 
+@Test
+func h10StopSessionDoesNotTurnACommittedPromptIntoProviderTermination() async throws {
+  let stack = try H10Stack.make()
+  defer { stack.remove() }
+  let (_, connection) = try await stack.pairedConnection()
+  let target = ClairV2AgentTarget(projectID: stack.projectID)
+  let running = try await stack.host.startSession(
+    providerID: .openCode, target: target, sessionID: try SessionID("h10-stop-dispatch"),
+    endpoint: H10FixtureEndpoint(), on: connection
+  )
+  let epoch = try SessionEpoch(running.processGeneration)
+  let prompt = try OperationRequest(
+    operationID: OperationID("op-h10-stop-dispatch-prompt"), scope: running.identity.sessionScope,
+    kind: .agentInput, capability: .steerAgent,
+    payload: ClairV2AgentCommandPayload(
+      epoch: epoch, processGeneration: running.processGeneration, action: .prompt("still-running")
+    )
+  )
+  _ = try await stack.host.stopSession(prompt, on: connection)
+  let afterPrompt = try await stack.agentRuntime.session(sessionID: running.identity.sessionID)
+  #expect(afterPrompt.lifecycle == .running)
+
+  _ = try await stack.host.stopSession(
+    try OperationRequest(
+      operationID: OperationID("op-h10-stop-dispatch-stop"), scope: running.identity.sessionScope,
+      kind: .agentStop, capability: .terminate,
+      payload: ClairV2AgentCommandPayload(
+        epoch: epoch, processGeneration: running.processGeneration, action: .stop
+      )
+    ),
+    on: connection
+  )
+}
+
+@Test
+func h10ProviderExitAutomaticallyReconcilesTheComposedHost() async throws {
+  let stack = try H10Stack.make(providerArguments: ["-c", "sleep 0.2"])
+  defer { stack.remove() }
+  let (_, connection) = try await stack.pairedConnection()
+  let target = ClairV2AgentTarget(projectID: stack.projectID)
+  let running = try await stack.host.startSession(
+    providerID: .openCode, target: target, sessionID: try SessionID("h10-auto-reap"),
+    endpoint: H10FixtureEndpoint(), on: connection
+  )
+  #expect(running.lifecycle == .running)
+
+  var reconciled = false
+  for _ in 0..<200 {
+    let diagnostics = await stack.host.diagnostics()
+    if diagnostics.agentSessionCounts.running == 0,
+      diagnostics.journalOpenSessionCount == 0
+    {
+      reconciled = true
+      break
+    }
+    try await Task.sleep(nanoseconds: 10_000_000)
+  }
+  #expect(reconciled)
+  let snapshot = try await stack.agentRuntime.session(sessionID: running.identity.sessionID)
+  #expect(snapshot.lifecycle == .exited || snapshot.lifecycle == .failed)
+}
+
+@Test
+func h10ResumeDoesNotExposeUnknownSessionState() async throws {
+  let stack = try H10Stack.make()
+  defer { stack.remove() }
+  let (_, connection) = try await stack.pairedConnection()
+  await #expect(throws: ClairDaemonHostError.unauthorized) {
+    _ = try await stack.host.resumeSession(
+      sessionID: try SessionID("h10-unknown-resume"), endpoint: H10FixtureEndpoint(),
+      on: connection
+    )
+  }
+}
+
+@Test
+func h10CommittedStopReportsPendingProviderCleanupWithoutReleasingResources() async throws {
+  let stack = try H10Stack.make(
+    processFactory: ClairV2SystemAgentProcessFactory(
+      processGroupClaimFailures: 0, cleanupFailures: 3
+    )
+  )
+  defer { stack.remove() }
+  let (_, connection) = try await stack.pairedConnection()
+  let target = ClairV2AgentTarget(projectID: stack.projectID)
+  let running = try await stack.host.startSession(
+    providerID: .openCode, target: target, sessionID: try SessionID("h10-stop-pending"),
+    endpoint: H10FixtureEndpoint(), on: connection
+  )
+  let epoch = try SessionEpoch(running.processGeneration)
+  let stop = try OperationRequest(
+    operationID: OperationID("op-h10-stop-pending"), scope: running.identity.sessionScope,
+    kind: .agentStop, capability: .terminate,
+    payload: ClairV2AgentCommandPayload(
+      epoch: epoch, processGeneration: running.processGeneration, action: .stop
+    )
+  )
+  await #expect(throws: ClairDaemonHostError.agentCleanupPending) {
+    _ = try await stack.host.stopSession(stop, on: connection)
+  }
+  let diagnostics = await stack.host.diagnostics()
+  #expect(diagnostics.agentSessionCounts.cleanupPending == 1)
+  #expect(diagnostics.journalOpenSessionCount == 1)
+  await stack.host.shutdown()
+}
+
 /// Reproduces the Finding #2 TOCTOU race directly: two `startSession` calls
 /// issued *truly concurrently* (`async let`, not sequential `await`s)
 /// against a daemon-wide cap of 1. The former `admitNewAgentSession()`
@@ -598,6 +706,149 @@ func h10FailedAttachStopsTheProviderAndReturnsTheHostAndCommandSlots() async thr
       kind: .agentStop, capability: .terminate,
       payload: ClairV2AgentCommandPayload(
         epoch: thirdEpoch, processGeneration: third.processGeneration, action: .stop
+      )
+    ),
+    on: connection
+  )
+}
+
+@Test
+func h10CleanupPendingAttachmentKeepsTheHostSlotUntilH04CleanupCompletes() async throws {
+  let stack = try H10Stack.make(
+    hostLimits: try ClairDaemonHostLimits(maximumTotalAgentSessions: 2),
+    commandLimits: try ClairV2AgentCommandLimits(maximumSessions: 1),
+    processFactory: ClairV2SystemAgentProcessFactory(
+      processGroupClaimFailures: 0, cleanupFailures: 3
+    )
+  )
+  defer { stack.remove() }
+  let (_, connection) = try await stack.pairedConnection()
+  let target = ClairV2AgentTarget(projectID: stack.projectID)
+  _ = try await stack.host.startSession(
+    providerID: .openCode, target: target, sessionID: try SessionID("h10-pending-first"),
+    endpoint: H10FixtureEndpoint(), on: connection
+  )
+
+  let pendingID = try SessionID("h10-pending-attach")
+  await #expect(throws: ClairV2AgentCommandError.sessionCapacity) {
+    _ = try await stack.host.startSession(
+      providerID: .openCode, target: target, sessionID: pendingID,
+      endpoint: H10FixtureEndpoint(), on: connection
+    )
+  }
+  let pending = try await stack.agentRuntime.session(sessionID: pendingID)
+  #expect(pending.lifecycle == .cleanupPending)
+  #expect(pending.processID != nil)
+  let pendingDiagnostics = await stack.host.diagnostics()
+  #expect(pendingDiagnostics.agentSessionCounts.running == 1)
+  #expect(pendingDiagnostics.agentSessionCounts.cleanupPending == 1)
+
+  await #expect(throws: ClairDaemonHostError.agentSessionCapacityExceeded) {
+    _ = try await stack.host.startSession(
+      providerID: .openCode, target: target, sessionID: try SessionID("h10-pending-third"),
+      endpoint: H10FixtureEndpoint(), on: connection
+    )
+  }
+
+  await stack.host.shutdown()
+  let third = try await stack.host.startSession(
+    providerID: .openCode, target: target, sessionID: try SessionID("h10-pending-third-after"),
+    endpoint: H10FixtureEndpoint(), on: connection
+  )
+  #expect(third.lifecycle == .running)
+  let thirdEpoch = try SessionEpoch(third.processGeneration)
+  _ = try await stack.host.stopSession(
+    try OperationRequest(
+      operationID: OperationID("op-h10-pending-third-stop"), scope: third.identity.sessionScope,
+      kind: .agentStop, capability: .terminate,
+      payload: ClairV2AgentCommandPayload(
+        epoch: thirdEpoch, processGeneration: third.processGeneration, action: .stop
+      )
+    ),
+    on: connection
+  )
+}
+
+@Test
+func h10GenerationReplacementReclaimsHostSubscriberAccounting() async throws {
+  let stack = try H10Stack.make(
+    hostLimits: try ClairDaemonHostLimits(maximumTotalJournalSubscribers: 1)
+  )
+  defer { stack.remove() }
+  let (_, connection) = try await stack.pairedConnection()
+  let target = ClairV2AgentTarget(projectID: stack.projectID)
+  let sessionID = try SessionID("h10-generation-replacement")
+  let first = try await stack.host.startSession(
+    providerID: .openCode, target: target, sessionID: sessionID, endpoint: H10FixtureEndpoint(),
+    on: connection
+  )
+  let firstScope = first.identity.sessionScope
+  let firstEpoch = try SessionEpoch(first.processGeneration)
+  let firstCursor = try ReplayCursor(scope: firstScope, epoch: firstEpoch, revision: .zero)
+  let firstSubscriber = try ClairV2JournalSubscriberID("h10-generation-old")
+  _ = try await stack.host.subscribeJournal(firstSubscriber, cursor: firstCursor, on: connection)
+
+  _ = try await stack.agentRuntime.stop(sessionID: sessionID)
+  let resumed = try await stack.host.resumeSession(
+    sessionID: sessionID, endpoint: H10FixtureEndpoint(), on: connection
+  )
+  let resumedEpoch = try SessionEpoch(resumed.processGeneration)
+  let resumedCursor = try ReplayCursor(
+    scope: resumed.identity.sessionScope, epoch: resumedEpoch, revision: .zero
+  )
+  let replacementSubscriber = try ClairV2JournalSubscriberID("h10-generation-new")
+  _ = try await stack.host.subscribeJournal(
+    replacementSubscriber, cursor: resumedCursor, on: connection
+  )
+
+  _ = try await stack.host.stopSession(
+    try OperationRequest(
+      operationID: OperationID("op-h10-generation-stop"), scope: resumed.identity.sessionScope,
+      kind: .agentStop, capability: .terminate,
+      payload: ClairV2AgentCommandPayload(
+        epoch: resumedEpoch, processGeneration: resumed.processGeneration, action: .stop
+      )
+    ),
+    on: connection
+  )
+}
+
+@Test
+func h10TerminalSessionsReleaseJournalCapacity() async throws {
+  let stack = try H10Stack.make(
+    journalLimits: try ClairV2SessionJournalLimits(maximumSessions: 1)
+  )
+  defer { stack.remove() }
+  let (_, connection) = try await stack.pairedConnection()
+  let target = ClairV2AgentTarget(projectID: stack.projectID)
+  let first = try await stack.host.startSession(
+    providerID: .openCode, target: target, sessionID: try SessionID("h10-journal-first"),
+    endpoint: H10FixtureEndpoint(), on: connection
+  )
+  let firstEpoch = try SessionEpoch(first.processGeneration)
+  _ = try await stack.host.stopSession(
+    try OperationRequest(
+      operationID: OperationID("op-h10-journal-first-stop"), scope: first.identity.sessionScope,
+      kind: .agentStop, capability: .terminate,
+      payload: ClairV2AgentCommandPayload(
+        epoch: firstEpoch, processGeneration: first.processGeneration, action: .stop
+      )
+    ),
+    on: connection
+  )
+
+  let second = try await stack.host.startSession(
+    providerID: .openCode, target: target, sessionID: try SessionID("h10-journal-second"),
+    endpoint: H10FixtureEndpoint(), on: connection
+  )
+  #expect(second.lifecycle == .running)
+  let secondEpoch = try SessionEpoch(second.processGeneration)
+  _ = try await stack.host.stopSession(
+    try OperationRequest(
+      operationID: OperationID("op-h10-journal-second-stop"), scope: second.identity.sessionScope,
+      kind: .agentStop, capability: .terminate,
+      payload: ClairV2AgentCommandPayload(
+        epoch: secondEpoch, processGeneration: second.processGeneration, action: .stop
       )
     ),
     on: connection

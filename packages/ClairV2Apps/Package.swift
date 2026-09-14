@@ -32,7 +32,11 @@ let package = Package(
     .executableTarget(
       name: "ClairDaemon",
       dependencies: [
-        .product(name: "ClairV2DaemonKit", package: "ClairV2Core")
+        .product(name: "ClairV2Agent", package: "ClairV2Core"),
+        .product(name: "ClairV2DaemonKit", package: "ClairV2Core"),
+        .product(name: "ClairV2Push", package: "ClairV2Core"),
+        .product(name: "ClairV2Transport", package: "ClairV2Core"),
+        .product(name: "ClairV2Workspace", package: "ClairV2Core")
       ]
     ),
     .testTarget(

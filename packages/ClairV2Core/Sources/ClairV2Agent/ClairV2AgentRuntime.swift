@@ -2025,7 +2025,14 @@ public struct ClairV2SystemAgentProcessFactory: ClairV2AgentProcessFactory {
         throw ClairV2AgentError.processGroupUnavailable
       }
 
-      let argumentStrings = ["/bin/sh", "-c", "read -r _"]
+      // The keeper's stdin is the daemon-owned control pipe. If the daemon is
+      // killed before it can run the normal H04 cleanup path, EOF reaches the
+      // keeper and its EXIT trap kills the whole keeper-owned process group.
+      // This makes provider cleanup survive an uncatchable daemon SIGKILL
+      // without relying on a numeric PGID discovered by a fresh runtime.
+      let argumentStrings = [
+        "/bin/sh", "-c", "trap 'kill -KILL -$$ 2>/dev/null' EXIT; read -r _",
+      ]
       let argumentPointers = try makeCStringStorage(argumentStrings)
       defer {
         for pointer in argumentPointers {
@@ -2439,6 +2446,7 @@ public actor ClairV2AgentRuntime {
   private let workspace: ClairV2WorkspaceRuntime
   private var providers: [ClairV2ProviderID: any ClairV2AgentProviderAdapter]
   private var sessions: [SessionID: ManagedSession] = [:]
+  private var lifecycleObserver: (@Sendable (ClairV2AgentSessionSnapshot) -> Void)?
   private var nextProcessGeneration: UInt64 = 0
   private var nextShutdownGeneration: UInt64 = 0
   private var shutdownFence: UInt64?
@@ -2661,6 +2669,16 @@ public actor ClairV2AgentRuntime {
     sessions.values
       .map { $0.snapshot() }
       .sorted { lhs, rhs in lhs.identity.sessionID.rawValue < rhs.identity.sessionID.rawValue }
+  }
+
+  /// Installs the composition-layer hook used by H10 to propagate provider
+  /// exits into H06/H08. The callback is non-async and must only schedule work;
+  /// it is never invoked while an H04 process transition is awaiting another
+  /// actor.
+  public func setLifecycleObserver(
+    _ observer: (@Sendable (ClairV2AgentSessionSnapshot) -> Void)?
+  ) {
+    lifecycleObserver = observer
   }
 
   public func status(for sessionID: SessionID) throws -> ClairV2AgentSessionSnapshot {
@@ -3337,6 +3355,7 @@ public actor ClairV2AgentRuntime {
         failed.lifecycle = .failed
         failed.failure = .abnormalExit
         sessions[sessionID] = failed
+        lifecycleObserver?(failed.snapshot())
       } catch {
         recordCleanupPending(
           sessionID: sessionID,
@@ -3366,6 +3385,7 @@ public actor ClairV2AgentRuntime {
       current.failure = .abnormalExit
     }
     sessions[sessionID] = current
+    lifecycleObserver?(current.snapshot())
   }
 
   private func recordLaunchFailure(

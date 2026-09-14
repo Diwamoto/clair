@@ -64,6 +64,7 @@ public enum ClairDaemonHostError: Error, Equatable, LocalizedError, Sendable {
   case unauthorized
   case agentSessionCapacityExceeded
   case journalSubscriberCapacityExceeded
+  case agentCleanupPending
 
   public var errorDescription: String? {
     switch self {
@@ -75,6 +76,8 @@ public enum ClairDaemonHostError: Error, Equatable, LocalizedError, Sendable {
       "The daemon has reached its bounded total concurrent agent session capacity."
     case .journalSubscriberCapacityExceeded:
       "The daemon has reached its bounded total concurrent journal subscriber capacity."
+    case .agentCleanupPending:
+      "The agent process cleanup is still pending and the session remains fenced."
     }
   }
 }
@@ -232,6 +235,7 @@ public actor ClairDaemonHost {
   public let limits: ClairDaemonHostLimits
 
   private var openJournalSessions: Set<SessionID> = []
+  private var journalProcessGenerations: [SessionID: UInt64] = [:]
   private var subscriberKeys: Set<SubscriberKey> = []
 
   /// Race-free admission bookkeeping for the daemon-wide agent-session cap
@@ -284,6 +288,13 @@ public actor ClairDaemonHost {
     self.pushRegistry = try ClairDaemonPushRegistry(
       authority: authority, relay: pushRelay, clock: pushClock, capacity: pushCapacity
     )
+    Task { [weak self, agentRuntime] in
+      await agentRuntime.setLifecycleObserver { [weak self] _ in
+        Task { [weak self] in
+          _ = await self?.reapExitedSessions()
+        }
+      }
+    }
   }
 
   // MARK: - G1 step 2: project/worktree/session browsing (H02)
@@ -376,14 +387,21 @@ public actor ClairDaemonHost {
     on connection: ClairAuthenticatedConnection
   ) async throws -> ClairV2AgentSessionSnapshot {
     try await requireCapability(.spawnSession, scope: target.resourceScope, on: connection)
+    let resolvedSessionID = sessionID ?? makeSessionID()
+    let sessionAlreadyExists =
+      (try? await agentRuntime.session(sessionID: resolvedSessionID)) != nil
     let slot = try reserveAgentSessionSlot()
     let snapshot: ClairV2AgentSessionSnapshot
     do {
       snapshot = try await agentRuntime.start(
-        providerID: providerID, target: target, sessionID: sessionID
+        providerID: providerID, target: target, sessionID: resolvedSessionID
       )
     } catch {
-      releaseAgentSessionSlot(slot)
+      if sessionAlreadyExists {
+        releaseAgentSessionSlot(slot)
+      } else {
+        await reconcileFailedStartSlot(slot, sessionID: resolvedSessionID)
+      }
       throw error
     }
     resolveAgentSessionSlot(slot, for: snapshot)
@@ -407,7 +425,16 @@ public actor ClairDaemonHost {
     // view-only connection cannot use the staleSession/sessionNotFound split
     // as a session-existence oracle.
     try await requireCapability(.spawnSession, on: connection)
-    let existing = try await agentRuntime.session(sessionID: sessionID)
+    let existing: ClairV2AgentSessionSnapshot
+    do {
+      existing = try await agentRuntime.session(sessionID: sessionID)
+    } catch {
+      // A caller that is spawn-capable but outside the session's scope must
+      // not learn whether this opaque identifier exists in H04. Normalize
+      // lookup failures to the same denial used by the scoped authorization
+      // below, including stale/nonexistent IDs.
+      throw ClairDaemonHostError.unauthorized
+    }
     try await requireCapability(
       .spawnSession, scope: existing.identity.sessionScope, on: connection
     )
@@ -468,7 +495,11 @@ public actor ClairDaemonHost {
       releaseAgentSessionSlot(slot)
       return
     }
-    agentSessionSlotsBySessionID[snapshot.identity.sessionID] = slot
+    if let previous = agentSessionSlotsBySessionID.updateValue(
+      slot, forKey: snapshot.identity.sessionID
+    ) {
+      reservedAgentSessionSlots.remove(previous)
+    }
   }
 
   /// Releases a slot previously resolved to a live session, once that
@@ -518,12 +549,16 @@ public actor ClairDaemonHost {
     // against, and H04 already reports the terminal snapshot on its own.
     guard snapshot.lifecycle == .running else { return }
     let epoch = try SessionEpoch(snapshot.processGeneration)
+    if journalProcessGenerations[snapshot.identity.sessionID] != snapshot.processGeneration {
+      removeSubscriberKeys(for: snapshot.identity.sessionID)
+    }
     try journal.open(
       identity: snapshot.identity,
       epoch: epoch,
       processGeneration: snapshot.processGeneration
     )
     openJournalSessions.insert(snapshot.identity.sessionID)
+    journalProcessGenerations[snapshot.identity.sessionID] = snapshot.processGeneration
     try commandBoundary.install(
       snapshot: snapshot, epoch: epoch, endpoint: endpoint
     )
@@ -549,13 +584,41 @@ public actor ClairDaemonHost {
     _ command: ClairV2AgentCommand, on connection: ClairAuthenticatedConnection
   ) async throws -> ClairV2AgentCommandResult {
     let result = try await commandBoundary.execute(command, on: connection)
-    if result.outcome == .committed, let sessionID = command.scope.sessionID {
-      let snapshot = try? await agentRuntime.stop(sessionID: sessionID)
-      if let snapshot {
-        commandBoundary.invalidate(
+    guard command.payload.action == .stop,
+      result.outcome == .committed,
+      let sessionID = command.scope.sessionID
+    else {
+      return result
+    }
+    do {
+      let snapshot = try await agentRuntime.stop(sessionID: sessionID)
+      commandBoundary.invalidate(
+        identity: snapshot.identity, processGeneration: snapshot.processGeneration
+      )
+      _ = try? journal.updateLifecycle(
+        identity: snapshot.identity,
+        processGeneration: snapshot.processGeneration,
+        lifecycle: snapshot.lifecycle
+      )
+      if isTerminal(snapshot.lifecycle) {
+        commandBoundary.uninstall(
           identity: snapshot.identity, processGeneration: snapshot.processGeneration
         )
-        commandBoundary.uninstall(
+        journal.close(
+          identity: snapshot.identity, processGeneration: snapshot.processGeneration
+        )
+        journalProcessGenerations.removeValue(forKey: sessionID)
+        openJournalSessions.remove(sessionID)
+        removeSubscriberKeys(for: sessionID)
+        releaseAgentSessionSlot(for: sessionID)
+      }
+    } catch {
+      // H06 already fenced the committed stop effect. If H04 cannot prove
+      // process cleanup, preserve its opaque handle, lifecycle, journal entry,
+      // and daemon-wide slot, then return a typed failure instead of reporting
+      // a successful stop that left a provider alive.
+      if let snapshot = try? await agentRuntime.session(sessionID: sessionID) {
+        commandBoundary.invalidate(
           identity: snapshot.identity, processGeneration: snapshot.processGeneration
         )
         _ = try? journal.updateLifecycle(
@@ -563,10 +626,8 @@ public actor ClairDaemonHost {
           processGeneration: snapshot.processGeneration,
           lifecycle: snapshot.lifecycle
         )
-        openJournalSessions.remove(sessionID)
-        removeSubscriberKeys(for: sessionID)
-        releaseAgentSessionSlot(for: sessionID)
       }
+      throw ClairDaemonHostError.agentCleanupPending
     }
     return result
   }
@@ -622,7 +683,11 @@ public actor ClairDaemonHost {
           processGeneration: snapshot.processGeneration,
           lifecycle: snapshot.lifecycle
         )
+        journal.close(
+          identity: snapshot.identity, processGeneration: snapshot.processGeneration
+        )
         openJournalSessions.remove(id)
+        journalProcessGenerations.removeValue(forKey: id)
       }
       removeSubscriberKeys(for: id)
       releaseAgentSessionSlot(for: id)
@@ -757,6 +822,27 @@ public actor ClairDaemonHost {
     subscriberKeys = subscriberKeys.filter { $0.sessionID != sessionID }
   }
 
+  private func reconcileFailedStartSlot(_ slot: UUID, sessionID: SessionID) async {
+    guard let snapshot = try? await agentRuntime.session(sessionID: sessionID),
+      holdsAgentSessionSlot(snapshot.lifecycle)
+    else {
+      releaseAgentSessionSlot(slot)
+      return
+    }
+    if let previous = agentSessionSlotsBySessionID.updateValue(slot, forKey: sessionID) {
+      reservedAgentSessionSlots.remove(previous)
+    }
+  }
+
+  private func holdsAgentSessionSlot(_ lifecycle: ClairV2AgentLifecycleState) -> Bool {
+    switch lifecycle {
+    case .starting, .running, .stopping, .upgrading, .cleanupPending:
+      true
+    case .stopped, .exited, .failed:
+      false
+    }
+  }
+
   private func isTerminal(_ lifecycle: ClairV2AgentLifecycleState) -> Bool {
     switch lifecycle {
     case .stopped, .exited, .failed:
@@ -771,6 +857,15 @@ public actor ClairDaemonHost {
   /// daemon-wide slot/subscriber accounting with H04's terminal snapshots.
   public func shutdown() async {
     await agentRuntime.shutdown()
+    await agentRuntime.setLifecycleObserver(nil)
     _ = await reapExitedSessions()
+  }
+
+  private func makeSessionID() -> SessionID {
+    while true {
+      if let sessionID = try? SessionID(UUID().uuidString.lowercased()) {
+        return sessionID
+      }
+    }
   }
 }
