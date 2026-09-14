@@ -1110,6 +1110,12 @@ public struct OperationRequest<Payload: Codable & Sendable>: Codable, Sendable {
   }
 }
 
+extension OperationRequest: CustomStringConvertible, CustomDebugStringConvertible {
+  public var description: String { "OperationRequest(<redacted>)" }
+
+  public var debugDescription: String { description }
+}
+
 public enum OperationDisposition: String, Codable, Sendable {
   case accepted
   case duplicate

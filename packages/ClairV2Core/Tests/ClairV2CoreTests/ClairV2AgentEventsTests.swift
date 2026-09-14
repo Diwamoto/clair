@@ -408,6 +408,35 @@ func h05RejectsMalformedAndIncompleteInput() throws {
 }
 
 @Test
+func h05DoesNotCreateApprovalRequestsWithoutCorrelationIDs() throws {
+  let identity = try h05Identity()
+  var asked = ClairV2OpenCodeStreamNormalizer(
+    identity: identity,
+    epoch: try SessionEpoch(1)
+  )
+  #expect(throws: ClairV2AgentStreamError.invalidEventField) {
+    try asked.append(
+      h05Data(#"{"type":"permission.asked","event_id":"ask"}"# + "\n")
+    )
+  }
+
+  var replied = ClairV2OpenCodeStreamNormalizer(
+    identity: identity,
+    epoch: try SessionEpoch(1)
+  )
+  let events = try replied.append(
+    h05Data(#"{"type":"permission.replied","event_id":"reply"}"# + "\n")
+  )
+  #expect(events.count == 1)
+  guard case .attention(let attention) = events[0].payload else {
+    Issue.record("Expected an uncorrelated attention response.")
+    return
+  }
+  #expect(attention.kind == .approval)
+  #expect(attention.status == .resolved)
+}
+
+@Test
 func h05EnforcesInputRecordTextEventAndProviderBounds() throws {
   let identity = try h05Identity()
   let smallLimits = try ClairV2AgentEventStreamLimits(

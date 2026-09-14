@@ -1122,23 +1122,6 @@ private struct H05RawEvent: Decodable, Sendable {
     type: String,
     limits: ClairV2AgentEventStreamLimits
   ) throws -> ClairV2AgentAttentionEvent {
-    let rawRequestID =
-      try string(
-        paths: [
-          ["request_id"],
-          ["requestId"],
-          ["permission_id"],
-          ["permissionId"],
-          ["question_id"],
-          ["questionId"],
-          ["permission", "id"],
-          ["properties", "permission", "id"],
-          ["question", "id"],
-          ["properties", "question", "id"],
-          ["id"],
-        ],
-        maximumBytes: limits.maximumIdentifierBytes
-      ) ?? type
     let kind: ClairV2AgentAttentionKind
     if [
       "permission.asked", "permission.updated", "permission.replied",
@@ -1154,9 +1137,33 @@ private struct H05RawEvent: Decodable, Sendable {
     } else {
       kind = .informational
     }
+    let rawRequestID = try string(
+      paths: [
+        ["request_id"],
+        ["requestId"],
+        ["permission_id"],
+        ["permissionId"],
+        ["question_id"],
+        ["questionId"],
+        ["permission", "id"],
+        ["properties", "permission", "id"],
+        ["question", "id"],
+        ["properties", "question", "id"],
+        ["id"],
+      ],
+      maximumBytes: limits.maximumIdentifierBytes
+    )
+    if kind == .approval, rawRequestID?.isEmpty != false {
+      // Never create an executable approval for an event that cannot be tied
+      // to a provider request. A response without an ID is retained as a
+      // resolved, uncorrelated event so H06 can invalidate pending approvals.
+      guard type.hasSuffix(".replied") else {
+        throw ClairV2AgentStreamError.invalidEventField
+      }
+    }
     return ClairV2AgentAttentionEvent(
       kind: kind,
-      requestID: digestIdentifier(rawRequestID),
+      requestID: digestIdentifier(rawRequestID ?? type),
       status: type.hasSuffix(".replied") ? .resolved : .pending
     )
   }

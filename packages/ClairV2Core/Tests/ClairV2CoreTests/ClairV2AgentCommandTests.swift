@@ -534,6 +534,39 @@ struct H06CommandTests {
   }
 
   @Test
+  func h06UncorrelatedResolutionInvalidatesPendingApprovalWindow() async throws {
+    let f = try await H06Fixture.make()
+    let asked = try f.pending()
+    var normalizer = ClairV2OpenCodeStreamNormalizer(
+      identity: f.identity,
+      epoch: f.epoch,
+      startingRevision: Revision(1)
+    )
+    let response = try normalizer.append(
+      Data((#"{"type":"permission.replied","event_id":"reply-without-id"}"# + "\n").utf8)
+    )
+    #expect(response.count == 1)
+    try f.boundary.ingest(response[0])
+    await h06Reject(.staleApproval) {
+      _ = try await f.boundary.execute(
+        f.command("uncorrelated-answer", action: .approve(asked)), on: f.connection)
+    }
+    #expect(f.endpoint.captured.isEmpty)
+  }
+
+  @Test
+  func h06AttentionKindReplacementInvalidatesApproval() async throws {
+    let f = try await H06Fixture.make()
+    let reference = try f.pending()
+    try f.boundary.ingest(f.attention(revision: 2, kind: .question))
+    await h06Reject(.staleApproval) {
+      _ = try await f.boundary.execute(
+        f.command("kind-replacement", action: .approve(reference)), on: f.connection)
+    }
+    #expect(f.endpoint.captured.isEmpty)
+  }
+
+  @Test
   func h06LifecycleAndGenerationRacesFenceOldTickets() async throws {
     let f = try await H06Fixture.make()
     let reference = try f.pending()
@@ -700,6 +733,8 @@ struct H06CommandTests {
     #expect(encoded.count < 1024)
     #expect(!String(describing: command.payload).contains(secret))
     #expect(!String(describing: command.payload.action).contains(secret))
+    #expect(!String(describing: command).contains(secret))
+    #expect(!String(reflecting: command).contains(secret))
     #expect(!String(describing: f.endpoint.captured[0]).contains(secret))
     #expect(!String(describing: ticket.operation.payload).contains(secret))
     var ledger = try OperationLedger()

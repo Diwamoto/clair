@@ -241,9 +241,16 @@ private final class CommandState: @unchecked Sendable {
         )
         guard try session.replay.apply(projection) == .applied else { return }
         switch event.payload {
-        case .attention(let attention) where attention.kind == .approval:
+        case .attention(let attention):
           guard let revision = event.revision else {
             throw ClairV2AgentCommandError.invalidEventStream
+          }
+          guard attention.kind == .approval else {
+            // A provider may reuse a request identity while changing the
+            // attention family. That is a replacement, not an approval, so
+            // revoke the old executable reference before ignoring the event.
+            session.pending.removeValue(forKey: attention.requestID)
+            break
           }
           let reference = try ClairV2AgentApprovalReference(
             requestID: attention.requestID, eventID: event.eventID, revision: revision
@@ -255,7 +262,12 @@ private final class CommandState: @unchecked Sendable {
             else { throw ClairV2AgentCommandError.approvalCapacity }
             session.pending[attention.requestID] = reference
           } else {
-            session.pending.removeValue(forKey: attention.requestID)
+            if session.pending.removeValue(forKey: attention.requestID) == nil {
+              // An uncorrelated resolution cannot safely identify which
+              // pending request was answered. Fail closed for the whole
+              // approval window instead of leaving an old approval executable.
+              session.pending.removeAll()
+            }
           }
         case .completion:
           session.pending.removeAll()
