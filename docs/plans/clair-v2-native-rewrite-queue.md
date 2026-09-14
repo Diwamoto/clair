@@ -143,7 +143,7 @@ G2 -> U01 -> U02
 | `H06` | `active` | `D5` | `H03`, `H05` | prompt、approval、deny、interrupt、stop を scoped command として実装する。operation ID による exactly-once effect、stale approval rejection、audit metadata、disconnect race の tests が通ること。 |
 | `H07` | `done` | `D4` | `H02` | Git status、changed-file list、text/binary diff、hunk metadata を mobile API に追加する。untracked、rename、large diff、invalid encoding、worktree race を壊さず表示できること。 |
 | `H08` | `queued` | `D5` | `H03`, `H05`, `H06` | session journal、subscriber cursor、gap/resync、revision snapshot、idempotency window を実装する。network switch、slow client、daemon restart、out-of-range cursor で silent data loss がないこと。 |
-| `H09` | `active` | `D4` | `B02`, `H03` | 最小 `ClairPushRelay` と APNs provider boundary を実装する。opaque event だけを送り、credential rotation、device token replacement、revoke、TTL、sandbox/production 分離を検証すること。 |
+| `H09` | `done` | `D4` | `B02`, `H03` | 最小 `ClairPushRelay` と APNs provider boundary を実装する。opaque event だけを送り、credential rotation、device token replacement、revoke、TTL、sandbox/production 分離を検証すること。 |
 | `H10` | `queued` | `D5` | `H06`, `H07`, `H08`, `H09` | daemon の crash recovery、resource limits、structured diagnostics と server integration suite を完成させる。Mac GUI なしで G1 の全 server operation を fixture client から再現できること。 |
 
 ## P0-C: Native iPhone / iPad app
@@ -349,3 +349,12 @@ UI の正本は [Clair UI Design canvas と Workbench](../../prototypes/clair-wo
 - result: `ClairV2MobileKit` and `ClairV2MobileApp` now provide a read-only project/worktree/session destination browser using typed identity and `ResourceScope`, recent destination restore/clear, multi-project isolation, stale-selection filtering, explicit missing/permission states, and zero transport side effects
 - known limitation: controller `make v2-foundation` full parallel test reruns reproduced unrelated pre-existing H04 process-group/daemon timing failures; all N04 tests and the affected build/package checks passed, and no N04 source is implicated
 - remaining: conversation stream UI, scoped commands/approvals, APNs/deep links, and production visual design remain in later queue tasks
+
+### H09 — 2026-09-14
+
+- integration commit (controller): `6583a93` (`feat(v2-h09): add push relay boundary`)
+- integration commit (recovered worker source): `e50a36e194d63a69febb79b360a283055452120b`
+- verification: H09 focused tests 10/10 passed in the worker and controller; full ClairV2Core 137/137 and ClairV2Apps 1/1 passed; `make v2-check` and `make v2-build` including all v2 targets and iOS Simulator passed; strict Swift format lint and `git diff --check` passed
+- result: `ClairV2Push` defines bounded opaque wake events with strict decoding; `ClairDaemonPushRegistry` binds token generations and scope admission to H03 authority, expiry, replacement, revoke, environment isolation, and H05 attention/completion projection; `ClairPushRelay` provides bounded digest idempotency; APNs request and protected credential-store seams classify provider failures without secret echo
+- external dependency: no Apple credential, durable protected store, APNs JWT/HTTP2 transport, or real notification was used; N07 owns mobile registration/actions/deep links and physical-device/TestFlight smoke remains pending Apple Developer access
+- remaining: scoped commands/approvals, session journal/reconnect, native conversation UI, and production APNs/device integration remain in later queue tasks; no push/publication
