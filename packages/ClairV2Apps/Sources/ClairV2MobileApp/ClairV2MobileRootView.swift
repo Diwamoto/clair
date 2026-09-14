@@ -24,6 +24,9 @@ struct ClairV2MobileRootView: View {
   @State private var conversationSnapshot = ClairV2MobileConversationState()
   @State private var conversationDraft = ""
   @State private var conversationError: String?
+  @State private var diffReview = ClairV2MobileDiffReviewController()
+  @State private var diffReviewSnapshot = ClairV2MobileDiffReviewState()
+  @State private var diffReviewError: String?
 
   var body: some View {
     NavigationStack {
@@ -31,6 +34,7 @@ struct ClairV2MobileRootView: View {
         hostSection
         destinationBrowserSection
         conversationSection
+        diffReviewSection
         connectionSection
         navigationSection
         surfaceSection
@@ -129,6 +133,123 @@ struct ClairV2MobileRootView: View {
               .font(.footnote)
               .foregroundStyle(.orange)
               .accessibilityIdentifier("conversation-error")
+          }
+        }
+      )
+    }
+  }
+
+  private var diffReviewSection: some View {
+    Section("Changed files") {
+      // A project, worktree, or session selection all resolve to the same
+      // underlying Project/Worktree Git status, so any selection is enough
+      // to show this section.
+      guard destinationBrowser.selectedScope != nil else {
+        return AnyView(
+          ContentUnavailableView(
+            "No project selected",
+            systemImage: "doc.on.doc",
+            description: Text("Select a project or worktree above to review its changed files.")
+          )
+        )
+      }
+      return AnyView(
+        VStack(alignment: .leading, spacing: 12) {
+          Button("Refresh changed files") {
+            dispatchDiffReviewCommand { try await diffReview.refreshChangedFiles() }
+          }
+          .accessibilityIdentifier("diff-review-refresh")
+
+          if diffReviewSnapshot.files.isEmpty {
+            Text("No changed files loaded.")
+              .font(.footnote)
+              .foregroundStyle(.secondary)
+          } else {
+            if diffReviewSnapshot.isChangedFileListTruncated {
+              Label(
+                "Changed-file list truncated — not every changed file is shown",
+                systemImage: "exclamationmark.triangle"
+              )
+              .font(.footnote)
+              .foregroundStyle(.orange)
+              .accessibilityIdentifier("diff-review-files-truncated")
+            }
+            ForEach(diffReviewSnapshot.files, id: \.path) { file in
+              Button {
+                dispatchDiffReviewCommand { try await diffReview.selectFile(file.path) }
+              } label: {
+                HStack {
+                  Text(file.path.rawValue)
+                  Spacer()
+                  Text(file.kind.rawValue.replacingOccurrences(of: "_", with: " "))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                  if diffReviewSnapshot.selectedPath == file.path {
+                    Image(systemName: "checkmark")
+                      .accessibilityHidden(true)
+                  }
+                }
+              }
+              .accessibilityIdentifier("diff-review-file-\(file.path.rawValue)")
+            }
+          }
+
+          if let diff = diffReviewSnapshot.diff {
+            Divider()
+            if diffReviewSnapshot.isBinary {
+              Label("Binary file — no text diff available", systemImage: "doc.badge.gearshape")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("diff-review-binary")
+            } else if let text = diff.text {
+              Text(text)
+                .font(.system(.footnote, design: .monospaced))
+                .accessibilityIdentifier("diff-review-text")
+            }
+
+            if diffReviewSnapshot.isTruncated {
+              Label(
+                "Diff truncated at \(diff.maximumOutputBytes) bytes — showing a bounded excerpt, not the complete diff",
+                systemImage: "exclamationmark.triangle"
+              )
+              .font(.footnote)
+              .foregroundStyle(.orange)
+              .accessibilityIdentifier("diff-review-truncated")
+            }
+
+            if !diffReviewSnapshot.hunks.isEmpty {
+              HStack {
+                Button("Previous hunk") {
+                  dispatchDiffReviewNavigation { await diffReview.previousHunk() }
+                }
+                .accessibilityIdentifier("diff-review-previous-hunk")
+                Spacer()
+                if let hunk = diffReviewSnapshot.currentHunk {
+                  Text(hunk.header)
+                    .font(.caption.monospaced())
+                    .accessibilityIdentifier("diff-review-current-hunk")
+                }
+                Spacer()
+                Button("Next hunk") {
+                  dispatchDiffReviewNavigation { await diffReview.nextHunk() }
+                }
+                .accessibilityIdentifier("diff-review-next-hunk")
+              }
+            }
+
+            if let seed = diffReviewSnapshot.followUpPromptSeed {
+              Button("Draft follow-up") {
+                conversationDraft = seed
+              }
+              .accessibilityIdentifier("diff-review-draft-follow-up")
+            }
+          }
+
+          if let diffReviewError {
+            Label(diffReviewError, systemImage: "exclamationmark.triangle")
+              .font(.footnote)
+              .foregroundStyle(.orange)
+              .accessibilityIdentifier("diff-review-error")
           }
         }
       )
@@ -385,5 +506,34 @@ struct ClairV2MobileRootView: View {
 
   private func refreshConversation() async {
     conversationSnapshot = await conversation.state
+  }
+
+  /// Wraps one diff review read (refresh changed files, select a file):
+  /// clears any previous error, awaits the actor (which owns its own
+  /// duplicate/in-flight de-duplication), then refreshes this view's
+  /// snapshot. Errors are surfaced, never thrown away.
+  private func dispatchDiffReviewCommand(_ action: @escaping () async throws -> Void) {
+    diffReviewError = nil
+    Task {
+      do {
+        try await action()
+      } catch {
+        diffReviewError = error.localizedDescription
+      }
+      await refreshDiffReview()
+    }
+  }
+
+  /// Wraps a pure, synchronous hunk-navigation call. It cannot fail or touch
+  /// the transport, so it only needs a snapshot refresh afterward.
+  private func dispatchDiffReviewNavigation(_ action: @escaping () async -> Void) {
+    Task {
+      await action()
+      await refreshDiffReview()
+    }
+  }
+
+  private func refreshDiffReview() async {
+    diffReviewSnapshot = await diffReview.state
   }
 }
