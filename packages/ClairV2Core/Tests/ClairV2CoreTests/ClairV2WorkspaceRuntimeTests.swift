@@ -2,6 +2,7 @@
 
   import Foundation
   import Testing
+  import Darwin
 
   @testable import ClairV2Shared
   @testable import ClairV2Workspace
@@ -58,6 +59,114 @@
       Issue.record("A WorktreeID from another Project was unexpectedly accepted.")
     } catch let error as ClairV2WorkspaceError {
       #expect(error == .worktreeNotFound(worktree.id))
+    }
+  }
+
+  @Test
+  func workspaceLaunchRootCapabilityRetainsCatalogDeviceInodeAndDescriptor() throws {
+    let fixture = try WorkspaceFixture(gitRepository: false)
+    defer { fixture.remove() }
+    let projectID = try ProjectID("project-h02-capability")
+    let project = try ClairV2ProjectRoot(id: projectID, rootURL: fixture.rootURL)
+    let runtime = try ClairV2WorkspaceRuntime(projects: [project])
+    let catalog = try runtime.catalog()
+    let entry = try #require(catalog.projects.first)
+    let device = try #require(entry.rootDevice)
+    let inode = try #require(entry.rootInode)
+
+    let capability = try runtime.launchRootCapability(
+      from: catalog,
+      projectID: projectID
+    )
+    #expect(capability.rootURL == fixture.rootURL.standardizedFileURL)
+    #expect(capability.device == device)
+    #expect(capability.inode == inode)
+
+    let descriptor = try capability.duplicateDescriptor()
+    defer { Darwin.close(descriptor) }
+    var information = stat()
+    #expect(Darwin.fstat(descriptor, &information) == 0)
+    #expect(UInt64(information.st_dev) == device)
+    #expect(UInt64(information.st_ino) == inode)
+  }
+
+  @Test
+  func workspaceLaunchRootCapabilityRejectsCatalogOutsideRegisteredProjectScope() throws {
+    let fixture = try WorkspaceFixture(gitRepository: false)
+    defer { fixture.remove() }
+    let projectID = try ProjectID("project-h04-arbitrary-catalog")
+    let project = try ClairV2ProjectRoot(id: projectID, rootURL: fixture.rootURL)
+    let runtime = try ClairV2WorkspaceRuntime(projects: [project])
+    let arbitraryRoot = fixture.rootURL.deletingLastPathComponent()
+      .appendingPathComponent("clair-v2-arbitrary-root-" + UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: arbitraryRoot, withIntermediateDirectories: false)
+    defer { try? FileManager.default.removeItem(at: arbitraryRoot) }
+
+    let arbitraryCatalog = ClairV2WorkspaceCatalog(projects: [
+      ClairV2ProjectCatalogEntry(
+        id: projectID,
+        rootURL: arbitraryRoot,
+        state: .available,
+        rootDevice: 1,
+        rootInode: 1
+      )
+    ])
+    do {
+      _ = try runtime.launchRootCapability(from: arbitraryCatalog, projectID: projectID)
+      Issue.record("An arbitrary catalog root unexpectedly acquired a launch capability.")
+    } catch let error as ClairV2WorkspaceError {
+      #expect(error == .rootIdentityChanged(arbitraryRoot.standardizedFileURL))
+    }
+  }
+
+  @Test
+  func workspaceLaunchRootCapabilityRejectsCatalogOutsideRegisteredWorktreeScope() throws {
+    let fixture = try WorkspaceFixture(gitRepository: true)
+    defer { fixture.remove() }
+    let projectID = try ProjectID("project-h04-arbitrary-worktree-catalog")
+    let project = try ClairV2ProjectRoot(id: projectID, rootURL: fixture.rootURL)
+    let runtime = try ClairV2WorkspaceRuntime(projects: [project])
+    let catalog = try runtime.catalog()
+    let registeredProject = try #require(catalog.projects.first)
+    let registeredWorktree = try #require(registeredProject.worktrees.first)
+    let repositoryRoot = try #require(registeredProject.repositoryRootURL)
+    let arbitraryRoot = fixture.rootURL.deletingLastPathComponent()
+      .appendingPathComponent(
+        "clair-v2-arbitrary-worktree-" + UUID().uuidString,
+        isDirectory: true
+      )
+    try FileManager.default.createDirectory(at: arbitraryRoot, withIntermediateDirectories: false)
+    defer { try? FileManager.default.removeItem(at: arbitraryRoot) }
+
+    let arbitraryWorktree = ClairV2WorktreeCatalogEntry(
+      id: registeredWorktree.id,
+      projectID: projectID,
+      repositoryRootURL: repositoryRoot,
+      rootURL: arbitraryRoot,
+      rootDevice: 1,
+      rootInode: 1,
+      state: .available,
+      isMain: registeredWorktree.isMain
+    )
+    let arbitraryProject = ClairV2ProjectCatalogEntry(
+      id: projectID,
+      rootURL: registeredProject.rootURL,
+      state: registeredProject.state,
+      rootDevice: registeredProject.rootDevice,
+      rootInode: registeredProject.rootInode,
+      repositoryRootURL: repositoryRoot,
+      worktrees: [arbitraryWorktree]
+    )
+    let arbitraryCatalog = ClairV2WorkspaceCatalog(projects: [arbitraryProject])
+    do {
+      _ = try runtime.launchRootCapability(
+        from: arbitraryCatalog,
+        projectID: projectID,
+        worktreeID: registeredWorktree.id
+      )
+      Issue.record("An arbitrary catalog worktree unexpectedly acquired a launch capability.")
+    } catch let error as ClairV2WorkspaceError {
+      #expect(error == .rootIdentityChanged(arbitraryRoot.standardizedFileURL))
     }
   }
 

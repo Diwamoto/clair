@@ -27,7 +27,10 @@ let package = Package(
     ),
     .target(
       name: "ClairV2Agent",
-      dependencies: ["ClairV2Shared"]
+      dependencies: [
+        "ClairV2Shared",
+        "ClairV2Workspace",
+      ]
     ),
     .target(
       name: "ClairV2Review",

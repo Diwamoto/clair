@@ -1,6 +1,10 @@
 import ClairV2Shared
 import Foundation
 
+#if os(macOS)
+  import Darwin
+#endif
+
 public struct ClairV2WorkspaceLimits: Codable, Equatable, Sendable {
   public static let hardMaximumFileReadBytes = 16 * 1024 * 1024
   public static let hardMaximumTreeEntries = 16 * 1024
@@ -259,10 +263,51 @@ public enum ClairV2WorkspaceRootState: String, Codable, Equatable, Sendable {
   case inaccessible
 }
 
+public final class ClairV2WorkspaceRootCapability: @unchecked Sendable {
+  public let rootURL: URL
+  public let device: UInt64
+  public let inode: UInt64
+
+  #if os(macOS)
+    private let descriptor: Int32
+
+    fileprivate init(rootURL: URL, descriptor: Int32, device: UInt64, inode: UInt64) {
+      self.rootURL = rootURL
+      self.descriptor = descriptor
+      self.device = device
+      self.inode = inode
+    }
+
+    public func duplicateDescriptor() throws -> Int32 {
+      let duplicatedDescriptor = Darwin.fcntl(descriptor, F_DUPFD_CLOEXEC, 3)
+      guard duplicatedDescriptor >= 0 else {
+        throw ClairV2WorkspaceError.rootCapabilityUnavailable(rootURL)
+      }
+      return duplicatedDescriptor
+    }
+
+    deinit {
+      Darwin.close(descriptor)
+    }
+  #else
+    fileprivate init(rootURL: URL, device: UInt64, inode: UInt64) {
+      self.rootURL = rootURL
+      self.device = device
+      self.inode = inode
+    }
+
+    public func duplicateDescriptor() throws -> Int32 {
+      throw ClairV2WorkspaceError.unsupportedPlatform
+    }
+  #endif
+}
+
 public struct ClairV2ProjectCatalogEntry: Codable, Equatable, Sendable {
   public let id: ProjectID
   public let rootURL: URL
   public let state: ClairV2WorkspaceRootState
+  public let rootDevice: UInt64?
+  public let rootInode: UInt64?
   public let repositoryRootURL: URL?
   public let worktrees: [ClairV2WorktreeCatalogEntry]
   public let isTruncated: Bool
@@ -271,6 +316,8 @@ public struct ClairV2ProjectCatalogEntry: Codable, Equatable, Sendable {
     id: ProjectID,
     rootURL: URL,
     state: ClairV2WorkspaceRootState,
+    rootDevice: UInt64? = nil,
+    rootInode: UInt64? = nil,
     repositoryRootURL: URL? = nil,
     worktrees: [ClairV2WorktreeCatalogEntry] = [],
     isTruncated: Bool = false
@@ -278,6 +325,8 @@ public struct ClairV2ProjectCatalogEntry: Codable, Equatable, Sendable {
     self.id = id
     self.rootURL = rootURL
     self.state = state
+    self.rootDevice = rootDevice
+    self.rootInode = rootInode
     self.repositoryRootURL = repositoryRootURL
     self.worktrees = worktrees
     self.isTruncated = isTruncated
@@ -289,6 +338,8 @@ public struct ClairV2WorktreeCatalogEntry: Codable, Equatable, Sendable {
   public let projectID: ProjectID
   public let repositoryRootURL: URL
   public let rootURL: URL
+  public let rootDevice: UInt64?
+  public let rootInode: UInt64?
   public let headRevision: String?
   public let branch: String?
   public let state: ClairV2WorkspaceRootState
@@ -302,6 +353,8 @@ public struct ClairV2WorktreeCatalogEntry: Codable, Equatable, Sendable {
     projectID: ProjectID,
     repositoryRootURL: URL,
     rootURL: URL,
+    rootDevice: UInt64? = nil,
+    rootInode: UInt64? = nil,
     headRevision: String? = nil,
     branch: String? = nil,
     state: ClairV2WorkspaceRootState,
@@ -314,6 +367,8 @@ public struct ClairV2WorktreeCatalogEntry: Codable, Equatable, Sendable {
     self.projectID = projectID
     self.repositoryRootURL = repositoryRootURL
     self.rootURL = rootURL
+    self.rootDevice = rootDevice
+    self.rootInode = rootInode
     self.headRevision = headRevision
     self.branch = branch
     self.state = state
@@ -474,6 +529,8 @@ public enum ClairV2WorkspaceError: Error, Equatable, LocalizedError, Sendable {
   case worktreeNotFound(WorktreeID)
   case projectRootUnavailable(ProjectID, ClairV2WorkspaceRootState)
   case worktreeRootUnavailable(WorktreeID, ClairV2WorkspaceRootState)
+  case rootIdentityChanged(URL)
+  case rootCapabilityUnavailable(URL)
   case repositoryNotFound(ProjectID)
   case gitExecutableUnavailable
   case gitCommandFailed(operation: String, status: Int32)
@@ -512,6 +569,10 @@ public enum ClairV2WorkspaceError: Error, Equatable, LocalizedError, Sendable {
       "The Clair Project root \(id) is unavailable (\(state.rawValue))."
     case .worktreeRootUnavailable(let id, let state):
       "The Clair Worktree root \(id) is unavailable (\(state.rawValue))."
+    case .rootIdentityChanged(let url):
+      "The Clair workspace root changed while its launch capability was being acquired: \(url.path)."
+    case .rootCapabilityUnavailable(let url):
+      "The Clair workspace root capability could not be acquired: \(url.path)."
     case .repositoryNotFound(let id):
       "The Clair Project is not a Git repository: \(id)."
     case .gitExecutableUnavailable:
@@ -590,6 +651,128 @@ public struct ClairV2WorkspaceRuntime: Sendable {
 
   public func projectCatalog() throws -> ClairV2WorkspaceCatalog {
     try catalog()
+  }
+
+  /// Resolves a launch root from one catalog snapshot and retains a stable
+  /// descriptor plus device/inode identity for consumers that create a
+  /// process. The snapshot overload lets callers keep the catalog selection
+  /// and capability acquisition in one H02 boundary without reopening an
+  /// untrusted path by name.
+  public func launchRootCapability(
+    projectID: ProjectID,
+    worktreeID: WorktreeID? = nil
+  ) throws -> ClairV2WorkspaceRootCapability {
+    #if os(macOS)
+      return try launchRootCapability(
+        from: catalog(),
+        projectID: projectID,
+        worktreeID: worktreeID
+      )
+    #else
+      throw ClairV2WorkspaceError.unsupportedPlatform
+    #endif
+  }
+
+  public func launchRootCapability(
+    from catalog: ClairV2WorkspaceCatalog,
+    projectID: ProjectID,
+    worktreeID: WorktreeID? = nil
+  ) throws -> ClairV2WorkspaceRootCapability {
+    #if os(macOS)
+      guard let registeredProject = projectsByID[projectID] else {
+        throw ClairV2WorkspaceError.projectNotFound(projectID)
+      }
+      guard let suppliedProject = catalog.projects.first(where: { $0.id == projectID }) else {
+        throw ClairV2WorkspaceError.projectNotFound(projectID)
+      }
+
+      // A catalog is a caller-visible snapshot, not an authority. Re-read the
+      // registered scope and compare the selected root identity before using
+      // any URL or device/inode values supplied by that snapshot.
+      let authoritativeCatalog = try self.catalog()
+      guard
+        let authoritativeProject = authoritativeCatalog.projects.first(where: {
+          $0.id == projectID
+        })
+      else {
+        throw ClairV2WorkspaceError.projectNotFound(projectID)
+      }
+      let suppliedProjectRoot = suppliedProject.rootURL.standardizedFileURL
+      let registeredProjectRoot = registeredProject.rootURL.standardizedFileURL
+      let authoritativeProjectRoot = authoritativeProject.rootURL.standardizedFileURL
+      guard suppliedProjectRoot == registeredProjectRoot,
+        authoritativeProjectRoot == registeredProjectRoot
+      else {
+        throw ClairV2WorkspaceError.rootIdentityChanged(suppliedProjectRoot)
+      }
+      guard !catalog.isTruncated,
+        !suppliedProject.isTruncated,
+        !authoritativeCatalog.isTruncated,
+        !authoritativeProject.isTruncated,
+        suppliedProjectRoot == authoritativeProjectRoot,
+        suppliedProject.state == authoritativeProject.state,
+        suppliedProject.rootDevice == authoritativeProject.rootDevice,
+        suppliedProject.rootInode == authoritativeProject.rootInode,
+        suppliedProject.repositoryRootURL?.standardizedFileURL
+          == authoritativeProject.repositoryRootURL?.standardizedFileURL
+      else {
+        throw ClairV2WorkspaceError.rootIdentityChanged(suppliedProjectRoot)
+      }
+
+      let rootURL: URL
+      let expectedDevice: UInt64?
+      let expectedInode: UInt64?
+      if let worktreeID {
+        guard
+          let suppliedWorktree = suppliedProject.worktrees.first(where: {
+            $0.id == worktreeID
+          }),
+          suppliedWorktree.projectID == projectID,
+          let authoritativeWorktree = authoritativeProject.worktrees.first(
+            where: { $0.id == worktreeID }
+          ),
+          authoritativeWorktree.projectID == projectID
+        else {
+          throw ClairV2WorkspaceError.worktreeNotFound(worktreeID)
+        }
+        let suppliedWorktreeRoot = suppliedWorktree.rootURL.standardizedFileURL
+        guard suppliedWorktreeRoot == authoritativeWorktree.rootURL.standardizedFileURL,
+          suppliedWorktree.repositoryRootURL.standardizedFileURL
+            == authoritativeWorktree.repositoryRootURL.standardizedFileURL,
+          suppliedWorktree.rootDevice == authoritativeWorktree.rootDevice,
+          suppliedWorktree.rootInode == authoritativeWorktree.rootInode,
+          suppliedWorktree.state == authoritativeWorktree.state
+        else {
+          throw ClairV2WorkspaceError.rootIdentityChanged(suppliedWorktreeRoot)
+        }
+        guard suppliedWorktree.state == .available else {
+          throw ClairV2WorkspaceError.worktreeRootUnavailable(
+            worktreeID,
+            suppliedWorktree.state
+          )
+        }
+        rootURL = suppliedWorktreeRoot
+        expectedDevice = suppliedWorktree.rootDevice
+        expectedInode = suppliedWorktree.rootInode
+      } else {
+        guard suppliedProject.state == .available else {
+          throw ClairV2WorkspaceError.projectRootUnavailable(projectID, suppliedProject.state)
+        }
+        rootURL = suppliedProjectRoot
+        expectedDevice = suppliedProject.rootDevice
+        expectedInode = suppliedProject.rootInode
+      }
+      guard let expectedDevice, let expectedInode else {
+        throw ClairV2WorkspaceError.rootCapabilityUnavailable(rootURL)
+      }
+      return try ClairV2WorkspacePOSIX.openRootCapability(
+        at: rootURL,
+        expectedDevice: expectedDevice,
+        expectedInode: expectedInode
+      )
+    #else
+      throw ClairV2WorkspaceError.unsupportedPlatform
+    #endif
   }
 
   public func fileTree(
@@ -716,6 +899,8 @@ public struct ClairV2WorkspaceRuntime: Sendable {
   private struct ClairV2WorkspacePOSIXMetadata {
     let kind: ClairV2WorkspacePOSIXFileKind
     let byteCount: UInt64
+    let device: UInt64
+    let inode: UInt64
   }
 
   private enum ClairV2WorkspacePOSIXLookupError: Error {
@@ -724,30 +909,51 @@ public struct ClairV2WorkspaceRuntime: Sendable {
 
   private enum ClairV2WorkspacePOSIX {
     static func rootState(at url: URL) -> ClairV2WorkspaceRootState {
+      rootProbe(at: url).state
+    }
+
+    static func rootProbe(at url: URL) -> (
+      state: ClairV2WorkspaceRootState,
+      device: UInt64?,
+      inode: UInt64?
+    ) {
       let fileMetadata: ClairV2WorkspacePOSIXMetadata
       do {
         fileMetadata = try metadata(at: url)
       } catch ClairV2WorkspacePOSIXLookupError.errno(let errorNumber) {
-        return state(for: errorNumber)
+        return (state(for: errorNumber), nil, nil)
       } catch {
-        return .inaccessible
+        return (.inaccessible, nil, nil)
       }
 
       switch fileMetadata.kind {
       case .symlink:
-        return .symlink
+        return (.symlink, nil, nil)
       case .regularFile, .other:
-        return .notDirectory
+        return (.notDirectory, nil, nil)
       case .directory:
         let descriptor = Darwin.open(
           url.path,
           O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW
         )
         guard descriptor >= 0 else {
-          return state(for: errno)
+          return (state(for: errno), nil, nil)
+        }
+        var descriptorInformation = stat()
+        guard Darwin.fstat(descriptor, &descriptorInformation) == 0,
+          descriptorInformation.st_mode & mode_t(S_IFMT) == mode_t(S_IFDIR),
+          UInt64(descriptorInformation.st_dev) == fileMetadata.device,
+          UInt64(descriptorInformation.st_ino) == fileMetadata.inode
+        else {
+          Darwin.close(descriptor)
+          return (.inaccessible, nil, nil)
         }
         Darwin.close(descriptor)
-        return .available
+        return (
+          .available,
+          UInt64(descriptorInformation.st_dev),
+          UInt64(descriptorInformation.st_ino)
+        )
       }
     }
 
@@ -771,7 +977,55 @@ public struct ClairV2WorkspaceRuntime: Sendable {
       }
       return ClairV2WorkspacePOSIXMetadata(
         kind: kind,
-        byteCount: information.st_size > 0 ? UInt64(information.st_size) : 0
+        byteCount: information.st_size > 0 ? UInt64(information.st_size) : 0,
+        device: UInt64(information.st_dev),
+        inode: UInt64(information.st_ino)
+      )
+    }
+
+    static func openRootCapability(
+      at url: URL,
+      expectedDevice: UInt64,
+      expectedInode: UInt64
+    ) throws -> ClairV2WorkspaceRootCapability {
+      let pathMetadata: ClairV2WorkspacePOSIXMetadata
+      do {
+        pathMetadata = try metadata(at: url)
+      } catch {
+        throw ClairV2WorkspaceError.rootIdentityChanged(url)
+      }
+      guard pathMetadata.kind == .directory,
+        pathMetadata.device == expectedDevice,
+        pathMetadata.inode == expectedInode
+      else {
+        throw ClairV2WorkspaceError.rootIdentityChanged(url)
+      }
+
+      let descriptor = Darwin.open(
+        url.path,
+        O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW
+      )
+      guard descriptor >= 0 else {
+        throw ClairV2WorkspaceError.rootCapabilityUnavailable(url)
+      }
+
+      var descriptorInformation = stat()
+      guard Darwin.fstat(descriptor, &descriptorInformation) == 0 else {
+        Darwin.close(descriptor)
+        throw ClairV2WorkspaceError.rootCapabilityUnavailable(url)
+      }
+      guard descriptorInformation.st_mode & mode_t(S_IFMT) == mode_t(S_IFDIR),
+        UInt64(descriptorInformation.st_dev) == expectedDevice,
+        UInt64(descriptorInformation.st_ino) == expectedInode
+      else {
+        Darwin.close(descriptor)
+        throw ClairV2WorkspaceError.rootIdentityChanged(url)
+      }
+      return ClairV2WorkspaceRootCapability(
+        rootURL: url,
+        descriptor: descriptor,
+        device: expectedDevice,
+        inode: expectedInode
       )
     }
 
@@ -1245,15 +1499,18 @@ public struct ClairV2WorkspaceRuntime: Sendable {
         guard worktreeIDs.insert(worktreeID).inserted else {
           throw ClairV2WorkspaceError.gitOutputMalformed(operation: operation)
         }
+        let rootProbe = ClairV2WorkspacePOSIX.rootProbe(at: worktree.rootURL)
         entries.append(
           ClairV2WorktreeCatalogEntry(
             id: worktreeID,
             projectID: projectID,
             repositoryRootURL: repositoryRoot,
             rootURL: worktree.rootURL,
+            rootDevice: rootProbe.device,
+            rootInode: rootProbe.inode,
             headRevision: worktree.headRevision,
             branch: worktree.branch,
-            state: ClairV2WorkspacePOSIX.rootState(at: worktree.rootURL),
+            state: rootProbe.state,
             isMain: canonicalPath(worktree.rootURL) == canonicalPath(repositoryRoot),
             isDetached: worktree.isDetached,
             isLocked: worktree.isLocked,
@@ -1603,12 +1860,15 @@ public struct ClairV2WorkspaceRuntime: Sendable {
     }
 
     private func read(project: ClairV2ProjectRoot) throws -> ClairV2ProjectCatalogEntry {
-      let state = ClairV2WorkspacePOSIX.rootState(at: project.rootURL)
+      let rootProbe = ClairV2WorkspacePOSIX.rootProbe(at: project.rootURL)
+      let state = rootProbe.state
       guard state == .available else {
         return ClairV2ProjectCatalogEntry(
           id: project.id,
           rootURL: project.rootURL,
-          state: state
+          state: state,
+          rootDevice: rootProbe.device,
+          rootInode: rootProbe.inode
         )
       }
 
@@ -1621,7 +1881,9 @@ public struct ClairV2WorkspaceRuntime: Sendable {
         return ClairV2ProjectCatalogEntry(
           id: project.id,
           rootURL: project.rootURL,
-          state: state
+          state: state,
+          rootDevice: rootProbe.device,
+          rootInode: rootProbe.inode
         )
       }
       let repositoryState = ClairV2WorkspacePOSIX.rootState(at: repositoryRoot)
@@ -1630,6 +1892,8 @@ public struct ClairV2WorkspaceRuntime: Sendable {
           id: project.id,
           rootURL: project.rootURL,
           state: repositoryState,
+          rootDevice: rootProbe.device,
+          rootInode: rootProbe.inode,
           repositoryRootURL: repositoryRoot
         )
       }
@@ -1642,6 +1906,8 @@ public struct ClairV2WorkspaceRuntime: Sendable {
         id: project.id,
         rootURL: project.rootURL,
         state: state,
+        rootDevice: rootProbe.device,
+        rootInode: rootProbe.inode,
         repositoryRootURL: repositoryRoot,
         worktrees: worktreeResult.entries,
         isTruncated: worktreeResult.isTruncated
