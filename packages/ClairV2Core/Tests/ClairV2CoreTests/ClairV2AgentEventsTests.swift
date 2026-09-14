@@ -434,6 +434,30 @@ func h05DoesNotCreateApprovalRequestsWithoutCorrelationIDs() throws {
   }
   #expect(attention.kind == .approval)
   #expect(attention.status == .resolved)
+  #expect(attention.requestID == nil)
+
+  var nested = ClairV2OpenCodeStreamNormalizer(
+    identity: identity,
+    epoch: try SessionEpoch(1)
+  )
+  let nestedAsk = try nested.append(
+    h05Data(
+      #"{"type":"permission.asked","properties":{"id":"nested-request"}}"# + "\n"
+    )
+  )
+  let nestedReply = try nested.append(
+    h05Data(
+      #"{"type":"permission.replied","properties":{"requestID":"nested-request"}}"#
+        + "\n"
+    )
+  )
+  guard case .attention(let askedAttention) = nestedAsk[0].payload,
+    case .attention(let repliedAttention) = nestedReply[0].payload
+  else {
+    Issue.record("Expected nested approval attention events.")
+    return
+  }
+  #expect(askedAttention.requestID == repliedAttention.requestID)
 }
 
 @Test

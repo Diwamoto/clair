@@ -245,24 +245,33 @@ private final class CommandState: @unchecked Sendable {
           guard let revision = event.revision else {
             throw ClairV2AgentCommandError.invalidEventStream
           }
+          guard let requestID = attention.requestID else {
+            if attention.kind == .approval && attention.status == .pending {
+              throw ClairV2AgentCommandError.invalidEventStream
+            }
+            // An uncorrelated attention cannot identify a single pending
+            // request. Invalidate the entire executable approval window.
+            session.pending.removeAll()
+            break
+          }
           guard attention.kind == .approval else {
             // A provider may reuse a request identity while changing the
             // attention family. That is a replacement, not an approval, so
             // revoke the old executable reference before ignoring the event.
-            session.pending.removeValue(forKey: attention.requestID)
+            session.pending.removeValue(forKey: requestID)
             break
           }
           let reference = try ClairV2AgentApprovalReference(
-            requestID: attention.requestID, eventID: event.eventID, revision: revision
+            requestID: requestID, eventID: event.eventID, revision: revision
           )
           if attention.status == .pending {
             guard
-              session.pending[attention.requestID] != nil
+              session.pending[requestID] != nil
                 || session.pending.count < limits.maximumPendingApprovals
             else { throw ClairV2AgentCommandError.approvalCapacity }
-            session.pending[attention.requestID] = reference
+            session.pending[requestID] = reference
           } else {
-            if session.pending.removeValue(forKey: attention.requestID) == nil {
+            if session.pending.removeValue(forKey: requestID) == nil {
               // An uncorrelated resolution cannot safely identify which
               // pending request was answered. Fail closed for the whole
               // approval window instead of leaving an old approval executable.

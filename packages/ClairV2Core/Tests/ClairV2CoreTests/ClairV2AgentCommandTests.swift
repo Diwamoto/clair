@@ -141,11 +141,13 @@ private struct H06Fixture: Sendable {
   {
     let event = try event ?? attention()
     try boundary.ingest(event)
-    guard case .attention(let value) = event.payload, let revision = event.revision else {
+    guard case .attention(let value) = event.payload, let requestID = value.requestID,
+      let revision = event.revision
+    else {
       throw ClairV2AgentCommandError.invalidCommand
     }
     return try ClairV2AgentApprovalReference(
-      requestID: value.requestID, eventID: event.eventID, revision: revision
+      requestID: requestID, eventID: event.eventID, revision: revision
     )
   }
 }
@@ -536,11 +538,12 @@ struct H06CommandTests {
   @Test
   func h06UncorrelatedResolutionInvalidatesPendingApprovalWindow() async throws {
     let f = try await H06Fixture.make()
-    let asked = try f.pending()
+    let first = try f.pending(f.attention(request: "permission.replied"))
+    let second = try f.pending(f.attention(revision: 2, request: "sensitive-action"))
     var normalizer = ClairV2OpenCodeStreamNormalizer(
       identity: f.identity,
       epoch: f.epoch,
-      startingRevision: Revision(1)
+      startingRevision: Revision(2)
     )
     let response = try normalizer.append(
       Data((#"{"type":"permission.replied","event_id":"reply-without-id"}"# + "\n").utf8)
@@ -549,7 +552,11 @@ struct H06CommandTests {
     try f.boundary.ingest(response[0])
     await h06Reject(.staleApproval) {
       _ = try await f.boundary.execute(
-        f.command("uncorrelated-answer", action: .approve(asked)), on: f.connection)
+        f.command("uncorrelated-answer-1", action: .approve(first)), on: f.connection)
+    }
+    await h06Reject(.staleApproval) {
+      _ = try await f.boundary.execute(
+        f.command("uncorrelated-answer-2", action: .approve(second)), on: f.connection)
     }
     #expect(f.endpoint.captured.isEmpty)
   }

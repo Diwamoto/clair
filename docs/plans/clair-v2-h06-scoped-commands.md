@@ -37,7 +37,11 @@ Task: `H06`; base: `4cf191378eb6ae5befa04e22d3e0156a8acdc7ed`
    A replacement request, provider reply, accepted/uncertain response, completion,
    interrupt, stop, lifecycle invalidation, or generation change invalidates it.
    H05 needs the additive requested/resolved attention lifecycle field so a
-   `permission.replied` event cannot accidentally create a new approval.
+   `permission.replied` event cannot accidentally create a new approval. H05
+   preserves a missing correlation as `nil`; a pending approval without a
+   correlation is rejected, and an uncorrelated resolution invalidates the
+   entire pending approval window rather than using a sentinel that could
+   collide with a real digest.
 6. Normalized event ingestion checks scope, epoch, kind, contiguous revisions,
    duplicates, and conflicts using B03 replay state with a digest-only projection.
    A gap or malformed event fences commands until a trusted new generation/epoch

@@ -93,14 +93,15 @@ public enum ClairV2AgentAttentionStatus: String, Codable, Equatable, Sendable {
 }
 
 public struct ClairV2AgentAttentionEvent: Codable, Equatable, Sendable {
-  /// A stable digest of the provider request identity.
+  /// A stable digest of the provider request identity, when the provider
+  /// supplied a correlation field. A missing value is never synthesized.
   public let kind: ClairV2AgentAttentionKind
-  public let requestID: String
+  public let requestID: String?
   public let status: ClairV2AgentAttentionStatus
 
   public init(
     kind: ClairV2AgentAttentionKind,
-    requestID: String,
+    requestID: String?,
     status: ClairV2AgentAttentionStatus = .unknown
   ) {
     self.kind = kind
@@ -112,7 +113,7 @@ public struct ClairV2AgentAttentionEvent: Codable, Equatable, Sendable {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     self.init(
       kind: try container.decode(ClairV2AgentAttentionKind.self, forKey: .kind),
-      requestID: try container.decode(String.self, forKey: .requestID),
+      requestID: try container.decodeIfPresent(String.self, forKey: .requestID),
       status: try container.decodeIfPresent(ClairV2AgentAttentionStatus.self, forKey: .status)
         ?? .unknown
     )
@@ -1141,6 +1142,7 @@ private struct H05RawEvent: Decodable, Sendable {
       paths: [
         ["request_id"],
         ["requestId"],
+        ["requestID"],
         ["permission_id"],
         ["permissionId"],
         ["question_id"],
@@ -1149,10 +1151,17 @@ private struct H05RawEvent: Decodable, Sendable {
         ["properties", "permission", "id"],
         ["question", "id"],
         ["properties", "question", "id"],
-        ["id"],
+        ["properties", "request_id"],
+        ["properties", "requestId"],
+        ["properties", "requestID"],
+        ["properties", "permission_id"],
+        ["properties", "permissionId"],
+        ["properties", "question_id"],
+        ["properties", "questionId"],
+        ["properties", "id"],
       ],
       maximumBytes: limits.maximumIdentifierBytes
-    )
+    ).flatMap { $0.isEmpty ? nil : $0 }
     if kind == .approval, rawRequestID?.isEmpty != false {
       // Never create an executable approval for an event that cannot be tied
       // to a provider request. A response without an ID is retained as a
@@ -1163,7 +1172,7 @@ private struct H05RawEvent: Decodable, Sendable {
     }
     return ClairV2AgentAttentionEvent(
       kind: kind,
-      requestID: digestIdentifier(rawRequestID ?? type),
+      requestID: rawRequestID.map(digestIdentifier),
       status: type.hasSuffix(".replied") ? .resolved : .pending
     )
   }
