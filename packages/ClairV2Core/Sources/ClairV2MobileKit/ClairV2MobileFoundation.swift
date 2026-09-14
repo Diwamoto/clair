@@ -1,3 +1,4 @@
+import ClairV2Push
 import ClairV2Shared
 import Foundation
 
@@ -17,6 +18,20 @@ public struct ClairV2MobileEnvironment: Equatable, Sendable {
   public let bundleIdentifier: String
   public let clientVersion: String
   public let distribution: Distribution
+
+  /// The APNs environment matching this build's code-signing distribution.
+  /// A development-signed (Xcode debug) build only ever has a `sandbox`
+  /// APNs credential; a TestFlight/App Store build always carries a
+  /// `production` one. This mapping is fixed by Apple's own signing rules,
+  /// not a product decision this task can invent differently.
+  public var pushEnvironment: ClairPushEnvironment {
+    switch distribution {
+    case .development:
+      .sandbox
+    case .testFlight:
+      .production
+    }
+  }
 
   public init(
     bundleIdentifier: String = Self.defaultBundleIdentifier,

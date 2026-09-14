@@ -63,6 +63,7 @@ let package = Package(
       name: "ClairV2MobileKit",
       dependencies: [
         "ClairV2Agent",
+        "ClairV2Push",
         "ClairV2Review",
         "ClairV2Shared",
         "ClairV2Transport",

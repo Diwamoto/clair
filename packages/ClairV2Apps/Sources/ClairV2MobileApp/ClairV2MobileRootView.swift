@@ -12,6 +12,21 @@ extension EnvironmentValues {
   }
 }
 
+/// The reconnect controller is created once by `ClairV2MobileApp` (the
+/// composition root) rather than locally by this view, so the same instance
+/// receives both native push-delegate callbacks (device token, remote
+/// notification payloads) and this view's scene-lifecycle/deep-link events.
+private struct ClairV2MobileReconnectKey: EnvironmentKey {
+  static let defaultValue = ClairV2MobileReconnectController()
+}
+
+extension EnvironmentValues {
+  var clairV2MobileReconnect: ClairV2MobileReconnectController {
+    get { self[ClairV2MobileReconnectKey.self] }
+    set { self[ClairV2MobileReconnectKey.self] = newValue }
+  }
+}
+
 struct ClairV2MobileRootView: View {
   @Environment(\.clairV2Mobile) private var environment
   @Environment(\.scenePhase) private var scenePhase
@@ -27,6 +42,10 @@ struct ClairV2MobileRootView: View {
   @State private var diffReview = ClairV2MobileDiffReviewController()
   @State private var diffReviewSnapshot = ClairV2MobileDiffReviewState()
   @State private var diffReviewError: String?
+  @Environment(\.clairV2MobileReconnect) private var reconnect
+  @State private var reconnectState = ClairV2MobileReconnectState.idle
+  @State private var reconnectError: String?
+  @State private var hasProcessedLaunch = false
 
   var body: some View {
     NavigationStack {
@@ -35,6 +54,7 @@ struct ClairV2MobileRootView: View {
         destinationBrowserSection
         conversationSection
         diffReviewSection
+        reconnectSection
         connectionSection
         navigationSection
         surfaceSection
@@ -44,14 +64,49 @@ struct ClairV2MobileRootView: View {
     }
     .onAppear {
       store.send(.sceneBecameActive)
+      guard !hasProcessedLaunch else { return }
+      hasProcessedLaunch = true
+      // A cold launch with no deep link still runs through the same typed
+      // reconnect state machine as any other foreground: the last cached
+      // destination (if any) is re-verified against the host, never trusted
+      // silently just because the process just started.
+      dispatchReconnectEvent(.launched(deepLink: nil))
+    }
+    .onOpenURL { url in
+      // A deep link handed to an already-running process is processed
+      // exactly like a cold launch with that link: it is never trusted
+      // without an independent host verification.
+      guard let deepLink = try? ClairV2MobileDeepLink(url: url) else {
+        reconnectError = ClairV2MobileReconnectError.invalidDeepLink.localizedDescription
+        return
+      }
+      dispatchReconnectEvent(.launched(deepLink: deepLink))
     }
     .onChange(of: scenePhase) { _, phase in
       store.send(command(for: phase))
-      if phase == .active {
+      switch phase {
+      case .active:
         // A response streamed while backgrounded is already folded by the
         // actor regardless of scene phase; returning to the foreground only
         // needs to refresh this view's snapshot of that state.
         Task { await refreshConversation() }
+        dispatchReconnectEvent(.foregrounded)
+      case .background:
+        dispatchReconnectEvent(.backgrounded)
+      default:
+        break
+      }
+    }
+    .onChange(of: destinationBrowser.selectedScope) { _, scope in
+      // A device token can arrive from the OS before any destination is
+      // selected; registration is attempted (or re-attempted for the new
+      // scope) whenever the selection changes, using whatever token the
+      // controller has already recorded.
+      guard let scope, scope.isSessionScope else { return }
+      Task {
+        _ = await reconnect.registerPendingPushTokenIfNeeded(
+          environment: environment.pushEnvironment, scope: scope
+        )
       }
     }
   }
@@ -253,6 +308,63 @@ struct ClairV2MobileRootView: View {
           }
         }
       )
+    }
+  }
+
+  /// Third sibling section alongside `conversationSection` (N05) and
+  /// `diffReviewSection` (N06): a minimal functional surface for the
+  /// scene-lifecycle/deep-link/push reconnect state, not production visual
+  /// design. It only ever displays what `ClairV2MobileReconnectController`
+  /// reports -- it never itself decides a destination is current.
+  private var reconnectSection: some View {
+    Section("Reconnect") {
+      switch reconnectState {
+      case .idle:
+        Text("Not yet checked.")
+          .font(.footnote)
+          .foregroundStyle(.secondary)
+          .accessibilityIdentifier("reconnect-idle")
+      case .verifying(let scope):
+        LabeledContent("Verifying", value: scope.projectID.description)
+          .accessibilityIdentifier("reconnect-verifying")
+      case .verified(let cursor):
+        VStack(alignment: .leading, spacing: 4) {
+          Label("Verified with host", systemImage: "checkmark.shield")
+            .foregroundStyle(.green)
+          Text(verbatim: "Project: \(cursor.scope.projectID.description)")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+          Text(
+            verbatim: "Revision: \(cursor.revision.description) (epoch \(cursor.epoch.description))"
+          )
+          .font(.caption.monospaced())
+          .foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("reconnect-verified")
+      case .mustReconnect(let scope, let error):
+        VStack(alignment: .leading, spacing: 4) {
+          Label("Must reconnect", systemImage: "exclamationmark.triangle")
+            .foregroundStyle(.orange)
+          if let scope {
+            Text(verbatim: "Destination: \(scope.projectID.description)")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+          }
+          Text(error.localizedDescription)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("reconnect-must-reconnect")
+      }
+
+      if let reconnectError {
+        Label(reconnectError, systemImage: "exclamationmark.triangle")
+          .font(.footnote)
+          .foregroundStyle(.orange)
+          .accessibilityIdentifier("reconnect-error")
+      }
     }
   }
 
@@ -535,5 +647,15 @@ struct ClairV2MobileRootView: View {
 
   private func refreshDiffReview() async {
     diffReviewSnapshot = await diffReview.state
+  }
+
+  /// Wraps one scene-lifecycle/deep-link event: clears any previous parse
+  /// error, awaits the actor (which owns the typed verify-before-trust state
+  /// machine on its own), then refreshes this view's snapshot. The actor's
+  /// state is authoritative regardless of how quickly the view redraws.
+  private func dispatchReconnectEvent(_ event: ClairV2MobileSceneEvent) {
+    Task {
+      reconnectState = await reconnect.handle(event)
+    }
   }
 }
