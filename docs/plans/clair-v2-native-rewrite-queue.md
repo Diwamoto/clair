@@ -157,7 +157,7 @@ G2 -> U01 -> U02
 | `N05` | `done` | `D4` | `H05`, `H06`, `N04` | OpenCode conversation stream、prompt composer、attention、approval/deny/interrupt を native app へ接続する。重複 tap、background 中の response、stale approval が安全であること。 |
 | `N06` | `done` | `D4` | `H07`, `N05` | changed-file list、native diff、hunk navigation と review follow-up を実装する。binary/large/truncated diff を明示し、表示だけで working tree を変更しないこと。 |
 | `N07` | `done` | `D4` | `H08`, `H09`, `N03` | APNs registration、notification category、deep link、scene lifecycle、background reconnect を実装する。foreground/background/terminated から正しい host/session/revision へ戻る実機 smoke が通ること。 |
-| `N08` | `queued` | `D5` | `H10`, `N06`, `N07`, `T02` | G1 Mobile-on-Clair dogfood gate。iPhone だけを操作して Clair repo の実際の raw terminal session 上で OpenCode process を起動し、依頼、承認、diff確認、follow-up、完了通知、再接続までを行い、fixture と実機 evidence を残すこと。 |
+| `N08` | `active` | `D5` | `H10`, `N06`, `N07`, `T02` | G1 Mobile-on-Clair dogfood gate。iPhone だけを操作して Clair repo の実際の raw terminal session 上で OpenCode process を起動し、依頼、承認、diff確認、follow-up、完了通知、再接続までを行い、fixture と実機 evidence を残すこと。 |
 
 Apple Developer membership、Team ID、APNs key は `N01`、`H09`、`N07` の実機完了に必要な外部依存である。入会待ちの間も code、simulator、mock APNs provider、protocol tests は進めるが、G1 は実機通知を確認するまで完了にしない。
 
