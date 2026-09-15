@@ -169,7 +169,7 @@ Editor track と Terminal surface track は、2026-09-15 の sequencing update �
 
 | ID | Status | Difficulty | Depends on | Task and completion evidence |
 |---|---|---:|---|---|
-| `E01` | `active` | `D4` | `B01` | editor invariants、Unicode corpus、10MB/long-line fixture、latency/memory benchmark harness を確定する。旧 CodeEdit PoC の失敗値を baseline evidence として保存すること。 |
+| `E01` | `done` | `D4` | `B01` | editor invariants、Unicode corpus、10MB/long-line fixture、latency/memory benchmark harness を確定する。旧 CodeEdit PoC の失敗値を baseline evidence として保存すること。**Evidence (2026-09-16)**: `docs/editor/clair-v2-editor-invariants.md`（INV-* 28件、CodeEdit PoC/CodeMirror実測値と相互参照）、`ClairV2EditorFixtures`（Unicode境界コーパス、10MB/long-line/1MB日本語フィクスチャ生成、latency/RSSベンチマーク）を追加。`swift test --filter '(UnicodeCorpusTests|EditorFixtureGeneratorTests|EditorBenchmarkTests|EditorInvariantsTests|EditorBaselineEvidenceTests)'` 18/18 pass。 |
 | `E02` | `queued` | `D5` | `E01` | Swift の text storage、line index、stable line ID、UTF-8/UTF-16/grapheme coordinate、immutable revision を実装する。randomized edit と differential tests が通ること。 |
 | `E03` | `queued` | `D5` | `E02` | transaction、SelectionSet、multi-cursor、rectangular selection、Undo/Redo、external/agent edit merge を実装する。複数 cursor の一操作が一つの undo unit になること。 |
 | `E04` | `queued` | `D3` | `E03` | literal/regex search、replace preview、replace one/all、selection scope を core transaction に統合する。zero-length regex、Unicode、stale result を安全に扱うこと。 |
