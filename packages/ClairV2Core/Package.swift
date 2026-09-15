@@ -117,6 +117,8 @@ let package = Package(
       dependencies: [
         "ClairV2Agent",
         "ClairV2DaemonKit",
+        .target(name: "ClairV2PTY", condition: .when(platforms: [.macOS])),
+        "ClairV2Ghostty",
         "ClairV2Review",
         "ClairV2Shared",
         "ClairV2Terminal",
