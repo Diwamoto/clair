@@ -1,6 +1,42 @@
 // swift-tools-version: 6.0
 
+import Foundation
 import PackageDescription
+
+// T01: libghostty/GhosttyKit foundation.
+//
+// `scripts/v2-ghostty.sh vendor` materializes the pinned commit's headers
+// and a built `GhosttyKit.xcframework` into this git-ignored directory. Its
+// presence — checked here, at manifest-evaluation time, not hardcoded —
+// decides whether `ClairV2GhosttyABI`/`ClairV2Ghostty` compile in "linked"
+// mode (real headers checked by `_Static_assert`, real library linked) or
+// "not linked" mode (subset types only, every runtime call throws
+// `GhosttyError.runtimeUnavailable`). Either way the package graph builds;
+// see `docs/plans/clair-v2-t01-libghostty-foundation.md`.
+let ghosttyVendorRoot = URL(fileURLWithPath: #filePath)
+  .deletingLastPathComponent()
+  .appendingPathComponent("Vendor/ghostty", isDirectory: true)
+let ghosttyHeaderPresent = FileManager.default.fileExists(
+  atPath: ghosttyVendorRoot.appendingPathComponent("include/ghostty.h").path
+)
+let ghosttyXCFrameworkPath = ghosttyVendorRoot
+  .appendingPathComponent("GhosttyKit.xcframework")
+let ghosttyArtifactPresent = FileManager.default.fileExists(
+  atPath: ghosttyXCFrameworkPath.appendingPathComponent("Info.plist").path
+)
+// Both must be present: a header without a linkable binary (or vice versa)
+// is a broken half-vendored state, and this build must not silently treat
+// it as either "fully linked" or "fully absent".
+let ghosttyVendored = ghosttyHeaderPresent && ghosttyArtifactPresent
+
+var ghosttyABITargets: [Target] = []
+var ghosttyABIDependencies: [Target.Dependency] = []
+if ghosttyVendored {
+  ghosttyABITargets.append(
+    .binaryTarget(name: "GhosttyKit", path: "Vendor/ghostty/GhosttyKit.xcframework")
+  )
+  ghosttyABIDependencies.append(.target(name: "GhosttyKit"))
+}
 
 let package = Package(
   name: "ClairV2Core",
@@ -21,6 +57,7 @@ let package = Package(
     .library(name: "ClairV2MobileKit", targets: ["ClairV2MobileKit"]),
     .library(name: "ClairV2AppKit", targets: ["ClairV2AppKit"]),
     .library(name: "ClairV2EditorFixtures", targets: ["ClairV2EditorFixtures"]),
+    .library(name: "ClairV2Ghostty", targets: ["ClairV2Ghostty"]),
     .executable(name: "EditorFixtureGenerator", targets: ["EditorFixtureGenerator"]),
   ],
   targets: [
@@ -90,6 +127,24 @@ let package = Package(
       name: "ClairV2EditorFixtures",
       dependencies: ["ClairV2Shared"]
     ),
+    .target(
+      name: "ClairV2GhosttyABI",
+      dependencies: ghosttyABIDependencies,
+      cSettings: [
+        .headerSearchPath("Vendor/ghostty/include"),
+        ghosttyVendored ? .define("CLAIR_GHOSTTY_VENDORED") : nil,
+      ].compactMap { $0 },
+      linkerSettings: ghosttyVendored
+        ? [.linkedFramework("GhosttyKit")]
+        : []
+    ),
+    .target(
+      name: "ClairV2Ghostty",
+      dependencies: ["ClairV2GhosttyABI"],
+      swiftSettings: ghosttyVendored
+        ? [.define("CLAIR_GHOSTTY_VENDORED")]
+        : []
+    ),
     .testTarget(
       name: "ClairV2CoreTests",
       dependencies: [
@@ -100,6 +155,7 @@ let package = Package(
         "ClairV2AppKit",
         "ClairV2DaemonKit",
         "ClairV2EditorFixtures",
+        "ClairV2Ghostty",
         "ClairV2MobileKit",
         "ClairV2Review",
         "ClairV2Shared",
@@ -112,5 +168,5 @@ let package = Package(
       name: "EditorFixtureGenerator",
       dependencies: ["ClairV2EditorFixtures"]
     ),
-  ]
+  ] + ghosttyABITargets
 )

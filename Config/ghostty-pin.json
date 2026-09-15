@@ -1,0 +1,22 @@
+{
+  "upstream": "https://github.com/ghostty-org/ghostty",
+  "commit": "d4c88d8069912b653d707191388ca98e24751f12",
+  "version": "1.3.2-dev",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2024 Mitchell Hashimoto, Ghostty contributors",
+  "toolchain": {
+    "name": "zig",
+    "version": "0.16.0",
+    "archive_url": "https://ziglang.org/download/0.16.0/zig-macos-aarch64-0.16.0.tar.xz",
+    "archive_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "build": {
+    "mode": "ReleaseFast",
+    "artifact": "GhosttyKit.xcframework",
+    "slices": [
+      "macos-arm64_x86_64",
+      "ios-arm64",
+      "ios-arm64-simulator"
+    ]
+  }
+}
