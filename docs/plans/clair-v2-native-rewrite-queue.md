@@ -12,6 +12,8 @@ Parent plan: [Clair v2 native rewrite](clair-v2-native-rewrite.md)
 
 旧 [Clair v2 roadmap](clair-v2-roadmap.md) と旧 [PoC queue](clair-poc-queue.md) は v1 の履歴・evidence としてだけ参照し、この queue と競合する実装順や PWA 方針は採用しない。
 
+**Sequencing update (2026-09-15)**: `N08` は Mac 側にペアリング bootstrap 面が存在しないという実装 gap で `blocked`。iPhone/iPad foundation shell は Simulator 実機で確認済みのため、release owner の判断で editor (`P1-A`/Phase 3) と terminal (`P1-B`/Phase 4) の POC 実装を `N08` 完了待ちにせず並行して優先度を上げる。詳細は [native rewrite plan の Sequencing update](clair-v2-native-rewrite.md#phase-4-libghostty-terminal) を参照。
+
 ## Priority contract
 
 | Priority | Goal | Product gate |
@@ -64,7 +66,7 @@ iPhone / iPad から以下を一続きで行える。
 7. agent の入力待ち・完了通知を受け、deep link から同じ session へ戻る。
 8. background、network 切替、Mac GUI 終了後も revision を検証して再接続する。
 
-この gate が完了するまで editor / terminal surface の本実装を priority lane に入れない。ただし、実際の agent PTY/process/session を検証するための daemon backend `T02` は G1 の前提として先行する。
+この gate が完了するまで editor / terminal surface の本実装を priority lane に入れない、としていたが、2026-09-15 の sequencing update により editor (`E01`起点) と terminal (`T01`起点) の POC track は G1 の完了を待たずに並行して進める。実際の agent PTY/process/session を検証するための daemon backend `T02` は元々 G1 の前提として先行していた。
 
 ### G2: Native IDE engine
 
@@ -96,7 +98,7 @@ H04 -> H05
 {H08, H09, N03} -> N07
 {H10, N06, N07, T02} -> N08 -> G1
 
-G1 -> {E01, T01}
+B01 -> {E01, T01}
 E01 -> E02 -> E03
 E03 -> E04
 E02 -> E05
@@ -163,18 +165,18 @@ Apple Developer membership、Team ID、APNs key は `N01`、`H09`、`N07` の実
 
 ## P1-A: Clair-owned native editor
 
-Editor track と Terminal surface track は G1 完了後、別 worktree で並列に進めてよい。daemon-owned PTY/process/session backend と raw agent I/O bridge の `T02` だけは、G1 の実際の agent session を成立させるため G1 前に先行する。
+Editor track と Terminal surface track は、2026-09-15 の sequencing update により G1 (`N08`) の完了を待たずに別 worktree で並列に進めてよい。daemon-owned PTY/process/session backend と raw agent I/O bridge の `T02` は、G1 の実際の agent session を成立させるため元々 G1 前に先行していた。
 
 | ID | Status | Difficulty | Depends on | Task and completion evidence |
 |---|---|---:|---|---|
-| `E01` | `queued` | `D4` | `N08` | editor invariants、Unicode corpus、10MB/long-line fixture、latency/memory benchmark harness を確定する。旧 CodeEdit PoC の失敗値を baseline evidence として保存すること。 |
+| `E01` | `queued` | `D4` | `B01` | editor invariants、Unicode corpus、10MB/long-line fixture、latency/memory benchmark harness を確定する。旧 CodeEdit PoC の失敗値を baseline evidence として保存すること。 |
 | `E02` | `queued` | `D5` | `E01` | Swift の text storage、line index、stable line ID、UTF-8/UTF-16/grapheme coordinate、immutable revision を実装する。randomized edit と differential tests が通ること。 |
 | `E03` | `queued` | `D5` | `E02` | transaction、SelectionSet、multi-cursor、rectangular selection、Undo/Redo、external/agent edit merge を実装する。複数 cursor の一操作が一つの undo unit になること。 |
 | `E04` | `queued` | `D3` | `E03` | literal/regex search、replace preview、replace one/all、selection scope を core transaction に統合する。zero-length regex、Unicode、stale result を安全に扱うこと。 |
 | `E05` | `queued` | `D4` | `E02` | Tree-sitter incremental parse と LSP coordinate/lifecycle を実装する。edit delta だけで parse を更新し、stale diagnostic/completion を revision で拒否すること。 |
 | `E06` | `queued` | `D5` | `E02`, `E05` | macOS custom `NSView`、CoreText visible-line layout、scroll、hit test、caret、selection、syntax/diagnostic layers を実装する。全行 eager layout や一行一 View を作らないこと。 |
 | `E07` | `queued` | `D5` | `E03`, `E06` | `NSTextInputClient`、日本語 IME、marked text、clipboard、drag/drop、accessibility、system cursor を実装する。実機 IME/VoiceOver と Unicode matrix が通ること。 |
-| `E08` | `queued` | `D5` | `E03`, `E05`, `N08` | iOS/iPadOS native editor surface、touch selection、hardware keyboard、IME、viewport virtualization を同じ editor core 上へ実装する。Mac と同じ transaction fixture が通ること。 |
+| `E08` | `queued` | `D5` | `E03`, `E05` | iOS/iPadOS native editor surface、touch selection、hardware keyboard、IME、viewport virtualization を同じ editor core 上へ実装する。Mac と同じ transaction fixture が通ること。 |
 | `E09` | `queued` | `D5` | `E03`, `E05`, `N06` | revision-aware review anchor、line comment、thread、stale/orphaned/resolved、AI suggestion apply/reject/partial/undo を実装する。編集後の誤った再配置や二重適用がないこと。 |
 | `E10` | `queued` | `D5` | `E04`, `E07`, `E08`, `E09` | editor integration gate。Mac/mobile で edit、multi-cursor、search/replace、review、save、external agent edit を通し、10MB/long-line/IME の performance threshold を満たすこと。 |
 
@@ -182,7 +184,7 @@ Editor track と Terminal surface track は G1 完了後、別 worktree で並�
 
 | ID | Status | Difficulty | Depends on | Task and completion evidence |
 |---|---|---:|---|---|
-| `T01` | `queued` | `D5` | `N08` | libghostty/GhosttyKit の pinned build、license、resource bundle、C ABI、Swift concurrency boundary を確立する。macOS/iOS の reproducible build と minimal surface smoke が通ること。 |
+| `T01` | `queued` | `D5` | `B01` | libghostty/GhosttyKit の pinned build、license、resource bundle、C ABI、Swift concurrency boundary を確立する。macOS/iOS の reproducible build と minimal surface smoke が通ること。 |
 | `T02` | `done` | `D5` | `H01`, `H04`, `H05`, `H06`, `H08` | raw input/output を含む daemon-owned PTY/process/session ownership と agent I/O bridge を `ClairDaemon` に実装し、surface から分離する。stable SessionID、bounded binary stream、resize owner、bounded journal、attach/detach、child reaping を検証し、N08 が実際の OpenCode process を mobile control 経路から操作できる backend を完成させること。 |
 | `T03` | `queued` | `D4` | `T01`, `T02` | macOS Ghostty surface を native workspace に接続する。local shell、selection、copy/paste、scrollback、font/DPI、window resize が動くこと。 |
 | `T04` | `active` | `D5` | `T02`, `H08` | remote terminal binary stream、epoch/cursor、snapshot/gap、backpressure、input ordering を実装する。alternate screen 中の reconnect と slow subscriber で破損しないこと。 |

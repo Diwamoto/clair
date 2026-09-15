@@ -218,6 +218,8 @@ Exit criteria: libvterm へ戻らず、Mac と mobile が同じ terminal session
 
 G1 の実際の raw agent session を検証するため、Phase 4 のうち daemon-owned PTY/process/session backend と raw I/O bridge は Phase 2 の dogfood gate より前に先行してよい。Ghostty の rendering surface、mobile terminal UI、full terminal integration は G1 後の Phase 4 scope とする。
 
+**Sequencing update (2026-09-15)**: `N08`（G1 の実機 dogfood gate）は、モバイル側の実装ではなく Mac 側にペアリングを開始する操作面（QR 表示等の GUI/CLI）が一つも存在しないという、計画時点で想定していなかった gap で `blocked` になった。iPhone/iPad 側の foundation shell は Simulator 実機確認済みで、G1 自体が Phase 3/4 の技術的前提には当たらないと判断し、release owner の指示で Phase 3 (editor) と Phase 4 (terminal) の POC 実装を G1 の完了を待たずに並行して優先度を上げる。Mac を「PC 側の本物の画面」として積極的に作り込む方針に転換し、G1 の残課題（Mac 側ペアリング bootstrap 面）は本転換後にあらためて優先度を判断する。`T02` の先行と同じ理由で、`E01`/`T01` の技術的前提はどちらも `N08` ではなく既存の package/build graph（`B01`）で足りるため、`N08` を必須先行条件から外す。
+
 ### Phase 5: Mock-faithful UI
 
 - Clair UI Design canvas と Workbench mock を UI contract として freeze
