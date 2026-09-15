@@ -216,6 +216,8 @@ Exit criteria: WebView/CodeEdit なしで Mac と mobile のコード編集・AI
 
 Exit criteria: libvterm へ戻らず、Mac と mobile が同じ terminal session を安全に操作できる。
 
+G1 の実際の raw agent session を検証するため、Phase 4 のうち daemon-owned PTY/process/session backend と raw I/O bridge は Phase 2 の dogfood gate より前に先行してよい。Ghostty の rendering surface、mobile terminal UI、full terminal integration は G1 後の Phase 4 scope とする。
+
 ### Phase 5: Mock-faithful UI
 
 - Clair UI Design canvas と Workbench mock を UI contract として freeze

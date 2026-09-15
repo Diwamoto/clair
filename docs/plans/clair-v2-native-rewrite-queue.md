@@ -8,7 +8,7 @@ Parent plan: [Clair v2 native rewrite](clair-v2-native-rewrite.md)
 
 この queue は Clair v2 の実装順、依存関係、難易度、完了条件の正本である。
 
-最初のゴールは、フルエディタや完成 UI より先に、iPhone / iPad から自宅 Mac の Clair を使って Clair 自身を開発できる状態を作ることとする。Mac 側 server、OpenCode integration、ネイティブ mobile app を最優先し、その後に editor と terminal、最後に Design canvas / Clair Workbench に忠実な UI を完成させる。
+最初のゴールは、フルエディタや完成 UI より先に、iPhone / iPad から自宅 Mac の Clair を使って Clair 自身を開発できる状態を作ることとする。Mac 側 server、OpenCode integration、ネイティブ mobile app を最優先し、G1 の実機検証に必要な daemon-owned terminal/session backend は editor や terminal surface より先行する。その後に editor と Ghostty surface、最後に Design canvas / Clair Workbench に忠実な UI を完成させる。
 
 旧 [Clair v2 roadmap](clair-v2-roadmap.md) と旧 [PoC queue](clair-poc-queue.md) は v1 の履歴・evidence としてだけ参照し、この queue と競合する実装順や PWA 方針は採用しない。
 
@@ -64,7 +64,7 @@ iPhone / iPad から以下を一続きで行える。
 7. agent の入力待ち・完了通知を受け、deep link から同じ session へ戻る。
 8. background、network 切替、Mac GUI 終了後も revision を検証して再接続する。
 
-この gate が完了するまで editor / terminal の本実装を priority lane に入れない。
+この gate が完了するまで editor / terminal surface の本実装を priority lane に入れない。ただし、実際の agent PTY/process/session を検証するための daemon backend `T02` は G1 の前提として先行する。
 
 ### G2: Native IDE engine
 
@@ -94,7 +94,7 @@ H04 -> H05
 {H05, H06, N04} -> N05
 {H07, N05} -> N06
 {H08, H09, N03} -> N07
-{H10, N06, N07} -> N08 -> G1
+{H10, N06, N07, T02} -> N08 -> G1
 
 G1 -> {E01, T01}
 E01 -> E02 -> E03
@@ -106,7 +106,7 @@ E02 -> E05
 {E03, E05, N06} -> E09
 {E04, E07, E08, E09} -> E10
 
-G1 -> T02
+{H01, H04, H05, H06, H08} -> T02
 {T01, T02} -> T03
 {T02, H08} -> T04
 {T01, T04, N01} -> T05
@@ -157,13 +157,13 @@ G2 -> U01 -> U02
 | `N05` | `done` | `D4` | `H05`, `H06`, `N04` | OpenCode conversation stream、prompt composer、attention、approval/deny/interrupt を native app へ接続する。重複 tap、background 中の response、stale approval が安全であること。 |
 | `N06` | `done` | `D4` | `H07`, `N05` | changed-file list、native diff、hunk navigation と review follow-up を実装する。binary/large/truncated diff を明示し、表示だけで working tree を変更しないこと。 |
 | `N07` | `done` | `D4` | `H08`, `H09`, `N03` | APNs registration、notification category、deep link、scene lifecycle、background reconnect を実装する。foreground/background/terminated から正しい host/session/revision へ戻る実機 smoke が通ること。 |
-| `N08` | `queued` | `D5` | `H10`, `N06`, `N07` | G1 Mobile-on-Clair dogfood gate。iPhone だけを操作して Clair repo で OpenCode を起動し、依頼、承認、diff確認、follow-up、完了通知、再接続までを行い、fixture と実機 evidence を残すこと。 |
+| `N08` | `queued` | `D5` | `H10`, `N06`, `N07`, `T02` | G1 Mobile-on-Clair dogfood gate。iPhone だけを操作して Clair repo の実際の raw terminal session 上で OpenCode process を起動し、依頼、承認、diff確認、follow-up、完了通知、再接続までを行い、fixture と実機 evidence を残すこと。 |
 
 Apple Developer membership、Team ID、APNs key は `N01`、`H09`、`N07` の実機完了に必要な外部依存である。入会待ちの間も code、simulator、mock APNs provider、protocol tests は進めるが、G1 は実機通知を確認するまで完了にしない。
 
 ## P1-A: Clair-owned native editor
 
-Editor track と Terminal track は G1 完了後、別 worktree で並列に進めてよい。
+Editor track と Terminal surface track は G1 完了後、別 worktree で並列に進めてよい。daemon-owned PTY/process/session backend と raw agent I/O bridge の `T02` だけは、G1 の実際の agent session を成立させるため G1 前に先行する。
 
 | ID | Status | Difficulty | Depends on | Task and completion evidence |
 |---|---|---:|---|---|
@@ -183,7 +183,7 @@ Editor track と Terminal track は G1 完了後、別 worktree で並列に進�
 | ID | Status | Difficulty | Depends on | Task and completion evidence |
 |---|---|---:|---|---|
 | `T01` | `queued` | `D5` | `N08` | libghostty/GhosttyKit の pinned build、license、resource bundle、C ABI、Swift concurrency boundary を確立する。macOS/iOS の reproducible build と minimal surface smoke が通ること。 |
-| `T02` | `queued` | `D5` | `H01`, `H08`, `N08` | PTY/process/session ownership を `ClairDaemon` に実装し、surface から分離する。stable SessionID、resize owner、bounded journal、attach/detach、child reaping を検証すること。 |
+| `T02` | `active` | `D5` | `H01`, `H04`, `H05`, `H06`, `H08` | raw input/output を含む daemon-owned PTY/process/session ownership と agent I/O bridge を `ClairDaemon` に実装し、surface から分離する。stable SessionID、bounded binary stream、resize owner、bounded journal、attach/detach、child reaping を検証し、N08 が実際の OpenCode process を mobile control 経路から操作できる backend を完成させること。 |
 | `T03` | `queued` | `D4` | `T01`, `T02` | macOS Ghostty surface を native workspace に接続する。local shell、selection、copy/paste、scrollback、font/DPI、window resize が動くこと。 |
 | `T04` | `queued` | `D5` | `T02`, `H08` | remote terminal binary stream、epoch/cursor、snapshot/gap、backpressure、input ordering を実装する。alternate screen 中の reconnect と slow subscriber で破損しないこと。 |
 | `T05` | `queued` | `D5` | `T01`, `T04`, `N01` | iOS/iPadOS Ghostty surface と remote session attach を実装する。touch scroll/selection、hardware keyboard、safe-area/rotation、background detach が動くこと。 |
@@ -218,9 +218,10 @@ UI の正本は [Clair UI Design canvas と Workbench](../../prototypes/clair-wo
 7. `H05`、`H07`、`N03`、`N04`
 8. `H06`、`H08`、`H09`、`N05`、`N06`、`N07`
 9. `H10`
-10. `N08` で G1 を実機判定
-11. G1 後に Editor track `E01` と Terminal track `T01` / `T02` を並列開始
-12. G2 後にだけ `U01` から UI track を開始
+10. Terminal backend `T02` を G1 前に開始
+11. `N08` で G1 を実機判定
+12. G1 後に Editor track `E01` と Terminal surface `T01` を並列開始
+13. G2 後にだけ `U01` から UI track を開始
 
 依存が未完了の task を、並列数を埋める目的で先行実装しない。
 
@@ -414,4 +415,10 @@ UI の正本は [Clair UI Design canvas と Workbench](../../prototypes/clair-wo
 - verification: worker H10 focused tests 18/18 passed and controller H10 focused tests 18/18 passed; `./scripts/v2-foundation.sh check` and `./scripts/v2-foundation.sh build` passed on the controller, including the `ClairDaemon` executable composition; `ClairV2Apps` 1/1 passed; strict Swift format lint and `git diff --check` passed after integration cleanup
 - result: `ClairDaemonHost` now composes H03-H09 with daemon-wide agent/journal/subscriber limits, structured redacted diagnostics, scoped resume authorization, race-safe slot and generation accounting, attach rollback, terminal journal closure, and fail-closed cleanup-pending propagation across H04/H06/H08; H04's daemon-owned process-group keeper reaps provider descendants after abnormal daemon termination; the H10 fixture client drives the complete G1 server operation set without a GUI
 - known limitation: the production executable intentionally uses an empty project/provider catalog and an unavailable push relay until later product configuration supplies real projects, provider credentials, and APNs transport; no Apple credential, physical device, push publication, or deployment was used; a full ClairV2Core run remains subject to the repository's known H04 process-group/waitID fixture timing flake, while the focused H10 and Apps gates are green
-- remaining: `N08` G1 Mobile-on-Clair dogfood is now dependency-ready but still requires the external iPhone/iPad, Apple signing, and APNs gate; no push/publication
+- remaining: `T02` daemon terminal backend must complete before `N08` G1 Mobile-on-Clair dogfood; the external iPhone/iPad, Apple signing, and APNs gate remain required after that; no push/publication
+
+### Execution-order correction — 2026-09-15
+
+- rationale: 製品 README と ADR-0011 は coding agent を raw terminal/PTY 上で扱うことを正本としている。一方、H10 の fixture は `/bin/sh` を起動し、H06 の effect を fixture endpoint に記録するだけで、実 provider process への input/output wiring を検証していなかった。
+- decision: `T02` の daemon-owned PTY/process/session backend と raw agent I/O bridge を `N08` の前提へ前倒しする。`T01` の Ghostty rendering surface と full terminal integration は G1 後に残し、editor track は引き続き G1 後に開始する。
+- status: controller が `T02` を `active` に変更した。統合前の queue/lease state を再検証し、worker は queue correction 後に記録した clean integration HEAD から開始する。no push/publication
