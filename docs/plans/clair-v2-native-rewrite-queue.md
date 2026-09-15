@@ -96,7 +96,8 @@ H04 -> H05
 {H05, H06, N04} -> N05
 {H07, N05} -> N06
 {H08, H09, N03} -> N07
-{H10, N06, N07, T02} -> N08 -> G1
+{H03, N03} -> N09
+{H10, N06, N07, T02, N09} -> N08 -> G1
 
 B01 -> {E01, T01}
 E01 -> E02 -> E03
@@ -160,7 +161,8 @@ G2 -> U01 -> U02
 | `N05` | `done` | `D4` | `H05`, `H06`, `N04` | OpenCode conversation stream、prompt composer、attention、approval/deny/interrupt を native app へ接続する。重複 tap、background 中の response、stale approval が安全であること。 |
 | `N06` | `done` | `D4` | `H07`, `N05` | changed-file list、native diff、hunk navigation と review follow-up を実装する。binary/large/truncated diff を明示し、表示だけで working tree を変更しないこと。 |
 | `N07` | `done` | `D4` | `H08`, `H09`, `N03` | APNs registration、notification category、deep link、scene lifecycle、background reconnect を実装する。foreground/background/terminated から正しい host/session/revision へ戻る実機 smoke が通ること。 |
-| `N08` | `blocked` | `D5` | `H10`, `N06`, `N07`, `T02` | G1 Mobile-on-Clair dogfood gate。iPhone だけを操作して Clair repo の実際の raw terminal session 上で OpenCode process を起動し、依頼、承認、diff確認、follow-up、完了通知、再接続までを行い、fixture と実機 evidence を残すこと。**Blocked evidence (2026-09-15)**: Simulator (iPhone 17, iOS 26.5) 上で `Clair v2 Mobile.app` を実際に build/install/launch し、"No paired hosts / Pair or re-pair host" の初期画面までは確認できた（過程で N07 が Xcode project への `ClairV2MobilePushDelegate.swift` 登録を漏らしていた build gap を発見・修正: commit `ba1cfe7`)。しかしそこから先の依頼/承認/diff/reconnect フローに必須のペアリング開始面が、Mac 側に一つも存在しない: `ClairV2MacApp` は 24 行のプレースホルダー(QR表示・pairing UI なし)、`ClairDaemon` の local control channel は health/version/shutdown のみで pairing endpoint がない。`ClairPairingLink`/`ClairPairingAuthority` は `ClairV2Transport`/`ClairV2MobileKit` にプロトコルとして存在するが、実際に新規ペアリングリンクを発行して人間が使える形（QRやコード）で提示する経路は fixture/unit test の中にしかない。H03/H10 はいずれも「fixture client からの再現」を完了条件としており、この運用者向け bootstrap 面は queue 上のどのタスクにも明示的に割り当てられていない。iPhone/iPad だけを操作する実機 dogfood は、この Mac 側ペアリング開始面が製品として実装されるまで着手できない。 |
+| `N08` | `blocked` | `D5` | `H10`, `N06`, `N07`, `T02`, `N09` | G1 Mobile-on-Clair dogfood gate。iPhone だけを操作して Clair repo の実際の raw terminal session 上で OpenCode process を起動し、依頼、承認、diff確認、follow-up、完了通知、再接続までを行い、fixture と実機 evidence を残すこと。**Blocked evidence (2026-09-15)**: Simulator (iPhone 17, iOS 26.5) 上で `Clair v2 Mobile.app` を実際に build/install/launch し、"No paired hosts / Pair or re-pair host" の初期画面までは確認できた（過程で N07 が Xcode project への `ClairV2MobilePushDelegate.swift` 登録を漏らしていた build gap を発見・修正: commit `ba1cfe7`)。しかしそこから先の依頼/承認/diff/reconnect フローに必須のペアリング開始面が、Mac 側に一つも存在しない: `ClairV2MacApp` は 24 行のプレースホルダー(QR表示・pairing UI なし)、`ClairDaemon` の local control channel は health/version/shutdown のみで pairing endpoint がない。`ClairPairingLink`/`ClairPairingAuthority` は `ClairV2Transport`/`ClairV2MobileKit` にプロトコルとして存在するが、実際に新規ペアリングリンクを発行して人間が使える形（QRやコード）で提示する経路は fixture/unit test の中にしかない。H03/H10 はいずれも「fixture client からの再現」を完了条件としており、この運用者向け bootstrap 面は queue 上のどのタスクにも明示的に割り当てられていない。iPhone/iPad だけを操作する実機 dogfood は、この Mac 側ペアリング開始面が製品として実装されるまで着手できない。 |
+| `N09` | `active` | `D4` | `H03`, `N03` | **(2026-09-16 追加)** `N08` が発見した gap を解消する: `ClairPairingAuthority.issuePairingLink` の結果を人間が Mac から iPhone/iPad へ運搬できるコンパクトな転送用文字列にエンコードする shared codec を `ClairV2Transport` に追加し、破損/改変/期限切れ/不正な pairingID を fail-closed で拒否すること(実際のペアリング可否は既存の H03 challenge/fingerprint confirmation 経路が最終判定し、本タスクの codec は運搬層に留める)。`ClairDaemon` の local control channel に pairing 発行 endpoint を追加し、`ClairV2MacApp` に最小限の「Pair a device」UI(コード表示、QR image、host fingerprint、有効期限)を実装する。mobile 側は `ClairV2MobileHostManagement` の既存 `presentPairing` 経路へ接続する貼り付け/手入力コードUIを追加する(camera QR scan は本タスクの必須要件ではない。Simulator dogfood はカメラを使えないため、手入力/ペーストが一次経路であること)。独自 visual design は加えない。 |
 
 Apple Developer membership、Team ID、APNs key は `N01`、`H09`、`N07` の実機完了に必要な外部依存である。入会待ちの間も code、simulator、mock APNs provider、protocol tests は進めるが、G1 は実機通知を確認するまで完了にしない。
 
