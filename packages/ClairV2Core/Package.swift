@@ -20,6 +20,8 @@ let package = Package(
     .library(name: "ClairV2DaemonKit", targets: ["ClairV2DaemonKit"]),
     .library(name: "ClairV2MobileKit", targets: ["ClairV2MobileKit"]),
     .library(name: "ClairV2AppKit", targets: ["ClairV2AppKit"]),
+    .library(name: "ClairV2EditorFixtures", targets: ["ClairV2EditorFixtures"]),
+    .executable(name: "EditorFixtureGenerator", targets: ["EditorFixtureGenerator"]),
   ],
   targets: [
     .target(name: "ClairV2PTY"),
@@ -84,6 +86,10 @@ let package = Package(
         "ClairV2Workspace",
       ]
     ),
+    .target(
+      name: "ClairV2EditorFixtures",
+      dependencies: ["ClairV2Shared"]
+    ),
     .testTarget(
       name: "ClairV2CoreTests",
       dependencies: [
@@ -93,6 +99,7 @@ let package = Package(
         "ClairV2Agent",
         "ClairV2AppKit",
         "ClairV2DaemonKit",
+        "ClairV2EditorFixtures",
         "ClairV2MobileKit",
         "ClairV2Review",
         "ClairV2Shared",
@@ -100,6 +107,10 @@ let package = Package(
         "ClairV2Transport",
         "ClairV2Workspace",
       ]
+    ),
+    .executableTarget(
+      name: "EditorFixtureGenerator",
+      dependencies: ["ClairV2EditorFixtures"]
     ),
   ]
 )
