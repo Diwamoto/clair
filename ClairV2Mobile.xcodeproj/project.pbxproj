@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		B00000000000000000000040 /* ClairV2MobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000020 /* ClairV2MobileApp.swift */; };
 		B00000000000000000000041 /* ClairV2MobileRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000021 /* ClairV2MobileRootView.swift */; };
+		B00000000000000000000046 /* ClairV2MobilePushDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000025 /* ClairV2MobilePushDelegate.swift */; };
 		B00000000000000000000042 /* ClairV2MobileKit in Frameworks */ = {isa = PBXBuildFile; productRef = B00000000000000000000011 /* ClairV2MobileKit */; };
 		B00000000000000000000043 /* ClairV2MobileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000023 /* ClairV2MobileTests.swift */; };
 		B00000000000000000000044 /* ClairV2MobileKit in Frameworks */ = {isa = PBXBuildFile; productRef = B00000000000000000000011 /* ClairV2MobileKit */; };
@@ -18,6 +19,7 @@
 /* Begin PBXFileReference section */
 		B00000000000000000000020 /* ClairV2MobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClairV2MobileApp.swift; sourceTree = "<group>"; };
 		B00000000000000000000021 /* ClairV2MobileRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClairV2MobileRootView.swift; sourceTree = "<group>"; };
+		B00000000000000000000025 /* ClairV2MobilePushDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClairV2MobilePushDelegate.swift; sourceTree = "<group>"; };
 		B00000000000000000000022 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = apple/ClairV2MobileApp/Info.plist; sourceTree = SOURCE_ROOT; };
 		B00000000000000000000023 /* ClairV2MobileTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClairV2MobileTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000024 /* ClairV2MobileUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClairV2MobileUITests.swift; sourceTree = "<group>"; };
@@ -78,6 +80,7 @@
 			children = (
 				B00000000000000000000020 /* ClairV2MobileApp.swift */,
 				B00000000000000000000021 /* ClairV2MobileRootView.swift */,
+				B00000000000000000000025 /* ClairV2MobilePushDelegate.swift */,
 				B00000000000000000000022 /* Info.plist */,
 			);
 			path = "packages/ClairV2Apps/Sources/ClairV2MobileApp";
@@ -238,6 +241,7 @@
 			files = (
 				B00000000000000000000040 /* ClairV2MobileApp.swift in Sources */,
 				B00000000000000000000041 /* ClairV2MobileRootView.swift in Sources */,
+				B00000000000000000000046 /* ClairV2MobilePushDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
