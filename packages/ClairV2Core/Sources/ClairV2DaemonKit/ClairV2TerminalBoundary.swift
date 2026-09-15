@@ -67,9 +67,8 @@ public struct ClairV2TerminalAttachmentState: Equatable, Sendable {
 /// before this lock; nothing inside the lock awaits or calls the authority.
 public final class ClairV2TerminalBoundary: @unchecked Sendable {
   private struct Subscriber {
-    let device: ClairDeviceID
     let subscriberID: UUID
-    let connectionID: ClairConnectionID
+    let connection: ClairAuthenticatedConnection
     let attachment: ClairV2TerminalAttachment
     var cursor: ClairV2TerminalCursor
     var offered: ClairV2TerminalFrame?
@@ -145,7 +144,8 @@ public final class ClairV2TerminalBoundary: @unchecked Sendable {
     scope: ResourceScope, generation: UInt64, subscriberID: UUID,
     cursor: ClairV2TerminalCursor? = nil, on connection: ClairAuthenticatedConnection
   ) async throws -> ClairV2TerminalAttachmentState {
-    try await authority.readAuthorized(scope: scope, on: connection) { [self] in
+    await pruneInactiveSubscribers()
+    return try await authority.readAuthorized(scope: scope, on: connection) { [self] in
       try lock.withLock {
         guard let id = scope.sessionID, var session = sessions[id], session.scope == scope,
           session.generation == generation
@@ -156,7 +156,8 @@ public final class ClairV2TerminalBoundary: @unchecked Sendable {
         // Reconnect replaces this device's named subscriber, without launching
         // a process and without stealing another viewer's cursor.
         session.subscribers = session.subscribers.filter {
-          !($0.value.device == connection.deviceID && $0.value.subscriberID == subscriberID)
+          !($0.value.connection.deviceID == connection.deviceID
+            && $0.value.subscriberID == subscriberID)
         }
         guard session.subscribers.count < maximumSubscribers else {
           throw ClairV2TerminalError.capacity
@@ -164,8 +165,8 @@ public final class ClairV2TerminalBoundary: @unchecked Sendable {
         let attachment = ClairV2TerminalAttachment(
           id: UUID(), scope: scope, generation: generation, cursor: start)
         session.subscribers[attachment.id] = Subscriber(
-          device: connection.deviceID, subscriberID: subscriberID,
-          connectionID: connection.connectionID, attachment: attachment, cursor: start)
+          subscriberID: subscriberID, connection: connection, attachment: attachment,
+          cursor: start)
         sessions[id] = session
         return ClairV2TerminalAttachmentState(
           attachment: attachment, stream: state, size: session.process.terminalSize)
@@ -317,10 +318,34 @@ public final class ClairV2TerminalBoundary: @unchecked Sendable {
       session.scope == attachment.scope,
       session.generation == attachment.generation,
       let subscriber = session.subscribers[attachment.id],
-      subscriber.attachment == attachment, subscriber.device == connection.deviceID,
-      subscriber.connectionID == connection.connectionID
+      subscriber.attachment == attachment, subscriber.connection.deviceID == connection.deviceID,
+      subscriber.connection.connectionID == connection.connectionID
     else { throw ClairV2TerminalError.staleSession }
     return (id, session, subscriber)
+  }
+
+  private func pruneInactiveSubscribers() async {
+    let candidates = lock.withLock {
+      sessions.values.flatMap { session in
+        session.subscribers.values.map(\.connection)
+      }
+    }
+    var inactiveConnectionIDs: Set<ClairConnectionID> = []
+    for candidate in candidates {
+      if !(await authority.isConnectionActive(candidate)) {
+        inactiveConnectionIDs.insert(candidate.connectionID)
+      }
+    }
+    guard !inactiveConnectionIDs.isEmpty else { return }
+    lock.withLock {
+      for id in sessions.keys {
+        guard var session = sessions[id] else { continue }
+        session.subscribers = session.subscribers.filter {
+          !inactiveConnectionIDs.contains($0.value.connection.connectionID)
+        }
+        sessions[id] = session
+      }
+    }
   }
 }
 

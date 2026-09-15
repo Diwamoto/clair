@@ -155,6 +155,103 @@ struct ClairV2TerminalBoundaryTests {
     #expect(!f.process.terminalJournal.snapshot().isClosed)
   }
 
+  @Test func t04ClosedConnectionDoesNotConsumeSubscriberCapacity() async throws {
+    let f = try T02BoundaryFixture(maximumSubscribers: 1)
+    let first = try await f.pair()
+    _ = try await f.boundary.attach(
+      scope: f.scope, generation: 1, subscriberID: UUID(), on: first.connection
+    )
+
+    _ = try await f.authority.revoke(deviceID: first.connection.deviceID)
+    let second = try await f.pair()
+    _ = try await f.boundary.attach(
+      scope: f.scope, generation: 1, subscriberID: UUID(), on: second.connection
+    )
+  }
+
+  @Test func t04AlternateScreenReconnectPreservesByteExactContinuity() async throws {
+    // Bytes are opaque to this layer, but exercising real alternate-screen
+    // control sequences proves reconnect never splices, drops, or duplicates
+    // a byte across the boundary that redraws a client's whole viewport.
+    let enterAltScreen = Data("\u{1B}[?1049h".utf8)
+    let redrawWhileDisconnected = Data("\u{1B}[2J\u{1B}[Hsome content".utf8)
+    let exitAltScreen = Data("\u{1B}[?1049l".utf8)
+
+    let f = try T02BoundaryFixture(journalBytes: 4096)
+    let peer = try await f.pair()
+    let subscriber = UUID()
+    let attachment = try await f.boundary.attach(
+      scope: f.scope, generation: 1, subscriberID: subscriber, on: peer.connection
+    ).attachment
+
+    try f.process.terminalJournal.append(enterAltScreen)
+    let opening = try #require(try await f.boundary.read(attachment, on: peer.connection))
+    try await f.boundary.acknowledge(attachment, cursor: opening.nextCursor, on: peer.connection)
+
+    // Reconnect while alternate screen is still active and more redraw bytes
+    // arrive only after the client has dropped off the old connection.
+    await f.authority.close(peer.connection)
+    let connection = try await peer.client.reconnect(
+      to: f.authority.presentation(), using: f.authority)
+    try f.process.terminalJournal.append(redrawWhileDisconnected)
+    let restored = try await f.boundary.attach(
+      scope: f.scope, generation: 1, subscriberID: subscriber,
+      cursor: opening.nextCursor, on: connection
+    ).attachment
+    #expect(restored.cursor == opening.nextCursor)
+
+    let redrawFrame = try #require(try await f.boundary.read(restored, on: connection))
+    #expect(redrawFrame.bytes == redrawWhileDisconnected)
+    try await f.boundary.acknowledge(restored, cursor: redrawFrame.nextCursor, on: connection)
+
+    try f.process.terminalJournal.append(exitAltScreen)
+    let closing = try #require(try await f.boundary.read(restored, on: connection))
+    #expect(closing.bytes == exitAltScreen)
+
+    let assembled = opening.bytes + redrawFrame.bytes + closing.bytes
+    #expect(assembled == enterAltScreen + redrawWhileDisconnected + exitAltScreen)
+  }
+
+  @Test func t04SlowSubscriberAltScreenFloodGetsExplicitGapNotCorruption() async throws {
+    let enterAltScreen = Data("\u{1B}[?1049h".utf8)
+    let redrawFlood = Data(repeating: 0x41, count: 64)
+
+    let f = try T02BoundaryFixture(journalBytes: 16)
+    let peer = try await f.pair()
+    let slow = try await f.boundary.attach(
+      scope: f.scope, generation: 1, subscriberID: UUID(), on: peer.connection
+    ).attachment
+
+    try f.process.terminalJournal.append(enterAltScreen)
+    let opening = try #require(try await f.boundary.read(slow, on: peer.connection))
+    #expect(opening.bytes == enterAltScreen)
+    try await f.boundary.acknowledge(slow, cursor: opening.nextCursor, on: peer.connection)
+
+    // The subscriber stalls (never reads again) while a large redraw burst
+    // evicts everything it has not yet consumed out of the bounded journal.
+    try f.process.terminalJournal.append(redrawFlood)
+    let retainedStart = f.process.terminalJournal.snapshot().retainedStart
+    #expect(retainedStart > opening.nextCursor.offset)
+
+    await #expect(throws: ClairV2TerminalError.gap(availableOffset: retainedStart)) {
+      try await f.boundary.read(slow, on: peer.connection)
+    }
+    // A gap is surfaced explicitly; the subscriber never receives a silently
+    // spliced or misaligned frame in place of the bytes it lost.
+    let snapshot = try await f.boundary.snapshot(slow, on: peer.connection)
+    #expect(snapshot.historyTruncated && snapshot.retainedStart == retainedStart)
+
+    // Resync from the daemon-reported retained start recovers exactly the
+    // still-available suffix of the flood, byte for byte.
+    let resynced = try await f.boundary.attach(
+      scope: f.scope, generation: 1, subscriberID: UUID(),
+      cursor: ClairV2TerminalCursor(epoch: opening.cursor.epoch, offset: retainedStart),
+      on: peer.connection
+    ).attachment
+    let recovered = try #require(try await f.boundary.read(resynced, on: peer.connection))
+    #expect(recovered.bytes == redrawFlood.suffix(recovered.bytes.count))
+  }
+
   @Test func t02DesktopGeometryRequiresExactOwnerAndMobileAttachCannotResize() async throws {
     let f = try T02BoundaryFixture()
     let peer = try await f.pair()
