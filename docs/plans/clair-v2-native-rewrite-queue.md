@@ -185,7 +185,7 @@ Editor track と Terminal surface track は G1 完了後、別 worktree で並�
 | `T01` | `queued` | `D5` | `N08` | libghostty/GhosttyKit の pinned build、license、resource bundle、C ABI、Swift concurrency boundary を確立する。macOS/iOS の reproducible build と minimal surface smoke が通ること。 |
 | `T02` | `done` | `D5` | `H01`, `H04`, `H05`, `H06`, `H08` | raw input/output を含む daemon-owned PTY/process/session ownership と agent I/O bridge を `ClairDaemon` に実装し、surface から分離する。stable SessionID、bounded binary stream、resize owner、bounded journal、attach/detach、child reaping を検証し、N08 が実際の OpenCode process を mobile control 経路から操作できる backend を完成させること。 |
 | `T03` | `queued` | `D4` | `T01`, `T02` | macOS Ghostty surface を native workspace に接続する。local shell、selection、copy/paste、scrollback、font/DPI、window resize が動くこと。 |
-| `T04` | `active` | `D5` | `T02`, `H08` | remote terminal binary stream、epoch/cursor、snapshot/gap、backpressure、input ordering を実装する。alternate screen 中の reconnect と slow subscriber で破損しないこと。 |
+| `T04` | `queued` | `D5` | `T02`, `H08` | remote terminal binary stream、epoch/cursor、snapshot/gap、backpressure、input ordering を実装する。alternate screen 中の reconnect と slow subscriber で破損しないこと。 |
 | `T05` | `queued` | `D5` | `T01`, `T04`, `N01` | iOS/iPadOS Ghostty surface と remote session attach を実装する。touch scroll/selection、hardware keyboard、safe-area/rotation、background detach が動くこと。 |
 | `T06` | `queued` | `D4` | `T03`, `T05` | IME/CJK、paste guard、mouse reporting、focus、desktop-owned PTY geometry、mobile local viewport を統合する。mobile attach が desktop rows/columns を暗黙に変えないこと。 |
 | `T07` | `queued` | `D5` | `T04`, `T06` | terminal integration gate。OpenCode TUI、shell、resize、alternate screen、flood、sleep/wake、network switch、Mac/mobile 同時入力、reattach の実機 tests と resource limits が通ること。 |
