@@ -1,4 +1,5 @@
 import ClairV2Shared
+import ClairV2Terminal
 import ClairV2Workspace
 import Dispatch
 import Foundation
@@ -2669,6 +2670,19 @@ public actor ClairV2AgentRuntime {
     sessions.values
       .map { $0.snapshot() }
       .sorted { lhs, rhs in lhs.identity.sessionID.rawValue < rhs.identity.sessionID.rawValue }
+  }
+
+  /// Daemon composition obtains the exact live generation's raw endpoint.
+  /// Surfaces do not own or launch a process through this seam.
+  public func terminalProcess(for snapshot: ClairV2AgentSessionSnapshot) throws
+    -> any ClairV2TerminalProcess
+  {
+    guard let session = sessions[snapshot.identity.sessionID],
+      session.identity == snapshot.identity,
+      session.processGeneration == snapshot.processGeneration,
+      session.lifecycle == .running, let process = session.process as? any ClairV2TerminalProcess
+    else { throw ClairV2TerminalError.staleSession }
+    return process
   }
 
   /// Installs the composition-layer hook used by H10 to propagate provider

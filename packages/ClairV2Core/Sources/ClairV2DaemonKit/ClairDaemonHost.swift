@@ -1,6 +1,7 @@
 import ClairV2Agent
 import ClairV2Push
 import ClairV2Shared
+import ClairV2Terminal
 import ClairV2Transport
 import ClairV2Workspace
 import Foundation
@@ -231,6 +232,7 @@ public actor ClairDaemonHost {
   public let agentRuntime: ClairV2AgentRuntime
   public let commandBoundary: ClairV2AgentCommandBoundary
   public let journal: ClairV2SessionJournal
+  public nonisolated let terminal: ClairV2TerminalBoundary
   public let pushRegistry: ClairDaemonPushRegistry
   public let limits: ClairDaemonHostLimits
 
@@ -285,6 +287,7 @@ public actor ClairDaemonHost {
       authority: authority, limits: commandLimits
     )
     self.journal = ClairV2SessionJournal(limits: journalLimits)
+    self.terminal = try ClairV2TerminalBoundary(authority: authority)
     self.pushRegistry = try ClairDaemonPushRegistry(
       authority: authority, relay: pushRelay, clock: pushClock, capacity: pushCapacity
     )
@@ -383,7 +386,7 @@ public actor ClairDaemonHost {
     providerID: ClairV2ProviderID,
     target: ClairV2AgentTarget,
     sessionID: SessionID? = nil,
-    endpoint: any ClairV2AgentCommandEndpoint,
+    endpoint: (any ClairV2AgentCommandEndpoint)? = nil,
     on connection: ClairAuthenticatedConnection
   ) async throws -> ClairV2AgentSessionSnapshot {
     try await requireCapability(.spawnSession, scope: target.resourceScope, on: connection)
@@ -406,7 +409,7 @@ public actor ClairDaemonHost {
     }
     resolveAgentSessionSlot(slot, for: snapshot)
     do {
-      try attach(snapshot: snapshot, endpoint: endpoint)
+      try await attach(snapshot: snapshot, endpoint: endpoint)
     } catch {
       await rollbackFailedAttachment(snapshot)
       throw error
@@ -418,7 +421,7 @@ public actor ClairDaemonHost {
   /// must already exist in H04's own bookkeeping; this never fabricates one.
   public func resumeSession(
     sessionID: SessionID,
-    endpoint: any ClairV2AgentCommandEndpoint,
+    endpoint: (any ClairV2AgentCommandEndpoint)? = nil,
     on connection: ClairAuthenticatedConnection
   ) async throws -> ClairV2AgentSessionSnapshot {
     // Check the capability before looking up the requested session so a
@@ -448,7 +451,7 @@ public actor ClairDaemonHost {
     }
     resolveAgentSessionSlot(slot, for: snapshot)
     do {
-      try attach(snapshot: snapshot, endpoint: endpoint)
+      try await attach(snapshot: snapshot, endpoint: endpoint)
     } catch {
       await rollbackFailedAttachment(snapshot)
       throw error
@@ -520,6 +523,7 @@ public actor ClairDaemonHost {
     _ snapshot: ClairV2AgentSessionSnapshot
   ) async {
     let identity = snapshot.identity
+    terminal.invalidate(snapshot: snapshot)
     commandBoundary.invalidate(
       identity: identity, processGeneration: snapshot.processGeneration
     )
@@ -541,13 +545,21 @@ public actor ClairDaemonHost {
   }
 
   private func attach(
-    snapshot: ClairV2AgentSessionSnapshot, endpoint: any ClairV2AgentCommandEndpoint
-  ) throws {
+    snapshot: ClairV2AgentSessionSnapshot, endpoint: (any ClairV2AgentCommandEndpoint)?
+  ) async throws {
     // A session that failed to reach `.running` (immediate exit, launch
     // failure) is never installed into H06/H08: there is no live process
     // generation for either module to authorize commands or append events
     // against, and H04 already reports the terminal snapshot on its own.
     guard snapshot.lifecycle == .running else { return }
+    let resolvedEndpoint: any ClairV2AgentCommandEndpoint
+    if let endpoint {
+      resolvedEndpoint = endpoint
+    } else {
+      let rawProcess = try await agentRuntime.terminalProcess(for: snapshot)
+      try terminal.install(snapshot: snapshot, process: rawProcess)
+      resolvedEndpoint = ClairV2RawAgentEndpoint(snapshot: snapshot, process: rawProcess)
+    }
     let epoch = try SessionEpoch(snapshot.processGeneration)
     if journalProcessGenerations[snapshot.identity.sessionID] != snapshot.processGeneration {
       removeSubscriberKeys(for: snapshot.identity.sessionID)
@@ -560,7 +572,7 @@ public actor ClairDaemonHost {
     openJournalSessions.insert(snapshot.identity.sessionID)
     journalProcessGenerations[snapshot.identity.sessionID] = snapshot.processGeneration
     try commandBoundary.install(
-      snapshot: snapshot, epoch: epoch, endpoint: endpoint
+      snapshot: snapshot, epoch: epoch, endpoint: resolvedEndpoint
     )
   }
 
@@ -592,6 +604,7 @@ public actor ClairDaemonHost {
     }
     do {
       let snapshot = try await agentRuntime.stop(sessionID: sessionID)
+      terminal.invalidate(snapshot: snapshot)
       commandBoundary.invalidate(
         identity: snapshot.identity, processGeneration: snapshot.processGeneration
       )
@@ -618,6 +631,7 @@ public actor ClairDaemonHost {
       // and daemon-wide slot, then return a typed failure instead of reporting
       // a successful stop that left a provider alive.
       if let snapshot = try? await agentRuntime.session(sessionID: sessionID) {
+        terminal.invalidate(snapshot: snapshot)
         commandBoundary.invalidate(
           identity: snapshot.identity, processGeneration: snapshot.processGeneration
         )
@@ -664,6 +678,7 @@ public actor ClairDaemonHost {
       let id = snapshot.identity.sessionID
       let cleanupPending = snapshot.lifecycle == .cleanupPending
       guard isTerminal(snapshot.lifecycle) || cleanupPending else { continue }
+      terminal.invalidate(snapshot: snapshot)
       let wasAttached = openJournalSessions.contains(id)
       // Also release a daemon-wide agent-session cap slot (Finding #2) for a
       // session that reserved one but never reached `attach`'s `.running`

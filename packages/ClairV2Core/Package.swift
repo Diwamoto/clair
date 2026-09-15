@@ -22,6 +22,7 @@ let package = Package(
     .library(name: "ClairV2AppKit", targets: ["ClairV2AppKit"]),
   ],
   targets: [
+    .target(name: "ClairV2PTY"),
     .target(name: "ClairV2Shared"),
     .target(name: "ClairV2Push"),
     .target(name: "ClairPushRelay", dependencies: ["ClairV2Push"]),
@@ -32,6 +33,8 @@ let package = Package(
     .target(
       name: "ClairV2Agent",
       dependencies: [
+        .target(name: "ClairV2PTY", condition: .when(platforms: [.macOS])),
+        "ClairV2Terminal",
         "ClairV2Shared",
         "ClairV2Workspace",
       ]
@@ -84,6 +87,7 @@ let package = Package(
     .testTarget(
       name: "ClairV2CoreTests",
       dependencies: [
+        .target(name: "ClairV2PTY", condition: .when(platforms: [.macOS])),
         "ClairV2Push",
         "ClairPushRelay",
         "ClairV2Agent",

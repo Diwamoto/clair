@@ -1,6 +1,7 @@
 import ClairV2Agent
 import ClairV2DaemonKit
 import ClairV2Push
+import ClairV2Shared
 import ClairV2Transport
 import ClairV2Workspace
 import Darwin
@@ -51,15 +52,37 @@ struct ClairDaemonMain {
     configuration: ClairDaemonConfiguration
   ) throws -> ClairDaemonRuntime {
     // The executable owns the same H10 composition root as the fixture suite.
-    // Project discovery, provider credentials, and APNs are intentionally
-    // injected/configured by later product surfaces; an empty catalog and
-    // unavailable relay fail closed until those inputs are supplied.
-    let workspace = try ClairV2WorkspaceRuntime(projects: [])
+    // Local host registration supplies the executable and project, never a
+    // remote caller's shell command. No provider credentials are copied into
+    // configuration or diagnostics. OpenCode can use its own protected config.
+    let root = argument("--project-root")
+    let executable = argument("--opencode-executable")
+    guard (root == nil) == (executable == nil) else { throw ClairV2AgentError.invalidLaunchSpec }
+    let projectID = try ProjectID("local-project")
+    let projects =
+      try root.map { [try ClairV2ProjectRoot(id: projectID, rootURL: URL(fileURLWithPath: $0))] }
+      ?? []
+    let workspace = try ClairV2WorkspaceRuntime(projects: projects)
     let authority = try ClairPairingAuthority(
       hostID: try ClairHostID("clair-daemon"),
-      endpoint: try ClairTransportEndpoint("wss://127.0.0.1/clair")
+      endpoint: try ClairTransportEndpoint("wss://127.0.0.1/clair"),
+      defaultVisibleScopes: root == nil ? [] : [try ResourceScope(projectID: projectID)]
     )
-    let agentRuntime = try ClairV2AgentRuntime(workspace: workspace, providers: [])
+    var providers: [any ClairV2AgentProviderAdapter] = []
+    if let executable {
+      let inherited = ProcessInfo.processInfo.environment
+      var environment = inherited.filter {
+        ["HOME", "PATH", "LANG", "TMPDIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME"].contains($0.key)
+      }
+      environment["TERM"] = "xterm-256color"
+      providers.append(
+        try ClairV2OpenCodeProvider(
+          executableURL: URL(fileURLWithPath: executable),
+          version: ClairV2ProviderVersion(argument("--opencode-version") ?? "unknown"),
+          environment: environment, processFactory: ClairV2PTYAgentProcessFactory()
+        ))
+    }
+    let agentRuntime = try ClairV2AgentRuntime(workspace: workspace, providers: providers)
     let host = try ClairDaemonHost(
       workspace: workspace,
       authority: authority,
@@ -67,6 +90,14 @@ struct ClairDaemonMain {
       pushRelay: ClairUnavailablePushRelay()
     )
     return ClairDaemonRuntime(configuration: configuration, host: host)
+  }
+
+  private static func argument(_ name: String) -> String? {
+    let arguments = Array(CommandLine.arguments.dropFirst())
+    guard let index = arguments.firstIndex(of: name), arguments.indices.contains(index + 1),
+      !arguments[index + 1].hasPrefix("--")
+    else { return nil }
+    return arguments[index + 1]
   }
 
   private static func daemonPaths() -> ClairDaemonPaths {
