@@ -14,6 +14,13 @@ Parent plan: [Clair v2 native rewrite](clair-v2-native-rewrite.md)
 
 **Sequencing update (2026-09-15)**: `N08` は Mac 側にペアリング bootstrap 面が存在しないという実装 gap で `blocked`。iPhone/iPad foundation shell は Simulator 実機で確認済みのため、release owner の判断で editor (`P1-A`/Phase 3) と terminal (`P1-B`/Phase 4) の POC 実装を `N08` 完了待ちにせず並行して優先度を上げる。詳細は [native rewrite plan の Sequencing update](clair-v2-native-rewrite.md#phase-4-libghostty-terminal) を参照。
 
+**Sequencing update (2026-09-16)**: `N09` は `N08` の mac 側 pairing bootstrap gap 解消を狙って実装済みだが、実際に `N08` の acceptance（iPhone だけを操作した dogfood）が通るかはまだ検証していない。それとは独立に、release owner の判断で目標の重心を動かす。「スマホから確認できること」より先に「Mac 上で editor / terminal を実際の開発に使える精度に仕上げ、Design canvas / Workbench 準拠の見た目・操作に揃えること」を当面の実行優先度にする。`P0`/`P1`/`P2` のラベルと `G1`/`G2`/`G3` のマイルストーン定義自体は変更しないが、実行順序は次のように上書きする。
+
+- `U04`（Mac AppShell chrome）、`U05`（editor/diff/review UI）、`U06`（terminal/session UI）は、`G2`（`E10` と `T07` の全完了）を待たず、Mac 側の実装（`U04`: `E07`, `T03` / `U05`: `E07`, `E09` / `U06`: `T03`）が揃った時点で着手できる。iOS 専用の実装（`E08`, `T05`）や統合ゲート（`E10`, `T07`）、`N08` の完了は前提にしない。
+- `U01`（Design canvas / Workbench の checklist freeze）と `U02`（tokens/primitives 移植）も `G2` を前提にせず、現在の canvas/mock 状態だけを前提にいつでも着手できる。
+- `U03`（モバイル nav UI）は従来通り `N08` に依存するが、他の `U` task をブロックしない。
+- `N08` は `blocked` のままでよい。仮に dependency が揃って `ready` になっても、`clair-v2-task`/`clair-v2-orchestrator` は `E`/`T` 系および `U04`〜`U06` の進行中作業を優先し、`N08` を先に割り込ませない。
+
 ## Priority contract
 
 | Priority | Goal | Product gate |
@@ -76,6 +83,8 @@ iPhone / iPad から以下を一続きで行える。
 
 Design canvas と Clair Workbench の全対象画面について visual / interaction / accessibility の照合が通り、仮 UI と旧 runtime が削除されている。
 
+2026-09-16 の sequencing update により、Mac 向けの `U04`/`U05`/`U06`（AppShell chrome、editor/diff/review UI、terminal/session UI）は `G2` の完了を待たず、対応する Mac 側 editor/terminal task が揃い次第着手する。`G2`/`G3` 自体の完了条件（Mac と mobile 双方、全画面の照合）は変えない。iOS 固有の見た目・操作照合は iOS 側の editor/terminal（`E08`, `T05`）と `N08` が揃ってから追い上げる。
+
 ## Dependency overview
 
 ```text
@@ -118,12 +127,13 @@ T01 -> T08
 {T04, T06} -> T07
 {E10, T07} -> G2
 
-G2 -> U01 -> U02
+U01 -> U02
 {U02, N08} -> U03
-{U02, E10, T07} -> U04
-{U03, U04, E10} -> U05
-{U03, U04, T07} -> U06
+{U02, E07, T03} -> U04
+{U04, E07, E09} -> U05
+{U04, T03} -> U06
 {U05, U06} -> U07 -> U08 -> G3
+{E10, T07} -> G2
 ```
 
 ## P0-A: Rewrite foundation
@@ -202,13 +212,13 @@ UI の正本は [Clair UI Design canvas と Workbench](../../prototypes/clair-wo
 
 | ID | Status | Difficulty | Depends on | Task and completion evidence |
 |---|---|---:|---|---|
-| `U01` | `queued` | `D2` | `E10`, `T07` | Design canvas と Workbench を同期し、対象 screen/state、tokens、layout、interaction、motion の native implementation checklist を freeze する。未定義状態を一覧化し、native 側で発明していないこと。 |
+| `U01` | `queued` | `D2` | `B01` | Design canvas と Workbench を同期し、対象 screen/state、tokens、layout、interaction、motion の native implementation checklist を freeze する。未定義状態を一覧化し、native 側で発明していないこと。**(2026-09-16 sequencing update)** `G2`(`E10`/`T07`)完了を前提にせず着手できる。 |
 | `U02` | `queued` | `D3` | `U01` | canvas tokens を Swift の color/type/spacing/radius/motion primitives と reusable native controls に写す。値と semantic name の照合 test を持つこと。 |
-| `U03` | `queued` | `D3` | `U02`, `N08` | mobile の host/project/session/activity/review/notification navigation を mock contract に合わせる。compact/regular size class と safe area を native に適応しつつ情報階層を変えないこと。 |
-| `U04` | `queued` | `D3` | `U02`, `E10`, `T07` | macOS AppShell、titlebar project groups、sidebar、pane/tab、status bar、command/settings surfaces を Workbench に合わせる。native window chrome を含む screenshot comparison が通ること。 |
-| `U05` | `queued` | `D4` | `U03`, `U04`, `E10` | editor、diff、AI review comment/thread/suggestion、context menu の visual/interaction を mock に合わせる。keyboard navigation、focus、stale state、empty/error state を照合すること。 |
-| `U06` | `queued` | `D3` | `U03`, `U04`, `T07` | terminal、agent activity、session list、attention/approval surfaces を mock に合わせる。terminal content の描画性能を UI overlay が悪化させないこと。 |
-| `U07` | `queued` | `D4` | `U05`, `U06` | screenshot/interaction regression、VoiceOver、Dynamic Type、keyboard-only、reduced motion、contrast の final QA を Mac/iPhone/iPad で行う。差分は canvas 変更か native bug のどちらかへ分類すること。 |
+| `U03` | `queued` | `D3` | `U02`, `N08` | mobile の host/project/session/activity/review/notification navigation を mock contract に合わせる。compact/regular size class と safe area を native に適応しつつ情報階層を変えないこと。他の `U` task はこの task の完了を待たない。 |
+| `U04` | `queued` | `D3` | `U02`, `E07`, `T03` | macOS AppShell、titlebar project groups、sidebar、pane/tab、status bar、command/settings surfaces を Workbench に合わせる。native window chrome を含む screenshot comparison が通ること。**(2026-09-16 sequencing update)** Mac 側 editor rendering(`E07`)と Mac 側 terminal surface(`T03`)が揃えば着手でき、`E10`/`T07`/`N08` の完了を前提にしない。 |
+| `U05` | `queued` | `D4` | `U04`, `E07`, `E09` | Mac 上の editor、diff、AI review comment/thread/suggestion、context menu の visual/interaction を mock に合わせる。keyboard navigation、focus、stale state、empty/error state を照合すること。**(2026-09-16 sequencing update)** `E08`(iOS editor surface)と完全な `E10` gate の完了を前提にしない。iOS 側の同等 UI は `E08` 完了後の追い課題とし、本 task の完了条件には含めない。 |
+| `U06` | `queued` | `D3` | `U04`, `T03` | Mac 上の terminal、agent activity、session list、attention/approval surfaces を mock に合わせる。terminal content の描画性能を UI overlay が悪化させないこと。**(2026-09-16 sequencing update)** `T05`(iOS terminal surface)と完全な `T07` gate の完了を前提にしない。iOS 側の同等 UI は `T05` 完了後の追い課題とし、本 task の完了条件には含めない。 |
+| `U07` | `queued` | `D4` | `U05`, `U06` | screenshot/interaction regression、VoiceOver、Dynamic Type、keyboard-only、reduced motion、contrast の final QA を Mac/iPhone/iPad で行う。差分は canvas 変更か native bug のどちらかへ分類すること。`U05`/`U06` が Mac 側だけで完了した状態で着手する場合は Mac 分の QA に限定し、iOS 分は `E08`/`T05`/`N08` が揃ってから追い QA として扱うこと。 |
 | `U08` | `queued` | `D3` | `U07` | final cutover。仮 UI、旧 CodeMirror/CodeEdit/libvterm/PWA assets、不要 dependency/build path を削除し、docs/runbook を v2 だけに更新する。archive tag からのみ旧実装を復元できる状態にすること。 |
 
 ## Initial dispatch order

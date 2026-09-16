@@ -220,6 +220,8 @@ G1 の実際の raw agent session を検証するため、Phase 4 のうち daem
 
 **Sequencing update (2026-09-15)**: `N08`（G1 の実機 dogfood gate）は、モバイル側の実装ではなく Mac 側にペアリングを開始する操作面（QR 表示等の GUI/CLI）が一つも存在しないという、計画時点で想定していなかった gap で `blocked` になった。iPhone/iPad 側の foundation shell は Simulator 実機確認済みで、G1 自体が Phase 3/4 の技術的前提には当たらないと判断し、release owner の指示で Phase 3 (editor) と Phase 4 (terminal) の POC 実装を G1 の完了を待たずに並行して優先度を上げる。Mac を「PC 側の本物の画面」として積極的に作り込む方針に転換し、G1 の残課題（Mac 側ペアリング bootstrap 面）は本転換後にあらためて優先度を判断する。`T02` の先行と同じ理由で、`E01`/`T01` の技術的前提はどちらも `N08` ではなく既存の package/build graph（`B01`）で足りるため、`N08` を必須先行条件から外す。
 
+**Sequencing update (2026-09-16)**: `N09` は `N08` の gap（Mac 側ペアリング bootstrap 面の欠如）解消を狙って実装済みだが、`N08` 自体の実機 dogfood acceptance はまだ検証していない。それとは別に、release owner の判断で当面の目標の重心を動かす。「モバイルから Mac を安全に確認・操作できること」を確認する前に、「Mac 上で editor / terminal を実際の開発に使える精度に仕上げ、Design canvas / Workbench 準拠の見た目・操作に揃えること」を優先する。Phase 5 (Mock-faithful UI) のうち Mac 向けの範囲（AppShell chrome、editor/diff/review UI、terminal/session UI）は、Phase 3/4 の Mac 側実装（native editor rendering、macOS Ghostty surface）が揃い次第着手し、Phase 3/4 の iOS 側実装（iOS editor surface、iOS terminal surface）や G1 dogfood の完了を前提にしない。iOS 側の mock-faithful UI は、iOS 側の editor/terminal 実装と `N08` が揃ってから追い上げる。Definition of done（section 10）の対象範囲は変えない。
+
 ### Phase 5: Mock-faithful UI
 
 - Clair UI Design canvas と Workbench mock を UI contract として freeze
@@ -227,6 +229,8 @@ G1 の実際の raw agent session を検証するため、Phase 4 のうち daem
 - editor、terminal、diff、review、agent activity を mock の見た目と操作へ一致させる
 - screenshot/interaction regression、VoiceOver、keyboard、reduced motion を検証
 - 仮 UI と旧 runtime/assets/dependencies を削除
+
+Mac 向け UI（AppShell chrome、editor/diff/review UI、terminal/session UI）は、上記 2026-09-16 sequencing update により Phase 3/4 の Mac 側実装が揃い次第、iOS 側の完了や G1 を待たずに着手する。iOS 向け UI は iOS 側の editor/terminal 実装が揃ってから着手する。
 
 Exit criteria: Design canvas / Workbench との差分が解消され、v2 native UI だけが製品経路として残る。
 
