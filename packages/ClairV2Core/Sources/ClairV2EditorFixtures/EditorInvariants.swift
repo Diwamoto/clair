@@ -56,6 +56,7 @@ public enum EditorInvariants {
         "The buffer's canonical storage unit is the UTF-8 byte. Every other coordinate space (UTF-16 code unit, Unicode scalar, extended grapheme cluster, line/column) is a derived projection of a UTF-8 offset.",
       rationale:
         "Files are read and written as UTF-8. Picking UTF-16 as canonical would make every disk round trip a transcode, and picking grapheme clusters would make offsets depend on the Unicode version linked at runtime.",
+      // EditorTextCoordinateTests.testCorpusRoundTripsAllCoordinateSpacesAndLines
       provenBy: ["E02"]
     ),
     EditorInvariant(
@@ -65,6 +66,7 @@ public enum EditorInvariants {
         "Every offset accepted or returned by the public core API must be tagged with its coordinate space. A bare `Int` offset is not a valid parameter type.",
       rationale:
         "The CodeEdit PoC mixed UTF-16 selection ranges, UTF-8 fixture byte counts, and a UTF-16-based `maxSyncContentLength` threshold in one system. The 1MB Japanese fixture then landed on the wrong side of the synchronous-parse boundary and produced a 26.14 ms median keystroke.",
+      // EditorTextCoordinateTests (typed offsets at every public boundary)
       provenBy: ["E02"]
     ),
     EditorInvariant(
@@ -74,6 +76,7 @@ public enum EditorInvariants {
         "No public API may produce an offset that falls inside a UTF-8 continuation byte, between the halves of a UTF-16 surrogate pair, or inside an extended grapheme cluster. Cursor-visible positions must snap outward to a grapheme cluster boundary.",
       rationale:
         "Astral-plane characters and ZWJ emoji sequences are single user-perceived characters. Splitting them corrupts the document on delete and produces unpaired surrogates on LSP round trips.",
+      // EditorTextCoordinateTests.testEveryInteriorUnitRejectsOrExplicitlyRoundsOutward
       provenBy: ["E02", "E03"]
     ),
     EditorInvariant(
@@ -83,6 +86,8 @@ public enum EditorInvariants {
         "Caret motion, selection extension, and backward delete operate on extended grapheme cluster boundaries as computed by Swift's `Character` segmentation, not on scalars or code units.",
       rationale:
         "One press of Delete must remove one visible character: the whole `👨‍👩‍👧‍👦` sequence, the whole `e` + combining acute pair, and the whole `\\r\\n` pair.",
+      // EditorTextStorageTests.testDeletingEachE01GraphemeRemovesExactlyOneVisibleCharacter
+      // E02 proves the storage prerequisite; caret/selection/input remain in the tasks below.
       provenBy: ["E03", "E07", "E08"]
     ),
     EditorInvariant(
@@ -92,6 +97,7 @@ public enum EditorInvariants {
         "`\\r\\n` is exactly one line break and exactly one grapheme cluster. A lone `\\r`, a lone `\\n`, U+0085, U+2028, and U+2029 are each one line break. No coordinate may land between `\\r` and `\\n`.",
       rationale:
         "Mixed line endings are normal in real repositories; an offset between CR and LF makes line index and byte offset disagree.",
+      // EditorTextStorageTests.testCRLFFusionKeepsExistingIdentityBeforeNewIdentity
       provenBy: ["E02"]
     ),
     EditorInvariant(
@@ -110,6 +116,7 @@ public enum EditorInvariants {
         "Text is stored exactly as read. The core never applies Unicode normalization (NFC/NFD) to document content; normalization may only be offered as an explicit, undoable user edit.",
       rationale:
         "Silent normalization rewrites bytes the user never touched, producing spurious diffs and breaking content-hash based external-change detection.",
+      // EditorTextCoordinateTests.testStrictUTF8LoadAndReplacementNeverNormalizeOrRepairBytes
       provenBy: ["E02"]
     ),
     EditorInvariant(
@@ -119,6 +126,7 @@ public enum EditorInvariants {
         "Invalid UTF-8 in a file must be represented losslessly enough to round trip unchanged when the region is not edited, or the file must be refused as binary. Silent U+FFFD substitution on load is forbidden.",
       rationale:
         "Replacing undecodable bytes with U+FFFD and then saving destroys user data with no undo entry.",
+      // EditorTextCoordinateTests.testStrictUTF8LoadAndReplacementNeverNormalizeOrRepairBytes
       provenBy: ["E02"]
     ),
 
@@ -131,6 +139,7 @@ public enum EditorInvariants {
         "A document revision is an immutable, totally ordered value. Revisions increase strictly monotonically for content changes and are never reused within a document's lifetime.",
       rationale:
         "Anchors, diagnostics, completions, and AI suggestions are all validated by revision equality; a reused revision silently re-validates stale data.",
+      // EditorTextStorageTests.testNoOpsFailuresAndForeignRevisionsNeverAdvanceOrPartiallyMutate
       provenBy: ["E02"]
     ),
     EditorInvariant(
@@ -140,6 +149,7 @@ public enum EditorInvariants {
         "Attribute-only changes (syntax highlight, diagnostics, review decorations) must not advance the content revision.",
       rationale:
         "The CodeEdit PoC initially advanced its revision from an `NSTextStorage` delegate that also fired for attribute changes, invalidating every comment anchor on each highlight pass.",
+      // E02 has no attribute mutation API; E05 decoration integration remains pending
       provenBy: ["E02", "E05"]
     ),
     EditorInvariant(
@@ -149,6 +159,7 @@ public enum EditorInvariants {
         "A snapshot taken at revision R is immutable and readable from any thread without copying the whole document.",
       rationale:
         "Save, Tree-sitter parse, LSP sync, and AI review all need a consistent view while the user keeps typing.",
+      // EditorTextStorageTests.testRetainedSnapshotsCanBeReadAcrossTasksDuringEdits
       provenBy: ["E02", "E05"]
     ),
     EditorInvariant(
@@ -167,6 +178,7 @@ public enum EditorInvariants {
         "The whole-document `String` is never materialised on the typing hot path. Snapshots are produced only at explicit boundaries: save, parse, external sync, and AI hand-off.",
       rationale:
         "The current CodeMirror/WKWebView path pushes `doc.toString()` on every change or selection event; 20 selection round trips on the 10MB fixture moved 209,714,700 bytes across the bridge.",
+      // EditorTextSeamTests.testManySmallEditsPreserveAVLBalanceAndShareUntouchedLeaves
       provenBy: ["E02", "E06"]
     ),
 
@@ -326,6 +338,7 @@ public enum EditorInvariants {
         "Work per edit is proportional to the size of the edit and the visible viewport, not to document size or line length.",
       rationale:
         "This is the structural answer to the PoC's 10MB numbers; it is a data-structure requirement, not a tuning goal.",
+      // EditorTextPerformanceTests (storage); E06 viewport proof remains pending
       provenBy: ["E02", "E06"]
     ),
     EditorInvariant(

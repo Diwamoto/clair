@@ -58,6 +58,7 @@ let package = Package(
     .library(name: "ClairV2MobileKit", targets: ["ClairV2MobileKit"]),
     .library(name: "ClairV2AppKit", targets: ["ClairV2AppKit"]),
     .library(name: "ClairV2EditorFixtures", targets: ["ClairV2EditorFixtures"]),
+    .library(name: "ClairV2EditorCore", targets: ["ClairV2EditorCore"]),
     .library(name: "ClairV2Ghostty", targets: ["ClairV2Ghostty"]),
     .executable(name: "EditorFixtureGenerator", targets: ["EditorFixtureGenerator"]),
   ],
@@ -65,6 +66,7 @@ let package = Package(
     .target(name: "ClairV2PTY"),
     .target(name: "ClairV2Shared"),
     .target(name: "ClairV2DesignSystem"),
+    .target(name: "ClairV2EditorCore"),
     .target(name: "ClairV2Push"),
     .target(name: "ClairPushRelay", dependencies: ["ClairV2Push"]),
     .target(
@@ -160,6 +162,7 @@ let package = Package(
         "ClairV2AppKit",
         "ClairV2DaemonKit",
         "ClairV2EditorFixtures",
+        "ClairV2EditorCore",
         "ClairV2Ghostty",
         "ClairV2MobileKit",
         "ClairV2Review",
