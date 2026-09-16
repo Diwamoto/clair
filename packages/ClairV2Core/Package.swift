@@ -141,15 +141,69 @@ let package = Package(
         .headerSearchPath("Vendor/ghostty/include"),
         ghosttyVendored ? .define("CLAIR_GHOSTTY_VENDORED") : nil,
       ].compactMap { $0 },
+      // GhosttyKit.xcframework wraps `libghostty-internal.a`, a static
+      // library. Its Metal renderer, its font shaping, and its embedded
+      // process/display handling (T08's `ghostty_surface_*` subset) pull in
+      // system frameworks that libghostty itself does not (and, as a
+      // static library, cannot) declare as link dependencies; every
+      // consumer has to name them, exactly like the real Xcode-based
+      // Ghostty app's project settings do. This list was derived by
+      // linking T08's real macOS smoke test against the pinned commit's
+      // built xcframework and resolving every "undefined symbol" error.
+      //
+      // `GhosttyKit` itself is not listed with `.linkedFramework`: the
+      // vendored xcframework's macOS slice wraps a static library
+      // (`libghostty-internal.a`), not a `.framework` bundle, so
+      // `-framework GhosttyKit` fails at final link time with "framework
+      // 'GhosttyKit' not found" (T01's original setting was never
+      // exercised because nothing had ever been vendored). The
+      // `.binaryTarget`/`.target(name: "GhosttyKit")` dependency above is
+      // sufficient on its own for SwiftPM to link the static library into
+      // anything that depends on it transitively.
       linkerSettings: ghosttyVendored
-        ? [.linkedFramework("GhosttyKit")]
+        ? [
+          // libghostty statically links several C++ dependencies (glslang,
+          // SPIRV-Cross, Dear ImGui, Breakpad) for its shader/inspector
+          // tooling; their exception-handling/RTTI symbols need libc++.
+          .linkedLibrary("c++"),
+          .linkedFramework("AppKit", .when(platforms: [.macOS])),
+          .linkedFramework("Metal", .when(platforms: [.macOS])),
+          .linkedFramework("QuartzCore", .when(platforms: [.macOS])),
+          .linkedFramework("CoreVideo", .when(platforms: [.macOS])),
+          .linkedFramework("IOSurface", .when(platforms: [.macOS])),
+          .linkedFramework("CoreText", .when(platforms: [.macOS])),
+          .linkedFramework("CoreGraphics", .when(platforms: [.macOS])),
+          .linkedFramework("Carbon", .when(platforms: [.macOS])),
+          .linkedFramework("Security", .when(platforms: [.macOS])),
+          .linkedFramework("SystemConfiguration", .when(platforms: [.macOS])),
+          .linkedFramework("CoreServices", .when(platforms: [.macOS])),
+          .linkedFramework("UniformTypeIdentifiers", .when(platforms: [.macOS])),
+          .linkedFramework("IOKit", .when(platforms: [.macOS])),
+          .linkedFramework("OSLog", .when(platforms: [.macOS])),
+        ]
         : []
     ),
     .target(
       name: "ClairV2Ghostty",
       dependencies: ["ClairV2GhosttyABI"],
+      // `.define("CLAIR_GHOSTTY_VENDORED")` alone only sets a *Swift*
+      // compilation flag, guarding `#if CLAIR_GHOSTTY_VENDORED` blocks
+      // written in this target's own Swift source. It does not reach the
+      // Clang importer that parses `ClairV2GhosttyABI`'s public header
+      // when this target `import`s it — that importer needs its own
+      // `-Xcc -D…`, or every declaration inside
+      // `clair_ghostty_abi.h`'s `#if defined(CLAIR_GHOSTTY_VENDORED)`
+      // block (the entire real ABI surface: init/info/config *and* T08's
+      // `ghostty_surface_*` subset) is invisible to Swift here regardless
+      // of whether the library is actually vendored — a real, silent gap
+      // T08 found the moment it vendored for the first time and ran
+      // `swift build` against the result (T01 never caught this because
+      // nothing had ever been vendored in that environment).
       swiftSettings: ghosttyVendored
-        ? [.define("CLAIR_GHOSTTY_VENDORED")]
+        ? [
+          .define("CLAIR_GHOSTTY_VENDORED"),
+          .unsafeFlags(["-Xcc", "-DCLAIR_GHOSTTY_VENDORED"]),
+        ]
         : []
     ),
     .testTarget(

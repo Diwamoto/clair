@@ -54,7 +54,12 @@ public final class GhosttyRuntime {
   /// `false` means every method below always throws `.runtimeUnavailable`;
   /// this is the default, expected state before `scripts/v2-ghostty.sh
   /// vendor` has run.
-  public static var isVendored: Bool {
+  ///
+  /// `nonisolated` because this is a pure compile-time-conditional read
+  /// (no C handle, no shared mutable state) and callers need it outside
+  /// actor isolation, e.g. in a Swift Testing `.enabled(if:)` trait, which
+  /// evaluates its condition before any test body runs on the main actor.
+  public nonisolated static var isVendored: Bool {
     #if CLAIR_GHOSTTY_VENDORED
     return clair_ghostty_abi_is_vendored() != 0
     #else

@@ -20,6 +20,29 @@ under the Apache License 2.0 or the MIT License, at the user's option.
 - Project: https://crates.io/crates/libc
 - License: https://github.com/rust-lang/libc/blob/main/LICENSE-APACHE
 
+## libghostty / GhosttyKit
+
+Clair's terminal engine (`ClairV2GhosttyABI`/`ClairV2Ghostty`) links the
+pinned `libghostty-internal` static library, built from upstream Ghostty at
+the commit recorded in `Config/ghostty-pin.json`. Ghostty is available under
+the MIT License.
+
+- Project: https://github.com/ghostty-org/ghostty
+- Pinned commit: `d4c88d8069912b653d707191388ca98e24751f12` (`1.3.2-dev`)
+- License: MIT — Copyright (c) 2024 Mitchell Hashimoto, Ghostty contributors
+- The upstream `LICENSE` file is staged at vendor time to
+  `packages/ClairV2Core/Vendor/ghostty/LICENSE-ghostty` (git-ignored,
+  materialized by `scripts/v2-ghostty.sh vendor`, not redistributed from
+  this repository).
+
+Ghostty's macOS build statically links several third-party C++ libraries for
+its Metal renderer, shader compilation, and debugging/crash-reporting
+tooling (glslang, SPIRV-Cross, Dear ImGui, Google Breakpad, among others).
+Their licenses are upstream Ghostty's responsibility to track and notice as
+part of its own build; this repository does not re-vendor or redistribute
+their source and defers to upstream Ghostty's own license inventory for
+that transitive dependency set.
+
 ## Repository dependency policy
 
 The PTY host dependency is resolved through Cargo and is not vendored into this

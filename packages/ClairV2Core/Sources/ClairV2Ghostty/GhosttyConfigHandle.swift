@@ -38,4 +38,14 @@ public final class GhosttyConfigHandle {
     guard isValid else { throw GhosttyError.handleExpired }
     return try body()
   }
+
+  #if CLAIR_GHOSTTY_VENDORED
+    /// Module-internal escape hatch for `GhosttyRuntime.withApp`, which
+    /// needs the raw `clair_ghostty_config_t` to call `ghostty_app_new`.
+    /// Not `public`: nothing outside `ClairV2Ghostty` touches the raw C
+    /// handle directly.
+    func withRawConfig<T>(_ body: (clair_ghostty_config_t) -> T) -> T {
+      body(raw)
+    }
+  #endif
 }

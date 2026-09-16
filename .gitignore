@@ -29,3 +29,9 @@ __pycache__/
 
 # Seeded Claude Design canvas output. Re-seed from the .dc.html sources.
 /docs/investigations/ui-design-review/clair-workspace-redesign.html
+
+# Materialized libghostty/GhosttyKit vendor artifact and its build/fetch
+# cache (Config/ghostty-pin.json is the tracked source of truth; see
+# scripts/v2-ghostty.sh and docs/plans/clair-v2-t01-libghostty-foundation.md).
+/packages/ClairV2Core/Vendor/ghostty/
+/.cache/v2-ghostty/

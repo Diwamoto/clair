@@ -7,8 +7,8 @@
   "toolchain": {
     "name": "zig",
     "version": "0.16.0",
-    "archive_url": "https://ziglang.org/download/0.16.0/zig-macos-aarch64-0.16.0.tar.xz",
-    "archive_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    "archive_url": "https://ziglang.org/download/0.16.0/zig-aarch64-macos-0.16.0.tar.xz",
+    "archive_sha256": "b23d70deaa879b5c2d486ed3316f7eaa53e84acf6fc9cc747de152450d401489"
   },
   "build": {
     "mode": "ReleaseFast",
@@ -17,6 +17,10 @@
       "macos-arm64_x86_64",
       "ios-arm64",
       "ios-arm64-simulator"
-    ]
+    ],
+    "vendored_slices": [
+      "macos-arm64"
+    ],
+    "vendored_slices_note": "T08 (2026-09-16) implemented and verified only the native macos-arm64 slice end-to-end (real zig build + real ghostty_surface_* smoke). The macOS x86_64 half of the universal slice and both iOS slices remain unbuilt in this environment; T05 (iOS Ghostty surface) is the task that extends `scripts/v2-ghostty.sh vendor` to the remaining slices before it needs them."
   }
 }

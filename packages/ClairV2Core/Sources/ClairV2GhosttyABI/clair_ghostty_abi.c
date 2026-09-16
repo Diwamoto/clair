@@ -1,5 +1,172 @@
 #include "include/clair_ghostty_abi.h"
 
+#if defined(CLAIR_GHOSTTY_VENDORED)
+#include <string.h>
+
+// T01's init/info/config subset was originally exposed to Swift as
+// function-like macros (`#define clair_ghostty_init(argc, argv)
+// ghostty_init((argc), (argv))`). Swift's Clang importer does not import
+// function-like macros that expand to a call expression, so those macros
+// were never actually reachable from `GhosttyRuntime.swift` — this was
+// only discovered now, by T08, because T01's environment never vendored
+// the real library and so never ran `swift build` against it. Real
+// functions instead, matching the rest of this file's `ghostty_surface_*`
+// wrappers.
+int clair_ghostty_init(uintptr_t argc, char **argv) {
+  return ghostty_init(argc, argv);
+}
+
+clair_ghostty_info_s clair_ghostty_info(void) {
+  ghostty_info_s real = ghostty_info();
+  clair_ghostty_info_s out;
+  memcpy(&out, &real, sizeof(out));
+  return out;
+}
+
+clair_ghostty_config_t clair_ghostty_config_new(void) {
+  return (clair_ghostty_config_t)ghostty_config_new();
+}
+
+void clair_ghostty_config_free(clair_ghostty_config_t config) {
+  ghostty_config_free((ghostty_config_t)config);
+}
+
+// --- Runtime callback table (T08) -----------------------------------------
+//
+// libghostty's app requires real, non-null callbacks for wakeup, clipboard
+// read/confirm/write, and action delivery (see `ghostty_runtime_config_s`).
+// This subset does not expose any of them to Swift: Clair's minimal
+// surface-embedding smoke test does not need libghostty to read or write
+// the system clipboard, nor to hand back arbitrary app actions, so every
+// callback here is a fixed, always-safe no-op/deny. A future task that
+// needs real clipboard or action integration extends this table (and adds
+// its own layout assertions for whatever payload it actually reads) rather
+// than punching a hole through it.
+static void clair_ghostty_wakeup_cb(void *userdata) {
+  (void)userdata;
+}
+
+static ghostty_clipboard_read_result_e clair_ghostty_read_clipboard_cb(
+    void *userdata, ghostty_clipboard_e clipboard, void *state,
+    const char *const *mime_types, size_t mime_types_len, bool required) {
+  (void)userdata;
+  (void)clipboard;
+  (void)state;
+  (void)mime_types;
+  (void)mime_types_len;
+  (void)required;
+  return GHOSTTY_CLIPBOARD_READ_UNAVAILABLE;
+}
+
+static void clair_ghostty_confirm_read_clipboard_cb(
+    void *userdata, const ghostty_clipboard_confirm_s *confirm, void *state,
+    ghostty_clipboard_request_e request_type) {
+  (void)userdata;
+  (void)confirm;
+  (void)state;
+  (void)request_type;
+}
+
+static void clair_ghostty_write_clipboard_cb(
+    void *userdata, ghostty_clipboard_e clipboard,
+    const ghostty_clipboard_content_s *content, size_t content_len, bool confirmed) {
+  (void)userdata;
+  (void)clipboard;
+  (void)content;
+  (void)content_len;
+  (void)confirmed;
+}
+
+// Deliberately does not mirror `ghostty_target_s`/`ghostty_action_s` (see
+// the header comment above the surface-config assertions): every action is
+// reported as "not handled" without decoding the payload.
+static bool clair_ghostty_action_cb(
+    ghostty_app_t app, ghostty_target_s target, ghostty_action_s action) {
+  (void)app;
+  (void)target;
+  (void)action;
+  return false;
+}
+
+clair_ghostty_app_t clair_ghostty_app_new(clair_ghostty_config_t config) {
+  ghostty_runtime_config_s runtime_config;
+  memset(&runtime_config, 0, sizeof(runtime_config));
+  runtime_config.userdata = NULL;
+  runtime_config.supports_selection_clipboard = false;
+  runtime_config.wakeup_cb = clair_ghostty_wakeup_cb;
+  runtime_config.action_cb = clair_ghostty_action_cb;
+  runtime_config.read_clipboard_cb = clair_ghostty_read_clipboard_cb;
+  runtime_config.confirm_read_clipboard_cb = clair_ghostty_confirm_read_clipboard_cb;
+  runtime_config.write_clipboard_cb = clair_ghostty_write_clipboard_cb;
+  runtime_config.close_surface_cb = NULL;
+  return (clair_ghostty_app_t)ghostty_app_new(
+      &runtime_config, (ghostty_config_t)config);
+}
+
+void clair_ghostty_app_free(clair_ghostty_app_t app) {
+  ghostty_app_free((ghostty_app_t)app);
+}
+
+void clair_ghostty_app_tick(clair_ghostty_app_t app) {
+  ghostty_app_tick((ghostty_app_t)app);
+}
+
+clair_ghostty_surface_config_s clair_ghostty_surface_config_new(void) {
+  ghostty_surface_config_s real = ghostty_surface_config_new();
+  clair_ghostty_surface_config_s out;
+  // Safe because of the sizeof/offsetof assertions above: both structs have
+  // identical layout, only the (Clair-prefixed) nominal type differs.
+  memcpy(&out, &real, sizeof(out));
+  return out;
+}
+
+clair_ghostty_surface_t clair_ghostty_surface_new(
+    clair_ghostty_app_t app, const clair_ghostty_surface_config_s *config) {
+  ghostty_surface_config_s real;
+  memcpy(&real, config, sizeof(real));
+  return (clair_ghostty_surface_t)ghostty_surface_new((ghostty_app_t)app, &real);
+}
+
+void clair_ghostty_surface_free(clair_ghostty_surface_t surface) {
+  ghostty_surface_free((ghostty_surface_t)surface);
+}
+
+void clair_ghostty_surface_set_size(
+    clair_ghostty_surface_t surface, uint32_t width_px, uint32_t height_px) {
+  ghostty_surface_set_size((ghostty_surface_t)surface, width_px, height_px);
+}
+
+clair_ghostty_surface_size_s clair_ghostty_surface_size(clair_ghostty_surface_t surface) {
+  ghostty_surface_size_s real = ghostty_surface_size((ghostty_surface_t)surface);
+  clair_ghostty_surface_size_s out;
+  memcpy(&out, &real, sizeof(out));
+  return out;
+}
+
+bool clair_ghostty_surface_read_text(
+    clair_ghostty_surface_t surface, clair_ghostty_selection_s selection,
+    clair_ghostty_text_s *out_text) {
+  ghostty_selection_s real_selection;
+  memcpy(&real_selection, &selection, sizeof(real_selection));
+  ghostty_text_s real_text;
+  memset(&real_text, 0, sizeof(real_text));
+  bool ok = ghostty_surface_read_text(
+      (ghostty_surface_t)surface, real_selection, &real_text);
+  if (ok && out_text) {
+    memcpy(out_text, &real_text, sizeof(*out_text));
+  }
+  return ok;
+}
+
+void clair_ghostty_surface_free_text(
+    clair_ghostty_surface_t surface, clair_ghostty_text_s *text) {
+  ghostty_text_s real_text;
+  memcpy(&real_text, text, sizeof(real_text));
+  ghostty_surface_free_text((ghostty_surface_t)surface, &real_text);
+  memcpy(text, &real_text, sizeof(*text));
+}
+#endif // CLAIR_GHOSTTY_VENDORED
+
 int clair_ghostty_abi_is_vendored(void) {
 #if defined(CLAIR_GHOSTTY_VENDORED)
   // Referencing the probe pointers here (rather than leaving them as
@@ -9,7 +176,16 @@ int clair_ghostty_abi_is_vendored(void) {
   // actually usable and callers should not trust `clair_ghostty_abi_is_vendored`.
   return clair_ghostty_probe_init != 0 && clair_ghostty_probe_info != 0 &&
          clair_ghostty_probe_config_new != 0 &&
-         clair_ghostty_probe_config_free != 0;
+         clair_ghostty_probe_config_free != 0 &&
+         clair_ghostty_probe_app_new != 0 && clair_ghostty_probe_app_free != 0 &&
+         clair_ghostty_probe_app_tick != 0 &&
+         clair_ghostty_probe_surface_config_new != 0 &&
+         clair_ghostty_probe_surface_new != 0 &&
+         clair_ghostty_probe_surface_free != 0 &&
+         clair_ghostty_probe_surface_set_size != 0 &&
+         clair_ghostty_probe_surface_size != 0 &&
+         clair_ghostty_probe_surface_read_text != 0 &&
+         clair_ghostty_probe_surface_free_text != 0;
 #else
   return 0;
 #endif

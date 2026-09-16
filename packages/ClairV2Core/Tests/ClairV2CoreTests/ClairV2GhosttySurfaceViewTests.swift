@@ -34,7 +34,8 @@ import Testing
       #expect(ClairV2GhosttySurfaceView.encode(event) == Data("a".utf8))
     }
 
-    @Test @MainActor func t03CopyWithoutVendoredGhosttyFailsClosedRatherThanGuessingSelectionText()
+    @Test(.enabled(if: !GhosttyRuntime.isVendored)) @MainActor
+    func t03CopyWithoutVendoredGhosttyFailsClosedRatherThanGuessingSelectionText()
       throws
     {
       let session = try ClairV2LocalShellSession(
