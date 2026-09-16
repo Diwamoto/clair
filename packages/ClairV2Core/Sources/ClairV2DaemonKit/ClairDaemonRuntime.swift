@@ -4,6 +4,7 @@
   import Foundation
 
   import ClairV2Shared
+  import ClairV2Transport
 
   public final class ClairDaemonRuntime: @unchecked Sendable {
     public let configuration: ClairDaemonConfiguration
@@ -17,16 +18,22 @@
     /// processes and their dependent in-memory state. Stopping the daemon
     /// must fence both lifecycles.
     private let shutdownHandler: (@Sendable () async -> Void)?
+    /// N09: absent when this runtime is composed without a host (e.g. a
+    /// bare H01 lifecycle test), in which case `.issuePairing` fails closed
+    /// with `.pairingUnavailable` instead of silently no-op'ing.
+    private let pairingIssuer: (@Sendable () async throws -> ClairPairingLink)?
     /// Regenerated on every successful `start()` (see H10). This is the
     /// daemon-restart signal reported in `ClairDaemonHealth.instanceID`.
     private var instanceID = UUID()
 
     public init(
       configuration: ClairDaemonConfiguration,
-      shutdownHandler: (@Sendable () async -> Void)? = nil
+      shutdownHandler: (@Sendable () async -> Void)? = nil,
+      pairingIssuer: (@Sendable () async throws -> ClairPairingLink)? = nil
     ) {
       self.configuration = configuration
       self.shutdownHandler = shutdownHandler
+      self.pairingIssuer = pairingIssuer
     }
 
     /// Convenience composition initializer for the real H10 daemon host.
@@ -36,9 +43,11 @@
       configuration: ClairDaemonConfiguration,
       host: ClairDaemonHost
     ) {
-      self.init(configuration: configuration) {
-        await host.shutdown()
-      }
+      self.init(
+        configuration: configuration,
+        shutdownHandler: { await host.shutdown() },
+        pairingIssuer: { try await host.authority.issuePairingLink() }
+      )
     }
 
     public var state: ClairDaemonLifecycleState {
@@ -208,6 +217,42 @@
         } catch {
           return .failure(ClairDaemonControlFailure(code: .internalFailure))
         }
+      case .issuePairing:
+        return issuePairing()
+      }
+    }
+
+    /// Bridges the actor-isolated `ClairPairingAuthority.issuePairingLink()`
+    /// into this synchronous handler, mirroring how `.shutdown` already
+    /// bridges its async `shutdownHandler` with a semaphore below.
+    private func issuePairing() -> ClairDaemonControlResponse {
+      guard let pairingIssuer else {
+        return .failure(ClairDaemonControlFailure(code: .pairingUnavailable))
+      }
+      let semaphore = DispatchSemaphore(value: 0)
+      // The semaphore below establishes the happens-before edge the compiler
+      // cannot see: `outcome` is written once from the detached task, then
+      // `semaphore.wait()` blocks this thread until that write is visible.
+      nonisolated(unsafe) var outcome: Result<ClairPairingLink, Error>!
+      Task.detached {
+        do {
+          outcome = .success(try await pairingIssuer())
+        } catch {
+          outcome = .failure(error)
+        }
+        semaphore.signal()
+      }
+      semaphore.wait()
+      guard case .success(let link) = outcome else {
+        return .failure(ClairDaemonControlFailure(code: .pairingUnavailable))
+      }
+      do {
+        let code = try ClairPairingLinkCodec.encode(link)
+        return .pairingIssued(
+          ClairDaemonPairingIssuance(
+            code: code, fingerprint: link.hostFingerprint, expiresAt: link.expiresAt))
+      } catch {
+        return .failure(ClairDaemonControlFailure(code: .internalFailure))
       }
     }
 

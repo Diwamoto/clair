@@ -4,6 +4,7 @@
   import Foundation
 
   import ClairV2Shared
+  import ClairV2Transport
 
   public enum ClairDaemonLifecycleState: String, Codable, Equatable, Sendable {
     case stopped
@@ -132,11 +133,13 @@
     case health
     case version
     case shutdown
+    case issuePairing
 
     private enum Kind: String, Codable {
       case health
       case version
       case shutdown
+      case issuePairing = "issue_pairing"
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -151,6 +154,8 @@
         .version
       case .shutdown:
         .shutdown
+      case .issuePairing:
+        .issuePairing
       }
     }
 
@@ -163,12 +168,31 @@
         self = .version
       case .shutdown:
         self = .shutdown
+      case .issuePairing:
+        self = .issuePairing
       }
     }
 
     public func encode(to encoder: Encoder) throws {
       var container = encoder.container(keyedBy: CodingKeys.self)
       try container.encode(kind, forKey: .kind)
+    }
+  }
+
+  /// N09: the human-transferable half of a `ClairPairingLink`. `code` is the
+  /// `ClairPairingLinkCodec`-encoded string to display/QR-encode; the raw
+  /// link (and its `bootstrapSecret`) never leaves the daemon process. The
+  /// fingerprint and expiry are surfaced separately so a Mac-side UI can
+  /// display them without decoding `code` itself.
+  public struct ClairDaemonPairingIssuance: Codable, Equatable, Sendable {
+    public let code: String
+    public let fingerprint: ClairHostFingerprint
+    public let expiresAt: Date
+
+    public init(code: String, fingerprint: ClairHostFingerprint, expiresAt: Date) {
+      self.code = code
+      self.fingerprint = fingerprint
+      self.expiresAt = expiresAt
     }
   }
 
@@ -182,6 +206,7 @@
     case notRunning = "not_running"
     case stopping = "stopping"
     case internalFailure = "internal_failure"
+    case pairingUnavailable = "pairing_unavailable"
   }
 
   public struct ClairDaemonControlFailure: Codable, Equatable, Sendable {
@@ -201,12 +226,14 @@
     case health(ClairDaemonHealth)
     case version(ClairDaemonVersion)
     case shutdownAccepted
+    case pairingIssued(ClairDaemonPairingIssuance)
     case failure(ClairDaemonControlFailure)
 
     private enum Kind: String, Codable {
       case health
       case version
       case shutdownAccepted = "shutdown_accepted"
+      case pairingIssued = "pairing_issued"
       case failure
     }
 
@@ -214,6 +241,7 @@
       case kind
       case health
       case version
+      case pairingIssued = "pairing_issued"
       case failure
     }
 
@@ -226,6 +254,9 @@
         self = .version(try container.decode(ClairDaemonVersion.self, forKey: .version))
       case .shutdownAccepted:
         self = .shutdownAccepted
+      case .pairingIssued:
+        self = .pairingIssued(
+          try container.decode(ClairDaemonPairingIssuance.self, forKey: .pairingIssued))
       case .failure:
         self = .failure(try container.decode(ClairDaemonControlFailure.self, forKey: .failure))
       }
@@ -242,6 +273,9 @@
         try container.encode(version, forKey: .version)
       case .shutdownAccepted:
         try container.encode(Kind.shutdownAccepted, forKey: .kind)
+      case .pairingIssued(let issuance):
+        try container.encode(Kind.pairingIssued, forKey: .kind)
+        try container.encode(issuance, forKey: .pairingIssued)
       case .failure(let failure):
         try container.encode(Kind.failure, forKey: .kind)
         try container.encode(failure, forKey: .failure)
@@ -395,6 +429,17 @@
       switch try request(.shutdown) {
       case .shutdownAccepted:
         return
+      case .failure(let failure):
+        throw ClairDaemonError.remoteFailure(failure.code)
+      default:
+        throw ClairDaemonError.unexpectedResponse
+      }
+    }
+
+    public func issuePairing() throws -> ClairDaemonPairingIssuance {
+      switch try request(.issuePairing) {
+      case .pairingIssued(let issuance):
+        return issuance
       case .failure(let failure):
         throw ClairDaemonError.remoteFailure(failure.code)
       default:

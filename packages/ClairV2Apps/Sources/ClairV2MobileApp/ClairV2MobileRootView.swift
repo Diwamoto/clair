@@ -35,6 +35,7 @@ struct ClairV2MobileRootView: View {
   @State private var destinationBrowser = ClairMobileDestinationBrowserState()
   @State private var showingPairing = false
   @State private var pairingCode = ""
+  @State private var pairingError: String?
   @State private var conversation = ClairV2MobileConversationController()
   @State private var conversationSnapshot = ClairV2MobileConversationState()
   @State private var conversationDraft = ""
@@ -410,20 +411,67 @@ struct ClairV2MobileRootView: View {
     .sheet(isPresented: $showingPairing) {
       NavigationStack {
         Form {
-          Section("Pairing QR") {
-            TextField("Paste pairing link", text: $pairingCode)
+          Section("Pairing code") {
+            TextField("Paste pairing code", text: $pairingCode)
+              .accessibilityIdentifier("pairing-code-field")
+            Button("Decode") { decodePairingCode() }
+              .disabled(pairingCode.isEmpty)
+              .accessibilityIdentifier("decode-pairing-code")
+            if let pairingError {
+              Text(pairingError)
+                .font(.footnote)
+                .foregroundStyle(.red)
+            }
             Text(
               "Pairing links are one-time and expire. Confirm the host fingerprint before trusting it."
             )
             .font(.footnote)
             .foregroundStyle(.secondary)
           }
+          if let pairing = hostManagement.pairing {
+            Section("Confirm this host") {
+              LabeledContent("Host", value: pairing.hostID.description)
+              Text("Fingerprint: \(pairing.fingerprint.description.prefix(16))…")
+                .font(.caption.monospaced())
+                .foregroundStyle(.secondary)
+              switch pairing.state {
+              case .ready:
+                Text(
+                  "Ready to pair. Verify this fingerprint out of band before trusting this host."
+                )
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+              case .expired:
+                Text("This pairing code has expired. Ask the host to issue a new one.")
+                  .font(.footnote)
+                  .foregroundStyle(.orange)
+              case .fingerprintChanged:
+                Text("This host's fingerprint changed since it was last seen.")
+                  .font(.footnote)
+                  .foregroundStyle(.red)
+              }
+            }
+          }
           Section {
-            Button("Cancel", role: .cancel) { showingPairing = false }
+            Button("Cancel", role: .cancel) {
+              showingPairing = false
+              pairingCode = ""
+              pairingError = nil
+              hostManagement.clearPairing()
+            }
           }
         }
         .navigationTitle("Pair host")
       }
+    }
+  }
+
+  private func decodePairingCode() {
+    do {
+      try hostManagement.presentPairing(fromCode: pairingCode)
+      pairingError = nil
+    } catch {
+      pairingError = "That pairing code could not be read. Check it was copied in full."
     }
   }
 

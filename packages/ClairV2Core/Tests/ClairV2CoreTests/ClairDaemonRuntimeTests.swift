@@ -168,6 +168,30 @@
     #expect(daemon.state == .stopped)
   }
 
+  @Test
+  func n09IssuePairingFailsClosedWithoutAComposedPairingAuthority() throws {
+    let (directory, configuration) = try makeDaemonConfiguration()
+    defer { try? FileManager.default.removeItem(at: directory) }
+
+    // The bare `ClairDaemonRuntime(configuration:)` initializer (no `host:`)
+    // has no `ClairPairingAuthority` to ask, so `.issuePairing` must fail
+    // closed with a typed code rather than crash or fabricate a link.
+    let daemon = ClairDaemonRuntime(configuration: configuration)
+    try daemon.start()
+    defer { try? daemon.stop() }
+
+    let client = ClairDaemonControlClient(
+      paths: configuration.paths,
+      frameLimits: configuration.frameLimits
+    )
+    do {
+      _ = try client.issuePairing()
+      Issue.record("Expected .pairingUnavailable without a composed pairing authority.")
+    } catch let error as ClairDaemonError {
+      #expect(error == .remoteFailure(.pairingUnavailable))
+    }
+  }
+
   private func makeDaemonConfiguration() throws -> (URL, ClairDaemonConfiguration) {
     let directory = URL(fileURLWithPath: "/private/tmp")
       .appendingPathComponent("clair-v2-h01-\(UUID().uuidString)", isDirectory: true)

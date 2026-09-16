@@ -200,6 +200,27 @@ func n03PairingPresentationDistinguishesExpiredLinksAndFingerprintChanges() asyn
 }
 
 @Test
+func n09PresentPairingFromCodeDecodesAValidCodeAndFailsClosedOnGarbage() async throws {
+  let fixture = try N02Fixture.make()
+  let link = try await fixture.authority.issuePairingLink(lifetime: 60)
+  let code = try ClairPairingLinkCodec.encode(link)
+
+  var management = ClairMobileHostManagementState()
+  try management.presentPairing(fromCode: code, now: Date(timeIntervalSince1970: 0))
+  let presented = try #require(management.pairing)
+  #expect(presented.hostID == link.hostID)
+  #expect(presented.fingerprint == link.hostFingerprint)
+  #expect(presented.state == .ready)
+
+  // A garbled paste must not clear or silently replace an already-presented
+  // pairing with a bogus one.
+  #expect(throws: ClairTransportError.invalidPairingLink) {
+    try management.presentPairing(fromCode: "garbage-from-a-bad-paste")
+  }
+  #expect(management.pairing == presented)
+}
+
+@Test
 func n03HostManagementKeepsScopeAndMarksRevokedWithoutCredentialMaterial() async throws {
   let fixture = try N02Fixture.make()
   let client = try fixture.makeClient()

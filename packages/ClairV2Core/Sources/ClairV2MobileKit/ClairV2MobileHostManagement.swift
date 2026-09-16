@@ -90,6 +90,14 @@ public struct ClairMobileHostManagementState: Equatable, Sendable {
     pairing = ClairMobilePairingPresentation(link: link, now: now)
   }
 
+  /// Decodes a pasted/scanned N09 transport code and presents it exactly as
+  /// `presentPairing(_:now:)` would. A malformed or tampered code throws and
+  /// leaves any existing pairing presentation untouched rather than clearing
+  /// or replacing it with a partially-decoded result.
+  public mutating func presentPairing(fromCode code: String, now: Date = Date()) throws {
+    presentPairing(try ClairPairingLinkCodec.decode(code), now: now)
+  }
+
   public mutating func clearPairing() {
     pairing = nil
   }

@@ -1168,6 +1168,36 @@ func h10EveryDependentComponentFailsClosedAfterASimulatedDaemonRestart() async t
     #expect(diagnostics.journalOpenSessionCount == 0)
   }
 
+  /// N09: closes the gap N08 found, where issuing and transferring a
+  /// `ClairPairingLink` had no path outside test fixtures. Drives the real
+  /// local control channel end to end — the same one a Mac app would use —
+  /// through a real composed `ClairDaemonHost.authority`, and proves the
+  /// returned code is exactly what a receiving device would decode.
+  @Test
+  func n09IssuePairingReturnsADecodableCodeThroughTheRealHostAuthority() throws {
+    let stack = try H10Stack.make()
+    defer { stack.remove() }
+    let directory = URL(fileURLWithPath: "/private/tmp")
+      .appendingPathComponent("clair-v2-n09-pairing-\(UUID().uuidString)", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let configuration = try ClairDaemonConfiguration(
+      paths: ClairDaemonPaths(directoryURL: directory)
+    )
+    let daemon = ClairDaemonRuntime(configuration: configuration, host: stack.host)
+    try daemon.start()
+    defer { try? daemon.stop() }
+
+    let client = ClairDaemonControlClient(
+      paths: configuration.paths,
+      frameLimits: configuration.frameLimits
+    )
+    let issuance = try client.issuePairing()
+    let decoded = try ClairPairingLinkCodec.decode(issuance.code)
+    #expect(decoded.hostFingerprint == issuance.fingerprint)
+    #expect(decoded.expiresAt == issuance.expiresAt)
+    #expect(!decoded.isExpired(at: Date()))
+  }
+
   /// Simulates a real, ungraceful daemon crash at the OS level: a *separate*
   /// real process (not this test process, and not cleaned up by any Swift
   /// `deinit`) holds the exact same advisory lock and control-socket bind
