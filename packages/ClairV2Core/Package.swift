@@ -48,6 +48,7 @@ let package = Package(
     .library(name: "ClairV2Push", targets: ["ClairV2Push"]),
     .library(name: "ClairPushRelay", targets: ["ClairPushRelay"]),
     .library(name: "ClairV2Shared", targets: ["ClairV2Shared"]),
+    .library(name: "ClairV2DesignSystem", targets: ["ClairV2DesignSystem"]),
     .library(name: "ClairV2Workspace", targets: ["ClairV2Workspace"]),
     .library(name: "ClairV2Agent", targets: ["ClairV2Agent"]),
     .library(name: "ClairV2Review", targets: ["ClairV2Review"]),
@@ -63,6 +64,7 @@ let package = Package(
   targets: [
     .target(name: "ClairV2PTY"),
     .target(name: "ClairV2Shared"),
+    .target(name: "ClairV2DesignSystem"),
     .target(name: "ClairV2Push"),
     .target(name: "ClairPushRelay", dependencies: ["ClairV2Push"]),
     .target(
@@ -166,6 +168,10 @@ let package = Package(
         "ClairV2Transport",
         "ClairV2Workspace",
       ]
+    ),
+    .testTarget(
+      name: "ClairV2DesignSystemTests",
+      dependencies: ["ClairV2DesignSystem"]
     ),
     .executableTarget(
       name: "EditorFixtureGenerator",
