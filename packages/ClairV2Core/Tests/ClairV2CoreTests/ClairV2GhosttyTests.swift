@@ -162,6 +162,86 @@ final class ClairV2GhosttyTests: XCTestCase {
         }
       }
     }
+
+    /// T03's acceptance smoke test: the retained-lifetime handles
+    /// (`GhosttyRuntime.retainApp` / `GhosttyAppHandle.retainSurface`) this
+    /// task added specifically because `withApp`/`withSurface`'s closure
+    /// scope cannot span `ClairV2GhosttySurfaceView`'s real, multi-run-loop-
+    /// turn lifetime. Unlike `testFullSurfaceEmbeddingRoundTripsKnownOutput`
+    /// above, the app/surface handles here are created, used across several
+    /// separate statements (not one enclosing closure), and closed
+    /// explicitly — proving they actually outlive a single scope. Also
+    /// exercises `sendText` (the real paste entry point) and the
+    /// has-selection/read-selection round trip `ClairV2GhosttySurfaceView
+    /// .copy(_:)` uses, and that a closed handle fails closed.
+    func testRetainedSurfaceOutlivesScopeAndAcceptsRealTextAndSelectionCalls() throws {
+      try XCTSkipUnless(isVendoredEnvironment)
+
+      let runtime = GhosttyRuntime()
+      try runtime.activate()
+
+      let marker = "CLAIRT03HELLO-\(UUID().uuidString.prefix(8))"
+      let view = NSView(frame: NSRect(x: 0, y: 0, width: 640, height: 400))
+      view.wantsLayer = true
+
+      // Created outside any `with...` closure: this is the specific gap
+      // T03 was asked to close.
+      let app = try runtime.retainApp()
+      let surface = try app.retainSurface(
+        GhosttySurfaceConfig(
+          platform: .macOS(Unmanaged.passUnretained(view).toOpaque()),
+          workingDirectory: NSTemporaryDirectory(),
+          command: "/bin/sh",
+          initialInput: "printf '\(marker)\\n'\n"
+        )
+      )
+      try surface.setSize(widthPixels: 640, heightPixels: 400)
+
+      func tickUntil(_ predicate: () throws -> Bool) throws -> Bool {
+        for _ in 0..<100 {
+          try app.tick()
+          Thread.sleep(forTimeInterval: 0.05)
+          if try predicate() { return true }
+        }
+        return false
+      }
+
+      let sawMarker = try tickUntil {
+        if let text = try surface.readText(.screen) { return text.contains(marker) }
+        return false
+      }
+      XCTAssertTrue(sawMarker, "expected the real spawned shell's initial output across separate statements")
+
+      // No selection yet: the real round trip must report that cleanly,
+      // not throw.
+      XCTAssertFalse(try surface.hasSelection())
+      XCTAssertNil(try surface.readSelection())
+
+      // `sendText` is the real entry point `ClairV2GhosttySurfaceView
+      // .pasteFromPasteboard` uses — prove it actually reaches the real
+      // spawned shell, not just that it compiles.
+      let pasted = "CLAIRT03PASTE-\(UUID().uuidString.prefix(8))"
+      try surface.sendText("printf '\(pasted)\\n'\n")
+      let sawPasted = try tickUntil {
+        if let text = try surface.readText(.screen) { return text.contains(pasted) }
+        return false
+      }
+      XCTAssertTrue(sawPasted, "expected sendText's input to reach the real shell")
+
+      // Retained handles are the caller's to close, unlike withApp/
+      // withSurface's automatic defer-based free.
+      surface.close()
+      app.close()
+      XCTAssertThrowsError(try surface.setSize(widthPixels: 1, heightPixels: 1)) { error in
+        XCTAssertEqual(error as? GhosttyError, .handleExpired)
+      }
+      XCTAssertThrowsError(try app.tick()) { error in
+        XCTAssertEqual(error as? GhosttyError, .handleExpired)
+      }
+      // Idempotent: closing an already-closed handle again must not crash.
+      surface.close()
+      app.close()
+    }
   #endif
 
   func testResourcesAreMissingBeforeVendor() {

@@ -226,6 +226,84 @@ typedef struct {
   bool can_remember;
 } clair_ghostty_clipboard_confirm_s;
 
+// --- ghostty_surface_key/text/mouse_*/set_focus/set_content_scale/
+// has_selection/read_selection subset (T03) ---------------------------------
+//
+// T08 pinned enough to create a real surface and read its rendered screen
+// text back, but nothing to actually drive it: no keyboard, no mouse, no
+// focus, no DPI update, no selection readback. T03 discovered (by reading
+// the real, vendored `ghostty.h` and the real macOS app's
+// `NSEvent+Extension.swift` / `SurfaceView_AppKit.swift`, not by guessing)
+// that `ghostty_input_key_s.keycode` is the *raw macOS virtual keycode*
+// (`NSEvent.keyCode`) passed straight through — libghostty itself does the
+// keycode-to-action translation internally. This means the input path does
+// NOT need `ghostty_input_key_e`'s ~200-case enum mirrored here at all: no
+// keycode translation table has to live on the Clair side.
+//
+// Real copy/paste also does not need this subset to touch libghostty's
+// internal clipboard read/write callbacks (which `clair_ghostty_abi.c`'s
+// runtime callback table still keeps fixed at "unavailable"/"dropped", per
+// T08's documented invariant): `ghostty_surface_has_selection` +
+// `ghostty_surface_read_selection` read the selected text directly, and
+// `ghostty_surface_text` feeds already-read `NSPasteboard` text straight
+// into the terminal, exactly like committed IME text. Neither goes through
+// `ghostty_surface_binding_action`'s clipboard-callback-dependent
+// `"copy_to_clipboard"`/`"paste_from_clipboard"` path.
+typedef enum {
+  CLAIR_GHOSTTY_INPUT_ACTION_RELEASE = 0,
+  CLAIR_GHOSTTY_INPUT_ACTION_PRESS = 1,
+  CLAIR_GHOSTTY_INPUT_ACTION_REPEAT = 2,
+} clair_ghostty_input_action_e;
+
+typedef enum {
+  CLAIR_GHOSTTY_MODS_NONE = 0,
+  CLAIR_GHOSTTY_MODS_SHIFT = 1 << 0,
+  CLAIR_GHOSTTY_MODS_CTRL = 1 << 1,
+  CLAIR_GHOSTTY_MODS_ALT = 1 << 2,
+  CLAIR_GHOSTTY_MODS_SUPER = 1 << 3,
+  CLAIR_GHOSTTY_MODS_CAPS = 1 << 4,
+  CLAIR_GHOSTTY_MODS_NUM = 1 << 5,
+  CLAIR_GHOSTTY_MODS_SHIFT_RIGHT = 1 << 6,
+  CLAIR_GHOSTTY_MODS_CTRL_RIGHT = 1 << 7,
+  CLAIR_GHOSTTY_MODS_ALT_RIGHT = 1 << 8,
+  CLAIR_GHOSTTY_MODS_SUPER_RIGHT = 1 << 9,
+} clair_ghostty_input_mods_e;
+
+typedef struct {
+  clair_ghostty_input_action_e action;
+  clair_ghostty_input_mods_e mods;
+  clair_ghostty_input_mods_e consumed_mods;
+  uint32_t keycode;
+  const char *text;
+  uint32_t unshifted_codepoint;
+  bool composing;
+} clair_ghostty_input_key_s;
+
+typedef enum {
+  CLAIR_GHOSTTY_MOUSE_RELEASE = 0,
+  CLAIR_GHOSTTY_MOUSE_PRESS = 1,
+} clair_ghostty_mouse_state_e;
+
+typedef enum {
+  CLAIR_GHOSTTY_MOUSE_UNKNOWN = 0,
+  CLAIR_GHOSTTY_MOUSE_LEFT = 1,
+  CLAIR_GHOSTTY_MOUSE_RIGHT = 2,
+  CLAIR_GHOSTTY_MOUSE_MIDDLE = 3,
+  CLAIR_GHOSTTY_MOUSE_FOUR = 4,
+  CLAIR_GHOSTTY_MOUSE_FIVE = 5,
+  CLAIR_GHOSTTY_MOUSE_SIX = 6,
+  CLAIR_GHOSTTY_MOUSE_SEVEN = 7,
+  CLAIR_GHOSTTY_MOUSE_EIGHT = 8,
+  CLAIR_GHOSTTY_MOUSE_NINE = 9,
+  CLAIR_GHOSTTY_MOUSE_TEN = 10,
+  CLAIR_GHOSTTY_MOUSE_ELEVEN = 11,
+} clair_ghostty_mouse_button_e;
+
+// Mirrors `ghostty_input_scroll_mods_t`: a packed bitmask (precision +
+// momentum phase), documented upstream as "not reliably a C packed struct"
+// and built from a plain `int` on both sides instead.
+typedef int clair_ghostty_scroll_mods_t;
+
 #if defined(CLAIR_GHOSTTY_VENDORED)
 
 #include <ghostty.h>
@@ -307,6 +385,27 @@ _Static_assert(sizeof(clair_ghostty_clipboard_content_s) == sizeof(ghostty_clipb
 _Static_assert(sizeof(clair_ghostty_clipboard_confirm_s) == sizeof(ghostty_clipboard_confirm_s),
                "ghostty_clipboard_confirm_s size changed upstream");
 
+_Static_assert(sizeof(clair_ghostty_input_action_e) == sizeof(ghostty_input_action_e),
+               "ghostty_input_action_e size changed upstream");
+_Static_assert(sizeof(clair_ghostty_input_mods_e) == sizeof(ghostty_input_mods_e),
+               "ghostty_input_mods_e size changed upstream");
+_Static_assert(sizeof(clair_ghostty_mouse_state_e) == sizeof(ghostty_input_mouse_state_e),
+               "ghostty_input_mouse_state_e size changed upstream");
+_Static_assert(sizeof(clair_ghostty_mouse_button_e) == sizeof(ghostty_input_mouse_button_e),
+               "ghostty_input_mouse_button_e size changed upstream");
+_Static_assert(sizeof(clair_ghostty_scroll_mods_t) == sizeof(ghostty_input_scroll_mods_t),
+               "ghostty_input_scroll_mods_t size changed upstream");
+
+_Static_assert(sizeof(clair_ghostty_input_key_s) == sizeof(ghostty_input_key_s),
+               "ghostty_input_key_s size changed upstream");
+CLAIR_GHOSTTY_ASSERT_FIELD(clair_ghostty_input_key_s, ghostty_input_key_s, action);
+CLAIR_GHOSTTY_ASSERT_FIELD(clair_ghostty_input_key_s, ghostty_input_key_s, mods);
+CLAIR_GHOSTTY_ASSERT_FIELD(clair_ghostty_input_key_s, ghostty_input_key_s, consumed_mods);
+CLAIR_GHOSTTY_ASSERT_FIELD(clair_ghostty_input_key_s, ghostty_input_key_s, keycode);
+CLAIR_GHOSTTY_ASSERT_FIELD(clair_ghostty_input_key_s, ghostty_input_key_s, text);
+CLAIR_GHOSTTY_ASSERT_FIELD(clair_ghostty_input_key_s, ghostty_input_key_s, unshifted_codepoint);
+CLAIR_GHOSTTY_ASSERT_FIELD(clair_ghostty_input_key_s, ghostty_input_key_s, composing);
+
 #undef CLAIR_GHOSTTY_ASSERT_FIELD
 
 // --- Function presence/signature invariants ------------------------------
@@ -339,6 +438,26 @@ static bool (*const clair_ghostty_probe_surface_read_text)(
     ghostty_surface_t, ghostty_selection_s, ghostty_text_s *) = ghostty_surface_read_text;
 static void (*const clair_ghostty_probe_surface_free_text)(ghostty_surface_t, ghostty_text_s *) =
     ghostty_surface_free_text;
+static bool (*const clair_ghostty_probe_surface_key)(ghostty_surface_t, ghostty_input_key_s) =
+    ghostty_surface_key;
+static void (*const clair_ghostty_probe_surface_text)(ghostty_surface_t, const char *, uintptr_t) =
+    ghostty_surface_text;
+static bool (*const clair_ghostty_probe_surface_mouse_button)(
+    ghostty_surface_t, ghostty_input_mouse_state_e, ghostty_input_mouse_button_e,
+    ghostty_input_mods_e) = ghostty_surface_mouse_button;
+static void (*const clair_ghostty_probe_surface_mouse_pos)(
+    ghostty_surface_t, double, double, ghostty_input_mods_e) = ghostty_surface_mouse_pos;
+static void (*const clair_ghostty_probe_surface_mouse_scroll)(
+    ghostty_surface_t, double, double, ghostty_input_scroll_mods_t) =
+    ghostty_surface_mouse_scroll;
+static void (*const clair_ghostty_probe_surface_set_focus)(ghostty_surface_t, bool) =
+    ghostty_surface_set_focus;
+static void (*const clair_ghostty_probe_surface_set_content_scale)(ghostty_surface_t, double, double) =
+    ghostty_surface_set_content_scale;
+static bool (*const clair_ghostty_probe_surface_has_selection)(ghostty_surface_t) =
+    ghostty_surface_has_selection;
+static bool (*const clair_ghostty_probe_surface_read_selection)(ghostty_surface_t, ghostty_text_s *) =
+    ghostty_surface_read_selection;
 
 // These are real functions (defined in clair_ghostty_abi.c), not macros:
 // Swift's Clang importer does not import function-like macros that expand
@@ -378,6 +497,26 @@ bool clair_ghostty_surface_read_text(
     clair_ghostty_text_s *out_text);
 void clair_ghostty_surface_free_text(
     clair_ghostty_surface_t surface, clair_ghostty_text_s *text);
+
+// Real functions (same reasoning as above): they convert this file's mirrored
+// enum/struct value types to the real upstream ones before calling through.
+bool clair_ghostty_surface_key(
+    clair_ghostty_surface_t surface, clair_ghostty_input_key_s event);
+void clair_ghostty_surface_text(
+    clair_ghostty_surface_t surface, const char *text, uintptr_t text_len);
+bool clair_ghostty_surface_mouse_button(
+    clair_ghostty_surface_t surface, clair_ghostty_mouse_state_e state,
+    clair_ghostty_mouse_button_e button, clair_ghostty_input_mods_e mods);
+void clair_ghostty_surface_mouse_pos(
+    clair_ghostty_surface_t surface, double x, double y, clair_ghostty_input_mods_e mods);
+void clair_ghostty_surface_mouse_scroll(
+    clair_ghostty_surface_t surface, double x, double y, clair_ghostty_scroll_mods_t mods);
+void clair_ghostty_surface_set_focus(clair_ghostty_surface_t surface, bool focused);
+void clair_ghostty_surface_set_content_scale(
+    clair_ghostty_surface_t surface, double x_scale, double y_scale);
+bool clair_ghostty_surface_has_selection(clair_ghostty_surface_t surface);
+bool clair_ghostty_surface_read_selection(
+    clair_ghostty_surface_t surface, clair_ghostty_text_s *out_text);
 
 #endif // CLAIR_GHOSTTY_VENDORED
 

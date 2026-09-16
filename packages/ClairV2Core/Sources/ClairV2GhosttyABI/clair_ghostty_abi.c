@@ -165,6 +165,60 @@ void clair_ghostty_surface_free_text(
   ghostty_surface_free_text((ghostty_surface_t)surface, &real_text);
   memcpy(text, &real_text, sizeof(*text));
 }
+
+bool clair_ghostty_surface_key(
+    clair_ghostty_surface_t surface, clair_ghostty_input_key_s event) {
+  ghostty_input_key_s real_event;
+  memcpy(&real_event, &event, sizeof(real_event));
+  return ghostty_surface_key((ghostty_surface_t)surface, real_event);
+}
+
+void clair_ghostty_surface_text(
+    clair_ghostty_surface_t surface, const char *text, uintptr_t text_len) {
+  ghostty_surface_text((ghostty_surface_t)surface, text, text_len);
+}
+
+bool clair_ghostty_surface_mouse_button(
+    clair_ghostty_surface_t surface, clair_ghostty_mouse_state_e state,
+    clair_ghostty_mouse_button_e button, clair_ghostty_input_mods_e mods) {
+  return ghostty_surface_mouse_button(
+      (ghostty_surface_t)surface, (ghostty_input_mouse_state_e)state,
+      (ghostty_input_mouse_button_e)button, (ghostty_input_mods_e)mods);
+}
+
+void clair_ghostty_surface_mouse_pos(
+    clair_ghostty_surface_t surface, double x, double y, clair_ghostty_input_mods_e mods) {
+  ghostty_surface_mouse_pos((ghostty_surface_t)surface, x, y, (ghostty_input_mods_e)mods);
+}
+
+void clair_ghostty_surface_mouse_scroll(
+    clair_ghostty_surface_t surface, double x, double y, clair_ghostty_scroll_mods_t mods) {
+  ghostty_surface_mouse_scroll((ghostty_surface_t)surface, x, y, (ghostty_input_scroll_mods_t)mods);
+}
+
+void clair_ghostty_surface_set_focus(clair_ghostty_surface_t surface, bool focused) {
+  ghostty_surface_set_focus((ghostty_surface_t)surface, focused);
+}
+
+void clair_ghostty_surface_set_content_scale(
+    clair_ghostty_surface_t surface, double x_scale, double y_scale) {
+  ghostty_surface_set_content_scale((ghostty_surface_t)surface, x_scale, y_scale);
+}
+
+bool clair_ghostty_surface_has_selection(clair_ghostty_surface_t surface) {
+  return ghostty_surface_has_selection((ghostty_surface_t)surface);
+}
+
+bool clair_ghostty_surface_read_selection(
+    clair_ghostty_surface_t surface, clair_ghostty_text_s *out_text) {
+  ghostty_text_s real_text;
+  memset(&real_text, 0, sizeof(real_text));
+  bool ok = ghostty_surface_read_selection((ghostty_surface_t)surface, &real_text);
+  if (ok && out_text) {
+    memcpy(out_text, &real_text, sizeof(*out_text));
+  }
+  return ok;
+}
 #endif // CLAIR_GHOSTTY_VENDORED
 
 int clair_ghostty_abi_is_vendored(void) {
@@ -185,7 +239,15 @@ int clair_ghostty_abi_is_vendored(void) {
          clair_ghostty_probe_surface_set_size != 0 &&
          clair_ghostty_probe_surface_size != 0 &&
          clair_ghostty_probe_surface_read_text != 0 &&
-         clair_ghostty_probe_surface_free_text != 0;
+         clair_ghostty_probe_surface_free_text != 0 &&
+         clair_ghostty_probe_surface_key != 0 && clair_ghostty_probe_surface_text != 0 &&
+         clair_ghostty_probe_surface_mouse_button != 0 &&
+         clair_ghostty_probe_surface_mouse_pos != 0 &&
+         clair_ghostty_probe_surface_mouse_scroll != 0 &&
+         clair_ghostty_probe_surface_set_focus != 0 &&
+         clair_ghostty_probe_surface_set_content_scale != 0 &&
+         clair_ghostty_probe_surface_has_selection != 0 &&
+         clair_ghostty_probe_surface_read_selection != 0;
 #else
   return 0;
 #endif

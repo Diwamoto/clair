@@ -90,5 +90,41 @@ import Testing
       session.terminate()
       Issue.record("paste never reached the shell")
     }
+
+    /// Regression test for a controller-found bug: `deinit` used to be
+    /// missing entirely, so a real spawned shell process and its 30Hz poll
+    /// `Timer` would outlive the view whenever AppKit deallocates it
+    /// without first calling `viewDidMoveToWindow(nil)` (for example, a
+    /// window closed without its subviews being explicitly
+    /// `removeFromSuperview()`-ed) — `teardownGhosttySurface()` was only
+    /// ever reachable from that notification. This attaches the view to a
+    /// real window, lets it create a real surface, then drops every
+    /// reference *without* detaching first, simulating exactly that
+    /// scenario. It only proves `isolated deinit` runs cleanly (no crash,
+    /// no hang, both objects actually released) — it cannot directly
+    /// observe that the real child process or Timer stopped, but a crash
+    /// or hang here would mean the fix itself is broken.
+    @Test(.enabled(if: GhosttyRuntime.isVendored)) @MainActor
+    func t03SurfaceViewDeinitTearsDownEvenWithoutWindowDetachNotification()
+      async throws
+    {
+      weak var weakView: ClairV2GhosttySurfaceView?
+      weak var weakWindow: NSWindow?
+      do {
+        let window = NSWindow(
+          contentRect: NSRect(x: 0, y: 0, width: 200, height: 100),
+          styleMask: [.borderless], backing: .buffered, defer: true)
+        let view = ClairV2GhosttySurfaceView()
+        window.contentView = view
+        weakView = view
+        weakWindow = window
+        // Give real surface creation + the poll timer a moment to spin up
+        // before everything goes out of scope undetached.
+        try await Task.sleep(for: .milliseconds(50))
+      }
+      try await Task.sleep(for: .milliseconds(50))
+      #expect(weakView == nil)
+      #expect(weakWindow == nil)
+    }
   }
 #endif
