@@ -212,7 +212,7 @@ UI の正本は [Clair UI Design canvas と Workbench](../../prototypes/clair-wo
 
 | ID | Status | Difficulty | Depends on | Task and completion evidence |
 |---|---|---:|---|---|
-| `U01` | `queued` | `D2` | `B01` | Design canvas と Workbench を同期し、対象 screen/state、tokens、layout、interaction、motion の native implementation checklist を freeze する。未定義状態を一覧化し、native 側で発明していないこと。**(2026-09-16 sequencing update)** `G2`(`E10`/`T07`)完了を前提にせず着手できる。 |
+| `U01` | `active` | `D2` | `B01` | Design canvas と Workbench を同期し、対象 screen/state、tokens、layout、interaction、motion の native implementation checklist を freeze する。未定義状態を一覧化し、native 側で発明していないこと。**(2026-09-16 sequencing update)** `G2`(`E10`/`T07`)完了を前提にせず着手できる。 |
 | `U02` | `queued` | `D3` | `U01` | canvas tokens を Swift の color/type/spacing/radius/motion primitives と reusable native controls に写す。値と semantic name の照合 test を持つこと。 |
 | `U03` | `queued` | `D3` | `U02`, `N08` | mobile の host/project/session/activity/review/notification navigation を mock contract に合わせる。compact/regular size class と safe area を native に適応しつつ情報階層を変えないこと。他の `U` task はこの task の完了を待たない。 |
 | `U04` | `queued` | `D3` | `U02`, `E07`, `T03` | macOS AppShell、titlebar project groups、sidebar、pane/tab、status bar、command/settings surfaces を Workbench に合わせる。native window chrome を含む screenshot comparison が通ること。**(2026-09-16 sequencing update)** Mac 側 editor rendering(`E07`)と Mac 側 terminal surface(`T03`)が揃えば着手でき、`E10`/`T07`/`N08` の完了を前提にしない。 |
