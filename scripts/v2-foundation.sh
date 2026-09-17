@@ -26,7 +26,7 @@ app_targets=(
 )
 
 usage() {
-  printf 'usage: %s <build|mobile-build|test|check|all>\n' "$(basename "$0")" >&2
+  printf 'usage: %s <build|mobile-build|test|test-integration|check|all>\n' "$(basename "$0")" >&2
 }
 
 build_core() {
@@ -54,8 +54,19 @@ build_mobile_simulator() {
 }
 
 test_packages() {
-  swift test --package-path "$core_package"
-  swift test --package-path "$apps_package"
+  swift test --package-path "$core_package" --parallel --filter ClairV2CoreTests
+  swift test --package-path "$core_package" --parallel --filter ClairV2DesignSystemTests
+  swift test --package-path "$apps_package" --parallel
+}
+
+test_integration_packages() {
+  # --num-workers 1: these tests spawn and reap real OS processes/sockets.
+  # Swift Testing parallelizes across suites within one process by default
+  # regardless of --parallel, and concurrent real waitpid()/socket work from
+  # different suites races (observed as ~300s hangs and spurious transport
+  # errors) unless capped to one worker.
+  swift test --package-path "$core_package" --parallel --num-workers 1 \
+    --filter ClairV2CoreIntegrationTests
 }
 
 check_package() {
@@ -91,6 +102,9 @@ case "${1:-}" in
     ;;
   test)
     test_packages
+    ;;
+  test-integration)
+    test_integration_packages
     ;;
   check)
     check

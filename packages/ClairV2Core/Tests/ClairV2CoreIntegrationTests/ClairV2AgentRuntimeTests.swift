@@ -9,6 +9,12 @@ import Testing
   import Darwin
 #endif
 
+// Real OS process groups are global mutable state (PIDs, waitpid reaping),
+// so these tests cannot run concurrently with each other even though the
+// suite as a whole runs in parallel with other files.
+@Suite(.serialized)
+struct ClairV2AgentRuntimeTests {
+
 @Test
 func h04StartsOpenCodeWithTypedIdentityAndValidatedProjectCwd() async throws {
   let fixture = try H04WorkspaceFixture()
@@ -1571,6 +1577,8 @@ func h04MapsMissingAndNonExecutableOpenCodeBinariesToTypedErrors() async throws 
   }
 
 #endif
+
+}
 
 private func fixtureProvider(
   factory: H04ProcessFactory,

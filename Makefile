@@ -4,7 +4,7 @@ SHELL := /bin/bash
 .PHONY: help doctor workspace-check build-editor-web build-stable build-dev build-mobile-simulator run-stable run-dev watch-dev
 .PHONY: test test-rust test-swift test-mobile lint lint-rust lint-swift analyze
 .PHONY: smoke smoke-bundles artifact-check ci clean-artifacts
-.PHONY: v2-build v2-mobile-build v2-test v2-check v2-foundation
+.PHONY: v2-build v2-mobile-build v2-test v2-test-integration v2-check v2-foundation
 
 help: ## Show the supported development commands.
 	@awk 'BEGIN {FS = ":.*## "; printf "Clair development commands:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -43,7 +43,7 @@ test-swift: ## Run Swift unit tests through the Clair Dev host app.
 	@./scripts/xcode.sh test "Clair Dev" tests
 
 test-mobile: ## Run the cross-platform mobile protocol package tests.
-	@swift test --package-path packages/ClairMobileKit
+	@swift test --package-path packages/ClairMobileKit --parallel
 
 v2-build: ## Build every Clair v2 core, macOS, mobile, and daemon target.
 	@./scripts/v2-foundation.sh build
@@ -51,13 +51,16 @@ v2-build: ## Build every Clair v2 core, macOS, mobile, and daemon target.
 v2-mobile-build: ## Cross-build the Clair v2 mobile app for the iOS Simulator SDK.
 	@./scripts/v2-foundation.sh mobile-build
 
-v2-test: ## Run the Clair v2 core and application package tests.
+v2-test: ## Run the fast Clair v2 core and application unit tests.
 	@./scripts/v2-foundation.sh test
+
+v2-test-integration: ## Run the slow real-subprocess/PTY/daemon Clair v2 integration tests.
+	@./scripts/v2-foundation.sh test-integration
 
 v2-check: ## Validate the Clair v2 package graph and v1 dependency boundary.
 	@./scripts/v2-foundation.sh check
 
-v2-foundation: v2-check v2-build v2-test ## Run the complete Clair v2 foundation lane.
+v2-foundation: v2-check v2-build v2-test v2-test-integration ## Run the complete Clair v2 foundation lane.
 
 test: test-rust test-swift test-mobile ## Run Rust, desktop Swift, and mobile protocol tests.
 

@@ -8,6 +8,7 @@ import Testing
   @Suite(.serialized)
   struct ClairV2LocalShellSessionTests {
     @Test func t03LocalShellRunsARealPTYAndReportsPromptedOutput() async throws {
+      let (exitStream, exitContinuation) = AsyncStream<Void>.makeStream()
       let session = try ClairV2LocalShellSession(
         spec: ClairV2LocalShellSpec(
           executableURL: URL(fileURLWithPath: "/bin/sh"),
@@ -15,14 +16,16 @@ import Testing
           environment: ["PATH": "/usr/bin:/bin", "TERM": "xterm-256color"],
           workingDirectoryURL: FileManager.default.temporaryDirectory
         ),
-        size: try ClairV2TerminalSize(rows: 24, columns: 80)
+        size: try ClairV2TerminalSize(rows: 24, columns: 80),
+        onTermination: { _ in exitContinuation.finish() }
       )
       try session.start()
       #expect(try await waitForJournal(session, until: "READY"))
       try session.write(Data("hello\n".utf8))
       #expect(try await waitForJournal(session, until: "<hello>"))
       session.terminate()
-      for _ in 0..<300 where session.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+      var iterator = exitStream.makeAsyncIterator()
+      _ = await iterator.next()
       #expect(!session.isRunning)
     }
 
@@ -46,16 +49,19 @@ import Testing
     }
 
     @Test func t03LocalShellRejectsInputAfterExit() async throws {
+      let (exitStream, exitContinuation) = AsyncStream<Void>.makeStream()
       let session = try ClairV2LocalShellSession(
         spec: ClairV2LocalShellSpec(
           executableURL: URL(fileURLWithPath: "/bin/sh"),
           arguments: ["-c", "exit 0"],
           environment: ["PATH": "/usr/bin:/bin"],
           workingDirectoryURL: FileManager.default.temporaryDirectory
-        )
+        ),
+        onTermination: { _ in exitContinuation.finish() }
       )
       try session.start()
-      for _ in 0..<300 where session.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+      var iterator = exitStream.makeAsyncIterator()
+      _ = await iterator.next()
       #expect(!session.isRunning)
       #expect(session.enqueueTerminalInput(Data("x".utf8)) == .rejected)
       #expect(session.terminalJournal.snapshot().isClosed)

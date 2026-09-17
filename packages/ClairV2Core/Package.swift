@@ -271,6 +271,33 @@ let package = Package(
         "ClairV2Workspace",
       ]
     ),
+    // Real subprocess/PTY/daemon-socket/ghostty integration tests, split out
+    // of `ClairV2CoreTests` so the fast unit suite (`swift test`) doesn't pay
+    // for spawning real `/bin/sh` children and real daemon sockets on every
+    // run. Run explicitly via `swift test --filter ClairV2CoreIntegrationTests`.
+    .testTarget(
+      name: "ClairV2CoreIntegrationTests",
+      dependencies: [
+        .target(name: "ClairV2PTY", condition: .when(platforms: [.macOS])),
+        "ClairV2Push",
+        "ClairPushRelay",
+        "ClairV2Agent",
+        "ClairV2AppKit",
+        "ClairV2DaemonKit",
+        "ClairV2EditorFixtures",
+        "ClairV2EditorCore",
+        "ClairV2EditorLanguage",
+        "ClairV2EditorLanguageFixtures",
+        "ClairV2EditorView",
+        "ClairV2Ghostty",
+        "ClairV2MobileKit",
+        "ClairV2Review",
+        "ClairV2Shared",
+        "ClairV2Terminal",
+        "ClairV2Transport",
+        "ClairV2Workspace",
+      ]
+    ),
     .testTarget(
       name: "ClairV2DesignSystemTests",
       dependencies: ["ClairV2DesignSystem"]
