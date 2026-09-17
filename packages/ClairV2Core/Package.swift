@@ -103,7 +103,7 @@ let package = Package(
     ),
     .target(
       name: "ClairV2Review",
-      dependencies: ["ClairV2Shared"]
+      dependencies: ["ClairV2Shared", "ClairV2EditorCore"]
     ),
     .target(
       name: "ClairV2Terminal",

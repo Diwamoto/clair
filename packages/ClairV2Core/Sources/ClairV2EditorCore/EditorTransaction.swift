@@ -8,6 +8,7 @@ public final class EditorTransactionManager {
   public private(set) var selection: TextSelectionSet
 
   private struct UndoEntry {
+    var label: String?
     var forward: [TextEdit]
     var inverse: [TextEdit]
     var selectionBefore: TextSelectionSet
@@ -25,6 +26,14 @@ public final class EditorTransactionManager {
   public var canUndo: Bool { !undoStack.isEmpty }
   public var canRedo: Bool { !redoStack.isEmpty }
 
+  /// The edits actually written to the buffer by the most recent `apply`,
+  /// `applyExternal`, `undo`, or `redo` call, in the coordinate space that
+  /// was current immediately before that call. Lets a caller that owns
+  /// out-of-band position state (e.g. `ReviewThreadManager`) rebase through
+  /// exactly what changed — including an undo/redo's own inverse edits,
+  /// which are not otherwise observable from outside.
+  public private(set) var lastCommittedEdits: [TextEdit] = []
+
   /// Updates the tracked selection without creating an edit or undo entry
   /// — e.g. after a caret move or mouse drag that never touched the
   /// buffer (E07). `apply`/`applyExternal` map *this* selection through
@@ -39,8 +48,13 @@ public final class EditorTransactionManager {
   /// through all of them together. Ranges are given in the buffer's current
   /// coordinate space and must be mutually non-overlapping and grapheme-aligned;
   /// nothing is written until every edit in the batch validates.
+  /// The label of the most recent undo entry, if any. Useful for callers that
+  /// route specific operations (e.g. AI suggestion apply) through the manager
+  /// and need to know whether the next `undo()` will revert that operation.
+  public var lastUndoLabel: String? { undoStack.last?.label }
+
   @discardableResult
-  public func apply(_ edits: [TextEdit]) throws -> TextSnapshot {
+  public func apply(_ edits: [TextEdit], label: String? = nil) throws -> TextSnapshot {
     let sorted = try TextEdit.sortedNonOverlapping(edits)
     let before = buffer.snapshot
     try Self.validateBoundaries(sorted, in: before)
@@ -50,9 +64,10 @@ public final class EditorTransactionManager {
     selection = selection.mapped(through: sorted)
     undoStack.append(
       UndoEntry(
-        forward: sorted, inverse: inverse, selectionBefore: selectionBefore,
-        selectionAfter: selection))
+        label: label, forward: sorted, inverse: inverse,
+        selectionBefore: selectionBefore, selectionAfter: selection))
     redoStack.removeAll()
+    lastCommittedEdits = sorted
     return buffer.snapshot
   }
 
@@ -74,6 +89,7 @@ public final class EditorTransactionManager {
     selection = selection.mapped(through: sorted)
     undoStack = undoStack.compactMap { Self.rebase($0, through: sorted) }
     redoStack = redoStack.compactMap { Self.rebase($0, through: sorted) }
+    lastCommittedEdits = sorted
     return buffer.snapshot
   }
 
@@ -83,6 +99,7 @@ public final class EditorTransactionManager {
     try Self.commit(entry.inverse, to: buffer)
     selection = entry.selectionBefore
     redoStack.append(entry)
+    lastCommittedEdits = entry.inverse
     return buffer.snapshot
   }
 
@@ -92,6 +109,7 @@ public final class EditorTransactionManager {
     try Self.commit(entry.forward, to: buffer)
     selection = entry.selectionAfter
     undoStack.append(entry)
+    lastCommittedEdits = entry.forward
     return buffer.snapshot
   }
 
