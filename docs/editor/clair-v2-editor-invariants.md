@@ -275,3 +275,54 @@ below are this task's D5 record in place of new IDs.
   enormous sentinel rect (not `bounds`) for a view with no window, which fed a non-finite value
   into the line-index arithmetic and crashed until this was added — caught by
   `testAccessibilityVisibleCharacterRangeMatchesVisibleLines`.
+
+## 12. Native input surface design decisions (`E08`)
+
+`E08` (D5, depends on `E03`, `E05`) adds the iOS/iPadOS counterpart of `ClairEditorView`: a `UIView`
+implementing `UITextInput`/`UIKeyInput` (touch selection, hardware keyboard, IME/marked text) on the
+same `ClairV2EditorCore` transaction/selection model and the same viewport-virtualized CoreText line
+cache (`EditorLineRenderer`, `EditorViewGeometry`) E06 built for macOS — those two types and
+`EditorHighlighting.swift`'s span/token types are made cross-platform (`PlatformColor`/`PlatformFont`
+aliases in `PlatformTypes.swift`) rather than forked per platform. Like `E07`, this task proves
+invariants already on the books (`INV-COORD-004`, `INV-UNDO-003`) and does not introduce new
+`EditorInvariants.swift` IDs; the `INV-INPUT-*` tags below continue E07's same informal, in-doc-only
+numbering (never registered in the machine-readable list, `EditorInvariantsTests` does not check
+them) so both platforms' design decisions stay cross-referenced from one running series.
+
+- **`UITextPosition`/`UITextRange` carry a document-wide "composed" UTF-8 offset, not a line-local
+  UTF-16 one (`INV-INPUT-010`)** — a deliberate divergence from `E07`'s `INV-INPUT-001` (line-local
+  UTF-16 for `NSTextInputClient`), for a reason specific to this protocol's shape rather than a
+  reason to prefer one address space over the other in general: `NSTextInputClient` exchanges raw
+  `NSRange`s in a space the adopter must choose carefully to avoid a per-keystroke document-wide
+  conversion, but `UITextInput`'s positions/ranges are opaque reference types the adopter defines
+  from scratch, and `TextSnapshot`'s rope-backed coordinate conversion is `O(log n)` regardless of
+  which space is chosen — UIKit only ever asks about specific position objects it already holds, it
+  never re-derives one from a raw document index, so a document-wide address here does not
+  reintroduce the `O(document)` cost `INV-INPUT-001` was written to avoid. "Composed" means: the
+  committed buffer with the live IME composition's text spliced into `EditorComposition
+  .replacedRange`, identity when there is no composition — `ClairEditorView+iOSTextInput.swift`'s
+  `composedOffset`/`bufferOffset` are the two (mutually inverse, unit-tested) pure functions this
+  reduces to.
+- **A position/range query that resolves strictly inside the composition's own marked text (not one
+  of its two edges) clamps to the splice's start** — the same clamp precedent `INV-INPUT-002`
+  established for a range crossing the reference line on macOS. Real IME sessions and touch queries
+  ask for the marked range's edges or ranges wholly outside it, never an interior point; the
+  composition's own internal cursor is reported separately, through `selectedTextRange` reading
+  `EditorComposition.selectedRangeInText`, not through this generic position machinery.
+- **Touch selection is not hand-rolled**: `setUpTouchInteraction()` attaches
+  `UITextInteraction(for: .editable)`, so tap-to-place-caret, drag/long-press-to-select, handles, and
+  the magnifier loupe all come from UIKit's own text-interaction bundle driving this task's
+  `UITextInput` conformance (`closestPosition(to:)`, `characterRange(at:)`, `selectionRects(for:)`,
+  …) — no custom `UIPanGestureRecognizer`/`UILongPressGestureRecognizer` pair was written.
+- **The caret and selection highlight are drawn by the system, not by this view (`INV-INPUT-011`,
+  the iOS counterpart of `INV-INPUT-009`'s "the OS is the only thing that draws the
+  composition/selection cursor")**: `UITextInteraction` owns a `UITextSelectionView` overlay fed by
+  `caretRect(for:)`/`selectionRects(for:)`; `ClairEditorView`'s own `draw(_:)` paints only glyphs and
+  diagnostic squigglies. This is also why macOS's caret-blink `Timer` has no iOS counterpart — the
+  system caret already blinks on its own.
+- **Hardware-keyboard navigation uses `UIKeyCommand`, not a raw HID/`pressesBegan` handler**
+  (`ClairEditorView+iOSEditing.swift`): arrow keys, shift-to-extend, and Cmd+Left/Right line
+  boundaries are declared through `override var keyCommands: [UIKeyCommand]?`, the same mechanism
+  `UITextView` itself uses, mirroring macOS's `doCommand(by:)` dispatch onto the same
+  grapheme-boundary movement helpers (`INV-COORD-004`). Character input and Backspace already come
+  through `UIKeyInput.insertText`/`deleteBackward`, part of `UITextInput` itself.
