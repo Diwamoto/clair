@@ -19,7 +19,8 @@ let ghosttyVendorRoot = URL(fileURLWithPath: #filePath)
 let ghosttyHeaderPresent = FileManager.default.fileExists(
   atPath: ghosttyVendorRoot.appendingPathComponent("include/ghostty.h").path
 )
-let ghosttyXCFrameworkPath = ghosttyVendorRoot
+let ghosttyXCFrameworkPath =
+  ghosttyVendorRoot
   .appendingPathComponent("GhosttyKit.xcframework")
 let ghosttyArtifactPresent = FileManager.default.fileExists(
   atPath: ghosttyXCFrameworkPath.appendingPathComponent("Info.plist").path
@@ -59,8 +60,25 @@ let package = Package(
     .library(name: "ClairV2AppKit", targets: ["ClairV2AppKit"]),
     .library(name: "ClairV2EditorFixtures", targets: ["ClairV2EditorFixtures"]),
     .library(name: "ClairV2EditorCore", targets: ["ClairV2EditorCore"]),
+    .library(name: "ClairV2EditorLanguage", targets: ["ClairV2EditorLanguage"]),
     .library(name: "ClairV2Ghostty", targets: ["ClairV2Ghostty"]),
     .executable(name: "EditorFixtureGenerator", targets: ["EditorFixtureGenerator"]),
+  ],
+  dependencies: [
+    // E05: tree-sitter incremental parse and LSP coordinate/lifecycle. The
+    // JSON grammar used by tests is vendored directly in
+    // `ClairV2EditorLanguageFixtures` instead of depending on
+    // tree-sitter-json's own SwiftPM package, whose `SwiftTreeSitter` pin
+    // (`0.8.0`, semver-locked below `0.9.0`) conflicts with this one.
+    .package(
+      url: "https://github.com/ChimeHQ/SwiftTreeSitter.git",
+      revision: "08ef81eb8620617b55b08868126707ad72bf754f"),
+    .package(
+      url: "https://github.com/tree-sitter/tree-sitter",
+      revision: "da6fe9beb4f7f67beb75914ca8e0d48ae48d6406"),
+    .package(
+      url: "https://github.com/ChimeHQ/LanguageServerProtocol.git",
+      revision: "82770aa7d6e54e52f3b4339c49a64ee794ad1cfe"),
   ],
   targets: [
     .target(name: "ClairV2PTY"),
@@ -133,6 +151,22 @@ let package = Package(
     .target(
       name: "ClairV2EditorFixtures",
       dependencies: ["ClairV2Shared"]
+    ),
+    .target(
+      name: "ClairV2EditorLanguage",
+      dependencies: [
+        "ClairV2EditorCore",
+        .product(name: "SwiftTreeSitter", package: "SwiftTreeSitter"),
+        .product(name: "TreeSitter", package: "tree-sitter"),
+        .product(name: "LanguageServerProtocol", package: "LanguageServerProtocol"),
+      ]
+    ),
+    // Test-only vendored tree-sitter-json grammar; see `VENDOR.md`. Not a
+    // public product: nothing outside `ClairV2CoreTests` should link it.
+    .target(
+      name: "ClairV2EditorLanguageFixtures",
+      publicHeadersPath: "include",
+      cSettings: [.headerSearchPath("src")]
     ),
     .target(
       name: "ClairV2GhosttyABI",
@@ -217,6 +251,8 @@ let package = Package(
         "ClairV2DaemonKit",
         "ClairV2EditorFixtures",
         "ClairV2EditorCore",
+        "ClairV2EditorLanguage",
+        "ClairV2EditorLanguageFixtures",
         "ClairV2Ghostty",
         "ClairV2MobileKit",
         "ClairV2Review",
