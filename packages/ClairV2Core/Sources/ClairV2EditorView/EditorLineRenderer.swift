@@ -88,5 +88,39 @@ import ClairV2EditorCore
       }
       return CTLineCreateWithAttributedString(attributed)
     }
+
+    /// Renders `index` with `composition`'s text spliced in over the buffer
+    /// range it stands in for, instead of that line's committed text
+    /// (`EditorComposition`, `INV-UNDO-003`). Never cached — a composing
+    /// line's content changes on every keystroke, and it is exactly one
+    /// line, so rebuilding it each draw stays proportional to one line, not
+    /// the document (`INV-PERF-001`). Syntax highlighting is skipped here:
+    /// it is a short-lived visual state, and remapping highlight spans
+    /// across a shifting splice is not worth the complexity.
+    func composedLine(
+      at index: TextLineIndex, in snapshot: TextSnapshot, composition: EditorComposition
+    ) throws -> (line: TextLine, ctLine: CTLine) {
+      let textLine = try snapshot.line(at: index)
+      let text = try snapshot.text(in: textLine.contentRange)
+      let attributed = NSMutableAttributedString(
+        string: text, attributes: [.font: font, .foregroundColor: NSColor.labelColor])
+      let bounds = 0...(text as NSString).length
+      let lineStart = try snapshot.convert(textLine.contentRange.lowerBound, to: UTF16Unit.self)
+        .value
+      let rawStart =
+        try snapshot.convert(composition.replacedRange.lowerBound, to: UTF16Unit.self)
+        .value - lineStart
+      let rawEnd =
+        try snapshot.convert(composition.replacedRange.upperBound, to: UTF16Unit.self)
+        .value - lineStart
+      let start = min(max(rawStart, bounds.lowerBound), bounds.upperBound)
+      let end = min(max(rawEnd, start), bounds.upperBound)
+      let spliceRange = NSRange(location: start, length: end - start)
+      attributed.replaceCharacters(in: spliceRange, with: composition.text)
+      attributed.addAttribute(
+        .underlineStyle, value: NSUnderlineStyle.single.rawValue,
+        range: NSRange(location: start, length: (composition.text as NSString).length))
+      return (textLine, CTLineCreateWithAttributedString(attributed))
+    }
   }
 #endif

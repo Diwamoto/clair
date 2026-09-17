@@ -25,6 +25,16 @@ public final class EditorTransactionManager {
   public var canUndo: Bool { !undoStack.isEmpty }
   public var canRedo: Bool { !redoStack.isEmpty }
 
+  /// Updates the tracked selection without creating an edit or undo entry
+  /// — e.g. after a caret move or mouse drag that never touched the
+  /// buffer (E07). `apply`/`applyExternal` map *this* selection through
+  /// their edits as the pre-transaction state, so a host must keep it in
+  /// sync with view-only selection changes for a later `apply` (typing,
+  /// paste, …) to report the right post-edit selection.
+  public func setSelection(_ selection: TextSelectionSet) {
+    self.selection = selection
+  }
+
   /// Applies `edits` as one transaction: one undo unit, and `selection` mapped
   /// through all of them together. Ranges are given in the buffer's current
   /// coordinate space and must be mutually non-overlapping and grapheme-aligned;
@@ -113,7 +123,8 @@ public final class EditorTransactionManager {
       let old = try snapshot.text(in: edit.range)
       let start = edit.range.lowerBound.value + delta
       let end = start + edit.insertedUTF8Count
-      result.append(TextEdit(range: TextUTF8Range(UTF8Offset(start), UTF8Offset(end)), replacement: old))
+      result.append(
+        TextEdit(range: TextUTF8Range(UTF8Offset(start), UTF8Offset(end)), replacement: old))
       delta += edit.insertedUTF8Count - (edit.range.upperBound.value - edit.range.lowerBound.value)
     }
     return result

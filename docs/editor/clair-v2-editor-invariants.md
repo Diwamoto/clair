@@ -217,3 +217,61 @@ this document must not introduce an ID that is not also present there, and vice 
 every invariant has a non-empty statement, rationale, and `provenBy` list). When `E02`-`E10` close
 out an invariant with a passing test, update `provenBy` in the same commit rather than leaving it
 aspirational.
+
+## 11. Native input surface design decisions (`E07`)
+
+`E07` (D5, depends on `E03`, `E06`) adds `NSTextInputClient`/IME, clipboard, drag/drop,
+accessibility, and the system cursor to `ClairEditorView`. It proves two invariants already on
+the books — `INV-COORD-004` (caret motion/selection/backward-delete on grapheme boundaries) and
+`INV-UNDO-003` (IME composition is not undoable while marked; only the committed result enters
+the undo stack, as one unit) — and does not introduce new `INV-*` IDs: clipboard/drag/accessibility
+are UI behaviors this view coordinates on top of `E02`/`E03`'s buffer contract, not new buffer
+invariants, and `EditorInvariant.Category` stays the closed set `E01` fixed. The design decisions
+below are this task's D5 record in place of new IDs.
+
+- **`NSTextInputClient`'s coordinate space is the current line, not the document.**
+  `selectedRange()`/`markedRange()`/`attributedSubstring(forProposedRange:)`/`firstRect(forCharacterRange:)`
+  all answer in UTF-16 offsets local to the line containing the primary selection or composition,
+  never a document-wide UTF-16 offset. A document-wide address would require converting an
+  arbitrary offset against the whole rope on every IME round trip (several per keystroke),
+  reintroducing the `O(document)` cost `INV-PERF-001`/`E06` rejected; no real input method needs
+  more than its own line to place a candidate window or read the text it is composing. A range
+  that would start past the reference line clamps into it instead of crossing — accepted as a
+  known gap, since IME composition does not span a hard newline in practice (Return
+  commits/dismisses composition first).
+- **Marked (composing) text is a pure view-local overlay.** It never touches `TextBuffer` or
+  `EditorTransactionManager` — it is spliced into the one affected line's rendered `CTLine` in
+  place of whatever buffer range it is provisionally standing in for, and the blinking caret is
+  suppressed on that line in favor of the underline (the OS candidate window is the only
+  composition cursor drawn). Only `insertText`/`unmarkText` commit it, as exactly one edit through
+  the ordinary `EditorTransactionManager.apply` path — this is what makes `INV-UNDO-003` hold
+  without teaching the shared buffer/undo model a second "provisional" edit mode, and it is
+  proven by `testMarkedTextNeverTouchesBufferUntilCommitted` and
+  `testInsertTextWhileComposingCommitsAsOneUndoUnitNotOnePerKeystroke`.
+- **A commit from typing, IME, cut, paste, or drop is exactly one call to the view's
+  `onCommitEdits`**, carrying one edit per active cursor (`TextSelectionSet.edits(replacingEachWith:)`)
+  so multi-cursor typing/deleting stays one undo unit, the same ownership split `E06` established
+  for `onSelectionChange`: the view never calls `TextBuffer`/`EditorTransactionManager` directly,
+  and a caret-only move (mouse, arrow keys, VoiceOver) must reach the manager through the new
+  `EditorTransactionManager.setSelection(_:)` (not an edit) so a later `apply` maps the right
+  pre-transaction selection.
+- **Clipboard round-trips as UTF-8 text through `NSPasteboard.general`'s `.string` type only.**
+  Copy/cut never declare a second, richer representation (RTF/HTML) that could drift from the
+  plain-text one; paste only reads `.string` and does nothing when absent.
+- **A drag only ever carries the dragged selection's exact bytes; a drop only ever inserts
+  pasteboard `.string` content**, never a file/URL payload — opening a dropped file is a
+  host/window-chrome concern, out of scope here. An internal move (drag and drop within the same
+  view) deletes the source range(s) and inserts at the destination as simultaneous edits in one
+  `onCommitEdits` call, so it is one undo unit, not two; dropping inside the range being moved is
+  a no-op rather than a self-deleting drop. This planning logic is pulled into the pure, directly
+  testable `ClairEditorView.dropEdits(inserting:at:movingFrom:)` specifically so it does not
+  require a mocked `NSDraggingInfo` to verify.
+- **Accessibility answers in ordinary document-wide UTF-16 terms, not the line-local space
+  `NSTextInputClient` uses.** `accessibilityValue()`/`accessibilitySelectedTextRange()`/
+  `accessibilityVisibleCharacterRange()` are queried rarely (a VoiceOver focus event, not every
+  keystroke), so materializing the whole document or converting a document-wide offset there is
+  acceptable in a way it is not on the `draw`/`applyEdits` hot path. `accessibilityVisibleCharacterRange()`
+  intersects `NSView.visibleRect` with `bounds` first: `visibleRect` is documented to return an
+  enormous sentinel rect (not `bounds`) for a view with no window, which fed a non-finite value
+  into the line-index arithmetic and crashed until this was added — caught by
+  `testAccessibilityVisibleCharacterRangeMatchesVisibleLines`.

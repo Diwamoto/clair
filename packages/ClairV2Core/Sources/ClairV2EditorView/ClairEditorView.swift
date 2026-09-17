@@ -4,18 +4,24 @@ import ClairV2EditorCore
   import AppKit
   import CoreText
 
-  /// The macOS native editor viewport (E06): a custom `NSView` that lays
-  /// out, via CoreText, only the document lines currently intersecting its
-  /// visible rect — never the whole document, never one subview per line.
-  /// Meant as an `NSScrollView` document view; scrolling itself is standard
-  /// AppKit clipping, not reimplemented here.
+  /// The macOS native editor viewport (E06 rendering/hit-test/selection,
+  /// E07 text input): a custom `NSView` that lays out, via CoreText, only
+  /// the document lines currently intersecting its visible rect — never
+  /// the whole document, never one subview per line. Meant as an
+  /// `NSScrollView` document view; scrolling itself is standard AppKit
+  /// clipping, not reimplemented here.
   ///
-  /// `NSTextInputClient`/IME, clipboard, drag/drop, and accessibility are
-  /// E07's scope, not this view's: `ClairEditorView` only renders a given
-  /// snapshot/selection and turns mouse hits into selection changes.
+  /// This view never touches `TextBuffer`/`EditorTransactionManager`
+  /// directly (same split E06 established for `onSelectionChange`):
+  /// `onCommitEdits` (`ClairEditorView+Editing.swift`) is how typing, IME
+  /// commits, clipboard, and drag/drop ask the owner to apply an edit and
+  /// reflect the result back via `applyEdits`.
   public final class ClairEditorView: NSView {
     public private(set) var snapshot: TextSnapshot
-    public private(set) var selection: TextSelectionSet
+    // `internal(set)`, not `private(set)`: E07's editing/IME/drag extensions
+    // (separate files, same module) update selection locally the same way
+    // this file's mouse handling always has.
+    public internal(set) var selection: TextSelectionSet
     public var highlights: [EditorHighlightSpan] = [] {
       didSet {
         renderer.invalidateAll()
@@ -35,20 +41,28 @@ import ClairV2EditorCore
     /// responsible for reconciling this back into its
     /// `EditorTransactionManager`; this view does not own that state.
     public var onSelectionChange: ((TextSelectionSet) -> Void)?
+    /// Called with one transaction's worth of edits — typing, an IME
+    /// commit, cut, paste, or a text drop — for the owner to apply through
+    /// its `EditorTransactionManager` (one call is one undo unit) and
+    /// reflect back via `applyEdits`. See `ClairEditorView+Editing.swift`.
+    public var onCommitEdits: (([TextEdit]) -> Void)?
 
-    private let renderer: EditorLineRenderer
-    private let font: NSFont
+    let renderer: EditorLineRenderer
+    let font: NSFont
     private let ascent: CGFloat
     /// The fixed per-row height every line occupies (no soft-wrap, one row
     /// per document line). Exposed so a host can scroll a given line into
     /// view.
     public let lineHeight: CGFloat
-    private let textInset: CGFloat = 4
+    let textInset: CGFloat = 4
     private var knownContentWidth: CGFloat = 0
     private var caretVisible = true
     private var caretTimer: Timer?
-    private var dragAnchor: UTF8Offset?
-    private var dragFixedSelections: [TextSelection] = []
+    var dragAnchor: UTF8Offset?
+    var dragFixedSelections: [TextSelection] = []
+    /// The live IME composition, if any (`ClairEditorView+TextInput.swift`).
+    /// A view-local overlay only — see `EditorComposition`'s doc comment.
+    var composition: EditorComposition?
 
     public init(
       snapshot: TextSnapshot, selection: TextSelectionSet,
@@ -62,6 +76,7 @@ import ClairV2EditorCore
       self.lineHeight = (font.ascender - font.descender + font.leading).rounded(.up)
       super.init(frame: .zero)
       wantsLayer = true
+      registerForDraggedTypes([.string])
     }
 
     @available(*, unavailable)
@@ -79,6 +94,10 @@ import ClairV2EditorCore
 
     public override var isFlipped: Bool { true }
     public override var acceptsFirstResponder: Bool { true }
+
+    public override func resetCursorRects() {
+      addCursorRect(bounds, cursor: .iBeam)
+    }
 
     // MARK: - Content
 
@@ -161,13 +180,31 @@ import ClairV2EditorCore
 
     // MARK: - Mouse / selection
 
+    /// A mouse-down inside the existing selection defers to a possible text
+    /// drag-out instead of immediately collapsing the selection — see
+    /// `mouseDragged`/`ClairEditorView+DragDrop.swift`. `nil` once that
+    /// gesture is resolved either way.
+    private var pendingSelectionDrag: (downPoint: NSPoint, offset: UTF8Offset)?
+
     // ponytail: single click/drag and cmd-click add-cursor cover the
     // acceptance criteria (hit test -> caret/selection). Double/triple-click
-    // word/line selection is a UX nicety, not required here — add when E07
-    // wires up the rest of the input surface.
+    // word/line selection is a UX nicety, not required here.
     public override func mouseDown(with event: NSEvent) {
       window?.makeFirstResponder(self)
-      guard let offset = hitTestOffset(at: convert(event.locationInWindow, from: nil)) else {
+      // A click anywhere unmarks an in-progress IME composition, matching
+      // system text views: the click is the user abandoning the candidate
+      // in favor of pointing elsewhere.
+      if composition != nil { inputContext?.discardMarkedText() }
+      let point = convert(event.locationInWindow, from: nil)
+      guard let offset = hitTestOffset(at: point) else { return }
+
+      if !event.modifierFlags.contains(.command),
+        selection.selections.contains(where: {
+          !$0.isEmpty && $0.range.lowerBound.value <= offset.value
+            && offset.value <= $0.range.upperBound.value
+        })
+      {
+        pendingSelectionDrag = (point, offset)
         return
       }
       dragAnchor = offset
@@ -176,6 +213,15 @@ import ClairV2EditorCore
     }
 
     public override func mouseDragged(with event: NSEvent) {
+      if let pending = pendingSelectionDrag {
+        let point = convert(event.locationInWindow, from: nil)
+        guard hypot(point.x - pending.downPoint.x, point.y - pending.downPoint.y) > 4 else {
+          return
+        }
+        pendingSelectionDrag = nil
+        beginDraggingSelection(with: event)
+        return
+      }
       guard let offset = hitTestOffset(at: convert(event.locationInWindow, from: nil)) else {
         return
       }
@@ -183,6 +229,15 @@ import ClairV2EditorCore
     }
 
     public override func mouseUp(with event: NSEvent) {
+      if let pending = pendingSelectionDrag {
+        // Resolved as a plain click (never exceeded the drag threshold):
+        // collapse to a caret at the click point, same as a click outside
+        // the selection would.
+        dragAnchor = pending.offset
+        dragFixedSelections = []
+        updateDragSelection(head: pending.offset)
+        pendingSelectionDrag = nil
+      }
       dragAnchor = nil
     }
 
@@ -223,6 +278,17 @@ import ClairV2EditorCore
 
     // MARK: - Drawing
 
+    /// The line an active composition sits on, or `nil` when there is none
+    /// or it can no longer be located (e.g. a concurrent external edit —
+    /// falls back to plain rendering rather than crashing).
+    private var composingLine: TextLineIndex? {
+      guard let composition else { return nil }
+      return try? snapshot.position(
+        at: composition.replacedRange.lowerBound, columnUnit: UTF8Unit.self
+      )
+      .line
+    }
+
     public override func draw(_ dirtyRect: NSRect) {
       guard let context = NSGraphicsContext.current?.cgContext else { return }
       context.setFillColor(NSColor.textBackgroundColor.cgColor)
@@ -232,19 +298,36 @@ import ClairV2EditorCore
         visibleRect: dirtyRect, lineHeight: lineHeight, lineCount: snapshot.lineCount)
       guard !visible.isEmpty else { return }
 
+      let composingLine = self.composingLine
       var measuredWidth: CGFloat = 0
       for index in visible {
-        guard
-          let (textLine, ctLine) = try? renderer.line(
+        let built: (line: TextLine, ctLine: CTLine)?
+        if let composition, composingLine?.value == index {
+          built = try? renderer.composedLine(
+            at: TextLineIndex(index), in: snapshot, composition: composition)
+        } else {
+          built = try? renderer.line(
             at: TextLineIndex(index), in: snapshot, highlights: highlights,
             colorOverrides: tokenColors)
-        else { continue }
+        }
+        guard let (textLine, ctLine) = built else { continue }
         let top = EditorViewGeometry.lineOrigin(index, lineHeight: lineHeight)
+        // A composing line's local UTF-16 offsets no longer line up with the
+        // committed buffer (the composition text is spliced in over it), so
+        // selection/caret overlays — which are computed from committed
+        // coordinates — are skipped for exactly that one line while it is
+        // composing (`INV-INPUT-009`: the OS candidate window is the only
+        // composition cursor shown).
+        let isComposingLine = composingLine?.value == index
 
-        drawSelections(for: textLine, ctLine: ctLine, top: top, context: context)
+        if !isComposingLine {
+          drawSelections(for: textLine, ctLine: ctLine, top: top, context: context)
+        }
         drawText(ctLine, top: top, context: context)
-        drawDiagnostics(for: textLine, ctLine: ctLine, top: top, context: context)
-        drawCarets(for: textLine, ctLine: ctLine, top: top, context: context)
+        if !isComposingLine {
+          drawDiagnostics(for: textLine, ctLine: ctLine, top: top, context: context)
+          drawCarets(for: textLine, ctLine: ctLine, top: top, context: context)
+        }
 
         let width = CGFloat(CTLineGetTypographicBounds(ctLine, nil, nil, nil))
         measuredWidth = max(measuredWidth, width + textInset * 2)
