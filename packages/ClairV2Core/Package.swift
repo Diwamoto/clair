@@ -61,6 +61,7 @@ let package = Package(
     .library(name: "ClairV2EditorFixtures", targets: ["ClairV2EditorFixtures"]),
     .library(name: "ClairV2EditorCore", targets: ["ClairV2EditorCore"]),
     .library(name: "ClairV2EditorLanguage", targets: ["ClairV2EditorLanguage"]),
+    .library(name: "ClairV2EditorView", targets: ["ClairV2EditorView"]),
     .library(name: "ClairV2Ghostty", targets: ["ClairV2Ghostty"]),
     .executable(name: "EditorFixtureGenerator", targets: ["EditorFixtureGenerator"]),
   ],
@@ -161,6 +162,13 @@ let package = Package(
         .product(name: "LanguageServerProtocol", package: "LanguageServerProtocol"),
       ]
     ),
+    // E06: macOS custom NSView / CoreText viewport renderer. AppKit-only;
+    // every file guards its body with `#if os(macOS)` (same pattern as
+    // `ClairV2AppKit`) so the target still builds empty on the iOS slice.
+    .target(
+      name: "ClairV2EditorView",
+      dependencies: ["ClairV2EditorCore"]
+    ),
     // Test-only vendored tree-sitter-json grammar; see `VENDOR.md`. Not a
     // public product: nothing outside `ClairV2CoreTests` should link it.
     .target(
@@ -253,6 +261,7 @@ let package = Package(
         "ClairV2EditorCore",
         "ClairV2EditorLanguage",
         "ClairV2EditorLanguageFixtures",
+        "ClairV2EditorView",
         "ClairV2Ghostty",
         "ClairV2MobileKit",
         "ClairV2Review",
