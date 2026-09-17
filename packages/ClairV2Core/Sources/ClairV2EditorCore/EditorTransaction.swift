@@ -151,6 +151,7 @@ public final class EditorTransactionManager {
   private static func rebase(_ entry: UndoEntry, through edits: [TextEdit]) -> UndoEntry? {
     guard !entry.inverse.contains(where: { overlaps($0.range, edits) }) else { return nil }
     return UndoEntry(
+      label: entry.label,
       forward: mapEdits(entry.forward, through: edits),
       inverse: mapEdits(entry.inverse, through: edits),
       selectionBefore: entry.selectionBefore.mapped(through: edits),
