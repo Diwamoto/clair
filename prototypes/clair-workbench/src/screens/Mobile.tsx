@@ -22,7 +22,7 @@ import {
 } from '../icons';
 import { artboards, type ArtboardKey } from '../mobile-artboards';
 import { useWorkbench } from '../store';
-import { color, line, wash } from '../tokens';
+import { color, fs, line, radius, space, wash } from '../tokens';
 
 type Tab = '概要' | 'セッション' | 'アクティビティ' | '設定';
 type Push = { kind: 'terminal'; sessionId: string } | { kind: 'pairing' } | null;
@@ -60,12 +60,12 @@ const SCOPES = [
    targets, card radius 10, button/field radius 8, 16px gutter. */
 
 const TOUCH = 44;
-const R_CARD = 10;
-const R_BUTTON = 8;
+const R_CARD = radius.overlay;
+const R_BUTTON = radius.card;
 
 function Eyebrow({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
-    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', color: color.textQuaternary, ...style }}>
+    <div style={{ fontSize: fs.caption, fontWeight: 600, color: color.textTertiary, ...style }}>
       {children}
     </div>
   );
@@ -118,13 +118,13 @@ function PrimaryButton({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 8,
+        gap: space[2],
         height: TOUCH,
         borderRadius: R_BUTTON,
         background: wash.strong,
         border: `1px solid ${line.stronger}`,
         color: color.textPrimary,
-        fontSize: 14,
+        fontSize: fs.title,
         fontWeight: 600,
         ...style,
       }}
@@ -143,13 +143,13 @@ function DestructiveButton({ children, onClick }: { children: React.ReactNode; o
         display: 'flex',
         alignItems: 'center',
         height: 28,
-        padding: '0 11px',
-        borderRadius: 4,
+        padding: '0 8px',
+        borderRadius: radius.control,
         background: wash.soft,
         border: '1px solid rgba(241,242,246,0.24)',
         color: color.textPrimary,
-        fontSize: 11,
-        fontWeight: 700,
+        fontSize: fs.caption,
+        fontWeight: 600,
         flexShrink: 0,
       }}
     >
@@ -164,16 +164,16 @@ function StatusPill({ label }: { label: string }) {
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 5,
+        gap: space[1],
         height: 26,
-        padding: '0 9px',
-        borderRadius: 13,
+        padding: '0 8px',
+        borderRadius: radius.overlay,
         background: 'rgba(241,242,246,0.08)',
         border: '1px solid rgba(241,242,246,0.24)',
       }}
     >
       <span style={{ width: 6, height: 6, borderRadius: '50%', background: color.textSecondary }} />
-      <span style={{ fontSize: 11, fontWeight: 600, color: color.textPrimary }}>{label}</span>
+      <span style={{ fontSize: fs.caption, fontWeight: 600, color: color.textPrimary }}>{label}</span>
     </div>
   );
 }
@@ -182,12 +182,12 @@ function StateBadge({ label }: { label: string }) {
   return (
     <span
       style={{
-        fontSize: 11,
+        fontSize: fs.caption,
         fontWeight: 600,
         color: color.textPrimary,
         background: wash.strongest,
-        borderRadius: 4,
-        padding: '3px 7px',
+        borderRadius: radius.control,
+        padding: '2px 4px',
       }}
     >
       {label}
@@ -203,8 +203,8 @@ function ScopeChip({ id, granted }: { id: string; granted: boolean }) {
         alignItems: 'center',
         height: 22,
         padding: '0 8px',
-        borderRadius: 4,
-        fontSize: 11,
+        borderRadius: radius.control,
+        fontSize: fs.caption,
         fontWeight: 600,
         background: granted ? wash.strongest : 'transparent',
         border: granted ? `1px solid ${line.stronger}` : `1px dashed ${line.strong}`,
@@ -225,7 +225,7 @@ function Switch({ on, onChange }: { on: boolean; onChange: () => void }) {
         position: 'relative',
         width: 34,
         height: 20,
-        borderRadius: 10,
+        borderRadius: radius.overlay,
         background: on ? '#6b7280' : color.divider,
         flexShrink: 0,
       }}
@@ -253,25 +253,25 @@ function Banner({ children, style }: { children: React.ReactNode; style?: React.
       style={{
         display: 'flex',
         alignItems: 'flex-start',
-        gap: 8,
-        padding: '10px 11px',
+        gap: space[2],
+        padding: '8px 8px',
         borderRadius: R_BUTTON,
         background: wash.soft,
         border: '1px solid rgba(241,242,246,0.22)',
         color: color.textSecondary,
-        fontSize: 11,
+        fontSize: fs.caption,
         lineHeight: '16px',
         ...style,
       }}
     >
-      <IconInfo size={14} style={{ marginTop: 1 }} />
+      <IconInfo size={14} style={{ marginTop: 2 }} />
       <span>{children}</span>
     </div>
   );
 }
 
 function ProjectDot() {
-  return <span style={{ width: 7, height: 7, borderRadius: 2, background: color.textTertiary, flexShrink: 0 }} />;
+  return <span style={{ width: 7, height: 7, borderRadius: radius.control, background: color.textTertiary, flexShrink: 0 }} />;
 }
 
 function Dim({ children }: { children: React.ReactNode }) {
@@ -296,7 +296,7 @@ function Row({
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 10,
+        gap: space[2],
         minHeight: 48,
         padding: '8px 0',
         borderTop: first ? undefined : `1px solid ${line.hairlineFaint}`,
@@ -314,13 +314,13 @@ function KV({ label, value, extra, first }: { label: string; value: string; extr
       style={{
         display: 'flex',
         alignItems: 'baseline',
-        gap: 8,
+        gap: space[2],
         padding: first ? '0 0 7px 0' : '7px 0',
         borderTop: first ? undefined : `1px solid ${line.hairlineFaint}`,
       }}
     >
-      <span style={{ fontSize: 11, color: color.textQuaternary, width: 92, flexShrink: 0 }}>{label}</span>
-      <span className="cl" style={{ fontSize: 11, color: color.textSecondary }}>
+      <span style={{ fontSize: fs.caption, color: color.textQuaternary, width: 92, flexShrink: 0 }}>{label}</span>
+      <span className="cl" style={{ fontSize: fs.caption, color: color.textSecondary }}>
         {value}
       </span>
       {extra ? (
@@ -337,13 +337,13 @@ function Tag({ children }: { children: React.ReactNode }) {
   return (
     <span
       style={{
-        fontSize: 10,
+        fontSize: fs.caption,
         fontWeight: 600,
         color: color.textTertiary,
         background: wash.medium,
         border: `1px solid ${line.strong}`,
-        borderRadius: 4,
-        padding: '2px 6px',
+        borderRadius: radius.control,
+        padding: '2px 4px',
         flexShrink: 0,
       }}
     >
@@ -360,16 +360,16 @@ function EmptyState({ title, note }: { title: string; note: string }) {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: 7,
+        gap: space[1],
         padding: '16px 12px',
-        borderRadius: 4,
+        borderRadius: radius.control,
         background: color.canvas,
       }}
     >
       <IconEmptySession size={24} color={color.divider} />
-      <span style={{ fontSize: 12, fontWeight: 600, color: color.textSecondary }}>{title}</span>
+      <span style={{ fontSize: fs.secondary, fontWeight: 600, color: color.textSecondary }}>{title}</span>
       <span
-        style={{ fontSize: 10, color: color.textQuaternary, textAlign: 'center', maxWidth: 260, lineHeight: '15px' }}
+        style={{ fontSize: fs.caption, color: color.textQuaternary, textAlign: 'center', maxWidth: 260, lineHeight: '15px' }}
       >
         {note}
       </span>
@@ -395,13 +395,13 @@ function StatusSpacer() {
 function TabHeader({ title, sub, right }: { title: string; sub: React.ReactNode; right?: React.ReactNode }) {
   return (
     <div style={{ flexShrink: 0, padding: '0 16px 12px 16px' }}>
-      <Eyebrow style={{ marginBottom: 4 }}>PRIVATE NETWORK</Eyebrow>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em' }}>{title}</span>
+      <Eyebrow style={{ marginBottom: 4 }}>Private network</Eyebrow>
+      <div style={{ display: 'flex', alignItems: 'center', gap: space[2] }}>
+        <span style={{ fontSize: fs.display.screenTitle, fontWeight: 600, letterSpacing: '-0.02em' }}>{title}</span>
         <div style={{ flex: 1 }} />
         {right ?? <StatusPill label="接続中" />}
       </div>
-      <div style={{ marginTop: 3, fontSize: 12, color: color.textQuaternary }}>{sub}</div>
+      <div style={{ marginTop: 2, fontSize: fs.secondary, color: color.textQuaternary }}>{sub}</div>
     </div>
   );
 }
@@ -411,9 +411,9 @@ function Footnote({ children }: { children: React.ReactNode }) {
     <div
       style={{
         flexShrink: 0,
-        padding: '10px 16px 8px 16px',
+        padding: '8px 16px 8px 16px',
         color: color.textQuaternary,
-        fontSize: 11,
+        fontSize: fs.caption,
         lineHeight: '16px',
       }}
     >
@@ -454,12 +454,12 @@ function TabBar({ tab, onSelect }: { tab: Tab; onSelect: (t: Tab) => void }) {
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              gap: 3,
+              gap: space[0],
               color: on ? color.textPrimary : color.textQuaternary,
             }}
           >
             {TAB_ICONS[name]}
-            <span style={{ fontSize: 10, fontWeight: on ? 600 : 400 }}>{name}</span>
+            <span style={{ fontSize: fs.caption, fontWeight: on ? 600 : 400 }}>{name}</span>
           </button>
         );
       })}
@@ -471,14 +471,14 @@ function TabBar({ tab, onSelect }: { tab: Tab; onSelect: (t: Tab) => void }) {
 
 function SessionSummaryCard({ session, onOpen }: { session: Session; onOpen: () => void }) {
   return (
-    <Card prominent style={{ padding: 13, marginBottom: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+    <Card prominent style={{ padding: 12, marginBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: space[2] }}>
         <AgentGlyph icon={session.icon} size={15} tone={color.textPrimary} />
-        <span style={{ fontSize: 15, fontWeight: 600, flex: 1 }}>{session.agent}</span>
+        <span style={{ fontSize: fs.title, fontWeight: 600, flex: 1 }}>{session.agent}</span>
         <StateBadge label={session.state} />
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 7, fontSize: 12, color: color.textTertiary }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: space[2], marginTop: 4, fontSize: fs.secondary, color: color.textTertiary }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: space[1] }}>
           <ProjectDot />
           {session.project}
         </span>
@@ -487,7 +487,7 @@ function SessionSummaryCard({ session, onOpen }: { session: Session; onOpen: () 
         <Dim>·</Dim>
         <span className="cl">{session.signalTime || session.elapsed}</span>
       </div>
-      <PrimaryButton onClick={onOpen} style={{ width: '100%', marginTop: 10 }}>
+      <PrimaryButton onClick={onOpen} style={{ width: '100%', marginTop: 8 }}>
         ターミナルを開く
       </PrimaryButton>
     </Card>
@@ -500,19 +500,19 @@ function HomeScreen({ onOpenTerminal }: { onOpenTerminal: (id: string) => void }
 
   return (
     <>
-      <Card style={{ padding: 13, marginBottom: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+      <Card style={{ padding: 12, marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: space[2], marginBottom: 8 }}>
           <IconHost size={15} color={color.textSecondary} />
-          <span style={{ fontSize: 15, fontWeight: 600 }}>{HOST.name}</span>
+          <span style={{ fontSize: fs.title, fontWeight: 600 }}>{HOST.name}</span>
           <div style={{ flex: 1 }} />
-          <span style={{ fontSize: 11, fontWeight: 600, color: color.textTertiary }}>{HOST.route}</span>
+          <span style={{ fontSize: fs.caption, fontWeight: 600, color: color.textTertiary }}>{HOST.route}</span>
         </div>
         <KV label="endpoint" value={HOST.endpoint} />
         <KV label="fingerprint" value={HOST.fingerprint} extra={<Tag>固定済み</Tag>} />
         <KV
           label="protocol"
           value={HOST.protocol}
-          extra={<span style={{ fontSize: 11, color: color.textQuaternary }}>この端末は view · 入力</span>}
+          extra={<span style={{ fontSize: fs.caption, color: color.textQuaternary }}>この端末は view · 入力</span>}
         />
       </Card>
 
@@ -528,8 +528,8 @@ function HomeScreen({ onOpenTerminal }: { onOpenTerminal: (id: string) => void }
         </div>
       )}
 
-      <Section>PROJECT</Section>
-      <Card style={{ padding: '4px 13px' }}>
+      <Section>Project</Section>
+      <Card style={{ padding: '4px 12px' }}>
         {projects.map((p, i) => {
           const list = wb.sessions.filter((s) => s.project === p);
           const waiting = list.filter((s) => s.attention).length;
@@ -540,17 +540,17 @@ function HomeScreen({ onOpenTerminal }: { onOpenTerminal: (id: string) => void }
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 8,
+                gap: space[2],
                 height: 42,
                 borderTop: i === 0 ? undefined : `1px solid ${line.hairlineFaint}`,
               }}
             >
               <ProjectDot />
-              <span style={{ fontSize: 14, fontWeight: 600, flex: 1, color: exited ? color.textSecondary : undefined }}>
+              <span style={{ fontSize: fs.title, fontWeight: 600, flex: 1, color: exited ? color.textSecondary : undefined }}>
                 {p}
               </span>
               {waiting ? <StateBadge label={String(waiting)} /> : null}
-              <span style={{ fontSize: 12, color: color.textQuaternary }}>
+              <span style={{ fontSize: fs.secondary, color: color.textQuaternary }}>
                 {list.length} セッション{exited ? ' · exit 1' : ''}
               </span>
             </div>
@@ -567,12 +567,12 @@ function SessionRow({ session, onOpen }: { session: Session; onOpen: () => void 
   const exited = session.state === 'exit 1';
   const idle = session.icon === 'zsh';
   return (
-    <Card onClick={onOpen} style={{ padding: '12px 13px', marginBottom: 8, cursor: 'pointer' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+    <Card onClick={onOpen} style={{ padding: '12px 12px', marginBottom: 8, cursor: 'pointer' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: space[2] }}>
         <AgentGlyph icon={session.icon} />
         <span
           style={{
-            fontSize: 14,
+            fontSize: fs.title,
             fontWeight: 600,
             flex: 1,
             color: exited || idle ? color.textSecondary : color.textPrimary,
@@ -583,7 +583,7 @@ function SessionRow({ session, onOpen }: { session: Session; onOpen: () => void 
         {exited ? (
           <>
             <IconClose size={13} color={color.textTertiary} />
-            <span style={{ fontSize: 11, fontWeight: 600, color: color.textPrimary }}>exit 1</span>
+            <span style={{ fontSize: fs.caption, fontWeight: 600, color: color.textPrimary }}>exit 1</span>
           </>
         ) : (
           <>
@@ -592,21 +592,21 @@ function SessionRow({ session, onOpen }: { session: Session; onOpen: () => void 
                 style={{ width: 8, height: 8, borderRadius: '50%', background: color.textSecondary, flexShrink: 0 }}
               />
             )}
-            <span className="cl" style={{ fontSize: 12, color: color.textQuaternary }}>
+            <span className="cl" style={{ fontSize: fs.secondary, color: color.textQuaternary }}>
               {session.elapsed}
             </span>
           </>
         )}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 7, flexWrap: 'wrap' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: color.textTertiary }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: space[1], marginTop: 4, flexWrap: 'wrap' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: space[1], fontSize: fs.secondary, color: color.textTertiary }}>
           <ProjectDot />
           {session.project}
         </span>
         {session.worktree ? (
           <Tag>{session.worktree}</Tag>
         ) : (
-          <span style={{ fontSize: 12, color: color.textQuaternary }}>
+          <span style={{ fontSize: fs.secondary, color: color.textQuaternary }}>
             {exited ? session.signalTime : session.context}
           </span>
         )}
@@ -634,16 +634,16 @@ function SessionsScreen({
 
   return (
     <>
-      <Card prominent style={{ padding: 13, marginBottom: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+      <Card prominent style={{ padding: 12, marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: space[2], marginBottom: 8 }}>
           <IconCodex size={15} color={color.textPrimary} />
-          <span style={{ fontSize: 15, fontWeight: 600, color: color.textPrimary }}>{lead.agent}</span>
+          <span style={{ fontSize: fs.title, fontWeight: 600, color: color.textPrimary }}>{lead.agent}</span>
           <StateBadge label={wb.awaitingApproval ? '入力待ち' : '実行中'} />
         </div>
         <div
-          style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, fontSize: 12, color: color.textTertiary }}
+          style={{ display: 'flex', alignItems: 'center', gap: space[2], marginBottom: 8, fontSize: fs.secondary, color: color.textTertiary }}
         >
-          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: space[1] }}>
             <ProjectDot />
             {lead.project}
           </span>
@@ -655,10 +655,10 @@ function SessionsScreen({
         <div
           className="cl"
           style={{
-            padding: 10,
-            borderRadius: 7,
+            padding: 8,
+            borderRadius: radius.card,
             background: color.canvas,
-            fontSize: 11,
+            fontSize: fs.caption,
             lineHeight: '17px',
             color: color.code,
             whiteSpace: 'pre',
@@ -685,7 +685,7 @@ function SessionsScreen({
             </div>
           )}
         </div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+        <div style={{ display: 'flex', gap: space[2], marginTop: 8 }}>
           <PrimaryButton onClick={() => onOpenTerminal(lead.id)} style={{ flex: 1 }}>
             ターミナルを開く
           </PrimaryButton>
@@ -739,7 +739,7 @@ function ActivityScreen({ onOpenTerminal }: { onOpenTerminal: (id: string) => vo
       )}
 
       <Section>これまで</Section>
-      <Card style={{ padding: '2px 13px' }}>
+      <Card style={{ padding: '2px 12px' }}>
         {history.map((s, i) => (
           <div
             key={s.id}
@@ -747,19 +747,19 @@ function ActivityScreen({ onOpenTerminal }: { onOpenTerminal: (id: string) => vo
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 9,
+              gap: space[2],
               height: 52,
               borderTop: i === 0 ? undefined : `1px solid ${line.hairlineFaint}`,
             }}
           >
             <AgentGlyph icon={s.icon} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: s.state === 'exit 1' ? color.textSecondary : undefined }}>
+              <div style={{ fontSize: fs.body, fontWeight: 600, color: s.state === 'exit 1' ? color.textSecondary : undefined }}>
                 {s.agent}
               </div>
               <div
                 style={{
-                  fontSize: 11,
+                  fontSize: fs.caption,
                   color: color.textTertiary,
                   marginTop: 2,
                   overflow: 'hidden',
@@ -771,7 +771,7 @@ function ActivityScreen({ onOpenTerminal }: { onOpenTerminal: (id: string) => vo
                 {s.worktree ? ` / ${s.worktree}` : ''}
               </div>
             </div>
-            <span className="cl" style={{ fontSize: 11, color: color.textQuaternary, flexShrink: 0 }}>
+            <span className="cl" style={{ fontSize: fs.caption, color: color.textQuaternary, flexShrink: 0 }}>
               {s.signalTime}
             </span>
           </div>
@@ -805,35 +805,35 @@ function SettingsScreen({
   return (
     <>
       <Section>この端末の権限</Section>
-      <Card style={{ padding: '12px 13px', marginBottom: 12 }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+      <Card style={{ padding: '12px 12px', marginBottom: 12 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: space[1] }}>
           {SCOPES.map((s) => (
             <ScopeChip key={s.id} id={s.id} granted={s.granted} />
           ))}
         </div>
-        <div style={{ marginTop: 10, fontSize: 11, lineHeight: '16px', color: color.textQuaternary }}>
+        <div style={{ marginTop: 8, fontSize: fs.caption, lineHeight: '16px', color: color.textQuaternary }}>
           破線は未付与。付与はMac側の操作でしか増やせない。
         </div>
       </Card>
 
       <Section>接続</Section>
-      <Card style={{ padding: '2px 13px', marginBottom: 12 }}>
+      <Card style={{ padding: '2px 12px', marginBottom: 12 }}>
         <Row first>
-          <span style={{ fontSize: 13, flex: 1 }}>経路</span>
-          <span style={{ fontSize: 12, color: color.textTertiary }}>{HOST.route}</span>
+          <span style={{ fontSize: fs.body, flex: 1 }}>経路</span>
+          <span style={{ fontSize: fs.secondary, color: color.textTertiary }}>{HOST.route}</span>
           <IconChevron size={13} color={color.textQuaternary} />
         </Row>
         <Row>
-          <span style={{ fontSize: 13, flex: 1 }}>host fingerprint</span>
-          <span className="cl" style={{ fontSize: 11, color: color.textTertiary }}>
+          <span style={{ fontSize: fs.body, flex: 1 }}>host fingerprint</span>
+          <span className="cl" style={{ fontSize: fs.caption, color: color.textTertiary }}>
             7f3a…d05a
           </span>
           <Tag>固定済み</Tag>
         </Row>
         <Row>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13 }}>前面復帰で再取得</div>
-            <div style={{ fontSize: 11, color: color.textQuaternary, marginTop: 2 }}>
+            <div style={{ fontSize: fs.body }}>前面復帰で再取得</div>
+            <div style={{ fontSize: fs.caption, color: color.textQuaternary, marginTop: 2 }}>
               アプリに戻ったとき要対応を取り直す
             </div>
           </div>
@@ -842,15 +842,15 @@ function SettingsScreen({
       </Card>
 
       <Section>ペアリング済みの端末</Section>
-      <Card style={{ padding: '2px 13px', marginBottom: 12 }}>
+      <Card style={{ padding: '2px 12px', marginBottom: 12 }}>
         {devices.map((d, i) => (
           <Row key={d.id} first={i === 0}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: d.current ? color.textPrimary : color.textSecondary }}>
+              <div style={{ fontSize: fs.body, fontWeight: 600, color: d.current ? color.textPrimary : color.textSecondary }}>
                 {d.name}
                 {d.current ? <span style={{ fontWeight: 400, color: color.textQuaternary }}> · この端末</span> : null}
               </div>
-              <div style={{ fontSize: 11, color: color.textQuaternary, marginTop: 2 }}>
+              <div style={{ fontSize: fs.caption, color: color.textQuaternary, marginTop: 2 }}>
                 {d.scopes} — {d.since}
               </div>
             </div>
@@ -910,12 +910,12 @@ function TerminalScreen({ session, onBack }: { session: Session; onBack: () => v
         alignItems: 'center',
         justifyContent: 'center',
         height: 32,
-        padding: '0 11px',
-        borderRadius: 6,
+        padding: '0 8px',
+        borderRadius: radius.card,
         background: color.panel,
         border: `1px solid ${line.hairline}`,
         color: color.textSecondary,
-        fontSize: 12,
+        fontSize: fs.secondary,
         fontWeight: 600,
         flexShrink: 0,
         ...style,
@@ -936,19 +936,19 @@ function TerminalScreen({ session, onBack }: { session: Session; onBack: () => v
           flexShrink: 0,
           display: 'flex',
           alignItems: 'center',
-          gap: 10,
+          gap: space[2],
           padding: '0 12px 0 8px',
           backgroundColor: color.chrome,
           borderBottom: `1px solid ${line.chrome}`,
         }}
       >
-        <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: 2, color: color.textSecondary }}>
+        <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: space[0], color: color.textSecondary }}>
           <IconChevronLeft size={20} />
-          <span style={{ fontSize: 14 }}>セッション</span>
+          <span style={{ fontSize: fs.title }}>セッション</span>
         </button>
         <div style={{ flex: 1 }} />
         <AgentGlyph icon={session.icon} size={15} tone={color.textPrimary} />
-        <span style={{ fontSize: 14, fontWeight: 600 }}>{session.agent}</span>
+        <span style={{ fontSize: fs.title, fontWeight: 600 }}>{session.agent}</span>
         <div style={{ flex: 1 }} />
         <IconEllipsis size={18} color={color.textTertiary} />
       </div>
@@ -958,14 +958,14 @@ function TerminalScreen({ session, onBack }: { session: Session; onBack: () => v
           flexShrink: 0,
           display: 'flex',
           alignItems: 'center',
-          gap: 7,
+          gap: space[1],
           padding: '8px 16px',
-          fontSize: 11,
+          fontSize: fs.caption,
           color: color.textTertiary,
           borderBottom: `1px solid ${line.hairlineFaint}`,
         }}
       >
-        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: space[1] }}>
           <ProjectDot />
           {session.project}
         </span>
@@ -984,8 +984,8 @@ function TerminalScreen({ session, onBack }: { session: Session; onBack: () => v
         style={{
           flex: 1,
           overflowY: 'auto',
-          padding: '10px 14px',
-          fontSize: 11.5,
+          padding: '8px 12px',
+          fontSize: fs.secondary,
           lineHeight: '18px',
           color: color.code,
           whiteSpace: 'pre-wrap',
@@ -998,10 +998,10 @@ function TerminalScreen({ session, onBack }: { session: Session; onBack: () => v
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 8,
-            margin: '6px 0',
+            gap: space[2],
+            margin: '4px 0',
             color: color.textQuaternary,
-            fontSize: 10.5,
+            fontSize: fs.caption,
           }}
         >
           <span style={{ flex: 1, height: 1, background: line.hairline }} />
@@ -1027,8 +1027,8 @@ function TerminalScreen({ session, onBack }: { session: Session; onBack: () => v
       <div
         style={{
           flexShrink: 0,
-          padding: '7px 16px',
-          fontSize: 10.5,
+          padding: '4px 16px',
+          fontSize: fs.caption,
           color: color.textQuaternary,
           borderTop: `1px solid ${line.hairlineFaint}`,
         }}
@@ -1041,11 +1041,11 @@ function TerminalScreen({ session, onBack }: { session: Session; onBack: () => v
           flexShrink: 0,
           backgroundColor: color.chrome,
           borderTop: `1px solid ${line.chrome}`,
-          padding: '9px 12px 10px 12px',
-          paddingBottom: 'calc(10px + env(safe-area-inset-bottom))',
+          padding: '8px 12px 8px 12px',
+          paddingBottom: 'calc(8px + env(safe-area-inset-bottom))',
         }}
       >
-        <div style={{ display: 'flex', gap: 7, marginBottom: 9 }}>
+        <div style={{ display: 'flex', gap: space[1], marginBottom: 8 }}>
           {key('esc', () => setValue(''))}
           {key('tab', () => setValue((v) => `${v}  `))}
           {key('^C', () => send('N'))}
@@ -1058,7 +1058,7 @@ function TerminalScreen({ session, onBack }: { session: Session; onBack: () => v
             e.preventDefault();
             send(value);
           }}
-          style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+          style={{ display: 'flex', alignItems: 'center', gap: space[2] }}
         >
           <input
             value={value}
@@ -1076,7 +1076,7 @@ function TerminalScreen({ session, onBack }: { session: Session; onBack: () => v
               background: color.panel,
               border: `1px solid ${line.strong}`,
               color: color.textPrimary,
-              fontSize: 13,
+              fontSize: fs.body,
               outline: 'none',
             }}
           />
@@ -1120,38 +1120,38 @@ function PairingScreen({ onCancel, onPair }: { onCancel: () => void; onPair: (na
     <>
       <StatusSpacer />
       <div style={{ height: TOUCH, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 16px' }}>
-        <button onClick={onCancel} style={{ fontSize: 14, color: color.textTertiary }}>
+        <button onClick={onCancel} style={{ fontSize: fs.title, color: color.textTertiary }}>
           キャンセル
         </button>
         <div style={{ flex: 1 }} />
-        <span style={{ fontSize: 14, fontWeight: 600 }}>ペアリング</span>
+        <span style={{ fontSize: fs.title, fontWeight: 600 }}>ペアリング</span>
         <div style={{ flex: 1 }} />
         {/* balances the title against the キャンセル on the left */}
-        <span aria-hidden style={{ fontSize: 14, visibility: 'hidden' }}>
+        <span aria-hidden style={{ fontSize: fs.title, visibility: 'hidden' }}>
           キャンセル
         </span>
       </div>
 
       <div className="scroll" style={{ flex: 1, overflowY: 'auto', padding: '12px 16px 0 16px' }}>
-        <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.01em', lineHeight: '28px', marginBottom: 6 }}>
+        <div style={{ fontSize: fs.display.h1, fontWeight: 600, letterSpacing: '-0.01em', lineHeight: '28px', marginBottom: 4 }}>
           このMacとペアリングしますか？
         </div>
-        <div style={{ fontSize: 12, lineHeight: '18px', color: color.textTertiary, marginBottom: 16 }}>
+        <div style={{ fontSize: fs.secondary, lineHeight: '18px', color: color.textTertiary, marginBottom: 16 }}>
           Macの画面に出ている指紋と、下の指紋が一致することを確かめてください。
         </div>
 
-        <Card prominent style={{ padding: 13, marginBottom: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 11 }}>
+        <Card prominent style={{ padding: 12, marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: space[2], marginBottom: 8 }}>
             <IconHost size={15} color={color.textPrimary} />
-            <span style={{ fontSize: 15, fontWeight: 600 }}>{HOST.name}</span>
+            <span style={{ fontSize: fs.title, fontWeight: 600 }}>{HOST.name}</span>
           </div>
-          <Eyebrow style={{ marginBottom: 5 }}>HOST FINGERPRINT</Eyebrow>
-          <div className="cl" style={{ fontSize: 17, letterSpacing: '0.08em', color: color.textPrimary, lineHeight: '26px' }}>
+          <Eyebrow style={{ marginBottom: 4 }}>Host fingerprint</Eyebrow>
+          <div className="cl" style={{ fontSize: fs.display.pairingCode, letterSpacing: '0.08em', color: color.textPrimary, lineHeight: '26px' }}>
             {HOST.fingerprintFull.map((row) => (
               <div key={row}>{row}</div>
             ))}
           </div>
-          <div style={{ marginTop: 11, paddingTop: 9, borderTop: `1px solid ${line.hairline}` }}>
+          <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${line.hairline}` }}>
             <KV label="endpoint" value={HOST.endpoint} first />
             <div style={{ height: 6 }} />
             <KV label="protocol" value={HOST.protocol} first />
@@ -1159,12 +1159,12 @@ function PairingScreen({ onCancel, onPair }: { onCancel: () => void; onPair: (na
         </Card>
 
         <Section>最初に付与される権限</Section>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: space[1], marginBottom: 8 }}>
           {SCOPES.map((s) => (
             <ScopeChip key={s.id} id={s.id} granted={s.id === 'view'} />
           ))}
         </div>
-        <div style={{ fontSize: 11, lineHeight: '16px', color: color.textQuaternary, margin: '0 2px 14px 2px' }}>
+        <div style={{ fontSize: fs.caption, lineHeight: '16px', color: color.textQuaternary, margin: '0 2px 12px 2px' }}>
           最初は閲覧だけ。入力・割り込みはあとからMacで足す。
         </div>
 
@@ -1186,7 +1186,7 @@ function PairingScreen({ onCancel, onPair }: { onCancel: () => void; onPair: (na
         >
           ペアリングする
         </PrimaryButton>
-        <div style={{ textAlign: 'center', marginTop: 9, fontSize: 11, color: color.textQuaternary }}>
+        <div style={{ textAlign: 'center', marginTop: 8, fontSize: fs.caption, color: color.textQuaternary }}>
           {expired ? (
             'このリンクは期限切れ。Macで作り直してください。'
           ) : (
@@ -1212,17 +1212,17 @@ function DesignSnapshot({ k }: { k: ArtboardKey }) {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: 10,
+        gap: space[2],
         padding: '16px 0',
         overflow: 'auto',
         background: color.overlayGround,
       }}
     >
-      <div style={{ fontSize: 11, fontWeight: 600, color: color.textQuaternary }}>design canvas · {board.file}</div>
+      <div style={{ fontSize: fs.caption, fontWeight: 600, color: color.textQuaternary }}>design canvas · {board.file}</div>
       <style>{board.css}</style>
       <div
         className="dc-board"
-        style={{ width: 390, height: 844, borderRadius: 12, overflow: 'hidden', flexShrink: 0 }}
+        style={{ width: 390, height: 844, borderRadius: radius.overlay, overflow: 'hidden', flexShrink: 0 }}
         dangerouslySetInnerHTML={{ __html: board.html }}
       />
     </div>
@@ -1309,14 +1309,14 @@ export function MobileApp() {
             zIndex: 10,
             display: 'flex',
             alignItems: 'center',
-            gap: 6,
+            gap: space[1],
             height: 28,
-            padding: '0 10px',
-            borderRadius: 14,
+            padding: '0 8px',
+            borderRadius: radius.overlay,
             background: 'rgba(0,0,0,0.55)',
             border: '1px dashed rgba(241,242,246,0.5)',
             color: color.textPrimary,
-            fontSize: 11,
+            fontSize: fs.caption,
             fontWeight: 600,
           }}
         >

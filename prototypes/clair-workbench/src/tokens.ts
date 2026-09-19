@@ -111,7 +111,7 @@ export const wash = {
 
 // TYPE SCALE — 4 steps, the macOS text styles. Strength comes from weight
 // (400 / 600 only) and ink, never from size. Nothing under 11px.
-export const fs = { caption: 11, secondary: 12, body: 13, title: 15, display: { h1: 20 } } as const;
+export const fs = { caption: 11, secondary: 12, body: 13, title: 15, display: { pairingCode: 17, h1: 20, screenTitle: 24 } } as const;
 export const lineHeight = { caption: '16px', secondary: '18px', body: '20px', title: '22px' } as const;
 
 // RADIUS — 3 steps plus pill. `device` is the phone frame in the viewer only.
