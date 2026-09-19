@@ -48,6 +48,9 @@ public final class ClairV2MobileTerminalSession {
   private var pumpTask: Task<Void, Never>?
 
   public private(set) var state: ClairV2MobileTerminalSessionState = .detached
+  /// DEC modes the remote program has enabled (bracketed paste, mouse, focus),
+  /// scanned from the output stream; reset on every fresh attach.
+  public private(set) var modes = ClairV2TerminalModes()
   /// Invoked on the main actor after every successfully applied frame.
   public var onScreenUpdate: ((GhosttyVTScreenSnapshot) -> Void)?
 
@@ -110,6 +113,7 @@ public final class ClairV2MobileTerminalSession {
         return resumed
       }
     }
+    modes = ClairV2TerminalModes()
     return try await transport.attach(
       scope: scope, generation: generation, cursor: nil, on: connection)
   }
@@ -140,6 +144,29 @@ public final class ClairV2MobileTerminalSession {
     let bytes = ClairV2TerminalKeyEncoding.encode(key)
     guard !bytes.isEmpty else { return }
     try? await transport.input(bytes, attachment: attachment, on: connection)
+  }
+
+  /// Sends raw pre-encoded bytes (paste, mouse, focus reports). Same no-op-
+  /// when-detached contract as `sendKey`. Never resizes the remote PTY: the
+  /// mobile viewport is local, geometry is desktop-owned (`T04` resize owner).
+  public func sendInput(_ bytes: Data) async {
+    guard !bytes.isEmpty, let attachment, let connection else { return }
+    try? await transport.input(bytes, attachment: attachment, on: connection)
+  }
+
+  public func paste(_ text: String) async {
+    await sendInput(ClairV2TerminalPaste.encode(text, modes: modes))
+  }
+
+  public func sendFocus(_ focused: Bool) async {
+    await sendInput(ClairV2TerminalFocus.encode(focused: focused, modes: modes))
+  }
+
+  public func sendMouse(
+    _ button: ClairV2TerminalMouseButton, _ action: ClairV2TerminalMouseAction, column: Int, row: Int
+  ) async {
+    await sendInput(
+      ClairV2TerminalMouse.encode(button, action, column: column, row: row, modes: modes))
   }
 
   /// Touch pan-to-scroll: shifts the local VT parser's viewport and
@@ -180,6 +207,7 @@ public final class ClairV2MobileTerminalSession {
         return true
       }
       try terminal.write(frame.bytes)
+      modes.feed(frame.bytes)
       try await transport.acknowledge(attachment, cursor: frame.nextCursor, on: connection)
       lastAcknowledgedCursor = frame.nextCursor
       if let snapshot = try? terminal.snapshot() {

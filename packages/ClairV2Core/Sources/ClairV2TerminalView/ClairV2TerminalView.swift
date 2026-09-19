@@ -99,6 +99,46 @@
 
     public override var canBecomeFirstResponder: Bool { true }
 
+    // MARK: - Focus reporting (`CSI ? 1004`)
+
+    public override func becomeFirstResponder() -> Bool {
+      let became = super.becomeFirstResponder()
+      if became { Task { [session] in await session.sendFocus(true) } }
+      return became
+    }
+
+    public override func resignFirstResponder() -> Bool {
+      let resigned = super.resignFirstResponder()
+      if resigned { Task { [session] in await session.sendFocus(false) } }
+      return resigned
+    }
+
+    // MARK: - Paste guard
+
+    public override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+      action == #selector(paste(_:)) ? UIPasteboard.general.hasStrings : super.canPerformAction(action, withSender: sender)
+    }
+
+    public override func paste(_ sender: Any?) {
+      guard let text = UIPasteboard.general.string, !text.isEmpty else { return }
+      guard ClairV2TerminalPaste.needsConfirmation(text, modes: session.modes) else {
+        Task { [session] in await session.paste(text) }
+        return
+      }
+      let alert = UIAlertController(
+        title: "複数行をペーストしますか？",
+        message: "実行中のプログラムは bracketed paste に対応していないため、各行がそのまま実行されます。",
+        preferredStyle: .alert)
+      alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+      alert.addAction(
+        UIAlertAction(title: "ペースト", style: .destructive) { [session] _ in
+          Task { await session.paste(text) }
+        })
+      var top = window?.rootViewController
+      while let presented = top?.presentedViewController { top = presented }
+      top?.present(alert, animated: true)
+    }
+
     // MARK: - Attach lifecycle
 
     /// Starts (or resumes) the remote session attach and remembers `scope`/
@@ -158,16 +198,27 @@
       let rowsToDraw = min(snapshot.lines.count, visibleRowCount)
       for index in 0..<rowsToDraw {
         let line = snapshot.lines[index]
-        let attributed = NSAttributedString(
-          string: line, attributes: [.font: font, .foregroundColor: UIColor.white])
-        let ctLine = CTLineCreateWithAttributedString(attributed)
         let lineTop = top + CGFloat(index) * lineHeight
         drawSelectionHighlight(forRow: index, top: lineTop, context: context)
-        context.saveGState()
-        context.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
-        context.textPosition = CGPoint(x: textInset, y: lineTop + ascent)
-        CTLineDraw(ctLine, context)
-        context.restoreGState()
+        // One CTLine per character, positioned on its VT cell column: wide
+        // (CJK) glyphs take two cells, so a single proportional CTLine per row
+        // would drift off the grid the cursor/selection are measured on.
+        var column = 0
+        for character in line {
+          let width = ClairV2TerminalCellWidth.of(character)
+          defer { column += width }
+          guard width > 0, character != " " else { continue }
+          let ctLine = CTLineCreateWithAttributedString(
+            NSAttributedString(
+              string: String(character),
+              attributes: [.font: font, .foregroundColor: UIColor.white]))
+          context.saveGState()
+          context.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
+          context.textPosition = CGPoint(
+            x: textInset + CGFloat(column) * charWidth, y: lineTop + ascent)
+          CTLineDraw(ctLine, context)
+          context.restoreGState()
+        }
       }
 
       if snapshot.cursor.visible, snapshot.cursor.row < rowsToDraw {
@@ -220,6 +271,19 @@
       let longPress = UILongPressGestureRecognizer(
         target: self, action: #selector(handleLongPress(_:)))
       addGestureRecognizer(longPress)
+      addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(handleTap(_:))))
+    }
+
+    /// Tap becomes a left press+release when the program enabled mouse
+    /// reporting; otherwise it only takes keyboard focus.
+    @objc private func handleTap(_ gesture: UITapGestureRecognizer) {
+      becomeFirstResponder()
+      guard session.modes.mouseReporting else { return }
+      let point = cell(at: gesture.location(in: self))
+      Task { [session] in
+        await session.sendMouse(.left, .press, column: point.column, row: point.row)
+        await session.sendMouse(.left, .release, column: point.column, row: point.row)
+      }
     }
 
     private var panLastTranslationY: CGFloat = 0
@@ -238,7 +302,17 @@
       case .changed:
         let translation = gesture.translation(in: self).y
         let deltaRows = Int((translation - panLastTranslationY) / lineHeight)
-        if deltaRows != 0 {
+        if deltaRows != 0, session.modes.mouseReporting {
+          // The program owns the mouse: forward scroll as wheel events.
+          let point = cell(at: gesture.location(in: self))
+          let wheel: ClairV2TerminalMouseButton = deltaRows > 0 ? .wheelUp : .wheelDown
+          Task { [session] in
+            for _ in 0..<abs(deltaRows) {
+              await session.sendMouse(wheel, .press, column: point.column, row: point.row)
+            }
+          }
+          panLastTranslationY += CGFloat(deltaRows) * lineHeight
+        } else if deltaRows != 0 {
           // Dragging content downward (positive translation) reveals rows
           // above -- scroll the viewport up (negative rows).
           session.scroll(byRows: -deltaRows)

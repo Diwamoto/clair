@@ -129,6 +129,28 @@ struct ClairV2MobileTerminalSessionTests {
     #expect(f.process.writes == [Data("ls".utf8), Data([0x0D]), Data([0x03])])
   }
 
+  @Test func streamEnabledModesShapePasteMouseAndFocusInput() async throws {
+    let f = try T05Fixture()
+    let client = try await f.pair()
+    f.process.terminalJournal.appendOrFail(Data("\u{1B}[?2004h\u{1B}[?1004h\u{1B}[?1000h\u{1B}[?1006h".utf8))
+    let session = ClairV2MobileTerminalSession(
+      transport: f.transport, engine: FakeTerminalEngine())
+    await session.foreground(scope: f.scope, generation: 1, on: client.connection)
+    try await waitUntil { session.modes.bracketedPaste && session.modes.mouseSGR }
+
+    await session.paste("a\nb")
+    await session.sendFocus(true)
+    await session.sendMouse(.left, .press, column: 1, row: 2)
+
+    try await waitUntil { f.process.writes.count == 3 }
+    #expect(
+      f.process.writes == [
+        ClairV2TerminalPaste.bracketStart + Data("a\rb".utf8) + ClairV2TerminalPaste.bracketEnd,
+        Data([0x1B, 0x5B, 0x49]),
+        Data("\u{1B}[<0;2;3M".utf8),
+      ])
+  }
+
   @Test func sendKeyBeforeAttachIsANoOp() async throws {
     let f = try T05Fixture()
     let session = ClairV2MobileTerminalSession(
