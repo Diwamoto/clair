@@ -11,7 +11,7 @@ import {
 } from '../icons';
 import { useWorkbench } from '../store';
 import { Chip, MainHeader, SourceControlModeTabs } from '../chrome';
-import { color, groupColor, line, wash } from '../tokens';
+import { color, fs, groupColor, line, radius, space, wash } from '../tokens';
 
 const GRID = '26px 146px 84px 196px 66px 1fr 104px 88px';
 
@@ -30,14 +30,14 @@ export function SessionsMain() {
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
       <MainHeader>
         <IconSession size={15} color={color.textTertiary} />
-        <span style={{ fontSize: 13, fontWeight: 600, color: color.chromeInk }}>Agents</span>
-        <span style={{ fontSize: 10, color: color.textQuaternary }}>全Project · PTYとprocessから得られる事実のみ</span>
+        <span style={{ fontSize: fs.body, fontWeight: 600, color: color.chromeInk }}>Agents</span>
+        <span style={{ fontSize: fs.caption, color: color.textQuaternary }}>全Project · PTYとprocessから得られる事実のみ</span>
         <div style={{ flex: 1 }} />
         <Chip
           onClick={() => (attention ? wb.setScreen('workspace') : undefined)}
           style={{
-            background: 'rgba(242,244,238,0.07)',
-            border: '1px solid rgba(242,244,238,0.22)',
+            background: 'rgba(241,242,246,0.07)',
+            border: '1px solid rgba(241,242,246,0.22)',
             color: color.textSecondary,
           }}
         >
@@ -49,7 +49,7 @@ export function SessionsMain() {
           onClick={() => wb.setOverlay('addAgent')}
           style={{ background: color.panel, border: `1px solid ${line.hairline}`, color: color.textTertiary }}
         >
-          Agentを起動 <span style={{ color: color.textMuted, fontWeight: 500 }}>⌃⌘N</span>
+          Agentを起動 <span style={{ color: color.textQuaternary, fontWeight: 500 }}>⌃⌘N</span>
         </Chip>
       </MainHeader>
 
@@ -58,13 +58,13 @@ export function SessionsMain() {
           display: 'grid',
           gridTemplateColumns: GRID,
           alignItems: 'center',
-          gap: 12,
+          gap: space[3],
           height: 26,
-          padding: '0 14px',
+          padding: '0 12px',
           background: color.panelDeep,
           borderBottom: `1px solid ${line.hairline}`,
-          color: color.textMuted,
-          fontSize: 9,
+          color: color.textQuaternary,
+          fontSize: fs.caption,
           fontWeight: 700,
           letterSpacing: '0.04em',
         }}
@@ -87,11 +87,11 @@ export function SessionsMain() {
               display: 'grid',
               gridTemplateColumns: GRID,
               alignItems: 'center',
-              gap: 12,
+              gap: space[3],
               height: 34,
               padding: s.attention ? '0 14px 0 12px' : '0 14px',
               borderBottom: `1px solid ${line.hairlineFaint}`,
-              background: s.attention ? 'rgba(242,244,238,0.05)' : undefined,
+              background: s.attention ? 'rgba(241,242,246,0.05)' : undefined,
               borderLeft: s.attention ? `2px solid ${color.textSecondary}` : undefined,
             }}
           >
@@ -112,7 +112,7 @@ export function SessionsMain() {
               )}
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: space[1], minWidth: 0 }}>
               <AgentIcon icon={s.icon} />
               <span style={{ fontWeight: 600, color: s.icon === 'zsh' || s.icon === 'opencode' ? color.textSecondary : color.textPrimary }}>
                 {s.agent}
@@ -132,8 +132,8 @@ export function SessionsMain() {
               </Chip>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ width: 6, height: 6, borderRadius: 2, background: color.textTertiary }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: space[1] }}>
+              <span style={{ width: 6, height: 6, borderRadius: radius.control, background: color.textTertiary }} />
               <span style={{ color: color.textSecondary }}>{s.project}</span>
             </div>
 
@@ -166,15 +166,15 @@ export function SessionsMain() {
               {s.elapsed}
             </div>
 
-            <div style={{ color: s.signal === '—' ? color.textMuted : color.textTertiary, minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap' }}>
+            <div style={{ color: s.signal === '—' ? color.textQuaternary : color.textTertiary, minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap' }}>
               {s.signal}
-              {s.signalTime ? <span style={{ color: color.textMuted }}> · {s.signalTime}</span> : null}
+              {s.signalTime ? <span style={{ color: color.textQuaternary }}> · {s.signalTime}</span> : null}
             </div>
 
             <div>
               {s.quotaPercent ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <div style={{ flex: 1, height: 4, borderRadius: 2, background: color.surfaceActive, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: space[1] }}>
+                  <div style={{ flex: 1, height: 4, borderRadius: radius.control, background: color.surfaceActive, overflow: 'hidden' }}>
                     <div
                       style={{
                         width: `${s.quotaPercent}%`,
@@ -183,12 +183,12 @@ export function SessionsMain() {
                       }}
                     />
                   </div>
-                  <span className="cl" style={{ fontSize: 10, color: s.quotaTight ? color.textSecondary : color.textTertiary }}>
+                  <span className="cl" style={{ fontSize: fs.caption, color: s.quotaTight ? color.textSecondary : color.textTertiary }}>
                     {s.quotaLabel}
                   </span>
                 </div>
               ) : (
-                <span className="cl" style={{ fontSize: 10, color: color.lineNumber }}>
+                <span className="cl" style={{ fontSize: fs.caption, color: color.lineNumber }}>
                   —
                 </span>
               )}
@@ -199,7 +199,7 @@ export function SessionsMain() {
                 onClick={() => (s.action === '再起動' ? wb.restartSession(s.id) : wb.setScreen('workspace'))}
                 style={{
                   background: s.action === '移動 ↵' ? color.surfaceActive : 'transparent',
-                  color: s.action === '移動 ↵' ? color.textSecondary : color.textMuted,
+                  color: s.action === '移動 ↵' ? color.textSecondary : color.textQuaternary,
                 }}
               >
                 {s.action}
@@ -233,14 +233,14 @@ export function AgentsPanel() {
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 8,
+        gap: space[2],
         height: 26,
         margin: '0 8px',
         padding: '0 8px',
-        borderRadius: 6,
-        background: selected ? 'rgba(242,244,238,0.08)' : undefined,
+        borderRadius: radius.card,
+        background: selected ? 'rgba(241,242,246,0.08)' : undefined,
         color: selected ? color.chromeInk : color.textTertiary,
-        fontSize: 11,
+        fontSize: fs.caption,
       }}
     >
       <span
@@ -253,12 +253,12 @@ export function AgentsPanel() {
         }}
       />
       <span style={{ flex: 1 }}>{label}</span>
-      <span style={{ fontSize: 10, color: color.chromeInkMuted }}>{count}</span>
+      <span style={{ fontSize: fs.caption, color: color.textTertiary }}>{count}</span>
     </div>
   );
 
   const heading = (text: string) => (
-    <div style={{ padding: '10px 16px 4px', fontSize: 10, color: color.chromeInkMuted }}>{text}</div>
+    <div style={{ padding: '8px 16px 4px', fontSize: fs.caption, color: color.textTertiary }}>{text}</div>
   );
 
   return (
@@ -281,17 +281,17 @@ export function SessionsStatus() {
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 6,
+        gap: space[1],
         height: 18,
         padding: '0 8px',
-        borderRadius: 9,
-        background: 'rgba(242,244,238,0.07)',
-        border: '1px solid rgba(242,244,238,0.22)',
+        borderRadius: radius.card,
+        background: 'rgba(241,242,246,0.07)',
+        border: '1px solid rgba(241,242,246,0.22)',
         color: color.textSecondary,
       }}
     >
       <span style={{ fontWeight: 600 }}>{attention.agent} が入力待ち</span>
-      <span style={{ fontSize: 9, color: color.textQuaternary }}>⌥⇥</span>
+      <span style={{ fontSize: fs.caption, color: color.textQuaternary }}>⌥⇥</span>
     </div>
   );
 }
@@ -357,9 +357,9 @@ export function MergeGraphMain() {
       <MainHeader>
         <SourceControlModeTabs />
         <div style={{ flex: 1 }} />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 10, color: color.textTertiary }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: space[3], fontSize: fs.caption, color: color.textTertiary }}>
           {(Object.keys(branchColor) as Array<keyof typeof branchColor>).map((b) => (
-            <span key={b} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            <span key={b} style={{ display: 'inline-flex', alignItems: 'center', gap: space[1] }}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: branchColor[b] }} />
               {b}
             </span>
@@ -375,8 +375,8 @@ export function MergeGraphMain() {
           gridTemplateColumns: GRAPH_GRID,
           alignItems: 'center',
           padding: '0 16px',
-          color: color.textMuted,
-          fontSize: 9,
+          color: color.textQuaternary,
+          fontSize: fs.caption,
           fontWeight: 700,
           letterSpacing: '0.04em',
           borderBottom: `1px solid ${line.hairline}`,
@@ -403,31 +403,31 @@ export function MergeGraphMain() {
               width: '100%',
               height: 32,
               padding: '0 16px',
-              borderBottom: '1px solid rgba(242,244,238,0.06)',
+              borderBottom: '1px solid rgba(241,242,246,0.06)',
             }}
           >
             <GraphCell kind={c.graph} />
             <span
               style={{
-                fontSize: 11.5,
+                fontSize: fs.secondary,
                 fontWeight: c.graph === 'merge' ? 700 : 400,
                 color: c.graph === 'merge' ? color.textPrimary : color.codeBright,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
-                paddingRight: 10,
+                paddingRight: 8,
                 textAlign: 'left',
               }}
             >
               {c.subject}
             </span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 9.5, color: color.textTertiary }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: space[1], fontSize: fs.caption, color: color.textTertiary }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: branchColor[c.branch], flexShrink: 0 }} />
               {c.branch}
             </span>
-            <span style={{ fontSize: 10.5, color: color.textTertiary }}>{c.author}</span>
-            <span style={{ fontSize: 10, color: color.textMuted }}>{c.when}</span>
-            <span className="cl" style={{ fontSize: 10, color: color.textMuted }}>
+            <span style={{ fontSize: fs.caption, color: color.textTertiary }}>{c.author}</span>
+            <span style={{ fontSize: fs.caption, color: color.textQuaternary }}>{c.when}</span>
+            <span className="cl" style={{ fontSize: fs.caption, color: color.textQuaternary }}>
               {c.hash}
             </span>
           </button>

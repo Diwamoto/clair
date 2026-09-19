@@ -3,7 +3,7 @@ import { HighlightedLine } from '../highlight';
 import { IconClaude, IconRefresh, IconShieldCheck } from '../icons';
 import { useWorkbench } from '../store';
 import { MainHeader, SourceControlModeTabs } from '../chrome';
-import { color, line } from '../tokens';
+import { color, fs, line, radius, space } from '../tokens';
 
 /** The "+"/"−" stage toggle VSCode puts at the end of a changed-file row —
  * one glyph, not an icon, matching how this app already uses plain "▾"/"▸"
@@ -17,7 +17,7 @@ function StageButton({ staged, onClick, title }: { staged: boolean; onClick: () 
         e.stopPropagation();
         onClick();
       }}
-      style={{ width: 18, height: 18, fontSize: 12, fontWeight: 700, color: color.textTertiary, flexShrink: 0 }}
+      style={{ width: 18, height: 18, fontSize: fs.secondary, fontWeight: 700, color: color.textTertiary, flexShrink: 0 }}
     >
       {staged ? '−' : '+'}
     </button>
@@ -50,11 +50,11 @@ function FileRow({
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 7,
+        gap: space[1],
         width: '100%',
         height: 24,
         padding: selected ? '0 8px 0 20px' : '0 8px 0 22px',
-        fontSize: 11,
+        fontSize: fs.caption,
         color: selected ? color.textPrimary : color.textTertiary,
         background: selected ? color.surfaceActive : undefined,
         borderLeft: selected ? `2px solid ${color.textSecondary}` : undefined,
@@ -64,18 +64,18 @@ function FileRow({
       <IconClaude size={12} color={untracked ? color.success : color.textTertiary} />
       <span style={{ flex: 1, textAlign: 'left', color: untracked ? color.success : undefined }}>{file.name}</span>
       {untracked ? (
-        <span className="cl" style={{ fontSize: 10, color: color.textMuted }}>
+        <span className="cl" style={{ fontSize: fs.caption, color: color.textQuaternary }}>
           未追跡
         </span>
       ) : (
         <>
           {file.added ? (
-            <span className="cl" style={{ fontSize: 10, color: color.success }}>
+            <span className="cl" style={{ fontSize: fs.caption, color: color.success }}>
               +{file.added}
             </span>
           ) : null}
           {file.removed ? (
-            <span className="cl" style={{ fontSize: 10, color: color.danger }}>
+            <span className="cl" style={{ fontSize: fs.caption, color: color.danger }}>
               −{file.removed}
             </span>
           ) : null}
@@ -100,16 +100,16 @@ function SectionHeading({
   onBulk: () => void;
 }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, height: 26, padding: '0 12px 0 20px' }}>
-      <span style={{ fontSize: 10, fontWeight: 700, color: color.textTertiary, letterSpacing: '0.03em', flex: 1 }}>
-        {label} <span style={{ color: color.textMuted, fontWeight: 400 }}>{count}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: space[1], height: 26, padding: '0 12px 0 20px' }}>
+      <span style={{ fontSize: fs.caption, fontWeight: 700, color: color.textTertiary, letterSpacing: '0.03em', flex: 1 }}>
+        {label} <span style={{ color: color.textQuaternary, fontWeight: 400 }}>{count}</span>
       </span>
       {count ? (
         <button
           className="act"
           title={bulkTitle}
           onClick={onBulk}
-          style={{ width: 18, height: 18, fontSize: 12, fontWeight: 700, color: color.textQuaternary, flexShrink: 0 }}
+          style={{ width: 18, height: 18, fontSize: fs.secondary, fontWeight: 700, color: color.textQuaternary, flexShrink: 0 }}
         >
           {bulkGlyph}
         </button>
@@ -126,16 +126,16 @@ function NoChanges() {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: 7,
+        gap: space[1],
         padding: '16px 12px',
-        borderRadius: 4,
+        borderRadius: radius.control,
         background: color.canvas,
         margin: 12,
       }}
     >
       <IconShieldCheck size={24} color={color.divider} />
-      <span style={{ fontSize: 12, fontWeight: 600, color: color.textSecondary }}>変更はありません</span>
-      <span style={{ fontSize: 10, color: color.textQuaternary, textAlign: 'center', maxWidth: 220, lineHeight: '15px' }}>
+      <span style={{ fontSize: fs.secondary, fontWeight: 600, color: color.textSecondary }}>変更はありません</span>
+      <span style={{ fontSize: fs.caption, color: color.textQuaternary, textAlign: 'center', maxWidth: 220, lineHeight: '15px' }}>
         working tree はきれいです。
       </span>
     </div>
@@ -147,10 +147,10 @@ function DiffRow({ row }: { row: DiffLine }) {
   const signColor = row.sign === '+' ? color.success : row.sign === '-' ? color.danger : undefined;
   return (
     <>
-      <div className="dn" style={{ textAlign: 'right', paddingRight: 10, color: color.lineNumber, background: row.sign === '-' ? tint : undefined }}>
+      <div className="dn" style={{ textAlign: 'right', paddingRight: 8, color: color.lineNumber, background: row.sign === '-' ? tint : undefined }}>
         {row.old ?? ''}
       </div>
-      <div className="dn" style={{ textAlign: 'right', paddingRight: 10, color: color.lineNumber, background: row.sign === '+' ? tint : undefined }}>
+      <div className="dn" style={{ textAlign: 'right', paddingRight: 8, color: color.lineNumber, background: row.sign === '+' ? tint : undefined }}>
         {row.New ?? ''}
       </div>
       <div style={{ paddingLeft: 12, background: tint, whiteSpace: 'pre' }}>
@@ -182,19 +182,19 @@ export function ReviewPanel() {
           flexShrink: 0,
           display: 'flex',
           alignItems: 'center',
-          gap: 8,
+          gap: space[2],
           padding: '0 12px',
           borderBottom: `1px solid ${line.hairline}`,
         }}
       >
-        <span style={{ fontSize: 13, fontWeight: 600 }}>変更を確認</span>
+        <span style={{ fontSize: fs.body, fontWeight: 600 }}>変更を確認</span>
         <div style={{ flex: 1 }} />
         <button className="act" style={{ width: 20, height: 20 }} title="更新">
           <IconRefresh size={13} color={color.textQuaternary} />
         </button>
       </div>
 
-      <div style={{ flexShrink: 0, padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ flexShrink: 0, padding: 8, display: 'flex', flexDirection: 'column', gap: space[1] }}>
         <textarea
           value={wb.commitMessage}
           onChange={(e) => wb.setCommitMessage(e.target.value)}
@@ -203,11 +203,11 @@ export function ReviewPanel() {
           style={{
             resize: 'none',
             border: `1px solid ${line.hairline}`,
-            borderRadius: 4,
+            borderRadius: radius.control,
             background: color.panel,
             color: color.textPrimary,
-            fontSize: 11,
-            padding: '6px 8px',
+            fontSize: fs.caption,
+            padding: '4px 8px',
             outline: 'none',
           }}
         />
@@ -219,12 +219,12 @@ export function ReviewPanel() {
             alignItems: 'center',
             justifyContent: 'center',
             height: 26,
-            padding: '0 10px',
-            borderRadius: 4,
+            padding: '0 8px',
+            borderRadius: radius.control,
             background: canCommit ? color.surfaceActive : color.panel,
             border: `1px solid ${canCommit ? line.stronger : line.hairline}`,
             color: canCommit ? color.textPrimary : color.textQuaternary,
-            fontSize: 11,
+            fontSize: fs.caption,
             fontWeight: 600,
             cursor: canCommit ? 'pointer' : 'default',
           }}
@@ -295,7 +295,7 @@ export function ReviewMain() {
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, background: color.canvas }}>
       <MainHeader>
         <SourceControlModeTabs />
-        <span className="cl" style={{ fontSize: 10, color: color.textMuted }}>
+        <span className="cl" style={{ fontSize: fs.caption, color: color.textQuaternary }}>
           {staged.length} / {changedFiles.length} files staged
         </span>
       </MainHeader>
@@ -306,23 +306,23 @@ export function ReviewMain() {
           flexShrink: 0,
           display: 'flex',
           alignItems: 'center',
-          gap: 9,
+          gap: space[2],
           padding: '0 16px',
           background: '#171a1e',
           borderBottom: `1px solid ${line.hairline}`,
         }}
       >
         <IconClaude size={12} color={color.textTertiary} />
-        <span className="cl" style={{ fontSize: 11, color: color.textSecondary }}>
+        <span className="cl" style={{ fontSize: fs.caption, color: color.textSecondary }}>
           {current.path}
         </span>
         {current.added ? (
-          <span className="cl" style={{ fontSize: 10, color: color.success }}>
+          <span className="cl" style={{ fontSize: fs.caption, color: color.success }}>
             +{current.added}
           </span>
         ) : null}
         {current.removed ? (
-          <span className="cl" style={{ fontSize: 10, color: color.danger }}>
+          <span className="cl" style={{ fontSize: fs.caption, color: color.danger }}>
             −{current.removed}
           </span>
         ) : null}
@@ -331,13 +331,13 @@ export function ReviewMain() {
           style={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: 4,
+            gap: space[1],
             height: 18,
-            padding: '0 6px',
-            borderRadius: 3,
-            background: current.untracked ? 'rgba(229,192,123,0.14)' : isStaged ? 'rgba(138,203,148,0.14)' : 'rgba(242,244,238,0.07)',
+            padding: '0 4px',
+            borderRadius: radius.control,
+            background: current.untracked ? 'rgba(229,192,123,0.14)' : isStaged ? 'rgba(138,203,148,0.14)' : 'rgba(241,242,246,0.07)',
             color: current.untracked ? color.attention : isStaged ? color.success : color.textTertiary,
-            fontSize: 9,
+            fontSize: fs.caption,
             fontWeight: 600,
           }}
         >
@@ -351,7 +351,7 @@ export function ReviewMain() {
           style={{
             display: 'grid',
             gridTemplateColumns: '44px 44px 1fr',
-            fontSize: 12,
+            fontSize: fs.secondary,
             lineHeight: '19px',
             color: color.code,
           }}
@@ -369,7 +369,7 @@ export function ReviewStatus() {
   const { current } = useReview();
   if (!current) return null;
   return (
-    <span className="cl" style={{ color: color.textMuted }}>
+    <span className="cl" style={{ color: color.textQuaternary }}>
       {current.path}
     </span>
   );

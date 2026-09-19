@@ -65,7 +65,7 @@ const R_BUTTON = 8;
 
 function Eyebrow({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
-    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', color: color.textMuted, ...style }}>
+    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', color: color.textQuaternary, ...style }}>
       {children}
     </div>
   );
@@ -91,7 +91,7 @@ function Card({
       onClick={onClick}
       style={{
         background: prominent ? wash.soft : color.panel,
-        border: `1px solid ${prominent ? 'rgba(242,244,238,0.24)' : line.hairline}`,
+        border: `1px solid ${prominent ? 'rgba(241,242,246,0.24)' : line.hairline}`,
         borderRadius: R_CARD,
         textAlign: 'left',
         ...style,
@@ -146,7 +146,7 @@ function DestructiveButton({ children, onClick }: { children: React.ReactNode; o
         padding: '0 11px',
         borderRadius: 4,
         background: wash.soft,
-        border: '1px solid rgba(242,244,238,0.24)',
+        border: '1px solid rgba(241,242,246,0.24)',
         color: color.textPrimary,
         fontSize: 11,
         fontWeight: 700,
@@ -168,8 +168,8 @@ function StatusPill({ label }: { label: string }) {
         height: 26,
         padding: '0 9px',
         borderRadius: 13,
-        background: 'rgba(242,244,238,0.08)',
-        border: '1px solid rgba(242,244,238,0.24)',
+        background: 'rgba(241,242,246,0.08)',
+        border: '1px solid rgba(241,242,246,0.24)',
       }}
     >
       <span style={{ width: 6, height: 6, borderRadius: '50%', background: color.textSecondary }} />
@@ -257,7 +257,7 @@ function Banner({ children, style }: { children: React.ReactNode; style?: React.
         padding: '10px 11px',
         borderRadius: R_BUTTON,
         background: wash.soft,
-        border: '1px solid rgba(242,244,238,0.22)',
+        border: '1px solid rgba(241,242,246,0.22)',
         color: color.textSecondary,
         fontSize: 11,
         lineHeight: '16px',
@@ -412,7 +412,7 @@ function Footnote({ children }: { children: React.ReactNode }) {
       style={{
         flexShrink: 0,
         padding: '10px 16px 8px 16px',
-        color: color.textMuted,
+        color: color.textQuaternary,
         fontSize: 11,
         lineHeight: '16px',
       }}
@@ -1029,7 +1029,7 @@ function TerminalScreen({ session, onBack }: { session: Session; onBack: () => v
           flexShrink: 0,
           padding: '7px 16px',
           fontSize: 10.5,
-          color: color.textMuted,
+          color: color.textQuaternary,
           borderTop: `1px solid ${line.hairlineFaint}`,
         }}
       >
@@ -1186,7 +1186,7 @@ function PairingScreen({ onCancel, onPair }: { onCancel: () => void; onPair: (na
         >
           ペアリングする
         </PrimaryButton>
-        <div style={{ textAlign: 'center', marginTop: 9, fontSize: 11, color: color.textMuted }}>
+        <div style={{ textAlign: 'center', marginTop: 9, fontSize: 11, color: color.textQuaternary }}>
           {expired ? (
             'このリンクは期限切れ。Macで作り直してください。'
           ) : (
@@ -1314,7 +1314,7 @@ export function MobileApp() {
             padding: '0 10px',
             borderRadius: 14,
             background: 'rgba(0,0,0,0.55)',
-            border: '1px dashed rgba(242,244,238,0.5)',
+            border: '1px dashed rgba(241,242,246,0.5)',
             color: color.textPrimary,
             fontSize: 11,
             fontWeight: 600,

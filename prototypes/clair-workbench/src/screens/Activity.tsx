@@ -4,7 +4,7 @@ import { activityItems } from '../data';
 import { IconSearch } from '../icons';
 import { useWorkbench } from '../store';
 
-import { color, line, wash } from '../tokens';
+import { color, fs, line, radius, space, wash } from '../tokens';
 
 export function ActivityPanel() {
   const wb = useWorkbench();
@@ -19,11 +19,11 @@ export function ActivityPanel() {
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 8,
+              gap: space[2],
               height: 40,
               padding: '0 12px',
               margin: '8px 12px',
-              borderRadius: 6,
+              borderRadius: radius.card,
               background: color.canvas,
               border: `1px solid ${line.strong}`,
             }}
@@ -39,12 +39,12 @@ export function ActivityPanel() {
                 border: 0,
                 outline: 'none',
                 background: 'transparent',
-                fontSize: 11,
+                fontSize: fs.caption,
                 color: color.textSecondary,
               }}
             />
           </div>
-          <div style={{ display: 'flex', gap: 5, padding: '0 12px 8px' }}>
+          <div style={{ display: 'flex', gap: space[1], padding: '0 12px 8px' }}>
             {(['すべて', 'clair', 'ccedit'] as const).map((s) => {
               const on = scope === s;
               return (
@@ -56,11 +56,11 @@ export function ActivityPanel() {
                     alignItems: 'center',
                     height: 22,
                     padding: '0 8px',
-                    borderRadius: 4,
+                    borderRadius: radius.control,
                     background: on ? wash.raised : 'transparent',
                     border: on ? `1px solid ${line.hairline}` : '1px solid transparent',
                     color: on ? color.textSecondary : color.textQuaternary,
-                    fontSize: 10,
+                    fontSize: fs.caption,
                   }}
                 >
                   {s}
@@ -78,10 +78,10 @@ export function ActivityPanel() {
                   style={{
                     display: 'flex',
                     alignItems: 'flex-start',
-                    gap: 10,
+                    gap: space[2],
                     width: '100%',
-                    padding: '9px 14px',
-                    background: selected ? 'rgba(242,244,238,0.055)' : undefined,
+                    padding: '8px 12px',
+                    background: selected ? 'rgba(241,242,246,0.055)' : undefined,
                     borderLeft: `2px solid ${selected ? color.textSecondary : 'transparent'}`,
                   }}
                 >
@@ -92,12 +92,12 @@ export function ActivityPanel() {
                       flex: '0 0 18px',
                       borderRadius: '50%',
                       background:
-                        item.state === 'done' ? 'rgba(242,244,238,0.05)' : selected || item.state === 'attention' ? wash.strongest : wash.selected,
+                        item.state === 'done' ? 'rgba(241,242,246,0.05)' : selected || item.state === 'attention' ? wash.strongest : wash.selected,
                       color: item.state === 'done' ? color.textQuaternary : selected || item.state === 'attention' ? color.textPrimary : color.textSecondary,
                       display: 'grid',
                       placeItems: 'center',
-                      fontSize: 10,
-                      marginTop: 1,
+                      fontSize: fs.caption,
+                      marginTop: 2,
                     }}
                   >
                     {item.glyph}
@@ -107,14 +107,14 @@ export function ActivityPanel() {
                       style={{
                         display: 'block',
                         color: selected ? color.textPrimary : color.textSecondary,
-                        fontSize: 11,
+                        fontSize: fs.caption,
                         fontWeight: 500,
                         textAlign: 'left',
                       }}
                     >
                       {item.title}
                     </strong>
-                    <small style={{ display: 'block', marginTop: 4, color: color.textMuted, fontSize: 10 }}>
+                    <small style={{ display: 'block', marginTop: 4, color: color.textQuaternary, fontSize: fs.caption }}>
                       {item.meta}
                     </small>
                   </span>
@@ -144,10 +144,10 @@ export function ActivityMain() {
                 <div
                   style={{
                     padding: '12px 16px',
-                    borderRadius: 10,
-                    background: m.from === 'user' ? wash.strong : 'rgba(242,244,238,0.045)',
+                    borderRadius: radius.overlay,
+                    background: m.from === 'user' ? wash.strong : 'rgba(241,242,246,0.045)',
                     color: m.from === 'user' ? color.textPrimary : color.textSecondary,
-                    fontSize: 13,
+                    fontSize: fs.body,
                     lineHeight: 1.55,
                     maxWidth: '85%',
                     marginLeft: m.from === 'user' ? 'auto' : undefined,
@@ -157,7 +157,7 @@ export function ActivityMain() {
                 </div>
                 <div
                   className="cl"
-                  style={{ marginTop: 6, color: color.textMuted, fontSize: 10, textAlign: m.from === 'user' ? 'right' : 'left' }}
+                  style={{ marginTop: 4, color: color.textQuaternary, fontSize: fs.caption, textAlign: m.from === 'user' ? 'right' : 'left' }}
                 >
                   {m.time}
                 </div>
@@ -168,7 +168,7 @@ export function ActivityMain() {
               <div
                 style={{
                   border: `1px solid ${line.stronger}`,
-                  borderRadius: 8,
+                  borderRadius: radius.card,
                   background: wash.faint,
                   overflow: 'hidden',
                 }}
@@ -178,40 +178,40 @@ export function ActivityMain() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    gap: 12,
+                    gap: space[3],
                     padding: '12px 16px',
-                    borderBottom: `1px solid rgba(242,244,238,0.14)`,
+                    borderBottom: `1px solid rgba(241,242,246,0.14)`,
                     color: color.textPrimary,
-                    fontSize: 12.5,
+                    fontSize: fs.body,
                     fontWeight: 600,
                   }}
                 >
                   変更を適用してテストを実行しますか？
-                  <span className="cl" style={{ color: color.textMuted, fontWeight: 400, fontSize: 10 }}>
+                  <span className="cl" style={{ color: color.textQuaternary, fontWeight: 400, fontSize: fs.caption }}>
                     PermissionRequest
                   </span>
                 </div>
-                <div style={{ padding: '14px 16px', display: 'grid', gap: 10 }}>
+                <div style={{ padding: '12px 16px', display: 'grid', gap: space[2] }}>
                   <div
                     className="cl scroll"
                     style={{
-                      padding: '9px 11px',
+                      padding: '8px 8px',
                       border: `1px solid ${line.hairline}`,
-                      borderRadius: 6,
+                      borderRadius: radius.card,
                       background: color.canvas,
                       color: color.textSecondary,
-                      fontSize: 12.5,
+                      fontSize: fs.body,
                       whiteSpace: 'pre',
                     }}
                   >
                     git diff --check &amp;&amp; swift test --package-path packages/ClairMobileKit
                   </div>
-                  <div className="cl" style={{ display: 'flex', gap: 18, color: color.textMuted, fontSize: 10, flexWrap: 'wrap' }}>
+                  <div className="cl" style={{ display: 'flex', gap: space[4], color: color.textQuaternary, fontSize: fs.caption, flexWrap: 'wrap' }}>
                     <span>作業ディレクトリ ~/Projects/ccedit</span>
                     <span>リスク ローカルのテストコマンドを実行</span>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 8, padding: '0 16px 14px' }}>
+                <div style={{ display: 'flex', gap: space[2], padding: '0 16px 12px' }}>
                   {(
                     [
                       ['拒否', line.hairline, 'transparent', color.textTertiary, 400],
@@ -230,10 +230,10 @@ export function ActivityMain() {
                           minHeight: 30,
                           lineHeight: '30px',
                           border: `1px solid ${chosen ? line.ring : border}`,
-                          borderRadius: 4,
+                          borderRadius: radius.control,
                           background: chosen ? color.surfaceActive : bg,
                           color: chosen ? color.textPrimary : fg,
-                          fontSize: 11,
+                          fontSize: fs.caption,
                           fontWeight: weight,
                         }}
                       >
@@ -244,7 +244,7 @@ export function ActivityMain() {
                 </div>
               </div>
               {wb.approvalDecision ? (
-                <div className="cl" style={{ marginTop: 8, color: color.textMuted, fontSize: 10 }}>
+                <div className="cl" style={{ marginTop: 8, color: color.textQuaternary, fontSize: fs.caption }}>
                   {wb.approvalDecision} を選択しました。
                 </div>
               ) : null}
@@ -257,10 +257,10 @@ export function ActivityMain() {
               margin: '0 20px 16px',
               display: 'flex',
               alignItems: 'center',
-              gap: 10,
-              padding: '0 14px',
+              gap: space[2],
+              padding: '0 12px',
               height: 46,
-              borderRadius: 8,
+              borderRadius: radius.card,
               background: color.panel,
               border: `1px solid ${line.strong}`,
             }}
@@ -281,7 +281,7 @@ export function ActivityMain() {
                 outline: 'none',
                 background: 'transparent',
                 color: color.textPrimary,
-                fontSize: 12.5,
+                fontSize: fs.body,
               }}
             />
           </div>
@@ -291,7 +291,7 @@ export function ActivityMain() {
 
 export function ActivityStatus() {
   return (
-    <span className="cl" style={{ color: color.textMuted }}>
+    <span className="cl" style={{ color: color.textQuaternary }}>
       Claude Code · 実行中
     </span>
   );

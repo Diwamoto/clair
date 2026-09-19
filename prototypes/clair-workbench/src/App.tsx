@@ -30,7 +30,7 @@ import { ExplorerPanel, WorkspaceMain, WorkspaceStatus } from './screens/Workspa
 import { AppShell, navIdFor } from './chrome';
 import { PanelStage, ScreenStage } from './motion';
 import { WorkbenchProvider, useWorkbench } from './store';
-import { color, line } from './tokens';
+import { color, fs, line, radius, space } from './tokens';
 
 /* ── routing ──────────────────────────────────────────────────────────── */
 
@@ -386,9 +386,9 @@ function ViewerBar({
     minWidth: 30,
     height: 26,
     padding: '0 8px',
-    borderRadius: 4,
+    borderRadius: radius.control,
     color: color.textSecondary,
-    fontSize: 12,
+    fontSize: fs.secondary,
   };
   return (
     <div
@@ -400,12 +400,12 @@ function ViewerBar({
         zIndex: 90,
         display: 'flex',
         alignItems: 'center',
-        gap: 2,
+        gap: space[0],
         height: 34,
-        padding: '0 6px',
-        borderRadius: 8,
+        padding: '0 4px',
+        borderRadius: radius.card,
         background: color.chromeRaised,
-        border: '1px solid rgba(242,244,238,0.14)',
+        border: '1px solid rgba(241,242,246,0.14)',
         boxShadow: '0 8px 20px rgba(0,0,0,0.4)',
       }}
     >
@@ -413,7 +413,7 @@ function ViewerBar({
         −
       </button>
       <button
-        style={{ ...button, color: autoFit ? color.textPrimary : color.textSecondary, fontSize: 10, fontWeight: 600 }}
+        style={{ ...button, color: autoFit ? color.textPrimary : color.textSecondary, fontSize: fs.caption, fontWeight: 600 }}
         onClick={onFit}
       >
         {Math.round(scale * 100)}%
@@ -421,10 +421,10 @@ function ViewerBar({
       <button style={button} onClick={onZoomIn} aria-label="拡大">
         +
       </button>
-      <div style={{ width: 1, height: 18, background: 'rgba(242,244,238,0.14)', margin: '0 4px' }} />
+      <div style={{ width: 1, height: 18, background: 'rgba(241,242,246,0.14)', margin: '0 4px' }} />
       <RouteLink
         to="mobile"
-        style={{ ...button, textDecoration: 'none', fontSize: 10, fontWeight: 600, color: color.textTertiary }}
+        style={{ ...button, textDecoration: 'none', fontSize: fs.caption, fontWeight: 600, color: color.textTertiary }}
       >
         モバイル
       </RouteLink>
@@ -452,12 +452,12 @@ function MobileStage({ viewport }: { viewport: { width: number; height: number }
             display: 'flex',
             alignItems: 'center',
             height: 24,
-            padding: '0 9px',
-            borderRadius: 12,
-            background: 'rgba(242,244,238,0.07)',
-            border: '1px solid rgba(242,244,238,0.22)',
+            padding: '0 8px',
+            borderRadius: radius.overlay,
+            background: 'rgba(241,242,246,0.07)',
+            border: '1px solid rgba(241,242,246,0.22)',
             color: color.textSecondary,
-            fontSize: 10,
+            fontSize: fs.caption,
             fontWeight: 600,
             textDecoration: 'none',
           }}
@@ -480,7 +480,7 @@ function MobileStage({ viewport }: { viewport: { width: number; height: number }
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 16,
+        gap: space[4],
       }}
     >
       <div style={{ width: PHONE.width * scale, height: PHONE.height * scale }}>
@@ -490,7 +490,7 @@ function MobileStage({ viewport }: { viewport: { width: number; height: number }
             height: PHONE.height,
             transform: `scale(${scale})`,
             transformOrigin: 'top left',
-            borderRadius: 44,
+            borderRadius: radius.device,
             overflow: 'hidden',
             border: `1px solid ${line.strong}`,
             boxShadow: '0 24px 70px rgba(0,0,0,0.5)',
@@ -505,12 +505,12 @@ function MobileStage({ viewport }: { viewport: { width: number; height: number }
           display: 'flex',
           alignItems: 'center',
           height: 24,
-          padding: '0 11px',
-          borderRadius: 12,
-          background: 'rgba(242,244,238,0.07)',
-          border: '1px solid rgba(242,244,238,0.22)',
+          padding: '0 8px',
+          borderRadius: radius.overlay,
+          background: 'rgba(241,242,246,0.07)',
+          border: '1px solid rgba(241,242,246,0.22)',
           color: color.textSecondary,
-          fontSize: 10,
+          fontSize: fs.caption,
           fontWeight: 600,
           textDecoration: 'none',
         }}

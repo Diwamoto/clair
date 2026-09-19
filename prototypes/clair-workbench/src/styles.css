@@ -21,11 +21,9 @@ html {
 
 body {
   background: #101214;
-  color: #f1f3ef;
-  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN',
-    'SF Pro Text', system-ui, sans-serif;
-  font-size: 11px;
-  -webkit-font-smoothing: antialiased;
+  color: #f1f2f6;
+  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', sans-serif;
+  font-size: 13px;
   overscroll-behavior: none;
 }
 
@@ -47,7 +45,7 @@ textarea {
 }
 
 .cl {
-  font-family: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace;
+  font-family: 'SF Mono', ui-monospace, Menlo, 'Hiragino Sans', monospace;
 }
 
 /* surfaceHover / surfaceActive from the Tokens artboard. */
@@ -65,19 +63,19 @@ textarea {
   justify-content: center;
   width: 30px;
   height: 28px;
-  border-radius: 7px;
-  color: #707871;
+  border-radius: 6px;
+  color: #81858d;
 }
 
 .act:hover {
   background: #2e333c;
-  color: #c9cec8;
+  color: #caccd2;
 }
 
 .scroll {
   overflow: auto;
   scrollbar-width: thin;
-  scrollbar-color: rgba(242, 244, 238, 0.15) transparent;
+  scrollbar-color: rgba(241, 242, 246, 0.15) transparent;
 }
 
 .scroll::-webkit-scrollbar {
@@ -90,8 +88,8 @@ textarea {
 }
 
 .scroll::-webkit-scrollbar-thumb {
-  background: rgba(242, 244, 238, 0.15);
-  border-radius: 3px;
+  background: rgba(241, 242, 246, 0.15);
+  border-radius: 4px;
 }
 
 .no-scrollbar::-webkit-scrollbar {

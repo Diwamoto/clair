@@ -7,7 +7,7 @@ import { IconBranchSmall } from '../icons';
 import { copyText, editorMenu, fileMenu, folderMenu, readClipboard, streamMenu } from '../menus';
 import { useWorkbench, type PaneNode } from '../store';
 import { FileIcon } from '../chrome';
-import { color, line, mono } from '../tokens';
+import { color, fs, line, mono, radius, space } from '../tokens';
 
 const byPath = new Map(files.map((f) => [f.path, f]));
 
@@ -27,7 +27,7 @@ export function ExplorerPanel() {
           width: 'calc(100% - 16px)',
           margin: '0 8px',
           padding: `0 10px 0 ${indent - 8}px`,
-          borderRadius: 7,
+          borderRadius: radius.card,
           boxShadow: targetRing,
         }
       : { width: '100%', padding: base };
@@ -42,7 +42,7 @@ export function ExplorerPanel() {
   };
 
   return (
-    <div className="scroll" style={{ position: 'absolute', inset: 0, padding: '6px 0' }}>
+    <div className="scroll" style={{ position: 'absolute', inset: 0, padding: '4px 0' }}>
         {tree.map((node) => {
           if (node.type !== 'project' && hidden(node.parent)) return null;
 
@@ -56,7 +56,7 @@ export function ExplorerPanel() {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 5,
+                  gap: space[1],
                   height: 24,
                   ...ringed(node.id, 10, '0 10px'),
                   color: color.attention,
@@ -64,7 +64,7 @@ export function ExplorerPanel() {
               >
                 {open ? '▾' : '▸'}
                 <IconBranchSmall size={10} />
-                <span style={{ fontSize: 11, fontWeight: 700, marginLeft: 1 }}>{node.name}</span>
+                <span style={{ fontSize: fs.caption, fontWeight: 700, marginLeft: 2 }}>{node.name}</span>
               </button>
             );
           }
@@ -79,14 +79,14 @@ export function ExplorerPanel() {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 5,
+                  gap: space[1],
                   height: 24,
                   ...ringed(node.id, INDENT[node.depth] ?? 22, `0 10px 0 ${INDENT[node.depth] ?? 22}px`),
                   color: color.textSecondary,
                 }}
               >
                 {open ? '▾' : '▸'}
-                <span style={{ fontSize: 11, marginLeft: 3 }}>{node.name}</span>
+                <span style={{ fontSize: fs.caption, marginLeft: 2 }}>{node.name}</span>
               </button>
             );
           }
@@ -106,7 +106,7 @@ export function ExplorerPanel() {
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 6,
+                gap: space[1],
                 width: framed ? 'calc(100% - 16px)' : '100%',
                 height: selected ? 28 : 26,
                 padding: `0 10px 0 ${(INDENT[node.depth] ?? 36) - (framed ? 8 : 0)}px`,
@@ -118,11 +118,11 @@ export function ExplorerPanel() {
               }}
             >
               <FileIcon kind={file?.kind ?? 'swift'} tint={selected ? '#cfd3ce' : color.textTertiary} />
-              <span style={{ fontSize: 11, flex: 1, fontWeight: selected ? 500 : 400 }}>{node.name}</span>
+              <span style={{ fontSize: fs.caption, flex: 1, fontWeight: selected ? 500 : 400 }}>{node.name}</span>
               {status ? (
                 <span
                   style={{
-                    fontSize: 10,
+                    fontSize: fs.caption,
                     fontWeight: 600,
                     color: status === 'A' ? color.success : color.attention,
                   }}
@@ -156,7 +156,7 @@ function PathBreadcrumb({ path }: { path: string }) {
         flexShrink: 0,
         display: 'flex',
         alignItems: 'center',
-        gap: 5,
+        gap: space[1],
         padding: '0 12px',
         overflow: 'hidden',
         background: color.canvas,
@@ -167,11 +167,11 @@ function PathBreadcrumb({ path }: { path: string }) {
         return (
           <Fragment key={i}>
             {i > 0 ? (
-              <span style={{ fontSize: 10, color: color.textQuaternary, flexShrink: 0 }}>›</span>
+              <span style={{ fontSize: fs.caption, color: color.textQuaternary, flexShrink: 0 }}>›</span>
             ) : null}
             <span
               style={{
-                fontSize: 11,
+                fontSize: fs.caption,
                 fontWeight: last ? 600 : 400,
                 color: last ? color.textSecondary : color.textQuaternary,
                 whiteSpace: 'nowrap',
@@ -285,7 +285,7 @@ function EditorPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
             flexShrink: 0,
             padding: '8px 0',
             textAlign: 'right',
-            fontSize: 12,
+            fontSize: fs.secondary,
             lineHeight: '19px',
             color: color.lineNumber,
             overflow: 'hidden',
@@ -305,7 +305,7 @@ function EditorPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
             style={{
               margin: 0,
               padding: '8px 12px 8px 0',
-              fontSize: 12,
+              fontSize: fs.secondary,
               lineHeight: '19px',
               color: color.code,
               whiteSpace: 'pre',
@@ -348,7 +348,7 @@ function EditorPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
               background: 'transparent',
               color: 'transparent',
               caretColor: color.textPrimary,
-              fontSize: 12,
+              fontSize: fs.secondary,
               lineHeight: '19px',
               whiteSpace: 'pre',
               overflow: 'auto',
@@ -388,8 +388,8 @@ function AgentPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
         flex: 1,
         minHeight: 0,
         background: color.canvas,
-        padding: '20px 12px 10px 12px',
-        fontSize: 11,
+        padding: '20px 12px 8px 12px',
+        fontSize: fs.caption,
         lineHeight: '17px',
         color: color.code,
         whiteSpace: 'pre',
@@ -446,8 +446,8 @@ function TerminalPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
         flex: 1,
         minHeight: 0,
         background: color.canvas,
-        padding: '20px 12px 10px 12px',
-        fontSize: 11,
+        padding: '20px 12px 8px 12px',
+        fontSize: fs.caption,
         lineHeight: '17px',
         color: color.code,
         whiteSpace: 'pre',
@@ -463,7 +463,7 @@ function TerminalPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
           <span>{input}</span>
           <span
             className="caret"
-            style={{ display: 'inline-block', width: 7, height: 14, background: color.code, marginLeft: 1 }}
+            style={{ display: 'inline-block', width: 7, height: 14, background: color.code, marginLeft: 2 }}
           />
           <input
             ref={inputRef}
@@ -485,7 +485,7 @@ function TerminalPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
               color: 'transparent',
               caretColor: 'transparent',
               fontFamily: mono,
-              fontSize: 11,
+              fontSize: fs.caption,
             }}
           />
         </span>
@@ -531,7 +531,7 @@ function Divider({
         flexShrink: 0,
         width: horizontal ? 1 : undefined,
         height: horizontal ? undefined : 1,
-        background: strong ? 'rgba(242,244,238,0.3)' : line.paneDivider,
+        background: strong ? 'rgba(241,242,246,0.3)' : line.paneDivider,
         cursor: horizontal ? 'col-resize' : 'row-resize',
         touchAction: 'none',
       }}

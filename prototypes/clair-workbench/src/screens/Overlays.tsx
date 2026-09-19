@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { commands, files } from '../data';
 import { IconClaude, IconCommand, IconMarkdown, IconQuickOpen, IconSearch } from '../icons';
 import { useWorkbench } from '../store';
-import { color, line, mono, wash } from '../tokens';
+import { color, fs, line, mono, radius, space, wash } from '../tokens';
 
 /* The scrim the AddAgent artboard defines for an overlay over the workspace. */
 function Scrim({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
@@ -38,7 +38,7 @@ function Panel({ width, children }: { width: number; children: React.ReactNode }
         width: 'min(100%, ' + width + 'px)',
         display: 'flex',
         flexDirection: 'column',
-        borderRadius: 10,
+        borderRadius: radius.overlay,
         border: `1px solid ${line.strong}`,
         boxShadow: '0 18px 48px rgba(0,0,0,0.62)',
         overflow: 'hidden',
@@ -69,26 +69,26 @@ function ShellHeader({
         flexShrink: 0,
         display: 'flex',
         alignItems: 'center',
-        gap: 9,
-        padding: '0 14px',
+        gap: space[2],
+        padding: '0 12px',
         borderBottom: `1px solid ${line.hairline}`,
       }}
     >
       <span style={{ color: color.textTertiary, display: 'flex' }}>{icon}</span>
-      <span style={{ fontSize: 13, fontWeight: 600, color: color.textPrimary }}>{title}</span>
-      <span style={{ fontSize: 10, color: color.textMuted }}>{hint}</span>
+      <span style={{ fontSize: fs.body, fontWeight: 600, color: color.textPrimary }}>{title}</span>
+      <span style={{ fontSize: fs.caption, color: color.textQuaternary }}>{hint}</span>
       <div style={{ flex: 1 }} />
       <button
         className="cl"
         onClick={onClose}
         style={{
-          fontSize: 9,
+          fontSize: fs.caption,
           fontWeight: 600,
           color: color.textQuaternary,
           background: color.panel,
           border: `1px solid ${line.hairline}`,
-          borderRadius: 3,
-          padding: '2px 6px',
+          borderRadius: radius.control,
+          padding: '2px 4px',
         }}
       >
         esc
@@ -111,15 +111,15 @@ function QueryInput({
   onKeyDown: (e: React.KeyboardEvent) => void;
 }) {
   return (
-    <div style={{ padding: '10px 12px 8px 12px' }}>
+    <div style={{ padding: '8px 12px 8px 12px' }}>
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 8,
+          gap: space[2],
           height: 40,
-          padding: '0 11px',
-          borderRadius: 5,
+          padding: '0 8px',
+          borderRadius: radius.control,
           background: color.canvas,
           border: `1px solid ${line.ring}`,
         }}
@@ -137,12 +137,12 @@ function QueryInput({
             border: 0,
             outline: 'none',
             background: 'transparent',
-            fontSize: 13,
+            fontSize: fs.body,
             color: color.textPrimary,
             caretColor: color.textSecondary,
           }}
         />
-        <span style={{ fontSize: 10, color: color.textMuted }}>{count}</span>
+        <span style={{ fontSize: fs.caption, color: color.textQuaternary }}>{count}</span>
       </div>
     </div>
   );
@@ -155,15 +155,15 @@ function KeyChip({ children, onClick }: { children: React.ReactNode; onClick?: (
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 5,
+        gap: space[1],
         height: 20,
-        padding: '0 7px',
-        borderRadius: 3,
+        padding: '0 4px',
+        borderRadius: radius.control,
         background: color.canvas,
         border: `1px solid ${line.hairline}`,
       }}
     >
-      <span className="cl" style={{ fontSize: 10, color: color.textSecondary }}>
+      <span className="cl" style={{ fontSize: fs.caption, color: color.textSecondary }}>
         {children}
       </span>
     </button>
@@ -240,24 +240,24 @@ export function CommandPalette() {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 10,
+                  gap: space[2],
                   width: '100%',
                   height: 40,
-                  padding: '0 10px',
+                  padding: '0 8px',
                   marginBottom: 2,
-                  borderRadius: 5,
+                  borderRadius: radius.control,
                   background: on ? color.surfaceActive : row.danger ? wash.soft : 'transparent',
                   boxShadow: on
                     ? `inset 0 0 0 1px ${line.ring}`
                     : row.danger
-                      ? 'inset 0 0 0 1px rgba(242,244,238,0.16)'
+                      ? 'inset 0 0 0 1px rgba(241,242,246,0.16)'
                       : 'none',
                 }}
               >
-                <span style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0, flex: 1 }}>
+                <span style={{ display: 'flex', flexDirection: 'column', gap: space[0], minWidth: 0, flex: 1 }}>
                   <span
                     style={{
-                      fontSize: 12,
+                      fontSize: fs.secondary,
                       fontWeight: 500,
                       color: on ? color.textPrimary : color.textSecondary,
                       whiteSpace: 'nowrap',
@@ -270,8 +270,8 @@ export function CommandPalette() {
                   <span
                     className="cl"
                     style={{
-                      fontSize: 9,
-                      color: color.textMuted,
+                      fontSize: fs.caption,
+                      color: color.textQuaternary,
                       whiteSpace: 'nowrap',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
@@ -283,9 +283,9 @@ export function CommandPalette() {
                 <span
                   className="cl"
                   style={{
-                    fontSize: 10,
+                    fontSize: fs.caption,
                     fontWeight: 600,
-                    color: on ? color.textSecondary : color.textMuted,
+                    color: on ? color.textSecondary : color.textQuaternary,
                     whiteSpace: 'nowrap',
                     minWidth: 52,
                     textAlign: 'right',
@@ -303,8 +303,8 @@ export function CommandPalette() {
             flexShrink: 0,
             display: 'flex',
             alignItems: 'center',
-            gap: 10,
-            padding: '0 14px',
+            gap: space[2],
+            padding: '0 12px',
             background: color.panel,
             borderTop: `1px solid ${line.hairline}`,
           }}
@@ -326,13 +326,13 @@ export function CommandPalette() {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 5,
+                  gap: space[1],
                   height: 20,
                   padding: '0 8px',
-                  borderRadius: 3,
+                  borderRadius: radius.control,
                   background: on ? color.surfaceActive : 'transparent',
                   color: on ? color.textPrimary : color.textTertiary,
-                  fontSize: 10,
+                  fontSize: fs.caption,
                   fontWeight: 600,
                 }}
               >
@@ -343,14 +343,14 @@ export function CommandPalette() {
           <span style={{ width: 1, height: 14, background: line.hairline }} />
           <KeyChip onClick={() => setIndex((i) => Math.max(0, i - 1))}>↑</KeyChip>
           <KeyChip onClick={() => setIndex((i) => Math.min(rows.length - 1, i + 1))}>↓</KeyChip>
-          <span style={{ fontSize: 10, color: color.textQuaternary }}>
+          <span style={{ fontSize: fs.caption, color: color.textQuaternary }}>
             <span className="cl" style={{ color: color.textSecondary }}>
               ↵
             </span>{' '}
             選択中を実行
           </span>
           <div style={{ flex: 1 }} />
-          <span style={{ fontSize: 10, color: color.textMuted }}>{isCommand ? '⌘K' : '⌘P'}</span>
+          <span style={{ fontSize: fs.caption, color: color.textQuaternary }}>{isCommand ? '⌘K' : '⌘P'}</span>
         </div>
       </Panel>
     </Scrim>
@@ -437,13 +437,13 @@ export function SearchOverlay() {
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 8,
+                    gap: space[2],
                     height: 26,
-                    padding: '0 10px',
+                    padding: '0 8px',
                     marginTop: gi ? 6 : 0,
                     color: color.textTertiary,
                     fontWeight: 600,
-                    fontSize: 11,
+                    fontSize: fs.caption,
                   }}
                 >
                   {file.kind === 'md' ? (
@@ -452,7 +452,7 @@ export function SearchOverlay() {
                     <IconClaude size={12} color={color.textTertiary} />
                   )}
                   {file.name}
-                  <span className="cl" style={{ marginLeft: 'auto', color: color.textMuted, fontWeight: 400 }}>
+                  <span className="cl" style={{ marginLeft: 'auto', color: color.textQuaternary, fontWeight: 400 }}>
                     {dir}
                   </span>
                 </div>
@@ -470,9 +470,9 @@ export function SearchOverlay() {
                         alignItems: 'center',
                         width: '100%',
                         height: 32,
-                        padding: '0 10px 0 30px',
-                        marginBottom: 1,
-                        borderRadius: 5,
+                        padding: '0 8px 0 30px',
+                        marginBottom: 2,
+                        borderRadius: radius.control,
                         background: on ? color.surfaceActive : 'transparent',
                         boxShadow: on ? `inset 0 0 0 1px ${line.ring}` : 'none',
                       }}
@@ -480,7 +480,7 @@ export function SearchOverlay() {
                       <span
                         className="cl"
                         style={{
-                          fontSize: 11.5,
+                          fontSize: fs.secondary,
                           color: on ? color.textPrimary : color.textTertiary,
                           whiteSpace: 'nowrap',
                           overflow: 'hidden',
@@ -492,8 +492,8 @@ export function SearchOverlay() {
                         <b
                           style={{
                             color: on ? color.textPrimary : color.textSecondary,
-                            background: on ? 'rgba(242,244,238,0.22)' : 'rgba(242,244,238,0.14)',
-                            borderRadius: 2,
+                            background: on ? 'rgba(241,242,246,0.22)' : 'rgba(241,242,246,0.14)',
+                            borderRadius: radius.control,
                           }}
                         >
                           {hit.text.slice(hit.at, hit.at + query.length)}
@@ -507,7 +507,7 @@ export function SearchOverlay() {
             );
           })}
           {!hits.length ? (
-            <div style={{ padding: '18px 10px', color: color.textMuted, fontSize: 11 }}>一致するものはありません。</div>
+            <div style={{ padding: '16px 8px', color: color.textQuaternary, fontSize: fs.caption }}>一致するものはありません。</div>
           ) : null}
         </div>
         <div
@@ -516,22 +516,22 @@ export function SearchOverlay() {
             flexShrink: 0,
             display: 'flex',
             alignItems: 'center',
-            gap: 10,
-            padding: '0 14px',
+            gap: space[2],
+            padding: '0 12px',
             background: color.panel,
             borderTop: `1px solid ${line.hairline}`,
           }}
         >
           <KeyChip onClick={() => setIndex((i) => Math.max(0, i - 1))}>↑</KeyChip>
           <KeyChip onClick={() => setIndex((i) => Math.min(hits.length - 1, i + 1))}>↓</KeyChip>
-          <span style={{ fontSize: 10, color: color.textQuaternary }}>
+          <span style={{ fontSize: fs.caption, color: color.textQuaternary }}>
             <span className="cl" style={{ color: color.textSecondary }}>
               ↵
             </span>{' '}
             ファイルを開く
           </span>
           <div style={{ flex: 1 }} />
-          <span style={{ fontSize: 10, color: color.textMuted }}>⇧⌘F</span>
+          <span style={{ fontSize: fs.caption, color: color.textQuaternary }}>⇧⌘F</span>
         </div>
       </Panel>
     </Scrim>
@@ -555,8 +555,8 @@ export function AddAgentOverlay() {
   const [prompt, setPrompt] = useState('');
   const [confirm, setConfirm] = useState(true);
 
-  const label = { fontSize: 11, fontWeight: 600, color: color.textSecondary } as const;
-  const hint = { color: color.textMuted, fontSize: 10 } as const;
+  const label = { fontSize: fs.caption, fontWeight: 600, color: color.textSecondary } as const;
+  const hint = { color: color.textQuaternary, fontSize: fs.caption } as const;
 
   return (
     <Scrim onClose={() => wb.setOverlay(null)}>
@@ -566,7 +566,7 @@ export function AddAgentOverlay() {
           width: 'min(100%, 620px)',
           margin: '26px 12px 44px',
           overflow: 'hidden',
-          borderRadius: 10,
+          borderRadius: radius.overlay,
           border: `1px solid ${line.strong}`,
           boxShadow: '0 24px 70px rgba(0,0,0,0.5)',
           background: color.chromeRaised,
@@ -577,25 +577,25 @@ export function AddAgentOverlay() {
             display: 'flex',
             alignItems: 'flex-start',
             justifyContent: 'space-between',
-            gap: 18,
-            padding: '18px 20px',
+            gap: space[4],
+            padding: '16px 20px',
             borderBottom: `1px solid ${line.hairline}`,
           }}
         >
           <div>
             <div
               style={{
-                fontSize: 9,
+                fontSize: fs.caption,
                 fontWeight: 700,
                 letterSpacing: '0.06em',
                 textTransform: 'uppercase',
-                color: color.textMuted,
+                color: color.textQuaternary,
               }}
             >
               新しいセッション
             </div>
-            <h2 style={{ margin: '4px 0 3px', fontSize: 18, fontWeight: 600 }}>Agentを追加</h2>
-            <p className="cl" style={{ margin: 0, color: color.textMuted, fontSize: 11, lineHeight: 1.5 }}>
+            <h2 style={{ margin: '4px 0 2px', fontSize: fs.title, fontWeight: 600 }}>Agentを追加</h2>
+            <p className="cl" style={{ margin: 0, color: color.textQuaternary, fontSize: fs.caption, lineHeight: 1.5 }}>
               Agent、起動モデル、セッションの場所を選択します。
             </p>
           </div>
@@ -610,23 +610,23 @@ export function AddAgentOverlay() {
               display: 'grid',
               placeItems: 'center',
               color: color.textTertiary,
-              fontSize: 17,
+              fontSize: fs.title,
             }}
           >
             ×
           </button>
         </div>
 
-        <div className="scroll" style={{ padding: '18px 20px 20px', display: 'grid', gap: 16, maxHeight: '58vh' }}>
+        <div className="scroll" style={{ padding: '16px 20px 20px', display: 'grid', gap: space[4], maxHeight: '58vh' }}>
           <div
             style={{
               display: 'grid',
               gridTemplateColumns: '34px minmax(0,1fr) auto',
               alignItems: 'center',
-              gap: 11,
+              gap: space[2],
               padding: 12,
               border: `1px solid ${line.strong}`,
-              borderRadius: 6,
+              borderRadius: radius.card,
               background: color.panel,
             }}
           >
@@ -639,7 +639,7 @@ export function AddAgentOverlay() {
                 border: `1px solid ${line.strong}`,
                 display: 'grid',
                 placeItems: 'center',
-                fontSize: 13,
+                fontSize: fs.body,
                 fontWeight: 700,
               }}
             >
@@ -648,17 +648,17 @@ export function AddAgentOverlay() {
             <div>
               <div
                 style={{
-                  fontSize: 9,
+                  fontSize: fs.caption,
                   fontWeight: 700,
                   letterSpacing: '0.06em',
                   textTransform: 'uppercase',
-                  color: color.textMuted,
+                  color: color.textQuaternary,
                 }}
               >
                 おすすめ · 残り使用量が多いAgent
               </div>
-              <strong style={{ fontSize: 12.5, fontWeight: 600 }}>OpenCode</strong>
-              <div className="cl" style={{ color: color.textMuted, fontSize: 10 }}>
+              <strong style={{ fontSize: fs.body, fontWeight: 600 }}>OpenCode</strong>
+              <div className="cl" style={{ color: color.textQuaternary, fontSize: fs.caption }}>
                 5時間 残り84% · 7日間 残り78%
               </div>
             </div>
@@ -666,12 +666,12 @@ export function AddAgentOverlay() {
               onClick={() => setAgent('OpenCode')}
               style={{
                 minHeight: 26,
-                padding: '0 9px',
+                padding: '0 8px',
                 border: `1px solid ${line.strong}`,
-                borderRadius: 4,
+                borderRadius: radius.control,
                 background: wash.selected,
                 color: color.textSecondary,
-                fontSize: 10.5,
+                fontSize: fs.caption,
                 display: 'flex',
                 alignItems: 'center',
               }}
@@ -687,7 +687,7 @@ export function AddAgentOverlay() {
                 このセッションで使う接続済みのAgentを選択します。
               </span>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: space[2] }}>
               {AGENTS.map((a) => {
                 const on = agent === a.name;
                 return (
@@ -699,10 +699,10 @@ export function AddAgentOverlay() {
                       display: 'grid',
                       gridTemplateColumns: '22px minmax(0,1fr) 13px',
                       alignItems: 'center',
-                      gap: 8,
-                      padding: 10,
+                      gap: space[2],
+                      padding: 8,
                       border: `1px solid ${on ? line.strong : line.hairline}`,
-                      borderRadius: 5,
+                      borderRadius: radius.control,
                       background: on ? color.surfaceHover : 'transparent',
                       color: on ? color.textPrimary : color.textTertiary,
                     }}
@@ -713,24 +713,24 @@ export function AddAgentOverlay() {
                         height: 22,
                         borderRadius: '50%',
                         background: on ? color.surfaceActive : color.surfaceHover,
-                        border: `1px solid ${on ? 'rgba(242,244,238,0.4)' : line.strong}`,
+                        border: `1px solid ${on ? 'rgba(241,242,246,0.4)' : line.strong}`,
                         display: 'grid',
                         placeItems: 'center',
-                        fontSize: 9,
+                        fontSize: fs.caption,
                         fontWeight: 700,
                       }}
                     >
                       {a.code}
                     </span>
                     <span>
-                      <strong style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: on ? undefined : color.textSecondary }}>
+                      <strong style={{ display: 'block', fontSize: fs.caption, fontWeight: 600, color: on ? undefined : color.textSecondary }}>
                         {a.name}
                       </strong>
-                      <small className="cl" style={{ display: 'block', marginTop: 2, color: color.textMuted, fontSize: 9 }}>
+                      <small className="cl" style={{ display: 'block', marginTop: 2, color: color.textQuaternary, fontSize: fs.caption }}>
                         {a.quota}
                       </small>
                     </span>
-                    <span className="cl" style={{ textAlign: 'right', color: color.textPrimary, fontSize: 12 }}>
+                    <span className="cl" style={{ textAlign: 'right', color: color.textPrimary, fontSize: fs.secondary }}>
                       {on ? '✓' : ''}
                     </span>
                   </button>
@@ -750,10 +750,10 @@ export function AddAgentOverlay() {
               style={{
                 display: 'grid',
                 gridTemplateColumns: '1fr 1fr',
-                gap: 1,
-                padding: 1,
+                gap: space[0],
+                padding: 2,
                 background: line.hairline,
-                borderRadius: 6,
+                borderRadius: radius.card,
                 border: `1px solid ${line.hairline}`,
               }}
             >
@@ -773,21 +773,21 @@ export function AddAgentOverlay() {
                       display: 'grid',
                       gridTemplateColumns: '20px minmax(0,1fr)',
                       alignItems: 'center',
-                      gap: 8,
-                      padding: '7px 10px',
-                      borderRadius: 5,
+                      gap: space[2],
+                      padding: '4px 8px',
+                      borderRadius: radius.control,
                       background: on ? color.surfaceActive : color.panel,
                       boxShadow: on ? `inset 0 0 0 1px ${line.strong}` : undefined,
                     }}
                   >
-                    <span style={{ fontSize: 15, textAlign: 'center', color: on ? color.textSecondary : color.textQuaternary }}>
+                    <span style={{ fontSize: fs.title, textAlign: 'center', color: on ? color.textSecondary : color.textQuaternary }}>
                       {glyph}
                     </span>
                     <span>
-                      <strong style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: on ? undefined : color.textTertiary }}>
+                      <strong style={{ display: 'block', fontSize: fs.caption, fontWeight: 600, color: on ? undefined : color.textTertiary }}>
                         {name}
                       </strong>
-                      <small className="cl" style={{ display: 'block', marginTop: 2, color: color.textMuted, fontSize: 9 }}>
+                      <small className="cl" style={{ display: 'block', marginTop: 2, color: color.textQuaternary, fontSize: fs.caption }}>
                         {sub}
                       </small>
                     </span>
@@ -804,7 +804,7 @@ export function AddAgentOverlay() {
                 変更を分離するか、現在のProjectに紐づけます。
               </span>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: space[2] }}>
               {(
                 [
                   ['現在のProject', '~/Projects/clair'],
@@ -820,10 +820,10 @@ export function AddAgentOverlay() {
                       display: 'grid',
                       gridTemplateColumns: '14px minmax(0,1fr)',
                       alignItems: 'start',
-                      gap: 8,
-                      padding: 10,
+                      gap: space[2],
+                      padding: 8,
                       border: `1px solid ${on ? line.strong : line.hairline}`,
-                      borderRadius: 5,
+                      borderRadius: radius.control,
                       background: on ? color.surfaceHover : 'transparent',
                       color: on ? color.textPrimary : color.textTertiary,
                     }}
@@ -833,15 +833,15 @@ export function AddAgentOverlay() {
                         width: 13,
                         height: 13,
                         borderRadius: '50%',
-                        border: on ? `4px solid ${color.textPrimary}` : '1px solid rgba(242,244,238,0.36)',
-                        marginTop: 1,
+                        border: on ? `4px solid ${color.textPrimary}` : '1px solid rgba(241,242,246,0.36)',
+                        marginTop: 2,
                       }}
                     />
                     <span>
-                      <strong style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: on ? undefined : color.textSecondary }}>
+                      <strong style={{ display: 'block', fontSize: fs.caption, fontWeight: 600, color: on ? undefined : color.textSecondary }}>
                         {name}
                       </strong>
-                      <small className="cl" style={{ display: 'block', marginTop: 2, color: color.textMuted, fontSize: 9 }}>
+                      <small className="cl" style={{ display: 'block', marginTop: 2, color: color.textQuaternary, fontSize: fs.caption }}>
                         {sub}
                       </small>
                     </span>
@@ -857,16 +857,16 @@ export function AddAgentOverlay() {
                 marginTop: 8,
                 width: '100%',
                 height: 32,
-                padding: '0 10px',
+                padding: '0 8px',
                 border: `1px solid ${line.strong}`,
-                borderRadius: 5,
+                borderRadius: radius.control,
                 background: color.canvas,
                 color: color.textSecondary,
-                fontSize: 11,
+                fontSize: fs.caption,
                 outline: 'none',
               }}
             />
-            <div className="cl" style={{ marginTop: 6, color: color.textMuted, fontSize: 9.5 }}>
+            <div className="cl" style={{ marginTop: 4, color: color.textQuaternary, fontSize: fs.caption }}>
               ~/Projects/clair/.worktrees/{branch}
             </div>
           </div>
@@ -886,12 +886,12 @@ export function AddAgentOverlay() {
               style={{
                 width: '100%',
                 minHeight: 56,
-                padding: '9px 10px',
+                padding: '8px 8px',
                 border: `1px solid ${line.strong}`,
-                borderRadius: 5,
+                borderRadius: radius.control,
                 background: color.canvas,
                 color: color.textSecondary,
-                fontSize: 11,
+                fontSize: fs.caption,
                 lineHeight: 1.5,
                 outline: 'none',
                 resize: 'vertical',
@@ -899,20 +899,20 @@ export function AddAgentOverlay() {
             />
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: space[3], flexWrap: 'wrap' }}>
             <div>
-              <span className="cl" style={{ display: 'block', marginBottom: 6, color: color.textMuted, fontSize: 9.5 }}>
+              <span className="cl" style={{ display: 'block', marginBottom: 4, color: color.textQuaternary, fontSize: fs.caption }}>
                 セッションモード
               </span>
               <div
                 style={{
                   minHeight: 30,
-                  padding: '0 9px',
+                  padding: '0 8px',
                   border: `1px solid ${line.strong}`,
-                  borderRadius: 4,
+                  borderRadius: radius.control,
                   background: color.canvas,
                   color: color.textSecondary,
-                  fontSize: 11,
+                  fontSize: fs.caption,
                   display: 'flex',
                   alignItems: 'center',
                 }}
@@ -922,13 +922,13 @@ export function AddAgentOverlay() {
             </div>
             <button
               onClick={() => setConfirm((c) => !c)}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, color: color.textTertiary, fontSize: 10.5 }}
+              style={{ display: 'flex', alignItems: 'center', gap: space[2], color: color.textTertiary, fontSize: fs.caption }}
             >
               <span
                 style={{
                   width: 13,
                   height: 13,
-                  borderRadius: 3,
+                  borderRadius: radius.control,
                   background: confirm ? color.textSecondary : 'transparent',
                   border: confirm ? undefined : `1px solid ${line.strong}`,
                   display: 'inline-block',
@@ -944,26 +944,26 @@ export function AddAgentOverlay() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 12,
+            gap: space[3],
             padding: '16px 20px',
             borderTop: `1px solid ${line.hairline}`,
             background: color.panel,
             flexWrap: 'wrap',
           }}
         >
-          <span className="cl" style={{ color: color.textMuted, fontSize: 10 }}>
+          <span className="cl" style={{ color: color.textQuaternary, fontSize: fs.caption }}>
             {agent} · デフォルトモデル · {place} · {worktree}
           </span>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: space[2] }}>
             <button
               onClick={() => wb.setOverlay(null)}
               style={{
                 minHeight: 32,
                 padding: '0 12px',
                 border: `1px solid ${line.strong}`,
-                borderRadius: 5,
+                borderRadius: radius.control,
                 color: color.textTertiary,
-                fontSize: 11,
+                fontSize: fs.caption,
                 display: 'flex',
                 alignItems: 'center',
               }}
@@ -978,10 +978,10 @@ export function AddAgentOverlay() {
               style={{
                 minHeight: 32,
                 padding: '0 12px',
-                borderRadius: 5,
+                borderRadius: radius.control,
                 background: color.textPrimary,
                 color: '#121416',
-                fontSize: 11,
+                fontSize: fs.caption,
                 fontWeight: 600,
                 display: 'flex',
                 alignItems: 'center',

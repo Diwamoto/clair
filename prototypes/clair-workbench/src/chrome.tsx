@@ -11,7 +11,7 @@ import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type R
 import { targetRing, useContextMenu } from './contextMenu';
 import { files, projectTabs, type FileKind } from './data';
 import { fileMenu, projectMenu, sessionTabMenu, standInTabMenu } from './menus';
-import { color, groupColor, line, mono, withAlpha, type GroupColorKey } from './tokens';
+import { color, fs, groupColor, line, mono, radius, space, withAlpha, type GroupColorKey } from './tokens';
 import {
   IconBranch,
   IconBug,
@@ -41,7 +41,7 @@ export function FileIcon({ kind, tint }: { kind: FileKind; tint: string }) {
 
 export function TrafficLights() {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: space[2] }}>
       {[color.close, color.minimize, color.zoom].map((c) => (
         <div key={c} style={{ width: 12, height: 12, borderRadius: '50%', background: c }} />
       ))}
@@ -114,11 +114,11 @@ export function Chip({
   const base: CSSProperties = {
     display: 'inline-flex',
     alignItems: 'center',
-    gap: 4,
+    gap: space[1],
     height: 18,
-    padding: '0 6px',
-    borderRadius: 3,
-    fontSize: 9,
+    padding: '0 4px',
+    borderRadius: radius.control,
+    fontSize: fs.caption,
     fontWeight: 600,
     whiteSpace: 'nowrap',
     ...style,
@@ -146,7 +146,7 @@ export function MainHeader({ children, height = 44 }: { children: ReactNode; hei
         flexShrink: 0,
         display: 'flex',
         alignItems: 'center',
-        gap: 10,
+        gap: space[2],
         padding: '0 16px',
         backgroundColor: color.chrome,
         borderBottom: `1px solid ${line.chrome}`,
@@ -232,11 +232,11 @@ function Tab({
         position: 'relative',
         display: 'flex',
         alignItems: 'center',
-        gap: 7,
-        padding: '0 11px',
+        gap: space[1],
+        padding: '0 8px',
         width: TAB_WIDTH,
         flexShrink: 0,
-        borderRadius: 8,
+        borderRadius: radius.card,
         // The selected tab wears the pane's own colour, so it reads as a hole
         // through the chrome onto the surface below rather than a marker
         // painted on top of it.
@@ -250,7 +250,7 @@ function Tab({
       <span
         ref={labelRef}
         style={{
-          fontSize: 11,
+          fontSize: fs.caption,
           fontWeight: active ? 600 : 400,
           color: tint,
           whiteSpace: 'nowrap',
@@ -371,8 +371,8 @@ function ProjectChip({
     display: 'flex',
     alignItems: 'center',
     height: 26,
-    padding: '0 10px',
-    borderRadius: 8,
+    padding: '0 8px',
+    borderRadius: radius.card,
     background,
     border: `1px solid ${border}`,
     alignSelf: 'center',
@@ -382,7 +382,7 @@ function ProjectChip({
     boxShadow: targeted ? `0 0 0 2px ${color.chrome}, 0 0 0 3px ${line.ring}` : undefined,
   };
   const text: CSSProperties = {
-    fontSize: 12,
+    fontSize: fs.secondary,
     fontWeight: 600,
     color: active ? color.chromeInk : uncoloured ? color.textQuaternary : color.textTertiary,
     whiteSpace: 'nowrap',
@@ -558,7 +558,7 @@ function ProjectGroup({ project }: { project: string }) {
           minWidth: 0,
         }}
       >
-        <div style={{ overflow: 'hidden', minWidth: 0, display: 'flex', alignItems: 'center', height: '100%', gap: 3, paddingLeft: 4 }}>
+        <div style={{ overflow: 'hidden', minWidth: 0, display: 'flex', alignItems: 'center', height: '100%', gap: space[0], paddingLeft: 4 }}>
           {items.map((tab, i) => (
             <Fragment key={i}>
               {i > 0 ? <TabDivider /> : null}
@@ -594,7 +594,7 @@ export function AppTitlebar({ extra }: { extra?: ReactNode }) {
         borderBottom: `1px solid ${line.hairline}`,
       }}
     >
-      <div style={{ width: 76, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '0 0 0 20px' }}>
+      <div style={{ width: 76, flexShrink: 0, display: 'flex', alignItems: 'center', gap: space[2], padding: '0 0 0 20px' }}>
         <TrafficLights />
       </div>
 
@@ -603,11 +603,11 @@ export function AppTitlebar({ extra }: { extra?: ReactNode }) {
         // Fixed-width tabs overflow rather than shrink, so the strip has to
         // scroll — otherwise a narrow window puts the last tabs out of reach.
         // The scrollbar itself stays hidden; this is chrome, not content.
-        style={{ flex: 1, height: 48, display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, overflowX: 'auto', overflowY: 'hidden' }}
+        style={{ flex: 1, height: 48, display: 'flex', alignItems: 'center', gap: space[1], minWidth: 0, overflowX: 'auto', overflowY: 'hidden' }}
       >
         {wb.projectOrder.map((p, i) => (
           <Fragment key={p}>
-            {i > 0 ? <div style={{ width: 1, height: 22, background: 'rgba(242,244,238,0.09)', margin: '0 5px', flexShrink: 0 }} /> : null}
+            {i > 0 ? <div style={{ width: 1, height: 22, background: 'rgba(241,242,246,0.09)', margin: '0 4px', flexShrink: 0 }} /> : null}
             <ProjectGroup project={p} />
           </Fragment>
         ))}
@@ -620,7 +620,7 @@ export function AppTitlebar({ extra }: { extra?: ReactNode }) {
         </Act>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 12px', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: space[1], padding: '0 12px', flexShrink: 0 }}>
         {extra}
         {/* The field itself, back in the tab bar. A magnifier on its own said
             "there is a search somewhere"; the field says what it searches and
@@ -637,20 +637,20 @@ export function AppTitlebar({ extra }: { extra?: ReactNode }) {
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 7,
+            gap: space[1],
             width: 200,
             height: 28,
-            padding: '0 9px',
-            borderRadius: 8,
+            padding: '0 8px',
+            borderRadius: radius.card,
             background: color.panel,
             border: `1px solid ${line.hairline}`,
           }}
         >
           <IconSearch size={12} color={color.textQuaternary} />
-          <span style={{ fontSize: 11, color: color.chromeInkMuted, flex: 1, textAlign: 'left' }}>
+          <span style={{ fontSize: fs.caption, color: color.textTertiary, flex: 1, textAlign: 'left' }}>
             ファイル、シンボル
           </span>
-          <span className="cl" style={{ fontSize: 10, color: color.textQuaternary }}>
+          <span className="cl" style={{ fontSize: fs.caption, color: color.textQuaternary }}>
             ⌘⇧F
           </span>
         </button>
@@ -716,7 +716,7 @@ export function SourceControlModeTabs() {
         alignItems: 'stretch',
         height: 24,
         flexShrink: 0,
-        borderRadius: 4,
+        borderRadius: radius.control,
         background: color.panel,
         border: `1px solid ${line.hairline}`,
         overflow: 'hidden',
@@ -737,7 +737,7 @@ export function SourceControlModeTabs() {
               padding: '0 12px',
               background: on ? color.surfaceActive : undefined,
               color: on ? color.chromeInk : color.textQuaternary,
-              fontSize: 11,
+              fontSize: fs.caption,
               fontWeight: on ? 600 : 400,
             }}
           >
@@ -760,7 +760,7 @@ function SidebarStrip() {
         flexShrink: 0,
         display: 'flex',
         alignItems: 'center',
-        gap: 3,
+        gap: space[0],
         padding: '0 8px',
         borderBottom: `1px solid ${line.chromeSoft}`,
       }}
@@ -799,11 +799,11 @@ export function QuotaMeter({ percent = 84, label = '残り16%', tint }: { percen
   const fill = tint ?? color.textSecondary;
   return (
     <>
-      <span style={{ color: color.textMuted, fontSize: 10 }}>Claude 5時間</span>
-      <div style={{ width: 34, height: 4, borderRadius: 2, background: line.strong, overflow: 'hidden' }}>
+      <span style={{ color: color.textQuaternary, fontSize: fs.caption }}>Claude 5時間</span>
+      <div style={{ width: 34, height: 4, borderRadius: radius.control, background: line.strong, overflow: 'hidden' }}>
         <div style={{ width: `${percent}%`, height: '100%', background: fill }} />
       </div>
-      <span className="cl" style={{ fontSize: 10, color: fill, fontWeight: 600 }}>
+      <span className="cl" style={{ fontSize: fs.caption, color: fill, fontWeight: 600 }}>
         {label}
       </span>
     </>
@@ -826,19 +826,19 @@ function AppStatusBar({ context, trailing }: { context?: ReactNode; trailing?: R
         flexShrink: 0,
         display: 'flex',
         alignItems: 'center',
-        gap: 10,
+        gap: space[2],
         padding: '0 12px',
         backgroundColor: color.chrome,
         borderTop: `1px solid ${line.chrome}`,
         color: color.textTertiary,
-        fontSize: 11,
+        fontSize: fs.caption,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: space[1] }}>
         <IconBranch size={12} />
         <span>{onBranch ? 'pane-split' : 'main'}</span>
       </div>
-      <span className="cl" style={{ color: color.textMuted }}>
+      <span className="cl" style={{ color: color.textQuaternary }}>
         {onBranch ? 'worktree' : '↓0 ↑2'}
       </span>
       <span>{6 + wb.dirtyCount} 変更</span>
@@ -885,7 +885,7 @@ export function AppShell({
         overflow: 'hidden',
         background: color.chrome,
         color: color.chromeInk,
-        fontSize: 11,
+        fontSize: fs.caption,
       }}
     >
       <AppTitlebar extra={titlebarExtra} />

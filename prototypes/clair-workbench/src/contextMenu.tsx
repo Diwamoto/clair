@@ -31,7 +31,7 @@ import {
 
 import { IconChevron } from './icons';
 import { useWorkbench, type Workbench } from './store';
-import { GROUP_COLOR_KEYS, color, groupColor, line, type GroupColorKey } from './tokens';
+import { color, fs, GROUP_COLOR_KEYS, groupColor, line, radius, space, type GroupColorKey } from './tokens';
 
 export type MenuItem = {
   type: 'item';
@@ -407,7 +407,7 @@ function Panel({
         padding: PAD,
         background: color.chromeRaised,
         border: `1px solid ${line.strong}`,
-        borderRadius: 10,
+        borderRadius: radius.overlay,
         boxShadow: '0 18px 48px rgba(0,0,0,0.62)',
         outline: 'none',
         userSelect: 'none',
@@ -415,16 +415,16 @@ function Panel({
     >
       {header ? (
         <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px 4px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: space[2], padding: '4px 8px 4px' }}>
             {header.icon ? (
               <span style={{ width: ICON_COLUMN, flexShrink: 0, display: 'flex', justifyContent: 'center', color: color.textTertiary }}>
                 {header.icon}
               </span>
             ) : null}
-            <span style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+            <span style={{ display: 'flex', flexDirection: 'column', gap: space[0], minWidth: 0 }}>
               <span
                 style={{
-                  fontSize: 11,
+                  fontSize: fs.caption,
                   fontWeight: 600,
                   color: color.textPrimary,
                   whiteSpace: 'nowrap',
@@ -438,8 +438,8 @@ function Panel({
                 <span
                   className="cl"
                   style={{
-                    fontSize: 9,
-                    color: color.textMuted,
+                    fontSize: fs.caption,
+                    color: color.textQuaternary,
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
@@ -466,7 +466,7 @@ function Panel({
               aria-label="グループカラー"
               data-index={index}
               onMouseEnter={() => onHover(depth, index)}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, height: 32, padding: `0 8px 0 ${labelInset}px` }}
+              style={{ display: 'flex', alignItems: 'center', gap: space[1], height: 32, padding: `0 8px 0 ${labelInset}px` }}
             >
               {GROUP_COLOR_KEYS.map((key, i) => {
                 const picked = entry.value === key;
@@ -487,7 +487,7 @@ function Panel({
                       width: 26,
                       height: 18,
                       flexShrink: 0,
-                      borderRadius: 4,
+                      borderRadius: radius.control,
                       background: groupColor[key],
                       boxShadow: picked
                         ? `0 0 0 2px ${color.chromeRaised}, 0 0 0 3.5px ${color.textSecondary}`
@@ -504,11 +504,11 @@ function Panel({
 
         const on = active === index;
         const label = entry.disabled
-          ? color.textMuted
+          ? color.textQuaternary
           : on || entry.destructive
             ? color.textPrimary
             : color.textSecondary;
-        const quiet = entry.disabled ? color.textMuted : on ? color.textSecondary : color.textQuaternary;
+        const quiet = entry.disabled ? color.textQuaternary : on ? color.textSecondary : color.textQuaternary;
         return (
           <div
             key={index}
@@ -522,10 +522,10 @@ function Panel({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 8,
+              gap: space[2],
               height: 26,
               padding: '0 8px',
-              borderRadius: 6,
+              borderRadius: radius.card,
               background: on ? color.surfaceActive : undefined,
               cursor: entry.disabled ? 'default' : 'pointer',
             }}
@@ -537,7 +537,7 @@ function Panel({
                   flexShrink: 0,
                   display: 'flex',
                   justifyContent: 'center',
-                  color: entry.disabled ? color.textMuted : on ? color.textSecondary : color.textTertiary,
+                  color: entry.disabled ? color.textQuaternary : on ? color.textSecondary : color.textTertiary,
                 }}
               >
                 {entry.icon}
@@ -547,7 +547,7 @@ function Panel({
               style={{
                 flex: 1,
                 minWidth: 0,
-                fontSize: 12,
+                fontSize: fs.secondary,
                 fontWeight: entry.destructive ? 700 : 400,
                 color: label,
                 whiteSpace: 'nowrap',
@@ -558,12 +558,12 @@ function Panel({
               {entry.label}
             </span>
             {entry.detail ? (
-              <span className="cl" style={{ marginLeft: 12, fontSize: 10, color: quiet, whiteSpace: 'nowrap' }}>
+              <span className="cl" style={{ marginLeft: 12, fontSize: fs.caption, color: quiet, whiteSpace: 'nowrap' }}>
                 {entry.detail}
               </span>
             ) : null}
             {entry.shortcut ? (
-              <span className="cl" style={{ marginLeft: 20, fontSize: 10, color: quiet, whiteSpace: 'nowrap' }}>
+              <span className="cl" style={{ marginLeft: 20, fontSize: fs.caption, color: quiet, whiteSpace: 'nowrap' }}>
                 {entry.shortcut}
               </span>
             ) : null}
