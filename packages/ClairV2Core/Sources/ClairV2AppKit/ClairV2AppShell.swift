@@ -20,7 +20,14 @@
     // ponytail: multi-window shares one socket owner; route by window when V04 adds per-Project windows.
     private var ipc: WorkbenchIPCServer?
 
-    public init() {
+    /// V04: workspace file (Projects + per-Project layout). nil disables persistence.
+    // ponytail: single shared path; Stable/Dev data separation lands with V09.
+    private let persistURL: URL?
+
+    public init(persistAt url: URL? = ClairV2WorkbenchStore.defaultPersistURL) {
+      persistURL = url
+      if let url, let restored = WorkbenchState.restore(from: url) { state = restored }
+      if state.projects.isEmpty { run("project.open", ["path": .string(Self.seedRoot)]) }
       let store = self
       let server = WorkbenchIPCServer { id, input in
         DispatchQueue.main.sync { MainActor.assumeIsolated { store.run(id, input) } }
@@ -30,6 +37,17 @@
 
     isolated deinit { ipc?.stop() }
 
+    public static var defaultPersistURL: URL {
+      ProcessInfo.processInfo.environment["CLAIR_WORKSPACE_FILE"].map { URL(fileURLWithPath: $0) }
+        ?? URL.applicationSupportDirectory.appending(path: "Clair/workspace.json")
+    }
+
+    /// First launch: `CLAIR_PROJECT_ROOT`, else the launch directory, else home.
+    private static var seedRoot: String {
+      let cwd = FileManager.default.currentDirectoryPath
+      return ProcessInfo.processInfo.environment["CLAIR_PROJECT_ROOT"] ?? (cwd == "/" ? NSHomeDirectory() : cwd)
+    }
+
     @discardableResult
     public func run(_ id: String, _ input: CommandInput = [:], confirmed: Bool = false) -> Result<CommandResult, CommandError> {
       let r = registry.execute(id, input, confirmed: confirmed, state: &state)
@@ -37,7 +55,9 @@
       case .failure(let e) where e.code == .confirmationRequired: pending = (id, input)
       // ponytail: kept for inspection only; no canvas error surface yet (U05/U07).
       case .failure(let e): lastError = e
-      case .success: lastError = nil
+      case .success:
+        lastError = nil
+        if let persistURL { try? state.save(to: persistURL) }
       }
       return r
     }
@@ -92,9 +112,7 @@
     private var st: WorkbenchState { store.state }
     @State private var query = ""
     @State private var selection = 0
-    private let projects: [(name: String, color: SwiftUI.Color)] = [
-      ("clair", C.debugBlue), ("ccedit", C.success), ("clair-releases", C.attention),
-    ]
+    private let projectColors = [C.debugBlue, C.success, C.attention]
 
     public init() {}
 
@@ -127,16 +145,18 @@
           ForEach([C.close, C.minimize, C.zoom], id: \.self) { Circle().fill($0).frame(width: 12, height: 12) }
         }
         .padding(.trailing, 12)
-        ForEach(projects, id: \.name) { p in
+        ForEach(Array(st.projects.enumerated()), id: \.element.name) { i, p in
+          let color = projectColors[i % projectColors.count]
           let on = st.project == p.name
           Button { store.run("project.switch", ["name": .string(p.name)]) } label: {
             Text(p.name).font(Typography.font(Typography.chromeStrong))
               .foregroundStyle(C.textPrimary)
               .padding(.horizontal, 10).frame(height: 26)
-              .background(p.color.opacity(on ? 0.22 : 0.14), in: RoundedRectangle(cornerRadius: Radius.card))
-              .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(p.color.opacity(on ? 0.55 : 0.28)))
+              .background(color.opacity(on ? 0.22 : 0.14), in: RoundedRectangle(cornerRadius: Radius.card))
+              .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(color.opacity(on ? 0.55 : 0.28)))
           }.buttonStyle(.plain)
         }
+        Button(action: openFolder) { Image(systemName: "plus").foregroundStyle(C.chromeInk) }.buttonStyle(.plain)
         Spacer()
         Button { store.run(st.settingsOpen ? "settings.close" : "settings.open") } label: {
           Image(systemName: "gearshape").foregroundStyle(C.chromeInk)
@@ -146,6 +166,12 @@
       .frame(height: ChromeBudget.titlebar)
       .background(C.chrome)
       .overlay(alignment: .bottom) { Rectangle().fill(L.chrome).frame(height: 1) }
+    }
+
+    private func openFolder() {
+      let panel = NSOpenPanel()
+      panel.canChooseFiles = false; panel.canChooseDirectories = true
+      if panel.runModal() == .OK, let url = panel.url { store.run("project.open", ["path": .string(url.path)]) }
     }
 
     // MARK: sidebar

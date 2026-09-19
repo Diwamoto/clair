@@ -38,4 +38,4 @@ pane/tab/Project/settings の workbench state は持たない。V02 の IPC/CLI 
 
 - 利用者による shortcut 再割当: default shortcut のみ。設定 UI が canvas に無いため後回し。
 - 最後の editor pane を閉じたときの dirty 判定は global dirty set で近似(buffer と pane の対応は V04/U05)。
-- 実 file 保存・Project 永続化は V04/V05、IPC/CLI は V02、MCP と `aiAvailable` 強制は V03。
+- Project 永続化・実 file tree は V04 で完了。実 file 保存は V05、IPC/CLI は V02、MCP と `aiAvailable` 強制は V03。

@@ -75,6 +75,13 @@ public struct PaneTree: Sendable, Equatable, Codable {
     if maximized == target { maximized = nil }
   }
 
+  /// False for a decoded tree that could crash or mislead the UI (restore degrades to the default layout).
+  public var isValid: Bool {
+    let ids = leaves.map(\.id)
+    return Set(ids).count == ids.count && ids.contains(focused) && (maximized.map(ids.contains) ?? true)
+      && nextID > (ids.max() ?? 0)
+  }
+
   public mutating func toggleMaximize() { maximized = maximized == nil ? focused : nil }
 
   public mutating func equalize() {

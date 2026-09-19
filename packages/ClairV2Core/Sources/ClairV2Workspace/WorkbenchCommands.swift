@@ -18,7 +18,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public static let sections = ["一般", "AIプロバイダー", "エディタ", "ターミナル", "モバイル", "アップデート"]
   public static let toggleKeys = ["restoreLayout", "confirmClose", "showQuota"]
 
-  // ponytail: static sample tree mirroring the workbench `files`; real file system binding is V04.
+  // Sample tree only until a Project is opened (`project.open` replaces it with the real file system).
   public var files = [
     WorkbenchFile(path: "apple/ClairApp/ContentView.swift", status: "M"),
     WorkbenchFile(path: "apple/ClairApp/ProjectWorkspace.swift", status: "M"),
@@ -26,8 +26,10 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
     WorkbenchFile(path: "apple/ClairApp/SessionRail.swift", status: "A"),
     WorkbenchFile(path: "docs/architecture/pane-layout.md", status: nil),
   ]
-  public var projects = ["clair", "ccedit", "clair-releases"]  // ponytail: sample list; Project model is V04.
-  public var project = "clair"
+  public var projects: [WorkbenchProject] = []
+  public var project = ""
+  /// Layouts of inactive Projects (V04); the active one lives in the fields below.
+  public var layouts: [String: ProjectLayout] = [:]
   public var tree = PaneTree()
   public var tabs: [String] = ["apple/ClairApp/ContentView.swift"]
   public var active: String? = "apple/ClairApp/ContentView.swift"
@@ -269,8 +271,21 @@ extension CommandRegistry {
     },
     cmd("project.switch", "プロジェクトを切り替え", .read, params: [CommandParam("name", .string)],
         preflight: { s, i throws(CommandError) in
-          try require(s.projects.contains(i["name"]!.string!), "no project \(i["name"]!)"); return .read
-        }) { s, i in s.project = i["name"]!.string!; return .ok },
+          try require(s.projects.contains { $0.name == i["name"]!.string! }, "no project \(i["name"]!)"); return .read
+        }) { s, i in s.switchProject(to: s.projects.first { $0.name == i["name"]!.string! }!); return .ok },
+    // ai: false — an agent must not widen the readable file system on its own.
+    cmd("project.open", "フォルダをプロジェクトとして開く", .additive, ai: false, params: [CommandParam("path", .string)],
+        preflight: { _, i throws(CommandError) in
+          try require(WorkbenchProject.normalized(i["path"]!.string!) != nil, "not a directory \(i["path"]!)"); return .additive
+        }) { s, i in
+      let path = WorkbenchProject.normalized(i["path"]!.string!)!
+      if let p = s.projects.first(where: { $0.path == path }) { s.switchProject(to: p); return .ok }
+      var name = URL(fileURLWithPath: path).lastPathComponent, n = 2
+      while s.projects.contains(where: { $0.name == name }) { name = "\(URL(fileURLWithPath: path).lastPathComponent) \(n)"; n += 1 }
+      let p = WorkbenchProject(name: name, path: path)
+      s.projects.append(p); s.switchProject(to: p)
+      return .ok
+    },
     cmd("explorer.toggle", "フォルダを開閉", .read, params: [CommandParam("path", .string)]) { s, i in
       let p = i["path"]!.string!
       if !s.collapsed.insert(p).inserted { s.collapsed.remove(p) }
