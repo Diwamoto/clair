@@ -64,7 +64,7 @@ export function ExplorerPanel() {
               >
                 {open ? '▾' : '▸'}
                 <IconBranchSmall size={10} />
-                <span style={{ fontSize: fs.caption, fontWeight: 700, marginLeft: 2 }}>{node.name}</span>
+                <span style={{ fontSize: fs.caption, fontWeight: 600, marginLeft: 2 }}>{node.name}</span>
               </button>
             );
           }
@@ -618,7 +618,7 @@ export function WorkspaceMain() {
 export function WorkspaceStatus() {
   const wb = useWorkbench();
   return (
-    <span className="cl">
+    <span className="tnum">
       Ln {wb.cursor.line}, Col {wb.cursor.column}
     </span>
   );

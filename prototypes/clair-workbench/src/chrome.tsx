@@ -650,7 +650,7 @@ export function AppTitlebar({ extra }: { extra?: ReactNode }) {
           <span style={{ fontSize: fs.caption, color: color.textTertiary, flex: 1, textAlign: 'left' }}>
             ファイル、シンボル
           </span>
-          <span className="cl" style={{ fontSize: fs.caption, color: color.textQuaternary }}>
+          <span className="tnum" style={{ fontSize: fs.caption, color: color.textQuaternary }}>
             ⌘⇧F
           </span>
         </button>
@@ -803,7 +803,7 @@ export function QuotaMeter({ percent = 84, label = '残り16%', tint }: { percen
       <div style={{ width: 34, height: 4, borderRadius: radius.control, background: line.strong, overflow: 'hidden' }}>
         <div style={{ width: `${percent}%`, height: '100%', background: fill }} />
       </div>
-      <span className="cl" style={{ fontSize: fs.caption, color: fill, fontWeight: 600 }}>
+      <span className="tnum" style={{ fontSize: fs.caption, color: fill, fontWeight: 600 }}>
         {label}
       </span>
     </>
@@ -821,6 +821,7 @@ function AppStatusBar({ context, trailing }: { context?: ReactNode; trailing?: R
 
   return (
     <div
+      className="tnum"
       style={{
         height: 26,
         flexShrink: 0,
@@ -838,7 +839,7 @@ function AppStatusBar({ context, trailing }: { context?: ReactNode; trailing?: R
         <IconBranch size={12} />
         <span>{onBranch ? 'pane-split' : 'main'}</span>
       </div>
-      <span className="cl" style={{ color: color.textQuaternary }}>
+      <span className="tnum" style={{ color: color.textQuaternary }}>
         {onBranch ? 'worktree' : '↓0 ↑2'}
       </span>
       <span>{6 + wb.dirtyCount} 変更</span>

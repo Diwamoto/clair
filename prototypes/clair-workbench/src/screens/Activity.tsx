@@ -108,7 +108,7 @@ export function ActivityPanel() {
                         display: 'block',
                         color: selected ? color.textPrimary : color.textSecondary,
                         fontSize: fs.caption,
-                        fontWeight: 500,
+                        fontWeight: 400,
                         textAlign: 'left',
                       }}
                     >
@@ -142,6 +142,7 @@ export function ActivityMain() {
             {wb.messages.map((m) => (
               <div key={m.id} style={{ maxWidth: 640, margin: '0 auto 16px', padding: '0 30px' }}>
                 <div
+                  className="prose"
                   style={{
                     padding: '12px 16px',
                     borderRadius: radius.overlay,
@@ -156,7 +157,7 @@ export function ActivityMain() {
                   {m.text}
                 </div>
                 <div
-                  className="cl"
+                  className="tnum"
                   style={{ marginTop: 4, color: color.textQuaternary, fontSize: fs.caption, textAlign: m.from === 'user' ? 'right' : 'left' }}
                 >
                   {m.time}
@@ -187,7 +188,7 @@ export function ActivityMain() {
                   }}
                 >
                   変更を適用してテストを実行しますか？
-                  <span className="cl" style={{ color: color.textQuaternary, fontWeight: 400, fontSize: fs.caption }}>
+                  <span className="tnum" style={{ color: color.textQuaternary, fontWeight: 400, fontSize: fs.caption }}>
                     PermissionRequest
                   </span>
                 </div>
@@ -206,7 +207,7 @@ export function ActivityMain() {
                   >
                     git diff --check &amp;&amp; swift test --package-path packages/ClairMobileKit
                   </div>
-                  <div className="cl" style={{ display: 'flex', gap: space[4], color: color.textQuaternary, fontSize: fs.caption, flexWrap: 'wrap' }}>
+                  <div className="tnum" style={{ display: 'flex', gap: space[4], color: color.textQuaternary, fontSize: fs.caption, flexWrap: 'wrap' }}>
                     <span>作業ディレクトリ ~/Projects/ccedit</span>
                     <span>リスク ローカルのテストコマンドを実行</span>
                   </div>
@@ -244,7 +245,7 @@ export function ActivityMain() {
                 </div>
               </div>
               {wb.approvalDecision ? (
-                <div className="cl" style={{ marginTop: 8, color: color.textQuaternary, fontSize: fs.caption }}>
+                <div className="tnum" style={{ marginTop: 8, color: color.textQuaternary, fontSize: fs.caption }}>
                   {wb.approvalDecision} を選択しました。
                 </div>
               ) : null}
@@ -291,7 +292,7 @@ export function ActivityMain() {
 
 export function ActivityStatus() {
   return (
-    <span className="cl" style={{ color: color.textQuaternary }}>
+    <span className="tnum" style={{ color: color.textQuaternary }}>
       Claude Code · 実行中
     </span>
   );

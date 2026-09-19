@@ -79,7 +79,7 @@ function ShellHeader({
       <span style={{ fontSize: fs.caption, color: color.textQuaternary }}>{hint}</span>
       <div style={{ flex: 1 }} />
       <button
-        className="cl"
+        className="tnum"
         onClick={onClose}
         style={{
           fontSize: fs.caption,
@@ -163,7 +163,7 @@ function KeyChip({ children, onClick }: { children: React.ReactNode; onClick?: (
         border: `1px solid ${line.hairline}`,
       }}
     >
-      <span className="cl" style={{ fontSize: fs.caption, color: color.textSecondary }}>
+      <span className="tnum" style={{ fontSize: fs.caption, color: color.textSecondary }}>
         {children}
       </span>
     </button>
@@ -258,7 +258,7 @@ export function CommandPalette() {
                   <span
                     style={{
                       fontSize: fs.secondary,
-                      fontWeight: 500,
+                      fontWeight: 400,
                       color: on ? color.textPrimary : color.textSecondary,
                       whiteSpace: 'nowrap',
                       overflow: 'hidden',
@@ -281,7 +281,7 @@ export function CommandPalette() {
                   </span>
                 </span>
                 <span
-                  className="cl"
+                  className="tnum"
                   style={{
                     fontSize: fs.caption,
                     fontWeight: 600,
@@ -344,7 +344,7 @@ export function CommandPalette() {
           <KeyChip onClick={() => setIndex((i) => Math.max(0, i - 1))}>↑</KeyChip>
           <KeyChip onClick={() => setIndex((i) => Math.min(rows.length - 1, i + 1))}>↓</KeyChip>
           <span style={{ fontSize: fs.caption, color: color.textQuaternary }}>
-            <span className="cl" style={{ color: color.textSecondary }}>
+            <span className="tnum" style={{ color: color.textSecondary }}>
               ↵
             </span>{' '}
             選択中を実行
@@ -525,7 +525,7 @@ export function SearchOverlay() {
           <KeyChip onClick={() => setIndex((i) => Math.max(0, i - 1))}>↑</KeyChip>
           <KeyChip onClick={() => setIndex((i) => Math.min(hits.length - 1, i + 1))}>↓</KeyChip>
           <span style={{ fontSize: fs.caption, color: color.textQuaternary }}>
-            <span className="cl" style={{ color: color.textSecondary }}>
+            <span className="tnum" style={{ color: color.textSecondary }}>
               ↵
             </span>{' '}
             ファイルを開く
@@ -586,16 +586,14 @@ export function AddAgentOverlay() {
             <div
               style={{
                 fontSize: fs.caption,
-                fontWeight: 700,
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-                color: color.textQuaternary,
+                fontWeight: 600,
+                color: color.textTertiary,
               }}
             >
               新しいセッション
             </div>
             <h2 style={{ margin: '4px 0 2px', fontSize: fs.title, fontWeight: 600 }}>Agentを追加</h2>
-            <p className="cl" style={{ margin: 0, color: color.textQuaternary, fontSize: fs.caption, lineHeight: 1.5 }}>
+            <p className="tnum" style={{ margin: 0, color: color.textQuaternary, fontSize: fs.caption, lineHeight: 1.5 }}>
               Agent、起動モデル、セッションの場所を選択します。
             </p>
           </div>
@@ -640,7 +638,7 @@ export function AddAgentOverlay() {
                 display: 'grid',
                 placeItems: 'center',
                 fontSize: fs.body,
-                fontWeight: 700,
+                fontWeight: 600,
               }}
             >
               OC
@@ -649,16 +647,14 @@ export function AddAgentOverlay() {
               <div
                 style={{
                   fontSize: fs.caption,
-                  fontWeight: 700,
-                  letterSpacing: '0.06em',
-                  textTransform: 'uppercase',
-                  color: color.textQuaternary,
+                  fontWeight: 600,
+                  color: color.textTertiary,
                 }}
               >
                 おすすめ · 残り使用量が多いAgent
               </div>
               <strong style={{ fontSize: fs.body, fontWeight: 600 }}>OpenCode</strong>
-              <div className="cl" style={{ color: color.textQuaternary, fontSize: fs.caption }}>
+              <div className="tnum" style={{ color: color.textQuaternary, fontSize: fs.caption }}>
                 5時間 残り84% · 7日間 残り78%
               </div>
             </div>
@@ -683,7 +679,7 @@ export function AddAgentOverlay() {
           <div>
             <div style={{ marginBottom: 8 }}>
               <strong style={label}>Agent</strong>{' '}
-              <span className="cl" style={hint}>
+              <span className="tnum" style={hint}>
                 このセッションで使う接続済みのAgentを選択します。
               </span>
             </div>
@@ -717,7 +713,7 @@ export function AddAgentOverlay() {
                         display: 'grid',
                         placeItems: 'center',
                         fontSize: fs.caption,
-                        fontWeight: 700,
+                        fontWeight: 600,
                       }}
                     >
                       {a.code}
@@ -726,11 +722,11 @@ export function AddAgentOverlay() {
                       <strong style={{ display: 'block', fontSize: fs.caption, fontWeight: 600, color: on ? undefined : color.textSecondary }}>
                         {a.name}
                       </strong>
-                      <small className="cl" style={{ display: 'block', marginTop: 2, color: color.textQuaternary, fontSize: fs.caption }}>
+                      <small className="tnum" style={{ display: 'block', marginTop: 2, color: color.textQuaternary, fontSize: fs.caption }}>
                         {a.quota}
                       </small>
                     </span>
-                    <span className="cl" style={{ textAlign: 'right', color: color.textPrimary, fontSize: fs.secondary }}>
+                    <span className="tnum" style={{ textAlign: 'right', color: color.textPrimary, fontSize: fs.secondary }}>
                       {on ? '✓' : ''}
                     </span>
                   </button>
@@ -742,7 +738,7 @@ export function AddAgentOverlay() {
           <div>
             <div style={{ marginBottom: 8 }}>
               <strong style={label}>起動場所</strong>{' '}
-              <span className="cl" style={hint}>
+              <span className="tnum" style={hint}>
                 新しいセッションを、続けて作業しやすい場所で開きます。
               </span>
             </div>
@@ -787,7 +783,7 @@ export function AddAgentOverlay() {
                       <strong style={{ display: 'block', fontSize: fs.caption, fontWeight: 600, color: on ? undefined : color.textTertiary }}>
                         {name}
                       </strong>
-                      <small className="cl" style={{ display: 'block', marginTop: 2, color: color.textQuaternary, fontSize: fs.caption }}>
+                      <small className="tnum" style={{ display: 'block', marginTop: 2, color: color.textQuaternary, fontSize: fs.caption }}>
                         {sub}
                       </small>
                     </span>
@@ -800,7 +796,7 @@ export function AddAgentOverlay() {
           <div>
             <div style={{ marginBottom: 8 }}>
               <strong style={label}>worktree</strong>{' '}
-              <span className="cl" style={hint}>
+              <span className="tnum" style={hint}>
                 変更を分離するか、現在のProjectに紐づけます。
               </span>
             </div>
@@ -841,7 +837,7 @@ export function AddAgentOverlay() {
                       <strong style={{ display: 'block', fontSize: fs.caption, fontWeight: 600, color: on ? undefined : color.textSecondary }}>
                         {name}
                       </strong>
-                      <small className="cl" style={{ display: 'block', marginTop: 2, color: color.textQuaternary, fontSize: fs.caption }}>
+                      <small className="tnum" style={{ display: 'block', marginTop: 2, color: color.textQuaternary, fontSize: fs.caption }}>
                         {sub}
                       </small>
                     </span>
@@ -874,12 +870,12 @@ export function AddAgentOverlay() {
           <div>
             <div style={{ marginBottom: 8 }}>
               <strong style={label}>最初のプロンプト</strong>{' '}
-              <span className="cl" style={hint}>
+              <span className="tnum" style={hint}>
                 任意 · 空のまま起動すると待機状態で開きます。
               </span>
             </div>
             <textarea
-              className="cl"
+              className="prose"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="例: EditorPane の行間を少し広げて、既存の配色は変えずに調整して。"
@@ -901,7 +897,7 @@ export function AddAgentOverlay() {
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: space[3], flexWrap: 'wrap' }}>
             <div>
-              <span className="cl" style={{ display: 'block', marginBottom: 4, color: color.textQuaternary, fontSize: fs.caption }}>
+              <span className="tnum" style={{ display: 'block', marginBottom: 4, color: color.textQuaternary, fontSize: fs.caption }}>
                 セッションモード
               </span>
               <div
@@ -951,7 +947,7 @@ export function AddAgentOverlay() {
             flexWrap: 'wrap',
           }}
         >
-          <span className="cl" style={{ color: color.textQuaternary, fontSize: fs.caption }}>
+          <span className="tnum" style={{ color: color.textQuaternary, fontSize: fs.caption }}>
             {agent} · デフォルトモデル · {place} · {worktree}
           </span>
           <div style={{ display: 'flex', gap: space[2] }}>

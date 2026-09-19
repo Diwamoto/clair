@@ -17,7 +17,7 @@ function StageButton({ staged, onClick, title }: { staged: boolean; onClick: () 
         e.stopPropagation();
         onClick();
       }}
-      style={{ width: 18, height: 18, fontSize: fs.secondary, fontWeight: 700, color: color.textTertiary, flexShrink: 0 }}
+      style={{ width: 18, height: 18, fontSize: fs.secondary, fontWeight: 600, color: color.textTertiary, flexShrink: 0 }}
     >
       {staged ? '−' : '+'}
     </button>
@@ -64,18 +64,18 @@ function FileRow({
       <IconClaude size={12} color={untracked ? color.success : color.textTertiary} />
       <span style={{ flex: 1, textAlign: 'left', color: untracked ? color.success : undefined }}>{file.name}</span>
       {untracked ? (
-        <span className="cl" style={{ fontSize: fs.caption, color: color.textQuaternary }}>
+        <span className="tnum" style={{ fontSize: fs.caption, color: color.textQuaternary }}>
           未追跡
         </span>
       ) : (
         <>
           {file.added ? (
-            <span className="cl" style={{ fontSize: fs.caption, color: color.success }}>
+            <span className="tnum" style={{ fontSize: fs.caption, color: color.success }}>
               +{file.added}
             </span>
           ) : null}
           {file.removed ? (
-            <span className="cl" style={{ fontSize: fs.caption, color: color.danger }}>
+            <span className="tnum" style={{ fontSize: fs.caption, color: color.danger }}>
               −{file.removed}
             </span>
           ) : null}
@@ -101,7 +101,7 @@ function SectionHeading({
 }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: space[1], height: 26, padding: '0 12px 0 20px' }}>
-      <span style={{ fontSize: fs.caption, fontWeight: 700, color: color.textTertiary, letterSpacing: '0.03em', flex: 1 }}>
+      <span style={{ fontSize: fs.caption, fontWeight: 600, color: color.textTertiary, flex: 1 }}>
         {label} <span style={{ color: color.textQuaternary, fontWeight: 400 }}>{count}</span>
       </span>
       {count ? (
@@ -109,7 +109,7 @@ function SectionHeading({
           className="act"
           title={bulkTitle}
           onClick={onBulk}
-          style={{ width: 18, height: 18, fontSize: fs.secondary, fontWeight: 700, color: color.textQuaternary, flexShrink: 0 }}
+          style={{ width: 18, height: 18, fontSize: fs.secondary, fontWeight: 600, color: color.textQuaternary, flexShrink: 0 }}
         >
           {bulkGlyph}
         </button>
@@ -229,7 +229,12 @@ export function ReviewPanel() {
             cursor: canCommit ? 'pointer' : 'default',
           }}
         >
-          コミット{staged.length ? `（${staged.length}）` : ''}
+          コミット
+          {staged.length ? (
+            <span className="tnum" style={{ marginLeft: space[1] }}>
+              {staged.length}
+            </span>
+          ) : null}
         </button>
       </div>
 
@@ -295,7 +300,7 @@ export function ReviewMain() {
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, background: color.canvas }}>
       <MainHeader>
         <SourceControlModeTabs />
-        <span className="cl" style={{ fontSize: fs.caption, color: color.textQuaternary }}>
+        <span className="tnum" style={{ fontSize: fs.caption, color: color.textQuaternary }}>
           {staged.length} / {changedFiles.length} files staged
         </span>
       </MainHeader>
@@ -317,12 +322,12 @@ export function ReviewMain() {
           {current.path}
         </span>
         {current.added ? (
-          <span className="cl" style={{ fontSize: fs.caption, color: color.success }}>
+          <span className="tnum" style={{ fontSize: fs.caption, color: color.success }}>
             +{current.added}
           </span>
         ) : null}
         {current.removed ? (
-          <span className="cl" style={{ fontSize: fs.caption, color: color.danger }}>
+          <span className="tnum" style={{ fontSize: fs.caption, color: color.danger }}>
             −{current.removed}
           </span>
         ) : null}

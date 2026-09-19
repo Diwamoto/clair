@@ -59,14 +59,14 @@ function Row({
         justifyContent: 'space-between',
         gap: space[3],
         minHeight: 52,
-        padding: '13px 0',
+        padding: '12px 0',
         borderTop: first ? `1px solid ${line.hairlineSoft}` : undefined,
         borderBottom: last ? 0 : `1px solid ${line.hairlineSoft}`,
       }}
     >
       <div>
-        <strong style={{ display: 'block', fontSize: fs.secondary, fontWeight: 500, color: color.textPrimary }}>{title}</strong>
-        <small style={{ display: 'block', marginTop: 2, color: color.textTertiary, fontSize: fs.caption }}>{note}</small>
+        <strong style={{ display: 'block', fontSize: fs.secondary, fontWeight: 600, color: color.textPrimary }}>{title}</strong>
+        <small className="prose" style={{ display: 'block', marginTop: 2, color: color.textTertiary, fontSize: fs.caption }}>{note}</small>
       </div>
       {control}
     </div>
@@ -86,7 +86,7 @@ function Card({ title, note, children }: { title: string; note: string; children
     >
       <div style={{ marginBottom: 16 }}>
         <h2 style={{ margin: 0, fontSize: fs.body, fontWeight: 600 }}>{title}</h2>
-        <p style={{ margin: '4px 0 0', color: color.textTertiary, fontSize: fs.caption, lineHeight: 1.5 }}>{note}</p>
+        <p className="prose" style={{ margin: '4px 0 0', color: color.textTertiary, fontSize: fs.caption, lineHeight: 1.5 }}>{note}</p>
       </div>
       {children}
     </div>
@@ -130,7 +130,7 @@ export function SettingsPanel() {
             }}
           />
           <nav>
-            <div style={{ margin: '4px 8px', color: color.textQuaternary, fontSize: fs.caption, fontWeight: 700, letterSpacing: '0.06em' }}>
+            <div style={{ margin: '4px 8px', color: color.textTertiary, fontSize: fs.caption, fontWeight: 600 }}>
               ワークスペース
             </div>
             {sections.map((s) => {
@@ -170,7 +170,7 @@ export function SettingsMain() {
         <div className="scroll" style={{ flex: 1, minWidth: 0, minHeight: 0, padding: '40px 56px', background: '#1e2127' }}>
           <div style={{ maxWidth: 720, margin: '0 auto' }}>
             <h1 style={{ margin: 0, fontSize: fs.display.h1, fontWeight: 600, letterSpacing: '-0.01em' }}>{section}</h1>
-            <p style={{ margin: '8px 0 24px', color: color.textTertiary, fontSize: fs.secondary, lineHeight: 1.6 }}>
+            <p className="prose" style={{ margin: '8px 0 24px', color: color.textTertiary, fontSize: fs.secondary, lineHeight: 1.6 }}>
               {section === '一般'
                 ? 'ワークスペースの基本動作とアプリ全体の表示を設定します。'
                 : `${section} の設定です。`}
@@ -269,7 +269,7 @@ export function SettingsMain() {
 export function SettingsStatus() {
   const wb = useWorkbench();
   return (
-    <span className="cl" style={{ color: color.textQuaternary }}>
+    <span className="tnum" style={{ color: color.textQuaternary }}>
       設定 · {wb.settingsSection}
     </span>
   );

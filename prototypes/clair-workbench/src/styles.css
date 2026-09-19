@@ -24,6 +24,9 @@ body {
   color: #f1f2f6;
   font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', sans-serif;
   font-size: 13px;
+  /* Proportional kana for UI text; long-form text and code switch it back
+     off with .prose / .cl. */
+  font-feature-settings: 'palt' 1;
   overscroll-behavior: none;
 }
 
@@ -46,6 +49,17 @@ textarea {
 
 .cl {
   font-family: 'SF Mono', ui-monospace, Menlo, 'Hiragino Sans', monospace;
+  font-feature-settings: normal;
+}
+
+/* Long-form text: chat, settings descriptions, prompts. */
+.prose {
+  font-feature-settings: normal;
+}
+
+/* Numbers that line up: status bar, tables, times, counts, +N / −N. */
+.tnum {
+  font-variant-numeric: tabular-nums;
 }
 
 /* surfaceHover / surfaceActive from the Tokens artboard. */

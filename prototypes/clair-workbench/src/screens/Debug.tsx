@@ -92,7 +92,7 @@ function DebugToolbar() {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ padding: '12px 12px 4px', fontSize: fs.caption, fontWeight: 700, letterSpacing: '0.04em', color: color.textQuaternary }}>
+    <div style={{ padding: '12px 12px 4px', fontSize: fs.caption, fontWeight: 600, color: color.textTertiary }}>
       {children}
     </div>
   );
@@ -181,7 +181,7 @@ export function DebugPanel() {
 
   return (
     <div className="scroll" style={{ position: 'absolute', inset: 0 }}>
-          <div style={{ padding: '12px 12px 4px', fontSize: fs.caption, fontWeight: 700, letterSpacing: '0.04em', color: color.textQuaternary }}>
+          <div style={{ padding: '12px 12px 4px', fontSize: fs.caption, fontWeight: 600, color: color.textTertiary }}>
             ブレークポイント
           </div>
           {wb.breakpoints.length ? (
@@ -377,7 +377,7 @@ export function DebugAgentBadge() {
 export function DebugAgentPanel() {
   return (
     <div className="scroll" style={{ position: 'absolute', inset: 0 }}>
-      <div style={{ padding: '12px 12px 4px', fontSize: fs.caption, fontWeight: 700, letterSpacing: '0.04em', color: color.textQuaternary }}>
+      <div style={{ padding: '12px 12px 4px', fontSize: fs.caption, fontWeight: 600, color: color.textTertiary }}>
         ブレークポイント
       </div>
       <div
@@ -591,7 +591,7 @@ export function DebugAgentMain() {
             </div>
           </div>
           {applied ? (
-            <div className="cl" style={{ color: color.textQuaternary, fontSize: fs.caption }}>
+            <div className="tnum" style={{ color: color.textQuaternary, fontSize: fs.caption }}>
               {applied} を選択しました。
             </div>
           ) : null}

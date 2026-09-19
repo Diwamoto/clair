@@ -43,13 +43,13 @@ export function SessionsMain() {
         >
           <IconBellFilled size={10} />
           次の注意へ
-          <span style={{ color: color.textQuaternary, fontWeight: 500 }}>⌥⇥</span>
+          <span style={{ color: color.textQuaternary, fontWeight: 400 }}>⌥⇥</span>
         </Chip>
         <Chip
           onClick={() => wb.setOverlay('addAgent')}
           style={{ background: color.panel, border: `1px solid ${line.hairline}`, color: color.textTertiary }}
         >
-          Agentを起動 <span style={{ color: color.textQuaternary, fontWeight: 500 }}>⌃⌘N</span>
+          Agentを起動 <span style={{ color: color.textQuaternary, fontWeight: 400 }}>⌃⌘N</span>
         </Chip>
       </MainHeader>
 
@@ -63,10 +63,9 @@ export function SessionsMain() {
           padding: '0 12px',
           background: color.panelDeep,
           borderBottom: `1px solid ${line.hairline}`,
-          color: color.textQuaternary,
+          color: color.textTertiary,
           fontSize: fs.caption,
-          fontWeight: 700,
-          letterSpacing: '0.04em',
+          fontWeight: 600,
         }}
       >
         <div />
@@ -162,7 +161,7 @@ export function SessionsMain() {
               )}
             </div>
 
-            <div className="cl" style={{ textAlign: 'right', color: color.textTertiary }}>
+            <div className="tnum" style={{ textAlign: 'right', color: color.textTertiary }}>
               {s.elapsed}
             </div>
 
@@ -183,12 +182,12 @@ export function SessionsMain() {
                       }}
                     />
                   </div>
-                  <span className="cl" style={{ fontSize: fs.caption, color: s.quotaTight ? color.textSecondary : color.textTertiary }}>
+                  <span className="tnum" style={{ fontSize: fs.caption, color: s.quotaTight ? color.textSecondary : color.textTertiary }}>
                     {s.quotaLabel}
                   </span>
                 </div>
               ) : (
-                <span className="cl" style={{ fontSize: fs.caption, color: color.lineNumber }}>
+                <span className="tnum" style={{ fontSize: fs.caption, color: color.lineNumber }}>
                   —
                 </span>
               )}
@@ -375,10 +374,9 @@ export function MergeGraphMain() {
           gridTemplateColumns: GRAPH_GRID,
           alignItems: 'center',
           padding: '0 16px',
-          color: color.textQuaternary,
+          color: color.textTertiary,
           fontSize: fs.caption,
-          fontWeight: 700,
-          letterSpacing: '0.04em',
+          fontWeight: 600,
           borderBottom: `1px solid ${line.hairline}`,
         }}
       >

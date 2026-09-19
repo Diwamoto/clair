@@ -558,12 +558,12 @@ function Panel({
               {entry.label}
             </span>
             {entry.detail ? (
-              <span className="cl" style={{ marginLeft: 12, fontSize: fs.caption, color: quiet, whiteSpace: 'nowrap' }}>
+              <span className="tnum" style={{ marginLeft: 12, fontSize: fs.caption, color: quiet, whiteSpace: 'nowrap' }}>
                 {entry.detail}
               </span>
             ) : null}
             {entry.shortcut ? (
-              <span className="cl" style={{ marginLeft: 20, fontSize: fs.caption, color: quiet, whiteSpace: 'nowrap' }}>
+              <span className="tnum" style={{ marginLeft: 20, fontSize: fs.caption, color: quiet, whiteSpace: 'nowrap' }}>
                 {entry.shortcut}
               </span>
             ) : null}
