@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 
 import { activityItems } from '../data';
-import { IconSearch } from '../icons';
+import { IconArrowRight, IconSearch } from '../icons';
 import { useWorkbench } from '../store';
 
 import { color, fs, line, radius, space, wash } from '../tokens';
@@ -74,15 +74,17 @@ export function ActivityPanel() {
               return (
                 <button
                   key={item.id}
+                  className={selected ? undefined : 'hoverable'}
                   onClick={() => wb.setActiveActivity(item.id)}
                   style={{
                     display: 'flex',
                     alignItems: 'flex-start',
                     gap: space[2],
-                    width: '100%',
-                    padding: '8px 12px',
-                    background: selected ? 'rgba(241,242,246,0.055)' : undefined,
-                    borderLeft: `2px solid ${selected ? color.textSecondary : 'transparent'}`,
+                    width: 'calc(100% - 16px)',
+                    margin: '0 8px',
+                    padding: '8px',
+                    borderRadius: radius.control,
+                    background: selected ? color.surfaceActive : undefined,
                   }}
                 >
                   <span
@@ -126,10 +128,18 @@ export function ActivityPanel() {
   );
 }
 
+// One 720px column for messages, approval card and composer alike.
+const COLUMN: CSSProperties = { width: '100%', maxWidth: 720, margin: '0 auto', padding: '0 16px' };
+
 export function ActivityMain() {
   const wb = useWorkbench();
   const [draft, setDraft] = useState('');
   const feedRef = useRef<HTMLDivElement>(null);
+  const send = () => {
+    if (!draft.trim()) return;
+    wb.sendMessage(draft.trim());
+    setDraft('');
+  };
 
   useEffect(() => {
     const el = feedRef.current;
@@ -140,32 +150,33 @@ export function ActivityMain() {
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, background: color.canvas }}>
           <div ref={feedRef} className="scroll" style={{ minHeight: 0, flex: 1, padding: '26px 0 16px' }}>
             {wb.messages.map((m) => (
-              <div key={m.id} style={{ maxWidth: 640, margin: '0 auto 16px', padding: '0 30px' }}>
+              <div key={m.id} className="msg" style={{ ...COLUMN, marginBottom: space[4] }}>
                 <div
                   className="prose"
                   style={{
-                    padding: '12px 16px',
+                    padding: m.from === 'user' ? '12px 16px' : 0,
                     borderRadius: radius.overlay,
-                    background: m.from === 'user' ? wash.strong : 'rgba(241,242,246,0.045)',
+                    background: m.from === 'user' ? wash.strong : undefined,
                     color: m.from === 'user' ? color.textPrimary : color.textSecondary,
                     fontSize: fs.body,
                     lineHeight: 1.55,
-                    maxWidth: '85%',
+                    maxWidth: m.from === 'user' ? '85%' : undefined,
                     marginLeft: m.from === 'user' ? 'auto' : undefined,
+                    width: m.from === 'user' ? 'fit-content' : undefined,
                   }}
                 >
                   {m.text}
                 </div>
                 <div
-                  className="tnum"
-                  style={{ marginTop: 4, color: color.textQuaternary, fontSize: fs.caption, textAlign: m.from === 'user' ? 'right' : 'left' }}
+                  className="tnum msg-time"
+                  style={{ marginTop: space[1], color: color.textQuaternary, fontSize: fs.caption, textAlign: m.from === 'user' ? 'right' : 'left' }}
                 >
                   {m.time}
                 </div>
               </div>
             ))}
 
-            <div style={{ maxWidth: 640, margin: '0 auto 16px', padding: '0 30px' }}>
+            <div style={{ ...COLUMN, marginBottom: space[4] }}>
               <div
                 style={{
                   border: `1px solid ${line.stronger}`,
@@ -245,39 +256,48 @@ export function ActivityMain() {
             </div>
           </div>
 
-          <div
-            style={{
-              flexShrink: 0,
-              margin: '0 20px 16px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: space[2],
-              padding: '0 12px',
-              height: 46,
-              borderRadius: radius.card,
-              background: color.canvas,
-              border: `1px solid ${line.hairline}`,
-            }}
-          >
-            <input
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && draft.trim()) {
-                  wb.sendMessage(draft.trim());
-                  setDraft('');
-                }
-              }}
-              placeholder="Agentにメッセージ…"
+          <div style={{ ...COLUMN, flexShrink: 0, marginBottom: space[4] }}>
+            <div
+              className="field"
               style={{
-                flex: 1,
-                border: 0,
-                outline: 'none',
-                background: 'transparent',
-                color: color.textPrimary,
-                fontSize: fs.body,
+                display: 'flex',
+                alignItems: 'center',
+                gap: space[2],
+                padding: '0 8px 0 12px',
+                height: 46,
+                borderRadius: radius.card,
+                background: color.canvas,
+                border: `1px solid ${line.hairline}`,
               }}
-            />
+            >
+              <input
+                className="prose"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') send();
+                }}
+                placeholder="Agentにメッセージ…"
+                style={{
+                  flex: 1,
+                  border: 0,
+                  outline: 'none',
+                  background: 'transparent',
+                  color: color.textPrimary,
+                  fontSize: fs.body,
+                }}
+              />
+              <button
+                className="btn-primary"
+                aria-label="送信"
+                title="送信"
+                disabled={!draft.trim()}
+                onClick={send}
+                style={{ width: 28, height: 28, display: 'grid', placeItems: 'center', borderRadius: radius.control, flexShrink: 0 }}
+              >
+                <IconArrowRight size={14} style={{ transform: 'rotate(-90deg)' }} />
+              </button>
+            </div>
           </div>
     </div>
   );

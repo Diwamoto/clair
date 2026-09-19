@@ -68,11 +68,11 @@ export function SessionsMain() {
         }}
       >
         <div />
-        <div>AGENT</div>
-        <div>PROJECT</div>
-        <div>実行CONTEXT</div>
+        <div>エージェント</div>
+        <div>プロジェクト</div>
+        <div>実行場所</div>
         <div style={{ textAlign: 'right' }}>経過</div>
-        <div>最後のSIGNAL</div>
+        <div>最後のシグナル</div>
         <div>利用枠</div>
         <div />
       </div>
@@ -81,6 +81,7 @@ export function SessionsMain() {
         {wb.sessions.map((s) => (
           <div
             key={s.id}
+            className="rail-row"
             style={{
               display: 'grid',
               gridTemplateColumns: GRID,
@@ -188,7 +189,8 @@ export function SessionsMain() {
                   color: s.action === '移動 ↵' ? color.textSecondary : color.textQuaternary,
                 }}
               >
-                {s.action}
+                {s.action.replace(' ↵', '')}
+                {s.action === '再起動' ? null : <span className={s.attention ? undefined : 'go-hint'}> ↵</span>}
               </Chip>
             </div>
           </div>
@@ -222,8 +224,8 @@ export function AgentsPanel() {
         height: 26,
         margin: '0 8px',
         padding: '0 8px',
-        borderRadius: radius.card,
-        background: selected ? 'rgba(241,242,246,0.08)' : undefined,
+        borderRadius: radius.control,
+        background: selected ? color.surfaceActive : undefined,
         color: selected ? color.chromeInk : color.textTertiary,
         fontSize: fs.caption,
       }}

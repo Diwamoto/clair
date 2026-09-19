@@ -46,7 +46,7 @@ function Row({
   last,
 }: {
   title: string;
-  note: string;
+  note?: string;
   control: React.ReactNode;
   first?: boolean;
   last?: boolean;
@@ -66,14 +66,18 @@ function Row({
     >
       <div>
         <strong style={{ display: 'block', fontSize: fs.secondary, fontWeight: 600, color: color.textPrimary }}>{title}</strong>
-        <small className="prose" style={{ display: 'block', marginTop: 2, color: color.textTertiary, fontSize: fs.caption }}>{note}</small>
+        {note ? (
+          <small className="prose" style={{ display: 'block', marginTop: 2, color: color.textTertiary, fontSize: fs.caption }}>
+            {note}
+          </small>
+        ) : null}
       </div>
       {control}
     </div>
   );
 }
 
-function Card({ title, note, children }: { title: string; note: string; children: React.ReactNode }) {
+function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div
       style={{
@@ -85,7 +89,6 @@ function Card({ title, note, children }: { title: string; note: string; children
     >
       <div style={{ marginBottom: 16 }}>
         <h2 style={{ margin: 0, fontSize: fs.body, fontWeight: 600 }}>{title}</h2>
-        <p className="prose" style={{ margin: '4px 0 0', color: color.textTertiary, fontSize: fs.caption, lineHeight: 1.5 }}>{note}</p>
       </div>
       {children}
     </div>
@@ -137,6 +140,7 @@ export function SettingsPanel() {
               return (
                 <button
                   key={s}
+                  className={on ? undefined : 'hoverable'}
                   onClick={() => wb.setSettingsSection(s)}
                   style={{
                     minHeight: 30,
@@ -146,8 +150,8 @@ export function SettingsPanel() {
                     gap: space[2],
                     padding: '0 8px',
                     borderRadius: radius.control,
-                    background: on ? 'rgba(241,242,246,0.075)' : undefined,
-                    color: on ? color.textPrimary : color.textTertiary,
+                    background: on ? color.surfaceActive : undefined,
+                    color: on ? color.textPrimary : color.textSecondary,
                     fontSize: fs.caption,
                     fontWeight: on ? 600 : 400,
                   }}
@@ -177,27 +181,34 @@ export function SettingsMain() {
 
             {section === '一般' ? (
               <>
-                <Card title="ワークスペース" note="Projectを開くときに使う基本設定です。">
+                <Card title="ワークスペース">
                   <Row
                     first
                     title="ワークスペースのディレクトリ"
-                    note="Projectをまとめて管理するフォルダです。"
                     control={
-                      <div
-                        className="cl"
-                        style={{
-                          minHeight: 30,
-                          padding: '0 8px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          border: `1px solid ${line.hairline}`,
-                          borderRadius: radius.control,
-                          background: color.chrome,
-                          color: color.textSecondary,
-                          fontSize: fs.caption,
-                        }}
-                      >
-                        ~/Projects
+                      <div style={{ display: 'flex', alignItems: 'center', gap: space[2] }}>
+                        <div
+                          className="cl"
+                          style={{
+                            minHeight: 26,
+                            padding: '0 8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            border: `1px solid ${line.hairline}`,
+                            borderRadius: radius.control,
+                            background: color.chrome,
+                            color: color.textSecondary,
+                            fontSize: fs.caption,
+                          }}
+                        >
+                          ~/Projects
+                        </div>
+                        <button
+                          className="btn-secondary"
+                          style={{ minHeight: 26, padding: '0 8px', borderRadius: radius.control, fontSize: fs.caption }}
+                        >
+                          変更…
+                        </button>
                       </div>
                     }
                   />
@@ -214,18 +225,17 @@ export function SettingsMain() {
                   />
                 </Card>
 
-                <Card title="インターフェース" note="ワークスペースを静かで集中しやすい表示にします。">
+                <Card title="インターフェース">
                   <Row
                     first
                     last
                     title="ステータスバーの利用枠を表示"
-                    note="最も逼迫したAgentの利用枠を、すべての画面のstatus barに表示します。"
                     control={<Switch on={wb.toggles.showQuota} onClick={() => wb.setToggle('showQuota')} />}
                   />
                 </Card>
               </>
             ) : section === 'モバイル' ? (
-              <Card title="モバイル" note="同じネットワーク上の端末からセッションを確認します。">
+              <Card title="モバイル">
                 <Row
                   first
                   last
@@ -240,11 +250,9 @@ export function SettingsMain() {
                         height: 24,
                         padding: '0 8px',
                         borderRadius: radius.control,
-                        background: 'rgba(241,242,246,0.09)',
-                        border: `1px solid ${line.stronger}`,
-                        color: color.textPrimary,
+                        border: `1px solid ${line.strong}`,
+                        color: color.textSecondary,
                         fontSize: fs.caption,
-                        fontWeight: 600,
                         textDecoration: 'none',
                       }}
                     >
@@ -254,9 +262,9 @@ export function SettingsMain() {
                 />
               </Card>
             ) : (
-              <Card title={section} note="この画面はデザインキャンバスにまだ存在しません。">
+              <Card title={section}>
                 <div style={{ color: color.textQuaternary, fontSize: fs.caption, lineHeight: 1.7 }}>
-                  キャンバスが定義しているのは「一般」の内容だけです。ここに項目を足すのはキャンバス側の作業です。
+                  この画面はデザインキャンバスにまだ存在しません。キャンバスが定義しているのは「一般」の内容だけです。ここに項目を足すのはキャンバス側の作業です。
                 </div>
               </Card>
             )}

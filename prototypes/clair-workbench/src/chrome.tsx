@@ -6,7 +6,7 @@
 // each drew their own header because an artboard is a single still frame —
 // those are treated as internal parts of this shell, not as separate chrome.
 
-import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { Fragment, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
 import { targetRing, useContextMenu } from './contextMenu';
 import { files, projectTabs, type FileKind } from './data';
@@ -60,7 +60,6 @@ export function Act({
   width = 30,
   height = 28,
   title,
-  underline,
 }: {
   children: ReactNode;
   onClick?: () => void;
@@ -68,7 +67,6 @@ export function Act({
   width?: number;
   height?: number;
   title?: string;
-  underline?: boolean;
 }) {
   return (
     <button
@@ -85,19 +83,6 @@ export function Act({
       }}
     >
       {children}
-      {active && underline ? (
-        <div
-          style={{
-            position: 'absolute',
-            left: '50%',
-            bottom: -1,
-            transform: 'translateX(-50%)',
-            width: 18,
-            height: 2,
-            background: color.textSecondary,
-          }}
-        />
-      ) : null}
     </button>
   );
 }
@@ -166,39 +151,13 @@ export function MainHeader({ children, height = 44 }: { children: ReactNode; hei
  * are open and however wide the window is. A tab that moved or resized every
  * time a sibling opened would cost more than the tidy right edge is worth.
  *
- * A name that does not fit is faded out at its right edge rather than
- * ellipsised: the fade says "there is more" without spending characters on
- * punctuation, and it keeps the label's ink even at the cut.
+ * A name that does not fit ends in an ellipsis; the full name is the tab's title.
  */
 const TAB_WIDTH = 200;
-const TAB_FADE = 18;
-
-const fadeRight: CSSProperties = {
-  WebkitMaskImage: `linear-gradient(to right, #000 calc(100% - ${TAB_FADE}px), transparent 100%)`,
-  maskImage: `linear-gradient(to right, #000 calc(100% - ${TAB_FADE}px), transparent 100%)`,
-};
 
 /** A faint seam between adjacent tabs — just a short rule, never a box around either. */
 function TabDivider() {
   return <div style={{ width: 1, height: 18, background: line.chromeSoft, flexShrink: 0 }} />;
-}
-
-/** True while the label is wider than the room the tab gives it. */
-function useClipped(label: string) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const [clipped, setClipped] = useState(false);
-
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const measure = () => setClipped(el.scrollWidth > el.clientWidth);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [label]);
-
-  return [ref, clipped] as const;
 }
 
 function Tab({
@@ -221,7 +180,6 @@ function Tab({
   targeted?: boolean;
 }) {
   const tint = active ? color.chromeInk : color.textTertiary;
-  const [labelRef, clipped] = useClipped(label);
   return (
     <button
       onClick={onClick}
@@ -248,18 +206,16 @@ function Tab({
     >
       {icon}
       <span
-        ref={labelRef}
         style={{
           fontSize: fs.caption,
           fontWeight: active ? 600 : 400,
           color: tint,
           whiteSpace: 'nowrap',
           overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          minWidth: 0,
           flex: 1,
           textAlign: 'left',
-          // Only a name that actually runs past the tab is faded; one that
-          // fits keeps its last letters at full ink.
-          ...(clipped ? fadeRight : null),
         }}
       >
         {label}
@@ -618,12 +574,8 @@ export function AppTitlebar({ extra }: { extra?: ReactNode }) {
         {/* The field itself, back in the tab bar. A magnifier on its own said
             "there is a search somewhere"; the field says what it searches and
             gives the shortcut, and the fixed-width tabs mean the 200px it
-            takes costs nothing else on the row. It is painted like the commit
-            message box — panel over a hairline, darker than the chrome around
-            it — because both are the same thing: somewhere you type. A text
-            field is a well cut into the frame, not a button raised out of it,
-            and the two should not be lit differently for sitting in different
-            parts of the window. */}
+            takes costs nothing else on the row. It is the chrome's own colour
+            over a hairline, like every other field: one surface, one outline. */}
         <button
           onClick={() => wb.setOverlay('search')}
           title="検索"
@@ -710,7 +662,6 @@ export function SourceControlModeTabs() {
         height: 24,
         flexShrink: 0,
         borderRadius: radius.control,
-        background: color.panel,
         border: `1px solid ${line.hairline}`,
         overflow: 'hidden',
       }}
@@ -729,7 +680,7 @@ export function SourceControlModeTabs() {
               alignItems: 'center',
               padding: '0 12px',
               background: on ? color.surfaceActive : undefined,
-              color: on ? color.chromeInk : color.textQuaternary,
+              color: on ? color.textPrimary : color.textSecondary,
               fontSize: fs.caption,
               fontWeight: on ? 600 : 400,
             }}
@@ -753,12 +704,12 @@ function SidebarStrip() {
         flexShrink: 0,
         display: 'flex',
         alignItems: 'center',
-        gap: space[0],
+        gap: space[1],
         padding: '0 8px',
         borderBottom: `1px solid ${line.chromeSoft}`,
       }}
     >
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: space[1] }}>
         {NAV.map((item) => {
           const Icon = item.icon;
           return (
@@ -768,7 +719,6 @@ function SidebarStrip() {
               height={32}
               title={item.label}
               active={active === item.id}
-              underline={item.id !== 'files'}
               onClick={() => {
                 wb.setOverlay(null);
                 wb.setScreen(item.screen);
@@ -820,7 +770,7 @@ function AppStatusBar({ context, trailing }: { context?: ReactNode; trailing?: R
         flexShrink: 0,
         display: 'flex',
         alignItems: 'center',
-        gap: space[2],
+        gap: space[3],
         padding: '0 12px',
         backgroundColor: color.chrome,
         borderTop: `1px solid ${line.chrome}`,
@@ -836,13 +786,10 @@ function AppStatusBar({ context, trailing }: { context?: ReactNode; trailing?: R
         {onBranch ? 'worktree' : '↓0 ↑2'}
       </span>
       <span>{6 + wb.dirtyCount} 変更</span>
-      {context ? <span style={{ color: color.divider }}>·</span> : null}
       {context}
       <div style={{ flex: 1 }} />
       {wb.toggles.showQuota ? <QuotaMeter /> : null}
-      <span style={{ color: color.divider }}>·</span>
       <span>{wb.sessions.length} セッション</span>
-      {trailing ? <span style={{ color: color.divider }}>·</span> : null}
       {trailing}
     </div>
   );

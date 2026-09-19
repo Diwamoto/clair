@@ -93,7 +93,7 @@ textarea {
 button:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
-.field:focus-within {
+.field:has(:focus-visible) {
   outline: none;
   box-shadow: 0 0 0 1px rgba(241, 242, 246, 0.32);
 }
@@ -123,6 +123,20 @@ textarea:focus-visible,
 .act:hover {
   background: #2e333c;
   color: #caccd2;
+}
+
+.msg-time {
+  opacity: 0;
+}
+.msg:hover .msg-time {
+  opacity: 1;
+}
+
+.go-hint {
+  visibility: hidden;
+}
+.rail-row:hover .go-hint {
+  visibility: visible;
 }
 
 .scroll {

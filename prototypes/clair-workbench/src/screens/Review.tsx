@@ -51,13 +51,14 @@ function FileRow({
         display: 'flex',
         alignItems: 'center',
         gap: space[1],
-        width: '100%',
-        height: 24,
-        padding: selected ? '0 8px 0 20px' : '0 8px 0 22px',
+        width: 'calc(100% - 16px)',
+        margin: '0 8px',
+        height: 26,
+        padding: '0 8px',
+        borderRadius: radius.control,
         fontSize: fs.caption,
-        color: selected ? color.textPrimary : color.textTertiary,
+        color: selected ? color.textPrimary : color.textSecondary,
         background: selected ? color.surfaceActive : undefined,
-        borderLeft: selected ? `2px solid ${color.textSecondary}` : undefined,
         cursor: 'pointer',
       }}
     >
@@ -296,7 +297,7 @@ export function ReviewMain() {
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, background: color.canvas }}>
       <MainHeader>
         <SourceControlModeTabs />
-        <span className="tnum" style={{ fontSize: fs.caption, color: color.textQuaternary }}>
+        <span className="tnum" style={{ fontSize: fs.caption, color: color.textTertiary }}>
           {staged.length} / {changedFiles.length} files staged
         </span>
       </MainHeader>

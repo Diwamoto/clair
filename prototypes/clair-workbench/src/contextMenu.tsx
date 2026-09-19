@@ -548,7 +548,7 @@ function Panel({
                 flex: 1,
                 minWidth: 0,
                 fontSize: fs.secondary,
-                fontWeight: entry.destructive ? 700 : 400,
+                fontWeight: entry.destructive ? 600 : 400,
                 color: label,
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',

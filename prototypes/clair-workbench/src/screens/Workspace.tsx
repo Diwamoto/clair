@@ -3,7 +3,7 @@ import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { targetRing, useContextMenu } from '../contextMenu';
 import { files, tree } from '../data';
 import { HighlightedLine } from '../highlight';
-import { IconBranchSmall } from '../icons';
+import { IconBranchSmall, IconChevron } from '../icons';
 import { copyText, editorMenu, fileMenu, folderMenu, readClipboard, streamMenu } from '../menus';
 import { useWorkbench, type PaneNode } from '../store';
 import { FileIcon } from '../chrome';
@@ -11,26 +11,14 @@ import { color, fs, line, mono, radius, space } from '../tokens';
 
 const byPath = new Map(files.map((f) => [f.path, f]));
 
-const INDENT: Record<number, number> = { 0: 10, 1: 22, 2: 36, 3: 55 };
+// One level of tree indent.
+const INDENT = 12;
 
 /* ── sidebar ──────────────────────────────────────────────────────────── */
 
 export function ExplorerPanel() {
   const wb = useWorkbench();
   const menu = useContextMenu();
-
-  // A row whose menu is open wears a ring, inset from the sidebar edge the
-  // way the selected row already is.
-  const ringed = (id: string, indent: number, base: string) =>
-    wb.contextMenu?.target === id
-      ? {
-          width: 'calc(100% - 16px)',
-          margin: '0 8px',
-          padding: `0 10px 0 ${indent - 8}px`,
-          borderRadius: radius.card,
-          boxShadow: targetRing,
-        }
-      : { width: '100%', padding: base };
 
   const hidden = (parent: string | undefined) => {
     let cursor = parent;
@@ -46,25 +34,42 @@ export function ExplorerPanel() {
         {tree.map((node) => {
           if (node.type !== 'project' && hidden(node.parent)) return null;
 
+          const targeted = wb.contextMenu?.target === node.id;
+          // Every row is the same inset pill: the 8px margin sits outside the
+          // background, so the trailing badges line up on every row.
+          const row = (selected: boolean): React.CSSProperties => ({
+            display: 'flex',
+            alignItems: 'center',
+            gap: space[1],
+            height: 26,
+            width: 'calc(100% - 16px)',
+            margin: '0 8px',
+            padding: `0 8px 0 ${8 + node.depth * INDENT}px`,
+            borderRadius: radius.control,
+            background: selected ? color.surfaceActive : undefined,
+            boxShadow: targeted ? targetRing : undefined,
+          });
+          const chevron = (open: boolean) => (
+            <IconChevron
+              size={10}
+              color={color.textTertiary}
+              style={{ flexShrink: 0, transform: open ? 'rotate(90deg)' : undefined }}
+            />
+          );
+
           if (node.type === 'project') {
             const open = !wb.collapsed.has(node.id);
             return (
               <button
                 key={node.id}
+                className="hoverable"
                 onClick={() => wb.toggleFolder(node.id)}
                 onContextMenu={(event) => menu(event, (w) => folderMenu(w, node.id, node.name, true), node.id)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: space[1],
-                  height: 24,
-                  ...ringed(node.id, 10, '0 10px'),
-                  color: color.attention,
-                }}
+                style={{ ...row(false), color: color.textPrimary }}
               >
-                {open ? '▾' : '▸'}
+                {chevron(open)}
                 <IconBranchSmall size={10} />
-                <span style={{ fontSize: fs.caption, fontWeight: 600, marginLeft: 2 }}>{node.name}</span>
+                <span style={{ fontSize: fs.caption, fontWeight: 600, marginLeft: space[0] }}>{node.name}</span>
               </button>
             );
           }
@@ -74,19 +79,13 @@ export function ExplorerPanel() {
             return (
               <button
                 key={node.id}
+                className="hoverable"
                 onClick={() => wb.toggleFolder(node.id)}
                 onContextMenu={(event) => menu(event, (w) => folderMenu(w, node.id, node.name, false), node.id)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: space[1],
-                  height: 24,
-                  ...ringed(node.id, INDENT[node.depth] ?? 22, `0 10px 0 ${INDENT[node.depth] ?? 22}px`),
-                  color: color.textSecondary,
-                }}
+                style={{ ...row(false), color: color.textSecondary }}
               >
-                {open ? '▾' : '▸'}
-                <span style={{ fontSize: fs.caption, marginLeft: 2 }}>{node.name}</span>
+                {chevron(open)}
+                <span style={{ fontSize: fs.caption, marginLeft: space[0] }}>{node.name}</span>
               </button>
             );
           }
@@ -95,30 +94,16 @@ export function ExplorerPanel() {
           const selected = wb.activePath === node.path;
           const dirty = wb.tabs.find((t) => t.path === node.path)?.dirty;
           const status = dirty ? 'M' : file?.status;
-          const targeted = wb.contextMenu?.target === node.id;
-          const framed = selected || targeted;
           return (
             <button
               key={node.id}
               className={selected ? undefined : 'hoverable'}
               onClick={() => wb.openFile(node.path)}
               onContextMenu={(event) => menu(event, (w) => fileMenu(w, node.path, 'tree'), node.id)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: space[1],
-                width: framed ? 'calc(100% - 16px)' : '100%',
-                height: selected ? 28 : 26,
-                padding: `0 10px 0 ${(INDENT[node.depth] ?? 36) - (framed ? 8 : 0)}px`,
-                margin: framed ? '0 8px' : undefined,
-                borderRadius: framed ? 7 : undefined,
-                background: selected ? 'rgba(255,255,255,0.08)' : undefined,
-                boxShadow: targeted ? targetRing : undefined,
-                color: selected ? color.textPrimary : color.textTertiary,
-              }}
+              style={{ ...row(selected), color: selected ? color.textPrimary : color.textSecondary }}
             >
-              <FileIcon kind={file?.kind ?? 'swift'} tint={selected ? '#cfd3ce' : color.textTertiary} />
-              <span style={{ fontSize: fs.caption, flex: 1, fontWeight: selected ? 500 : 400 }}>{node.name}</span>
+              <FileIcon kind={file?.kind ?? 'swift'} tint={selected ? color.textSecondary : color.textTertiary} />
+              <span style={{ fontSize: fs.caption, flex: 1, fontWeight: selected ? 600 : 400 }}>{node.name}</span>
               {status ? (
                 <span
                   style={{
@@ -304,7 +289,7 @@ function EditorPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
             aria-hidden
             style={{
               margin: 0,
-              padding: '8px 12px 8px 0',
+              padding: '8px 16px 8px 0',
               fontSize: fs.secondary,
               lineHeight: '19px',
               color: color.code,
@@ -341,7 +326,7 @@ function EditorPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
               inset: 0,
               width: '100%',
               height: '100%',
-              padding: '8px 12px 8px 0',
+              padding: '8px 16px 8px 0',
               border: 0,
               outline: 'none',
               resize: 'none',
@@ -554,9 +539,22 @@ function Pane({ node }: { node: PaneNode }) {
   const wb = useWorkbench();
 
   if (node.kind === 'leaf') {
-    if (node.pane === 'editor') return <EditorPane node={node} />;
-    if (node.pane === 'agent') return <AgentPane node={node} />;
-    return <TerminalPane node={node} />;
+    // A pane has no header to say it is focused, so the ones that are not
+    // sit back a step.
+    return (
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          minWidth: 0,
+          minHeight: 0,
+          opacity: wb.focusedPane === node.id ? 1 : 0.75,
+        }}
+      >
+        {node.pane === 'editor' ? <EditorPane node={node} /> : node.pane === 'agent' ? <AgentPane node={node} /> : <TerminalPane node={node} />}
+      </div>
+    );
   }
 
   const horizontal = node.orientation === 'horizontal';

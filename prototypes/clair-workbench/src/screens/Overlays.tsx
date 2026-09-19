@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { commands, files } from '../data';
-import { IconClaude, IconCommand, IconMarkdown, IconQuickOpen, IconSearch } from '../icons';
+import { IconClaude, IconMarkdown, IconSearch } from '../icons';
 import { useWorkbench } from '../store';
 import { color, fs, line, mono, radius, space, wash } from '../tokens';
 
@@ -160,7 +160,6 @@ function KeyChip({ children, onClick }: { children: React.ReactNode; onClick?: (
         height: 20,
         padding: '0 4px',
         borderRadius: radius.control,
-        background: color.canvas,
         border: `1px solid ${line.hairline}`,
       }}
     >
@@ -168,6 +167,35 @@ function KeyChip({ children, onClick }: { children: React.ReactNode; onClick?: (
         {children}
       </span>
     </button>
+  );
+}
+
+/** A shortcut as one keycap per key: ⌃⌘G → [⌃][⌘][G]. */
+function Keycaps({ shortcut, on }: { shortcut: string; on: boolean }) {
+  return (
+    <span style={{ display: 'flex', gap: space[0], flexShrink: 0 }}>
+      {[...shortcut].map((k, i) => (
+        <kbd
+          key={i}
+          className="tnum"
+          style={{
+            font: 'inherit',
+            minWidth: 20,
+            height: 20,
+            padding: '0 4px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: radius.control,
+            border: `1px solid ${line.hairline}`,
+            fontSize: fs.caption,
+            color: on ? color.textSecondary : color.textTertiary,
+          }}
+        >
+          {k}
+        </kbd>
+      ))}
+    </span>
   );
 }
 
@@ -217,12 +245,6 @@ export function CommandPalette() {
   return (
     <Scrim onClose={() => wb.setOverlay(null)}>
       <Panel width={560}>
-        <ShellHeader
-          icon={isCommand ? <IconCommand size={14} /> : <IconQuickOpen size={14} />}
-          title={isCommand ? 'コマンド' : 'ファイルへ移動'}
-          hint={isCommand ? 'Command Registryの全操作' : 'Project内のファイル'}
-          onClose={() => wb.setOverlay(null)}
-        />
         <QueryInput
           value={query}
           onChange={setQuery}
@@ -236,64 +258,45 @@ export function CommandPalette() {
             return (
               <button
                 key={row.key}
-                onMouseEnter={() => setIndex(i)}
+                title={row.key}
+                // Pointer movement, not entry: keyboard navigation scrolls rows
+                // under a still pointer and must not hand the highlight back.
+                onMouseMove={() => index !== i && setIndex(i)}
                 onClick={() => commit(i)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: space[2],
                   width: '100%',
-                  height: 40,
+                  height: 32,
                   padding: '0 8px',
-                  marginBottom: 2,
                   borderRadius: radius.control,
-                  background: on ? color.surfaceActive : row.danger ? wash.soft : 'transparent',
-                  boxShadow: on
-                    ? `inset 0 0 0 1px ${line.ring}`
-                    : row.danger
-                      ? 'inset 0 0 0 1px rgba(241,242,246,0.16)'
-                      : 'none',
+                  background: on ? color.surfaceActive : 'transparent',
                 }}
               >
-                <span style={{ display: 'flex', flexDirection: 'column', gap: space[0], minWidth: 0, flex: 1 }}>
-                  <span
-                    style={{
-                      fontSize: fs.secondary,
-                      fontWeight: 400,
-                      color: on ? color.textPrimary : color.textSecondary,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                    }}
-                  >
-                    {row.title}
-                  </span>
+                <span
+                  style={{
+                    fontSize: fs.secondary,
+                    color: row.danger ? color.danger : on ? color.textPrimary : color.textSecondary,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    flex: 1,
+                    textAlign: 'left',
+                  }}
+                >
+                  {row.title}
+                </span>
+                {isCommand ? (
+                  <Keycaps shortcut={row.shortcut} on={on} />
+                ) : (
                   <span
                     className="cl"
-                    style={{
-                      fontSize: fs.caption,
-                      color: color.textQuaternary,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                    }}
+                    style={{ fontSize: fs.caption, color: color.textQuaternary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}
                   >
                     {row.sub}
                   </span>
-                </span>
-                <span
-                  className="tnum"
-                  style={{
-                    fontSize: fs.caption,
-                    fontWeight: 600,
-                    color: on ? color.textSecondary : color.textQuaternary,
-                    whiteSpace: 'nowrap',
-                    minWidth: 52,
-                    textAlign: 'right',
-                  }}
-                >
-                  {row.shortcut}
-                </span>
+                )}
               </button>
             );
           })}
