@@ -12,6 +12,7 @@ let package = Package(
     .executable(name: "ClairV2MacApp", targets: ["ClairV2MacApp"]),
     .executable(name: "ClairV2MobileApp", targets: ["ClairV2MobileApp"]),
     .executable(name: "ClairDaemon", targets: ["ClairDaemon"]),
+    .executable(name: "clair", targets: ["clair"]),
   ],
   dependencies: [
     .package(path: "../ClairV2Core")
@@ -21,6 +22,12 @@ let package = Package(
       name: "ClairV2MacApp",
       dependencies: [
         .product(name: "ClairV2AppKit", package: "ClairV2Core")
+      ]
+    ),
+    .executableTarget(
+      name: "clair",
+      dependencies: [
+        .product(name: "ClairV2Workspace", package: "ClairV2Core")
       ]
     ),
     .executableTarget(

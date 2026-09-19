@@ -16,15 +16,30 @@
     public var lastError: CommandError?
     public let registry = CommandRegistry.workbench
 
-    public init() {}
+    /// V02: serves this store to `clair` CLI. Only the first window's store wins the socket.
+    // ponytail: multi-window shares one socket owner; route by window when V04 adds per-Project windows.
+    private var ipc: WorkbenchIPCServer?
 
-    public func run(_ id: String, _ input: CommandInput = [:], confirmed: Bool = false) {
-      switch registry.execute(id, input, confirmed: confirmed, state: &state) {
+    public init() {
+      let store = self
+      let server = WorkbenchIPCServer { id, input in
+        DispatchQueue.main.sync { MainActor.assumeIsolated { store.run(id, input) } }
+      }
+      if (try? server.start()) != nil { ipc = server }
+    }
+
+    isolated deinit { ipc?.stop() }
+
+    @discardableResult
+    public func run(_ id: String, _ input: CommandInput = [:], confirmed: Bool = false) -> Result<CommandResult, CommandError> {
+      let r = registry.execute(id, input, confirmed: confirmed, state: &state)
+      switch r {
       case .failure(let e) where e.code == .confirmationRequired: pending = (id, input)
       // ponytail: kept for inspection only; no canvas error surface yet (U05/U07).
       case .failure(let e): lastError = e
       case .success: lastError = nil
       }
+      return r
     }
 
     public func confirm() {
