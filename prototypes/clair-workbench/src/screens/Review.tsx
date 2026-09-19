@@ -212,6 +212,7 @@ export function ReviewPanel() {
           }}
         />
         <button
+          className="btn-primary"
           disabled={!canCommit}
           onClick={() => wb.commitStaged()}
           style={{
@@ -221,12 +222,7 @@ export function ReviewPanel() {
             height: 26,
             padding: '0 8px',
             borderRadius: radius.control,
-            background: canCommit ? color.surfaceActive : color.panel,
-            border: `1px solid ${canCommit ? line.stronger : line.hairline}`,
-            color: canCommit ? color.textPrimary : color.textQuaternary,
             fontSize: fs.caption,
-            fontWeight: 600,
-            cursor: canCommit ? 'pointer' : 'default',
           }}
         >
           コミット

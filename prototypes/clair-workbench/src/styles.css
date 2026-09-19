@@ -62,6 +62,45 @@ textarea {
   font-variant-numeric: tabular-nums;
 }
 
+/* EMPHASIS (Tokens): emphasis is lightness, never a new hue. Primary = the
+   brightest ink on the darkest surface; everything else is an outline. */
+.btn-primary {
+  background: #f1f2f6;
+  color: #282c34;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+.btn-primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
+.btn-secondary {
+  background: transparent;
+  color: #caccd2;
+  border: 1px solid rgba(241, 242, 246, 0.19);
+}
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  background: transparent;
+  color: #caccd2;
+  font-weight: 400;
+  border: 1px solid rgba(241, 242, 246, 0.19);
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Focus ring: keyboard focus only, one style for fields and buttons. Fields
+   drawn as a wrapper around a bare input use .field. */
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+.field:focus-within {
+  outline: none;
+  box-shadow: 0 0 0 1px rgba(241, 242, 246, 0.32);
+}
+.field input:focus-visible {
+  box-shadow: none;
+}
+
 /* surfaceHover / surfaceActive from the Tokens artboard. */
 .hoverable:hover {
   background: #2e333c;

@@ -11,7 +11,7 @@ import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type R
 import { targetRing, useContextMenu } from './contextMenu';
 import { files, projectTabs, type FileKind } from './data';
 import { fileMenu, projectMenu, sessionTabMenu, standInTabMenu } from './menus';
-import { color, fs, groupColor, line, mono, radius, space, withAlpha, type GroupColorKey } from './tokens';
+import { color, fs, groupColor, line, mono, radius, space, type GroupColorKey } from './tokens';
 import {
   IconBranch,
   IconBug,
@@ -288,6 +288,9 @@ function Tab({
           </svg>
         </span>
       ) : null}
+      {active ? (
+        <span style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 1.5, background: color.textPrimary }} />
+      ) : null}
     </button>
   );
 }
@@ -322,17 +325,15 @@ function FileTab({ path, active }: { path: string; active: boolean }) {
  * working in just hides its tab strip, the way collapsing the active group in
  * Chrome leaves the page alone.
  *
- * The group's colour lives on the chip itself (its fill and border), not as
- * a separate round swatch. Right-click opens the chip's context menu, whose
+ * The group's colour is a 6px dot before the name — no pill, no underline.
+ * Right-click opens the chip's context menu, whose
  * first row is the colour swatches — how Chrome puts a tab group's colour
- * picker behind a right-click on the group's own pill rather than a second
- * control next to it. The same colour is what the underline below the whole
- * group is drawn in.
+ * picker behind a right-click on the group's own chip rather than a second
+ * control next to it.
  */
 function ProjectChip({
   project,
   label,
-  active,
   collapsed,
   colorKey,
   renaming,
@@ -344,7 +345,6 @@ function ProjectChip({
 }: {
   project: string;
   label: string;
-  active: boolean;
   collapsed: boolean;
   colorKey: GroupColorKey;
   renaming: boolean;
@@ -355,36 +355,23 @@ function ProjectChip({
   onCancelRename: () => void;
 }) {
   const swatch = groupColor[colorKey];
-  const uncoloured = colorKey === 'gray';
-  const background = uncoloured
-    ? active
-      ? 'rgba(255,255,255,0.08)'
-      : 'transparent'
-    : withAlpha(swatch, active ? 0.22 : 0.1);
-  const border = uncoloured
-    ? active
-      ? 'rgba(255,255,255,0.12)'
-      : 'transparent'
-    : withAlpha(swatch, active ? 0.55 : 0.28);
 
+  // Name-field frame only — the chip itself is a dot and a name, no pill.
   const frame: CSSProperties = {
     display: 'flex',
     alignItems: 'center',
     height: 26,
     padding: '0 8px',
     borderRadius: radius.card,
-    background,
-    border: `1px solid ${border}`,
+    background: color.chrome,
+    border: `1px solid ${line.ring}`,
     alignSelf: 'center',
     flexShrink: 0,
-    // The chip already has a border of its own, so the "menu is open on
-    // this" ring sits outside it instead of inset.
-    boxShadow: targeted ? `0 0 0 2px ${color.chrome}, 0 0 0 3px ${line.ring}` : undefined,
   };
   const text: CSSProperties = {
     fontSize: fs.secondary,
     fontWeight: 600,
-    color: active ? color.chromeInk : uncoloured ? color.textQuaternary : color.textTertiary,
+    color: color.textSecondary,
     whiteSpace: 'nowrap',
   };
 
@@ -397,8 +384,19 @@ function ProjectChip({
       onClick={onToggle}
       onContextMenu={onMenu}
       title={`${project} タブグループを${collapsed ? '展開' : '折りたたむ'}（右クリックでメニュー）`}
-      style={frame}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: space[2],
+        height: 26,
+        padding: '0 8px',
+        alignSelf: 'center',
+        flexShrink: 0,
+        borderRadius: radius.card,
+        boxShadow: targeted ? `0 0 0 2px ${color.chrome}, 0 0 0 3px ${line.ring}` : undefined,
+      }}
     >
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: swatch, flexShrink: 0 }} />
       <span style={text}>{label}</span>
     </button>
   );
@@ -467,16 +465,13 @@ function ChipNameField({
  * something to show when expanded per the "make every project's tabs
  * visible" request — not real openable files.
  *
- * A 2px bar in the group's colour runs along the bottom of the whole group
- * (chip + tabs together, not per-tab) so it's visible at a glance where one
- * project's tabs end and the next begins — the boundary the vertical
- * dividers alone don't make obvious.
+ * The group is told apart by its colour dot alone; only the active tab
+ * carries an underline.
  */
 function ProjectGroup({ project }: { project: string }) {
   const wb = useWorkbench();
   const menu = useContextMenu();
   const targeted = (id: string) => wb.contextMenu?.target === id;
-  const active = project === wb.activeProject;
   const collapsed = wb.collapsedProjects.has(project);
   const colorKey = wb.groupColors[project] ?? 'gray';
 
@@ -539,7 +534,6 @@ function ProjectGroup({ project }: { project: string }) {
       <ProjectChip
         project={project}
         label={wb.projectLabels[project] ?? project}
-        active={active}
         collapsed={collapsed}
         colorKey={colorKey}
         renaming={wb.renamingProject === project}
@@ -567,7 +561,6 @@ function ProjectGroup({ project }: { project: string }) {
           ))}
         </div>
       </div>
-      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 2, background: groupColor[colorKey], borderRadius: '1px 1px 0 0' }} />
     </div>
   );
 }

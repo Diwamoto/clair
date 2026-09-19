@@ -17,8 +17,8 @@ function Switch({ on, onClick }: { on: boolean; onClick: () => void }) {
         position: 'relative',
         width: 34,
         height: 20,
-        borderRadius: radius.overlay,
-        background: on ? '#6b7280' : '#494d56',
+        borderRadius: radius.pill,
+        background: on ? color.textSecondary : color.surfaceActive,
         flexShrink: 0,
       }}
     >
@@ -30,7 +30,7 @@ function Switch({ on, onClick }: { on: boolean; onClick: () => void }) {
           width: 14,
           height: 14,
           borderRadius: '50%',
-          background: on ? color.textPrimary : color.textSecondary,
+          background: on ? color.canvas : color.textTertiary,
           transition: 'left 120ms ease',
         }}
       />

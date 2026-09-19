@@ -94,17 +94,17 @@ export function SessionsMain() {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'center' }}>
-              {s.attention ? (
-                <IconBellFilled size={13} color={color.textPrimary} />
-              ) : s.state === 'exit 1' ? (
-                <IconClose size={12} color={color.textTertiary} />
+              {s.state === 'exit 1' ? (
+                <IconClose size={12} color={color.danger} />
               ) : (
                 <span
                   style={{
                     width: 7,
                     height: 7,
                     borderRadius: '50%',
-                    background: s.state === '待機' ? color.textQuaternary : color.textSecondary,
+                    boxSizing: 'border-box',
+                    background: s.attention ? color.attention : s.state === '待機' ? 'transparent' : color.textPrimary,
+                    border: s.state === '待機' ? `1px solid ${color.textQuaternary}` : undefined,
                   }}
                 />
               )}
@@ -115,19 +115,7 @@ export function SessionsMain() {
               <span style={{ fontWeight: 600, color: s.icon === 'zsh' || s.icon === 'opencode' ? color.textSecondary : color.textPrimary }}>
                 {s.agent}
               </span>
-              <Chip
-                style={{
-                  background:
-                    s.state === '入力待ち'
-                      ? wash.strongest
-                      : s.state === '待機'
-                        ? 'rgba(155,161,155,0.12)'
-                        : wash.selected,
-                  color: s.state === '待機' ? color.textTertiary : s.state === 'exit 1' ? color.textPrimary : color.textSecondary,
-                }}
-              >
-                {s.state}
-              </Chip>
+              <span style={{ fontSize: fs.caption, color: color.textTertiary }}>{s.state}</span>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: space[1] }}>

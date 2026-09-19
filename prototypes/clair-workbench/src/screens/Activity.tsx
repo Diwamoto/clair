@@ -212,36 +212,29 @@ export function ActivityMain() {
                     <span>リスク ローカルのテストコマンドを実行</span>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: space[2], padding: '0 16px 12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: space[2], padding: '0 16px 12px' }}>
                   {(
                     [
-                      ['拒否', line.hairline, 'transparent', color.textTertiary, 400],
-                      ['セッション中は許可', line.strong, wash.medium, color.textSecondary, 400],
-                      ['今回だけ許可', line.stronger, wash.strong, color.textPrimary, 600],
+                      ['拒否', 'btn-secondary'],
+                      ['セッション中は許可', 'btn-secondary'],
+                      ['今回だけ許可', 'btn-primary'],
                     ] as const
-                  ).map(([label, border, bg, fg, weight]) => {
-                    const chosen = wb.approvalDecision === label;
-                    return (
-                      <button
-                        key={label}
-                        onClick={() => wb.setApprovalDecision(label)}
-                        style={{
-                          flex: 1,
-                          textAlign: 'center',
-                          minHeight: 30,
-                          lineHeight: '30px',
-                          border: `1px solid ${chosen ? line.ring : border}`,
-                          borderRadius: radius.control,
-                          background: chosen ? color.surfaceActive : bg,
-                          color: chosen ? color.textPrimary : fg,
-                          fontSize: fs.caption,
-                          fontWeight: weight,
-                        }}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
+                  ).map(([label, cls]) => (
+                    <button
+                      key={label}
+                      className={cls}
+                      onClick={() => wb.setApprovalDecision(label)}
+                      style={{
+                        textAlign: 'center',
+                        minHeight: 30,
+                        padding: '0 12px',
+                        borderRadius: radius.control,
+                        fontSize: fs.caption,
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
               </div>
               {wb.approvalDecision ? (

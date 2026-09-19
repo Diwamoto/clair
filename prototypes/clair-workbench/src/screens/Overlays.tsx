@@ -113,6 +113,7 @@ function QueryInput({
   return (
     <div style={{ padding: '8px 12px 8px 12px' }}>
       <div
+        className="field"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -949,13 +950,12 @@ export function AddAgentOverlay() {
           </span>
           <div style={{ display: 'flex', gap: space[2] }}>
             <button
+              className="btn-secondary"
               onClick={() => wb.setOverlay(null)}
               style={{
                 minHeight: 32,
                 padding: '0 12px',
-                border: `1px solid ${line.strong}`,
                 borderRadius: radius.control,
-                color: color.textTertiary,
                 fontSize: fs.caption,
                 display: 'flex',
                 alignItems: 'center',
@@ -964,6 +964,7 @@ export function AddAgentOverlay() {
               キャンセル
             </button>
             <button
+              className="btn-primary"
               onClick={() => {
                 wb.setOverlay(null);
                 wb.setScreen(place === 'ターミナル' ? 'sessions' : 'activity');
@@ -972,10 +973,7 @@ export function AddAgentOverlay() {
                 minHeight: 32,
                 padding: '0 12px',
                 borderRadius: radius.control,
-                background: color.textPrimary,
-                color: '#121416',
                 fontSize: fs.caption,
-                fontWeight: 600,
                 display: 'flex',
                 alignItems: 'center',
               }}
