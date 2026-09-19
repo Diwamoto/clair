@@ -1,0 +1,121 @@
+import Foundation
+
+/// Pane layout model for the Mac AppShell (checklist §3.1). Pure value type so
+/// split/close/maximize/equalize/focus rules are testable without any UI.
+public enum PaneKind: String, Sendable, Equatable {
+  case editor, agent, terminal
+}
+
+public struct PaneTree: Sendable, Equatable {
+  public enum Axis: Sendable, Equatable { case horizontal, vertical }
+
+  public indirect enum Node: Sendable, Equatable {
+    case leaf(id: Int, kind: PaneKind)
+    case split(axis: Axis, ratio: Double, first: Node, second: Node)
+  }
+
+  public static let ratioRange: ClosedRange<Double> = 0.08...0.92
+
+  public private(set) var root: Node
+  public private(set) var focused: Int
+  public private(set) var maximized: Int?
+  private var nextID: Int
+
+  /// editor (left, 0.62) | agent (top right) / terminal (bottom right, 0.55)
+  public init() {
+    root = .split(
+      axis: .horizontal, ratio: 0.62,
+      first: .leaf(id: 1, kind: .editor),
+      second: .split(
+        axis: .vertical, ratio: 0.55,
+        first: .leaf(id: 2, kind: .agent),
+        second: .leaf(id: 3, kind: .terminal)))
+    focused = 1
+    nextID = 4
+  }
+
+  /// Leaves in first-to-last (appearance) order.
+  public var leaves: [(id: Int, kind: PaneKind)] { Self.leaves(root) }
+
+  private static func leaves(_ n: Node) -> [(id: Int, kind: PaneKind)] {
+    switch n {
+    case .leaf(let id, let kind): return [(id, kind)]
+    case .split(_, _, let a, let b): return leaves(a) + leaves(b)
+    }
+  }
+
+  public mutating func setRatio(splitContaining id: Int, _ ratio: Double) {
+    root = Self.map(root) { n in
+      guard case .split(let ax, _, let a, let b) = n, Self.leaves(a).contains(where: { $0.id == id })
+      else { return nil }
+      return .split(axis: ax, ratio: Self.clamp(ratio), first: a, second: b)
+    }
+  }
+
+  /// Splits the focused pane; the new pane copies its kind and takes focus.
+  public mutating func splitFocused(_ axis: Axis) {
+    let new = nextID
+    nextID += 1
+    let target = focused
+    root = Self.map(root) { n in
+      guard case .leaf(let id, let kind) = n, id == target else { return nil }
+      return .split(axis: axis, ratio: 0.5, first: n, second: .leaf(id: new, kind: kind))
+    }
+    focused = new
+    maximized = nil
+  }
+
+  /// Closes the focused pane; the last pane cannot be closed.
+  public mutating func closeFocused() {
+    let all = leaves
+    guard all.count > 1, let i = all.firstIndex(where: { $0.id == focused }) else { return }
+    let target = focused
+    root = Self.remove(root, target) ?? root
+    focused = all[i == 0 ? 1 : i - 1].id
+    if maximized == target { maximized = nil }
+  }
+
+  public mutating func toggleMaximize() { maximized = maximized == nil ? focused : nil }
+
+  public mutating func equalize() {
+    root = Self.map(root) { n in
+      guard case .split(let ax, _, let a, let b) = n else { return nil }
+      return .split(axis: ax, ratio: 0.5, first: a, second: b)
+    }
+  }
+
+  /// Cycles focus through leaves in appearance order (`⌃⌘→`).
+  public mutating func focusNext() {
+    let all = leaves
+    guard let i = all.firstIndex(where: { $0.id == focused }) else { return }
+    focused = all[(i + 1) % all.count].id
+    if maximized != nil { maximized = focused }
+  }
+
+  public mutating func focus(_ id: Int) {
+    if leaves.contains(where: { $0.id == id }) { focused = id }
+  }
+
+  private static func clamp(_ r: Double) -> Double { min(max(r, ratioRange.lowerBound), ratioRange.upperBound) }
+
+  /// Bottom-up rewrite; `f` returns a replacement or nil to keep the node.
+  private static func map(_ n: Node, _ f: (Node) -> Node?) -> Node {
+    var n = n
+    if case .split(let ax, let r, let a, let b) = n {
+      n = .split(axis: ax, ratio: r, first: map(a, f), second: map(b, f))
+    }
+    return f(n) ?? n
+  }
+
+  private static func remove(_ n: Node, _ id: Int) -> Node? {
+    switch n {
+    case .leaf(let i, _): return i == id ? nil : n
+    case .split(let ax, let r, let a, let b):
+      switch (remove(a, id), remove(b, id)) {
+      case (nil, let s?), (let s?, nil): return s
+      case (let x?, let y?): return .split(axis: ax, ratio: r, first: x, second: y)
+      default: return nil
+      }
+    }
+  }
+}
