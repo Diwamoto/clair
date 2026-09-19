@@ -105,3 +105,11 @@ Risk metadataをcommand authorが定義し、runtime targetをClairが検査す�
 
 - [Product principles](../product/principles.md)
 - [Product scope](../product/scope.md)
+
+## State owner(2026-09-19 追記、V01)
+
+v2 の workbench state(pane tree、tab、Project 選択、settings、palette)は起動中 GUI process の `ClairV2WorkbenchStore` が所有する。
+`ClairDaemon` は PTY/session/journal の owner のまま、workbench state は持たない。`clair` CLI(V02)と MCP(V03)は
+local IPC 経由で GUI の `CommandRegistry.workbench.execute` を呼ぶ。GUI が起動していなければ workbench command は失敗させる。
+Registry 本体は UI 非依存(`ClairV2Workspace`)なので、background service へ移すときは store の置き場所だけを変える。
+詳細は [V01 invariants](../plans/clair-v2-v01-command-registry.md)。

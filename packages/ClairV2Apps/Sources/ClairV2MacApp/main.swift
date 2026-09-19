@@ -7,6 +7,7 @@ struct ClairV2MacApp: App {
     WindowGroup("Clair v2") {
       ClairV2AppShell()
     }
+    .commands { ClairV2CommandMenu() }
     WindowGroup("Pair a device", id: "clair-v2-pairing") {
       ClairV2PairingBootstrapView()
     }

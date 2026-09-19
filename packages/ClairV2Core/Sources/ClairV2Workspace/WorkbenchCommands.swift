@@ -1,0 +1,295 @@
+import Foundation
+
+// V01: ADR-0007 typed Command Registry. Every Mac workbench operation is a
+// command here; palette, menu and shortcuts are projections of `commands`,
+// and a test/CLI caller runs the exact same `execute`. State owner is the GUI
+// process (ADR-0007 "State owner" addendum); this file is UI-free so the same
+// registry can later be served over IPC (V02) and MCP (V03).
+// Invariants/test matrix: docs/plans/clair-v2-v01-command-registry.md.
+
+public struct WorkbenchFile: Sendable, Codable, Equatable {
+  public let path: String
+  public let status: String?
+}
+
+public struct WorkbenchState: Sendable, Codable, Equatable {
+  public enum Palette: String, Sendable, Codable { case commands, files }
+
+  public static let sections = ["一般", "AIプロバイダー", "エディタ", "ターミナル", "モバイル", "アップデート"]
+  public static let toggleKeys = ["restoreLayout", "confirmClose", "showQuota"]
+
+  // ponytail: static sample tree mirroring the workbench `files`; real file system binding is V04.
+  public var files = [
+    WorkbenchFile(path: "apple/ClairApp/ContentView.swift", status: "M"),
+    WorkbenchFile(path: "apple/ClairApp/ProjectWorkspace.swift", status: "M"),
+    WorkbenchFile(path: "apple/ClairApp/PaneSplit.swift", status: "A"),
+    WorkbenchFile(path: "apple/ClairApp/SessionRail.swift", status: "A"),
+    WorkbenchFile(path: "docs/architecture/pane-layout.md", status: nil),
+  ]
+  public var projects = ["clair", "ccedit", "clair-releases"]  // ponytail: sample list; Project model is V04.
+  public var project = "clair"
+  public var tree = PaneTree()
+  public var tabs: [String] = ["apple/ClairApp/ContentView.swift"]
+  public var active: String? = "apple/ClairApp/ContentView.swift"
+  public var dirty: Set<String> = []
+  public var collapsed: Set<String> = []
+  public var settingsOpen = false
+  public var section = "一般"
+  public var palette: Palette?
+  public var toggles = ["restoreLayout": true, "confirmClose": true, "showQuota": false]
+
+  public init() {}
+}
+
+/// Fixed risk class. Preflight may only raise it (ADR-0007).
+public enum CommandRisk: Int, Sendable, Codable, Comparable {
+  case read, additive, write, destructive, external
+  public static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
+  public var label: String { ["読み取り", "追加", "書き込み", "破壊的", "外部"][rawValue] }
+}
+
+public enum CommandArg: Sendable, Codable, Equatable {
+  case string(String), int(Int), double(Double), bool(Bool)
+
+  public init(from decoder: Decoder) throws {
+    let c = try decoder.singleValueContainer()
+    if let v = try? c.decode(Bool.self) { self = .bool(v) }
+    else if let v = try? c.decode(Int.self) { self = .int(v) }
+    else if let v = try? c.decode(Double.self) { self = .double(v) }
+    else { self = .string(try c.decode(String.self)) }
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var c = encoder.singleValueContainer()
+    switch self {
+    case .string(let v): try c.encode(v)
+    case .int(let v): try c.encode(v)
+    case .double(let v): try c.encode(v)
+    case .bool(let v): try c.encode(v)
+    }
+  }
+
+  var string: String? { if case .string(let v) = self { v } else { nil } }
+  var int: Int? { if case .int(let v) = self { v } else { nil } }
+  var bool: Bool? { if case .bool(let v) = self { v } else { nil } }
+  var double: Double? {
+    switch self { case .double(let v): v; case .int(let v): Double(v); default: nil }
+  }
+}
+
+public typealias CommandInput = [String: CommandArg]
+
+public struct CommandParam: Sendable, Codable, Equatable {
+  public enum Kind: String, Sendable, Codable { case string, int, double, bool }
+  public let name: String
+  public let kind: Kind
+  public let required: Bool
+  public let allowed: [String]?
+
+  public init(_ name: String, _ kind: Kind, required: Bool = true, allowed: [String]? = nil) {
+    self.name = name; self.kind = kind; self.required = required; self.allowed = allowed
+  }
+}
+
+public enum CommandResult: Sendable, Codable, Equatable {
+  case ok
+  case pane(Int)
+  case snapshot(WorkbenchState)
+}
+
+public struct CommandError: Error, Sendable, Codable, Equatable {
+  public enum Code: String, Sendable, Codable { case unknownCommand, invalidInput, preconditionFailed, confirmationRequired }
+  public let code: Code
+  public let message: String
+  public init(_ code: Code, _ message: String) { self.code = code; self.message = message }
+}
+
+public struct CommandDescriptor: Sendable, Codable, Equatable {
+  public let id: String
+  public let title: String
+  public let risk: CommandRisk
+  public let aiAvailable: Bool
+  public let params: [CommandParam]
+  /// Default shortcut as display string, e.g. `⌃⌘⇧D`. Last character is the key.
+  public let shortcut: String?
+  /// Listed in the ⌘K palette (UI-only commands and ones needing arguments are not).
+  public let inPalette: Bool
+}
+
+public struct PaletteItem: Sendable, Equatable {
+  public let title: String
+  public let hint: String
+  public let id: String
+  public let input: CommandInput
+}
+
+public struct CommandRegistry: Sendable {
+  struct Command: Sendable {
+    let descriptor: CommandDescriptor
+    /// Throws for unmet preconditions; returns the effective risk.
+    let preflight: @Sendable (WorkbenchState, CommandInput) throws(CommandError) -> CommandRisk
+    let run: @Sendable (inout WorkbenchState, CommandInput) -> CommandResult
+  }
+
+  private let table: [String: Command]
+  public let commands: [CommandDescriptor]
+
+  init(_ list: [Command]) {
+    commands = list.map(\.descriptor)
+    table = Dictionary(uniqueKeysWithValues: list.map { ($0.descriptor.id, $0) })
+  }
+
+  /// Validates input against the schema and returns the effective risk (never below the fixed one).
+  public func preflight(_ id: String, _ input: CommandInput = [:], _ state: WorkbenchState) -> Result<CommandRisk, CommandError> {
+    guard let c = table[id] else { return .failure(CommandError(.unknownCommand, id)) }
+    do {
+      try Self.validate(input, c.descriptor.params)
+      return .success(max(c.descriptor.risk, try c.preflight(state, input)))
+    } catch { return .failure(error) }
+  }
+
+  /// Runs a command. `destructive`/`external` effective risk requires `confirmed` (native UI approval).
+  @discardableResult
+  public func execute(_ id: String, _ input: CommandInput = [:], confirmed: Bool = false, state: inout WorkbenchState) -> Result<CommandResult, CommandError> {
+    switch preflight(id, input, state) {
+    case .failure(let e): return .failure(e)
+    case .success(let risk) where risk >= .destructive && !confirmed:
+      return .failure(CommandError(.confirmationRequired, "\(id) is \(risk.label)"))
+    case .success: return .success(table[id]!.run(&state, input))
+    }
+  }
+
+  public func paletteItems(_ kind: WorkbenchState.Palette, query: String, state: WorkbenchState) -> [PaletteItem] {
+    let q = query.lowercased()
+    switch kind {
+    case .commands:
+      return commands.filter { $0.inPalette && (q.isEmpty || $0.title.lowercased().contains(q)) }
+        .map { PaletteItem(title: $0.title, hint: $0.shortcut ?? "", id: $0.id, input: [:]) }
+    case .files:
+      return state.files.filter { q.isEmpty || $0.path.lowercased().contains(q) }
+        .map { PaletteItem(title: $0.path, hint: "", id: "tab.open", input: ["path": .string($0.path)]) }
+    }
+  }
+
+  private static func validate(_ input: CommandInput, _ params: [CommandParam]) throws(CommandError) {
+    for key in input.keys where !params.contains(where: { $0.name == key }) {
+      throw CommandError(.invalidInput, "unknown argument \(key)")
+    }
+    for p in params {
+      guard let v = input[p.name] else {
+        if p.required { throw CommandError(.invalidInput, "missing \(p.name)") }
+        continue
+      }
+      let ok: Bool
+      switch p.kind {
+      case .string: ok = v.string.map { p.allowed?.contains($0) ?? true } ?? false
+      case .int: ok = v.int != nil
+      case .double: ok = v.double != nil
+      case .bool: ok = v.bool != nil
+      }
+      if !ok { throw CommandError(.invalidInput, "\(p.name) must be \(p.kind.rawValue)\(p.allowed.map { " in \($0)" } ?? "")") }
+    }
+  }
+}
+
+// MARK: - Workbench commands
+
+extension CommandRegistry {
+  private static func cmd(
+    _ id: String, _ title: String, _ risk: CommandRisk, ai: Bool = true, params: [CommandParam] = [],
+    shortcut: String? = nil, palette: Bool? = nil,
+    preflight: @escaping @Sendable (WorkbenchState, CommandInput) throws(CommandError) -> CommandRisk = { _, _ in .read },
+    _ run: @escaping @Sendable (inout WorkbenchState, CommandInput) -> CommandResult
+  ) -> Command {
+    Command(
+      descriptor: CommandDescriptor(
+        id: id, title: title, risk: risk, aiAvailable: ai, params: params, shortcut: shortcut,
+        inPalette: palette ?? !params.contains(where: \.required)),
+      preflight: preflight, run: run)
+  }
+
+  private static func require(_ ok: Bool, _ message: @autoclosure () -> String) throws(CommandError) {
+    if !ok { throw CommandError(.preconditionFailed, message()) }
+  }
+
+  public static let workbench = CommandRegistry([
+    cmd("pane.splitRight", "ペインを右に分割", .additive, shortcut: "⌃⌘D") { s, _ in
+      s.tree.splitFocused(.horizontal); return .pane(s.tree.focused)
+    },
+    cmd("pane.splitDown", "ペインを下に分割", .additive, shortcut: "⌃⌘⇧D") { s, _ in
+      s.tree.splitFocused(.vertical); return .pane(s.tree.focused)
+    },
+    cmd("pane.focusNext", "ペインのフォーカスを右へ", .read, shortcut: "⌃⌘→") { s, _ in s.tree.focusNext(); return .ok },
+    cmd("pane.focus", "ペインにフォーカス", .read, params: [CommandParam("id", .int)],
+        preflight: { s, i throws(CommandError) in
+          try require(s.tree.leaves.contains { $0.id == i["id"]?.int }, "no pane \(i["id"]!)"); return .read
+        }) { s, i in s.tree.focus(i["id"]!.int!); return .ok },
+    cmd("pane.maximize", "ペインを最大化", .read, shortcut: "⌃⌘M") { s, _ in s.tree.toggleMaximize(); return .ok },
+    cmd("pane.equalize", "分割を均等化", .read, shortcut: "⌃⌘=") { s, _ in s.tree.equalize(); return .ok },
+    cmd("pane.setRatio", "分割比を変更", .read, params: [CommandParam("id", .int), CommandParam("ratio", .double)]) { s, i in
+      s.tree.setRatio(splitContaining: i["id"]!.int!, i["ratio"]!.double!); return .ok
+    },
+    // Closing the last editor pane while buffers are dirty discards them → destructive.
+    cmd("pane.close", "ペインを閉じる", .write, shortcut: "⌃⌘W",
+        preflight: { s, _ throws(CommandError) in
+          let leaves = s.tree.leaves
+          try require(leaves.count > 1, "the last pane cannot be closed")
+          let editors = leaves.filter { $0.kind == .editor }
+          return editors.count == 1 && editors[0].id == s.tree.focused && !s.dirty.isEmpty ? .destructive : .write
+        }) { s, _ in s.tree.closeFocused(); return .ok },
+    cmd("tab.open", "ファイルを開く", .read, params: [CommandParam("path", .string)],
+        preflight: { s, i throws(CommandError) in
+          try require(s.files.contains { $0.path == i["path"]?.string }, "no file \(i["path"]!)"); return .read
+        }) { s, i in
+      let p = i["path"]!.string!
+      if !s.tabs.contains(p) { s.tabs.append(p) }
+      s.active = p; s.settingsOpen = false; s.palette = nil
+      return .ok
+    },
+    cmd("tab.activate", "タブを切り替え", .read, params: [CommandParam("path", .string)],
+        preflight: { s, i throws(CommandError) in
+          try require(s.tabs.contains(i["path"]!.string!), "no tab \(i["path"]!)"); return .read
+        }) { s, i in s.active = i["path"]!.string!; return .ok },
+    // Omitted `path` means the active tab. A dirty tab discards its buffer → destructive.
+    cmd("tab.close", "タブを閉じる", .write, params: [CommandParam("path", .string, required: false)],
+        preflight: { s, i throws(CommandError) in
+          let p = i["path"]?.string ?? s.active
+          try require(p.map(s.tabs.contains) ?? false, "no tab to close")
+          return s.dirty.contains(p!) ? .destructive : .write
+        }) { s, i in
+      let p = i["path"]?.string ?? s.active!
+      let idx = s.tabs.firstIndex(of: p)!
+      s.tabs.remove(at: idx); s.dirty.remove(p)
+      if s.active == p { s.active = s.tabs.isEmpty ? nil : s.tabs[max(idx - 1, 0)] }
+      return .ok
+    },
+    cmd("file.save", "保存", .write, shortcut: "⌘S",
+        preflight: { s, _ throws(CommandError) in try require(s.active != nil, "no active file"); return .write }) { s, _ in
+      s.dirty.remove(s.active!); return .ok  // ponytail: dirty flag only; real buffer write lands with V04/V05 file binding.
+    },
+    cmd("project.switch", "プロジェクトを切り替え", .read, params: [CommandParam("name", .string)],
+        preflight: { s, i throws(CommandError) in
+          try require(s.projects.contains(i["name"]!.string!), "no project \(i["name"]!)"); return .read
+        }) { s, i in s.project = i["name"]!.string!; return .ok },
+    cmd("explorer.toggle", "フォルダを開閉", .read, params: [CommandParam("path", .string)]) { s, i in
+      let p = i["path"]!.string!
+      if !s.collapsed.insert(p).inserted { s.collapsed.remove(p) }
+      return .ok
+    },
+    cmd("settings.open", "設定を開く", .read, params: [CommandParam("section", .string, required: false, allowed: WorkbenchState.sections)],
+        shortcut: "⌘,") { s, i in
+      s.settingsOpen = true; s.palette = nil
+      if let sec = i["section"]?.string { s.section = sec }
+      return .ok
+    },
+    cmd("settings.close", "設定を閉じる", .read) { s, _ in s.settingsOpen = false; return .ok },
+    cmd("settings.set", "設定を変更", .write, ai: false,
+        params: [CommandParam("key", .string, allowed: WorkbenchState.toggleKeys), CommandParam("value", .bool)]) { s, i in
+      s.toggles[i["key"]!.string!] = i["value"]!.bool!; return .ok
+    },
+    cmd("palette.commands", "コマンドパレット", .read, ai: false, shortcut: "⌘K", palette: false) { s, _ in s.palette = .commands; return .ok },
+    cmd("palette.files", "ファイルへ移動", .read, ai: false, shortcut: "⌘P", palette: false) { s, _ in s.palette = .files; return .ok },
+    cmd("palette.close", "パレットを閉じる", .read, ai: false, palette: false) { s, _ in s.palette = nil; return .ok },
+    cmd("state.snapshot", "状態を取得", .read, palette: false) { s, _ in .snapshot(s) },
+  ])
+}

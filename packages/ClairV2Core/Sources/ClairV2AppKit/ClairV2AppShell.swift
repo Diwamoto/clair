@@ -1,57 +1,80 @@
 #if os(macOS)
   import ClairV2DesignSystem
   import ClairV2Workspace
+  import Observation
   import SwiftUI
 
   private typealias C = DesignTokens.Color
   private typealias L = DesignTokens.Line
 
-  private struct ShellFile: Sendable { let path: String; let status: Character? }
-  // ponytail: static sample tree mirroring the workbench `files`; real catalog binding (H02) comes with U05.
-  private let sampleFiles = [
-    ShellFile(path: "apple/ClairApp/ContentView.swift", status: "M"),
-    ShellFile(path: "apple/ClairApp/ProjectWorkspace.swift", status: "M"),
-    ShellFile(path: "apple/ClairApp/PaneSplit.swift", status: "A"),
-    ShellFile(path: "apple/ClairApp/SessionRail.swift", status: "A"),
-    ShellFile(path: "docs/architecture/pane-layout.md", status: nil),
-  ]
+  /// V01: the GUI process owns `WorkbenchState` (ADR-0007 state owner). Every
+  /// mutation goes through `CommandRegistry.workbench`; a destructive effective
+  /// risk parks the call in `pending` until the native confirmation approves it.
+  @MainActor @Observable public final class ClairV2WorkbenchStore {
+    public var state = WorkbenchState()
+    public var pending: (id: String, input: CommandInput)?
+    public var lastError: CommandError?
+    public let registry = CommandRegistry.workbench
 
-  private struct Command: Sendable { let title: String; let shortcut: String; let risk: String; let run: @Sendable (inout ShellState) -> Void }
+    public init() {}
 
-  private struct ShellState: Sendable {
-    var tree = PaneTree()
-    var project = "clair"
-    var tabs = [sampleFiles[0].path]
-    var active = sampleFiles[0].path
-    var dirty: Set<String> = []
-    var collapsed: Set<String> = []
-    var settings = false
-    var section = "一般"
-    var palette: Palette?
-    var toggles: [String: Bool] = ["restoreLayout": true, "confirmClose": true, "showQuota": false]
-    enum Palette { case commands, files }
+    public func run(_ id: String, _ input: CommandInput = [:], confirmed: Bool = false) {
+      switch registry.execute(id, input, confirmed: confirmed, state: &state) {
+      case .failure(let e) where e.code == .confirmationRequired: pending = (id, input)
+      // ponytail: kept for inspection only; no canvas error surface yet (U05/U07).
+      case .failure(let e): lastError = e
+      case .success: lastError = nil
+      }
+    }
 
-    mutating func open(_ path: String) {
-      if !tabs.contains(path) { tabs.append(path) }
-      active = path; settings = false; palette = nil
+    public func confirm() {
+      guard let p = pending else { return }
+      pending = nil
+      run(p.id, p.input, confirmed: true)
     }
   }
 
-  private let commands: [Command] = [
-    Command(title: "ペインを右に分割", shortcut: "⌃⌘D", risk: "追加") { $0.tree.splitFocused(.horizontal) },
-    Command(title: "ペインを下に分割", shortcut: "⌃⌘⇧D", risk: "追加") { $0.tree.splitFocused(.vertical) },
-    Command(title: "ペインのフォーカスを右へ", shortcut: "⌃⌘→", risk: "読み取り") { $0.tree.focusNext() },
-    Command(title: "ペインを最大化", shortcut: "⌃⌘M", risk: "読み取り") { $0.tree.toggleMaximize() },
-    Command(title: "分割を均等化", shortcut: "⌃⌘=", risk: "読み取り") { $0.tree.equalize() },
-    Command(title: "ペインを閉じる", shortcut: "⌃⌘W", risk: "破壊的") { $0.tree.closeFocused() },
-    Command(title: "設定を開く", shortcut: "⌘,", risk: "読み取り") { $0.settings = true },
-  ]
+  private struct StoreKey: FocusedValueKey { typealias Value = ClairV2WorkbenchStore }
+  extension FocusedValues {
+    var clairWorkbench: ClairV2WorkbenchStore? {
+      get { self[StoreKey.self] }
+      set { self[StoreKey.self] = newValue }
+    }
+  }
+
+  /// Menu bar projection of the registry; default shortcuts live here, so the
+  /// hidden-button shortcut layer is gone.
+  public struct ClairV2CommandMenu: Commands {
+    @FocusedValue(\.clairWorkbench) private var store
+    public init() {}
+
+    public var body: some Commands {
+      CommandMenu("Clair") {
+        ForEach(CommandRegistry.workbench.commands.filter { $0.shortcut != nil }, id: \.id) { d in
+          Button(d.title) { store?.run(d.id) }
+            .keyboardShortcut(Self.shortcut(d.shortcut!))
+            .disabled(store == nil)
+        }
+      }
+    }
+
+    /// `⌃⌘⇧D` → modifiers from the symbols, key from the last character.
+    static func shortcut(_ s: String) -> KeyboardShortcut {
+      var m: EventModifiers = []
+      for (sym, mod) in [("⌘", EventModifiers.command), ("⌃", .control), ("⇧", .shift), ("⌥", .option)] where s.contains(sym) {
+        m.insert(mod)
+      }
+      let k = s.last!
+      return KeyboardShortcut(k == "→" ? .rightArrow : KeyEquivalent(Character(k.lowercased())), modifiers: m)
+    }
+  }
 
   /// U04: AppShell chrome (checklist §3) — titlebar 48 + sidebar 286 + main +
   /// status 26. Built once; only sidebar panel and main are swapped. Pane
   /// contents other than the terminal are placeholders owned by U05/U06.
   public struct ClairV2AppShell: View {
-    @State private var st = ShellState()
+    @State private var store = ClairV2WorkbenchStore()
+    private var st: WorkbenchState { store.state }
     @State private var query = ""
     @State private var selection = 0
     private let projects: [(name: String, color: SwiftUI.Color)] = [
@@ -66,7 +89,7 @@
         HStack(spacing: 0) {
           sidebar
           Rectangle().fill(L.hairline).frame(width: 1)
-          if st.settings { settingsMain } else { main }
+          if st.settingsOpen { settingsMain } else { main }
         }
         statusBar
       }
@@ -74,7 +97,13 @@
       .frame(minWidth: 900, minHeight: 560)
       .overlay { if let p = st.palette { paletteView(p) } }
       .animation(.easeOut(duration: 0.09), value: st.palette == nil)
-      .background(shortcuts)
+      .onChange(of: st.palette) { query = ""; selection = 0 }
+      .focusedSceneValue(\.clairWorkbench, store)
+      .confirmationDialog(
+        "未保存の変更を破棄しますか？", isPresented: Binding(get: { store.pending != nil }, set: { if !$0 { store.pending = nil } })
+      ) {
+        Button("破棄して続行", role: .destructive) { store.confirm() }
+      }
     }
 
     private var titlebar: some View {
@@ -85,7 +114,7 @@
         .padding(.trailing, 12)
         ForEach(projects, id: \.name) { p in
           let on = st.project == p.name
-          Button { st.project = p.name } label: {
+          Button { store.run("project.switch", ["name": .string(p.name)]) } label: {
             Text(p.name).font(Typography.font(Typography.chromeStrong))
               .foregroundStyle(C.textPrimary)
               .padding(.horizontal, 10).frame(height: 26)
@@ -94,7 +123,7 @@
           }.buttonStyle(.plain)
         }
         Spacer()
-        Button { st.settings.toggle() } label: {
+        Button { store.run(st.settingsOpen ? "settings.close" : "settings.open") } label: {
           Image(systemName: "gearshape").foregroundStyle(C.chromeInk)
         }.buttonStyle(.plain)
       }
@@ -116,7 +145,7 @@
         }
         .padding(.horizontal, 12).frame(height: ChromeBudget.sidebarStrip)
         Rectangle().fill(L.hairline).frame(height: 1)
-        ScrollView { VStack(alignment: .leading, spacing: 0) { st.settings ? AnyView(sections) : AnyView(explorer) } }
+        ScrollView { VStack(alignment: .leading, spacing: 0) { st.settingsOpen ? AnyView(sections) : AnyView(explorer) } }
         Spacer(minLength: 0)
       }
       .frame(width: 286)
@@ -125,15 +154,15 @@
 
     private var sections: some View {
       ForEach(["一般", "AIプロバイダー", "エディタ", "ターミナル", "モバイル", "アップデート"], id: \.self) { s in
-        row(s, depth: 0, selected: st.section == s) { st.section = s }
+        row(s, depth: 0, selected: st.section == s) { store.run("settings.open", ["section": .string(s)]) }
       }
     }
 
     /// Folders derived from the file paths; click toggles, files open a tab.
     private var explorer: some View {
-      var out: [(id: String, label: String, depth: Int, file: ShellFile?)] = []
+      var out: [(id: String, label: String, depth: Int, file: WorkbenchFile?)] = []
       var seen = Set<String>()
-      for f in sampleFiles {
+      for f in st.files {
         let parts = f.path.split(separator: "/").map(String.init)
         for d in 0..<parts.count - 1 {
           let id = parts[0...d].joined(separator: "/")
@@ -143,10 +172,10 @@
       }
       return ForEach(out.filter { r in !st.collapsed.contains { r.id.hasPrefix($0 + "/") } }, id: \.id) { r in
         if let f = r.file {
-          row(r.label, depth: r.depth, selected: st.active == f.path && !st.settings, badge: f.status) { st.open(f.path) }
+          row(r.label, depth: r.depth, selected: st.active == f.path && !st.settingsOpen, badge: f.status?.first) { store.run("tab.open", ["path": .string(f.path)]) }
         } else {
           row((st.collapsed.contains(r.id) ? "▸ " : "▾ ") + r.label, depth: r.depth, selected: false) {
-            if !st.collapsed.insert(r.id).inserted { st.collapsed.remove(r.id) }
+            store.run("explorer.toggle", ["path": .string(r.id)])
           }
         }
       }
@@ -181,14 +210,15 @@
             }
             .padding(.horizontal, 12).frame(width: 168, height: 32, alignment: .leading)
             .background(p == st.active ? C.surfaceActive : .clear)
-            .onTapGesture { st.active = p }
+            .onTapGesture { store.run("tab.activate", ["path": .string(p)]) }
           }
           Spacer(minLength: 0)
         }
         .background(C.chromeRaised)
         PaneView(
           node: st.tree.maximized.flatMap { id in st.tree.leaves.first { $0.id == id }.map { .leaf(id: $0.id, kind: $0.kind) } } ?? st.tree.root,
-          focused: st.tree.focused, onFocus: { st.tree.focus($0) }, onRatio: { st.tree.setRatio(splitContaining: $0, $1) })
+          focused: st.tree.focused, onFocus: { store.run("pane.focus", ["id": .int($0)]) },
+          onRatio: { store.run("pane.setRatio", ["id": .int($0), "ratio": .double($1)]) })
       }
     }
 
@@ -213,12 +243,12 @@
     }
 
     private func toggle(_ title: String, _ key: String) -> some View {
-      Toggle(title, isOn: Binding(get: { st.toggles[key] ?? false }, set: { st.toggles[key] = $0 })).foregroundStyle(C.textSecondary)
+      Toggle(title, isOn: Binding(get: { st.toggles[key] ?? false }, set: { store.run("settings.set", ["key": .string(key), "value": .bool($0)]) })).foregroundStyle(C.textSecondary)
     }
 
     private var statusBar: some View {
       HStack {
-        Text(st.settings ? "設定 · \(st.section)" : "Ln 1, Col 1").font(Typography.font(Typography.chrome, family: .mono)).foregroundStyle(C.chromeInkMuted)
+        Text(st.settingsOpen ? "設定 · \(st.section)" : "Ln 1, Col 1").font(Typography.font(Typography.chrome, family: .mono)).foregroundStyle(C.chromeInkMuted)
         Spacer()
       }
       .padding(.horizontal, 12).frame(height: ChromeBudget.statusBar)
@@ -228,25 +258,21 @@
 
     // MARK: palette (⌘K commands, ⌘P files)
 
-    private func items(_ p: ShellState.Palette) -> [(title: String, hint: String, run: (inout ShellState) -> Void)] {
-      let q = query.lowercased()
-      switch p {
-      case .commands: return commands.filter { q.isEmpty || $0.title.lowercased().contains(q) }.map { ($0.title, $0.shortcut, $0.run) }
-      case .files: return sampleFiles.filter { q.isEmpty || $0.path.lowercased().contains(q) }.map { f in (f.path, "", { $0.open(f.path) }) }
-      }
+    private func items(_ p: WorkbenchState.Palette) -> [PaletteItem] {
+      store.registry.paletteItems(p, query: query, state: st)
     }
 
-    private func paletteView(_ p: ShellState.Palette) -> some View {
+    private func paletteView(_ p: WorkbenchState.Palette) -> some View {
       let list = items(p)
       return ZStack(alignment: .top) {
-        Color.black.opacity(0.35).onTapGesture { st.palette = nil }
+        Color.black.opacity(0.35).onTapGesture { store.run("palette.close") }
         VStack(spacing: 0) {
           TextField(p == .commands ? "コマンドを入力" : "ファイルへ移動", text: $query)
             .textFieldStyle(.plain).padding(12)
             .onSubmit { run(list) }
             .onKeyPress(.downArrow) { selection = min(selection + 1, max(list.count - 1, 0)); return .handled }
             .onKeyPress(.upArrow) { selection = max(selection - 1, 0); return .handled }
-            .onKeyPress(.escape) { st.palette = nil; return .handled }
+            .onKeyPress(.escape) { store.run("palette.close"); return .handled }
             .onChange(of: query) { selection = 0 }
           ForEach(Array(list.enumerated()), id: \.offset) { i, it in
             HStack { Text(it.title); Spacer(); Text(it.hint).foregroundStyle(C.textTertiary) }
@@ -263,29 +289,10 @@
       }
     }
 
-    private func run(_ list: [(title: String, hint: String, run: (inout ShellState) -> Void)]) {
+    private func run(_ list: [PaletteItem]) {
       guard selection < list.count else { return }
-      let f = list[selection].run
-      st.palette = nil
-      f(&st)
-    }
-
-    private func showPalette(_ p: ShellState.Palette) { query = ""; selection = 0; st.palette = p }
-
-    /// ⌃⌘D / ⌃⌘⇧D split, ⌃⌘W close, ⌃⌘M maximize, ⌃⌘= equalize, ⌃⌘→ focus next, ⌘S, ⌘K, ⌘P, ⌘,.
-    private var shortcuts: some View {
-      Group {
-        Button("") { st.tree.splitFocused(.horizontal) }.keyboardShortcut("d", modifiers: [.control, .command])
-        Button("") { st.tree.splitFocused(.vertical) }.keyboardShortcut("d", modifiers: [.control, .command, .shift])
-        Button("") { st.tree.closeFocused() }.keyboardShortcut("w", modifiers: [.control, .command])
-        Button("") { st.tree.toggleMaximize() }.keyboardShortcut("m", modifiers: [.control, .command])
-        Button("") { st.tree.equalize() }.keyboardShortcut("=", modifiers: [.control, .command])
-        Button("") { st.tree.focusNext() }.keyboardShortcut(.rightArrow, modifiers: [.control, .command])
-        Button("") { st.dirty.remove(st.active) }.keyboardShortcut("s", modifiers: .command)
-        Button("") { showPalette(.commands) }.keyboardShortcut("k", modifiers: .command)
-        Button("") { showPalette(.files) }.keyboardShortcut("p", modifiers: .command)
-        Button("") { st.settings = true }.keyboardShortcut(",", modifiers: .command)
-      }.opacity(0).frame(width: 0, height: 0)
+      store.run("palette.close")
+      store.run(list[selection].id, list[selection].input)
     }
   }
 

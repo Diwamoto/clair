@@ -2,14 +2,14 @@ import Foundation
 
 /// Pane layout model for the Mac AppShell (checklist §3.1). Pure value type so
 /// split/close/maximize/equalize/focus rules are testable without any UI.
-public enum PaneKind: String, Sendable, Equatable {
+public enum PaneKind: String, Sendable, Equatable, Codable {
   case editor, agent, terminal
 }
 
-public struct PaneTree: Sendable, Equatable {
-  public enum Axis: Sendable, Equatable { case horizontal, vertical }
+public struct PaneTree: Sendable, Equatable, Codable {
+  public enum Axis: String, Sendable, Equatable, Codable { case horizontal, vertical }
 
-  public indirect enum Node: Sendable, Equatable {
+  public indirect enum Node: Sendable, Equatable, Codable {
     case leaf(id: Int, kind: PaneKind)
     case split(axis: Axis, ratio: Double, first: Node, second: Node)
   }

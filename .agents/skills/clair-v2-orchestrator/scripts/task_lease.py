@@ -20,11 +20,11 @@ from typing import Any
 
 
 QUEUE_PATH = Path("docs/plans/clair-v2-native-rewrite-queue.md")
-TASK_ID_PATTERN = re.compile(r"^[BHNETU]\d{2}$")
-TASK_REFERENCE_PATTERN = re.compile(r"[BHNETU]\d{2}")
-TASK_ROW_START_PATTERN = re.compile(r"^\| `([BHNETU]\d{2})` \|", re.MULTILINE)
+TASK_ID_PATTERN = re.compile(r"^[BHNETUV]\d{2}$")
+TASK_REFERENCE_PATTERN = re.compile(r"[BHNETUV]\d{2}")
+TASK_ROW_START_PATTERN = re.compile(r"^\| `([BHNETUV]\d{2})` \|", re.MULTILINE)
 TASK_ROW_PATTERN = re.compile(
-    r"^\| `(?P<task_id>[BHNETU]\d{2})` "
+    r"^\| `(?P<task_id>[BHNETUV]\d{2})` "
     r"\| `(?P<status>next|queued|active|blocked|done)` "
     r"\| `(?P<difficulty>D[1-5])` "
     r"\| (?P<depends>.*?) "
