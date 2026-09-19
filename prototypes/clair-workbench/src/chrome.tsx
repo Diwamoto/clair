@@ -448,7 +448,7 @@ function ChipNameField({
         ...frame,
         ...text,
         width: `calc(${Math.max(4, value.length)}ch + 22px)`,
-        background: color.panel,
+        background: color.chrome,
         border: `1px solid ${line.ring}`,
         color: color.textPrimary,
         outline: 'none',
@@ -642,7 +642,7 @@ export function AppTitlebar({ extra }: { extra?: ReactNode }) {
             height: 28,
             padding: '0 8px',
             borderRadius: radius.card,
-            background: color.panel,
+            background: color.chrome,
             border: `1px solid ${line.hairline}`,
           }}
         >

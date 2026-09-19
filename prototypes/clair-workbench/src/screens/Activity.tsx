@@ -24,8 +24,8 @@ export function ActivityPanel() {
               padding: '0 12px',
               margin: '8px 12px',
               borderRadius: radius.card,
-              background: color.canvas,
-              border: `1px solid ${line.strong}`,
+              background: color.chrome,
+              border: `1px solid ${line.hairline}`,
             }}
           >
             <IconSearch size={13} color={color.textQuaternary} />
@@ -262,8 +262,8 @@ export function ActivityMain() {
               padding: '0 12px',
               height: 46,
               borderRadius: radius.card,
-              background: color.panel,
-              border: `1px solid ${line.strong}`,
+              background: color.canvas,
+              border: `1px solid ${line.hairline}`,
             }}
           >
             <input

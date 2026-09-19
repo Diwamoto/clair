@@ -78,8 +78,7 @@ function Card({ title, note, children }: { title: string; note: string; children
     <div
       style={{
         padding: '20px 22px',
-        background: 'rgba(241,242,246,0.025)',
-        border: `1px solid ${line.hairline}`,
+        background: color.chrome,
         borderRadius: radius.card,
         marginBottom: 12,
       }}
@@ -122,8 +121,8 @@ export function SettingsPanel() {
               height: 32,
               padding: '0 8px',
               borderRadius: radius.control,
-              background: color.canvas,
-              border: `1px solid ${line.strong}`,
+              background: color.chrome,
+              border: `1px solid ${line.hairline}`,
               color: color.textSecondary,
               fontSize: fs.caption,
               outline: 'none',
@@ -167,7 +166,7 @@ export function SettingsMain() {
   const section = wb.settingsSection;
 
   return (
-        <div className="scroll" style={{ flex: 1, minWidth: 0, minHeight: 0, padding: '40px 56px', background: '#1e2127' }}>
+        <div className="scroll" style={{ flex: 1, minWidth: 0, minHeight: 0, padding: '40px 56px', background: color.canvas }}>
           <div style={{ maxWidth: 720, margin: '0 auto' }}>
             <h1 style={{ margin: 0, fontSize: fs.display.h1, fontWeight: 600, letterSpacing: '-0.01em' }}>{section}</h1>
             <p className="prose" style={{ margin: '8px 0 24px', color: color.textTertiary, fontSize: fs.secondary, lineHeight: 1.6 }}>
@@ -191,9 +190,9 @@ export function SettingsMain() {
                           padding: '0 8px',
                           display: 'flex',
                           alignItems: 'center',
-                          border: `1px solid ${line.strong}`,
+                          border: `1px solid ${line.hairline}`,
                           borderRadius: radius.control,
-                          background: color.panelDeep,
+                          background: color.chrome,
                           color: color.textSecondary,
                           fontSize: fs.caption,
                         }}

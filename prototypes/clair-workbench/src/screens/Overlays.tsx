@@ -120,8 +120,8 @@ function QueryInput({
           height: 40,
           padding: '0 8px',
           borderRadius: radius.control,
-          background: color.canvas,
-          border: `1px solid ${line.ring}`,
+          background: color.chromeRaised,
+          border: `1px solid ${line.hairline}`,
         }}
       >
         <IconSearch size={14} color={color.textQuaternary} />
@@ -305,7 +305,6 @@ export function CommandPalette() {
             alignItems: 'center',
             gap: space[2],
             padding: '0 12px',
-            background: color.panel,
             borderTop: `1px solid ${line.hairline}`,
           }}
         >
@@ -518,7 +517,6 @@ export function SearchOverlay() {
             alignItems: 'center',
             gap: space[2],
             padding: '0 12px',
-            background: color.panel,
             borderTop: `1px solid ${line.hairline}`,
           }}
         >
@@ -854,9 +852,9 @@ export function AddAgentOverlay() {
                 width: '100%',
                 height: 32,
                 padding: '0 8px',
-                border: `1px solid ${line.strong}`,
+                border: `1px solid ${line.hairline}`,
                 borderRadius: radius.control,
-                background: color.canvas,
+                background: color.chromeRaised,
                 color: color.textSecondary,
                 fontSize: fs.caption,
                 outline: 'none',
@@ -883,9 +881,9 @@ export function AddAgentOverlay() {
                 width: '100%',
                 minHeight: 56,
                 padding: '8px 8px',
-                border: `1px solid ${line.strong}`,
+                border: `1px solid ${line.hairline}`,
                 borderRadius: radius.control,
-                background: color.canvas,
+                background: color.chromeRaised,
                 color: color.textSecondary,
                 fontSize: fs.caption,
                 lineHeight: 1.5,
@@ -943,7 +941,6 @@ export function AddAgentOverlay() {
             gap: space[3],
             padding: '16px 20px',
             borderTop: `1px solid ${line.hairline}`,
-            background: color.panel,
             flexWrap: 'wrap',
           }}
         >

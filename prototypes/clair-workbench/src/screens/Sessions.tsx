@@ -27,7 +27,7 @@ export function SessionsMain() {
   const attention = wb.sessions.find((s) => s.attention);
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, background: color.canvas }}>
       <MainHeader>
         <IconSession size={15} color={color.textTertiary} />
         <span style={{ fontSize: fs.body, fontWeight: 600, color: color.chromeInk }}>Agents</span>
@@ -61,7 +61,6 @@ export function SessionsMain() {
           gap: space[3],
           height: 26,
           padding: '0 12px',
-          background: color.panelDeep,
           borderBottom: `1px solid ${line.hairline}`,
           color: color.textTertiary,
           fontSize: fs.caption,
@@ -206,7 +205,6 @@ export function SessionsMain() {
             </div>
           </div>
         ))}
-        <div style={{ background: color.canvas, height: 12 }} />
       </div>
     </div>
   );

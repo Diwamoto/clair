@@ -150,7 +150,7 @@ function DiffRow({ row }: { row: DiffLine }) {
       <div className="dn" style={{ textAlign: 'right', paddingRight: 8, color: color.lineNumber, background: row.sign === '-' ? tint : undefined }}>
         {row.old ?? ''}
       </div>
-      <div className="dn" style={{ textAlign: 'right', paddingRight: 8, color: color.lineNumber, background: row.sign === '+' ? tint : undefined }}>
+      <div className="dn" style={{ textAlign: 'right', paddingRight: 8, color: color.lineNumber, background: tint }}>
         {row.New ?? ''}
       </div>
       <div style={{ paddingLeft: 12, background: tint, whiteSpace: 'pre' }}>
@@ -204,7 +204,7 @@ export function ReviewPanel() {
             resize: 'none',
             border: `1px solid ${line.hairline}`,
             borderRadius: radius.control,
-            background: color.panel,
+            background: color.chrome,
             color: color.textPrimary,
             fontSize: fs.caption,
             padding: '4px 8px',
@@ -313,7 +313,6 @@ export function ReviewMain() {
           alignItems: 'center',
           gap: space[2],
           padding: '0 16px',
-          background: '#171a1e',
           borderBottom: `1px solid ${line.hairline}`,
         }}
       >
