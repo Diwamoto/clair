@@ -21,6 +21,19 @@
     "vendored_slices": [
       "macos-arm64"
     ],
-    "vendored_slices_note": "T08 (2026-09-16) implemented and verified only the native macos-arm64 slice end-to-end (real zig build + real ghostty_surface_* smoke). The macOS x86_64 half of the universal slice remains unbuilt but is plausible. The two iOS slices are NOT achievable at the pinned commit: T05 (2026-09-18, blocked) confirmed with the pinned Zig 0.16.0 toolchain that `zig build -Dtarget=aarch64-ios -Demit-xcframework=true` fails with `error: iOS is not a supported target for the full Ghostty build; only libghostty-vt supports iOS (-Demit-lib-vt)` (`src/build/Config.zig:140`), and that upstream commits `4f39c506e`/`396166ecb`/`b112f3954` (2026-08-12, all ancestors of this pin per `git compare` behind_by=0) deliberately removed the iOS app/embedder target from `GhosttyXCFramework.zig` before this pin was cut; `origin/main` as of 2026-09-18 has not reinstated it. Do not re-attempt `vendor` for ios-arm64/ios-arm64-simulator against this pin without first resolving the architecture decision recorded in the T05 queue row (re-pin to a pre-removal commit, fork/patch upstream, adopt libghostty-vt plus a new Clair-owned iOS renderer, or descope)."
+    "vendored_slices_note": "T08 (2026-09-16) implemented and verified only the native macos-arm64 slice end-to-end (real zig build + real ghostty_surface_* smoke). The macOS x86_64 half of the universal slice remains unbuilt but is plausible. The two iOS slices are NOT achievable at the pinned commit via the full embedder build: T05 (2026-09-18, blocked) confirmed with the pinned Zig 0.16.0 toolchain that `zig build -Dtarget=aarch64-ios -Demit-xcframework=true` fails with `error: iOS is not a supported target for the full Ghostty build; only libghostty-vt supports iOS (-Demit-lib-vt)` (`src/build/Config.zig:140`), and that upstream commits `4f39c506e`/`396166ecb`/`b112f3954` (2026-08-12, all ancestors of this pin per `git compare` behind_by=0) deliberately removed the iOS app/embedder target from `GhosttyXCFramework.zig` before this pin was cut; `origin/main` as of 2026-09-18 has not reinstated it. Do not re-attempt `vendor` for ios-arm64/ios-arm64-simulator against this pin: iOS uses the separate `libghostty_vt` build below instead (architecture decision recorded in the T05 queue row)."
+  },
+  "libghostty_vt": {
+    "emit_flag": "-Demit-lib-vt=true",
+    "artifact": "GhosttyVT.xcframework",
+    "slices": [
+      "ios-arm64",
+      "ios-arm64-simulator"
+    ],
+    "vendored_slices": [
+      "ios-arm64",
+      "ios-arm64-simulator"
+    ],
+    "note": "T05 (2026-09-18) verified with the same pinned commit/Zig toolchain as the `build` block above that `zig build -Doptimize=ReleaseFast -Demit-lib-vt=true -Dtarget=aarch64-ios` and `-Dtarget=aarch64-ios-simulator` both succeed and produce a real `libghostty-vt.a` (Mach-O LC_BUILD_VERSION platform=IOS/IOSSIMULATOR respectively) plus the full `include/ghostty/vt/*.h` C ABI (terminal state, VT stream parsing, grid/selection/formatter, no GPU rendering). This is the separate 'VT parsing only' artifact `src/build/Config.zig:132-137` explicitly carves out as the one thing still built for iOS after the full embedder/app target was removed upstream. The two static libs are combined into `GhosttyVT.xcframework` via `xcodebuild -create-xcframework` (see `scripts/v2-ghostty.sh vendor-vt`). `libghostty-vt` exposes `ghostty_terminal_new/free/resize/vt_write/get/grid_ref/select_all/scroll_viewport` and `ghostty_terminal_selection_format_alloc` (whole-screen and selection plain-text formatting) — no GPU surface, no cell-grid pixel rendering; Clair owns the iOS renderer (`ClairV2GhosttyVTABI`/`ClairV2GhosttyVT`/`ClairV2TerminalView`)."
   }
 }

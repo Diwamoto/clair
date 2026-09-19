@@ -39,6 +39,40 @@ if ghosttyVendored {
   ghosttyABIDependencies.append(.target(name: "GhosttyKit"))
 }
 
+// T05: libghostty-vt (iOS terminal VT parsing, no GPU embedder -- see
+// `ClairV2GhosttyVTABI`'s header comment and `Config/ghostty-pin.json`'s
+// `libghostty_vt` block for why this is a separate vendored artifact from
+// `GhosttyKit.xcframework` above). `scripts/v2-ghostty.sh vendor-vt`
+// materializes both pieces independently of the macOS embedder vendor
+// step, so a worktree can have either, both, or neither vendored.
+let ghosttyVTHeaderPresent = FileManager.default.fileExists(
+  atPath: ghosttyVendorRoot.appendingPathComponent("include-vt/ghostty/vt.h").path
+)
+let ghosttyVTXCFrameworkPath =
+  ghosttyVendorRoot
+  .appendingPathComponent("GhosttyVT.xcframework")
+let ghosttyVTArtifactPresent = FileManager.default.fileExists(
+  atPath: ghosttyVTXCFrameworkPath.appendingPathComponent("Info.plist").path
+)
+let ghosttyVTVendored = ghosttyVTHeaderPresent && ghosttyVTArtifactPresent
+
+// `GhosttyVT.xcframework` only has ios-arm64/ios-arm64-simulator slices
+// (see `libghostty_vt.slices` in `Config/ghostty-pin.json`) -- unlike
+// `GhosttyKit.xcframework`, which has a macos-arm64 slice and so needs no
+// platform-conditioned dependency edge. Linking it into a macOS build
+// would fail ("no applicable architecture") the moment anything actually
+// tries to link, so every place this artifact reaches a target must be
+// `.when(platforms: [.iOS])`-gated, the same mechanism this file already
+// uses for `ClairV2PTY` (macOS-only) below.
+var ghosttyVTABITargets: [Target] = []
+var ghosttyVTABIDependencies: [Target.Dependency] = []
+if ghosttyVTVendored {
+  ghosttyVTABITargets.append(
+    .binaryTarget(name: "GhosttyVTKit", path: "Vendor/ghostty/GhosttyVT.xcframework")
+  )
+  ghosttyVTABIDependencies.append(.target(name: "GhosttyVTKit", condition: .when(platforms: [.iOS])))
+}
+
 let package = Package(
   name: "ClairV2Core",
   platforms: [
@@ -63,6 +97,8 @@ let package = Package(
     .library(name: "ClairV2EditorLanguage", targets: ["ClairV2EditorLanguage"]),
     .library(name: "ClairV2EditorView", targets: ["ClairV2EditorView"]),
     .library(name: "ClairV2Ghostty", targets: ["ClairV2Ghostty"]),
+    .library(name: "ClairV2GhosttyVT", targets: ["ClairV2GhosttyVT"]),
+    .library(name: "ClairV2TerminalView", targets: ["ClairV2TerminalView"]),
     .executable(name: "EditorFixtureGenerator", targets: ["EditorFixtureGenerator"]),
   ],
   dependencies: [
@@ -128,9 +164,11 @@ let package = Package(
       name: "ClairV2MobileKit",
       dependencies: [
         "ClairV2Agent",
+        "ClairV2GhosttyVT",
         "ClairV2Push",
         "ClairV2Review",
         "ClairV2Shared",
+        "ClairV2Terminal",
         "ClairV2Transport",
         "ClairV2Workspace",
       ]
@@ -248,6 +286,62 @@ let package = Package(
         ]
         : []
     ),
+    // T05: libghostty-vt C ABI subset. Mirrors `ClairV2GhosttyABI`'s
+    // vendored/not-vendored gating exactly, but against the separate
+    // `GhosttyVT.xcframework` artifact (see the `ghosttyVTVendored` block
+    // above and `ClairV2GhosttyVTABI`'s header comment).
+    .target(
+      name: "ClairV2GhosttyVTABI",
+      dependencies: ghosttyVTABIDependencies,
+      // The header search path and `CLAIR_GHOSTTY_VT_VENDORED` define are
+      // both `.when(platforms: [.iOS])`-gated: the headers themselves are
+      // plain C and harmless to expose on macOS, but the define also
+      // switches on the function-pointer probes/`_Static_assert`s that
+      // reference real `ghostty_*` symbols, and only the iOS slice of
+      // `GhosttyVTKit` actually provides them (see the comment above
+      // `ghosttyVTABIDependencies`). Gating only the define, not the
+      // header search path, keeps a macOS build from silently seeing a
+      // half-vendored header set.
+      cSettings: [
+        .headerSearchPath("Vendor/ghostty/include-vt"),
+        ghosttyVTVendored
+          ? .define("CLAIR_GHOSTTY_VT_VENDORED", .when(platforms: [.iOS])) : nil,
+      ].compactMap { $0 },
+      // libghostty-vt has no GPU/windowing surface (unlike GhosttyKit), so
+      // it needs no Apple framework beyond libc++ for its statically
+      // linked C++ dependencies (simdutf, highway) -- derived the same way
+      // T08 derived `ClairV2GhosttyABI`'s much longer framework list: by
+      // linking against the real vendored library and reading `nm -m`'s
+      // undefined-symbol list, which contains only libSystem/libc symbols
+      // and internal C++ mangled names, no CoreFoundation/AppKit/UIKit.
+      linkerSettings: ghosttyVTVendored
+        ? [.linkedLibrary("c++", .when(platforms: [.iOS]))] : []
+    ),
+    .target(
+      name: "ClairV2GhosttyVT",
+      dependencies: ["ClairV2GhosttyVTABI"],
+      // Same reasoning as `ClairV2Ghostty`'s swiftSettings comment: the
+      // Swift `#if CLAIR_GHOSTTY_VT_VENDORED` guard alone does not reach
+      // the Clang importer parsing `ClairV2GhosttyVTABI`'s header when this
+      // target imports it. iOS-gated for the same reason as the ABI
+      // target's cSettings above.
+      swiftSettings: ghosttyVTVendored
+        ? [
+          .define("CLAIR_GHOSTTY_VT_VENDORED", .when(platforms: [.iOS])),
+          .unsafeFlags(["-Xcc", "-DCLAIR_GHOSTTY_VT_VENDORED"], .when(platforms: [.iOS])),
+        ]
+        : []
+    ),
+    // T05: iOS/iPadOS terminal `UIView` (touch scroll/selection, hardware
+    // keyboard, safe-area/rotation). `#if os(iOS)`-gated like
+    // `ClairV2EditorView`'s `+iOS.swift` files; builds empty on macOS.
+    .target(
+      name: "ClairV2TerminalView",
+      dependencies: [
+        "ClairV2GhosttyVT", "ClairV2MobileKit", "ClairV2Terminal", "ClairV2Transport",
+        "ClairV2EditorView",
+      ]
+    ),
     .testTarget(
       name: "ClairV2CoreTests",
       dependencies: [
@@ -263,10 +357,12 @@ let package = Package(
         "ClairV2EditorLanguageFixtures",
         "ClairV2EditorView",
         "ClairV2Ghostty",
+        "ClairV2GhosttyVT",
         "ClairV2MobileKit",
         "ClairV2Review",
         "ClairV2Shared",
         "ClairV2Terminal",
+        "ClairV2TerminalView",
         "ClairV2Transport",
         "ClairV2Workspace",
       ]
@@ -290,10 +386,12 @@ let package = Package(
         "ClairV2EditorLanguageFixtures",
         "ClairV2EditorView",
         "ClairV2Ghostty",
+        "ClairV2GhosttyVT",
         "ClairV2MobileKit",
         "ClairV2Review",
         "ClairV2Shared",
         "ClairV2Terminal",
+        "ClairV2TerminalView",
         "ClairV2Transport",
         "ClairV2Workspace",
       ]
@@ -306,5 +404,5 @@ let package = Package(
       name: "EditorFixtureGenerator",
       dependencies: ["ClairV2EditorFixtures"]
     ),
-  ] + ghosttyABITargets
+  ] + ghosttyABITargets + ghosttyVTABITargets
 )
