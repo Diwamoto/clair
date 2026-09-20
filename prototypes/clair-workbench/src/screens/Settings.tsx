@@ -1,11 +1,71 @@
 import { useState } from 'react';
 
 import { RouteLink } from '../App';
+import { IconChevron } from '../icons';
 import { useWorkbench } from '../store';
 
 import { color, fs, line, radius, space } from '../tokens';
 
 const SECTIONS = ['一般', 'AIプロバイダー', 'エディタ', 'ターミナル', 'モバイル', 'アップデート'];
+
+/** A short, closed set of values — segmented rather than a Switch because
+ * there are more than two states. Same lightness-only emphasis rule: the
+ * selected segment gets surfaceActive, nothing gets a new hue. */
+function Segmented<T extends string>({
+  value,
+  options,
+  onChange,
+}: {
+  value: T;
+  options: readonly T[];
+  onChange: (next: T) => void;
+}) {
+  return (
+    <div style={{ display: 'flex', borderRadius: radius.control, border: `1px solid ${line.hairline}`, overflow: 'hidden' }}>
+      {options.map((opt) => {
+        const on = opt === value;
+        return (
+          <button
+            key={opt}
+            onClick={() => onChange(opt)}
+            style={{
+              height: 26,
+              padding: '0 10px',
+              fontSize: fs.caption,
+              fontWeight: on ? 600 : 400,
+              background: on ? color.surfaceActive : undefined,
+              color: on ? color.textPrimary : color.textSecondary,
+            }}
+          >
+            {opt}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** The `~/Projects` row's look, reused for any other path/command value. */
+function FieldValue({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="cl"
+      style={{
+        minHeight: 26,
+        padding: '0 8px',
+        display: 'flex',
+        alignItems: 'center',
+        border: `1px solid ${line.hairline}`,
+        borderRadius: radius.control,
+        background: color.chrome,
+        color: color.textSecondary,
+        fontSize: fs.caption,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
 
 function Switch({ on, onClick }: { on: boolean; onClick: () => void }) {
   return (
@@ -261,10 +321,116 @@ export function SettingsMain() {
                   }
                 />
               </Card>
+            ) : section === 'AIプロバイダー' ? (
+              <>
+                <Card title="Agent">
+                  <Row
+                    first
+                    title="既定のAgent"
+                    note="⌃⌘N で追加するときの初期選択。titlebarのタブは個別に選べます。"
+                    control={<Segmented value={wb.defaultAgent} options={['claude', 'codex'] as const} onChange={wb.setDefaultAgent} />}
+                  />
+                  <Row
+                    last
+                    title="承認ポリシー"
+                    note="ターミナル・Agent会話での変更提案を、どこまで自動で通すか。"
+                    control={
+                      <Segmented
+                        value={wb.approvalPolicy}
+                        options={['毎回確認', 'セッション中は許可', '自動承認'] as const}
+                        onChange={wb.setApprovalPolicy}
+                      />
+                    }
+                  />
+                </Card>
+                <Card title="インターフェース">
+                  <Row
+                    first
+                    last
+                    title="ステータスバーの利用枠を表示"
+                    note="一般タブの同じ項目と共通です。"
+                    control={<Switch on={wb.toggles.showQuota} onClick={() => wb.setToggle('showQuota')} />}
+                  />
+                </Card>
+              </>
+            ) : section === 'エディタ' ? (
+              <Card title="編集">
+                <Row
+                  first
+                  title="保存時に整形"
+                  note="⌘S のタイミングでフォーマッタを実行します。"
+                  control={<Switch on={wb.toggles.formatOnSave} onClick={() => wb.setToggle('formatOnSave')} />}
+                />
+                <Row
+                  title="タブ幅"
+                  control={<Segmented value={String(wb.tabWidth)} options={['2', '4', '8'] as const} onChange={(v) => wb.setTabWidth(Number(v))} />}
+                />
+                <Row
+                  last
+                  title="空白文字を表示"
+                  note="タブ・行末の空白を薄く可視化します。"
+                  control={<Switch on={wb.toggles.showWhitespace} onClick={() => wb.setToggle('showWhitespace')} />}
+                />
+              </Card>
+            ) : section === 'ターミナル' ? (
+              <Card title="シェルと承認">
+                <Row
+                  first
+                  title="デフォルトシェル"
+                  control={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: space[2] }}>
+                      <FieldValue>{wb.defaultShell}</FieldValue>
+                      <button
+                        className="btn-secondary"
+                        onClick={() => wb.setDefaultShell(wb.defaultShell === '/bin/zsh' ? '/bin/bash' : '/bin/zsh')}
+                        style={{ minHeight: 26, padding: '0 8px', borderRadius: radius.control, fontSize: fs.caption }}
+                      >
+                        変更…
+                      </button>
+                    </div>
+                  }
+                />
+                <Row
+                  title="コマンド実行前に確認"
+                  note="agentが実行するコマンドの承認プロンプト。ターミナルパネルの [y/N] と同じ挙動です。"
+                  control={<Switch on={wb.toggles.terminalApprovals} onClick={() => wb.setToggle('terminalApprovals')} />}
+                />
+                <Row
+                  last
+                  title="スクロールバック"
+                  control={
+                    <Segmented
+                      value={String(wb.scrollbackLines)}
+                      options={['1000', '5000', '10000'] as const}
+                      onChange={(v) => wb.setScrollbackLines(Number(v))}
+                    />
+                  }
+                />
+              </Card>
+            ) : section === 'アップデート' ? (
+              <>
+                <Card title="更新チャンネル">
+                  <Row
+                    first
+                    title="チャンネル"
+                    note="Dev は先行ビルド。署名検証・backup/rollback はどちらも同じです。"
+                    control={<Segmented value={wb.updateChannel} options={['Stable', 'Dev'] as const} onChange={wb.setUpdateChannel} />}
+                  />
+                  <Row
+                    last
+                    title="Agent実行中はスリープを抑止"
+                    note="長時間タスクの途中でMacがスリープしないようにします。"
+                    control={<Switch on={wb.toggles.preventSleepDuringAgent} onClick={() => wb.setToggle('preventSleepDuringAgent')} />}
+                  />
+                </Card>
+                <Card title="バージョン">
+                  <Row first last title="現在のバージョン" note={`Clair 2.0.0-${wb.updateChannel.toLowerCase()} · 最新`} control={<span />} />
+                </Card>
+              </>
             ) : (
               <Card title={section}>
                 <div style={{ color: color.textQuaternary, fontSize: fs.caption, lineHeight: 1.7 }}>
-                  この画面はデザインキャンバスにまだ存在しません。キャンバスが定義しているのは「一般」の内容だけです。ここに項目を足すのはキャンバス側の作業です。
+                  この画面はデザインキャンバスにまだ存在しません。
                 </div>
               </Card>
             )}
@@ -279,5 +445,93 @@ export function SettingsStatus() {
     <span className="tnum" style={{ color: color.textQuaternary }}>
       設定 · {wb.settingsSection}
     </span>
+  );
+}
+
+/**
+ * Settings as its own full-screen sheet, not a panel+main pair living inside
+ * the shared shell. The titlebar's tabs and the sidebar's nav were both
+ * still clickable through the old layout — a working "back" that competed
+ * with three other ways to leave. Here there is exactly one: the ← control
+ * at the top-left, plus Esc (already wired in App.tsx for any non-workspace
+ * screen). Nothing else on the screen can navigate away.
+ */
+export function SettingsScreen({ onClose }: { onClose: () => void }) {
+  const wb = useWorkbench();
+  return (
+    <div
+      className="enter-sheet"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 50,
+        display: 'flex',
+        flexDirection: 'column',
+        background: color.canvas,
+      }}
+    >
+      <div
+        style={{
+          height: 48,
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          gap: space[2],
+          padding: '0 16px',
+          background: color.chrome,
+          borderBottom: `1px solid ${line.hairline}`,
+        }}
+      >
+        <button
+          className="hoverable"
+          onClick={onClose}
+          autoFocus
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: space[1],
+            height: 30,
+            padding: '0 10px 0 6px',
+            borderRadius: radius.control,
+            color: color.textSecondary,
+            fontSize: fs.caption,
+            fontWeight: 600,
+          }}
+        >
+          <IconChevron size={11} style={{ transform: 'rotate(180deg)' }} />
+          戻る
+        </button>
+        <span style={{ fontSize: fs.body, fontWeight: 600, color: color.textPrimary }}>設定</span>
+      </div>
+      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+        <div
+          style={{
+            width: 220,
+            flexShrink: 0,
+            position: 'relative',
+            borderRight: `1px solid ${line.chrome}`,
+            background: color.chrome,
+          }}
+        >
+          <SettingsPanel />
+        </div>
+        <SettingsMain />
+      </div>
+      <div
+        style={{
+          height: 26,
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          padding: '0 12px',
+          background: color.chrome,
+          borderTop: `1px solid ${line.chrome}`,
+          color: color.textQuaternary,
+          fontSize: fs.caption,
+        }}
+      >
+        設定 · {wb.settingsSection}
+      </div>
+    </div>
   );
 }

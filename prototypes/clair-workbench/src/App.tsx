@@ -25,7 +25,7 @@ import {
 import { AgentsPanel, MergeGraphMain, SessionsMain, SessionsStatus } from './screens/Sessions';
 import { MobileApp } from './screens/Mobile';
 import { ReviewMain, ReviewPanel, ReviewStatus } from './screens/Review';
-import { SettingsMain, SettingsPanel, SettingsStatus } from './screens/Settings';
+import { SettingsScreen } from './screens/Settings';
 import { ExplorerPanel, WorkspaceMain, WorkspaceStatus } from './screens/Workspace';
 import { AppShell, navIdFor } from './chrome';
 import { PanelStage, ScreenStage } from './motion';
@@ -232,8 +232,6 @@ function Ide() {
       ) : (
         <DebugPanel />
       )
-    ) : panelId === 'settings' ? (
-      <SettingsPanel />
     ) : (
       <ExplorerPanel />
     );
@@ -249,8 +247,6 @@ function Ide() {
       <DebugMain />
     ) : wb.screen === 'debugAgent' ? (
       <DebugAgentMain />
-    ) : wb.screen === 'settings' ? (
-      <SettingsMain />
     ) : wb.screen === 'sessions' ? (
       <SessionsMain />
     ) : (
@@ -266,8 +262,6 @@ function Ide() {
       <DebugStatus />
     ) : wb.screen === 'debugAgent' ? (
       <DebugAgentStatus />
-    ) : wb.screen === 'settings' ? (
-      <SettingsStatus />
     ) : wb.screen === 'sessions' ? (
       <SessionsStatus />
     ) : wb.screen === 'workspace' ? (
@@ -294,6 +288,8 @@ function Ide() {
         panel={<PanelStage id={panelId}>{panel}</PanelStage>}
         main={<ScreenStage screen={wb.screen}>{main}</ScreenStage>}
       />
+
+      {wb.screen === 'settings' ? <SettingsScreen onClose={() => wb.setScreen('workspace')} /> : null}
 
       {wb.overlay === 'command' || wb.overlay === 'quickOpen' ? <CommandPalette /> : null}
       {wb.overlay === 'search' ? <SearchOverlay /> : null}
