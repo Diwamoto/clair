@@ -472,9 +472,15 @@ import Observation
       return ForEach(out.filter { r in !st.collapsed.contains { r.id.hasPrefix($0 + "/") } }, id: \.id) { r in
         if let f = r.file {
           row(r.label, depth: r.depth, selected: st.active == f.path && !st.settingsOpen, badge: f.status?.first) { store.run("tab.open", ["path": .string(f.path)]) }
+            .contextMenu { fileMenu(f.path, tab: false) }
         } else {
           row((st.collapsed.contains(r.id) ? "▸ " : "▾ ") + r.label, depth: r.depth, selected: false) {
             store.run("explorer.toggle", ["path": .string(r.id)])
+          }
+          .contextMenu {
+            Button(st.collapsed.contains(r.id) ? "開く" : "折りたたむ") { store.run("explorer.toggle", ["path": .string(r.id)]) }
+            Divider()
+            pathItems(r.id)
           }
         }
       }
@@ -490,6 +496,31 @@ import Observation
         .padding(.leading, 12 + CGFloat(depth) * 12).padding(.trailing, 12).frame(height: 24)
         .background(selected ? C.surfaceActive : .clear).contentShape(Rectangle())
       }.buttonStyle(.plain)
+    }
+
+    // MARK: context menus (checklist §3.6). ponytail: native NSMenu, not the canvas's custom overlay; "Agent に送る ›" needs a pane-input path that doesn't exist yet.
+
+    @ViewBuilder private func fileMenu(_ path: String, tab: Bool) -> some View {
+      if tab {
+        Button("タブを閉じる") { store.run("tab.close", ["path": .string(path)]) }
+        Button("分割して開く") { store.run("tab.activate", ["path": .string(path)]); store.run("pane.splitRight") }
+      } else {
+        Button("開く") { store.run("tab.open", ["path": .string(path)]) }
+      }
+      let change = changes.first { $0.path == path }
+      Button("変更を確認") {
+        if let c = change { diff = DiffTarget(path: c.path, staged: c.staged && !c.unstaged, untracked: c.untracked) }
+      }.disabled(change == nil)
+      Divider()
+      pathItems(path)
+    }
+
+    @ViewBuilder private func pathItems(_ path: String) -> some View {
+      let full = store.activeRoot.map { ($0 as NSString).appendingPathComponent(path) }
+      Button("パスをコピー") {
+        NSPasteboard.general.clearContents(); NSPasteboard.general.setString(path, forType: .string)
+      }
+      Button("Finder で表示") { full.map { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: $0)]) } }.disabled(full == nil)
     }
 
     // MARK: main
@@ -510,6 +541,7 @@ import Observation
             .padding(.horizontal, 12).frame(width: 168, height: 32, alignment: .leading)
             .background(p == st.active ? C.surfaceActive : .clear)
             .onTapGesture { store.run("tab.activate", ["path": .string(p)]) }
+            .contextMenu { fileMenu(p, tab: true) }
           }
           Spacer(minLength: 0)
         }
@@ -538,7 +570,8 @@ import Observation
           focused: st.tree.focused, launches: st.launches, onFocus: { store.run("pane.focus", ["id": .int($0)]) },
           onFacts: { store.facts(pane: $0, bells: $1, exit: $2) },
           onRatio: { store.run("pane.setRatio", ["id": .int($0), "ratio": .double($1)]) },
-          editor: EditorPane(buffers: store.buffers, root: store.activeRoot, path: st.active, onEdit: { store.edited($0) }))
+          editor: EditorPane(buffers: store.buffers, root: store.activeRoot, path: st.active, onEdit: { store.edited($0) }),
+          run: { _ = store.run($0, $1) })
         }
       }
     }
@@ -648,6 +681,7 @@ import Observation
     let onFacts: (Int, Int, Int?) -> Void
     let onRatio: (Int, Double) -> Void
     let editor: EditorPane
+    let run: (String, CommandInput) -> Void
 
     private func firstLeaf(_ n: PaneTree.Node) -> Int {
       switch n {
@@ -659,7 +693,7 @@ import Observation
     @ViewBuilder
     private func parts(_ axis: PaneTree.Axis, _ total: CGFloat, _ a: PaneTree.Node, _ b: PaneTree.Node, ratio: Double) -> some View {
       let h = axis == .horizontal
-      PaneView(node: a, focused: focused, launches: launches, onFocus: onFocus, onFacts: onFacts, onRatio: onRatio, editor: editor)
+      PaneView(node: a, focused: focused, launches: launches, onFocus: onFocus, onFacts: onFacts, onRatio: onRatio, editor: editor, run: run)
         .frame(width: h ? total * ratio : nil, height: h ? nil : total * ratio)
       Rectangle().fill(L.paneDivider).frame(width: h ? 1 : nil, height: h ? nil : 1)
         .padding(h ? .horizontal : .vertical, -3).contentShape(Rectangle())
@@ -667,7 +701,7 @@ import Observation
           DragGesture(coordinateSpace: .named("split")).onChanged { v in
             onRatio(firstLeaf(a), Double((h ? v.location.x : v.location.y) / total))
           })
-      PaneView(node: b, focused: focused, launches: launches, onFocus: onFocus, onFacts: onFacts, onRatio: onRatio, editor: editor)
+      PaneView(node: b, focused: focused, launches: launches, onFocus: onFocus, onFacts: onFacts, onRatio: onRatio, editor: editor, run: run)
     }
 
     var body: some View {
@@ -681,6 +715,14 @@ import Observation
         }
         .overlay(Rectangle().stroke(id == focused ? L.ring : .clear))
         .onTapGesture { onFocus(id) }
+        // ponytail: the libghostty NSView may consume right-clicks, so terminal panes might not show this; copy/paste/clear items wait on U06 surface commands.
+        .contextMenu {
+          Button("右に分割") { run("pane.focus", ["id": .int(id)]); run("pane.splitRight", [:]) }
+          Button("下に分割") { run("pane.focus", ["id": .int(id)]); run("pane.splitDown", [:]) }
+          Button("最大化") { run("pane.focus", ["id": .int(id)]); run("pane.maximize", [:]) }
+          Divider()
+          Button("ペインを閉じる", role: .destructive) { run("pane.focus", ["id": .int(id)]); run("pane.close", [:]) }
+        }
       case .split(let axis, let ratio, let a, let b):
         GeometryReader { g in
           let total = axis == .horizontal ? g.size.width : g.size.height
