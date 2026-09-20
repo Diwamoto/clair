@@ -501,7 +501,7 @@ import Observation
       }.buttonStyle(.plain)
     }
 
-    // MARK: context menus (checklist §3.6). ponytail: native NSMenu, not the canvas's custom overlay; "Agent に送る ›" needs a pane-input path that doesn't exist yet.
+    // MARK: context menus (checklist §3.6). ponytail: native NSMenu, not the canvas's custom overlay;
 
     @ViewBuilder private func fileMenu(_ path: String, tab: Bool) -> some View {
       if tab {
@@ -515,7 +515,20 @@ import Observation
         if let c = change { diff = DiffTarget(path: c.path, staged: c.staged && !c.unstaged, untracked: c.untracked) }
       }.disabled(change == nil)
       Divider()
+      agentItems(path)
       pathItems(path)
+    }
+
+    /// "Agent に送る ›": types `@path ` into a running agent terminal of this Project. No Return; the user reviews and sends.
+    @ViewBuilder private func agentItems(_ path: String) -> some View {
+      let agents = st.agentSessions.filter { $0.project == st.project && !$0.status.isExited }
+      Menu("Agent に送る") {
+        ForEach(agents) { a in
+          Button("\(a.title) · pane \(a.pane)") {
+            if ClairV2GhosttySurfaceView.send("@\(path) ", toPane: a.pane) { store.run("pane.focus", ["id": .int(a.pane)]) }
+          }
+        }
+      }.disabled(agents.isEmpty)
     }
 
     @ViewBuilder private func pathItems(_ path: String) -> some View {
@@ -731,7 +744,7 @@ import Observation
       case .leaf(let id, let kind):
         ZStack {
           C.surface
-          if kind == .terminal { ClairV2GhosttySurface(launch: launches[id].map { ($0.command, $0.cwd) }, onFacts: { onFacts(id, $0, $1) }) }  // ponytail: one surface per terminal leaf; session binding is U06
+          if kind == .terminal { ClairV2GhosttySurface(launch: launches[id].map { ($0.command, $0.cwd) }, pane: id, onFacts: { onFacts(id, $0, $1) }) }  // ponytail: one surface per terminal leaf; session binding is U06
           else if kind == .editor { editor }
           else { Text(kind.rawValue).foregroundStyle(C.textMuted) }  // agent content: U06
         }
