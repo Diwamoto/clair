@@ -20,6 +20,7 @@ import Observation
     public let registry = CommandRegistry.workbench
     /// U05: open editor buffers of the active Project, keyed by relative path.
     public let buffers = EditorBuffers()
+    let reviews = ReviewStore()
 
     /// V09: update flow state (Stable only; Dev has no feed).
     public enum UpdateStatus: Equatable { case idle, checking, available(ClairV2Update), installing, failed(String) }
@@ -441,7 +442,16 @@ import Observation
         }
         .background(C.chromeRaised)
         if let d = diff, let root = store.activeRoot {
-          DiffView(target: d, text: WorkbenchGit.diff(root, d.path, staged: d.staged, untracked: d.untracked), onClose: { diff = nil })
+          DiffView(
+            target: d, text: WorkbenchGit.diff(root, d.path, staged: d.staged, untracked: d.untracked),
+            threads: store.reviews.threads(d.path),
+            onComment: { n, body in
+              if case .ready(let m) = store.buffers.load(d.path, root: root) {
+                store.reviews.add(path: d.path, line: n, body: body, snapshot: m.buffer.snapshot)
+              }
+            },
+            onResolve: { store.reviews.resolve(path: d.path, id: $0) },
+            onClose: { diff = nil })
         } else {
         PaneView(
           node: st.tree.maximized.flatMap { id in st.tree.leaves.first { $0.id == id }.map { .leaf(id: $0.id, kind: $0.kind) } } ?? st.tree.root,

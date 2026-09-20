@@ -1,6 +1,9 @@
 #if os(macOS)
   import ClairV2DesignSystem
+  import ClairV2EditorCore
+  import ClairV2Review
   import ClairV2Workspace
+  import Observation
   import SwiftUI
 
   private typealias C = DesignTokens.Color
@@ -11,6 +14,35 @@
     let path: String
     let staged: Bool
     let untracked: Bool
+  }
+
+  /// Review threads of the active Project, anchored to a file line. In memory only (no persistence yet).
+  // ponytail: the line is fixed at creation and `rebase(through:)` is not fed editor edits; wire both when threads persist.
+  @MainActor @Observable final class ReviewStore {
+    private var managers: [String: ReviewThreadManager] = [:]
+    private var lines: [UUID: Int] = [:]
+    private(set) var version = 0
+    static let you = ReviewAuthor(displayName: "あなた", kind: .human)
+
+    /// 1-based file line → threads on it.
+    func threads(_ path: String) -> [Int: [ReviewThread]] {
+      _ = version
+      var out: [Int: [ReviewThread]] = [:]
+      for t in managers[path]?.threads ?? [] { if let l = lines[t.id] { out[l, default: []].append(t) } }
+      return out
+    }
+
+    func add(path: String, line: Int, body: String, snapshot: TextSnapshot) {
+      guard !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+        let l = try? snapshot.line(at: TextLineIndex(line - 1))
+      else { return }
+      let m = managers[path] ?? ReviewThreadManager()
+      managers[path] = m
+      lines[m.addThread(author: Self.you, body: body, anchor: ReviewAnchor(range: l.contentRange)).id] = line
+      version += 1
+    }
+
+    func resolve(path: String, id: UUID) { try? managers[path]?.resolveThread(id: id); version += 1 }
   }
 
   /// Source-control sidebar: staged / changes / untracked sections with a stage toggle per row.
@@ -62,21 +94,41 @@
   }
 
   /// Unified diff of one file. Colour is only for add/remove (state meaning); hunk headers stay quiet.
+  /// Lines that exist on the new side can be commented.
   struct DiffView: View {
     let target: DiffTarget
     let text: String
+    let threads: [Int: [ReviewThread]]
+    let onComment: (Int, String) -> Void
+    let onResolve: (UUID) -> Void
     let onClose: () -> Void
+    @State private var composing: Int?
+    @State private var draft = ""
     /// A diff this long is cut with a notice instead of laying out every row.
     static let maxLines = 5000
 
-    private var rows: [Substring] {
-      // Skip the file header (diff/index/---/+++); everything from the first @@ is content.
+    struct Row { let text: Substring; let newLine: Int? }
+
+    /// Parses `@@ -a,b +c,d @@` for `c`, then numbers context and added lines from there.
+    static func rows(_ text: String) -> [Row] {
       let all = text.split(separator: "\n", omittingEmptySubsequences: false)
       let body = all.drop { !$0.hasPrefix("@@") }
-      return Array((body.isEmpty ? all.filter { $0.hasPrefix("Binary") } : Array(body)).prefix(Self.maxLines))
+      if body.isEmpty { return all.filter { $0.hasPrefix("Binary") }.map { Row(text: $0, newLine: nil) } }
+      var n = 0
+      return body.prefix(maxLines).map { l in
+        if l.hasPrefix("@@") {
+          n = l.split(separator: " ").first { $0.hasPrefix("+") }
+            .flatMap { Int($0.dropFirst().split(separator: ",")[0]) } ?? 1
+          return Row(text: l, newLine: nil)
+        }
+        if l.hasPrefix("-") || l.hasPrefix("\\") { return Row(text: l, newLine: nil) }
+        defer { n += 1 }
+        return Row(text: l, newLine: n)
+      }
     }
 
     var body: some View {
+      let rows = Self.rows(text)
       VStack(spacing: 0) {
         HStack {
           Text(target.path).font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textPrimary)
@@ -89,11 +141,12 @@
         } else {
           ScrollView([.vertical, .horizontal]) {
             LazyVStack(alignment: .leading, spacing: 0) {
-              ForEach(Array(rows.enumerated()), id: \.offset) { _, l in
-                Text(l.isEmpty ? " " : String(l)).font(.system(size: 12, design: .monospaced))
-                  .foregroundStyle(l.hasPrefix("@@") ? C.textQuaternary : C.code)
-                  .padding(.horizontal, 12).frame(maxWidth: .infinity, alignment: .leading).frame(height: 18)
-                  .background(l.hasPrefix("+") ? C.success.opacity(0.12) : l.hasPrefix("-") ? C.danger.opacity(0.12) : .clear)
+              ForEach(Array(rows.enumerated()), id: \.offset) { _, r in
+                line(r)
+                if let n = r.newLine {
+                  ForEach(threads[n] ?? []) { thread($0) }
+                  if composing == n { composer(n) }
+                }
               }
               if rows.count == Self.maxLines {
                 Text("差分が長いため \(Self.maxLines) 行で打ち切りました。").font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).padding(12)
@@ -102,6 +155,45 @@
           }
         }
       }.background(C.surface)
+    }
+
+    private func line(_ r: Row) -> some View {
+      let l = r.text
+      return Text(l.isEmpty ? " " : String(l)).font(.system(size: 12, design: .monospaced))
+        .foregroundStyle(l.hasPrefix("@@") ? C.textQuaternary : C.code)
+        .padding(.horizontal, 12).frame(maxWidth: .infinity, alignment: .leading).frame(height: 18)
+        .background(l.hasPrefix("+") ? C.success.opacity(0.12) : l.hasPrefix("-") ? C.danger.opacity(0.12) : .clear)
+        .contentShape(Rectangle())
+        .onTapGesture { if let n = r.newLine { composing = composing == n ? nil : n; draft = "" } }
+        .help(r.newLine == nil ? "" : "クリックしてコメント")
+    }
+
+    private func thread(_ t: ReviewThread) -> some View {
+      VStack(alignment: .leading, spacing: 4) {
+        ForEach(t.comments) { c in
+          HStack(alignment: .top, spacing: 8) {
+            Text(c.author.displayName).font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textTertiary)
+            Text(c.body).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary)
+          }
+        }
+        if t.state == .open {
+          Button("解決する") { onResolve(t.id) }.buttonStyle(.plain).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+        } else {
+          Text("解決済み").font(Typography.font(Typography.chrome)).foregroundStyle(C.success)
+        }
+      }
+      .padding(8).frame(maxWidth: 520, alignment: .leading).background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.card))
+      .opacity(t.state == .open ? 1 : 0.6).padding(.leading, 28).padding(.vertical, 4)
+    }
+
+    private func composer(_ n: Int) -> some View {
+      HStack(spacing: 8) {
+        TextField("コメント", text: $draft).textFieldStyle(.plain).font(Typography.font(Typography.chrome)).frame(width: 360)
+          .onSubmit { onComment(n, draft); composing = nil }
+        Button("追加") { onComment(n, draft); composing = nil }.buttonStyle(.plain).foregroundStyle(C.textSecondary)
+        Button("キャンセル") { composing = nil }.buttonStyle(.plain).foregroundStyle(C.textTertiary)
+      }
+      .padding(8).background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.card)).padding(.leading, 28).padding(.vertical, 4)
     }
   }
 #endif
