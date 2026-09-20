@@ -524,6 +524,13 @@ import Observation
               }
             },
             onResolve: { store.reviews.resolve(root: root, path: d.path, id: $0) },
+            onSend: store.reviews.prompt(root: root, path: d.path).map { text in
+              {
+                NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text, forType: .string)
+                // Paste is left to the user: a review comment must not run as an agent command unseen.
+                if let a = st.agentSessions.first(where: { $0.project == st.project && !$0.status.isExited }) { store.run("pane.focus", ["id": .int(a.pane)]); diff = nil }
+              }
+            },
             onClose: { diff = nil })
         } else {
         PaneView(

@@ -61,6 +61,14 @@
       version += 1; save()
     }
 
+    /// Open threads as a prompt for an agent: one `path:line` heading per thread, comments beneath. Nil when nothing is open.
+    func prompt(root: String, path: String) -> String? {
+      let open = threads(root: root, path).sorted { $0.key < $1.key }.flatMap { l, ts in ts.filter { $0.state == .open }.map { (l, $0) } }
+      guard !open.isEmpty else { return nil }
+      return "次のレビューコメントに対応してください。\n\n"
+        + open.map { l, t in "\(path):\(l)\n" + t.comments.map { "- \($0.body)" }.joined(separator: "\n") }.joined(separator: "\n\n")
+    }
+
     func resolve(root: String, path: String, id: UUID) { try? managers[key(root, path)]?.resolveThread(id: id); version += 1; save() }
   }
 
@@ -120,10 +128,13 @@
     let threads: [Int: [ReviewThread]]
     let onComment: (Int, String) -> Void
     let onResolve: (UUID) -> Void
+    /// Copies the open threads as an agent prompt; nil hides the button (nothing open).
+    let onSend: (() -> Void)?
     let onClose: () -> Void
     @State private var composing: Int?
     @State private var draft = ""
     @State private var hunk = -1
+    @State private var sent = false
     /// A diff this long is cut with a notice instead of laying out every row.
     static let maxLines = 5000
 
@@ -166,6 +177,11 @@
                 .buttonStyle(.plain).keyboardShortcut(d < 0 ? .upArrow : .downArrow, modifiers: .option)
                 .help(d < 0 ? "前の hunk (⌥↑)" : "次の hunk (⌥↓)")
             }
+          }
+          if let onSend {
+            Button { onSend(); sent = true } label: {
+              Text(sent ? "コピー済み（⌘V で貼り付け）" : "agent に送る").font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary)
+            }.buttonStyle(.plain).help("未解決コメントをプロンプトとしてコピーし、agent のターミナルへ移動")
           }
           Button(action: onClose) { Image(systemName: "xmark").foregroundStyle(C.chromeInk) }.buttonStyle(.plain)
         }.padding(.horizontal, 12).frame(height: 32).background(C.chromeRaised)

@@ -29,7 +29,10 @@ public struct AgentLaunch: Sendable, Codable, Equatable {
 
 /// U06: one row of the session list, derived from facts only (launch + bell/exit notices).
 public struct AgentSession: Sendable, Equatable, Identifiable {
-  public enum Status: Sendable, Equatable { case running, attention, exited(Int?) }
+  public enum Status: Sendable, Equatable {
+    case running, attention, exited(Int?)
+    public var isExited: Bool { if case .exited = self { true } else { false } }
+  }
   public var id: String { NotificationLog.paneKey(project, pane) }
   public let project: String
   public let pane: Int

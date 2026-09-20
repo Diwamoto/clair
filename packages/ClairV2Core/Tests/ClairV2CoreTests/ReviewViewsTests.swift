@@ -27,6 +27,17 @@
       XCTAssertTrue(s.threads(root: "/other", "f").isEmpty)  // same path in another Project is separate
     }
 
+    func testPromptListsOpenThreadsOnly() throws {
+      let s = ReviewStore(file: nil), snap = try TextBuffer("a\nb").snapshot
+      XCTAssertNil(s.prompt(root: "/r", path: "f"))
+      s.add(root: "/r", path: "f", line: 2, body: "B", snapshot: snap)
+      s.add(root: "/r", path: "f", line: 1, body: "A", snapshot: snap)
+      let done = try XCTUnwrap(s.threads(root: "/r", "f")[2]?.first)
+      XCTAssertTrue(try XCTUnwrap(s.prompt(root: "/r", path: "f")).hasSuffix("f:1\n- A\n\nf:2\n- B"))
+      s.resolve(root: "/r", path: "f", id: done.id)
+      XCTAssertFalse(try XCTUnwrap(s.prompt(root: "/r", path: "f")).contains("f:2"))
+    }
+
     func testThreadsSurviveReload() throws {
       let f = FileManager.default.temporaryDirectory.appending(path: "reviews-\(UUID()).json")
       defer { try? FileManager.default.removeItem(at: f) }
