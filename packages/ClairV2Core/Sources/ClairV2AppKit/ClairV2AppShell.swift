@@ -398,11 +398,14 @@ import Observation
       let folded = collapsedGroups.contains(p.name)
       return HStack(spacing: 0) {
         Button { if folded { collapsedGroups.remove(p.name) } else { collapsedGroups.insert(p.name) } } label: {
-          HStack(spacing: 8) {
-            Circle().fill(color).frame(width: 6, height: 6)
-            Text(p.name).font(.system(size: 12, weight: .semibold)).foregroundStyle(active ? C.textPrimary : C.textSecondary).lineLimit(1)
-          }
-          .padding(.horizontal, 8).frame(height: 26)
+          // The chip carries its group colour as its own fill/border (mock
+          // review feedback: a small dot beside the label read as an
+          // afterthought), not a separate dot — active groups get the
+          // stronger alpha pair, matching the titlebar's active tab group.
+          Text(p.name).font(.system(size: 12, weight: .semibold)).foregroundStyle(active ? C.textPrimary : C.textSecondary).lineLimit(1)
+            .padding(.horizontal, 10).frame(height: 26)
+            .background(color.opacity(active ? 0.22 : 0.1), in: RoundedRectangle(cornerRadius: Radius.card))
+            .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(color.opacity(active ? 0.55 : 0.28)))
           .overlay(alignment: .topTrailing) {
             if st.notices.unread(p.name) > 0 {
               Text("\(st.notices.unread(p.name))").font(.system(size: 9, weight: .bold)).foregroundStyle(C.textPrimary)
@@ -588,11 +591,12 @@ import Observation
         out.append((f.path, parts.last!, parts.count, f))
       }
       return LazyVStack(alignment: .leading, spacing: 0) {
-        // Project root: bold, branch glyph; folds the whole tree (GUI-local).
+        // Project root: uppercase, branch glyph, no chevron — it reads as a
+        // section label, not one more row in the same list as its children.
+        // Folds the whole tree (GUI-local); click-to-collapse is unchanged.
         treeRow(depth: 0, selected: false, action: { rootFolded.toggle() }) {
-          chevron(open: !rootFolded)
           Image(systemName: "arrow.triangle.branch").font(.system(size: 9)).foregroundStyle(C.textTertiary)
-          Text(st.project).font(.system(size: 11, weight: .semibold)).foregroundStyle(C.textPrimary)
+          Text(st.project).font(.system(size: 11, weight: .semibold)).textCase(.uppercase).foregroundStyle(C.textPrimary)
           Spacer(minLength: 0)
         }
         if !rootFolded {
