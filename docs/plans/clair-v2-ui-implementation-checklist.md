@@ -158,6 +158,15 @@ panel id が選ばれた場合の共有 panel。`App.tsx` の `Ide()` の panel/
 - 操作: divider ドラッグで比率変更、`⌃⌘D`/`⌃⌘⇧D` で分割、`⌃⌘W` で閉じる、`⌃⌘M` で
   最大化トグル、`⌃⌘=` で均等化、`⌃⌘→` でフォーカス移動（`focusDirection`、leaf の
   出現順で巡回）。
+- **2026-09-20 amendment（新規）**: `agent`/`terminal` pane に hover 時だけ見える
+  24px の pane header を追加（editor pane は既存の breadcrumb がその役割を持つため
+  対象外）。header は左に drag handle（三点、ドラッグ可）、中央にラベル
+  （「Agent」/「ターミナル」）、右に close ボタン（hover、またはそのpaneが
+  focused の間だけ表示）。handle を別 pane の header へドロップすると
+  **その2 pane が表示している内容だけを入れ替える**（tree の形・split
+  ratio・どちらが focused かは変えない）。同一 pane へのドロップは無視。
+  正本: `prototypes/clair-workbench` の `PaneHeader`（`screens/Workspace.tsx`）
+  と `swapPanes`（`store.tsx`）。
 - タブ: 168px 固定幅。名前が入りきらない場合は省略記号ではなく **右端でフェードして
   隠す**（実際にはみ出したタブにのみ適用）。全名は hover のツールチップ。
 - ファイルタブの `dirty` 状態はドットで表現（`Tab` 型の `dirty: boolean`）。`⌘S` で

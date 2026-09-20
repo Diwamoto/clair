@@ -237,6 +237,21 @@ extension CommandRegistry {
     cmd("pane.setRatio", "分割比を変更", .read, params: [CommandParam("id", .int), CommandParam("ratio", .double)]) { s, i in
       s.tree.setRatio(splitContaining: i["id"]!.int!, i["ratio"]!.double!); return .ok
     },
+    // Header drag handle drop target swaps what two panes show; tree shape/ratios/focus stay put.
+    cmd("pane.swap", "ペインの表示を入れ替え", .write, params: [CommandParam("idA", .int), CommandParam("idB", .int)],
+        preflight: { s, i throws(CommandError) in
+          let a = i["idA"]?.int, b = i["idB"]?.int
+          try require(a != nil && b != nil, "missing pane ids")
+          try require(a != b, "cannot swap a pane with itself")
+          try require(s.tree.leaves.contains { $0.id == a }, "no pane \(a!)")
+          try require(s.tree.leaves.contains { $0.id == b }, "no pane \(b!)")
+          return .write
+        }) { s, i in
+      let a = i["idA"]!.int!, b = i["idB"]!.int!
+      s.tree.swapLeaves(a, b)
+      (s.launches[a], s.launches[b]) = (s.launches[b], s.launches[a])
+      return .ok
+    },
     // Closing the last editor pane while buffers are dirty discards them → destructive.
     cmd("pane.close", "ペインを閉じる", .write, shortcut: "⌃⌘W",
         preflight: { s, _ throws(CommandError) in

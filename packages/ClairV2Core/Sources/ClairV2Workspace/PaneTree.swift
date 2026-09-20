@@ -103,6 +103,21 @@ public struct PaneTree: Sendable, Equatable, Codable {
     if leaves.contains(where: { $0.id == id }) { focused = id }
   }
 
+  /// Swaps what two leaves show (their `kind`); tree shape, ratios and focus are untouched
+  /// (checklist §3.1, 2026-09-20 amendment; mirrors the mock's `swapPanes`).
+  public mutating func swapLeaves(_ idA: Int, _ idB: Int) {
+    guard idA != idB else { return }
+    let all = leaves
+    guard let kindA = all.first(where: { $0.id == idA })?.kind, let kindB = all.first(where: { $0.id == idB })?.kind
+    else { return }
+    root = Self.map(root) { n in
+      guard case .leaf(let id, _) = n else { return nil }
+      if id == idA { return .leaf(id: idA, kind: kindB) }
+      if id == idB { return .leaf(id: idB, kind: kindA) }
+      return nil
+    }
+  }
+
   private static func clamp(_ r: Double) -> Double { min(max(r, ratioRange.lowerBound), ratioRange.upperBound) }
 
   /// Bottom-up rewrite; `f` returns a replacement or nil to keep the node.

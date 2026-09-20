@@ -7,6 +7,7 @@ import IOKit.ps
 import Observation
   import SwiftUI
 @preconcurrency import UserNotifications
+  import UniformTypeIdentifiers
 
   private typealias C = DesignTokens.Color
   private typealias L = DesignTokens.Line
@@ -975,6 +976,48 @@ import Observation
     }
   }
 
+  /// Hover-revealed header for agent/terminal panes: a drag handle (drop another
+  /// pane's handle here to swap what the two show) and a close button. Editor
+  /// panes keep their breadcrumb instead (checklist §3.1, 2026-09-20 amendment;
+  /// mirrors the mock's `PaneHeader`).
+  private struct PaneHeaderView: View {
+    let id: Int
+    let label: String
+    let focused: Bool
+    let onSwap: (Int, Int) -> Void
+    let onClose: () -> Void
+    @State private var isHovered = false
+    @State private var isDropTarget = false
+
+    var body: some View {
+      // Mock: the handle fades in on hover, the label stays put, and the close
+      // button fades in on hover or while focused — the 24px bar itself is
+      // always laid out so this never becomes a permanent line of chrome.
+      HStack(spacing: Spacing.scale[0]) {
+        Image(systemName: "ellipsis").font(.system(size: 11)).foregroundStyle(C.textQuaternary)
+          .opacity(isHovered ? 1 : 0)
+        Text(label).font(.system(size: 10)).foregroundStyle(C.textQuaternary).frame(maxWidth: .infinity)
+        Button(action: onClose) {
+          Image(systemName: "xmark").font(.system(size: 9, weight: .medium)).foregroundStyle(C.textQuaternary)
+        }.buttonStyle(.plain).help("パネルを閉じる").opacity((isHovered || focused) ? 1 : 0)
+      }
+      .padding(.horizontal, 8).frame(height: 24).frame(maxWidth: .infinity)
+      .background(C.canvas)
+      .overlay(Rectangle().fill(isDropTarget ? L.ring : .clear).frame(height: 1), alignment: .bottom)
+      .contentShape(Rectangle())
+      .onHover { isHovered = $0 }
+      .onDrag { NSItemProvider(object: NSString(string: "\(id)")) }
+      .onDrop(of: [.text], isTargeted: $isDropTarget) { providers in
+        guard let provider = providers.first else { return false }
+        provider.loadObject(ofClass: NSString.self) { object, _ in
+          guard let fromID = (object as? NSString).flatMap({ Int($0 as String) }) else { return }
+          Task { @MainActor in onSwap(fromID, id) }
+        }
+        return true
+      }
+    }
+  }
+
   private struct PaneView: View {
     let node: PaneTree.Node
     let focused: Int
@@ -1009,21 +1052,29 @@ import Observation
     var body: some View {
       switch node {
       case .leaf(let id, let kind):
-        ZStack {
-          C.surface
-          if kind == .terminal { ClairV2GhosttySurface(launch: launches[id].map { ($0.command, $0.cwd) }, pane: id, onFacts: { onFacts(id, $0, $1) }) }  // ponytail: one surface per terminal leaf; session binding is U06
-          else if kind == .editor { editor }
-          else {
-            // Agent output is a terminal (ADR-0002); this pane is where none is running, so offer the launch instead of a bare label.
-            VStack(spacing: 8) {
-              Text("エージェントは起動していません").font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textTertiary)
-              HStack(spacing: 6) {
-                ForEach(AgentProfile.all, id: \.id) { p in
-                  Button { run("agent.launch", ["profile": .string(p.id)]) } label: {
-                    Text(p.title).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary)
-                      .padding(.horizontal, 10).frame(height: 26)
-                      .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(L.hairline))
-                  }.buttonStyle(.plain)
+        VStack(spacing: 0) {
+          if kind != .editor {
+            PaneHeaderView(
+              id: id, label: kind == .terminal ? "ターミナル" : "Agent", focused: id == focused,
+              onSwap: { run("pane.swap", ["idA": .int($0), "idB": .int($1)]) },
+              onClose: { run("pane.focus", ["id": .int(id)]); run("pane.close", [:]) })
+          }
+          ZStack {
+            C.surface
+            if kind == .terminal { ClairV2GhosttySurface(launch: launches[id].map { ($0.command, $0.cwd) }, pane: id, onFacts: { onFacts(id, $0, $1) }) }  // ponytail: one surface per terminal leaf; session binding is U06
+            else if kind == .editor { editor }
+            else {
+              // Agent output is a terminal (ADR-0002); this pane is where none is running, so offer the launch instead of a bare label.
+              VStack(spacing: 8) {
+                Text("エージェントは起動していません").font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textTertiary)
+                HStack(spacing: 6) {
+                  ForEach(AgentProfile.all, id: \.id) { p in
+                    Button { run("agent.launch", ["profile": .string(p.id)]) } label: {
+                      Text(p.title).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary)
+                        .padding(.horizontal, 10).frame(height: 26)
+                        .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(L.hairline))
+                    }.buttonStyle(.plain)
+                  }
                 }
               }
             }

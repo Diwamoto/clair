@@ -55,5 +55,21 @@ final class WorkbenchAgentLaunchTests: XCTestCase {
     let (s, _) = try opened()
     XCTAssertEqual(r.paletteItems(.commands, query: "codex", state: s).map(\.input), [["profile": .string("codex")]])
   }
+
+  // Dragging a launched pane's header onto another pane moves the running session with it.
+  func testSwapMovesLaunchToTheOtherPane() throws {
+    var (s, _) = try opened()
+    let a = try r.execute("agent.launch", ["profile": .string("claude")], confirmed: true, state: &s).get()
+    guard case .pane(let ida) = a else { return XCTFail() }
+    let untouched = s.tree.leaves.first { $0.id != ida }!.id
+    try r.execute("pane.swap", ["idA": .int(ida), "idB": .int(untouched)], state: &s).get()
+    XCTAssertNil(s.launches[ida])
+    XCTAssertEqual(s.launches[untouched]?.command, "claude")
+  }
+
+  func testSwapWithUnknownPaneFails() throws {
+    var (s, _) = try opened()
+    XCTAssertEqual(r.execute("pane.swap", ["idA": .int(1), "idB": .int(99)], state: &s).failure?.code, .preconditionFailed)
+  }
 }
 
