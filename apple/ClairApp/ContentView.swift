@@ -201,8 +201,8 @@ struct ContentView: View {
     )
   }
 
-  private var activityBar: some View {
-    WorkspaceActivityBar(
+  private var sidebarStrip: some View {
+    WorkspaceSidebarStrip(
       selected: workspace.activeSurface?.workspaceActivity.navigationEntry,
       onSelect: { selection in
         if workspace.activeSurface != nil {
@@ -238,34 +238,34 @@ struct ContentView: View {
     }
   }
 
-  // The activity bar (navigation icon column) is mounted once here, outside
-  // the per-tab `sidebarContent`/`mainContent` switches below. Switching
-  // between tabs whose content views have different concrete types forces
-  // SwiftUI to tear down and rebuild whatever is inside the switch; keeping
-  // the nav column outside it means it is never rebuilt, so it can't
-  // visibly jump when a tab (e.g. the bell/Activity tab) is selected. It
-  // also sits outside `isSidebarVisible`: hiding the sidebar panel hides the
-  // file tree etc., not the way to switch between them.
+  // The sidebar strip (navigation icon row) is mounted once here, outside the
+  // per-tab `sidebarContent`/`mainContent` switches below. Switching between
+  // tabs whose content views have different concrete types forces SwiftUI to
+  // tear down and rebuild whatever is inside the switch; keeping the nav row
+  // outside it means the icon strip itself is never rebuilt, so it can't
+  // visibly jump when a tab (e.g. the bell/Activity tab) is selected.
   private func workspaceSurface(project: Project, surface: ProjectSurfaceModel) -> some View {
     HStack(spacing: 0) {
-      activityBar
-
       if isSidebarVisible {
-        sidebarContent(project: project, surface: surface)
-          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-          .frame(
-            minWidth: 160,
-            idealWidth: WorkspaceChrome.Metrics.sidebarWidth,
-            maxWidth: 296,
-            maxHeight: .infinity,
-            alignment: .topLeading
-          )
-          .background(WorkspaceChrome.chrome)
-          .overlay(alignment: .trailing) {
-            Rectangle()
-              .fill(WorkspaceChrome.chromeLine)
-              .frame(width: 1)
-          }
+        VStack(spacing: 0) {
+          sidebarStrip
+
+          sidebarContent(project: project, surface: surface)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+        .frame(
+          minWidth: 204,
+          idealWidth: WorkspaceChrome.Metrics.sidebarWidth,
+          maxWidth: 340,
+          maxHeight: .infinity,
+          alignment: .topLeading
+        )
+        .background(WorkspaceChrome.chrome)
+        .overlay(alignment: .trailing) {
+          Rectangle()
+            .fill(WorkspaceChrome.chromeLine)
+            .frame(width: 1)
+        }
       }
 
       mainContent(project: project, surface: surface)
@@ -2059,57 +2059,58 @@ private struct WorkspaceSurfaceIcon: View {
 /// its own — the Tokens artboard's chrome budget is what pays for that.
 ///
 /// Search is deliberately absent: file and symbol search is the titlebar
-/// field, so putting it here too would give one job two entry points. A
-/// full-height column to the left of the sidebar panel, not a row nested
-/// inside it — icons read bigger (20pt) now that they own a whole column
-/// instead of sharing a 34px-tall strip with the "その他" action.
-private struct WorkspaceActivityBar: View {
+/// field, so putting it here too would give one job two entry points. The
+/// explorer, the first entry, has no underline: it is home, not a departure.
+private struct WorkspaceSidebarStrip: View {
   let selected: WorkspaceActivity?
   let onSelect: (WorkspaceActivity) -> Void
   let onQuickOpen: () -> Void
 
   var body: some View {
-    VStack(spacing: 2) {
-      ForEach(WorkspaceActivity.navigationCases) { activity in
-        navButton(activity)
+    HStack(spacing: 3) {
+      HStack(spacing: 0) {
+        ForEach(WorkspaceActivity.navigationCases) { activity in
+          navButton(activity)
+          if activity != WorkspaceActivity.navigationCases.last {
+            Spacer(minLength: 0)
+          }
+        }
       }
-
-      Spacer(minLength: 0)
+      .frame(maxWidth: .infinity)
 
       ChromeActionButton(
-        width: 36,
-        height: 36,
         help: "その他",
         action: onQuickOpen,
         label: {
           Image(systemName: "ellipsis")
-            .font(.system(size: 14, weight: .medium))
+            .font(.system(size: 12, weight: .medium))
         }
       )
     }
-    .padding(.vertical, 8)
+    .padding(.horizontal, 8)
     .frame(
-      width: WorkspaceChrome.Metrics.activityBarWidth,
-      maxHeight: .infinity
+      maxWidth: .infinity,
+      minHeight: WorkspaceChrome.Metrics.sidebarStrip,
+      maxHeight: WorkspaceChrome.Metrics.sidebarStrip
     )
-    .background(WorkspaceChrome.chrome)
-    .overlay(alignment: .trailing) {
+    .overlay(alignment: .bottom) {
       Rectangle()
         .fill(WorkspaceChrome.chromeLineSoft)
-        .frame(width: 1)
+        .frame(height: 1)
     }
   }
 
   private func navButton(_ activity: WorkspaceActivity) -> some View {
     ChromeActionButton(
-      width: 36,
-      height: 36,
+      width: 38,
+      height: 32,
       isActive: selected == activity,
+      showsUnderline: activity != .files,
       help: activity.accessibilityHint,
       action: { onSelect(activity) },
       label: {
         Image(systemName: activity.symbolName)
-          .font(.system(size: 18, weight: .medium))
+          .font(.system(size: 15, weight: .medium))
       }
     )
   }
