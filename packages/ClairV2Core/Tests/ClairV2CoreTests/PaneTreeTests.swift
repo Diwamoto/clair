@@ -41,4 +41,24 @@ final class PaneTreeTests: XCTestCase {
     t.focusNext(); XCTAssertEqual(t.maximized, 2)
     t.toggleMaximize(); XCTAssertNil(t.maximized)
   }
+
+  func testSwapLeavesExchangesKindButNotShapeOrFocus() {
+    var t = PaneTree()
+    t.focus(2)
+    t.swapLeaves(2, 3)
+    XCTAssertEqual(t.leaves.map(\.kind), [.editor, .terminal, .agent])
+    XCTAssertEqual(t.focused, 2)  // ids/focus stay put; only what they show moves
+    guard case .split(_, let ratio, _, let right) = t.root, case .split(_, _, let a, let b) = right
+    else { return XCTFail() }
+    XCTAssertEqual(ratio, 0.62)
+    guard case .leaf(2, .terminal) = a, case .leaf(3, .agent) = b else { return XCTFail() }
+  }
+
+  func testSwapLeavesIgnoresSelfOrUnknownID() {
+    var t = PaneTree()
+    t.swapLeaves(1, 1)
+    XCTAssertEqual(t.leaves.map(\.kind), [.editor, .agent, .terminal])
+    t.swapLeaves(1, 99)
+    XCTAssertEqual(t.leaves.map(\.kind), [.editor, .agent, .terminal])
+  }
 }

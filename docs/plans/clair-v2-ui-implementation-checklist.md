@@ -76,9 +76,19 @@ ui-monospace, "JetBrains Mono", Menlo, monospace`）の2種類のみ。
 
 ### 2.4 Chrome budget
 
-`chrome = { titlebar: 48, sidebarStrip: 34, statusBar: 26 }`。縦 chrome 予算は
+`chrome = { titlebar: 48, activityBarWidth: 44, statusBar: 26 }`。縦 chrome 予算は
 titlebar 48 + status bar 26 = **74px** で全画面共通（editor breadcrumb は意図的な例外、
 2.7参照）。
+
+> **2026-09-20 amendment（re-freeze）**: U01 freeze 時点の `sidebarStrip: 34`
+> （sidebar panel 内、横アイコン列）は、その後の workbench 敵対的UIレビューにより
+> **左サイドバーに独立した縦の Activity Bar**（`activityBarWidth: 44`、sidebar panel の
+> 外・titlebar と status bar の間で全高）に置き換わった。`sidebarStrip` トークンは廃止。
+> あわせて selected/hover の tint を `washSelected` 一本化（旧 `surfaceHover`/
+> `surfaceActive` の二段構え廃止）、file tab の下線（selected 状態の bottom rule）廃止、
+> file tree のルート行の大文字化・シェブロン廃止も同時に正本へ反映。詳細は
+> `prototypes/clair-workbench` の 2026-09-20 コミット群と、同日付で更新した Design
+> canvas `Main` artboard を参照。
 
 ### 2.5 Motion primitives（`motion.tsx`。`U02` が Swift アニメーションへ写す対象）
 
@@ -116,9 +126,11 @@ titlebar 48 + status bar 26 = **74px** で全画面共通（editor breadcrumb �
 
 ## 3. Screen/state 一覧（Mac IDE、`#/ide`）
 
-AppShell（`chrome.tsx` の `AppShell`）は titlebar 48px + sidebar 286px（`SidebarStrip`
-34px + panel）+ main + status bar 26px の構成で一度だけ組み立てられ、画面遷移では
-**panel と main だけ** が差し替わる。全画面共通で、`U04` の対象。
+AppShell（`chrome.tsx` の `AppShell`）は titlebar 48px + activity bar 44px（縦、
+titlebar〜status bar 間で全高）+ sidebar 242px（panel のみ）+ main + status bar 26px
+の構成で一度だけ組み立てられ、画面遷移では **activity bar は常にマウントされたまま、
+panel と main だけ** が差し替わる（2.4 の2026-09-20 amendment 参照）。全画面共通で、
+`U04` の対象。
 
 | 画面 | artboard | 入口 | panel（sidebar） | main | status | motion kind | スコープ |
 |---|---|---|---|---|---|---|---|
@@ -130,7 +142,7 @@ AppShell（`chrome.tsx` の `AppShell`）は titlebar 48px + sidebar 286px（`Si
 | Debug + AI統合（検討中） | `DebugAgent` | `⌘K` →「Debug + AI統合」 | `DebugAgentPanel` | `DebugAgentMain` | `DebugAgentStatus` | depth | Mac／**mock 自身が「検討中」と明記**（6.1参照） |
 | セッション | `SessionRail` | `⌃⌘L`、titlebar の codex タブ | 未定義（explorer ツリーのまま代用中。6.2参照） | `SessionsMain`（セッション表） | `SessionsStatus`（入力待ちバッジ） | lift | Mac（`U06`） |
 | Agentを追加 | `AddAgent`（overlay） | `⌃⌘N`、セッション画面の「Agentを起動」 | — | `AddAgentOverlay`（agent/place/worktree/branch/prompt/confirm） | — | overlay 90ms | Mac（`U05`/`U06`いずれかに整理要、6.7参照） |
-| 設定 | `Settings` | `⌘,`、titlebar の歯車 | `SettingsPanel`（セクション一覧） | `SettingsMain`（設定本文） | `SettingsStatus`（`設定 · セクション名`） | sheet | Mac（`U04`）。セクションの一部が未定義（6.3参照） |
+| 設定 | `Settings` | `⌘,`、titlebar の歯車 | `SettingsPanel`（セクション一覧） | `SettingsMain`（設定本文） | `SettingsStatus`（`設定 · セクション名`） | sheet | Mac（`U04`）。セクションの一部が未定義（6.3参照）。**2026-09-20 amendment**: 画面全体を覆うフルスクリーン画面に変更（titlebar/activity bar/sidebarは非表示、独自headerに戻すボタンは右上✕のみ）。旧「panel/mainだけ差し替え、titlebar・サイドバーは触れたまま」の形は廃止（サイドバー/タブ経由で設定から抜けられてしまう問題があったため） |
 | 検索 | `Search`（overlay） | `⇧⌘F`、titlebar の検索欄 | — | `SearchOverlay` | — | overlay 90ms | Mac（`U04`/`U05`） |
 | コマンドパレット / ファイルへ移動 | `CommandPalette`（overlay） | `⌘K`（`⌘P` はファイルへ移動） | — | `CommandPalette` | — | overlay 90ms | Mac（`U04`） |
 
@@ -146,6 +158,15 @@ panel id が選ばれた場合の共有 panel。`App.tsx` の `Ide()` の panel/
 - 操作: divider ドラッグで比率変更、`⌃⌘D`/`⌃⌘⇧D` で分割、`⌃⌘W` で閉じる、`⌃⌘M` で
   最大化トグル、`⌃⌘=` で均等化、`⌃⌘→` でフォーカス移動（`focusDirection`、leaf の
   出現順で巡回）。
+- **2026-09-20 amendment（新規）**: `agent`/`terminal` pane に hover 時だけ見える
+  24px の pane header を追加（editor pane は既存の breadcrumb がその役割を持つため
+  対象外）。header は左に drag handle（三点、ドラッグ可）、中央にラベル
+  （「Agent」/「ターミナル」）、右に close ボタン（hover、またはそのpaneが
+  focused の間だけ表示）。handle を別 pane の header へドロップすると
+  **その2 pane が表示している内容だけを入れ替える**（tree の形・split
+  ratio・どちらが focused かは変えない）。同一 pane へのドロップは無視。
+  正本: `prototypes/clair-workbench` の `PaneHeader`（`screens/Workspace.tsx`）
+  と `swapPanes`（`store.tsx`）。
 - タブ: 168px 固定幅。名前が入りきらない場合は省略記号ではなく **右端でフェードして
   隠す**（実際にはみ出したタブにのみ適用）。全名は hover のツールチップ。
 - ファイルタブの `dirty` 状態はドットで表現（`Tab` 型の `dirty: boolean`）。`⌘S` で
