@@ -177,3 +177,36 @@ extension CommandRegistry {
     ]
   }()
 }
+
+// U05: read side of the source-control view.
+public struct GitChange: Sendable, Equatable {
+  public let path: String
+  /// Porcelain X (index) and Y (worktree) columns; `?` on both for untracked.
+  public let index: Character, worktree: Character
+  public var untracked: Bool { index == "?" }
+  public var staged: Bool { index != " " && index != "?" }
+  public var unstaged: Bool { worktree != " " }
+}
+
+extension WorkbenchGit {
+  /// `git status` as staged/unstaged/untracked entries. Empty for a non-repo.
+  public static func changes(_ root: String) -> [GitChange] {
+    let r = run(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all"])
+    guard r.ok else { return [] }
+    var out: [GitChange] = []
+    var parts = r.out.split(separator: "\0", omittingEmptySubsequences: true).map(String.init).makeIterator()
+    while let e = parts.next(), e.count > 3 {
+      let x = e[e.startIndex], y = e[e.index(after: e.startIndex)]
+      out.append(GitChange(path: String(e.dropFirst(3)), index: x, worktree: y))
+      if x == "R" || x == "C" { _ = parts.next() }  // -z rename: the old path follows
+    }
+    return out
+  }
+
+  /// Unified diff of one file: staged (index vs HEAD) or worktree (vs index). Untracked files diff against /dev/null.
+  public static func diff(_ root: String, _ path: String, staged: Bool, untracked: Bool = false) -> String {
+    let args = untracked ? ["diff", "--no-index", "--", "/dev/null", path] : ["diff"] + (staged ? ["--cached"] : []) + ["--", path]
+    // `--no-index` exits 1 when files differ, so read the output whatever the status.
+    return run(root, args, merge: false).out
+  }
+}

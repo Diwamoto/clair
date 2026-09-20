@@ -90,4 +90,18 @@ final class WorkbenchGitTests: XCTestCase {
     XCTAssertEqual(r.execute("worktree.create", ["branch": .string("-x")], state: &s).failure?.code, .invalidInput)
     XCTAssertEqual(r.execute("git.switch", ["name": .string("a b")], state: &s).failure?.code, .invalidInput)
   }
+
+  func testChangesAndDiff() throws {
+    let (_, root) = try repo()
+    try "b".write(toFile: root + "/a.txt", atomically: true, encoding: .utf8)
+    try "n".write(toFile: root + "/new.txt", atomically: true, encoding: .utf8)
+    sh(root, "add", "a.txt")
+    try "c".write(toFile: root + "/a.txt", atomically: true, encoding: .utf8)
+    let c = WorkbenchGit.changes(root)
+    XCTAssertEqual(c.first { $0.path == "a.txt" }.map { [$0.staged, $0.unstaged] }, [true, true])
+    XCTAssertEqual(c.first { $0.path == "new.txt" }?.untracked, true)
+    XCTAssertTrue(WorkbenchGit.diff(root, "a.txt", staged: true).contains("+b"))
+    XCTAssertTrue(WorkbenchGit.diff(root, "a.txt", staged: false).contains("+c"))
+    XCTAssertTrue(WorkbenchGit.diff(root, "new.txt", staged: false, untracked: true).contains("+n"))
+  }
 }

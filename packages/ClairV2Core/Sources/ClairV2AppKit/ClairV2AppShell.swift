@@ -257,6 +257,10 @@ import Observation
     private var st: WorkbenchState { store.state }
     @State private var query = ""
     @State private var selection = 0
+    // U05: sidebar mode + source-control view. GUI-local (no command); the stage buttons go through git.stage/unstage.
+    @State private var sidebarMode = "folder"
+    @State private var changes: [GitChange] = []
+    @State private var diff: DiffTarget?
     private let projectColors = [C.debugBlue, C.success, C.attention]
 
     public init() {}
@@ -276,6 +280,8 @@ import Observation
       .overlay { if let p = st.palette { paletteView(p) } }
       .animation(.easeOut(duration: 0.09), value: st.palette == nil)
       .onChange(of: st.palette) { query = ""; selection = 0 }
+      .onChange(of: st.project) { diff = nil; reloadChanges() }
+      .onChange(of: st.files) { reloadChanges() }
       .focusedSceneValue(\.clairWorkbench, store)
       .confirmationDialog(
         "未保存の変更を破棄しますか？", isPresented: Binding(get: { store.pending != nil }, set: { if !$0 { store.pending = nil } })
@@ -342,18 +348,33 @@ import Observation
     private var sidebar: some View {
       VStack(spacing: 0) {
         HStack(spacing: 12) {
-          ForEach(["folder", "shield", "bell", "ladybug"], id: \.self) {
-            Image(systemName: $0).font(.system(size: 13)).foregroundStyle(C.chromeInkMuted)
+          ForEach(["folder", "shield", "bell", "ladybug"], id: \.self) { icon in
+            Button { if icon == "folder" || icon == "shield" { sidebarMode = icon; if icon == "folder" { diff = nil }; reloadChanges() } } label: {
+              Image(systemName: icon).font(.system(size: 13)).foregroundStyle(sidebarMode == icon ? C.textPrimary : C.chromeInkMuted)
+            }.buttonStyle(.plain)
           }
           Spacer()
         }
         .padding(.horizontal, 12).frame(height: ChromeBudget.sidebarStrip)
         Rectangle().fill(L.hairline).frame(height: 1)
-        ScrollView { VStack(alignment: .leading, spacing: 0) { st.settingsOpen ? AnyView(sections) : AnyView(explorer) } }
+        ScrollView { VStack(alignment: .leading, spacing: 0) { st.settingsOpen ? AnyView(sections) : sidebarMode == "shield" ? AnyView(changesList) : AnyView(explorer) } }
         Spacer(minLength: 0)
       }
       .frame(width: 286)
       .background(C.chromeRaised)
+    }
+
+    private var changesList: some View {
+      ChangesList(
+        changes: changes, selected: diff, onSelect: { diff = $0 },
+        onToggle: { c, stage in
+          store.run(stage ? "git.stage" : "git.unstage", ["path": .string(c.path)]); reloadChanges()
+        })
+    }
+
+    private func reloadChanges() {
+      changes = store.activeRoot.map(WorkbenchGit.changes) ?? []
+      if let d = diff, !changes.contains(where: { $0.path == d.path }) { diff = nil }
     }
 
     private var sections: some View {
@@ -419,12 +440,16 @@ import Observation
           Spacer(minLength: 0)
         }
         .background(C.chromeRaised)
+        if let d = diff, let root = store.activeRoot {
+          DiffView(target: d, text: WorkbenchGit.diff(root, d.path, staged: d.staged, untracked: d.untracked), onClose: { diff = nil })
+        } else {
         PaneView(
           node: st.tree.maximized.flatMap { id in st.tree.leaves.first { $0.id == id }.map { .leaf(id: $0.id, kind: $0.kind) } } ?? st.tree.root,
           focused: st.tree.focused, launches: st.launches, onFocus: { store.run("pane.focus", ["id": .int($0)]) },
           onFacts: { store.facts(pane: $0, bells: $1, exit: $2) },
           onRatio: { store.run("pane.setRatio", ["id": .int($0), "ratio": .double($1)]) },
           editor: EditorPane(buffers: store.buffers, root: store.activeRoot, path: st.active, onEdit: { store.edited($0) }))
+        }
       }
     }
 
