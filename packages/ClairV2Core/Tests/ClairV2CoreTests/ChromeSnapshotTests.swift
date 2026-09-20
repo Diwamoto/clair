@@ -36,15 +36,19 @@
       store.run("project.switch", ["name": .string("clair")])
       store.run("tab.open", ["path": .string("apple/ClairApp/ProjectWorkspace.swift")])
       store.edited("apple/ClairApp/ProjectWorkspace.swift")
-      let host = NSHostingView(rootView: ClairV2AppShell(store: store).frame(width: 1440, height: 900))
-      let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1440, height: 900), styleMask: [.titled], backing: .buffered, defer: false)
-      win.contentView = host
-      win.orderBack(nil)
-      RunLoop.current.run(until: Date().addingTimeInterval(2))
-      host.layoutSubtreeIfNeeded()
-      let rep = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
-      host.cacheDisplay(in: host.bounds, to: rep)
-      try XCTUnwrap(rep.representation(using: .png, properties: [:])).write(to: URL(fileURLWithPath: "/tmp/cmp/native.png"))
+      for (name, prep) in [("native", {}), ("palette", { store.run("palette.commands") }), ("quickopen", { store.run("palette.files") })] as [(String, () -> Void)] {
+        prep()
+        let host = NSHostingView(rootView: ClairV2AppShell(store: store).frame(width: 1440, height: 900))
+        let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1440, height: 900), styleMask: [.titled], backing: .buffered, defer: false)
+        win.contentView = host
+        win.orderBack(nil)
+        RunLoop.current.run(until: Date().addingTimeInterval(2))
+        host.layoutSubtreeIfNeeded()
+        let rep = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: rep)
+        try XCTUnwrap(rep.representation(using: .png, properties: [:])).write(to: URL(fileURLWithPath: "/tmp/cmp/\(name).png"))
+        store.run("palette.close")
+      }
     }
   }
 #endif

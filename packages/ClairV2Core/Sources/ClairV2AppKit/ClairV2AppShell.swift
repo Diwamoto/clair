@@ -820,26 +820,67 @@ import Observation
     private func paletteView(_ p: WorkbenchState.Palette) -> some View {
       let list = items(p)
       return ZStack(alignment: .top) {
-        Color.black.opacity(0.35).onTapGesture { store.run("palette.close") }
+        Color(red: 8 / 255, green: 10 / 255, blue: 12 / 255).opacity(0.68).onTapGesture { store.run("palette.close") }
         VStack(spacing: 0) {
-          TextField(p == .commands ? "コマンドを入力" : "ファイルへ移動", text: $query)
-            .textFieldStyle(.plain).padding(12)
-            .onSubmit { run(list) }
-            .onKeyPress(.downArrow) { selection = min(selection + 1, max(list.count - 1, 0)); return .handled }
-            .onKeyPress(.upArrow) { selection = max(selection - 1, 0); return .handled }
-            .onKeyPress(.escape) { store.run("palette.close"); return .handled }
-            .onChange(of: query) { selection = 0 }
-          ForEach(Array(list.enumerated()), id: \.offset) { i, it in
-            HStack { Text(it.title); Spacer(); Text(it.hint).foregroundStyle(C.textTertiary) }
-              .font(Typography.font(Typography.chrome)).foregroundStyle(C.textPrimary)
-              .padding(.horizontal, 12).frame(height: 28)
-              .background(i == selection ? C.surfaceActive : .clear)
-              .onTapGesture { selection = i; run(list) }
+          HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").font(.system(size: 14)).foregroundStyle(C.textQuaternary)
+            TextField("", text: $query)
+              .textFieldStyle(.plain).font(.system(size: 13)).foregroundStyle(C.textPrimary)
+              .onSubmit { run(list) }
+              .onKeyPress(.downArrow) { selection = min(selection + 1, max(list.count - 1, 0)); return .handled }
+              .onKeyPress(.upArrow) { selection = max(selection - 1, 0); return .handled }
+              .onKeyPress(.escape) { store.run("palette.close"); return .handled }
+              .onChange(of: query) { selection = 0 }
+            Text("\(list.count) 件").font(.system(size: 11)).foregroundStyle(C.textQuaternary)
           }
+          .padding(.horizontal, 8).frame(height: 40)
+          .background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.control))
+          .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.hairline))
+          .padding(12)
+          ScrollView {
+            LazyVStack(spacing: 0) {
+              ForEach(Array(list.enumerated()), id: \.offset) { i, it in
+                let on = i == selection
+                HStack(spacing: 8) {
+                  Text(p == .files ? name(it.title) : it.title).font(.system(size: 12)).lineLimit(1)
+                    .foregroundStyle(on ? C.textPrimary : C.textSecondary)
+                  Spacer(minLength: 0)
+                  if p == .files {
+                    Text(it.title).font(.system(size: 11)).lineLimit(1).truncationMode(.head).foregroundStyle(C.textQuaternary)
+                  }
+                  HStack(spacing: 2) {
+                    ForEach(Array(it.hint), id: \.self) { k in
+                      Text(String(k)).font(.system(size: 11)).monospacedDigit().foregroundStyle(on ? C.textSecondary : C.textTertiary)
+                        .frame(minWidth: 20, minHeight: 20).padding(.horizontal, 4)
+                        .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.hairline))
+                    }
+                  }
+                }
+                .padding(.horizontal, 8).frame(height: 32)
+                .background(on ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
+                .contentShape(Rectangle())
+                .onTapGesture { selection = i; run(list) }
+              }
+            }.padding(.horizontal, 8).padding(.bottom, 8)
+          }.frame(minHeight: 322, maxHeight: 420)
+          HStack(spacing: 8) {
+            ForEach([("コマンド", WorkbenchState.Palette.commands), ("ファイルへ移動", .files)], id: \.1) { label, mode in
+              Button { store.run(mode == .commands ? "palette.commands" : "palette.files") } label: {
+                Text(label).font(.system(size: 11, weight: .semibold))
+                  .foregroundStyle(p == mode ? C.textPrimary : C.textTertiary)
+                  .padding(.horizontal, 8).frame(height: 20)
+                  .background(p == mode ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
+              }.buttonStyle(.plain)
+            }
+            Spacer()
+          }
+          .padding(.horizontal, 12).frame(height: 34)
+          .overlay(alignment: .top) { Rectangle().fill(L.hairline).frame(height: 1) }
         }
-        .frame(width: 520).background(C.panel, in: RoundedRectangle(cornerRadius: Radius.overlay))
+        .frame(width: 560).background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.overlay))
         .overlay(RoundedRectangle(cornerRadius: Radius.overlay).stroke(L.strong))
-        .padding(.top, 80)
+        .shadow(color: .black.opacity(0.62), radius: 24, y: 18)
+        .padding(.top, 44)
         .transition(.scale(scale: 0.97, anchor: .top).combined(with: .opacity))
       }
     }
