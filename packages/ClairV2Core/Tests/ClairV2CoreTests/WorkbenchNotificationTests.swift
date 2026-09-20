@@ -36,3 +36,16 @@ final class WorkbenchNotificationTests: XCTestCase {
 private extension Result where Failure == CommandError {
   var failureCode: CommandError.Code? { if case .failure(let e) = self { e.code } else { nil } }
 }
+
+final class AgentSessionTests: XCTestCase {
+  func testStatusFromFacts() {
+    var s = WorkbenchState()
+    s.project = "p"
+    s.launches = [1: AgentLaunch(profile: "claude", cwd: "/x"), 2: AgentLaunch(profile: "codex", cwd: "/x"), 3: AgentLaunch(profile: "opencode", cwd: "/x")]
+    s.notices.record(project: "p", pane: 2, kind: .bell)
+    s.notices.record(project: "p", pane: 3, kind: .exited, exitCode: 0)
+    XCTAssertEqual(s.agentSessions.map(\.status), [.running, .attention, .exited(0)])
+    s.notices.markRead(project: "p")
+    XCTAssertEqual(s.agentSessions[1].status, .running)
+  }
+}

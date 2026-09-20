@@ -349,7 +349,7 @@ import Observation
     private var sidebar: some View {
       VStack(spacing: 0) {
         HStack(spacing: 12) {
-          ForEach(["folder", "shield", "bell", "ladybug"], id: \.self) { icon in
+          ForEach(["folder", "shield", "terminal", "bell", "ladybug"], id: \.self) { icon in
             Button { if icon != "ladybug" { sidebarMode = icon; if icon == "folder" { diff = nil }; reloadChanges() } } label: {
               Image(systemName: icon).font(.system(size: 13)).foregroundStyle(sidebarMode == icon ? C.textPrimary : C.chromeInkMuted)
                 .overlay(alignment: .topTrailing) { if icon == "bell", st.notices.unread() > 0 { Circle().fill(C.attention).frame(width: 6, height: 6).offset(x: 3, y: -2) } }
@@ -359,11 +359,18 @@ import Observation
         }
         .padding(.horizontal, 12).frame(height: ChromeBudget.sidebarStrip)
         Rectangle().fill(L.hairline).frame(height: 1)
-        ScrollView { VStack(alignment: .leading, spacing: 0) { st.settingsOpen ? AnyView(sections) : sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "bell" ? AnyView(noticeList) : AnyView(explorer) } }
+        ScrollView { VStack(alignment: .leading, spacing: 0) { st.settingsOpen ? AnyView(sections) : sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "bell" ? AnyView(noticeList) : sidebarMode == "terminal" ? AnyView(sessionList) : AnyView(explorer) } }
         Spacer(minLength: 0)
       }
       .frame(width: 286)
       .background(C.chromeRaised)
+    }
+
+    private var sessionList: some View {
+      SessionList(sessions: st.agentSessions, current: st.project) { s in
+        if s.project != st.project { store.run("project.switch", ["name": .string(s.project)]) }
+        store.run("pane.focus", ["id": .int(s.pane)])
+      }
     }
 
     private var noticeList: some View {

@@ -198,6 +198,44 @@
   }
 
   /// U06: notification history (facts only — bell / exit). Rows are read state + source + fixed wording.
+  struct SessionList: View {
+    let sessions: [AgentSession]
+    let current: String
+    let open: (AgentSession) -> Void
+
+    private func label(_ s: AgentSession) -> (String, Color) {
+      switch s.status {
+      case .running: ("実行中", C.textTertiary)
+      case .attention: ("入力待ち（ベル）", C.attention)
+      case .exited(let c): (c == 0 ? "正常終了" : "異常終了 (exit \(c ?? -1))", C.textQuaternary)
+      }
+    }
+
+    var body: some View {
+      Text("エージェント").font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textTertiary)
+        .padding(.horizontal, 20).frame(height: 26)
+      if sessions.isEmpty {
+        Text("起動中のエージェントはありません").font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textSecondary)
+          .frame(maxWidth: .infinity).padding(16)
+      }
+      ForEach(sessions) { s in
+        let (text, color) = label(s)
+        Button { open(s) } label: {
+          HStack(alignment: .top, spacing: 8) {
+            Circle().fill(color).frame(width: 6, height: 6).padding(.top, 6)
+            VStack(alignment: .leading, spacing: 2) {
+              Text(s.title).font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textPrimary)
+              Text("\(text) · \(s.project == current ? "" : s.project + " · ")\(s.cwd.split(separator: "/").last.map(String.init) ?? s.cwd)")
+                .font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary).lineLimit(1)
+            }
+            Spacer(minLength: 0)
+          }
+          .padding(.horizontal, 20).padding(.vertical, 4).contentShape(Rectangle())
+        }.buttonStyle(.plain)
+      }
+    }
+  }
+
   struct NoticeList: View {
     let log: NotificationLog
     /// `notice.mutePane` addresses panes of the active Project only.
