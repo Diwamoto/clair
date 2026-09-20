@@ -1,6 +1,6 @@
+import ClairMobileKit
 import Combine
 import Foundation
-import ClairMobileKit
 
 enum MobileAppConnectionPhase: String, Equatable {
   case disconnected
@@ -287,7 +287,9 @@ final class MobileControlAppModel: ObservableObject {
         )
       )
       let pairResponse = try await client.request(pairRequest)
-      let credential: MobileDeviceCredential = try MobileControlClientConnection.decodeResult(pairResponse)
+      let credential: MobileDeviceCredential = try MobileControlClientConnection.decodeResult(
+        pairResponse
+      )
       let host = try MobileClientHostRecord(
         endpoint: endpoint,
         hostIdentity: link.hostIdentity,
@@ -364,7 +366,9 @@ final class MobileControlAppModel: ObservableObject {
       )
     )
     let authenticationResponse = try await client.request(authenticationRequest)
-    let result: MobileJSONValue = try MobileControlClientConnection.decodeResult(authenticationResponse)
+    let result: MobileJSONValue = try MobileControlClientConnection.decodeResult(
+      authenticationResponse
+    )
     guard case .object(let values) = result,
       case .bool(true)? = values["authenticated"]
     else {
@@ -376,11 +380,17 @@ final class MobileControlAppModel: ObservableObject {
     guard let connection else { return }
     do {
       let sessionResponse = try await connection.request(MobileControlRequestFactory.sessionList())
-      let sessionResult: MobileSessionListResult = try MobileControlClientConnection.decodeResult(sessionResponse)
-      sessions = sessionResult.sessions.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+      let sessionResult: MobileSessionListResult = try MobileControlClientConnection.decodeResult(
+        sessionResponse
+      )
+      sessions = sessionResult.sessions.sorted {
+        $0.title.localizedStandardCompare($1.title) == .orderedAscending
+      }
 
       let agentResponse = try await connection.request(MobileControlRequestFactory.agentList())
-      let agentResult: MobileAgentCatalog = try MobileControlClientConnection.decodeResult(agentResponse)
+      let agentResult: MobileAgentCatalog = try MobileControlClientConnection.decodeResult(
+        agentResponse
+      )
       agents = agentResult.agents
       profiles = agentResult.profiles
       if let selectedSessionID, !sessions.contains(where: { $0.id == selectedSessionID }) {
@@ -409,7 +419,9 @@ final class MobileControlAppModel: ObservableObject {
         )
       )
       let response = try await connection.request(request)
-      let metadata: MobileSessionSubscribeMetadata = try MobileControlClientConnection.decodeResult(response)
+      let metadata: MobileSessionSubscribeMetadata = try MobileControlClientConnection.decodeResult(
+        response
+      )
       let receipt = MobileSubscriptionReceipt(
         subscriptionID: metadata.subscriptionID,
         streamID: metadata.streamID,

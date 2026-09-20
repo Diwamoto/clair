@@ -126,16 +126,18 @@ final class ClairApplicationDelegate: NSObject, NSApplicationDelegate {
         return nil
       }
 
-      guard let action = Self.keyboardShortcutAction(
-        for: event,
-        modifiers: modifiers,
-        key: key
-      ) else {
+      guard
+        let action = Self.keyboardShortcutAction(
+          for: event,
+          modifiers: modifiers,
+          key: key
+        )
+      else {
         return event
       }
 
       var userInfo: [String: String] = [
-        "action": action.rawValue,
+        "action": action.rawValue
       ]
       if action == .focusGroup, let key {
         userInfo["value"] = key

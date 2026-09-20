@@ -1,6 +1,6 @@
+import ClairMobileKit
 import Combine
 import Foundation
-import ClairMobileKit
 
 /// Connects the native workspace's existing terminal and agent lifecycle to
 /// the transport-neutral mobile host. The bridge is deliberately thin: the
@@ -42,10 +42,11 @@ final class MobileControlRuntimeBridge: ObservableObject {
     self.agentWorkflow = agentWorkflow
     self.worktreeCoordinator = worktreeCoordinator
 
-    let baseDirectory = fileManager.urls(
-      for: .applicationSupportDirectory,
-      in: .userDomainMask
-    ).first ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+    let baseDirectory =
+      fileManager.urls(
+        for: .applicationSupportDirectory,
+        in: .userDomainMask
+      ).first ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
     let storeURL = profile.applicationSupportURL(baseDirectory: baseDirectory)
       .appendingPathComponent(Self.storeFileName, isDirectory: false)
 

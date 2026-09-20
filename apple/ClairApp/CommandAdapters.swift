@@ -1803,12 +1803,13 @@ final class CommandAdapterRouter {
       "id": .string(profile.stableID),
       "title": .string(profile.displayName),
       "executable": .string(profile.executable),
-      "models": .array(profile.suggestedModels.map { model in
-        .object([
-          "id": .string(model.id),
-          "title": .string(model.title),
-        ])
-      }),
+      "models": .array(
+        profile.suggestedModels.map { model in
+          .object([
+            "id": .string(model.id),
+            "title": .string(model.title),
+          ])
+        }),
       "capabilities": .array([.string("agent_launch")]),
     ])
   }

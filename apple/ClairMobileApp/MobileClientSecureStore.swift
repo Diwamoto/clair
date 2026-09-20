@@ -1,6 +1,6 @@
+import ClairMobileKit
 import Foundation
 import Security
-import ClairMobileKit
 
 /// Keeps mobile credentials and device keys in the iOS Keychain.
 ///

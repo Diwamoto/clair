@@ -41,7 +41,12 @@ enum ProjectEditorCommentAnchorError: Error, Equatable, LocalizedError, Sendable
   case invalidRevision(UInt64)
   case invalidRange(String)
   case overlappingEdits
-  case documentMismatch(expectedID: String, actualID: String, expectedRevision: UInt64, actualRevision: UInt64)
+  case documentMismatch(
+    expectedID: String,
+    actualID: String,
+    expectedRevision: UInt64,
+    actualRevision: UInt64
+  )
   case historyUnavailable
 
   var errorDescription: String? {
@@ -330,10 +335,12 @@ final class ProjectEditorCommentAnchorStore {
     }
 
     let sortedEdits = edits.sorted { $0.range.location < $1.range.location }
-    let isFullyReplaced = anchor.range.length > 0 && isCovered(
-      anchor.range,
-      by: sortedEdits
-    )
+    let isFullyReplaced =
+      anchor.range.length > 0
+      && isCovered(
+        anchor.range,
+        by: sortedEdits
+      )
     let start = mapBoundary(
       anchor.range.location,
       affinity: .after,

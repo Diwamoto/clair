@@ -347,10 +347,12 @@ private final class DebugDAPTransport: @unchecked Sendable {
         onMessage?(.diagnostic("Could not encode DAP request \(command)."))
         return sequence
       }
-      connection.send(content: frame, completion: .contentProcessed { [weak self] error in
-        guard let self, let error else { return }
-        self.notifyClosed("DAP send failed: \(error.localizedDescription)")
-      })
+      connection.send(
+        content: frame,
+        completion: .contentProcessed { [weak self] error in
+          guard let self, let error else { return }
+          self.notifyClosed("DAP send failed: \(error.localizedDescription)")
+        })
       return sequence
     }
   }
@@ -828,7 +830,10 @@ final class DebugSessionModel: ObservableObject {
       finishStop()
     default:
       if command.hasPrefix("setBreakpoints:") {
-        applyBreakpointResponse(body, sourcePath: String(command.dropFirst("setBreakpoints:".count)))
+        applyBreakpointResponse(
+          body,
+          sourcePath: String(command.dropFirst("setBreakpoints:".count))
+        )
       }
     }
   }
@@ -857,7 +862,9 @@ final class DebugSessionModel: ObservableObject {
         appendConsole(.output, output.trimmingCharacters(in: .newlines))
       }
     case "breakpoint":
-      if let object = jsonObject(from: body), let breakpoint = object["breakpoint"] as? [String: Any] {
+      if let object = jsonObject(from: body),
+        let breakpoint = object["breakpoint"] as? [String: Any]
+      {
         updateBreakpointVerification(breakpoint)
       }
     case "exited", "terminated":
@@ -903,7 +910,8 @@ final class DebugSessionModel: ObservableObject {
     guard let object = jsonObject(from: body),
       let scopes = object["scopes"] as? [[String: Any]]
     else { return }
-    let scope = scopes.first { ($0["name"] as? String)?.lowercased().contains("local") == true }
+    let scope =
+      scopes.first { ($0["name"] as? String)?.lowercased().contains("local") == true }
       ?? scopes.first
     guard let scope, let reference = (scope["variablesReference"] as? NSNumber)?.intValue,
       reference != 0
@@ -934,7 +942,8 @@ final class DebugSessionModel: ObservableObject {
     else { return }
     let requested = breakpoints.filter { $0.sourcePath == sourcePath }
     for (index, value) in values.enumerated() where index < requested.count {
-      guard let breakpointIndex = breakpoints.firstIndex(where: { $0.id == requested[index].id }) else { continue }
+      guard let breakpointIndex = breakpoints.firstIndex(where: { $0.id == requested[index].id })
+      else { continue }
       breakpoints[breakpointIndex].verified = (value["verified"] as? Bool) ?? false
       breakpoints[breakpointIndex].message = value["message"] as? String
     }
@@ -946,9 +955,11 @@ final class DebugSessionModel: ObservableObject {
       let line = (object["line"] as? NSNumber)?.intValue
     else { return }
     let normalizedPath = normalizedSourcePath(path)
-    guard let index = breakpoints.firstIndex(where: {
-      $0.sourcePath == normalizedPath && $0.line == line
-    }) else { return }
+    guard
+      let index = breakpoints.firstIndex(where: {
+        $0.sourcePath == normalizedPath && $0.line == line
+      })
+    else { return }
     breakpoints[index].verified = (object["verified"] as? Bool) ?? false
     breakpoints[index].message = object["message"] as? String
   }
@@ -1006,7 +1017,9 @@ final class DebugSessionModel: ObservableObject {
   }
 
   private func jsonObject(from data: Data?) -> [String: Any]? {
-    guard let data, let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+    guard let data,
+      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    else {
       return nil
     }
     return object
@@ -1035,9 +1048,10 @@ final class DebugSessionModel: ObservableObject {
       candidates.append(URL(fileURLWithPath: configured))
     }
     if let path = ProcessInfo.processInfo.environment["PATH"] {
-      candidates.append(contentsOf: path.split(separator: ":").map {
-        URL(fileURLWithPath: String($0)).appendingPathComponent("dlv")
-      })
+      candidates.append(
+        contentsOf: path.split(separator: ":").map {
+          URL(fileURLWithPath: String($0)).appendingPathComponent("dlv")
+        })
     }
     candidates += [
       URL(fileURLWithPath: "/opt/homebrew/bin/dlv"),
@@ -1376,7 +1390,9 @@ struct DebugConsoleView: View {
           .foregroundStyle(WorkspaceChrome.textTertiary)
         Text(session.state.title)
           .font(WorkspaceChrome.chromeFont(size: 9))
-          .foregroundStyle(session.state == .failed ? WorkspaceChrome.danger : WorkspaceChrome.textMuted)
+          .foregroundStyle(
+            session.state == .failed ? WorkspaceChrome.danger : WorkspaceChrome.textMuted
+          )
         Spacer(minLength: 0)
         Button("クリア") {
           session.clearConsole()

@@ -1,5 +1,5 @@
-import SwiftUI
 import ClairMobileKit
+import SwiftUI
 
 private enum MobileAppTab: Hashable {
   case overview
@@ -143,9 +143,13 @@ struct MobileControlAppView: View {
         }
       }
       ToolbarItem(placement: .topBarTrailing) {
-        Button { model.refresh() } label: { Image(systemName: "arrow.clockwise") }
-          .disabled(!model.isConnected)
-          .accessibilityLabel("更新")
+        Button {
+          model.refresh()
+        } label: {
+          Image(systemName: "arrow.clockwise")
+        }
+        .disabled(!model.isConnected)
+        .accessibilityLabel("更新")
       }
     }
   }
@@ -162,7 +166,9 @@ struct MobileControlAppView: View {
       } else {
         List {
           ForEach(model.sessions) { session in
-            Button { model.selectSession(session) } label: {
+            Button {
+              model.selectSession(session)
+            } label: {
               SessionRow(session: session)
             }
             .buttonStyle(.plain)
@@ -232,9 +238,12 @@ struct MobileControlAppView: View {
           LabeledContent("Endpoint", value: endpoint)
             .font(.system(size: 11, design: .monospaced))
         }
-        Text("Cloudflare / Tailscaleのprivate routeは、この認証済みendpointの外側に置かれます。viewportはMacのPTY resizeへ送りません。")
-          .font(.system(size: 11))
-          .foregroundStyle(MobileAppPalette.secondary)
+        Text(
+          "Cloudflare / Tailscaleのprivate routeは、この認証済みendpointの外側に置かれます。"
+            + "viewportはMacのPTY resizeへ送りません。"
+        )
+        .font(.system(size: 11))
+        .foregroundStyle(MobileAppPalette.secondary)
       } header: {
         Text("接続")
       }
@@ -347,7 +356,9 @@ private struct MobileTerminalView: View {
           .font(.system(size: 14, weight: .semibold))
         HStack(spacing: 8) {
           Text(session.lifecycle.rawValue.uppercased())
-            .foregroundStyle(session.lifecycle == .running ? MobileAppPalette.green : MobileAppPalette.orange)
+            .foregroundStyle(
+              session.lifecycle == .running ? MobileAppPalette.green : MobileAppPalette.orange
+            )
           Text(session.cwd)
             .lineLimit(1)
             .truncationMode(.middle)
@@ -471,7 +482,9 @@ private struct SessionRow: View {
       Spacer()
       Text(session.lifecycle.rawValue)
         .font(.system(size: 10, design: .monospaced))
-        .foregroundStyle(session.lifecycle == .running ? MobileAppPalette.green : MobileAppPalette.orange)
+        .foregroundStyle(
+          session.lifecycle == .running ? MobileAppPalette.green : MobileAppPalette.orange
+        )
     }
     .padding(.vertical, 7)
   }
@@ -494,8 +507,8 @@ private struct AgentRow: View {
               .compactMap { $0 }
               .joined(separator: " · ")
           )
-            .font(.system(size: 10, design: .monospaced))
-            .foregroundStyle(MobileAppPalette.secondary)
+          .font(.system(size: 10, design: .monospaced))
+          .foregroundStyle(MobileAppPalette.secondary)
         }
         Spacer()
         if agent.attention {
@@ -514,7 +527,10 @@ private struct AgentRow: View {
         if model.canSteerAgent {
           Menu("コマンド") {
             Button("モデルを変更…") {
-              model.sendAgentCommand(agent.profileID == "opencode" ? "/models" : "/model", to: agent)
+              model.sendAgentCommand(
+                agent.profileID == "opencode" ? "/models" : "/model",
+                to: agent
+              )
             }
             Button("状態を表示") {
               model.sendAgentCommand("/status", to: agent)
@@ -640,7 +656,9 @@ private struct AgentLaunchCard: View {
     if selectedProfile == nil {
       selectedProfileID = model.profiles.first?.id
     }
-    if selectedProjectID == nil || !model.projectOptions.contains(where: { $0.id == selectedProjectID }) {
+    if selectedProjectID == nil
+      || !model.projectOptions.contains(where: { $0.id == selectedProjectID })
+    {
       selectedProjectID = model.projectOptions.first?.id
     }
   }
@@ -793,8 +811,8 @@ private enum MobileAppPalette {
   static let orange = Color(red: 0.95, green: 0.61, blue: 0.34)
 }
 
-private extension View {
-  func mobileCard() -> some View {
+extension View {
+  fileprivate func mobileCard() -> some View {
     padding(13)
       .background(MobileAppPalette.surface, in: RoundedRectangle(cornerRadius: 10))
       .overlay {
