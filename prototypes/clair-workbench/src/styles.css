@@ -121,8 +121,14 @@ textarea:focus-visible,
 }
 
 .act:hover {
-  background: #2e333c;
+  /* Same white wash as the "selected" state (wash.selected in tokens.ts) —
+     hover and selected are meant to read as one tint, not two. */
+  background: rgba(255, 255, 255, 0.08);
   color: #caccd2;
+}
+
+.tab-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .msg-time {
@@ -137,6 +143,21 @@ textarea:focus-visible,
 }
 .rail-row:hover .go-hint {
   visibility: visible;
+}
+
+/* Terminal/agent pane header: the drag handle and close button only show up
+   on hover, or (close button only) while the pane is focused — a header
+   that's visible all the time would put a permanent line of chrome above
+   every pane, which is exactly what the "no header per pane" rule avoids. */
+.pane-header-actions {
+  opacity: 0;
+  transition: opacity 80ms linear;
+}
+.pane-hoverable:hover .pane-header-actions {
+  opacity: 1;
+}
+.pane-header-actions.pane-visible {
+  opacity: 1;
 }
 
 .scroll {

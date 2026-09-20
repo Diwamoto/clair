@@ -3,7 +3,7 @@ import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { targetRing, useContextMenu } from '../contextMenu';
 import { files, tree } from '../data';
 import { HighlightedLine } from '../highlight';
-import { IconBranchSmall, IconChevron } from '../icons';
+import { IconBranchSmall, IconChevron, IconCloseThin, IconEllipsis } from '../icons';
 import { copyText, editorMenu, fileMenu, folderMenu, readClipboard, streamMenu } from '../menus';
 import { useWorkbench, type PaneNode } from '../store';
 import { FileIcon } from '../chrome';
@@ -58,7 +58,9 @@ export function ExplorerPanel() {
           );
 
           if (node.type === 'project') {
-            const open = !wb.collapsed.has(node.id);
+            // The repo root keeps its click-to-collapse behaviour but drops
+            // the chevron — it reads as a section label (uppercase, like a
+            // heading), not one more row in the same list as its children.
             return (
               <button
                 key={node.id}
@@ -67,9 +69,10 @@ export function ExplorerPanel() {
                 onContextMenu={(event) => menu(event, (w) => folderMenu(w, node.id, node.name, true), node.id)}
                 style={{ ...row(false), color: color.textPrimary }}
               >
-                {chevron(open)}
                 <IconBranchSmall size={10} />
-                <span style={{ fontSize: fs.caption, fontWeight: 600, marginLeft: space[0] }}>{node.name}</span>
+                <span style={{ fontSize: fs.caption, fontWeight: 600, marginLeft: space[0], textTransform: 'uppercase' }}>
+                  {node.name}
+                </span>
               </button>
             );
           }
@@ -358,31 +361,104 @@ function LogLine({ text, tone }: { text: string; tone?: string }) {
   return <div style={{ color: tint }}>{text || ' '}</div>;
 }
 
+/**
+ * The header a terminal/agent pane shows on hover: a drag handle (three
+ * dots, draggable to another pane to swap what each one shows — the tree
+ * shape and split ratios stay put) and a close button (hover, or while the
+ * pane is focused). Editor panes keep their own breadcrumb instead; this is
+ * only for the panes that had no header at all before.
+ */
+function PaneHeader({ node, label }: { node: Extract<PaneNode, { kind: 'leaf' }>; label: string }) {
+  const wb = useWorkbench();
+  const focused = wb.focusedPane === node.id;
+  const [dragOver, setDragOver] = useState(false);
+
+  return (
+    <div
+      draggable
+      onDragStart={(event) => {
+        event.dataTransfer.setData('text/pane-id', node.id);
+        event.dataTransfer.effectAllowed = 'move';
+      }}
+      onDragOver={(event) => {
+        event.preventDefault();
+        setDragOver(true);
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(event) => {
+        event.preventDefault();
+        setDragOver(false);
+        const fromId = event.dataTransfer.getData('text/pane-id');
+        if (fromId) wb.swapPanes(fromId, node.id);
+      }}
+      style={{
+        height: 24,
+        flexShrink: 0,
+        display: 'flex',
+        alignItems: 'center',
+        gap: space[1],
+        padding: '0 6px 0 8px',
+        background: color.canvas,
+        borderBottom: `1px solid ${dragOver ? line.ring : 'transparent'}`,
+        cursor: 'grab',
+      }}
+    >
+      <span className="pane-header-actions" style={{ display: 'flex', alignItems: 'center', color: color.textQuaternary }}>
+        <IconEllipsis size={12} />
+      </span>
+      <span style={{ flex: 1, textAlign: 'center', fontSize: fs.caption, color: color.textQuaternary }}>{label}</span>
+      <button
+        onClick={(event) => {
+          event.stopPropagation();
+          wb.closePane(node.id);
+        }}
+        title="パネルを閉じる"
+        aria-label="パネルを閉じる"
+        className={`pane-header-actions${focused ? ' pane-visible' : ''}`}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 18,
+          height: 18,
+          borderRadius: radius.control,
+          color: color.textQuaternary,
+        }}
+      >
+        <IconCloseThin size={11} />
+      </button>
+    </div>
+  );
+}
+
 function AgentPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
   const wb = useWorkbench();
   const menu = useContextMenu();
   return (
-    <div
-      onMouseDown={() => wb.setFocusedPane(node.id)}
-      onContextMenu={(event) => {
-        const selection = selectionWithin(event.currentTarget);
-        menu(event, (w) => streamMenu(w, { paneId: node.id, kind: 'agent', selection }));
-      }}
-      className="cl scroll"
-      style={{
-        flex: 1,
-        minHeight: 0,
-        background: color.canvas,
-        padding: '20px 12px 8px 12px',
-        fontSize: fs.caption,
-        lineHeight: '17px',
-        color: color.code,
-        whiteSpace: 'pre',
-      }}
-    >
-      {wb.agentLog.map((l, i) => (
-        <LogLine key={i} text={l.text} tone={l.tone === 'accent' ? undefined : l.tone} />
-      ))}
+    <div className="pane-hoverable" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
+      <PaneHeader node={node} label="Agent" />
+      <div
+        onMouseDown={() => wb.setFocusedPane(node.id)}
+        onContextMenu={(event) => {
+          const selection = selectionWithin(event.currentTarget);
+          menu(event, (w) => streamMenu(w, { paneId: node.id, kind: 'agent', selection }));
+        }}
+        className="cl scroll"
+        style={{
+          flex: 1,
+          minHeight: 0,
+          background: color.canvas,
+          padding: '20px 12px 8px 12px',
+          fontSize: fs.caption,
+          lineHeight: '17px',
+          color: color.code,
+          whiteSpace: 'pre',
+        }}
+      >
+        {wb.agentLog.map((l, i) => (
+          <LogLine key={i} text={l.text} tone={l.tone === 'accent' ? undefined : l.tone} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -402,78 +478,81 @@ function TerminalPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
   const prompt = wb.awaitingApproval ? 'Apply this change? [y/N] ' : '$ ';
 
   return (
-    <div
-      ref={scrollRef}
-      onMouseDown={(event) => {
-        wb.setFocusedPane(node.id);
-        // A right-click must not move focus into the prompt: that would drop
-        // the text selection the menu is about to copy.
-        if (event.button !== 2 && !event.ctrlKey) inputRef.current?.focus();
-      }}
-      onContextMenu={(event) => {
-        const selection = selectionWithin(event.currentTarget);
-        menu(event, (w) =>
-          streamMenu(w, {
-            paneId: node.id,
-            kind: 'terminal',
-            selection,
-            paste: () => {
-              void readClipboard().then((text) => {
-                if (text) setInput((current) => current + text.replace(/\n/g, ' '));
-                requestAnimationFrame(() => inputRef.current?.focus());
-              });
-            },
-          }),
-        );
-      }}
-      className="cl scroll"
-      style={{
-        flex: 1,
-        minHeight: 0,
-        background: color.canvas,
-        padding: '20px 12px 8px 12px',
-        fontSize: fs.caption,
-        lineHeight: '17px',
-        color: color.code,
-        whiteSpace: 'pre',
-        cursor: 'text',
-      }}
-    >
-      {wb.terminal.map((l, i) => (
-        <LogLine key={i} text={l.text} tone={l.tone} />
-      ))}
-      <div style={{ display: 'flex', alignItems: 'center' }}>
-        <span style={{ color: wb.awaitingApproval ? color.code : color.codeComment }}>{prompt}</span>
-        <span style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center' }}>
-          <span>{input}</span>
-          <span
-            className="caret"
-            style={{ display: 'inline-block', width: 7, height: 14, background: color.code, marginLeft: 2 }}
-          />
-          <input
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                wb.runTerminal(input);
-                setInput('');
-              }
-            }}
-            style={{
-              position: 'absolute',
-              inset: 0,
-              width: '100%',
-              border: 0,
-              outline: 'none',
-              background: 'transparent',
-              color: 'transparent',
-              caretColor: 'transparent',
-              fontFamily: mono,
-              fontSize: fs.caption,
-            }}
-          />
-        </span>
+    <div className="pane-hoverable" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
+      <PaneHeader node={node} label="ターミナル" />
+      <div
+        ref={scrollRef}
+        onMouseDown={(event) => {
+          wb.setFocusedPane(node.id);
+          // A right-click must not move focus into the prompt: that would drop
+          // the text selection the menu is about to copy.
+          if (event.button !== 2 && !event.ctrlKey) inputRef.current?.focus();
+        }}
+        onContextMenu={(event) => {
+          const selection = selectionWithin(event.currentTarget);
+          menu(event, (w) =>
+            streamMenu(w, {
+              paneId: node.id,
+              kind: 'terminal',
+              selection,
+              paste: () => {
+                void readClipboard().then((text) => {
+                  if (text) setInput((current) => current + text.replace(/\n/g, ' '));
+                  requestAnimationFrame(() => inputRef.current?.focus());
+                });
+              },
+            }),
+          );
+        }}
+        className="cl scroll"
+        style={{
+          flex: 1,
+          minHeight: 0,
+          background: color.canvas,
+          padding: '20px 12px 8px 12px',
+          fontSize: fs.caption,
+          lineHeight: '17px',
+          color: color.code,
+          whiteSpace: 'pre',
+          cursor: 'text',
+        }}
+      >
+        {wb.terminal.map((l, i) => (
+          <LogLine key={i} text={l.text} tone={l.tone} />
+        ))}
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <span style={{ color: wb.awaitingApproval ? color.code : color.codeComment }}>{prompt}</span>
+          <span style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center' }}>
+            <span>{input}</span>
+            <span
+              className="caret"
+              style={{ display: 'inline-block', width: 7, height: 14, background: color.code, marginLeft: 2 }}
+            />
+            <input
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  wb.runTerminal(input);
+                  setInput('');
+                }
+              }}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: '100%',
+                border: 0,
+                outline: 'none',
+                background: 'transparent',
+                color: 'transparent',
+                caretColor: 'transparent',
+                fontFamily: mono,
+                fontSize: fs.caption,
+              }}
+            />
+          </span>
+        </div>
       </div>
     </div>
   );

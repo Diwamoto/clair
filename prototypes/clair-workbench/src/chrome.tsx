@@ -6,12 +6,12 @@
 // each drew their own header because an artboard is a single still frame —
 // those are treated as internal parts of this shell, not as separate chrome.
 
-import { Fragment, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
 import { targetRing, useContextMenu } from './contextMenu';
 import { files, projectTabs, type FileKind } from './data';
 import { fileMenu, projectMenu, sessionTabMenu, standInTabMenu } from './menus';
-import { color, fs, groupColor, line, mono, radius, space, type GroupColorKey } from './tokens';
+import { color, fs, groupColor, line, mono, radius, space, wash, withAlpha, type GroupColorKey } from './tokens';
 import {
   IconBranch,
   IconBug,
@@ -78,7 +78,8 @@ export function Act({
         position: 'relative',
         width,
         height,
-        background: active ? color.surfaceActive : undefined,
+        // Same white-wash "selected" as the tabs now use, not surfaceActive.
+        background: active ? wash.selected : undefined,
         color: active ? color.chromeInk : undefined,
       }}
     >
@@ -182,6 +183,7 @@ function Tab({
   const tint = active ? color.chromeInk : color.textTertiary;
   return (
     <button
+      className={active ? undefined : 'tab-btn'}
       onClick={onClick}
       onContextMenu={onContextMenu}
       title={label}
@@ -195,10 +197,12 @@ function Tab({
         width: TAB_WIDTH,
         flexShrink: 0,
         borderRadius: radius.card,
-        // The selected tab wears the pane's own colour, so it reads as a hole
-        // through the chrome onto the surface below rather than a marker
-        // painted on top of it.
-        background: active ? color.canvas : 'transparent',
+        // Selected is a white wash over chrome — the same idiom Activity's
+        // and Overlays' own "selected" rows already use — so it reads
+        // brighter than plain surfaceActive. Unselected must omit
+        // `background` entirely (not 'transparent'): an inline value of any
+        // kind outranks the .hoverable:hover rule and silently kills hover.
+        background: active ? wash.selected : undefined,
         height: 38,
         alignSelf: 'center',
         overflow: 'hidden',
@@ -243,9 +247,6 @@ function Tab({
             <path d="M4 4l8 8M12 4l-8 8" />
           </svg>
         </span>
-      ) : null}
-      {active ? (
-        <span style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 1.5, background: color.textPrimary }} />
       ) : null}
     </button>
   );
@@ -343,16 +344,20 @@ function ProjectChip({
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: space[2],
         height: 26,
-        padding: '0 8px',
+        padding: '0 10px',
         alignSelf: 'center',
         flexShrink: 0,
         borderRadius: radius.card,
+        // The chip carries the group's colour as its own fill now, not a
+        // dot beside the name — `withAlpha` is the same helper the tab
+        // group's own doc describes for this (14-22% fill / 28-55% border;
+        // `gray` already carries its own alpha, so it passes through as-is).
+        background: withAlpha(swatch, 0.16),
+        border: `1px solid ${withAlpha(swatch, 0.4)}`,
         boxShadow: targeted ? `0 0 0 2px ${color.chrome}, 0 0 0 3px ${line.ring}` : undefined,
       }}
     >
-      <span style={{ width: 6, height: 6, borderRadius: '50%', background: swatch, flexShrink: 0 }} />
       <span style={text}>{label}</span>
     </button>
   );
@@ -693,30 +698,79 @@ export function SourceControlModeTabs() {
   );
 }
 
-function SidebarStrip() {
+// A separate vertical rail, not a strip folded into the sidebar's top edge —
+// VSCode/JetBrains/Zed/Cursor all keep navigation identity off to the side
+// in its own column, so it never competes with the panel's own content for
+// width the way the old 34px horizontal strip did. Icons grew 16->18px now
+// that there's headroom for them; 44px matches the touch/device sizing the
+// Mobile artboards already use elsewhere in Tokens.
+const ACTIVITY_BAR_WIDTH = 44;
+const NAV_ITEM_HEIGHT = 40;
+const NAV_GAP = space[1];
+
+function ActivityBar() {
   const wb = useWorkbench();
   const active = navIdFor(wb.screen);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [visibleCount, setVisibleCount] = useState(NAV.length);
+  const [overflowOpen, setOverflowOpen] = useState(false);
+
+  // "…" only exists to hold what doesn't fit. A vertical rail has far more
+  // room than the old horizontal strip did, so in practice this rarely
+  // renders — but the rail can still fill up as more tools are added later.
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const fullHeight = (n: number) => n * NAV_ITEM_HEIGHT + Math.max(0, n - 1) * NAV_GAP;
+    const compute = () => {
+      const available = el.clientHeight;
+      if (fullHeight(NAV.length) <= available) {
+        setVisibleCount(NAV.length);
+        return;
+      }
+      let count = NAV.length - 1;
+      while (count > 0 && fullHeight(count) + NAV_GAP + NAV_ITEM_HEIGHT > available) count -= 1;
+      setVisibleCount(count);
+    };
+    compute();
+    const observer = new ResizeObserver(compute);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const visible = NAV.slice(0, visibleCount);
+  const overflow = NAV.slice(visibleCount);
+  if (overflow.length === 0 && overflowOpen) setOverflowOpen(false);
+
+  useEffect(() => {
+    if (!overflowOpen) return;
+    const close = () => setOverflowOpen(false);
+    window.addEventListener('mousedown', close);
+    return () => window.removeEventListener('mousedown', close);
+  }, [overflowOpen]);
 
   return (
     <div
       style={{
-        height: 34,
+        width: ACTIVITY_BAR_WIDTH,
         flexShrink: 0,
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
         gap: space[1],
-        padding: '0 8px',
-        borderBottom: `1px solid ${line.chromeSoft}`,
+        padding: '8px 0',
+        backgroundColor: color.chrome,
+        borderRight: `1px solid ${line.chrome}`,
       }}
     >
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: space[1] }}>
-        {NAV.map((item) => {
+      <div ref={containerRef} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: space[1], minHeight: 0, overflow: 'hidden' }}>
+        {visible.map((item) => {
           const Icon = item.icon;
           return (
             <Act
               key={item.id}
-              width={38}
-              height={32}
+              width={32}
+              height={NAV_ITEM_HEIGHT}
               title={item.label}
               active={active === item.id}
               onClick={() => {
@@ -724,14 +778,66 @@ function SidebarStrip() {
                 wb.setScreen(item.screen);
               }}
             >
-              <Icon size={16} />
+              <Icon size={18} />
             </Act>
           );
         })}
       </div>
-      <Act title="その他">
-        <IconEllipsis size={13} />
-      </Act>
+      {overflow.length > 0 ? (
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          <Act title="その他のナビゲーション" active={overflowOpen || overflow.some((i) => active === i.id)} onClick={() => setOverflowOpen((v) => !v)}>
+            <IconEllipsis size={13} />
+          </Act>
+          {overflowOpen ? (
+            <div
+              className="ctx-menu"
+              style={{
+                position: 'absolute',
+                bottom: 0,
+                left: 36,
+                minWidth: 160,
+                padding: 4,
+                borderRadius: radius.overlay,
+                background: color.chromeRaised,
+                border: `1px solid ${line.strong}`,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+                zIndex: 10,
+              }}
+            >
+              {overflow.map((item) => {
+                const Icon = item.icon;
+                const on = active === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    className={on ? undefined : 'hoverable'}
+                    onClick={() => {
+                      wb.setOverlay(null);
+                      wb.setScreen(item.screen);
+                      setOverflowOpen(false);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: space[2],
+                      width: '100%',
+                      height: 30,
+                      padding: '0 8px',
+                      borderRadius: radius.control,
+                      background: on ? wash.selected : undefined,
+                      color: on ? color.textPrimary : color.textSecondary,
+                      fontSize: fs.caption,
+                    }}
+                  >
+                    <Icon size={14} />
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -750,6 +856,86 @@ export function QuotaMeter({ percent = 84, label = '残り16%', tint }: { percen
         {label}
       </span>
     </>
+  );
+}
+
+/**
+ * The branch name in the status bar, clickable to switch — a lightweight
+ * stand-in for `git checkout` without leaving the status bar. Opens upward
+ * (it sits on the bottom edge), same overlay surface and ring as every other
+ * popover.
+ */
+function BranchSwitcher() {
+  const wb = useWorkbench();
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener('mousedown', close);
+    return () => window.removeEventListener('mousedown', close);
+  }, [open]);
+
+  return (
+    <div style={{ position: 'relative' }} onMouseDown={(e) => e.stopPropagation()}>
+      <button
+        className="hoverable"
+        onClick={() => setOpen((v) => !v)}
+        title="ブランチを切り替え"
+        style={{ display: 'flex', alignItems: 'center', gap: space[1], height: 20, padding: '0 4px', borderRadius: radius.control }}
+      >
+        <IconBranch size={12} />
+        <span>{wb.currentBranch}</span>
+      </button>
+      {open ? (
+        <div
+          className="ctx-menu"
+          style={{
+            position: 'absolute',
+            bottom: 24,
+            left: 0,
+            minWidth: 180,
+            padding: 4,
+            borderRadius: radius.overlay,
+            background: color.chromeRaised,
+            border: `1px solid ${line.strong}`,
+            boxShadow: '0 -8px 24px rgba(0,0,0,0.35)',
+            zIndex: 10,
+          }}
+        >
+          <div style={{ padding: '4px 8px', color: color.textQuaternary, fontSize: fs.caption, fontWeight: 600 }}>ブランチを切り替え</div>
+          {wb.branches.map((b) => {
+            const on = b === wb.currentBranch;
+            return (
+              <button
+                key={b}
+                className={on ? undefined : 'hoverable'}
+                onClick={() => {
+                  wb.setCurrentBranch(b);
+                  setOpen(false);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: space[2],
+                  width: '100%',
+                  height: 28,
+                  padding: '0 8px',
+                  borderRadius: radius.control,
+                  background: on ? color.surfaceActive : undefined,
+                  color: on ? color.textPrimary : color.textSecondary,
+                  fontSize: fs.caption,
+                  fontWeight: on ? 600 : 400,
+                }}
+              >
+                <IconBranch size={12} />
+                {b}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -778,10 +964,7 @@ function AppStatusBar({ context, trailing }: { context?: ReactNode; trailing?: R
         fontSize: fs.caption,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: space[1] }}>
-        <IconBranch size={12} />
-        <span>{onBranch ? 'pane-split' : 'main'}</span>
-      </div>
+      <BranchSwitcher />
       <span className="tnum" style={{ color: color.textQuaternary }}>
         {onBranch ? 'worktree' : '↓0 ↑2'}
       </span>
@@ -831,6 +1014,7 @@ export function AppShell({
     >
       <AppTitlebar extra={titlebarExtra} />
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+        <ActivityBar />
         <div
           style={{
             width: sidebarWidth,
@@ -842,7 +1026,6 @@ export function AppShell({
             minHeight: 0,
           }}
         >
-          <SidebarStrip />
           <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>{panel}</div>
         </div>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, position: 'relative' }}>
