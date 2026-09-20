@@ -6,8 +6,9 @@
 
   @testable import ClairV2AppKit
 
-  /// Renders the shell offscreen to /tmp/cmp/native.png (chrome only; the libghostty surface is not drawn) for mock comparison.
-  @MainActor final class TmpSnapshotTests: XCTestCase {
+  /// U04 mock comparison aid: `CLAIR_SNAPSHOT=1 swift test --filter ChromeSnapshotTests` renders the shell offscreen to /tmp/cmp/native.png
+  /// (a Workbench mock screenshot goes beside it as mock.png). Skipped otherwise; it asserts nothing.
+  @MainActor final class ChromeSnapshotTests: XCTestCase {
     func fixture(_ root: String, _ files: [String: String]) throws {
       for (p, c) in files {
         let u = URL(fileURLWithPath: root + "/" + p)
@@ -17,6 +18,8 @@
     }
 
     func testSnapshot() throws {
+      try XCTSkipUnless(ProcessInfo.processInfo.environment["CLAIR_SNAPSHOT"] != nil, "opt-in: set CLAIR_SNAPSHOT=1")
+      try FileManager.default.createDirectory(atPath: "/tmp/cmp", withIntermediateDirectories: true)
       setenv("CLAIR_CHANNEL", "dev", 1)
       let base = "/tmp/fx/" + UUID().uuidString
       let src = "import SwiftUI\n\n/// The workspace surface owns one pane tree per project.\nstruct ProjectWorkspaceView: View {\n  var body: some View {\n    Text(1)\n  }\n}\n"

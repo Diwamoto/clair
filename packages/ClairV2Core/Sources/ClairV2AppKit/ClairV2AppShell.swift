@@ -867,7 +867,21 @@ import Observation
           C.surface
           if kind == .terminal { ClairV2GhosttySurface(launch: launches[id].map { ($0.command, $0.cwd) }, pane: id, onFacts: { onFacts(id, $0, $1) }) }  // ponytail: one surface per terminal leaf; session binding is U06
           else if kind == .editor { editor }
-          else { Text(kind.rawValue).foregroundStyle(C.textMuted) }  // agent content: U06
+          else {
+            // Agent output is a terminal (ADR-0002); this pane is where none is running, so offer the launch instead of a bare label.
+            VStack(spacing: 8) {
+              Text("エージェントは起動していません").font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textTertiary)
+              HStack(spacing: 6) {
+                ForEach(AgentProfile.all, id: \.id) { p in
+                  Button { run("agent.launch", ["profile": .string(p.id)]) } label: {
+                    Text(p.title).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary)
+                      .padding(.horizontal, 10).frame(height: 26)
+                      .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(L.hairline))
+                  }.buttonStyle(.plain)
+                }
+              }
+            }
+          }
         }
         // Mock: a pane has no header to say it is focused, so the others recede instead of the focused one getting a frame.
         .opacity(id == focused ? 1 : 0.75)
