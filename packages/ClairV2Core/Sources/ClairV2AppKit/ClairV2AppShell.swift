@@ -191,13 +191,14 @@ import Observation
     /// V03: an AI call at write-or-above risk waits here (IPC thread, never main) for a native
     /// approval. No answer within `timeout` is a denial.
     public var mcpApproval: (id: String, input: CommandInput, risk: CommandRisk)?
+    public private(set) var mcpApprovalDeadline = Date()
     private var mcpDecision: DispatchSemaphore?
     private var mcpApproved = false
 
     nonisolated func requestMCPApproval(_ id: String, _ input: CommandInput, _ risk: CommandRisk, timeout: TimeInterval = 60) -> Bool {
       let sem = DispatchSemaphore(value: 0)
       DispatchQueue.main.sync {
-        MainActor.assumeIsolated { mcpApproval = (id, input, risk); mcpDecision = sem; mcpApproved = false }
+        MainActor.assumeIsolated { mcpApproval = (id, input, risk); mcpApprovalDeadline = Date().addingTimeInterval(timeout); mcpDecision = sem; mcpApproved = false }
       }
       _ = sem.wait(timeout: .now() + timeout)
       return DispatchQueue.main.sync {
@@ -304,12 +305,13 @@ import Observation
       ) {
         Button("破棄して続行", role: .destructive) { store.confirm() }
       }
-      .confirmationDialog(
-        store.mcpApproval.map { "AI が「\($0.id)」（\($0.risk.label)）を実行しようとしています" } ?? "",
-        isPresented: Binding(get: { store.mcpApproval != nil }, set: { if !$0 { store.resolveMCPApproval(false) } })
-      ) {
-        Button("許可して実行") { store.resolveMCPApproval(true) }
+      .overlay(alignment: .topTrailing) {
+        if let a = store.mcpApproval {
+          ApprovalCard(id: a.id, input: a.input, risk: a.risk, deadline: store.mcpApprovalDeadline, decide: store.resolveMCPApproval)
+            .padding(.top, 56).padding(.trailing, 12).transition(.move(edge: .trailing).combined(with: .opacity))
+        }
       }
+      .animation(.easeOut(duration: 0.18), value: store.mcpApproval?.id)
     }
 
     private var titlebar: some View {

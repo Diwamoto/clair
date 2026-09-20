@@ -123,6 +123,7 @@
     let onClose: () -> Void
     @State private var composing: Int?
     @State private var draft = ""
+    @State private var hunk = -1
     /// A diff this long is cut with a notice instead of laying out every row.
     static let maxLines = 5000
 
@@ -148,11 +149,24 @@
 
     var body: some View {
       let rows = Self.rows(text)
+      let hunks = rows.indices.filter { rows[$0].text.hasPrefix("@@") }
+      ScrollViewReader { proxy in
       VStack(spacing: 0) {
         HStack {
           Text(target.path).font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textPrimary)
           Text(target.staged ? "ステージ済み" : target.untracked ? "未追跡" : "変更").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary)
           Spacer()
+          if !hunks.isEmpty {
+            Text("\(max(hunk, 0) + 1)/\(hunks.count)").font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary)
+            ForEach([-1, 1], id: \.self) { d in
+              Button {
+                hunk = min(max(hunk + d, 0), hunks.count - 1)
+                withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(hunks[hunk], anchor: .top) }
+              } label: { Image(systemName: d < 0 ? "chevron.up" : "chevron.down").foregroundStyle(C.chromeInk) }
+                .buttonStyle(.plain).keyboardShortcut(d < 0 ? .upArrow : .downArrow, modifiers: .option)
+                .help(d < 0 ? "前の hunk (⌥↑)" : "次の hunk (⌥↓)")
+            }
+          }
           Button(action: onClose) { Image(systemName: "xmark").foregroundStyle(C.chromeInk) }.buttonStyle(.plain)
         }.padding(.horizontal, 12).frame(height: 32).background(C.chromeRaised)
         if text.isEmpty {
@@ -160,8 +174,8 @@
         } else {
           ScrollView([.vertical, .horizontal]) {
             LazyVStack(alignment: .leading, spacing: 0) {
-              ForEach(Array(rows.enumerated()), id: \.offset) { _, r in
-                line(r)
+              ForEach(Array(rows.enumerated()), id: \.offset) { i, r in
+                line(r).id(i)
                 if let n = r.newLine {
                   ForEach(threads[n] ?? []) { thread($0) }
                   if composing == n { composer(n) }
@@ -174,6 +188,7 @@
           }
         }
       }.background(C.surface)
+      }
     }
 
     private func line(_ r: Row) -> some View {
@@ -213,6 +228,52 @@
         Button("キャンセル") { composing = nil }.buttonStyle(.plain).foregroundStyle(C.textTertiary)
       }
       .padding(8).background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.card)).padding(.leading, 28).padding(.vertical, 4)
+    }
+  }
+
+  /// U06: an AI (MCP) call at write-or-above risk waits here. Facts only: command, risk, arguments, time left.
+  /// No answer by the deadline is a denial (V03); ⌘↩ allows, esc denies.
+  struct ApprovalCard: View {
+    let id: String
+    let input: CommandInput
+    let risk: CommandRisk
+    let deadline: Date
+    let decide: (Bool) -> Void
+
+    private func value(_ a: CommandArg) -> String {
+      switch a {
+      case .string(let s): s
+      case .int(let i): String(i)
+      case .double(let d): String(d)
+      case .bool(let b): String(b)
+      }
+    }
+
+    var body: some View {
+      VStack(alignment: .leading, spacing: 8) {
+        HStack(spacing: 6) {
+          Circle().fill(risk >= .destructive ? C.danger : C.attention).frame(width: 6, height: 6)
+          Text("AI が実行を求めています").font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textPrimary)
+          Spacer()
+          TimelineView(.periodic(from: .now, by: 1)) { c in
+            Text("残り \(max(0, Int(deadline.timeIntervalSince(c.date).rounded(.up)))) 秒").font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary)
+          }
+        }
+        Text(id).font(.system(size: 12, design: .monospaced)).foregroundStyle(C.code)
+        Text("リスク: \(risk.label)").font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+        ForEach(input.keys.sorted(), id: \.self) { k in
+          Text("\(k): \(value(input[k]!))").font(.system(size: 11, design: .monospaced)).foregroundStyle(C.textSecondary).lineLimit(2)
+        }
+        HStack(spacing: 8) {
+          Spacer()
+          Button("拒否") { decide(false) }.keyboardShortcut(.cancelAction)
+          Button("許可して実行") { decide(true) }.keyboardShortcut(.return, modifiers: .command)
+        }.padding(.top, 2)
+      }
+      .padding(12).frame(width: 340, alignment: .leading)
+      .background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.card))
+      .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(C.attention.opacity(0.5)))
+      .shadow(color: .black.opacity(0.35), radius: 12, y: 4)
     }
   }
 
