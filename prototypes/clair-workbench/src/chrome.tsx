@@ -11,7 +11,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSPropert
 import { targetRing, useContextMenu } from './contextMenu';
 import { files, projectTabs, type FileKind } from './data';
 import { fileMenu, projectMenu, sessionTabMenu, standInTabMenu } from './menus';
-import { color, fs, groupColor, line, mono, radius, space, wash, type GroupColorKey } from './tokens';
+import { color, fs, groupColor, line, mono, radius, space, wash, withAlpha, type GroupColorKey } from './tokens';
 import {
   IconBranch,
   IconBug,
@@ -344,16 +344,20 @@ function ProjectChip({
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: space[2],
         height: 26,
-        padding: '0 8px',
+        padding: '0 10px',
         alignSelf: 'center',
         flexShrink: 0,
         borderRadius: radius.card,
+        // The chip carries the group's colour as its own fill now, not a
+        // dot beside the name — `withAlpha` is the same helper the tab
+        // group's own doc describes for this (14-22% fill / 28-55% border;
+        // `gray` already carries its own alpha, so it passes through as-is).
+        background: withAlpha(swatch, 0.16),
+        border: `1px solid ${withAlpha(swatch, 0.4)}`,
         boxShadow: targeted ? `0 0 0 2px ${color.chrome}, 0 0 0 3px ${line.ring}` : undefined,
       }}
     >
-      <span style={{ width: 6, height: 6, borderRadius: '50%', background: swatch, flexShrink: 0 }} />
       <span style={text}>{label}</span>
     </button>
   );
