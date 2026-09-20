@@ -35,3 +35,4 @@ __pycache__/
 # scripts/v2-ghostty.sh and docs/plans/clair-v2-t01-libghostty-foundation.md).
 /packages/ClairV2Core/Vendor/ghostty/
 /.cache/v2-ghostty/
+/ClairV2Mobile.xcodeproj/project.xcworkspace/
