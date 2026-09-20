@@ -198,6 +198,44 @@
   }
 
   /// U06: notification history (facts only — bell / exit). Rows are read state + source + fixed wording.
+  /// V05: project-wide find/replace. Enter searches; replace-all snapshots each file to local history first.
+  struct SearchPanel: View {
+    @Binding var query: String
+    @Binding var replacement: String
+    @Binding var regex: Bool
+    @Binding var caseSensitive: Bool
+    let hits: [SearchHit]
+    let message: String
+    let search: () -> Void
+    let replaceAll: () -> Void
+    let open: (SearchHit) -> Void
+
+    var body: some View {
+      VStack(alignment: .leading, spacing: 6) {
+        TextField("検索", text: $query).onSubmit(search)
+        TextField("置換", text: $replacement)
+        HStack(spacing: 12) {
+          Toggle("正規表現", isOn: $regex)
+          Toggle("大文字小文字", isOn: $caseSensitive)
+          Spacer()
+          Button("すべて置換", action: replaceAll).disabled(hits.isEmpty)
+        }.toggleStyle(.checkbox)
+        Text(message).foregroundStyle(C.textQuaternary)
+      }
+      .textFieldStyle(.roundedBorder).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+      .padding(.horizontal, 12).padding(.vertical, 8)
+      ForEach(Array(hits.prefix(500).enumerated()), id: \.offset) { _, h in
+        Button { open(h) } label: {
+          VStack(alignment: .leading, spacing: 1) {
+            Text(h.text.trimmingCharacters(in: .whitespaces)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textPrimary).lineLimit(1)
+            Text("\(h.path):\(h.line)").font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary).lineLimit(1)
+          }
+          .padding(.horizontal, 20).padding(.vertical, 3).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+        }.buttonStyle(.plain)
+      }
+    }
+  }
+
   struct SessionList: View {
     let sessions: [AgentSession]
     let current: String

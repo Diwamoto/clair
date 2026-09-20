@@ -1,5 +1,6 @@
 #if os(macOS)
   import ClairV2DesignSystem
+  import ClairV2EditorCore
   import ClairV2Workspace
   import IOKit.pwr_mgt
 import IOKit.ps
@@ -262,6 +263,13 @@ import Observation
     @State private var sidebarMode = "folder"
     @State private var changes: [GitChange] = []
     @State private var diff: DiffTarget?
+    // V05: search panel state (GUI-local).
+    @State private var searchQuery = ""
+    @State private var replaceText = ""
+    @State private var searchRegex = false
+    @State private var searchCase = false
+    @State private var hits: [SearchHit] = []
+    @State private var searchMessage = ""
     private let projectColors = [C.debugBlue, C.success, C.attention]
 
     public init() {}
@@ -349,7 +357,7 @@ import Observation
     private var sidebar: some View {
       VStack(spacing: 0) {
         HStack(spacing: 12) {
-          ForEach(["folder", "shield", "terminal", "bell", "ladybug"], id: \.self) { icon in
+          ForEach(["folder", "magnifyingglass", "shield", "terminal", "bell", "ladybug"], id: \.self) { icon in
             Button { if icon != "ladybug" { sidebarMode = icon; if icon == "folder" { diff = nil }; reloadChanges() } } label: {
               Image(systemName: icon).font(.system(size: 13)).foregroundStyle(sidebarMode == icon ? C.textPrimary : C.chromeInkMuted)
                 .overlay(alignment: .topTrailing) { if icon == "bell", st.notices.unread() > 0 { Circle().fill(C.attention).frame(width: 6, height: 6).offset(x: 3, y: -2) } }
@@ -359,11 +367,37 @@ import Observation
         }
         .padding(.horizontal, 12).frame(height: ChromeBudget.sidebarStrip)
         Rectangle().fill(L.hairline).frame(height: 1)
-        ScrollView { VStack(alignment: .leading, spacing: 0) { st.settingsOpen ? AnyView(sections) : sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "bell" ? AnyView(noticeList) : sidebarMode == "terminal" ? AnyView(sessionList) : AnyView(explorer) } }
+        ScrollView { VStack(alignment: .leading, spacing: 0) { st.settingsOpen ? AnyView(sections) : sidebarMode == "magnifyingglass" ? AnyView(searchPanel) : sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "bell" ? AnyView(noticeList) : sidebarMode == "terminal" ? AnyView(sessionList) : AnyView(explorer) } }
         Spacer(minLength: 0)
       }
       .frame(width: 286)
       .background(C.chromeRaised)
+    }
+
+    private var searchPattern: SearchPattern {
+      searchRegex ? .regex(searchQuery, caseSensitive: searchCase) : .literal(searchQuery, caseSensitive: searchCase)
+    }
+
+    private func runSearch() {
+      guard let root = store.activeRoot, !searchQuery.isEmpty else { hits = []; searchMessage = ""; return }
+      hits = (try? ProjectSearch.find(root: root, files: st.files, searchPattern)) ?? []  // unreadable files are skipped; only a bad regex yields nothing
+      searchMessage = hits.isEmpty ? "一致なし（正規表現を確認）" : "\(hits.count) 件 / \(Set(hits.map(\.path)).count) ファイル"
+    }
+
+    private func runReplace() {
+      guard let root = store.activeRoot else { return }
+      let history = LocalHistory(dir: URL.applicationSupportDirectory.appending(path: "Clair/history"))
+      do {
+        let n = try ProjectSearch.replace(root: root, files: st.files, searchPattern, with: replaceText, history: history)
+        runSearch(); searchMessage = "\(n) 件を置換しました（履歴に退避済み）"
+      } catch { searchMessage = "置換できません: \(error)" }
+    }
+
+    private var searchPanel: some View {
+      SearchPanel(
+        query: $searchQuery, replacement: $replaceText, regex: $searchRegex, caseSensitive: $searchCase,
+        hits: hits, message: searchMessage, search: runSearch, replaceAll: runReplace,
+        open: { store.run("tab.open", ["path": .string($0.path)]) })
     }
 
     private var sessionList: some View {
