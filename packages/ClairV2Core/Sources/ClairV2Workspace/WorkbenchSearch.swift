@@ -79,7 +79,12 @@ public enum ProjectSearch {
 extension WorkbenchState {
   /// Agent/external disk change: refresh the tree and drop unsaved markers for the changed files.
   public mutating func applyDiskChange(_ paths: Set<String>, root: String) {
-    files = WorkbenchFiles.scan(root)
+    applyDiskChange(paths, files: WorkbenchFiles.scan(root))
+  }
+
+  /// Same, with the (slow) scan already done off the main thread.
+  public mutating func applyDiskChange(_ paths: Set<String>, files scanned: [WorkbenchFile]) {
+    files = scanned
     dirty.subtract(paths)
   }
 }
@@ -97,7 +102,8 @@ public final class FileWatcher: @unchecked Sendable {
     let cb: FSEventStreamCallback = { _, info, n, paths, _, _ in
       let w = Unmanaged<FileWatcher>.fromOpaque(info!).takeUnretainedValue()
       let list = unsafeBitCast(paths, to: NSArray.self) as! [String]
-      let rel = Set(list.prefix(n).compactMap { $0.hasPrefix(w.root + "/") ? String($0.dropFirst(w.root.count + 1)) : nil })
+      // `.git/` and build output are ignored: our own `git status` rewrites `.git/index`, which would otherwise re-trigger a rescan forever.
+      let rel = Set(list.prefix(n).compactMap { $0.hasPrefix(w.root + "/") ? String($0.dropFirst(w.root.count + 1)) : nil }.filter { !WorkbenchFiles.isSkipped($0) })
       if !rel.isEmpty { w.onChange(rel) }
     }
     guard let s = FSEventStreamCreate(nil, cb, &ctx, [self.root] as CFArray, FSEventStreamEventId(kFSEventStreamEventIdSinceNow), latency,

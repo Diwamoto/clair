@@ -44,7 +44,12 @@ extension WorkbenchState {
     if !project.isEmpty { layouts[project] = layout }
     project = p.name
     files = WorkbenchFiles.scan(p.path)
-    var l = layouts[p.name] ?? ProjectLayout()
+    var l = layouts[p.name] ?? {
+      // First time this Project is shown: every directory starts folded (an unfolded tree of a big repo is thousands of rows).
+      var fresh = ProjectLayout()
+      fresh.collapsed = WorkbenchFiles.directories(of: files)
+      return fresh
+    }()
     let paths = Set(files.map(\.path))
     l.tabs = l.tabs.filter(paths.contains)
     l.dirty.formIntersection(l.tabs)
@@ -57,7 +62,18 @@ extension WorkbenchState {
 }
 
 public enum WorkbenchFiles {
-  static let skipped: Set<String> = [".git", "node_modules", ".build", "DerivedData", ".DS_Store"]
+  static let skipped: Set<String> = [".git", "node_modules", ".build", "DerivedData", ".DS_Store", "target"]
+  /// Every directory that contains a file, as root-relative paths.
+  static func directories(of files: [WorkbenchFile]) -> Set<String> {
+    var out = Set<String>()
+    for f in files {
+      let parts = f.path.split(separator: "/")
+      for d in 0..<max(parts.count - 1, 0) { out.insert(parts[0...d].joined(separator: "/")) }
+    }
+    return out
+  }
+  /// True for a root-relative path inside a skipped directory (build output, VCS internals).
+  static func isSkipped(_ relative: String) -> Bool { relative.split(separator: "/").contains { skipped.contains(String($0)) } }
   static let limit = 20_000  // ponytail: flat cap (10k files scan in ~0.2s, V05); lazy per-directory listing beyond this.
 
   /// Regular files under `root` (relative, sorted), never following symlinks, with Git status if `root` is a repo.

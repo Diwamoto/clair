@@ -160,10 +160,31 @@ import Observation
       watched = state.project
       guard let root = state.projects.first(where: { $0.name == state.project })?.path else { watcher = nil; return }
       watcher = FileWatcher(root: root) { [weak self] paths in
+        // Scan (directory walk + `git status`) off the main thread; only the state swap runs on it.
+        // One scan at a time: events arriving meanwhile are merged and rescanned once.
+        DispatchQueue.main.async { self?.diskChanged(paths, root: root) }
+      }
+    }
+
+    private var scanning = false
+    private var pendingPaths: Set<String> = []
+
+    private func diskChanged(_ paths: Set<String>, root: String) {
+      guard watched == state.project else { return }
+      pendingPaths.formUnion(paths)
+      guard !scanning else { return }
+      scanning = true
+      let batch = pendingPaths; pendingPaths = []
+      DispatchQueue.global(qos: .utility).async { [weak self] in
+        let files = WorkbenchFiles.scan(root)
         DispatchQueue.main.async {
-          guard let self, self.watched == self.state.project else { return }
-          self.state.applyDiskChange(paths, root: root)
-          self.buffers.drop(paths)
+          guard let self else { return }
+          self.scanning = false
+          if self.watched == self.state.project {
+            self.state.applyDiskChange(batch, files: files)
+            self.buffers.drop(batch)
+          }
+          if !self.pendingPaths.isEmpty { self.diskChanged([], root: root) }
         }
       }
     }
