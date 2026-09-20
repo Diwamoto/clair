@@ -263,12 +263,13 @@ import Observation
   /// status 26. Built once; only sidebar panel and main are swapped. Pane
   /// contents other than the terminal are placeholders owned by U05/U06.
   public struct ClairV2AppShell: View {
-    @State private var store = ClairV2WorkbenchStore()
+    @State private var store: ClairV2WorkbenchStore
     private var st: WorkbenchState { store.state }
     @State private var query = ""
     @State private var selection = 0
     // U05: sidebar mode + source-control view. GUI-local (no command); the stage buttons go through git.stage/unstage.
     @State private var sidebarMode = "folder"
+    @State private var collapsedGroups: Set<String> = []
     @State private var changes: [GitChange] = []
     @State private var branch: String?
     @State private var diff: DiffTarget?
@@ -281,7 +282,9 @@ import Observation
     @State private var searchMessage = ""
     private let projectColors = [C.debugBlue, C.success, C.attention]
 
-    public init() {}
+    public init() { _store = State(initialValue: ClairV2WorkbenchStore()) }
+    /// Snapshot tests inject a fixture store.
+    init(store: ClairV2WorkbenchStore) { _store = State(initialValue: store) }
 
     public var body: some View {
       VStack(spacing: 0) {
@@ -316,45 +319,113 @@ import Observation
       .animation(.easeOut(duration: 0.18), value: store.mcpApproval?.id)
     }
 
+    /// Mock `AppTitlebar`: traffic lights, one tab group per Project (dot + name chip, then its file tabs), then the search field and window actions.
     private var titlebar: some View {
-      HStack(spacing: 8) {
+      HStack(spacing: 0) {
         HStack(spacing: 8) {
           ForEach([C.close, C.minimize, C.zoom], id: \.self) { Circle().fill($0).frame(width: 12, height: 12) }
         }
-        .padding(.trailing, 12)
-        ForEach(Array(st.projects.enumerated()), id: \.element.name) { i, p in
-          let color = projectColors[i % projectColors.count]
-          let on = st.project == p.name
-          Button { store.run("project.switch", ["name": .string(p.name)]) } label: {
-            Text(p.name).font(Typography.font(Typography.chromeStrong))
-              .foregroundStyle(C.textPrimary)
-              .padding(.horizontal, 10).frame(height: 26)
-              .background(color.opacity(on ? 0.22 : 0.14), in: RoundedRectangle(cornerRadius: Radius.card))
-              .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(color.opacity(on ? 0.55 : 0.28)))
-              .overlay(alignment: .topTrailing) {
-                if st.notices.unread(p.name) > 0 {
-                  Text("\(st.notices.unread(p.name))").font(.system(size: 9, weight: .bold)).foregroundStyle(C.textPrimary)
-                    .padding(.horizontal, 4).background(color, in: Capsule()).offset(x: 4, y: -4)
-                }
-              }
-              .contextMenu {
-                let muted = st.notices.mutedProjects.contains(p.name)
-                Button(muted ? "通知のミュートを解除" : "通知をミュート") {
-                  store.run("notice.muteProject", ["name": .string(p.name), "muted": .bool(!muted)])
-                }
-              }
-          }.buttonStyle(.plain)
+        .frame(width: 76, alignment: .leading).padding(.leading, 20)
+        ScrollView(.horizontal, showsIndicators: false) {
+          HStack(spacing: 4) {
+            ForEach(Array(st.projects.enumerated()), id: \.element.name) { i, p in
+              if i > 0 { Rectangle().fill(Color(white: 0.95, opacity: 0.09)).frame(width: 1, height: 22).padding(.horizontal, 4) }
+              projectGroup(p, color: projectColors[i % projectColors.count])
+            }
+            Button(action: openFolder) { Image(systemName: "plus").font(.system(size: 13)).foregroundStyle(C.chromeInk).frame(width: 30, height: 30) }
+              .buttonStyle(.plain).help("フォルダを開く")
+          }
         }
-        Button(action: openFolder) { Image(systemName: "plus").foregroundStyle(C.chromeInk) }.buttonStyle(.plain)
-        Spacer()
-        Button { store.run(st.settingsOpen ? "settings.close" : "settings.open") } label: {
-          Image(systemName: "gearshape").foregroundStyle(C.chromeInk)
-        }.buttonStyle(.plain)
+        HStack(spacing: 4) {
+          Button { sidebarMode = "magnifyingglass"; reloadChanges() } label: {
+            HStack(spacing: 4) {
+              Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(C.textQuaternary)
+              Text("ファイル、シンボル").font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+              Spacer(minLength: 0)
+              Text("⌘⇧F").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary)
+            }
+            .padding(.horizontal, 8).frame(width: 200, height: 28)
+            .background(C.chrome, in: RoundedRectangle(cornerRadius: Radius.card))
+            .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(L.hairline))
+          }.buttonStyle(.plain).help("検索")
+          titlebarAction("command", "コマンドパレット", on: st.palette == .commands) { store.run("palette.commands") }
+          titlebarAction("gearshape", "設定", on: st.settingsOpen) { store.run(st.settingsOpen ? "settings.close" : "settings.open") }
+        }.padding(.horizontal, 12)
       }
-      .padding(.horizontal, 16)
       .frame(height: ChromeBudget.titlebar)
       .background(C.chrome)
-      .overlay(alignment: .bottom) { Rectangle().fill(L.chrome).frame(height: 1) }
+      .overlay(alignment: .bottom) { Rectangle().fill(L.hairline).frame(height: 1) }
+    }
+
+    private func titlebarAction(_ icon: String, _ help: String, on: Bool, _ action: @escaping () -> Void) -> some View {
+      Button(action: action) {
+        Image(systemName: icon).font(.system(size: 13)).foregroundStyle(on ? C.chromeInk : C.chromeInkMuted)
+          .frame(width: 30, height: 30).background(on ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
+      }.buttonStyle(.plain).help(help)
+    }
+
+    /// The chip toggles the group's tab strip (GUI-local; it never changes the active Project).
+    private func projectGroup(_ p: WorkbenchProject, color: Color) -> some View {
+      let active = st.project == p.name
+      let tabs = active ? st.tabs : (st.layouts[p.name]?.tabs ?? [])
+      let current = active ? st.active : st.layouts[p.name]?.active
+      let dirty = active ? st.dirty : (st.layouts[p.name]?.dirty ?? [])
+      let folded = collapsedGroups.contains(p.name)
+      return HStack(spacing: 0) {
+        Button { if folded { collapsedGroups.remove(p.name) } else { collapsedGroups.insert(p.name) } } label: {
+          HStack(spacing: 8) {
+            Circle().fill(color).frame(width: 6, height: 6)
+            Text(p.name).font(.system(size: 12, weight: .semibold)).foregroundStyle(active ? C.textPrimary : C.textSecondary).lineLimit(1)
+          }
+          .padding(.horizontal, 8).frame(height: 26)
+          .overlay(alignment: .topTrailing) {
+            if st.notices.unread(p.name) > 0 {
+              Text("\(st.notices.unread(p.name))").font(.system(size: 9, weight: .bold)).foregroundStyle(C.textPrimary)
+                .padding(.horizontal, 4).background(color, in: Capsule()).offset(x: 2, y: -4)
+            }
+          }
+        }
+        .buttonStyle(.plain).help("\(p.name) タブグループを\(folded ? "展開" : "折りたたむ")")
+        .contextMenu {
+          let muted = st.notices.mutedProjects.contains(p.name)
+          Button(muted ? "通知のミュートを解除" : "通知をミュート") {
+            store.run("notice.muteProject", ["name": .string(p.name), "muted": .bool(!muted)])
+          }
+        }
+        if !folded {
+          HStack(spacing: 0) {
+            ForEach(Array(tabs.enumerated()), id: \.element) { i, path in
+              if i > 0 { Rectangle().fill(L.chromeSoft).frame(width: 1, height: 18) }
+              fileTab(path, projectActive: active, project: p.name, selected: path == current && active, dirty: dirty.contains(path))
+            }
+          }.padding(.leading, 4)
+        }
+      }
+    }
+
+    private func fileTab(_ path: String, projectActive: Bool, project: String, selected: Bool, dirty: Bool) -> some View {
+      let tint = selected ? C.chromeInk : C.textTertiary
+      return HStack(spacing: 4) {
+        Image(systemName: path.hasSuffix(".md") ? "text.alignleft" : "doc.text").font(.system(size: 11)).foregroundStyle(tint)
+        Text(name(path)).font(.system(size: 11, weight: selected ? .semibold : .regular)).foregroundStyle(tint).lineLimit(1).truncationMode(.tail)
+        Spacer(minLength: 0)
+        if dirty { Circle().fill(selected ? C.textTertiary : C.textQuaternary).frame(width: 6, height: 6) }
+        if selected {
+          Button { store.run("tab.close", ["path": .string(path)]) } label: {
+            Image(systemName: "xmark").font(.system(size: 9, weight: .medium)).foregroundStyle(C.textTertiary)
+          }.buttonStyle(.plain).help("閉じる")
+        }
+      }
+      .padding(.horizontal, 8).frame(width: 200, height: 38)
+      .background(selected ? C.canvas : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
+      .overlay(alignment: .bottom) { if selected { Rectangle().fill(C.textPrimary).frame(height: 1.5) } }
+      .contentShape(Rectangle())
+      .onTapGesture {
+        if !projectActive { store.run("project.switch", ["name": .string(project)]) }
+        store.run("tab.activate", ["path": .string(path)])
+      }
+      .help(path)
+      .contextMenu { if projectActive { fileMenu(path, tab: true) } }
     }
 
     private func openFolder() {
@@ -557,23 +628,6 @@ import Observation
 
     private var main: some View {
       VStack(spacing: 0) {
-        HStack(spacing: 0) {
-          ForEach(st.tabs, id: \.self) { p in
-            HStack(spacing: 6) {
-              Circle().fill(C.textTertiary).frame(width: 6, height: 6).opacity(st.dirty.contains(p) ? 1 : 0)
-              Text(name(p)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary).lineLimit(1)
-                // ponytail: fade by name length, not measured width; measure if font/width tokens change.
-                .mask(LinearGradient(stops: [.init(color: .black, location: name(p).count > 16 ? 0.8 : 1), .init(color: .clear, location: 1)], startPoint: .leading, endPoint: .trailing))
-                .help(p)
-            }
-            .padding(.horizontal, 12).frame(width: 168, height: 32, alignment: .leading)
-            .background(p == st.active ? C.surfaceActive : .clear)
-            .onTapGesture { store.run("tab.activate", ["path": .string(p)]) }
-            .contextMenu { fileMenu(p, tab: true) }
-          }
-          Spacer(minLength: 0)
-        }
-        .background(C.chromeRaised)
         if let d = diff, let root = store.activeRoot {
           let fileLines = (try? String(contentsOfFile: root + "/" + d.path, encoding: .utf8))?.split(separator: "\n", omittingEmptySubsequences: false)
           let buffer: EditorTransactionManager? = { if case .ready(let m) = store.buffers.load(d.path, root: root) { m } else { nil } }()
