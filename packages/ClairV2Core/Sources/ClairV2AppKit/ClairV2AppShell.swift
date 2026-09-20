@@ -120,7 +120,10 @@ import Observation
     public func run(_ id: String, _ input: CommandInput = [:], confirmed: Bool = false) -> Result<CommandResult, CommandError> {
       // `file.save` from any caller (⌘S, CLI, MCP) writes the buffer first; a failed write keeps the dirty marker.
       if id == "file.save", let p = state.active, let root = activeRoot, buffers.isOpen(p) {
-        do { try buffers.save(p, root: root) } catch {
+        do {
+          try? Self.history.record(root: root, path: p)  // pre-save content; best effort, never blocks a save
+          try buffers.save(p, root: root)
+        } catch {
           let e = CommandError(.preconditionFailed, "保存できません: \(error.localizedDescription)")
           lastError = e; return .failure(e)
         }
@@ -142,6 +145,10 @@ import Observation
     var activeRoot: String? { state.projects.first { $0.name == state.project }?.path }
 
     /// U05: called by the editor surface on every committed edit.
+    static let history = LocalHistory(dir: URL.applicationSupportDirectory.appending(path: "Clair/history"))
+
+    func dropDirty(_ path: String) { state.dirty.remove(path) }
+
     func edited(_ path: String) { state.dirty.insert(path) }  // the GUI owns dirty; never persisted (principle 8)
 
     /// V05: agent/external disk changes refresh the tree and drop unsaved markers (principle 8).
@@ -357,7 +364,7 @@ import Observation
     private var sidebar: some View {
       VStack(spacing: 0) {
         HStack(spacing: 12) {
-          ForEach(["folder", "magnifyingglass", "shield", "terminal", "bell", "ladybug"], id: \.self) { icon in
+          ForEach(["folder", "magnifyingglass", "clock.arrow.circlepath", "shield", "terminal", "bell", "ladybug"], id: \.self) { icon in
             Button { if icon != "ladybug" { sidebarMode = icon; if icon == "folder" { diff = nil }; reloadChanges() } } label: {
               Image(systemName: icon).font(.system(size: 13)).foregroundStyle(sidebarMode == icon ? C.textPrimary : C.chromeInkMuted)
                 .overlay(alignment: .topTrailing) { if icon == "bell", st.notices.unread() > 0 { Circle().fill(C.attention).frame(width: 6, height: 6).offset(x: 3, y: -2) } }
@@ -367,7 +374,7 @@ import Observation
         }
         .padding(.horizontal, 12).frame(height: ChromeBudget.sidebarStrip)
         Rectangle().fill(L.hairline).frame(height: 1)
-        ScrollView { VStack(alignment: .leading, spacing: 0) { st.settingsOpen ? AnyView(sections) : sidebarMode == "magnifyingglass" ? AnyView(searchPanel) : sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "bell" ? AnyView(noticeList) : sidebarMode == "terminal" ? AnyView(sessionList) : AnyView(explorer) } }
+        ScrollView { VStack(alignment: .leading, spacing: 0) { st.settingsOpen ? AnyView(sections) : sidebarMode == "magnifyingglass" ? AnyView(searchPanel) : sidebarMode == "clock.arrow.circlepath" ? AnyView(historyPanel) : sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "bell" ? AnyView(noticeList) : sidebarMode == "terminal" ? AnyView(sessionList) : AnyView(explorer) } }
         Spacer(minLength: 0)
       }
       .frame(width: 286)
@@ -386,7 +393,7 @@ import Observation
 
     private func runReplace() {
       guard let root = store.activeRoot else { return }
-      let history = LocalHistory(dir: URL.applicationSupportDirectory.appending(path: "Clair/history"))
+      let history = ClairV2WorkbenchStore.history
       do {
         let n = try ProjectSearch.replace(root: root, files: st.files, searchPattern, with: replaceText, history: history)
         runSearch(); searchMessage = "\(n) 件を置換しました（履歴に退避済み）"
@@ -397,7 +404,18 @@ import Observation
       SearchPanel(
         query: $searchQuery, replacement: $replaceText, regex: $searchRegex, caseSensitive: $searchCase,
         hits: hits, message: searchMessage, search: runSearch, replaceAll: runReplace,
-        open: { store.run("tab.open", ["path": .string($0.path)]) })
+        open: { store.run("tab.open", ["path": .string($0.path)]); store.buffers.reveal($0.path, line: $0.line) })
+    }
+
+    private var historyPanel: some View {
+      let history = ClairV2WorkbenchStore.history
+      return HistoryList(
+        path: st.active, versions: st.active.flatMap { p in store.activeRoot.flatMap { try? history.versions(root: $0, path: p) } } ?? [],
+        restore: { v in
+          guard let root = store.activeRoot, let p = st.active else { return }
+          try? history.restore(v, root: root, path: p)
+          store.buffers.drop([p]); store.dropDirty(p)  // reload from disk; the pre-restore content is itself a new version
+        })
     }
 
     private var sessionList: some View {

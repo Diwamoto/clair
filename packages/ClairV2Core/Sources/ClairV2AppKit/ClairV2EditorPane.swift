@@ -15,8 +15,12 @@
 
     private var loads: [String: Load] = [:]
     private var revisions: [String: Int] = [:]
+    /// Search-hit jump target (1-based line); `nonce` makes a repeat jump to the same line still fire.
+    private(set) var reveal: (path: String, line: Int, nonce: Int)?
     /// Above this the file is refused rather than loaded whole (large-file paths are E10's scope).
     static let maxBytes = 10_000_000
+
+    func reveal(_ path: String, line: Int) { reveal = (path, line, (reveal?.nonce ?? 0) + 1) }
 
     func isOpen(_ path: String) -> Bool { if case .ready = loads[path] { true } else { false } }
 
@@ -60,7 +64,7 @@
       if let path, let root {
         switch buffers.load(path, root: root) {
         case .ready(let m):
-          EditorSurface(manager: m, onEdit: { onEdit(path) }).id("\(path)#\(buffers.revision(path))")
+          EditorSurface(manager: m, reveal: buffers.reveal?.path == path ? buffers.reveal : nil, onEdit: { onEdit(path) }).id("\(path)#\(buffers.revision(path))")
         case .failed(let message): note(message)
         }
       } else {
@@ -75,7 +79,11 @@
 
   private struct EditorSurface: NSViewRepresentable {
     let manager: EditorTransactionManager
+    let reveal: (path: String, line: Int, nonce: Int)?
     let onEdit: () -> Void
+
+    final class Coordinator { var nonce = 0 }
+    func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> NSScrollView {
       let scroll = NSScrollView()
@@ -94,6 +102,10 @@
       return scroll
     }
 
-    func updateNSView(_ scroll: NSScrollView, context: Context) {}
+    func updateNSView(_ scroll: NSScrollView, context: Context) {
+      guard let r = reveal, r.nonce != context.coordinator.nonce, let view = scroll.documentView as? ClairEditorView else { return }
+      context.coordinator.nonce = r.nonce
+      DispatchQueue.main.async { view.reveal(line: r.line - 1) }  // after the new view is laid out and in a window
+    }
   }
 #endif

@@ -133,6 +133,17 @@ import ClairV2EditorCore
 
     // MARK: - Layout / scrolling
 
+    /// Moves the caret to the start of `line` (0-based, clamped), scrolls it into view and takes focus.
+    public func reveal(line: Int) {
+      let i = min(max(line, 0), snapshot.lineCount - 1)
+      guard let l = try? snapshot.line(at: TextLineIndex(i)) else { return }
+      selection = TextSelectionSet(cursor: l.contentRange.lowerBound)
+      onSelectionChange?(selection)
+      scrollToVisible(NSRect(x: 0, y: CGFloat(i) * lineHeight - 3 * lineHeight, width: 1, height: 7 * lineHeight))
+      window?.makeFirstResponder(self)
+      needsDisplay = true
+    }
+
     public override func viewDidMoveToSuperview() {
       super.viewDidMoveToSuperview()
       guard let clipView = enclosingScrollView?.contentView else { return }

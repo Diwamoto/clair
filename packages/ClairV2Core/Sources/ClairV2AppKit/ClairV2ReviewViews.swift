@@ -236,6 +236,34 @@
     }
   }
 
+  /// V05: local history of the active file, newest first. Restoring snapshots the current content first.
+  struct HistoryList: View {
+    let path: String?
+    let versions: [URL]
+    let restore: (URL) -> Void
+
+    private func label(_ v: URL) -> String {
+      Double(v.lastPathComponent).map { Date(timeIntervalSince1970: $0).formatted(date: .abbreviated, time: .standard) } ?? v.lastPathComponent
+    }
+
+    var body: some View {
+      if path == nil || versions.isEmpty {
+        Text(path == nil ? "ファイルを選択してください。" : "履歴はありません（保存・一括置換の直前に自動退避されます）。")
+          .font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).padding(12)
+      }
+      ForEach(versions, id: \.self) { v in
+        Button { restore(v) } label: {
+          HStack {
+            Text(label(v)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textPrimary)
+            Spacer()
+            Text("復元").font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary)
+          }
+          .padding(.horizontal, 20).padding(.vertical, 4).contentShape(Rectangle())
+        }.buttonStyle(.plain)
+      }
+    }
+  }
+
   struct SessionList: View {
     let sessions: [AgentSession]
     let current: String
