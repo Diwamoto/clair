@@ -270,8 +270,10 @@ import Observation
     // U05: sidebar mode + source-control view. GUI-local (no command); the stage buttons go through git.stage/unstage.
     @State private var sidebarMode = "folder"
     @State private var collapsedGroups: Set<String> = []
+    @State private var rootFolded = false
     @State private var changes: [GitChange] = []
     @State private var branch: String?
+    @State private var sync: (behind: Int, ahead: Int)?
     @State private var diff: DiffTarget?
     // V05: search panel state (GUI-local).
     @State private var searchQuery = ""
@@ -438,17 +440,22 @@ import Observation
 
     private var sidebar: some View {
       VStack(spacing: 0) {
-        HStack(spacing: 12) {
+        HStack(spacing: 2) {
           ForEach(["folder", "magnifyingglass", "clock.arrow.circlepath", "shield", "terminal", "bell", "ladybug"], id: \.self) { icon in
+            let on = sidebarMode == icon && !st.settingsOpen
             Button { if icon != "ladybug" { sidebarMode = icon; if icon == "folder" { diff = nil }; reloadChanges() } } label: {
-              Image(systemName: icon).font(.system(size: 13)).foregroundStyle(sidebarMode == icon ? C.textPrimary : C.chromeInkMuted)
-                .overlay(alignment: .topTrailing) { if icon == "bell", st.notices.unread() > 0 { Circle().fill(C.attention).frame(width: 6, height: 6).offset(x: 3, y: -2) } }
+              Image(systemName: icon).font(.system(size: 13)).foregroundStyle(on ? C.chromeInk : C.chromeInkMuted)
+                .frame(width: 30, height: 28)
+                .background(on ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
+                .overlay(alignment: .topTrailing) { if icon == "bell", st.notices.unread() > 0 { Circle().fill(C.attention).frame(width: 6, height: 6).offset(x: -6, y: 5) } }
             }.buttonStyle(.plain)
           }
           Spacer()
+          Image(systemName: "ellipsis").font(.system(size: 11)).foregroundStyle(C.chromeInkMuted).frame(width: 24, height: 28)
         }
-        .padding(.horizontal, 12).frame(height: ChromeBudget.sidebarStrip)
-        Rectangle().fill(L.hairline).frame(height: 1)
+        // ponytail: the mock strip has 4 entries (files/review/agents/debug); search/history/notices stay as extra native entries, so icons are 30 wide instead of 38.
+        .padding(.horizontal, 8).frame(height: ChromeBudget.sidebarStrip)
+        Rectangle().fill(L.chromeSoft).frame(height: 1)
         ScrollView { VStack(alignment: .leading, spacing: 0) { st.settingsOpen ? AnyView(sections) : sidebarMode == "magnifyingglass" ? AnyView(searchPanel) : sidebarMode == "clock.arrow.circlepath" ? AnyView(historyPanel) : sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "bell" ? AnyView(noticeList) : sidebarMode == "terminal" ? AnyView(sessionList) : AnyView(explorer) } }
         Spacer(minLength: 0)
       }
@@ -534,6 +541,7 @@ import Observation
     private func reloadChanges() {
       changes = store.activeRoot.map(WorkbenchGit.changes) ?? []
       branch = store.activeRoot.flatMap(WorkbenchGit.currentBranch)
+      sync = store.activeRoot.flatMap(WorkbenchGit.aheadBehind)
       if let d = diff, !changes.contains(where: { $0.path == d.path }) { diff = nil }
     }
 
@@ -551,36 +559,68 @@ import Observation
         let parts = f.path.split(separator: "/").map(String.init)
         for d in 0..<parts.count - 1 {
           let id = parts[0...d].joined(separator: "/")
-          if seen.insert(id).inserted { out.append((id, parts[d], d, nil)) }
+          if seen.insert(id).inserted { out.append((id, parts[d], d + 1, nil)) }
         }
-        out.append((f.path, parts.last!, parts.count - 1, f))
+        out.append((f.path, parts.last!, parts.count, f))
       }
-      return ForEach(out.filter { r in !st.collapsed.contains { r.id.hasPrefix($0 + "/") } }, id: \.id) { r in
-        if let f = r.file {
-          row(r.label, depth: r.depth, selected: st.active == f.path && !st.settingsOpen, badge: f.status?.first) { store.run("tab.open", ["path": .string(f.path)]) }
-            .contextMenu { fileMenu(f.path, tab: false) }
-        } else {
-          row((st.collapsed.contains(r.id) ? "▸ " : "▾ ") + r.label, depth: r.depth, selected: false) {
-            store.run("explorer.toggle", ["path": .string(r.id)])
-          }
-          .contextMenu {
-            Button(st.collapsed.contains(r.id) ? "開く" : "折りたたむ") { store.run("explorer.toggle", ["path": .string(r.id)]) }
-            Divider()
-            pathItems(r.id)
+      return VStack(alignment: .leading, spacing: 0) {
+        // Project root: bold, branch glyph; folds the whole tree (GUI-local).
+        treeRow(depth: 0, selected: false, action: { rootFolded.toggle() }) {
+          chevron(open: !rootFolded)
+          Image(systemName: "arrow.triangle.branch").font(.system(size: 9)).foregroundStyle(C.textTertiary)
+          Text(st.project).font(.system(size: 11, weight: .semibold)).foregroundStyle(C.textPrimary)
+          Spacer(minLength: 0)
+        }
+        if !rootFolded {
+          ForEach(out.filter { r in !st.collapsed.contains { r.id.hasPrefix($0 + "/") } }, id: \.id) { r in
+            if let f = r.file {
+              let on = st.active == f.path && !st.settingsOpen
+              let badge = st.dirty.contains(f.path) ? "M" : f.status
+              treeRow(depth: r.depth, selected: on, action: { store.run("tab.open", ["path": .string(f.path)]) }) {
+                Image(systemName: f.path.hasSuffix(".md") ? "text.alignleft" : "doc.text").font(.system(size: 10)).foregroundStyle(on ? C.textSecondary : C.textTertiary).frame(width: 12)
+                Text(r.label).font(.system(size: 11, weight: on ? .semibold : .regular)).foregroundStyle(on ? C.textPrimary : C.textSecondary).lineLimit(1)
+                Spacer(minLength: 0)
+                if let b = badge { Text(b).font(.system(size: 11, weight: .semibold)).foregroundStyle(b == "A" || b == "?" ? C.success : C.attention) }
+              }
+              .contextMenu { fileMenu(f.path, tab: false) }
+            } else {
+              let open = !st.collapsed.contains(r.id)
+              treeRow(depth: r.depth, selected: false, action: { store.run("explorer.toggle", ["path": .string(r.id)]) }) {
+                chevron(open: open)
+                Text(r.label).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary).lineLimit(1)
+                Spacer(minLength: 0)
+              }
+              .contextMenu {
+                Button(open ? "折りたたむ" : "開く") { store.run("explorer.toggle", ["path": .string(r.id)]) }
+                Divider()
+                pathItems(r.id)
+              }
+            }
           }
         }
-      }
+      }.padding(.vertical, 4)
     }
 
     private func row(_ title: String, depth: Int, selected: Bool, badge: Character? = nil, _ action: @escaping () -> Void) -> some View {
+      treeRow(depth: depth, selected: selected, action: action) {
+        Text(title).font(Typography.font(Typography.chrome)).foregroundStyle(selected ? C.textPrimary : C.textSecondary)
+        Spacer(minLength: 0)
+        if let b = badge { Text(String(b)).font(Typography.font(Typography.micro)).foregroundStyle(C.textTertiary) }
+      }
+    }
+
+    private func chevron(open: Bool) -> some View {
+      Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold)).foregroundStyle(C.textTertiary)
+        .rotationEffect(.degrees(open ? 90 : 0)).frame(width: 10)
+    }
+
+    /// Mock explorer row: an inset 26px pill (8px margin outside the fill), 12px indent per level.
+    private func treeRow<Content: View>(depth: Int, selected: Bool, action: @escaping () -> Void, @ViewBuilder _ content: () -> Content) -> some View {
       Button(action: action) {
-        HStack {
-          Text(title).font(Typography.font(Typography.chrome)).foregroundStyle(selected ? C.textPrimary : C.textSecondary)
-          Spacer()
-          if let b = badge { Text(String(b)).font(Typography.font(Typography.micro)).foregroundStyle(C.textTertiary) }
-        }
-        .padding(.leading, 12 + CGFloat(depth) * 12).padding(.trailing, 12).frame(height: 24)
-        .background(selected ? C.surfaceActive : .clear).contentShape(Rectangle())
+        HStack(spacing: 4, content: content)
+          .padding(.leading, 8 + CGFloat(depth) * 12).padding(.trailing, 8).frame(height: 26)
+          .background(selected ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
+          .padding(.horizontal, 8).contentShape(Rectangle())
       }.buttonStyle(.plain)
     }
 
@@ -663,7 +703,7 @@ import Observation
           focused: st.tree.focused, launches: st.launches, onFocus: { store.run("pane.focus", ["id": .int($0)]) },
           onFacts: { store.facts(pane: $0, bells: $1, exit: $2) },
           onRatio: { store.run("pane.setRatio", ["id": .int($0), "ratio": .double($1)]) },
-          editor: EditorPane(buffers: store.buffers, root: store.activeRoot, path: st.active, onEdit: { store.edited($0) }),
+          editor: EditorPane(buffers: store.buffers, root: store.activeRoot, path: st.active, onEdit: { store.edited($0) }, onCaret: { store.buffers.setCaret($0, $1, in: $2) }),
           run: { _ = store.run($0, $1) })
         }
       }
@@ -717,29 +757,33 @@ import Observation
     }
 
     /// U06/U05: facts only — branch, change/dirty counts, agent state. Ln/Col waits on an editor caret callback.
+    /// Mock `AppStatusBar`: branch, ahead/behind, change count, caret, then the session count on the right. 26px, sans, `textTertiary`.
+    // ponytail: no quota meter (needs a provider usage source; the showQuota toggle exists but has no data yet).
     private var statusBar: some View {
       let agents = st.agentSessions.filter { $0.project == st.project && !$0.status.isExited }
       let waiting = agents.filter { $0.status == .attention }.count
-      return HStack(spacing: 14) {
+      let caret = st.active.flatMap { store.buffers.caret[$0] }
+      return HStack(spacing: 12) {
         if st.settingsOpen {
           Text("設定 · \(st.section)")
         } else {
-          if let branch { Label(branch, systemImage: "arrow.triangle.branch") }
-          if !changes.isEmpty { Text("変更 \(changes.count)") }
+          if let branch {
+            HStack(spacing: 4) { Image(systemName: "arrow.triangle.branch").font(.system(size: 10)); Text(branch) }
+          }
+          if let sync { Text("↓\(sync.behind) ↑\(sync.ahead)").foregroundStyle(C.textQuaternary) }
+          if !changes.isEmpty { Text("\(changes.count) 変更") }
           if !st.dirty.isEmpty { Text("未保存 \(st.dirty.count)").foregroundStyle(C.attention) }
+          if let caret { Text("Ln \(caret.line), Col \(caret.col)") }
         }
         Spacer()
-        if !agents.isEmpty {
-          Button { sidebarMode = "terminal" } label: {
-            HStack(spacing: 5) {
-              Circle().fill(waiting > 0 ? C.attention : C.success).frame(width: 6, height: 6)
-              Text(waiting > 0 ? "エージェント \(agents.count) · 入力待ち \(waiting)" : "エージェント \(agents.count) 実行中")
-            }
-          }.buttonStyle(.plain)
-        }
-        if let a = st.active, !st.settingsOpen { Text(a).lineLimit(1) }
+        Button { sidebarMode = "terminal" } label: {
+          HStack(spacing: 5) {
+            if waiting > 0 { Circle().fill(C.attention).frame(width: 6, height: 6) }
+            Text("\(agents.count) セッション" + (waiting > 0 ? " · 入力待ち \(waiting)" : ""))
+          }
+        }.buttonStyle(.plain)
       }
-      .font(Typography.font(Typography.chrome, family: .mono)).foregroundStyle(C.chromeInkMuted)
+      .font(Typography.font(Typography.chrome)).monospacedDigit().foregroundStyle(C.textTertiary)
       .padding(.horizontal, 12).frame(height: ChromeBudget.statusBar)
       .background(C.chrome)
       .overlay(alignment: .top) { Rectangle().fill(L.chrome).frame(height: 1) }

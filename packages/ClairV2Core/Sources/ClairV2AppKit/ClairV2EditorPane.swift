@@ -15,6 +15,15 @@
 
     private var loads: [String: Load] = [:]
     private var revisions: [String: Int] = [:]
+    /// 1-based caret of each open file (status bar Ln/Col); grapheme columns.
+    private(set) var caret: [String: (line: Int, col: Int)] = [:]
+
+    func setCaret(_ path: String, _ sel: TextSelectionSet, in snapshot: TextSnapshot) {
+      guard let head = sel.selections.first?.head,
+        let p = try? snapshot.position(at: head, columnUnit: GraphemeUnit.self, rounding: .down)
+      else { return }
+      caret[path] = (p.line.value + 1, p.column.value + 1)
+    }
     /// Search-hit jump target (1-based line); `nonce` makes a repeat jump to the same line still fire.
     private(set) var reveal: (path: String, line: Int, nonce: Int)?
     /// Above this the file is refused rather than loaded whole (large-file paths are E10's scope).
@@ -62,12 +71,13 @@
     let root: String?
     let path: String?
     let onEdit: (String) -> Void
+    let onCaret: (String, TextSelectionSet, TextSnapshot) -> Void
 
     var body: some View {
       if let path, let root {
         switch buffers.load(path, root: root) {
         case .ready(let m):
-          EditorSurface(manager: m, reveal: buffers.reveal?.path == path ? buffers.reveal : nil, onEdit: { onEdit(path) }).id("\(path)#\(buffers.revision(path))")
+          EditorSurface(manager: m, onCaret: { onCaret(path, $0, m.buffer.snapshot) }, reveal: buffers.reveal?.path == path ? buffers.reveal : nil, onEdit: { onEdit(path) }).id("\(path)#\(buffers.revision(path))")
         case .failed(let message): note(message)
         }
       } else {
@@ -82,6 +92,7 @@
 
   private struct EditorSurface: NSViewRepresentable {
     let manager: EditorTransactionManager
+    let onCaret: (TextSelectionSet) -> Void
     let reveal: (path: String, line: Int, nonce: Int)?
     let onEdit: () -> Void
 
@@ -100,7 +111,7 @@
         view.applyEdits(edits, oldSnapshot: old, newSnapshot: new, selection: manager.selection)
         onEdit()
       }
-      view.onSelectionChange = { [weak manager] in manager?.setSelection($0) }
+      view.onSelectionChange = { [weak manager, onCaret] in manager?.setSelection($0); onCaret($0) }
       scroll.documentView = view
       return scroll
     }

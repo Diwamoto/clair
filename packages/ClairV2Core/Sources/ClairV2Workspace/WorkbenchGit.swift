@@ -43,6 +43,12 @@ public enum WorkbenchGit {
   public static func currentBranch(_ root: String) -> String? {
     let r = run(root, ["rev-parse", "--abbrev-ref", "HEAD"]); return r.ok && r.out != "HEAD" ? r.out : nil
   }
+  /// Commits behind / ahead of the upstream; nil without one.
+  public static func aheadBehind(_ root: String) -> (behind: Int, ahead: Int)? {
+    let r = run(root, ["rev-list", "--left-right", "--count", "@{u}...HEAD"])
+    let n = r.out.split(whereSeparator: \.isWhitespace).compactMap { Int($0) }
+    return r.ok && n.count == 2 ? (n[0], n[1]) : nil
+  }
   static func isClean(_ root: String) -> Bool { run(root, ["status", "--porcelain"]).out.isEmpty }
 }
 
