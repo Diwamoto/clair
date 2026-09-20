@@ -101,9 +101,13 @@ enum WorkspaceChrome {
   /// pane pays 24px per pane on top of this.
   enum Metrics {
     static let titlebar: CGFloat = 48
-    static let sidebarStrip: CGFloat = 34
+    /// Left vertical nav strip — was a horizontal row nested at the top of
+    /// the sidebar panel (`sidebarStrip`, now unused); it now sits outside
+    /// the panel as its own full-height column, so the sidebar itself lost
+    /// this width from its own budget below.
+    static let activityBarWidth: CGFloat = 44
     static let statusBar: CGFloat = 26
-    static let sidebarWidth: CGFloat = 286
+    static let sidebarWidth: CGFloat = 242
     /// Tabs are a fixed width, left to right, and never stretch. Width is what
     /// makes a tab strip calm, so 200 is generous — the titlebar's own controls
     /// were cut back to pay for it — but it is the same 200 however many tabs
@@ -530,18 +534,18 @@ extension ProjectColor {
   }
 }
 
-/// The mock's `.act` control: a square-ish icon button that is quiet at rest,
-/// lights its ground on hover, and — when it stands for the current screen —
-/// keeps `surfaceActive` plus an optional 2px underline.
+/// The mock's `.act` control: a square-ish icon button that is quiet at rest
+/// and lights its ground on hover or when it stands for the current screen.
 ///
-/// The underline is what separates a *destination* (the sidebar's nav entries)
-/// from a plain *action* (the ellipsis, the command palette): the explorer, the
-/// first entry, is deliberately left without one.
+/// Hover and selected read as one white-wash tint (`washSelected`), not two —
+/// this used to be a separate `surfaceHover`/`surfaceActive` pair plus a 2px
+/// underline on the active nav entry; both distinctions turned out to read as
+/// noise rather than signal (mock review feedback), so a button is either lit
+/// or it isn't.
 struct ChromeActionButton<Label: View>: View {
   var width: CGFloat = 30
   var height: CGFloat = 28
   var isActive: Bool = false
-  var showsUnderline: Bool = false
   var help: String?
   let action: () -> Void
   @ViewBuilder var label: () -> Label
@@ -557,14 +561,6 @@ struct ChromeActionButton<Label: View>: View {
     .buttonStyle(.plain)
     .foregroundStyle(tint)
     .background(background, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-    .overlay(alignment: .bottom) {
-      if isActive && showsUnderline {
-        Rectangle()
-          .fill(WorkspaceChrome.textSecondary)
-          .frame(width: 18, height: 2)
-          .offset(y: 1)
-      }
-    }
     .onHover { isHovered = $0 }
     .help(help ?? "")
     .accessibilityLabel(help ?? "")
@@ -581,10 +577,7 @@ struct ChromeActionButton<Label: View>: View {
   }
 
   private var background: Color {
-    if isActive {
-      return WorkspaceChrome.surfaceActive
-    }
-    return isHovered ? WorkspaceChrome.surfaceHover : Color.clear
+    (isActive || isHovered) ? WorkspaceChrome.washSelected : Color.clear
   }
 }
 
