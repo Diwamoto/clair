@@ -40,7 +40,7 @@ public enum WorkbenchGit {
 
   static func validBranch(_ name: String) -> Bool { run(".", ["check-ref-format", "--branch", name]).ok }
   static func branchExists(_ root: String, _ name: String) -> Bool { run(root, ["rev-parse", "--verify", "-q", "refs/heads/\(name)"]).ok }
-  static func currentBranch(_ root: String) -> String? {
+  public static func currentBranch(_ root: String) -> String? {
     let r = run(root, ["rev-parse", "--abbrev-ref", "HEAD"]); return r.ok && r.out != "HEAD" ? r.out : nil
   }
   static func isClean(_ root: String) -> Bool { run(root, ["status", "--porcelain"]).out.isEmpty }

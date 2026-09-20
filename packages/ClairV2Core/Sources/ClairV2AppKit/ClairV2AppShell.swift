@@ -270,6 +270,7 @@ import Observation
     // U05: sidebar mode + source-control view. GUI-local (no command); the stage buttons go through git.stage/unstage.
     @State private var sidebarMode = "folder"
     @State private var changes: [GitChange] = []
+    @State private var branch: String?
     @State private var diff: DiffTarget?
     // V05: search panel state (GUI-local).
     @State private var searchQuery = ""
@@ -299,6 +300,7 @@ import Observation
       .onChange(of: st.palette) { query = ""; selection = 0 }
       .onChange(of: st.project) { diff = nil; reloadChanges() }
       .onChange(of: st.files) { reloadChanges() }
+      .onAppear { reloadChanges() }
       .focusedSceneValue(\.clairWorkbench, store)
       .confirmationDialog(
         "未保存の変更を破棄しますか？", isPresented: Binding(get: { store.pending != nil }, set: { if !$0 { store.pending = nil } })
@@ -448,6 +450,7 @@ import Observation
 
     private func reloadChanges() {
       changes = store.activeRoot.map(WorkbenchGit.changes) ?? []
+      branch = store.activeRoot.flatMap(WorkbenchGit.currentBranch)
       if let d = diff, !changes.contains(where: { $0.path == d.path }) { diff = nil }
     }
 
@@ -623,11 +626,30 @@ import Observation
       Toggle(title, isOn: Binding(get: { st.toggles[key] ?? false }, set: { store.run("settings.set", ["key": .string(key), "value": .bool($0)]) })).foregroundStyle(C.textSecondary)
     }
 
+    /// U06/U05: facts only — branch, change/dirty counts, agent state. Ln/Col waits on an editor caret callback.
     private var statusBar: some View {
-      HStack {
-        Text(st.settingsOpen ? "設定 · \(st.section)" : "Ln 1, Col 1").font(Typography.font(Typography.chrome, family: .mono)).foregroundStyle(C.chromeInkMuted)
+      let agents = st.agentSessions.filter { $0.project == st.project && !$0.status.isExited }
+      let waiting = agents.filter { $0.status == .attention }.count
+      return HStack(spacing: 14) {
+        if st.settingsOpen {
+          Text("設定 · \(st.section)")
+        } else {
+          if let branch { Label(branch, systemImage: "arrow.triangle.branch") }
+          if !changes.isEmpty { Text("変更 \(changes.count)") }
+          if !st.dirty.isEmpty { Text("未保存 \(st.dirty.count)").foregroundStyle(C.attention) }
+        }
         Spacer()
+        if !agents.isEmpty {
+          Button { sidebarMode = "terminal" } label: {
+            HStack(spacing: 5) {
+              Circle().fill(waiting > 0 ? C.attention : C.success).frame(width: 6, height: 6)
+              Text(waiting > 0 ? "エージェント \(agents.count) · 入力待ち \(waiting)" : "エージェント \(agents.count) 実行中")
+            }
+          }.buttonStyle(.plain)
+        }
+        if let a = st.active, !st.settingsOpen { Text(a).lineLimit(1) }
       }
+      .font(Typography.font(Typography.chrome, family: .mono)).foregroundStyle(C.chromeInkMuted)
       .padding(.horizontal, 12).frame(height: ChromeBudget.statusBar)
       .background(C.chrome)
       .overlay(alignment: .top) { Rectangle().fill(L.chrome).frame(height: 1) }
