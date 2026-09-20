@@ -58,7 +58,9 @@ export function ExplorerPanel() {
           );
 
           if (node.type === 'project') {
-            const open = !wb.collapsed.has(node.id);
+            // The repo root keeps its click-to-collapse behaviour but drops
+            // the chevron — it reads as a section label (uppercase, like a
+            // heading), not one more row in the same list as its children.
             return (
               <button
                 key={node.id}
@@ -67,9 +69,10 @@ export function ExplorerPanel() {
                 onContextMenu={(event) => menu(event, (w) => folderMenu(w, node.id, node.name, true), node.id)}
                 style={{ ...row(false), color: color.textPrimary }}
               >
-                {chevron(open)}
                 <IconBranchSmall size={10} />
-                <span style={{ fontSize: fs.caption, fontWeight: 600, marginLeft: space[0] }}>{node.name}</span>
+                <span style={{ fontSize: fs.caption, fontWeight: 600, marginLeft: space[0], textTransform: 'uppercase' }}>
+                  {node.name}
+                </span>
               </button>
             );
           }
