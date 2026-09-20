@@ -869,7 +869,8 @@ import Observation
           else if kind == .editor { editor }
           else { Text(kind.rawValue).foregroundStyle(C.textMuted) }  // agent content: U06
         }
-        .overlay(Rectangle().stroke(id == focused ? L.ring : .clear))
+        // Mock: a pane has no header to say it is focused, so the others recede instead of the focused one getting a frame.
+        .opacity(id == focused ? 1 : 0.75)
         .onTapGesture { onFocus(id) }
         // ponytail: the libghostty NSView may consume right-clicks, so terminal panes might not show this; copy/paste/clear items wait on U06 surface commands.
         .contextMenu {
