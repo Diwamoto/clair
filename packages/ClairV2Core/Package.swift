@@ -179,6 +179,8 @@ let package = Package(
         "ClairV2Agent",
         "ClairV2DaemonKit",
         "ClairV2DesignSystem",
+        "ClairV2EditorCore",
+        "ClairV2EditorView",
         .target(name: "ClairV2PTY", condition: .when(platforms: [.macOS])),
         "ClairV2Ghostty",
         "ClairV2Review",

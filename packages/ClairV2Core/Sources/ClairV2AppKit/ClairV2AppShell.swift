@@ -18,6 +18,8 @@ import Observation
     public var pending: (id: String, input: CommandInput)?
     public var lastError: CommandError?
     public let registry = CommandRegistry.workbench
+    /// U05: open editor buffers of the active Project, keyed by relative path.
+    public let buffers = EditorBuffers()
 
     /// V09: update flow state (Stable only; Dev has no feed).
     public enum UpdateStatus: Equatable { case idle, checking, available(ClairV2Update), installing, failed(String) }
@@ -114,6 +116,13 @@ import Observation
 
     @discardableResult
     public func run(_ id: String, _ input: CommandInput = [:], confirmed: Bool = false) -> Result<CommandResult, CommandError> {
+      // `file.save` from any caller (⌘S, CLI, MCP) writes the buffer first; a failed write keeps the dirty marker.
+      if id == "file.save", let p = state.active, let root = activeRoot, buffers.isOpen(p) {
+        do { try buffers.save(p, root: root) } catch {
+          let e = CommandError(.preconditionFailed, "保存できません: \(error.localizedDescription)")
+          lastError = e; return .failure(e)
+        }
+      }
       let r = registry.execute(id, input, confirmed: confirmed, state: &state)
       switch r {
       case .failure(let e) where e.code == .confirmationRequired: pending = (id, input)
@@ -128,6 +137,11 @@ import Observation
       return r
     }
 
+    var activeRoot: String? { state.projects.first { $0.name == state.project }?.path }
+
+    /// U05: called by the editor surface on every committed edit.
+    func edited(_ path: String) { state.dirty.insert(path) }  // the GUI owns dirty; never persisted (principle 8)
+
     /// V05: agent/external disk changes refresh the tree and drop unsaved markers (principle 8).
     private var watcher: FileWatcher?
     private var watched = ""
@@ -140,6 +154,7 @@ import Observation
         DispatchQueue.main.async {
           guard let self, self.watched == self.state.project else { return }
           self.state.applyDiskChange(paths, root: root)
+          self.buffers.drop(paths)
         }
       }
     }
@@ -408,7 +423,8 @@ import Observation
           node: st.tree.maximized.flatMap { id in st.tree.leaves.first { $0.id == id }.map { .leaf(id: $0.id, kind: $0.kind) } } ?? st.tree.root,
           focused: st.tree.focused, launches: st.launches, onFocus: { store.run("pane.focus", ["id": .int($0)]) },
           onFacts: { store.facts(pane: $0, bells: $1, exit: $2) },
-          onRatio: { store.run("pane.setRatio", ["id": .int($0), "ratio": .double($1)]) })
+          onRatio: { store.run("pane.setRatio", ["id": .int($0), "ratio": .double($1)]) },
+          editor: EditorPane(buffers: store.buffers, root: store.activeRoot, path: st.active, onEdit: { store.edited($0) }))
       }
     }
 
@@ -516,6 +532,7 @@ import Observation
     let onFocus: (Int) -> Void
     let onFacts: (Int, Int, Int?) -> Void
     let onRatio: (Int, Double) -> Void
+    let editor: EditorPane
 
     private func firstLeaf(_ n: PaneTree.Node) -> Int {
       switch n {
@@ -527,7 +544,7 @@ import Observation
     @ViewBuilder
     private func parts(_ axis: PaneTree.Axis, _ total: CGFloat, _ a: PaneTree.Node, _ b: PaneTree.Node, ratio: Double) -> some View {
       let h = axis == .horizontal
-      PaneView(node: a, focused: focused, launches: launches, onFocus: onFocus, onFacts: onFacts, onRatio: onRatio)
+      PaneView(node: a, focused: focused, launches: launches, onFocus: onFocus, onFacts: onFacts, onRatio: onRatio, editor: editor)
         .frame(width: h ? total * ratio : nil, height: h ? nil : total * ratio)
       Rectangle().fill(L.paneDivider).frame(width: h ? 1 : nil, height: h ? nil : 1)
         .padding(h ? .horizontal : .vertical, -3).contentShape(Rectangle())
@@ -535,7 +552,7 @@ import Observation
           DragGesture(coordinateSpace: .named("split")).onChanged { v in
             onRatio(firstLeaf(a), Double((h ? v.location.x : v.location.y) / total))
           })
-      PaneView(node: b, focused: focused, launches: launches, onFocus: onFocus, onFacts: onFacts, onRatio: onRatio)
+      PaneView(node: b, focused: focused, launches: launches, onFocus: onFocus, onFacts: onFacts, onRatio: onRatio, editor: editor)
     }
 
     var body: some View {
@@ -544,7 +561,8 @@ import Observation
         ZStack {
           C.surface
           if kind == .terminal { ClairV2GhosttySurface(launch: launches[id].map { ($0.command, $0.cwd) }, onFacts: { onFacts(id, $0, $1) }) }  // ponytail: one surface per terminal leaf; session binding is U06
-          else { Text(kind.rawValue).foregroundStyle(C.textMuted) }  // editor/agent content: U05/U06
+          else if kind == .editor { editor }
+          else { Text(kind.rawValue).foregroundStyle(C.textMuted) }  // agent content: U06
         }
         .overlay(Rectangle().stroke(id == focused ? L.ring : .clear))
         .onTapGesture { onFocus(id) }
