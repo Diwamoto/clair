@@ -1,7 +1,7 @@
 import ClairV2EditorCore
 import Foundation
 
-/// On-disk form of a single-file line thread (U05). The line is fixed at creation; anchors are not rebased on reload.
+/// On-disk form of a single-file line thread (U05). `text` is the anchored line's content, used to re-find the line after the file drifts.
 public struct ReviewThreadRecord: Codable, Equatable {
   public var id: UUID
   public var line: Int
@@ -11,8 +11,10 @@ public struct ReviewThreadRecord: Codable, Equatable {
   public var agent: Bool
   public var body: String
   public var resolved: Bool
+  public var text: String?
 
-  public init(_ t: ReviewThread, line: Int) {
+  public init(_ t: ReviewThread, line: Int, text: String? = nil) {
+    self.text = text
     let c = t.comments[0]
     (id, self.line, body, resolved) = (t.id, line, c.body, t.state == .resolved)
     (lower, upper) = (c.anchor.range.lowerBound.value, c.anchor.range.upperBound.value)

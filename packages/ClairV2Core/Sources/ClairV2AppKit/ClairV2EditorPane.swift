@@ -34,6 +34,9 @@
       return l
     }
 
+    /// Rebuilds the surface from the buffer after it was changed outside the view (a review suggestion applied).
+    func refresh(_ path: String) { revisions[path, default: 0] += 1 }
+
     func drop(_ paths: Set<String>) {
       for p in paths where loads.removeValue(forKey: p) != nil { revisions[p, default: 0] += 1 }
     }

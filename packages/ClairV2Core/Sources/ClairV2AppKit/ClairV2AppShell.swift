@@ -575,16 +575,27 @@ import Observation
         }
         .background(C.chromeRaised)
         if let d = diff, let root = store.activeRoot {
+          let fileLines = (try? String(contentsOfFile: root + "/" + d.path, encoding: .utf8))?.split(separator: "\n", omittingEmptySubsequences: false)
+          let buffer: EditorTransactionManager? = { if case .ready(let m) = store.buffers.load(d.path, root: root) { m } else { nil } }()
           DiffView(
             target: d, text: WorkbenchGit.diff(root, d.path, staged: d.staged, untracked: d.untracked),
-            threads: store.reviews.threads(root: root, d.path),
-            onComment: { n, body in
-              if case .ready(let m) = store.buffers.load(d.path, root: root) {
-                store.reviews.add(root: root, path: d.path, line: n, body: body, snapshot: m.buffer.snapshot)
-              }
+            threads: store.reviews.threads(root: root, d.path, in: fileLines),
+            suggestions: store.reviews.suggestions(root: root, d.path, current: buffer?.buffer.snapshot.revision),
+            onComment: { n, text, body in
+              if let m = buffer { store.reviews.add(root: root, path: d.path, line: n, text: text, body: body, snapshot: m.buffer.snapshot) }
+            },
+            onSuggest: { n, replacement in
+              if let m = buffer { store.reviews.suggest(root: root, path: d.path, line: n, replacement: replacement, snapshot: m.buffer.snapshot) }
             },
             onResolve: { store.reviews.resolve(root: root, path: d.path, id: $0) },
-            onSend: store.reviews.prompt(root: root, path: d.path).map { text in
+            onApply: { id in
+              guard let m = buffer else { return "ファイルを開けません。" }
+              let e = store.reviews.apply(root: root, path: d.path, id: id, in: m)
+              if e == nil { store.buffers.refresh(d.path); store.edited(d.path) }
+              return e
+            },
+            onReject: { store.reviews.reject(root: root, path: d.path, id: $0) },
+            onSend: store.reviews.prompt(root: root, path: d.path, in: fileLines).map { text in
               {
                 NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text, forType: .string)
                 // Paste is left to the user: a review comment must not run as an agent command unseen.

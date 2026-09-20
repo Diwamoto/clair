@@ -16,11 +16,25 @@
     let untracked: Bool
   }
 
+  /// A suggestion as the diff shows it. `stale`: the buffer changed since it was made, so it can no longer apply.
+  struct PlacedSuggestion: Identifiable {
+    let line: Int
+    let suggestion: ReviewSuggestion
+    let stale: Bool
+    var id: UUID { suggestion.id }
+    var replacement: String { suggestion.hunks.first?.replacement ?? "" }
+  }
+
   /// Review threads anchored to a file line, persisted as JSON keyed by project root + path.
-  // ponytail: the line is fixed at creation and `rebase(through:)` is not fed editor edits; wire it when line drift matters.
+  /// Drift: a thread remembers its line's text; given the current file it moves to the nearest identical line,
+  /// or is reported stale (line 0) when that text is gone.
+  // ponytail: content match, not `rebase(through:)` — survives external/agent edits and reloads. A reworded line goes stale; blank/duplicate lines pick the nearest twin.
+  // ponytail: suggestions are in-memory only (their base revision does not outlive the buffer).
   @MainActor @Observable final class ReviewStore {
     private var managers: [String: ReviewThreadManager] = [:]
     private var lines: [UUID: Int] = [:]
+    private var texts: [UUID: String] = [:]
+    private var suggestionLines: [UUID: Int] = [:]
     private(set) var version = 0
     private let file: URL?
     static let you = ReviewAuthor(displayName: "あなた", kind: .human)
@@ -30,7 +44,7 @@
       guard let file, let d = try? Data(contentsOf: file), let all = try? JSONDecoder().decode([String: [ReviewThreadRecord]].self, from: d) else { return }
       for (k, rs) in all {
         managers[k] = ReviewThreadManager(threads: rs.map(\.thread))
-        for r in rs { lines[r.id] = r.line }
+        for r in rs { lines[r.id] = r.line; texts[r.id] = r.text }
       }
     }
 
@@ -38,38 +52,85 @@
 
     private func save() {
       guard let file else { return }
-      let all = managers.mapValues { m in m.threads.compactMap { t in lines[t.id].map { ReviewThreadRecord(t, line: $0) } } }
+      let all = managers.mapValues { m in m.threads.compactMap { t in lines[t.id].map { ReviewThreadRecord(t, line: $0, text: texts[t.id]) } } }
       try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
       try? JSONEncoder().encode(all).write(to: file, options: .atomic)
     }
 
-    /// 1-based file line → threads on it.
-    func threads(root: String, _ path: String) -> [Int: [ReviewThread]] {
+    /// Nearest 1-based line in `file` whose text equals `text`.
+    static func locate(_ text: String, near line: Int, in file: [Substring]) -> Int? {
+      file.indices.filter { file[$0] == text }.map { $0 + 1 }.min { abs($0 - line) < abs($1 - line) }
+    }
+
+    /// Where each thread sits now. Without `file` (or for a thread saved before texts were kept) the saved line is trusted.
+    private func placed(_ root: String, _ path: String, in file: [Substring]?) -> [(line: Int, saved: Int, thread: ReviewThread, stale: Bool)] {
       _ = version
+      return (managers[key(root, path)]?.threads ?? []).compactMap { t in
+        guard let saved = lines[t.id] else { return nil }
+        guard let file, let text = texts[t.id] else { return (saved, saved, t, false) }
+        return Self.locate(text, near: saved, in: file).map { ($0, saved, t, false) } ?? (saved, saved, t, true)
+      }
+    }
+
+    /// 1-based file line → threads on it; stale threads (their line's text is gone) are under key 0.
+    func threads(root: String, _ path: String, in file: [Substring]? = nil) -> [Int: [ReviewThread]] {
       var out: [Int: [ReviewThread]] = [:]
-      for t in managers[key(root, path)]?.threads ?? [] { if let l = lines[t.id] { out[l, default: []].append(t) } }
+      for p in placed(root, path, in: file) { out[p.stale ? 0 : p.line, default: []].append(p.thread) }
       return out
     }
 
-    func add(root: String, path: String, line: Int, body: String, snapshot: TextSnapshot) {
+    func add(root: String, path: String, line: Int, text: String? = nil, body: String, snapshot: TextSnapshot) {
       guard !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
         let l = try? snapshot.line(at: TextLineIndex(line - 1))
       else { return }
       let k = key(root, path), m = managers[k] ?? ReviewThreadManager()
       managers[k] = m
-      lines[m.addThread(author: Self.you, body: body, anchor: ReviewAnchor(range: l.contentRange)).id] = line
+      let id = m.addThread(author: Self.you, body: body, anchor: ReviewAnchor(range: l.contentRange)).id
+      lines[id] = line; texts[id] = text
       version += 1; save()
     }
 
     /// Open threads as a prompt for an agent: one `path:line` heading per thread, comments beneath. Nil when nothing is open.
-    func prompt(root: String, path: String) -> String? {
-      let open = threads(root: root, path).sorted { $0.key < $1.key }.flatMap { l, ts in ts.filter { $0.state == .open }.map { (l, $0) } }
+    func prompt(root: String, path: String, in file: [Substring]? = nil) -> String? {
+      let open = placed(root, path, in: file).filter { $0.thread.state == .open }.sorted { $0.line < $1.line }
       guard !open.isEmpty else { return nil }
       return "次のレビューコメントに対応してください。\n\n"
-        + open.map { l, t in "\(path):\(l)\n" + t.comments.map { "- \($0.body)" }.joined(separator: "\n") }.joined(separator: "\n\n")
+        + open.map { p in
+          "\(path):\(p.line)" + (p.stale ? "（コメント後に行が変更されています）" : "") + "\n"
+            + p.thread.comments.map { "- \($0.body)" }.joined(separator: "\n")
+        }.joined(separator: "\n\n")
     }
 
     func resolve(root: String, path: String, id: UUID) { try? managers[key(root, path)]?.resolveThread(id: id); version += 1; save() }
+
+    // MARK: suggestions
+
+    /// A one-line replacement proposal on `line`, bound to the buffer's current revision.
+    func suggest(root: String, path: String, line: Int, replacement: String, snapshot: TextSnapshot) {
+      guard let l = try? snapshot.line(at: TextLineIndex(line - 1)) else { return }
+      let k = key(root, path), m = managers[k] ?? ReviewThreadManager()
+      managers[k] = m
+      let s = m.addSuggestion(
+        hunks: [ReviewSuggestionHunk(anchor: ReviewAnchor(range: l.contentRange), replacement: replacement)], baseRevision: snapshot.revision)
+      suggestionLines[s.id] = line; version += 1
+    }
+
+    func suggestions(root: String, _ path: String, current: TextRevision?) -> [PlacedSuggestion] {
+      _ = version
+      return (managers[key(root, path)]?.suggestions ?? []).compactMap { s in
+        suggestionLines[s.id].map { PlacedSuggestion(line: $0, suggestion: s, stale: s.state == .pending && s.baseRevision != current) }
+      }
+    }
+
+    /// Applies into the open buffer as one undo unit. Returns a message on refusal, nil on success.
+    func apply(root: String, path: String, id: UUID, in manager: EditorTransactionManager) -> String? {
+      defer { version += 1 }
+      do { try managers[key(root, path)]?.applySuggestion(id: id, in: manager); return nil }
+      catch ReviewThreadManagerError.suggestionRevisionMismatch { return "バッファが変更されたため適用できません。" }
+      catch { return "適用できません。" }
+    }
+
+    func reject(root: String, path: String, id: UUID) { try? managers[key(root, path)]?.rejectSuggestion(id: id); version += 1 }
   }
 
   /// Source-control sidebar: staged / changes / untracked sections with a stage toggle per row.
@@ -164,14 +225,22 @@
   struct DiffView: View {
     let target: DiffTarget
     let text: String
+    /// Line → threads; key 0 holds stale ones (their line's text is gone).
     let threads: [Int: [ReviewThread]]
-    let onComment: (Int, String) -> Void
+    let suggestions: [PlacedSuggestion]
+    let onComment: (Int, _ lineText: String, _ body: String) -> Void
+    let onSuggest: (Int, _ replacement: String) -> Void
     let onResolve: (UUID) -> Void
+    /// Applies into the open buffer; a message means refused.
+    let onApply: (UUID) -> String?
+    let onReject: (UUID) -> Void
     /// Copies the open threads as an agent prompt; nil hides the button (nothing open).
     let onSend: (() -> Void)?
     let onClose: () -> Void
     @State private var composing: Int?
     @State private var draft = ""
+    @State private var suggesting = false
+    @State private var applyError: String?
     @State private var hunk = -1
     @State private var sent = false
     /// A diff this long is cut with a notice instead of laying out every row.
@@ -206,6 +275,10 @@
       let rows = Self.rows(text)
       let (added, removed) = Self.stats(rows)
       let hunks = rows.indices.filter { rows[$0].text.hasPrefix("@@") }
+      // Threads/suggestions whose line is not in a hunk (or whose line went stale) would be invisible: list them on top.
+      let visible = Set(rows.compactMap(\.newLine))
+      let looseThreads = threads.filter { !visible.contains($0.key) }.sorted { $0.key < $1.key }
+      let looseSuggestions = suggestions.filter { !visible.contains($0.line) }
       ScrollViewReader { proxy in
       VStack(spacing: 0) {
         HStack {
@@ -239,11 +312,19 @@
         } else {
           ScrollView([.vertical, .horizontal]) {
             LazyVStack(alignment: .leading, spacing: 0) {
+              if !looseThreads.isEmpty || !looseSuggestions.isEmpty {
+                Text("この差分に表示できないコメント・提案").font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textTertiary).padding(.horizontal, 12).padding(.vertical, 6)
+                ForEach(looseThreads, id: \.key) { l, ts in
+                  ForEach(ts) { thread($0, note: l == 0 ? "行が変更されたため位置を特定できません" : "\(l) 行目") }
+                }
+                ForEach(looseSuggestions) { suggestion($0) }
+              }
               ForEach(Array(rows.enumerated()), id: \.offset) { i, r in
                 line(r).id(i)
                 if let n = r.newLine {
                   ForEach(threads[n] ?? []) { thread($0) }
-                  if composing == n { composer(n) }
+                  ForEach(suggestions.filter { $0.line == n }) { suggestion($0) }
+                  if composing == n { composer(n, text: r.text.dropFirst()) }
                 }
               }
               if rows.count == Self.maxLines {
@@ -263,12 +344,13 @@
         .padding(.horizontal, 12).frame(maxWidth: .infinity, alignment: .leading).frame(height: 18)
         .background(l.hasPrefix("+") ? C.success.opacity(0.12) : l.hasPrefix("-") ? C.danger.opacity(0.12) : .clear)
         .contentShape(Rectangle())
-        .onTapGesture { if let n = r.newLine { composing = composing == n ? nil : n; draft = "" } }
+        .onTapGesture { if let n = r.newLine { composing = composing == n ? nil : n; draft = ""; suggesting = false } }
         .help(r.newLine == nil ? "" : "クリックしてコメント")
     }
 
-    private func thread(_ t: ReviewThread) -> some View {
+    private func thread(_ t: ReviewThread, note: String? = nil) -> some View {
       VStack(alignment: .leading, spacing: 4) {
+        if let note { Text(note).font(Typography.font(Typography.micro)).foregroundStyle(C.attention) }
         ForEach(t.comments) { c in
           HStack(alignment: .top, spacing: 8) {
             Text(c.author.displayName).font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textTertiary)
@@ -285,11 +367,39 @@
       .opacity(t.state == .open ? 1 : 0.6).padding(.leading, 28).padding(.vertical, 4)
     }
 
-    private func composer(_ n: Int) -> some View {
-      HStack(spacing: 8) {
-        TextField("コメント", text: $draft).textFieldStyle(.plain).font(Typography.font(Typography.chrome)).frame(width: 360)
-          .onSubmit { onComment(n, draft); composing = nil }
-        Button("追加") { onComment(n, draft); composing = nil }.buttonStyle(.plain).foregroundStyle(C.textSecondary)
+    private func suggestion(_ p: PlacedSuggestion) -> some View {
+      let pending = p.suggestion.state == .pending
+      return VStack(alignment: .leading, spacing: 4) {
+        Text("提案 · \(p.line) 行目").font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary)
+        Text("+ " + p.replacement).font(.system(size: 12, design: .monospaced)).foregroundStyle(C.code)
+          .padding(.horizontal, 6).frame(maxWidth: .infinity, alignment: .leading).background(C.success.opacity(0.12))
+        if pending {
+          HStack(spacing: 8) {
+            Button("適用") { applyError = onApply(p.id) }.buttonStyle(.plain).foregroundStyle(p.stale ? C.textQuaternary : C.textPrimary).disabled(p.stale)
+            Button("却下") { onReject(p.id) }.buttonStyle(.plain).foregroundStyle(C.textTertiary)
+            if p.stale { Text("バッファが変更されたため適用できません").foregroundStyle(C.attention) }
+            else if let applyError { Text(applyError).foregroundStyle(C.attention) }
+          }.font(Typography.font(Typography.chrome))
+        } else {
+          Text(p.suggestion.state == .applied ? "適用済み（未保存。⌘S で保存）" : p.suggestion.state == .rejected ? "却下済み" : "一部適用済み")
+            .font(Typography.font(Typography.chrome)).foregroundStyle(p.suggestion.state == .applied ? C.success : C.textTertiary)
+        }
+      }
+      .padding(8).frame(maxWidth: 520, alignment: .leading).background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.card))
+      .opacity(pending ? 1 : 0.6).padding(.leading, 28).padding(.vertical, 4)
+    }
+
+    private func composer(_ n: Int, text: Substring) -> some View {
+      let submit = {
+        if suggesting { onSuggest(n, draft) } else { onComment(n, String(text), draft) }
+        composing = nil
+      }
+      return HStack(spacing: 8) {
+        TextField(suggesting ? "この行の置換後" : "コメント", text: $draft).textFieldStyle(.plain).font(Typography.font(Typography.chrome)).frame(width: 360)
+          .onSubmit(submit)
+        Button(suggesting ? "提案する" : "追加", action: submit).buttonStyle(.plain).foregroundStyle(C.textSecondary)
+        Button(suggesting ? "コメントに戻す" : "提案にする") { suggesting.toggle(); draft = suggesting ? String(text) : "" }
+          .buttonStyle(.plain).foregroundStyle(C.textTertiary)
         Button("キャンセル") { composing = nil }.buttonStyle(.plain).foregroundStyle(C.textTertiary)
       }
       .padding(8).background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.card)).padding(.leading, 28).padding(.vertical, 4)
