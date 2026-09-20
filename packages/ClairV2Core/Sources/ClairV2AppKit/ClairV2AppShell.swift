@@ -411,6 +411,10 @@ import Observation
       let history = ClairV2WorkbenchStore.history
       return HistoryList(
         path: st.active, versions: st.active.flatMap { p in store.activeRoot.flatMap { try? history.versions(root: $0, path: p) } } ?? [],
+        preview: { v in
+          guard let root = store.activeRoot, let p = st.active else { return [] }
+          return history.preview(v, root: root, path: p)
+        },
         restore: { v in
           guard let root = store.activeRoot, let p = st.active else { return }
           try? history.restore(v, root: root, path: p)
@@ -511,13 +515,13 @@ import Observation
         if let d = diff, let root = store.activeRoot {
           DiffView(
             target: d, text: WorkbenchGit.diff(root, d.path, staged: d.staged, untracked: d.untracked),
-            threads: store.reviews.threads(d.path),
+            threads: store.reviews.threads(root: root, d.path),
             onComment: { n, body in
               if case .ready(let m) = store.buffers.load(d.path, root: root) {
-                store.reviews.add(path: d.path, line: n, body: body, snapshot: m.buffer.snapshot)
+                store.reviews.add(root: root, path: d.path, line: n, body: body, snapshot: m.buffer.snapshot)
               }
             },
-            onResolve: { store.reviews.resolve(path: d.path, id: $0) },
+            onResolve: { store.reviews.resolve(root: root, path: d.path, id: $0) },
             onClose: { diff = nil })
         } else {
         PaneView(

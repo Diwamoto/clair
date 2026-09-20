@@ -137,6 +137,15 @@ public struct LocalHistory: Sendable {
     return try FileManager.default.contentsOfDirectory(at: f, includingPropertiesForKeys: nil).sorted { $0.lastPathComponent > $1.lastPathComponent }
   }
 
+  /// Line diff of what a restore would change: "-" lines leave the file, "+" lines come back.
+  public func preview(_ version: URL, root: String, path: String) -> [String] {
+    func lines(_ d: Data?) -> [String] { d.flatMap { String(data: $0, encoding: .utf8) }?.components(separatedBy: "\n") ?? [] }
+    let cur = lines(FileManager.default.contents(atPath: root + "/" + path)), old = lines(try? Data(contentsOf: version))
+    let d = old.difference(from: cur)
+    return d.removals.compactMap { c -> String? in if case .remove(let i, let l, _) = c { "- \(l)" } else { nil } }
+      + d.insertions.compactMap { c -> String? in if case .insert(_, let l, _) = c { "+ \(l)" } else { nil } }
+  }
+
   /// Restores a version; the current content is snapshotted first so a restore is itself undoable.
   public func restore(_ version: URL, root: String, path: String) throws {
     try record(root: root, path: path)

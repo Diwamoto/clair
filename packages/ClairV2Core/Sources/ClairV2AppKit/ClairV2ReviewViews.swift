@@ -16,33 +16,52 @@
     let untracked: Bool
   }
 
-  /// Review threads of the active Project, anchored to a file line. In memory only (no persistence yet).
-  // ponytail: the line is fixed at creation and `rebase(through:)` is not fed editor edits; wire both when threads persist.
+  /// Review threads anchored to a file line, persisted as JSON keyed by project root + path.
+  // ponytail: the line is fixed at creation and `rebase(through:)` is not fed editor edits; wire it when line drift matters.
   @MainActor @Observable final class ReviewStore {
     private var managers: [String: ReviewThreadManager] = [:]
     private var lines: [UUID: Int] = [:]
     private(set) var version = 0
+    private let file: URL?
     static let you = ReviewAuthor(displayName: "あなた", kind: .human)
 
+    init(file: URL? = URL.applicationSupportDirectory.appending(path: "Clair/reviews.json")) {
+      self.file = file
+      guard let file, let d = try? Data(contentsOf: file), let all = try? JSONDecoder().decode([String: [ReviewThreadRecord]].self, from: d) else { return }
+      for (k, rs) in all {
+        managers[k] = ReviewThreadManager(threads: rs.map(\.thread))
+        for r in rs { lines[r.id] = r.line }
+      }
+    }
+
+    private func key(_ root: String, _ path: String) -> String { root + "\0" + path }
+
+    private func save() {
+      guard let file else { return }
+      let all = managers.mapValues { m in m.threads.compactMap { t in lines[t.id].map { ReviewThreadRecord(t, line: $0) } } }
+      try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try? JSONEncoder().encode(all).write(to: file, options: .atomic)
+    }
+
     /// 1-based file line → threads on it.
-    func threads(_ path: String) -> [Int: [ReviewThread]] {
+    func threads(root: String, _ path: String) -> [Int: [ReviewThread]] {
       _ = version
       var out: [Int: [ReviewThread]] = [:]
-      for t in managers[path]?.threads ?? [] { if let l = lines[t.id] { out[l, default: []].append(t) } }
+      for t in managers[key(root, path)]?.threads ?? [] { if let l = lines[t.id] { out[l, default: []].append(t) } }
       return out
     }
 
-    func add(path: String, line: Int, body: String, snapshot: TextSnapshot) {
+    func add(root: String, path: String, line: Int, body: String, snapshot: TextSnapshot) {
       guard !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
         let l = try? snapshot.line(at: TextLineIndex(line - 1))
       else { return }
-      let m = managers[path] ?? ReviewThreadManager()
-      managers[path] = m
+      let k = key(root, path), m = managers[k] ?? ReviewThreadManager()
+      managers[k] = m
       lines[m.addThread(author: Self.you, body: body, anchor: ReviewAnchor(range: l.contentRange)).id] = line
-      version += 1
+      version += 1; save()
     }
 
-    func resolve(path: String, id: UUID) { try? managers[path]?.resolveThread(id: id); version += 1 }
+    func resolve(root: String, path: String, id: UUID) { try? managers[key(root, path)]?.resolveThread(id: id); version += 1; save() }
   }
 
   /// Source-control sidebar: staged / changes / untracked sections with a stage toggle per row.
@@ -240,7 +259,9 @@
   struct HistoryList: View {
     let path: String?
     let versions: [URL]
+    let preview: (URL) -> [String]
     let restore: (URL) -> Void
+    @State private var selected: URL?
 
     private func label(_ v: URL) -> String {
       Double(v.lastPathComponent).map { Date(timeIntervalSince1970: $0).formatted(date: .abbreviated, time: .standard) } ?? v.lastPathComponent
@@ -252,14 +273,27 @@
           .font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).padding(12)
       }
       ForEach(versions, id: \.self) { v in
-        Button { restore(v) } label: {
+        Button { selected = selected == v ? nil : v } label: {
           HStack {
             Text(label(v)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textPrimary)
             Spacer()
-            Text("復元").font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary)
+            Image(systemName: selected == v ? "chevron.down" : "chevron.right").font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary)
           }
           .padding(.horizontal, 20).padding(.vertical, 4).contentShape(Rectangle())
         }.buttonStyle(.plain)
+        if selected == v {
+          let diff = preview(v)
+          VStack(alignment: .leading, spacing: 2) {
+            Text(diff.isEmpty ? "現在の内容と同一です。" : "復元で \(diff.filter { $0.hasPrefix("-") }.count) 行が消え、\(diff.filter { $0.hasPrefix("+") }.count) 行が戻ります")
+              .font(Typography.font(Typography.micro)).foregroundStyle(C.textTertiary)
+            ForEach(Array(diff.prefix(40).enumerated()), id: \.offset) { _, l in
+              Text(l).font(.system(size: 11, design: .monospaced)).foregroundStyle(l.hasPrefix("+") ? C.textPrimary : C.textQuaternary).lineLimit(1)
+            }
+            if diff.count > 40 { Text("… 他 \(diff.count - 40) 行").font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary) }
+            Button("この版に復元") { restore(v); selected = nil }.disabled(diff.isEmpty).padding(.top, 4)
+          }
+          .padding(.horizontal, 28).padding(.bottom, 6)
+        }
       }
     }
   }
