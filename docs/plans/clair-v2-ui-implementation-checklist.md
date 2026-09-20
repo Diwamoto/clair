@@ -76,9 +76,19 @@ ui-monospace, "JetBrains Mono", Menlo, monospace`）の2種類のみ。
 
 ### 2.4 Chrome budget
 
-`chrome = { titlebar: 48, sidebarStrip: 34, statusBar: 26 }`。縦 chrome 予算は
+`chrome = { titlebar: 48, activityBarWidth: 44, statusBar: 26 }`。縦 chrome 予算は
 titlebar 48 + status bar 26 = **74px** で全画面共通（editor breadcrumb は意図的な例外、
 2.7参照）。
+
+> **2026-09-20 amendment（re-freeze）**: U01 freeze 時点の `sidebarStrip: 34`
+> （sidebar panel 内、横アイコン列）は、その後の workbench 敵対的UIレビューにより
+> **左サイドバーに独立した縦の Activity Bar**（`activityBarWidth: 44`、sidebar panel の
+> 外・titlebar と status bar の間で全高）に置き換わった。`sidebarStrip` トークンは廃止。
+> あわせて selected/hover の tint を `washSelected` 一本化（旧 `surfaceHover`/
+> `surfaceActive` の二段構え廃止）、file tab の下線（selected 状態の bottom rule）廃止、
+> file tree のルート行の大文字化・シェブロン廃止も同時に正本へ反映。詳細は
+> `prototypes/clair-workbench` の 2026-09-20 コミット群と、同日付で更新した Design
+> canvas `Main` artboard を参照。
 
 ### 2.5 Motion primitives（`motion.tsx`。`U02` が Swift アニメーションへ写す対象）
 
@@ -116,9 +126,11 @@ titlebar 48 + status bar 26 = **74px** で全画面共通（editor breadcrumb �
 
 ## 3. Screen/state 一覧（Mac IDE、`#/ide`）
 
-AppShell（`chrome.tsx` の `AppShell`）は titlebar 48px + sidebar 286px（`SidebarStrip`
-34px + panel）+ main + status bar 26px の構成で一度だけ組み立てられ、画面遷移では
-**panel と main だけ** が差し替わる。全画面共通で、`U04` の対象。
+AppShell（`chrome.tsx` の `AppShell`）は titlebar 48px + activity bar 44px（縦、
+titlebar〜status bar 間で全高）+ sidebar 242px（panel のみ）+ main + status bar 26px
+の構成で一度だけ組み立てられ、画面遷移では **activity bar は常にマウントされたまま、
+panel と main だけ** が差し替わる（2.4 の2026-09-20 amendment 参照）。全画面共通で、
+`U04` の対象。
 
 | 画面 | artboard | 入口 | panel（sidebar） | main | status | motion kind | スコープ |
 |---|---|---|---|---|---|---|---|

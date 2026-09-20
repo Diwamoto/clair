@@ -16,7 +16,7 @@ final class SpacingRadiusTests: XCTestCase {
 
   func testChromeBudgetMatchesChecklist() {
     XCTAssertEqual(ChromeBudget.titlebar, 48)
-    XCTAssertEqual(ChromeBudget.sidebarStrip, 34)
+    XCTAssertEqual(ChromeBudget.activityBarWidth, 44)
     XCTAssertEqual(ChromeBudget.statusBar, 26)
     // §2.4: titlebar (48) + status bar (26) = 74px vertical budget.
     XCTAssertEqual(ChromeBudget.titlebar + ChromeBudget.statusBar, 74)

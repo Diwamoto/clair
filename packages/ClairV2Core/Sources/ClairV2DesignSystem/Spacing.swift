@@ -21,7 +21,11 @@ public enum Spacing {
 /// concern for `U04`/`U05`, not a token.
 public enum ChromeBudget {
   public static let titlebar: CGFloat = 48
-  public static let sidebarStrip: CGFloat = 34
+  /// Left vertical nav strip — was a horizontal row nested at the top of
+  /// the sidebar panel (`sidebarStrip`, now unused); it sits outside the
+  /// panel as its own full-height column instead (checklist §2.4,
+  /// 2026-09-20 amendment).
+  public static let activityBarWidth: CGFloat = 44
   public static let statusBar: CGFloat = 26
 }
 

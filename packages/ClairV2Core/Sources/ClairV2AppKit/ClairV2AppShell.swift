@@ -10,6 +10,7 @@ import Observation
 
   private typealias C = DesignTokens.Color
   private typealias L = DesignTokens.Line
+  private typealias W = DesignTokens.Wash
 
   /// V01: the GUI process owns `WorkbenchState` (ADR-0007 state owner). Every
   /// mutation goes through `CommandRegistry.workbench`; a destructive effective
@@ -313,6 +314,7 @@ import Observation
       VStack(spacing: 0) {
         titlebar
         HStack(spacing: 0) {
+          activityBar
           sidebar
           Rectangle().fill(L.hairline).frame(width: 1)
           if st.settingsOpen { settingsMain } else { main }
@@ -427,27 +429,14 @@ import Observation
     }
 
     private func fileTab(_ path: String, projectActive: Bool, project: String, selected: Bool, dirty: Bool) -> some View {
-      let tint = selected ? C.chromeInk : C.textTertiary
-      return HStack(spacing: 4) {
-        Image(systemName: path.hasSuffix(".md") ? "text.alignleft" : "doc.text").font(.system(size: 11)).foregroundStyle(tint)
-        Text(name(path)).font(.system(size: 11, weight: selected ? .semibold : .regular)).foregroundStyle(tint).lineLimit(1).truncationMode(.tail)
-        Spacer(minLength: 0)
-        if dirty { Circle().fill(selected ? C.textTertiary : C.textQuaternary).frame(width: 6, height: 6) }
-        if selected {
-          Button { store.run("tab.close", ["path": .string(path)]) } label: {
-            Image(systemName: "xmark").font(.system(size: 9, weight: .medium)).foregroundStyle(C.textTertiary)
-          }.buttonStyle(.plain).help("閉じる")
-        }
-      }
-      .padding(.horizontal, 8).frame(width: 200, height: 38)
-      .background(selected ? C.canvas : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
-      .overlay(alignment: .bottom) { if selected { Rectangle().fill(C.textPrimary).frame(height: 1.5) } }
-      .contentShape(Rectangle())
-      .onTapGesture {
-        if !projectActive { store.run("project.switch", ["name": .string(project)]) }
-        store.run("tab.activate", ["path": .string(path)])
-      }
-      .help(path)
+      FileTabButton(
+        path: path, name: name(path), selected: selected, dirty: dirty,
+        onActivate: {
+          if !projectActive { store.run("project.switch", ["name": .string(project)]) }
+          store.run("tab.activate", ["path": .string(path)])
+        },
+        onClose: { store.run("tab.close", ["path": .string(path)]) }
+      )
       .contextMenu { if projectActive { fileMenu(path, tab: true) } }
     }
 
@@ -457,31 +446,44 @@ import Observation
       if panel.runModal() == .OK, let url = panel.url { store.run("project.open", ["path": .string(url.path)]) }
     }
 
-    // MARK: sidebar
+    // MARK: activity bar + sidebar
+
+    /// Left vertical nav strip, full-height, outside the sidebar panel.
+    /// Was a horizontal row nested at the top of `sidebar` (see checklist
+    /// §2.4, 2026-09-20 amendment): hover and selected now share one
+    /// `washSelected` tint instead of the old `surfaceHover`/`surfaceActive`
+    /// pair, and icons are bigger now that they own a whole column.
+    private var activityBar: some View {
+      VStack(spacing: 2) {
+        ForEach(["folder", "magnifyingglass", "clock.arrow.circlepath", "shield", "terminal", "bell", "ladybug"], id: \.self) { icon in
+          activityBarButton(icon)
+        }
+        Spacer(minLength: 0)
+        Image(systemName: "ellipsis").font(.system(size: 12)).foregroundStyle(C.chromeInkMuted).frame(width: 36, height: 32)
+      }
+      .padding(.vertical, 8)
+      .frame(width: ChromeBudget.activityBarWidth, maxHeight: .infinity)
+      .background(C.chrome)
+      .overlay(alignment: .trailing) { Rectangle().fill(L.chromeSoft).frame(width: 1) }
+    }
+
+    private func activityBarButton(_ icon: String) -> some View {
+      let on = sidebarMode == icon && !st.settingsOpen
+      return Button { if icon != "ladybug" { sidebarMode = icon; if icon == "folder" { diff = nil }; reloadChanges() } } label: {
+        Image(systemName: icon).font(.system(size: 16)).foregroundStyle(on ? C.chromeInk : C.chromeInkMuted)
+          .frame(width: 36, height: 36)
+          .background(on ? W.selected : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
+          .overlay(alignment: .topTrailing) { if icon == "bell", st.notices.unread() > 0 { Circle().fill(C.attention).frame(width: 6, height: 6).offset(x: -4, y: 4) } }
+      }.buttonStyle(.plain)
+    }
 
     private var sidebar: some View {
       VStack(spacing: 0) {
-        HStack(spacing: 2) {
-          ForEach(["folder", "magnifyingglass", "clock.arrow.circlepath", "shield", "terminal", "bell", "ladybug"], id: \.self) { icon in
-            let on = sidebarMode == icon && !st.settingsOpen
-            Button { if icon != "ladybug" { sidebarMode = icon; if icon == "folder" { diff = nil }; reloadChanges() } } label: {
-              Image(systemName: icon).font(.system(size: 13)).foregroundStyle(on ? C.chromeInk : C.chromeInkMuted)
-                .frame(width: 30, height: 28)
-                .background(on ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
-                .overlay(alignment: .topTrailing) { if icon == "bell", st.notices.unread() > 0 { Circle().fill(C.attention).frame(width: 6, height: 6).offset(x: -6, y: 5) } }
-            }.buttonStyle(.plain)
-          }
-          Spacer()
-          Image(systemName: "ellipsis").font(.system(size: 11)).foregroundStyle(C.chromeInkMuted).frame(width: 24, height: 28)
-        }
-        // ponytail: the mock strip has 4 entries (files/review/agents/debug); search/history/notices stay as extra native entries, so icons are 30 wide instead of 38.
-        .padding(.horizontal, 8).frame(height: ChromeBudget.sidebarStrip)
-        Rectangle().fill(L.chromeSoft).frame(height: 1)
         // Lazy: a Project can list thousands of files, and an eager tree makes accessibility traversal (and layout) block the main thread.
         ScrollView { LazyVStack(alignment: .leading, spacing: 0) { st.settingsOpen ? AnyView(sections) : sidebarMode == "magnifyingglass" ? AnyView(searchPanel) : sidebarMode == "clock.arrow.circlepath" ? AnyView(historyPanel) : sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "bell" ? AnyView(noticeList) : sidebarMode == "terminal" ? AnyView(sessionList) : AnyView(explorer) } }
         Spacer(minLength: 0)
       }
-      .frame(width: 286)
+      .frame(width: 242)
       .background(C.chromeRaised)
     }
 
@@ -889,6 +891,44 @@ import Observation
       guard selection < list.count else { return }
       store.run("palette.close")
       store.run(list[selection].id, list[selection].input)
+    }
+  }
+
+  /// A titlebar file tab. Selected and hover used to be two different
+  /// treatments — a `surfaceActive`-filled background plus a 1.5px bottom
+  /// rule for selected, a bare `.canvas` fill with nothing for hover — and
+  /// the rule read as a stray line rather than a state (mock review
+  /// feedback). Both now share the `washSelected` tint and there is no
+  /// rule; see checklist §2.4, 2026-09-20 amendment.
+  private struct FileTabButton: View {
+    let path: String
+    let name: String
+    let selected: Bool
+    let dirty: Bool
+    let onActivate: () -> Void
+    let onClose: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+      let tint = selected ? C.chromeInk : C.textTertiary
+      HStack(spacing: 4) {
+        Image(systemName: path.hasSuffix(".md") ? "text.alignleft" : "doc.text").font(.system(size: 11)).foregroundStyle(tint)
+        Text(name).font(.system(size: 11, weight: selected ? .semibold : .regular)).foregroundStyle(tint).lineLimit(1).truncationMode(.tail)
+        Spacer(minLength: 0)
+        if dirty { Circle().fill(selected ? C.textTertiary : C.textQuaternary).frame(width: 6, height: 6) }
+        if selected {
+          Button(action: onClose) {
+            Image(systemName: "xmark").font(.system(size: 9, weight: .medium)).foregroundStyle(C.textTertiary)
+          }.buttonStyle(.plain).help("閉じる")
+        }
+      }
+      .padding(.horizontal, 8).frame(width: 200, height: 38)
+      .background((selected || isHovered) ? W.selected : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
+      .contentShape(Rectangle())
+      .onHover { isHovered = $0 }
+      .onTapGesture(perform: onActivate)
+      .help(path)
     }
   }
 
