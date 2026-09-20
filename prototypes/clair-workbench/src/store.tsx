@@ -190,7 +190,23 @@ function useWorkbenchState() {
     restoreLayout: true,
     confirmClose: true,
     showQuota: true,
+    formatOnSave: true,
+    showWhitespace: false,
+    terminalApprovals: true,
+    preventSleepDuringAgent: true,
   });
+
+  // AI プロバイダー / エディタ / ターミナル / アップデート — Switch 以外の設定値。
+  const [defaultAgent, setDefaultAgent] = useState<'claude' | 'codex'>('claude');
+  const [approvalPolicy, setApprovalPolicy] = useState<'毎回確認' | 'セッション中は許可' | '自動承認'>('毎回確認');
+  const [tabWidth, setTabWidth] = useState(4);
+  const [defaultShell, setDefaultShell] = useState('/bin/zsh');
+  const [scrollbackLines, setScrollbackLines] = useState(5000);
+  const [updateChannel, setUpdateChannel] = useState<'Stable' | 'Dev'>('Stable');
+
+  // 左下のブランチ名から切り替えられる、現在のブランチ。
+  const branches = ['main', 'pane-split', 'docs-update'] as const;
+  const [currentBranch, setCurrentBranch] = useState<(typeof branches)[number]>('main');
 
   const [debugLine, setDebugLine] = useState(9);
   const [breakpoints, setBreakpoints] = useState<number[]>([9]);
@@ -326,6 +342,19 @@ function useWorkbenchState() {
         n.kind === 'split' ? { ...n, ratio: Math.min(0.92, Math.max(0.08, ratio)) } : n,
       ),
     );
+  }, []);
+
+  // Dragging one pane's header onto another swaps what each one shows —
+  // the tree shape (splits/ratios) stays put, only the leaf content moves.
+  const swapPanes = useCallback((idA: string, idB: string) => {
+    if (idA === idB) return;
+    setLayout((current) => {
+      const a = findLeaf(current, idA);
+      const b = findLeaf(current, idB);
+      if (!a || !b) return current;
+      const withA = mapNode(current, idA, () => ({ ...a, id: idA, pane: b.pane, filePath: b.filePath }));
+      return mapNode(withA, idB, () => ({ ...b, id: idB, pane: a.pane, filePath: a.filePath }));
+    });
   }, []);
 
   const pushTerminal = useCallback((lines: TerminalLine[]) => {
@@ -575,6 +604,7 @@ function useWorkbenchState() {
     maximized,
     setMaximized,
     setRatio,
+    swapPanes,
     splitPane,
     closePane,
     terminal,
@@ -621,6 +651,21 @@ function useWorkbenchState() {
     setSettingsSection,
     toggles,
     setToggle: (key: string) => setToggles((current) => ({ ...current, [key]: !current[key] })),
+    defaultAgent,
+    setDefaultAgent,
+    approvalPolicy,
+    setApprovalPolicy,
+    tabWidth,
+    setTabWidth,
+    defaultShell,
+    setDefaultShell,
+    scrollbackLines,
+    setScrollbackLines,
+    updateChannel,
+    setUpdateChannel,
+    branches,
+    currentBranch,
+    setCurrentBranch,
     debugLine,
     breakpoints,
     toggleBreakpoint,
