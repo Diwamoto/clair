@@ -36,7 +36,8 @@ daemon_args=()
 [[ -n "${CLAIR_DEV_OPENCODE_EXECUTABLE:-}" ]] && daemon_args+=(--opencode-executable "$CLAIR_DEV_OPENCODE_EXECUTABLE")
 
 printf 'dev: starting ClairDaemon...\n'
-"$bin_dir/ClairDaemon" "${daemon_args[@]}" &
+# bash 3.2 (macOS) treats an empty array as unbound under `set -u`, hence the ${arr[@]+...} guard.
+"$bin_dir/ClairDaemon" ${daemon_args[@]+"${daemon_args[@]}"} &
 daemon_pid=$!
 
 printf 'dev: launching Clair v2 macOS app (Ctrl-C to stop everything)...\n'
