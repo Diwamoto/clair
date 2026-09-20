@@ -25,8 +25,9 @@ struct ClairDaemonMain {
       let interrupt = DispatchSource.makeSignalSource(signal: SIGINT, queue: .global())
       let terminate = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .global())
       let termination = DispatchSemaphore(value: 0)
-      interrupt.setEventHandler { termination.signal() }
-      terminate.setEventHandler { termination.signal() }
+      // @Sendable: main() is MainActor-isolated, so a plain closure inherits that and traps (dispatch_assert_queue) when this global-queue source fires.
+      interrupt.setEventHandler { @Sendable in termination.signal() }
+      terminate.setEventHandler { @Sendable in termination.signal() }
       interrupt.resume()
       terminate.resume()
       try runtime.start()

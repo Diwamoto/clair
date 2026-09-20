@@ -30,6 +30,7 @@ final class WorkbenchSearchTests: XCTestCase {
     XCTAssertEqual(try String(contentsOfFile: root + "/a.txt", encoding: .utf8), "baz\nbar baz\n")
     let v = try h.versions(root: root, path: "a.txt")
     XCTAssertEqual(v.count, 1)
+    XCTAssertEqual(h.preview(v[0], root: root, path: "a.txt"), ["- baz", "- bar baz", "+ foo", "+ bar foo"])
     try h.restore(v[0], root: root, path: "a.txt")
     XCTAssertEqual(try String(contentsOfFile: root + "/a.txt", encoding: .utf8), "foo\nbar foo\n")
     XCTAssertEqual(try h.versions(root: root, path: "a.txt").count, 2)  // restore is undoable

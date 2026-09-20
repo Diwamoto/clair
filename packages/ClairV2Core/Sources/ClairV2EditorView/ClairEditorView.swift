@@ -37,6 +37,18 @@ import ClairV2EditorCore
         needsDisplay = true
       }
     }
+    /// Appearance (the host maps its design tokens here; defaults are the system colours).
+    public var background: NSColor = .textBackgroundColor { didSet { needsDisplay = true } }
+    public var textColor: NSColor = .textColor {
+      didSet { renderer.baseColor = textColor; renderer.invalidateAll(); needsDisplay = true }
+    }
+    public var selectionColor: NSColor = .selectedTextBackgroundColor { didSet { needsDisplay = true } }
+    public var caretColor: NSColor = .textColor { didSet { needsDisplay = true } }
+    /// Width of the line-number column; 0 hides it. Text starts after it.
+    public var gutterWidth: CGFloat = 0 { didSet { renderer.invalidateAll(); needsDisplay = true } }
+    public var lineNumberColor: NSColor = .secondaryLabelColor { didSet { needsDisplay = true } }
+    /// Line number of the caret's line is drawn in this colour instead.
+    public var currentLineNumberColor: NSColor = .labelColor { didSet { needsDisplay = true } }
     /// Called after a mouse-driven selection change. The owner is
     /// responsible for reconciling this back into its
     /// `EditorTransactionManager`; this view does not own that state.
@@ -54,7 +66,9 @@ import ClairV2EditorCore
     /// per document line). Exposed so a host can scroll a given line into
     /// view.
     public let lineHeight: CGFloat
-    let textInset: CGFloat = 4
+    var textInset: CGFloat { gutterWidth + 4 }
+    /// Vertical centring of a glyph row inside a taller `lineHeight`.
+    private let baselineShift: CGFloat
     private var knownContentWidth: CGFloat = 0
     private var caretVisible = true
     private var caretTimer: Timer?
@@ -66,14 +80,16 @@ import ClairV2EditorCore
 
     public init(
       snapshot: TextSnapshot, selection: TextSelectionSet,
-      font: NSFont = .monospacedSystemFont(ofSize: 13, weight: .regular)
+      font: NSFont = .monospacedSystemFont(ofSize: 13, weight: .regular), lineHeight: CGFloat? = nil
     ) {
       self.snapshot = snapshot
       self.selection = selection
       self.font = font
       self.renderer = EditorLineRenderer(font: font)
       self.ascent = font.ascender
-      self.lineHeight = (font.ascender - font.descender + font.leading).rounded(.up)
+      let natural = (font.ascender - font.descender + font.leading).rounded(.up)
+      self.lineHeight = max(lineHeight ?? natural, natural)
+      self.baselineShift = ((self.lineHeight - natural) / 2).rounded(.down)
       super.init(frame: .zero)
       wantsLayer = true
       registerForDraggedTypes([.string])
@@ -132,6 +148,17 @@ import ClairV2EditorCore
     }
 
     // MARK: - Layout / scrolling
+
+    /// Moves the caret to the start of `line` (0-based, clamped), scrolls it into view and takes focus.
+    public func reveal(line: Int) {
+      let i = min(max(line, 0), snapshot.lineCount - 1)
+      guard let l = try? snapshot.line(at: TextLineIndex(i)) else { return }
+      selection = TextSelectionSet(cursor: l.contentRange.lowerBound)
+      onSelectionChange?(selection)
+      scrollToVisible(NSRect(x: 0, y: CGFloat(i) * lineHeight - 3 * lineHeight, width: 1, height: 7 * lineHeight))
+      window?.makeFirstResponder(self)
+      needsDisplay = true
+    }
 
     public override func viewDidMoveToSuperview() {
       super.viewDidMoveToSuperview()
@@ -291,7 +318,7 @@ import ClairV2EditorCore
 
     public override func draw(_ dirtyRect: NSRect) {
       guard let context = NSGraphicsContext.current?.cgContext else { return }
-      context.setFillColor(NSColor.textBackgroundColor.cgColor)
+      context.setFillColor(background.cgColor)
       context.fill(dirtyRect)
 
       let visible = EditorViewGeometry.visibleLineRange(
@@ -324,6 +351,7 @@ import ClairV2EditorCore
           drawSelections(for: textLine, ctLine: ctLine, top: top, context: context)
         }
         drawText(ctLine, top: top, context: context)
+        if gutterWidth > 0 { drawLineNumber(index, top: top, context: context) }
         if !isComposingLine {
           drawDiagnostics(for: textLine, ctLine: ctLine, top: top, context: context)
           drawCarets(for: textLine, ctLine: ctLine, top: top, context: context)
@@ -346,8 +374,22 @@ import ClairV2EditorCore
     private func drawText(_ ctLine: CTLine, top: CGFloat, context: CGContext) {
       context.saveGState()
       context.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
-      context.textPosition = CGPoint(x: textInset, y: top + ascent)
+      context.textPosition = CGPoint(x: textInset, y: top + baselineShift + ascent)
       CTLineDraw(ctLine, context)
+      context.restoreGState()
+    }
+
+    /// Right-aligned 1-based number in the gutter, 12pt from the text column edge.
+    private func drawLineNumber(_ index: Int, top: CGFloat, context: CGContext) {
+      let current = selection.selections.first.flatMap { try? snapshot.position(at: $0.head, columnUnit: UTF8Unit.self, rounding: .down).line.value } == index
+      let s = NSAttributedString(
+        string: String(index + 1), attributes: [.font: font, .foregroundColor: current ? currentLineNumberColor : lineNumberColor])
+      let line = CTLineCreateWithAttributedString(s)
+      let width = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
+      context.saveGState()
+      context.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
+      context.textPosition = CGPoint(x: gutterWidth - 12 - width, y: top + baselineShift + ascent)
+      CTLineDraw(line, context)
       context.restoreGState()
     }
 
@@ -355,7 +397,7 @@ import ClairV2EditorCore
       for textLine: TextLine, ctLine: CTLine, top: CGFloat, context: CGContext
     ) {
       guard selection.selections.contains(where: { !$0.isEmpty }) else { return }
-      context.setFillColor(NSColor.selectedTextBackgroundColor.cgColor)
+      context.setFillColor(selectionColor.cgColor)
       for range in selection.selections.map(\.range) {
         guard let local = try? localUTF16Range(of: range, clippedTo: textLine, in: snapshot) else {
           continue
@@ -377,7 +419,7 @@ import ClairV2EditorCore
           position.line == textLine.index
         else { continue }
         let x = CTLineGetOffsetForStringIndex(ctLine, position.column.value, nil)
-        context.setFillColor(NSColor.textColor.cgColor)
+        context.setFillColor(caretColor.cgColor)
         context.fill(CGRect(x: textInset + x, y: top, width: 1.5, height: lineHeight))
       }
     }

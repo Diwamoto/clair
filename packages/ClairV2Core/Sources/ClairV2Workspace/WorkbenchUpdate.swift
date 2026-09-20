@@ -196,7 +196,7 @@ public enum ClairV2Updater {
     do {
       let p = Process()
       p.executableURL = URL(fileURLWithPath: "/usr/bin/ditto"); p.arguments = ["-x", "-k", archive.path, staging.path]
-      try p.run(); p.waitUntilExit()
+      try p.run(); p.waitWithoutRunLoop()
       guard p.terminationStatus == 0 else { throw ClairV2UpdateError.installFailed("ditto exited \(p.terminationStatus)") }
       let apps = try fm.contentsOfDirectory(at: staging, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]).filter { $0.pathExtension == "app" }
       guard apps.count == 1, let bundle = Bundle(url: apps[0]) else { throw ClairV2UpdateError.installFailed("archive must contain exactly one app bundle") }

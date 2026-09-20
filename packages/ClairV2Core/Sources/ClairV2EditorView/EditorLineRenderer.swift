@@ -45,6 +45,8 @@ func localUTF16Range(
 final class EditorLineRenderer {
   private var cache: [TextLineID: CTLine] = [:]
   let font: PlatformFont
+  /// Colour of text no highlight span covers.
+  var baseColor: PlatformColor = .editorLabel
 
   init(font: PlatformFont) {
     self.font = font
@@ -94,7 +96,7 @@ final class EditorLineRenderer {
   ) throws -> CTLine {
     let text = try snapshot.text(in: textLine.contentRange)
     let attributed = NSMutableAttributedString(
-      string: text, attributes: [.font: font, .foregroundColor: PlatformColor.editorLabel])
+      string: text, attributes: [.font: font, .foregroundColor: baseColor])
     for span in highlights {
       guard let local = try localUTF16Range(of: span.range, clippedTo: textLine, in: snapshot)
       else { continue }
@@ -118,7 +120,7 @@ final class EditorLineRenderer {
     let textLine = try snapshot.line(at: index)
     let text = try snapshot.text(in: textLine.contentRange)
     let attributed = NSMutableAttributedString(
-      string: text, attributes: [.font: font, .foregroundColor: PlatformColor.editorLabel])
+      string: text, attributes: [.font: font, .foregroundColor: baseColor])
     let bounds = 0...(text as NSString).length
     let lineStart = try snapshot.convert(textLine.contentRange.lowerBound, to: UTF16Unit.self)
       .value

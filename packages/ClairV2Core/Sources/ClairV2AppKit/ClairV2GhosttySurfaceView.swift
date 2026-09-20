@@ -482,7 +482,22 @@ import Foundation
     /// read callback. Without a real surface, writes directly into the
     /// fallback `session`'s real PTY, exactly as before T03.
     public func pasteFromPasteboard(_ pasteboard: NSPasteboard) {
-      guard let text = pasteboard.string(forType: .string), !text.isEmpty else { return }
+      guard let text = pasteboard.string(forType: .string) else { return }
+      sendText(text)
+    }
+
+    /// Terminal surfaces by pane id, so the shell can type into an agent pane (no Return — the user confirms).
+    /// ponytail: pane ids are per-Project; only the visible Project's tree is mounted, so a flat map is enough.
+    nonisolated(unsafe) private static var byPane: [Int: Weak] = [:]
+    private struct Weak { weak var view: ClairV2GhosttySurfaceView? }
+    static func register(_ v: ClairV2GhosttySurfaceView, pane: Int) { byPane[pane] = Weak(view: v) }
+    @discardableResult public static func send(_ text: String, toPane pane: Int) -> Bool {
+      guard let v = byPane[pane]?.view else { return false }
+      v.sendText(text); return true
+    }
+
+    func sendText(_ text: String) {
+      guard !text.isEmpty else { return }
       if let ghosttySurface {
         do { try ghosttySurface.sendText(text) } catch {
           lastReportedError = String(describing: error)
@@ -565,13 +580,15 @@ import Foundation
   public struct ClairV2GhosttySurface: NSViewRepresentable {
     let launch: (command: String, cwd: String)?
     let onFacts: ((Int, Int?) -> Void)?
-    public init(launch: (command: String, cwd: String)? = nil, onFacts: ((Int, Int?) -> Void)? = nil) {
-      self.launch = launch; self.onFacts = onFacts
+    let pane: Int?
+    public init(launch: (command: String, cwd: String)? = nil, pane: Int? = nil, onFacts: ((Int, Int?) -> Void)? = nil) {
+      self.launch = launch; self.pane = pane; self.onFacts = onFacts
     }
 
     public func makeNSView(context: Context) -> ClairV2GhosttySurfaceView {
       let v = ClairV2GhosttySurfaceView(launch: launch)
       v.onFacts = onFacts
+      if let pane { ClairV2GhosttySurfaceView.register(v, pane: pane) }
       return v
     }
 

@@ -276,4 +276,13 @@ final class ReviewThreadManagerTests: XCTestCase {
     XCTAssertEqual(
       manager.threads.first { $0.id == thread.id }?.anchor?.range, editorTextRange(5, 9))
   }
+
+  func testThreadRecordRoundTrip() throws {
+    let a = ReviewAnchor(range: TextUTF8Range(UTF8Offset(3), UTF8Offset(9)))
+    let t = ReviewThread(comments: [ReviewComment(author: ReviewAuthor(displayName: "x", kind: .agent), body: "b", anchor: a)], state: .resolved)
+    let r = try JSONDecoder().decode(ReviewThreadRecord.self, from: JSONEncoder().encode(ReviewThreadRecord(t, line: 7)))
+    XCTAssertEqual(r.line, 7)
+    XCTAssertEqual(r.thread.id, t.id); XCTAssertEqual(r.thread.state, .resolved)
+    XCTAssertEqual(r.thread.comments[0].anchor, a); XCTAssertEqual(r.thread.comments[0].author.kind, .agent)
+  }
 }

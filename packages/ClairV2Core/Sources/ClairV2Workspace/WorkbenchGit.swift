@@ -7,6 +7,12 @@ import Foundation
 // ponytail: synchronous git on the GUI thread, no timeout; move off-thread if a huge repo stalls it.
 // ponytail: conflicts are aborted and reported (re-ask the agent); a native merge editor is not built.
 
+extension Process {
+  /// `waitUntilExit()` spins the current run loop, so on the main thread SwiftUI re-renders mid-wait — while a
+  /// `store.state` mutation that called us is still open — and traps on exclusive access. Poll instead.
+  func waitWithoutRunLoop() { while isRunning { usleep(2000) } }
+}
+
 public struct GitReview: Sendable, Codable, Equatable {
   public var base: String?
   /// `git diff base...HEAD --name-status` lines — already committed on this branch.
@@ -29,7 +35,7 @@ public enum WorkbenchGit {
     p.standardOutput = out; p.standardError = merge ? out : FileHandle.nullDevice
     guard (try? p.run()) != nil else { return (false, "git not runnable") }
     let text = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-    p.waitUntilExit()
+    p.waitWithoutRunLoop()
     return (p.terminationStatus == 0, text.trimmingCharacters(in: .whitespacesAndNewlines))
   }
 
@@ -40,8 +46,14 @@ public enum WorkbenchGit {
 
   static func validBranch(_ name: String) -> Bool { run(".", ["check-ref-format", "--branch", name]).ok }
   static func branchExists(_ root: String, _ name: String) -> Bool { run(root, ["rev-parse", "--verify", "-q", "refs/heads/\(name)"]).ok }
-  static func currentBranch(_ root: String) -> String? {
+  public static func currentBranch(_ root: String) -> String? {
     let r = run(root, ["rev-parse", "--abbrev-ref", "HEAD"]); return r.ok && r.out != "HEAD" ? r.out : nil
+  }
+  /// Commits behind / ahead of the upstream; nil without one.
+  public static func aheadBehind(_ root: String) -> (behind: Int, ahead: Int)? {
+    let r = run(root, ["rev-list", "--left-right", "--count", "@{u}...HEAD"])
+    let n = r.out.split(whereSeparator: \.isWhitespace).compactMap { Int($0) }
+    return r.ok && n.count == 2 ? (n[0], n[1]) : nil
   }
   static func isClean(_ root: String) -> Bool { run(root, ["status", "--porcelain"]).out.isEmpty }
 }

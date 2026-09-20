@@ -27,7 +27,35 @@ public struct AgentLaunch: Sendable, Codable, Equatable {
   public var command: String { AgentProfile.named(profile)?.command ?? "" }
 }
 
+/// U06: one row of the session list, derived from facts only (launch + bell/exit notices).
+public struct AgentSession: Sendable, Equatable, Identifiable {
+  public enum Status: Sendable, Equatable {
+    case running, attention, exited(Int?)
+    public var isExited: Bool { if case .exited = self { true } else { false } }
+  }
+  public var id: String { NotificationLog.paneKey(project, pane) }
+  public let project: String
+  public let pane: Int
+  public let title: String
+  public let cwd: String
+  public let status: Status
+}
+
 extension WorkbenchState {
+  /// Every agent terminal across Projects; exit wins over bell, an unread bell means it wants you.
+  public var agentSessions: [AgentSession] {
+    var all = layouts.mapValues(\.launches)
+    all[project] = launches
+    return all.sorted { $0.key < $1.key }.flatMap { p, ls in
+      ls.sorted { $0.key < $1.key }.map { pane, l in
+        let mine = notices.items.filter { $0.project == p && $0.pane == pane }  // newest first
+        let status: AgentSession.Status =
+          mine.first { $0.kind == .exited }.map { .exited($0.exitCode) } ?? (mine.contains { $0.kind == .bell && !$0.read } ? .attention : .running)
+        return AgentSession(project: p, pane: pane, title: AgentProfile.named(l.profile)?.title ?? l.profile, cwd: l.cwd, status: status)
+      }
+    }
+  }
+
   /// Agent terminals that have not reported an exit (V08 fact) — the reason to keep the Mac awake (V09).
   public var runningAgents: Int {
     var all = layouts.mapValues(\.launches)
