@@ -456,7 +456,8 @@ import Observation
         // ponytail: the mock strip has 4 entries (files/review/agents/debug); search/history/notices stay as extra native entries, so icons are 30 wide instead of 38.
         .padding(.horizontal, 8).frame(height: ChromeBudget.sidebarStrip)
         Rectangle().fill(L.chromeSoft).frame(height: 1)
-        ScrollView { VStack(alignment: .leading, spacing: 0) { st.settingsOpen ? AnyView(sections) : sidebarMode == "magnifyingglass" ? AnyView(searchPanel) : sidebarMode == "clock.arrow.circlepath" ? AnyView(historyPanel) : sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "bell" ? AnyView(noticeList) : sidebarMode == "terminal" ? AnyView(sessionList) : AnyView(explorer) } }
+        // Lazy: a Project can list thousands of files, and an eager tree makes accessibility traversal (and layout) block the main thread.
+        ScrollView { LazyVStack(alignment: .leading, spacing: 0) { st.settingsOpen ? AnyView(sections) : sidebarMode == "magnifyingglass" ? AnyView(searchPanel) : sidebarMode == "clock.arrow.circlepath" ? AnyView(historyPanel) : sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "bell" ? AnyView(noticeList) : sidebarMode == "terminal" ? AnyView(sessionList) : AnyView(explorer) } }
         Spacer(minLength: 0)
       }
       .frame(width: 286)
@@ -563,7 +564,7 @@ import Observation
         }
         out.append((f.path, parts.last!, parts.count, f))
       }
-      return VStack(alignment: .leading, spacing: 0) {
+      return LazyVStack(alignment: .leading, spacing: 0) {
         // Project root: bold, branch glyph; folds the whole tree (GUI-local).
         treeRow(depth: 0, selected: false, action: { rootFolded.toggle() }) {
           chevron(open: !rootFolded)
