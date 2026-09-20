@@ -196,4 +196,52 @@
       .padding(8).background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.card)).padding(.leading, 28).padding(.vertical, 4)
     }
   }
+
+  /// U06: notification history (facts only — bell / exit). Rows are read state + source + fixed wording.
+  struct NoticeList: View {
+    let log: NotificationLog
+    /// `notice.mutePane` addresses panes of the active Project only.
+    let current: String
+    let agentTitle: (WorkbenchNotice) -> String?
+    let run: (String, CommandInput) -> Void
+
+    var body: some View {
+      HStack(spacing: 12) {
+        Text("通知").font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textTertiary)
+        Spacer()
+        Button("すべて既読") { run("notice.markRead", [:]) }.disabled(log.unread() == 0)
+        Button("消去") { run("notice.clear", [:]) }.disabled(log.items.isEmpty)
+      }
+      .buttonStyle(.plain).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+      .padding(.horizontal, 20).frame(height: 26)
+      if log.items.isEmpty {
+        Text("通知はありません").font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textSecondary)
+          .frame(maxWidth: .infinity).padding(16)
+      }
+      ForEach(log.items) { n in
+        let key = NotificationLog.paneKey(n.project, n.pane)
+        HStack(alignment: .top, spacing: 8) {
+          Circle().fill(n.read ? .clear : dot(n)).frame(width: 6, height: 6).padding(.top, 6)
+          VStack(alignment: .leading, spacing: 2) {
+            Text([agentTitle(n), n.title].compactMap { $0 }.joined(separator: " · "))
+              .font(Typography.font(Typography.chromeStrong)).foregroundStyle(n.read ? C.textTertiary : C.textPrimary)
+            Text("\(n.project) · \(n.at.formatted(.relative(presentation: .named)))")
+              .font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary)
+          }
+          Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 20).padding(.vertical, 4).contentShape(Rectangle())
+        .contextMenu {
+          if n.project == current {
+            let muted = log.mutedPanes.contains(key)
+            Button(muted ? "このターミナルのミュートを解除" : "このターミナルをミュート") {
+              run("notice.mutePane", ["id": .int(n.pane), "muted": .bool(!muted)])
+            }
+          }
+        }
+      }
+    }
+
+    private func dot(_ n: WorkbenchNotice) -> Color { n.kind == .exited && n.exitCode != 0 ? C.danger : n.kind == .exited ? C.success : C.attention }
+  }
 #endif
