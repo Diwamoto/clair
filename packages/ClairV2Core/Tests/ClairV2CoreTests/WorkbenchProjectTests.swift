@@ -124,4 +124,14 @@ final class WorkbenchProjectTests: XCTestCase {
     let m = Dictionary(uniqueKeysWithValues: WorkbenchFiles.scan(a).map { ($0.path, $0.status) })
     XCTAssertEqual(m["tracked.txt"], "M"); XCTAssertEqual(m["new.txt"], "U"); XCTAssertEqual(m["renamed.txt"], "R")
   }
+
+  func testDirectoriesStartFolded() throws {
+    let dir = URL.temporaryDirectory.appending(path: "clair-fold-\(UUID().uuidString)").resolvingSymlinksInPath()
+    try FileManager.default.createDirectory(at: dir.appending(path: "a/b"), withIntermediateDirectories: true)
+    try "x".write(to: dir.appending(path: "a/b/f.txt"), atomically: true, encoding: .utf8)
+    try "x".write(to: dir.appending(path: "top.txt"), atomically: true, encoding: .utf8)
+    var s = WorkbenchState()
+    try CommandRegistry.workbench.execute("project.open", ["path": .string(dir.path)], state: &s).get()
+    XCTAssertEqual(s.collapsed, ["a", "a/b"])
+  }
 }

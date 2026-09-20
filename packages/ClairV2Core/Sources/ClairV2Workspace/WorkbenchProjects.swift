@@ -44,12 +44,10 @@ extension WorkbenchState {
     if !project.isEmpty { layouts[project] = layout }
     project = p.name
     files = WorkbenchFiles.scan(p.path)
-    var l = layouts[p.name] ?? {
-      // First time this Project is shown: every directory starts folded (an unfolded tree of a big repo is thousands of rows).
-      var fresh = ProjectLayout()
-      fresh.collapsed = WorkbenchFiles.directories(of: files)
-      return fresh
-    }()
+    var l = layouts[p.name] ?? ProjectLayout()
+    // Nothing folded yet (a new Project, or a layout saved before folding was the default): fold every directory,
+    // since an unfolded tree of a big repo is thousands of rows. ponytail: a tree the user fully unfolded is folded again on the next switch.
+    if l.collapsed.isEmpty { l.collapsed = WorkbenchFiles.directories(of: files) }
     let paths = Set(files.map(\.path))
     l.tabs = l.tabs.filter(paths.contains)
     l.dirty.formIntersection(l.tabs)
