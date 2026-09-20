@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 import { RouteLink } from '../App';
-import { IconChevron } from '../icons';
+import { IconCloseThin } from '../icons';
 import { useWorkbench } from '../store';
 
 import { color, fs, line, radius, space } from '../tokens';
@@ -451,9 +451,9 @@ export function SettingsStatus() {
 /**
  * Settings as its own full-screen sheet, not a panel+main pair living inside
  * the shared shell. The titlebar's tabs and the sidebar's nav were both
- * still clickable through the old layout — a working "back" that competed
- * with three other ways to leave. Here there is exactly one: the ← control
- * at the top-left, plus Esc (already wired in App.tsx for any non-workspace
+ * still clickable through the old layout — a working "close" that competed
+ * with three other ways to leave. Here there is exactly one: the ✕ at the
+ * top-right, plus Esc (already wired in App.tsx for any non-workspace
  * screen). Nothing else on the screen can navigate away.
  */
 export function SettingsScreen({ onClose }: { onClose: () => void }) {
@@ -477,31 +477,22 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
           display: 'flex',
           alignItems: 'center',
           gap: space[2],
-          padding: '0 16px',
+          padding: '0 12px 0 16px',
           background: color.chrome,
           borderBottom: `1px solid ${line.hairline}`,
         }}
       >
+        <span style={{ fontSize: fs.body, fontWeight: 600, color: color.textPrimary }}>設定</span>
+        <div style={{ flex: 1 }} />
         <button
-          className="hoverable"
+          className="act"
           onClick={onClose}
           autoFocus
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: space[1],
-            height: 30,
-            padding: '0 10px 0 6px',
-            borderRadius: radius.control,
-            color: color.textSecondary,
-            fontSize: fs.caption,
-            fontWeight: 600,
-          }}
+          title="設定を閉じる"
+          aria-label="設定を閉じる"
         >
-          <IconChevron size={11} style={{ transform: 'rotate(180deg)' }} />
-          戻る
+          <IconCloseThin size={14} />
         </button>
-        <span style={{ fontSize: fs.body, fontWeight: 600, color: color.textPrimary }}>設定</span>
       </div>
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         <div

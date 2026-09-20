@@ -11,7 +11,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSPropert
 import { targetRing, useContextMenu } from './contextMenu';
 import { files, projectTabs, type FileKind } from './data';
 import { fileMenu, projectMenu, sessionTabMenu, standInTabMenu } from './menus';
-import { color, fs, groupColor, line, mono, radius, space, type GroupColorKey } from './tokens';
+import { color, fs, groupColor, line, mono, radius, space, wash, type GroupColorKey } from './tokens';
 import {
   IconBranch,
   IconBug,
@@ -78,7 +78,8 @@ export function Act({
         position: 'relative',
         width,
         height,
-        background: active ? color.surfaceActive : undefined,
+        // Same white-wash "selected" as the tabs now use, not surfaceActive.
+        background: active ? wash.selected : undefined,
         color: active ? color.chromeInk : undefined,
       }}
     >
@@ -196,10 +197,12 @@ function Tab({
         width: TAB_WIDTH,
         flexShrink: 0,
         borderRadius: radius.card,
-        // Selected keeps the same lightness hover already uses — clicking a
-        // tab just leaves it in the tint your pointer was about to show
-        // anyway, instead of punching a second, darker "hole" through chrome.
-        background: active ? color.surfaceActive : 'transparent',
+        // Selected is a white wash over chrome — the same idiom Activity's
+        // and Overlays' own "selected" rows already use — so it reads
+        // brighter than plain surfaceActive. Unselected must omit
+        // `background` entirely (not 'transparent'): an inline value of any
+        // kind outranks the .hoverable:hover rule and silently kills hover.
+        background: active ? wash.selected : undefined,
         height: 38,
         alignSelf: 'center',
         overflow: 'hidden',
