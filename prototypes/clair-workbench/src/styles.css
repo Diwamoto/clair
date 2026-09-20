@@ -121,8 +121,14 @@ textarea:focus-visible,
 }
 
 .act:hover {
-  background: #2e333c;
+  /* Same white wash as the "selected" state (wash.selected in tokens.ts) —
+     hover and selected are meant to read as one tint, not two. */
+  background: rgba(255, 255, 255, 0.08);
   color: #caccd2;
+}
+
+.tab-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .msg-time {

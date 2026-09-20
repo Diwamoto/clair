@@ -183,7 +183,7 @@ function Tab({
   const tint = active ? color.chromeInk : color.textTertiary;
   return (
     <button
-      className={active ? undefined : 'hoverable'}
+      className={active ? undefined : 'tab-btn'}
       onClick={onClick}
       onContextMenu={onContextMenu}
       title={label}
@@ -694,33 +694,38 @@ export function SourceControlModeTabs() {
   );
 }
 
-// Icons grew from 16 to 18px inside the same 40×32 target (the strip's 34px
-// budget doesn't move) now that the row isn't reserving space for an
-// always-on "…" — see below.
-const NAV_ITEM_WIDTH = 40;
+// A separate vertical rail, not a strip folded into the sidebar's top edge —
+// VSCode/JetBrains/Zed/Cursor all keep navigation identity off to the side
+// in its own column, so it never competes with the panel's own content for
+// width the way the old 34px horizontal strip did. Icons grew 16->18px now
+// that there's headroom for them; 44px matches the touch/device sizing the
+// Mobile artboards already use elsewhere in Tokens.
+const ACTIVITY_BAR_WIDTH = 44;
+const NAV_ITEM_HEIGHT = 40;
 const NAV_GAP = space[1];
 
-function SidebarStrip() {
+function ActivityBar() {
   const wb = useWorkbench();
   const active = navIdFor(wb.screen);
   const containerRef = useRef<HTMLDivElement>(null);
   const [visibleCount, setVisibleCount] = useState(NAV.length);
   const [overflowOpen, setOverflowOpen] = useState(false);
 
-  // "…" only exists to hold what doesn't fit. With room for every icon it
-  // never renders, so the row never spends width on a control nothing needs.
+  // "…" only exists to hold what doesn't fit. A vertical rail has far more
+  // room than the old horizontal strip did, so in practice this rarely
+  // renders — but the rail can still fill up as more tools are added later.
   useLayoutEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const fullWidth = (n: number) => n * NAV_ITEM_WIDTH + Math.max(0, n - 1) * NAV_GAP;
+    const fullHeight = (n: number) => n * NAV_ITEM_HEIGHT + Math.max(0, n - 1) * NAV_GAP;
     const compute = () => {
-      const available = el.clientWidth;
-      if (fullWidth(NAV.length) <= available) {
+      const available = el.clientHeight;
+      if (fullHeight(NAV.length) <= available) {
         setVisibleCount(NAV.length);
         return;
       }
       let count = NAV.length - 1;
-      while (count > 0 && fullWidth(count) + NAV_GAP + NAV_ITEM_WIDTH > available) count -= 1;
+      while (count > 0 && fullHeight(count) + NAV_GAP + NAV_ITEM_HEIGHT > available) count -= 1;
       setVisibleCount(count);
     };
     compute();
@@ -743,23 +748,25 @@ function SidebarStrip() {
   return (
     <div
       style={{
-        height: 34,
+        width: ACTIVITY_BAR_WIDTH,
         flexShrink: 0,
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
         gap: space[1],
-        padding: '0 8px',
-        borderBottom: `1px solid ${line.chromeSoft}`,
+        padding: '8px 0',
+        backgroundColor: color.chrome,
+        borderRight: `1px solid ${line.chrome}`,
       }}
     >
-      <div ref={containerRef} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: space[1], minWidth: 0, overflow: 'hidden' }}>
+      <div ref={containerRef} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: space[1], minHeight: 0, overflow: 'hidden' }}>
         {visible.map((item) => {
           const Icon = item.icon;
           return (
             <Act
               key={item.id}
-              width={NAV_ITEM_WIDTH}
-              height={32}
+              width={32}
+              height={NAV_ITEM_HEIGHT}
               title={item.label}
               active={active === item.id}
               onClick={() => {
@@ -782,8 +789,8 @@ function SidebarStrip() {
               className="ctx-menu"
               style={{
                 position: 'absolute',
-                top: 36,
-                right: 0,
+                bottom: 0,
+                left: 36,
                 minWidth: 160,
                 padding: 4,
                 borderRadius: radius.overlay,
@@ -813,7 +820,7 @@ function SidebarStrip() {
                       height: 30,
                       padding: '0 8px',
                       borderRadius: radius.control,
-                      background: on ? color.surfaceActive : undefined,
+                      background: on ? wash.selected : undefined,
                       color: on ? color.textPrimary : color.textSecondary,
                       fontSize: fs.caption,
                     }}
@@ -1003,6 +1010,7 @@ export function AppShell({
     >
       <AppTitlebar extra={titlebarExtra} />
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+        <ActivityBar />
         <div
           style={{
             width: sidebarWidth,
@@ -1014,7 +1022,6 @@ export function AppShell({
             minHeight: 0,
           }}
         >
-          <SidebarStrip />
           <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>{panel}</div>
         </div>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, position: 'relative' }}>
