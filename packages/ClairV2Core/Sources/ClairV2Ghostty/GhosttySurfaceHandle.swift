@@ -212,6 +212,19 @@ public final class GhosttyAppHandle {
     #endif
   }
 
+  /// V08: facts seen since the last call — bell count (drained) and the child's exit code
+  /// (nil until it exits, then sticky). Terminal bytes never cross this boundary.
+  public func takeEvents() -> (bells: Int, exitCode: Int?) {
+    #if CLAIR_GHOSTTY_VENDORED
+      guard isValid else { return (0, nil) }
+      var e = clair_ghostty_app_events_s()
+      clair_ghostty_app_take_events(raw, &e)
+      return (Int(e.bells), e.exit_code < 0 ? nil : Int(e.exit_code))
+    #else
+      return (0, nil)
+    #endif
+  }
+
   #if CLAIR_GHOSTTY_VENDORED
     /// Shared config-marshalling between `withSurface` and `retainSurface`:
     /// only the free-on-return-vs-caller-owns policy differs between them.

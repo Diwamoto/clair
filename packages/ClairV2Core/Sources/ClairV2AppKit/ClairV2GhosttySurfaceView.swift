@@ -41,8 +41,11 @@ import Foundation
     private var ghosttySurface: GhosttySurfaceHandle?
     private var pollTimer: Timer?
 
+    private let launch: (command: String, cwd: String)?
+
     public init(
       session: ClairV2LocalShellSession? = nil,
+      launch: (command: String, cwd: String)? = nil,
       font: NSFont = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
     ) {
       if let session {
@@ -56,6 +59,7 @@ import Foundation
         self.session = try! ClairV2LocalShellSession(
           spec: .loginShell(workingDirectoryURL: URL(fileURLWithPath: "/private/tmp")))
       }
+      self.launch = launch
       self.font = font
       self.metrics = ClairV2GhosttyCellMetrics.measuring(font: font, contentScale: 1)
       self.status = ClairV2GhosttyStatus(isVendored: false, activationError: nil)
@@ -188,7 +192,9 @@ import Foundation
           platform: .macOS(Unmanaged.passUnretained(self).toOpaque()),
           scaleFactor: Double(window?.backingScaleFactor ?? 1),
           fontSize: Double(font.pointSize),
-          workingDirectory: FileManager.default.homeDirectoryForCurrentUser.path
+          workingDirectory: launch?.cwd ?? FileManager.default.homeDirectoryForCurrentUser.path,
+          command: launch?.command,
+          waitAfterCommand: launch != nil  // keep the pane so the exit code stays readable
         )
         let surface = try newApp.retainSurface(config)
         ghosttyApp = newApp
@@ -232,11 +238,19 @@ import Foundation
       pollTimer = timer
     }
 
+    /// V08: facts only — bells since the last poll and, once, the child's exit code.
+    public var onFacts: ((_ bells: Int, _ exitCode: Int?) -> Void)?
+    private var exitReported = false
+
     private func pollGhosttySurface() {
       guard let ghosttyApp else { return }
       do { try ghosttyApp.tick() } catch {
         lastReportedError = String(describing: error)
       }
+      let e = ghosttyApp.takeEvents()
+      let exit = exitReported ? nil : e.exitCode
+      if exit != nil { exitReported = true }
+      if e.bells > 0 || exit != nil { onFacts?(e.bells, exit) }
       needsDisplay = true
     }
 
@@ -549,12 +563,18 @@ import Foundation
 
   /// SwiftUI host for `ClairV2GhosttySurfaceView`.
   public struct ClairV2GhosttySurface: NSViewRepresentable {
-    public init() {}
-
-    public func makeNSView(context: Context) -> ClairV2GhosttySurfaceView {
-      ClairV2GhosttySurfaceView()
+    let launch: (command: String, cwd: String)?
+    let onFacts: ((Int, Int?) -> Void)?
+    public init(launch: (command: String, cwd: String)? = nil, onFacts: ((Int, Int?) -> Void)? = nil) {
+      self.launch = launch; self.onFacts = onFacts
     }
 
-    public func updateNSView(_ nsView: ClairV2GhosttySurfaceView, context: Context) {}
+    public func makeNSView(context: Context) -> ClairV2GhosttySurfaceView {
+      let v = ClairV2GhosttySurfaceView(launch: launch)
+      v.onFacts = onFacts
+      return v
+    }
+
+    public func updateNSView(_ nsView: ClairV2GhosttySurfaceView, context: Context) { nsView.onFacts = onFacts }
   }
 #endif

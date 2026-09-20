@@ -8,9 +8,9 @@ final class WorkbenchIPCTests: XCTestCase {
   private final class Host: @unchecked Sendable {
     let lock = NSLock()
     var state = WorkbenchState()
-    func run(_ id: String, _ input: CommandInput) -> Result<CommandResult, CommandError> {
+    func run(_ req: WorkbenchIPCRequest) -> Result<CommandResult, CommandError> {
       lock.lock(); defer { lock.unlock() }
-      return CommandRegistry.workbench.execute(id, input, state: &state)  // no `confirmed` path from IPC
+      return CommandRegistry.workbench.execute(req.command, req.input, state: &state)  // no `confirmed` path from IPC
     }
   }
 
@@ -69,7 +69,7 @@ final class WorkbenchIPCTests: XCTestCase {
     let gone = URL(fileURLWithPath: "/tmp/clair-v2-none/c.sock")
     XCTAssertThrowsError(try cli(["state.snapshot"], gone)) { XCTAssertEqual($0 as? WorkbenchIPCError, .notRunning) }
     let (_, url, _) = try serve()
-    XCTAssertThrowsError(try WorkbenchIPCServer(socket: url, handler: { _, _ in .success(.ok) }).start()) {
+    XCTAssertThrowsError(try WorkbenchIPCServer(socket: url, handler: { _ in .success(.ok) }).start()) {
       XCTAssertEqual($0 as? WorkbenchIPCError, .alreadyRunning)
     }
     XCTAssertEqual(WorkbenchCLI.parse(["settings.set", "key=showQuota", "value=true"])?.input, ["key": .string("showQuota"), "value": .bool(true)])

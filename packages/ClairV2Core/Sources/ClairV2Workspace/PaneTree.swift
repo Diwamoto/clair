@@ -52,14 +52,14 @@ public struct PaneTree: Sendable, Equatable, Codable {
     }
   }
 
-  /// Splits the focused pane; the new pane copies its kind and takes focus.
-  public mutating func splitFocused(_ axis: Axis) {
+  /// Splits the focused pane; the new pane copies its kind (or takes `kind`) and takes focus.
+  public mutating func splitFocused(_ axis: Axis, kind newKind: PaneKind? = nil) {
     let new = nextID
     nextID += 1
     let target = focused
     root = Self.map(root) { n in
       guard case .leaf(let id, let kind) = n, id == target else { return nil }
-      return .split(axis: axis, ratio: 0.5, first: n, second: .leaf(id: new, kind: kind))
+      return .split(axis: axis, ratio: 0.5, first: n, second: .leaf(id: new, kind: newKind ?? kind))
     }
     focused = new
     maximized = nil

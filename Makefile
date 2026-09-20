@@ -2,6 +2,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 .PHONY: help doctor workspace-check build-editor-web build-stable build-dev build-mobile-simulator run-stable run-dev watch-dev
+.PHONY: dev dev-ios
 .PHONY: test test-rust test-swift test-mobile lint lint-rust lint-swift analyze
 .PHONY: smoke smoke-bundles artifact-check ci clean-artifacts
 .PHONY: v2-build v2-mobile-build v2-test v2-test-integration v2-check v2-foundation
@@ -24,7 +25,7 @@ build-stable: ## Build the unsigned Clair Stable app.
 build-dev: ## Build the unsigned Clair Dev app.
 	@./scripts/xcode.sh build "Clair Dev" dev
 
-build-mobile-simulator: ## Build the unsigned Clair Mobile app for iOS Simulator.
+build-mobile-simulator: ## Build the Clair v2 Mobile app for iOS Simulator.
 	@./scripts/build-mobile-simulator.sh
 
 run-stable: build-stable ## Build and launch a new Clair Stable process.
@@ -34,6 +35,12 @@ run-dev: ## Watch native sources and hot-restart Clair Dev after changes.
 	@./scripts/watch-dev.sh
 
 watch-dev: run-dev ## Backward-compatible alias for run-dev.
+
+dev: ## Build and launch the Clair v2 macOS app (Ctrl-C to stop).
+	@./scripts/run-v2-dev.sh
+
+dev-ios: ## Build and launch Clair v2 Mobile in an iOS Simulator.
+	@./scripts/run-mobile-simulator.sh
 
 test-rust: ## Run all Rust workspace unit tests.
 	@./scripts/doctor.sh rust

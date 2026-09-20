@@ -3,6 +3,13 @@ import Foundation
 
 // V02: `clair open path[:line:col]` / `clair <command-id> [key=value …]` → running Clair GUI.
 // stdout: JSON reply. exit 0 ok, 1 command error, 2 usage, 3 GUI not running / IPC failure.
+// V03: `clair mcp serve` — stdio MCP adapter (newline-delimited JSON-RPC). Authorization is enforced in the GUI.
+if CommandLine.arguments.dropFirst().starts(with: ["mcp", "serve"]) {
+  while let line = readLine() {
+    if let out = MCPServer.respond(to: line, call: { try WorkbenchIPC.call($0, timeout: 90) }) { print(out); fflush(stdout) }
+  }
+  exit(0)
+}
 guard let request = WorkbenchCLI.parse(Array(CommandLine.arguments.dropFirst())) else {
   FileHandle.standardError.write(Data("usage: clair open <path[:line[:col]]> | clair <command-id> [key=value ...]\n".utf8))
   exit(2)

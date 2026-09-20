@@ -485,6 +485,13 @@ void clair_ghostty_config_free(clair_ghostty_config_t config);
 clair_ghostty_app_t clair_ghostty_app_new(clair_ghostty_config_t config);
 void clair_ghostty_app_free(clair_ghostty_app_t app);
 void clair_ghostty_app_tick(clair_ghostty_app_t app);
+// V08: facts observed during `tick()`. `bells` is drained on read; `exit_code`
+// is -1 until the child exits, then sticky.
+typedef struct {
+  uint32_t bells;
+  int64_t exit_code;
+} clair_ghostty_app_events_s;
+void clair_ghostty_app_take_events(clair_ghostty_app_t app, clair_ghostty_app_events_s *out);
 clair_ghostty_surface_config_s clair_ghostty_surface_config_new(void);
 clair_ghostty_surface_t clair_ghostty_surface_new(
     clair_ghostty_app_t app, const clair_ghostty_surface_config_s *config);

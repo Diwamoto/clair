@@ -16,7 +16,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public enum Palette: String, Sendable, Codable { case commands, files }
 
   public static let sections = ["一般", "AIプロバイダー", "エディタ", "ターミナル", "モバイル", "アップデート"]
-  public static let toggleKeys = ["restoreLayout", "confirmClose", "showQuota"]
+  public static let toggleKeys = ["restoreLayout", "confirmClose", "showQuota", "preventSleepOnBattery"]
 
   // Sample tree only until a Project is opened (`project.open` replaces it with the real file system).
   public var files = [
@@ -35,10 +35,12 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var active: String? = "apple/ClairApp/ContentView.swift"
   public var dirty: Set<String> = []
   public var collapsed: Set<String> = []
+  public var launches: [Int: AgentLaunch] = [:]
+  public var notices = NotificationLog()
   public var settingsOpen = false
   public var section = "一般"
   public var palette: Palette?
-  public var toggles = ["restoreLayout": true, "confirmClose": true, "showQuota": false]
+  public var toggles = ["restoreLayout": true, "confirmClose": true, "showQuota": false, "preventSleepOnBattery": false]
 
   public init() {}
 }
@@ -97,10 +99,12 @@ public enum CommandResult: Sendable, Codable, Equatable {
   case ok
   case pane(Int)
   case snapshot(WorkbenchState)
+  case text(String)
+  case review(GitReview)
 }
 
 public struct CommandError: Error, Sendable, Codable, Equatable {
-  public enum Code: String, Sendable, Codable { case unknownCommand, invalidInput, preconditionFailed, confirmationRequired }
+  public enum Code: String, Sendable, Codable { case unknownCommand, invalidInput, preconditionFailed, confirmationRequired, notAvailableToAI, denied }
   public let code: Code
   public let message: String
   public init(_ code: Code, _ message: String) { self.code = code; self.message = message }
@@ -165,10 +169,12 @@ public struct CommandRegistry: Sendable {
     let q = query.lowercased()
     switch kind {
     case .commands:
-      return commands.filter { $0.inPalette && (q.isEmpty || $0.title.lowercased().contains(q)) }
+      return commands.filter { $0.inPalette && (state.isRepo || !($0.id.hasPrefix("git.") || $0.id.hasPrefix("worktree."))) && (q.isEmpty || $0.title.lowercased().contains(q)) }
         .map { PaletteItem(title: $0.title, hint: $0.shortcut ?? "", id: $0.id, input: [:]) }
+        + AgentProfile.all.map { PaletteItem(title: "\($0.title) を起動", hint: "", id: "agent.launch", input: ["profile": .string($0.id)]) }
+          .filter { q.isEmpty || $0.title.lowercased().contains(q) }
     case .files:
-      return state.files.filter { q.isEmpty || $0.path.lowercased().contains(q) }
+      return QuickOpen.rank(query, state.files)
         .map { PaletteItem(title: $0.path, hint: "", id: "tab.open", input: ["path": .string($0.path)]) }
     }
   }
@@ -197,7 +203,7 @@ public struct CommandRegistry: Sendable {
 // MARK: - Workbench commands
 
 extension CommandRegistry {
-  private static func cmd(
+  static func cmd(
     _ id: String, _ title: String, _ risk: CommandRisk, ai: Bool = true, params: [CommandParam] = [],
     shortcut: String? = nil, palette: Bool? = nil,
     preflight: @escaping @Sendable (WorkbenchState, CommandInput) throws(CommandError) -> CommandRisk = { _, _ in .read },
@@ -238,7 +244,22 @@ extension CommandRegistry {
           try require(leaves.count > 1, "the last pane cannot be closed")
           let editors = leaves.filter { $0.kind == .editor }
           return editors.count == 1 && editors[0].id == s.tree.focused && !s.dirty.isEmpty ? .destructive : .write
-        }) { s, _ in s.tree.closeFocused(); return .ok },
+        }) { s, _ in
+      s.tree.closeFocused()
+      s.launches = s.launches.filter { id, _ in s.tree.leaves.contains { $0.id == id } }
+      return .ok
+    },
+    // External: spawns a user-configured executable. ai: false — an agent must not start agents (V07/ADR-0002).
+    cmd("agent.launch", "エージェントを起動", .external, ai: false,
+        params: [CommandParam("profile", .string, allowed: AgentProfile.all.map(\.id))], palette: false,
+        preflight: { s, _ throws(CommandError) in
+          try require(s.projects.contains { $0.name == s.project }, "no active project"); return .external
+        }) { s, i in
+      s.tree.splitFocused(.vertical, kind: .terminal)
+      let root = s.projects.first { $0.name == s.project }!.path
+      s.launches[s.tree.focused] = AgentLaunch(profile: i["profile"]!.string!, cwd: root)
+      return .pane(s.tree.focused)
+    },
     cmd("tab.open", "ファイルを開く", .read, params: [CommandParam("path", .string)],
         preflight: { s, i throws(CommandError) in
           try require(s.files.contains { $0.path == i["path"]?.string }, "no file \(i["path"]!)"); return .read
@@ -305,6 +326,29 @@ extension CommandRegistry {
     cmd("palette.commands", "コマンドパレット", .read, ai: false, shortcut: "⌘K", palette: false) { s, _ in s.palette = .commands; return .ok },
     cmd("palette.files", "ファイルへ移動", .read, ai: false, shortcut: "⌘P", palette: false) { s, _ in s.palette = .files; return .ok },
     cmd("palette.close", "パレットを閉じる", .read, ai: false, palette: false) { s, _ in s.palette = nil; return .ok },
+    // V08. Reading history is `state.snapshot`; mute changes what the user is told, so ai: false.
+    cmd("notice.markRead", "通知を既読にする", .write, params: [CommandParam("project", .string, required: false)]) { s, i in
+      s.notices.markRead(project: i["project"]?.string); return .ok
+    },
+    cmd("notice.clear", "通知履歴を消去", .write, ai: false) { s, _ in s.notices.clear(); return .ok },
+    cmd("notice.muteProject", "Project の通知をミュート", .write, ai: false,
+        params: [CommandParam("name", .string), CommandParam("muted", .bool)],
+        preflight: { s, i throws(CommandError) in
+          try require(s.projects.contains { $0.name == i["name"]!.string! }, "no project \(i["name"]!)"); return .write
+        }) { s, i in
+      let n = i["name"]!.string!
+      if i["muted"]!.bool! { s.notices.mutedProjects.insert(n) } else { s.notices.mutedProjects.remove(n) }
+      return .ok
+    },
+    cmd("notice.mutePane", "ターミナルの通知をミュート", .write, ai: false,
+        params: [CommandParam("id", .int), CommandParam("muted", .bool)],
+        preflight: { s, i throws(CommandError) in
+          try require(s.tree.leaves.contains { $0.id == i["id"]!.int! }, "no pane \(i["id"]!)"); return .write
+        }) { s, i in
+      let k = NotificationLog.paneKey(s.project, i["id"]!.int!)
+      if i["muted"]!.bool! { s.notices.mutedPanes.insert(k) } else { s.notices.mutedPanes.remove(k) }
+      return .ok
+    },
     cmd("state.snapshot", "状態を取得", .read, palette: false) { s, _ in .snapshot(s) },
-  ])
+  ] + gitCommands)
 }

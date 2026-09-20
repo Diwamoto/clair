@@ -1,6 +1,7 @@
 #include "include/clair_ghostty_abi.h"
 
 #if defined(CLAIR_GHOSTTY_VENDORED)
+#include <stdlib.h>
 #include <string.h>
 
 // T01's init/info/config subset was originally exposed to Swift as
@@ -77,21 +78,34 @@ static void clair_ghostty_write_clipboard_cb(
   (void)confirmed;
 }
 
-// Deliberately does not mirror `ghostty_target_s`/`ghostty_action_s` (see
-// the header comment above the surface-config assertions): every action is
-// reported as "not handled" without decoding the payload.
+// V08: the only two actions read are RING_BELL and SHOW_CHILD_EXITED, and only
+// their facts (a bell count, the exit code) are kept, in a per-app record that
+// Swift drains after `tick()` (`clair_ghostty_app_take_events`). No payload
+// other than `child_exited.exit_code` is decoded; every action is still
+// reported "not handled" so libghostty's default behavior is unchanged.
+typedef struct {
+  uint32_t bells;
+  int64_t exit_code;  // -1 = the child has not exited
+} clair_ghostty_app_events_record;
+
 static bool clair_ghostty_action_cb(
     ghostty_app_t app, ghostty_target_s target, ghostty_action_s action) {
-  (void)app;
   (void)target;
-  (void)action;
+  clair_ghostty_app_events_record *rec = ghostty_app_userdata(app);
+  if (!rec) return false;
+  if (action.tag == GHOSTTY_ACTION_RING_BELL) rec->bells++;
+  else if (action.tag == GHOSTTY_ACTION_SHOW_CHILD_EXITED)
+    rec->exit_code = (int64_t)action.action.child_exited.exit_code;
   return false;
 }
 
 clair_ghostty_app_t clair_ghostty_app_new(clair_ghostty_config_t config) {
   ghostty_runtime_config_s runtime_config;
   memset(&runtime_config, 0, sizeof(runtime_config));
-  runtime_config.userdata = NULL;
+  clair_ghostty_app_events_record *rec = calloc(1, sizeof(*rec));
+  if (!rec) return NULL;
+  rec->exit_code = -1;
+  runtime_config.userdata = rec;
   runtime_config.supports_selection_clipboard = false;
   runtime_config.wakeup_cb = clair_ghostty_wakeup_cb;
   runtime_config.action_cb = clair_ghostty_action_cb;
@@ -99,12 +113,22 @@ clair_ghostty_app_t clair_ghostty_app_new(clair_ghostty_config_t config) {
   runtime_config.confirm_read_clipboard_cb = clair_ghostty_confirm_read_clipboard_cb;
   runtime_config.write_clipboard_cb = clair_ghostty_write_clipboard_cb;
   runtime_config.close_surface_cb = NULL;
-  return (clair_ghostty_app_t)ghostty_app_new(
-      &runtime_config, (ghostty_config_t)config);
+  ghostty_app_t app = ghostty_app_new(&runtime_config, (ghostty_config_t)config);
+  if (!app) free(rec);
+  return (clair_ghostty_app_t)app;
+}
+
+void clair_ghostty_app_take_events(clair_ghostty_app_t app, clair_ghostty_app_events_s *out) {
+  clair_ghostty_app_events_record *rec = ghostty_app_userdata((ghostty_app_t)app);
+  out->bells = rec ? rec->bells : 0;
+  out->exit_code = rec ? rec->exit_code : -1;
+  if (rec) rec->bells = 0;  // bells are drained; the exit code is sticky
 }
 
 void clair_ghostty_app_free(clair_ghostty_app_t app) {
+  void *rec = ghostty_app_userdata((ghostty_app_t)app);
   ghostty_app_free((ghostty_app_t)app);
+  free(rec);
 }
 
 void clair_ghostty_app_tick(clair_ghostty_app_t app) {

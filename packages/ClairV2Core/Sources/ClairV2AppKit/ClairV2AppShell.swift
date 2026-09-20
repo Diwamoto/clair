@@ -1,8 +1,11 @@
 #if os(macOS)
   import ClairV2DesignSystem
   import ClairV2Workspace
-  import Observation
+  import IOKit.pwr_mgt
+import IOKit.ps
+import Observation
   import SwiftUI
+@preconcurrency import UserNotifications
 
   private typealias C = DesignTokens.Color
   private typealias L = DesignTokens.Line
@@ -15,6 +18,13 @@
     public var pending: (id: String, input: CommandInput)?
     public var lastError: CommandError?
     public let registry = CommandRegistry.workbench
+
+    /// V09: update flow state (Stable only; Dev has no feed).
+    public enum UpdateStatus: Equatable { case idle, checking, available(ClairV2Update), installing, failed(String) }
+    public var update: UpdateStatus = .idle
+    public let updateConfig = ClairV2UpdateConfiguration.live()
+    private var updateTask: Task<Void, Never>?
+    private var sleepAssertion: IOPMAssertionID = 0
 
     /// V02: serves this store to `clair` CLI. Only the first window's store wins the socket.
     // ponytail: multi-window shares one socket owner; route by window when V04 adds per-Project windows.
@@ -29,17 +39,71 @@
       if let url, let restored = WorkbenchState.restore(from: url) { state = restored }
       if state.projects.isEmpty { run("project.open", ["path": .string(Self.seedRoot)]) }
       let store = self
-      let server = WorkbenchIPCServer { id, input in
-        DispatchQueue.main.sync { MainActor.assumeIsolated { store.run(id, input) } }
+      let server = WorkbenchIPCServer { req in
+        if req.via == .mcp {
+          return MCPGate.handle(
+            req, registry: CommandRegistry.workbench,
+            snapshot: { DispatchQueue.main.sync { MainActor.assumeIsolated { store.state } } },
+            approve: { store.requestMCPApproval($0, $1, $2) },
+            run: { id, input in DispatchQueue.main.sync { MainActor.assumeIsolated { store.run(id, input, confirmed: true) } } })
+        }
+        return DispatchQueue.main.sync { MainActor.assumeIsolated { store.run(req.command, req.input) } }
       }
       if (try? server.start()) != nil { ipc = server }
+      ClairV2Updater.markStartupSuccess(updateConfig)  // tells a pending update helper this launch is healthy
+      startAutomaticUpdateChecks()
     }
 
-    isolated deinit { ipc?.stop() }
+    isolated deinit { ipc?.stop(); updateTask?.cancel(); releaseSleepAssertion() }
+
+    /// ADR-0009: 5 s after launch, then hourly. Never applies on its own.
+    private func startAutomaticUpdateChecks() {
+      guard updateConfig.channel == .stable, updateConfig.publicKeyBase64 != nil, updateConfig.isInstalled else { return }
+      updateTask = Task { [weak self] in
+        try? await Task.sleep(for: .seconds(5))
+        while !Task.isCancelled {
+          await self?.checkForUpdate(manual: false)
+          try? await Task.sleep(for: .seconds(3600))
+        }
+      }
+    }
+
+    public func checkForUpdate(manual: Bool) async {
+      if case .installing = update { return }
+      update = .checking
+      do { update = .available(try await ClairV2Updater.check(updateConfig)) } catch {
+        if case ClairV2UpdateError.notNewer = error { update = .idle } else { update = manual ? .failed("\(error)") : .idle }
+      }
+    }
+
+    /// The user pressed 適用: download, verify, stage, then quit so the helper can swap and relaunch.
+    public func installUpdate() async {
+      guard case .available(let u) = update else { return }
+      update = .installing
+      do {
+        try await ClairV2Updater.install(u, updateConfig)
+        NSApp.terminate(nil)
+      } catch { update = .failed("\(error)") }
+    }
+
+    /// V09: block idle system sleep while agents run (AC power; battery only if opted in). Display may still sleep.
+    private func refreshSleepAssertion() {
+      let ac = (IOPSGetProvidingPowerSourceType(nil)?.takeRetainedValue() as String?) == kIOPSACPowerValue
+      if state.preventsSleep(onACPower: ac) {
+        guard sleepAssertion == 0 else { return }
+        IOPMAssertionCreateWithName(kIOPMAssertPreventUserIdleSystemSleep as CFString, IOPMAssertionLevel(kIOPMAssertionLevelOn),
+          "Clair: agent running" as CFString, &sleepAssertion)
+      } else { releaseSleepAssertion() }
+    }
+
+    private func releaseSleepAssertion() {
+      guard sleepAssertion != 0 else { return }
+      IOPMAssertionRelease(sleepAssertion); sleepAssertion = 0
+    }
 
     public static var defaultPersistURL: URL {
       ProcessInfo.processInfo.environment["CLAIR_WORKSPACE_FILE"].map { URL(fileURLWithPath: $0) }
-        ?? URL.applicationSupportDirectory.appending(path: "Clair/workspace.json")
+        ?? ClairV2Channel.current.dataURL.appending(path: "workspace.json")
     }
 
     /// First launch: `CLAIR_PROJECT_ROOT`, else the launch directory, else home.
@@ -57,9 +121,75 @@
       case .failure(let e): lastError = e
       case .success:
         lastError = nil
+        refreshSleepAssertion()
+        watchProject()
         if let persistURL { try? state.save(to: persistURL) }
       }
       return r
+    }
+
+    /// V05: agent/external disk changes refresh the tree and drop unsaved markers (principle 8).
+    private var watcher: FileWatcher?
+    private var watched = ""
+
+    private func watchProject() {
+      guard watched != state.project else { return }
+      watched = state.project
+      guard let root = state.projects.first(where: { $0.name == state.project })?.path else { watcher = nil; return }
+      watcher = FileWatcher(root: root) { [weak self] paths in
+        DispatchQueue.main.async {
+          guard let self, self.watched == self.state.project else { return }
+          self.state.applyDiskChange(paths, root: root)
+        }
+      }
+    }
+
+    /// V08: a terminal fact becomes a history entry (and a macOS banner unless muted or the app is frontmost).
+    public func facts(pane: Int, bells: Int, exit: Int?) {
+      // Only this GUI writes facts (no command records them), so an agent cannot fabricate notifications.
+      var fresh: WorkbenchNotice?
+      if bells > 0 { fresh = state.notices.record(project: state.project, pane: pane, kind: .bell) ?? fresh }
+      if let exit { fresh = state.notices.record(project: state.project, pane: pane, kind: .exited, exitCode: exit) ?? fresh }
+      refreshSleepAssertion()
+      guard let n = fresh, !NSApp.isActive,
+        Bundle.main.bundleIdentifier != nil  // UNUserNotificationCenter traps outside an app bundle (swift run)
+      else { return }
+      let body = state.launches[n.pane].flatMap { AgentProfile.named($0.profile)?.title }.map { "\($0): \(n.title)" } ?? n.title
+      let c = UNUserNotificationCenter.current()
+      c.requestAuthorization(options: [.alert]) { granted, _ in
+        guard granted else { return }
+        let m = UNMutableNotificationContent()
+        m.title = n.project; m.body = body
+        c.add(UNNotificationRequest(identifier: "clair-\(n.id)", content: m, trigger: nil))
+      }
+    }
+
+    /// V03: an AI call at write-or-above risk waits here (IPC thread, never main) for a native
+    /// approval. No answer within `timeout` is a denial.
+    public var mcpApproval: (id: String, input: CommandInput, risk: CommandRisk)?
+    private var mcpDecision: DispatchSemaphore?
+    private var mcpApproved = false
+
+    nonisolated func requestMCPApproval(_ id: String, _ input: CommandInput, _ risk: CommandRisk, timeout: TimeInterval = 60) -> Bool {
+      let sem = DispatchSemaphore(value: 0)
+      DispatchQueue.main.sync {
+        MainActor.assumeIsolated { mcpApproval = (id, input, risk); mcpDecision = sem; mcpApproved = false }
+      }
+      _ = sem.wait(timeout: .now() + timeout)
+      return DispatchQueue.main.sync {
+        MainActor.assumeIsolated {
+          defer { mcpApproval = nil; mcpDecision = nil }  // timeout: nobody answered
+          return mcpApproved
+        }
+      }
+    }
+
+    public func resolveMCPApproval(_ approved: Bool) {
+      // First answer wins: dismissing the dialog after "許可" must not turn it into a denial.
+      guard let sem = mcpDecision else { return }
+      mcpDecision = nil
+      mcpApproved = approved
+      sem.signal()
     }
 
     public func confirm() {
@@ -137,6 +267,12 @@
       ) {
         Button("破棄して続行", role: .destructive) { store.confirm() }
       }
+      .confirmationDialog(
+        store.mcpApproval.map { "AI が「\($0.id)」（\($0.risk.label)）を実行しようとしています" } ?? "",
+        isPresented: Binding(get: { store.mcpApproval != nil }, set: { if !$0 { store.resolveMCPApproval(false) } })
+      ) {
+        Button("許可して実行") { store.resolveMCPApproval(true) }
+      }
     }
 
     private var titlebar: some View {
@@ -154,6 +290,18 @@
               .padding(.horizontal, 10).frame(height: 26)
               .background(color.opacity(on ? 0.22 : 0.14), in: RoundedRectangle(cornerRadius: Radius.card))
               .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(color.opacity(on ? 0.55 : 0.28)))
+              .overlay(alignment: .topTrailing) {
+                if st.notices.unread(p.name) > 0 {
+                  Text("\(st.notices.unread(p.name))").font(.system(size: 9, weight: .bold)).foregroundStyle(C.textPrimary)
+                    .padding(.horizontal, 4).background(color, in: Capsule()).offset(x: 4, y: -4)
+                }
+              }
+              .contextMenu {
+                let muted = st.notices.mutedProjects.contains(p.name)
+                Button(muted ? "通知のミュートを解除" : "通知をミュート") {
+                  store.run("notice.muteProject", ["name": .string(p.name), "muted": .bool(!muted)])
+                }
+              }
           }.buttonStyle(.plain)
         }
         Button(action: openFolder) { Image(systemName: "plus").foregroundStyle(C.chromeInk) }.buttonStyle(.plain)
@@ -258,7 +406,8 @@
         .background(C.chromeRaised)
         PaneView(
           node: st.tree.maximized.flatMap { id in st.tree.leaves.first { $0.id == id }.map { .leaf(id: $0.id, kind: $0.kind) } } ?? st.tree.root,
-          focused: st.tree.focused, onFocus: { store.run("pane.focus", ["id": .int($0)]) },
+          focused: st.tree.focused, launches: st.launches, onFocus: { store.run("pane.focus", ["id": .int($0)]) },
+          onFacts: { store.facts(pane: $0, bells: $1, exit: $2) },
           onRatio: { store.run("pane.setRatio", ["id": .int($0), "ratio": .double($1)]) })
       }
     }
@@ -271,6 +420,10 @@
             toggle("前回のレイアウトを復元", "restoreLayout")
             toggle("閉じる前に確認", "confirmClose")
             toggle("ステータスバーの利用枠を表示", "showQuota")
+          } else if st.section == "ターミナル" {
+            toggle("バッテリー駆動中もエージェント実行中はスリープさせない", "preventSleepOnBattery")
+          } else if st.section == "アップデート" {
+            updateSection
           } else if st.section == "モバイル" {
             Text("同じネットワーク上の端末からセッションを確認します。").foregroundStyle(C.textTertiary)
           } else {
@@ -281,6 +434,25 @@
         .font(Typography.font(Typography.chrome)).padding(40).frame(maxWidth: 720, alignment: .leading).frame(maxWidth: .infinity)
       }
       .background(C.chromeRaised)
+    }
+
+    @ViewBuilder private var updateSection: some View {
+      let c = store.updateConfig
+      Text("\(c.channel.displayName) \(c.currentVersion)").foregroundStyle(C.textSecondary)
+      if c.channel == .dev {
+        Text("Dev ビルドは更新フィードを持ちません。").foregroundStyle(C.textMuted)
+      } else {
+        switch store.update {
+        case .idle: Text("最新の状態です。").foregroundStyle(C.textTertiary)
+        case .checking: Text("確認中…").foregroundStyle(C.textTertiary)
+        case .installing: Text("更新を適用しています。完了後に再起動します。").foregroundStyle(C.textTertiary)
+        case .failed(let m): Text(m).foregroundStyle(C.textTertiary)
+        case .available(let u):
+          Text("\(u.version) が利用できます。\(u.notes ?? "")").foregroundStyle(C.textSecondary)
+          Button("適用して再起動") { Task { await store.installUpdate() } }
+        }
+        Button("更新を確認") { Task { await store.checkForUpdate(manual: true) } }
+      }
     }
 
     private func toggle(_ title: String, _ key: String) -> some View {
@@ -340,7 +512,9 @@
   private struct PaneView: View {
     let node: PaneTree.Node
     let focused: Int
+    let launches: [Int: AgentLaunch]
     let onFocus: (Int) -> Void
+    let onFacts: (Int, Int, Int?) -> Void
     let onRatio: (Int, Double) -> Void
 
     private func firstLeaf(_ n: PaneTree.Node) -> Int {
@@ -353,7 +527,7 @@
     @ViewBuilder
     private func parts(_ axis: PaneTree.Axis, _ total: CGFloat, _ a: PaneTree.Node, _ b: PaneTree.Node, ratio: Double) -> some View {
       let h = axis == .horizontal
-      PaneView(node: a, focused: focused, onFocus: onFocus, onRatio: onRatio)
+      PaneView(node: a, focused: focused, launches: launches, onFocus: onFocus, onFacts: onFacts, onRatio: onRatio)
         .frame(width: h ? total * ratio : nil, height: h ? nil : total * ratio)
       Rectangle().fill(L.paneDivider).frame(width: h ? 1 : nil, height: h ? nil : 1)
         .padding(h ? .horizontal : .vertical, -3).contentShape(Rectangle())
@@ -361,7 +535,7 @@
           DragGesture(coordinateSpace: .named("split")).onChanged { v in
             onRatio(firstLeaf(a), Double((h ? v.location.x : v.location.y) / total))
           })
-      PaneView(node: b, focused: focused, onFocus: onFocus, onRatio: onRatio)
+      PaneView(node: b, focused: focused, launches: launches, onFocus: onFocus, onFacts: onFacts, onRatio: onRatio)
     }
 
     var body: some View {
@@ -369,7 +543,7 @@
       case .leaf(let id, let kind):
         ZStack {
           C.surface
-          if kind == .terminal { ClairV2GhosttySurface() }  // ponytail: one surface per terminal leaf; session binding is U06
+          if kind == .terminal { ClairV2GhosttySurface(launch: launches[id].map { ($0.command, $0.cwd) }, onFacts: { onFacts(id, $0, $1) }) }  // ponytail: one surface per terminal leaf; session binding is U06
           else { Text(kind.rawValue).foregroundStyle(C.textMuted) }  // editor/agent content: U05/U06
         }
         .overlay(Rectangle().stroke(id == focused ? L.ring : .clear))

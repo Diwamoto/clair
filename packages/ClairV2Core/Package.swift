@@ -126,7 +126,7 @@ let package = Package(
     .target(name: "ClairPushRelay", dependencies: ["ClairV2Push"]),
     .target(
       name: "ClairV2Workspace",
-      dependencies: ["ClairV2Shared"]
+      dependencies: ["ClairV2Shared", "ClairV2EditorCore"]
     ),
     .target(
       name: "ClairV2Agent",

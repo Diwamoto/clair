@@ -11,7 +11,10 @@ import Foundation
 public struct WorkbenchIPCRequest: Codable, Equatable, Sendable {
   public var command: String
   public var input: CommandInput
-  public init(command: String, input: CommandInput = [:]) { self.command = command; self.input = input }
+  /// `mcp` = an AI agent's call through `clair mcp serve`; the GUI applies `MCPGate` (V03).
+  public var via: Via?
+  public enum Via: String, Codable, Sendable { case mcp }
+  public init(command: String, input: CommandInput = [:], via: Via? = nil) { self.command = command; self.input = input; self.via = via }
 }
 
 public struct WorkbenchIPCReply: Codable, Equatable, Sendable {
@@ -32,8 +35,7 @@ public enum WorkbenchIPC {
   /// `CLAIR_V2_COMMAND_SOCKET` overrides (tests; sun_path is limited to ~104 bytes).
   public static var defaultSocketURL: URL {
     if let p = ProcessInfo.processInfo.environment["CLAIR_V2_COMMAND_SOCKET"] { return URL(fileURLWithPath: p) }
-    return FileManager.default.homeDirectoryForCurrentUser
-      .appendingPathComponent("Library/Application Support/Clair v2/command.sock")
+    return ClairV2Channel.current.dataURL.appending(path: "command.sock")
   }
 
   static func address(_ url: URL) throws -> sockaddr_un {
@@ -105,7 +107,7 @@ public enum WorkbenchIPC {
 /// drops any peer whose uid differs from `allowedUID`. One thread, one
 /// connection at a time: commands are tiny and must be serialized against GUI state anyway.
 public final class WorkbenchIPCServer: @unchecked Sendable {
-  public typealias Handler = @Sendable (String, CommandInput) -> Result<CommandResult, CommandError>
+  public typealias Handler = @Sendable (WorkbenchIPCRequest) -> Result<CommandResult, CommandError>
 
   private let url: URL
   private let allowedUID: uid_t
@@ -162,7 +164,7 @@ public final class WorkbenchIPCServer: @unchecked Sendable {
         continue
       }
       var reply = WorkbenchIPCReply()
-      switch handler(req.command, req.input) {
+      switch handler(req) {
       case .success(let r): reply.result = r
       case .failure(let e): reply.error = e
       }

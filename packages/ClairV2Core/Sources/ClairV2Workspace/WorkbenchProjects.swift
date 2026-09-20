@@ -8,6 +8,9 @@ import Foundation
 public struct WorkbenchProject: Sendable, Codable, Equatable {
   public let name: String
   public let path: String
+  /// Managed worktree only: the repository it was created from and its branch (V06).
+  public var origin: String? = nil
+  public var branch: String? = nil
 
   /// Absolute, symlink-resolved directory path, or nil if `path` is not an existing directory.
   static func normalized(_ path: String) -> String? {
@@ -25,12 +28,15 @@ public struct ProjectLayout: Sendable, Codable, Equatable {
   public var active: String?
   public var dirty: Set<String> = []
   public var collapsed: Set<String> = []
+  /// V07: live agent terminals by pane id. Never persisted — restore must not silently respawn agents.
+  public var launches: [Int: AgentLaunch] = [:]
+  private enum CodingKeys: String, CodingKey { case tree, tabs, active, dirty, collapsed }
 }
 
 extension WorkbenchState {
   var layout: ProjectLayout {
-    get { ProjectLayout(tree: tree, tabs: tabs, active: active, dirty: dirty, collapsed: collapsed) }
-    set { tree = newValue.tree; tabs = newValue.tabs; active = newValue.active; dirty = newValue.dirty; collapsed = newValue.collapsed }
+    get { ProjectLayout(tree: tree, tabs: tabs, active: active, dirty: dirty, collapsed: collapsed, launches: launches) }
+    set { tree = newValue.tree; tabs = newValue.tabs; active = newValue.active; dirty = newValue.dirty; collapsed = newValue.collapsed; launches = newValue.launches }
   }
 
   /// Stashes the current Project's layout, rescans the target's files and loads its layout.
@@ -44,13 +50,15 @@ extension WorkbenchState {
     l.dirty.formIntersection(l.tabs)
     if l.active.map(l.tabs.contains) != true { l.active = l.tabs.last }
     if !l.tree.isValid { l.tree = PaneTree() }
+    l.launches = l.launches.filter { id, _ in l.tree.leaves.contains { $0.id == id } }
     layout = l
+    notices.markRead(project: p.name)  // looking at a Project clears its badge
   }
 }
 
 public enum WorkbenchFiles {
   static let skipped: Set<String> = [".git", "node_modules", ".build", "DerivedData", ".DS_Store"]
-  static let limit = 5000  // ponytail: flat cap; lazy per-directory listing if 10k-file trees (V05) need it.
+  static let limit = 20_000  // ponytail: flat cap (10k files scan in ~0.2s, V05); lazy per-directory listing beyond this.
 
   /// Regular files under `root` (relative, sorted), never following symlinks, with Git status if `root` is a repo.
   public static func scan(_ root: String) -> [WorkbenchFile] {
