@@ -78,6 +78,40 @@
     let selected: DiffTarget?
     let onSelect: (DiffTarget) -> Void
     let onToggle: (GitChange, _ staged: Bool) -> Void
+    /// Section-wide stage/unstage; the flag is the desired state.
+    let onBulk: ([GitChange], _ stage: Bool) -> Void
+    /// Commits the staged files; returns an error message, nil on success.
+    let onCommit: (String) -> String?
+    @State private var message = ""
+    @State private var error: String?
+
+    private var canCommit: Bool { changes.contains(where: \.staged) && !message.trimmingCharacters(in: .whitespaces).isEmpty }
+
+    private var commitBox: some View {
+      VStack(alignment: .leading, spacing: 6) {
+        TextField("コミットメッセージ", text: $message)
+          .textFieldStyle(.plain).font(Typography.font(Typography.chrome)).foregroundStyle(C.textPrimary)
+          .padding(.horizontal, 8).frame(height: 26)
+          .background(C.surfaceActive, in: RoundedRectangle(cornerRadius: Radius.control))
+          .onSubmit(commit)
+        HStack {
+          if let error { Text(error).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).lineLimit(2) }
+          Spacer()
+          Button(action: commit) {
+            Text("コミット").font(Typography.font(Typography.chromeStrong))
+              .foregroundStyle(canCommit ? C.textPrimary : C.textQuaternary)
+              .padding(.horizontal, 10).frame(height: 24)
+              .background(canCommit ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
+          }.buttonStyle(.plain).disabled(!canCommit)
+        }
+      }.padding(.horizontal, 12).padding(.vertical, 8)
+    }
+
+    private func commit() {
+      guard canCommit else { return }
+      error = onCommit(message)
+      if error == nil { message = "" }
+    }
 
     var body: some View {
       if changes.isEmpty {
@@ -86,6 +120,7 @@
           Text("working tree はきれいです。").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary)
         }.frame(maxWidth: .infinity).padding(16)
       } else {
+        commitBox
         section("ステージ済み", changes.filter(\.staged)) { DiffTarget(path: $0.path, staged: true, untracked: false) }
         section("変更", changes.filter { $0.unstaged && !$0.untracked }) { DiffTarget(path: $0.path, staged: false, untracked: false) }
         section("未追跡", changes.filter(\.untracked)) { DiffTarget(path: $0.path, staged: false, untracked: true) }
@@ -99,6 +134,10 @@
           Text(title).font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textTertiary)
           Text("\(rows.count)").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary)
           Spacer()
+          let stage = title != "ステージ済み"
+          Button { onBulk(rows, stage) } label: {
+            Text(stage ? "+" : "−").font(Typography.font(Typography.title)).foregroundStyle(C.textTertiary).frame(width: 18, height: 18)
+          }.buttonStyle(.plain).help(stage ? "すべてステージに追加" : "すべてステージから外す")
         }.padding(.leading, 20).padding(.trailing, 12).frame(height: 26)
         ForEach(rows, id: \.path) { c in
           let t = target(c), on = selected == t

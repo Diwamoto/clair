@@ -445,6 +445,18 @@ import Observation
         changes: changes, selected: diff, onSelect: { diff = $0 },
         onToggle: { c, stage in
           store.run(stage ? "git.stage" : "git.unstage", ["path": .string(c.path)]); reloadChanges()
+        },
+        onBulk: { rows, stage in
+          for c in rows { store.run(stage ? "git.stage" : "git.unstage", ["path": .string(c.path)]) }
+          reloadChanges()
+        },
+        onCommit: { msg in
+          defer { reloadChanges() }
+          switch store.run("git.commit", ["message": .string(msg)]) {
+          case .failure(let e): return e.message
+          case .success(.text(let t)): return t
+          default: return nil
+          }
         })
     }
 
