@@ -21,6 +21,13 @@ final class WorkbenchGitTests: XCTestCase {
     return (s, dir.path)
   }
 
+  func testWaitWithoutRunLoopReturnsStatus() throws {
+    let p = Process()
+    p.executableURL = URL(fileURLWithPath: "/usr/bin/false")
+    try p.run(); p.waitWithoutRunLoop()
+    XCTAssertEqual(p.terminationStatus, 1)
+  }
+
   func testStageCommitAndNothingStaged() throws {
     var (s, root) = try repo()
     try "b".write(toFile: root + "/a.txt", atomically: true, encoding: .utf8)

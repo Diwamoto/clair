@@ -87,7 +87,7 @@ public enum WorkbenchFiles {
     p.standardOutput = out; p.standardError = FileHandle.nullDevice
     guard (try? p.run()) != nil else { return [:] }
     let data = out.fileHandleForReading.readDataToEndOfFile()
-    p.waitUntilExit()  // ponytail: no timeout; add one if a huge repo stalls the GUI.
+    p.waitWithoutRunLoop()  // ponytail: no timeout; add one if a huge repo stalls the GUI.
     var result: [String: String] = [:]
     var fields = String(decoding: data, as: UTF8.self).split(separator: "\0", omittingEmptySubsequences: true).makeIterator()
     while let f = fields.next(), f.count > 3 {
