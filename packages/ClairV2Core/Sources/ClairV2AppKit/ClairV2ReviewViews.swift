@@ -158,14 +158,24 @@
       }
     }
 
+    /// Added / removed line counts (rows start at the first hunk, so `+++`/`---` file headers are excluded).
+    static func stats(_ rows: [Row]) -> (added: Int, removed: Int) {
+      (rows.filter { $0.text.hasPrefix("+") }.count, rows.filter { $0.text.hasPrefix("-") }.count)
+    }
+
     var body: some View {
       let rows = Self.rows(text)
+      let (added, removed) = Self.stats(rows)
       let hunks = rows.indices.filter { rows[$0].text.hasPrefix("@@") }
       ScrollViewReader { proxy in
       VStack(spacing: 0) {
         HStack {
           Text(target.path).font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textPrimary)
           Text(target.staged ? "ステージ済み" : target.untracked ? "未追跡" : "変更").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary)
+          if added + removed > 0 {
+            Text("+\(added)").font(Typography.font(Typography.chrome)).foregroundStyle(C.success)
+            Text("−\(removed)").font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+          }
           Spacer()
           if !hunks.isEmpty {
             Text("\(max(hunk, 0) + 1)/\(hunks.count)").font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary)

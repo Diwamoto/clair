@@ -11,6 +11,8 @@
       XCTAssertEqual(r.map(\.newLine), [nil, 5, nil, 6, 7])  // hunk header, ctx, removed, added, added
       XCTAssertEqual(DiffView.rows("Binary files a/x and b/x differ").map(\.newLine), [nil])
       XCTAssertTrue(DiffView.rows("").isEmpty)
+      let st = DiffView.stats(r)
+      XCTAssertEqual([st.added, st.removed], [2, 1])
     }
 
     func testThreadAnchorsToLineAndResolves() throws {
