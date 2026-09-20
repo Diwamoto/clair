@@ -312,12 +312,21 @@ import Observation
 
     public var body: some View {
       VStack(spacing: 0) {
-        titlebar
-        HStack(spacing: 0) {
-          activityBar
-          sidebar
-          Rectangle().fill(L.hairline).frame(width: 1)
-          if st.settingsOpen { settingsMain } else { main }
+        if st.settingsOpen {
+          settingsHeader
+          HStack(spacing: 0) {
+            settingsPanel
+            Rectangle().fill(L.hairline).frame(width: 1)
+            settingsMain
+          }
+        } else {
+          titlebar
+          HStack(spacing: 0) {
+            activityBar
+            sidebar
+            Rectangle().fill(L.hairline).frame(width: 1)
+            main
+          }
         }
         statusBar
       }
@@ -483,11 +492,41 @@ import Observation
     private var sidebar: some View {
       VStack(spacing: 0) {
         // Lazy: a Project can list thousands of files, and an eager tree makes accessibility traversal (and layout) block the main thread.
-        ScrollView { LazyVStack(alignment: .leading, spacing: 0) { st.settingsOpen ? AnyView(sections) : sidebarMode == "magnifyingglass" ? AnyView(searchPanel) : sidebarMode == "clock.arrow.circlepath" ? AnyView(historyPanel) : sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "bell" ? AnyView(noticeList) : sidebarMode == "terminal" ? AnyView(sessionList) : AnyView(explorer) } }
+        ScrollView { LazyVStack(alignment: .leading, spacing: 0) { sidebarMode == "magnifyingglass" ? AnyView(searchPanel) : sidebarMode == "clock.arrow.circlepath" ? AnyView(historyPanel) : sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "bell" ? AnyView(noticeList) : sidebarMode == "terminal" ? AnyView(sessionList) : AnyView(explorer) } }
         Spacer(minLength: 0)
       }
       .frame(width: 242)
       .background(C.chromeRaised)
+    }
+
+    /// Settings takes over the whole window — its own header (with the one
+    /// way back: a close ✕, top-right) in place of the normal titlebar, its
+    /// own section-nav panel in place of the sidebar, no activity bar. It
+    /// used to be a plain panel/main swap that left the titlebar's project
+    /// tabs and the activity bar's other destinations clickable underneath
+    /// (mock review feedback: settings had no single way out). `statusBar`
+    /// already renders its settings-specific line and needs no change.
+    private var settingsHeader: some View {
+      HStack(spacing: 0) {
+        HStack(spacing: 8) {
+          ForEach([C.close, C.minimize, C.zoom], id: \.self) { Circle().fill($0).frame(width: 12, height: 12) }
+        }.frame(width: 76, alignment: .leading).padding(.leading, 20)
+        Text("設定").font(.system(size: 13, weight: .semibold)).foregroundStyle(C.textPrimary)
+        Spacer(minLength: 0)
+        Button { store.run("settings.close") } label: {
+          Image(systemName: "xmark").font(.system(size: 13, weight: .medium)).foregroundStyle(C.chromeInkMuted)
+            .frame(width: 26, height: 26)
+        }.buttonStyle(.plain).padding(.trailing, 16).help("設定を閉じる")
+      }
+      .frame(height: ChromeBudget.titlebar)
+      .background(C.chrome)
+      .overlay(alignment: .bottom) { Rectangle().fill(L.hairline).frame(height: 1) }
+    }
+
+    private var settingsPanel: some View {
+      ScrollView { LazyVStack(alignment: .leading, spacing: 0) { sections } }
+        .frame(width: 242)
+        .background(C.chromeRaised)
     }
 
     private var searchPattern: SearchPattern {

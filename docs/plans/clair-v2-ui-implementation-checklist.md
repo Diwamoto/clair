@@ -142,7 +142,7 @@ panel と main だけ** が差し替わる（2.4 の2026-09-20 amendment 参照�
 | Debug + AI統合（検討中） | `DebugAgent` | `⌘K` →「Debug + AI統合」 | `DebugAgentPanel` | `DebugAgentMain` | `DebugAgentStatus` | depth | Mac／**mock 自身が「検討中」と明記**（6.1参照） |
 | セッション | `SessionRail` | `⌃⌘L`、titlebar の codex タブ | 未定義（explorer ツリーのまま代用中。6.2参照） | `SessionsMain`（セッション表） | `SessionsStatus`（入力待ちバッジ） | lift | Mac（`U06`） |
 | Agentを追加 | `AddAgent`（overlay） | `⌃⌘N`、セッション画面の「Agentを起動」 | — | `AddAgentOverlay`（agent/place/worktree/branch/prompt/confirm） | — | overlay 90ms | Mac（`U05`/`U06`いずれかに整理要、6.7参照） |
-| 設定 | `Settings` | `⌘,`、titlebar の歯車 | `SettingsPanel`（セクション一覧） | `SettingsMain`（設定本文） | `SettingsStatus`（`設定 · セクション名`） | sheet | Mac（`U04`）。セクションの一部が未定義（6.3参照） |
+| 設定 | `Settings` | `⌘,`、titlebar の歯車 | `SettingsPanel`（セクション一覧） | `SettingsMain`（設定本文） | `SettingsStatus`（`設定 · セクション名`） | sheet | Mac（`U04`）。セクションの一部が未定義（6.3参照）。**2026-09-20 amendment**: 画面全体を覆うフルスクリーン画面に変更（titlebar/activity bar/sidebarは非表示、独自headerに戻すボタンは右上✕のみ）。旧「panel/mainだけ差し替え、titlebar・サイドバーは触れたまま」の形は廃止（サイドバー/タブ経由で設定から抜けられてしまう問題があったため） |
 | 検索 | `Search`（overlay） | `⇧⌘F`、titlebar の検索欄 | — | `SearchOverlay` | — | overlay 90ms | Mac（`U04`/`U05`） |
 | コマンドパレット / ファイルへ移動 | `CommandPalette`（overlay） | `⌘K`（`⌘P` はファイルへ移動） | — | `CommandPalette` | — | overlay 90ms | Mac（`U04`） |
 
