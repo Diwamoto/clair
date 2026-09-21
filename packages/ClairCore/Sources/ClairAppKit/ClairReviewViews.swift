@@ -497,17 +497,32 @@
         }.toggleStyle(.checkbox)
         Text(message).foregroundStyle(C.textQuaternary)
       }
+      // Live search: each change restarts the (debounced, cancellable) background run.
+      .onChange(of: query) { search() }
+      .onChange(of: regex) { search() }
+      .onChange(of: caseSensitive) { search() }
       .textFieldStyle(.roundedBorder).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
       .padding(.horizontal, 12).padding(.vertical, 8)
-      ForEach(Array(hits.prefix(500).enumerated()), id: \.offset) { _, h in
-        Button { open(h) } label: {
-          VStack(alignment: .leading, spacing: 1) {
-            Text(h.text.trimmingCharacters(in: .whitespaces)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textPrimary).lineLimit(1)
-            Text("\(h.path):\(h.line)").font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary).lineLimit(1)
-          }
-          .padding(.horizontal, 20).padding(.vertical, 3).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
-        }.buttonStyle(.plain)
+      ForEach(groups, id: \.path) { g in
+        Text("\(g.path)  \(g.hits.count)").font(Typography.font(Typography.micro)).foregroundStyle(C.textTertiary)
+          .padding(.horizontal, 12).padding(.top, 6).lineLimit(1)
+        ForEach(Array(g.hits.enumerated()), id: \.offset) { _, h in
+          Button { open(h) } label: {
+            HStack(spacing: 6) {
+              Text("\(h.line)").font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary).frame(minWidth: 24, alignment: .trailing)
+              Text(h.text.trimmingCharacters(in: .whitespaces)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textPrimary).lineLimit(1)
+            }
+            .padding(.horizontal, 20).padding(.vertical, 3).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+          }.buttonStyle(.plain)
+        }
       }
+    }
+
+    /// Hits grouped by file in first-seen order; only the first 500 hits are rendered.
+    private var groups: [(path: String, hits: [SearchHit])] {
+      var order: [String] = [], by: [String: [SearchHit]] = [:]
+      for h in hits.prefix(500) { if by[h.path] == nil { order.append(h.path) }; by[h.path, default: []].append(h) }
+      return order.map { ($0, by[$0]!) }
     }
   }
 

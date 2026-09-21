@@ -7,7 +7,7 @@ import Foundation
 
 // V05: Quick Open ranking, project-wide search/replace (E04 core), file watcher with agent
 // live reload (principle 8: disk wins, unsaved buffer is discarded) and per-file local history.
-// ponytail: search reads files serially and skips >1 MB / non-UTF-8; parallelise if 10k-file search feels slow.
+// ponytail: search reads files serially (cancellable per file) and skips >1 MB / non-UTF-8; parallelise if 10k-file search feels slow.
 
 public enum QuickOpen {
   /// Case-insensitive subsequence match. Basename hits and consecutive runs rank first; ties keep path order.
@@ -47,7 +47,10 @@ public enum ProjectSearch {
   public static func find(root: String, files: [WorkbenchFile], _ pattern: SearchPattern) throws -> [SearchHit] {
     var hits: [SearchHit] = []
     for f in files {
-      guard let buf = load(root, f.path), let ms = try? TextSearch.find(pattern, in: buf.snapshot) else { continue }
+      try Task.checkCancellation()
+      guard let buf = load(root, f.path) else { continue }
+      let ms: [SearchMatch]
+      do { ms = try TextSearch.find(pattern, in: buf.snapshot) } catch SearchError.invalidRegex { throw SearchError.invalidRegex } catch { continue }
       let text = buf.snapshot.string()
       for m in ms {
         let start = text.utf8.index(text.utf8.startIndex, offsetBy: m.range.lowerBound.value)

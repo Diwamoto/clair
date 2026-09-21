@@ -315,6 +315,8 @@ import Observation
     @State private var searchCase = false
     @State private var hits: [SearchHit] = []
     @State private var searchMessage = ""
+    @State private var searching = false
+    @State private var searchTask: Task<Void, Never>?
     private let projectColors = [C.debugBlue, C.success, C.attention]
 
     public init() { _store = State(initialValue: ClairWorkbenchStore()) }
@@ -554,10 +556,27 @@ import Observation
       searchRegex ? .regex(searchQuery, caseSensitive: searchCase) : .literal(searchQuery, caseSensitive: searchCase)
     }
 
+    /// Runs off the main thread; a newer query cancels the running one and its result is dropped.
     private func runSearch() {
-      guard let root = store.activeRoot, !searchQuery.isEmpty else { hits = []; searchMessage = ""; return }
-      hits = (try? ProjectSearch.find(root: root, files: st.files, searchPattern)) ?? []  // unreadable files are skipped; only a bad regex yields nothing
-      searchMessage = hits.isEmpty ? "一致なし（正規表現を確認）" : "\(hits.count) 件 / \(Set(hits.map(\.path)).count) ファイル"
+      searchTask?.cancel()
+      guard let root = store.activeRoot, !searchQuery.isEmpty else { hits = []; searchMessage = ""; searching = false; return }
+      let (files, pattern) = (st.files, searchPattern)
+      searching = true; searchMessage = "検索中…"
+      searchTask = Task {
+        // ponytail: 250 ms debounce for typing; the cancel above is what keeps stale results out.
+        try? await Task.sleep(nanoseconds: 250_000_000)
+        let result = await Task.detached(priority: .userInitiated) { Result { try ProjectSearch.find(root: root, files: files, pattern) } }.value
+        guard !Task.isCancelled else { return }
+        searching = false
+        switch result {
+        case .success(let found):
+          hits = found
+          searchMessage = found.isEmpty ? "一致なし" : "\(found.count) 件 / \(Set(found.map(\.path)).count) ファイル"
+        case .failure(let error):
+          hits = []
+          searchMessage = error is SearchError ? "正規表現が不正です" : "検索できません: \(error)"
+        }
+      }
     }
 
     private func runReplace() {

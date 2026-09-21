@@ -36,6 +36,20 @@ final class WorkbenchSearchTests: XCTestCase {
     XCTAssertEqual(try h.versions(root: root, path: "a.txt").count, 2)  // restore is undoable
   }
 
+  func testSearchSurfacesBadRegexAndStopsWhenCancelled() async throws {
+    let root = try tmp()
+    try "foo\n".write(toFile: root + "/a.txt", atomically: true, encoding: .utf8)
+    let files = WorkbenchFiles.scan(root)
+    XCTAssertThrowsError(try ProjectSearch.find(root: root, files: files, .regex("(", caseSensitive: true))) { XCTAssertEqual($0 as? SearchError, .invalidRegex) }
+    let t = Task { () -> Bool in
+      while !Task.isCancelled { await Task.yield() }
+      do { _ = try ProjectSearch.find(root: root, files: files, .literal("foo")); return false } catch { return error is CancellationError }
+    }
+    t.cancel()
+    let stopped = await t.value
+    XCTAssertTrue(stopped)
+  }
+
   func testDiskChangeDiscardsUnsavedBuffer() throws {
     let root = try tmp()
     try "x".write(toFile: root + "/a.txt", atomically: true, encoding: .utf8)
