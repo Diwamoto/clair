@@ -61,10 +61,11 @@ ccedit(旧 Clair v1)を製品・資料ともに廃止した。これに伴い:
 | `U05` | `active` | `D4` | `U04`, `E07`, `E09`, `V01` | **P2**。Mac の editor / diff / review / context menu を mock に合わせる。slice 11 まで完了(実ファイル接続、変更一覧+stage、diff pane、review thread 永続化、hunk ナビ、agent へ送る、コミット欄、行ドリフト追従、1 行 suggestion)。**残**: 実機での見た目確認。highlight は `E11`、multi-cursor UI は `E14` へ分離した。 |
 | `U06` | `active` | `D3` | `U04`, `T03`, `V01` | **P2**。Mac の terminal / agent activity / session list / 承認面を mock に合わせる。通知履歴、session list、承認カード、status bar 実データ化まで完了。描画性能は flood 下の main stall が overlay 有無で 5.3→5.7ms で悪化なし(2026-09-21 計測、`ClairGhosttyFloodPerfTests`)。**残**: 実機での見た目確認。GPU frame time は未計測。 |
 | `N10` | `queued` | `D4` | `E08`, `T05`, `N04` | **P2**。mobile app に editor / terminal surface を配線する。`E08`(iOS editor)と `T05`(iOS terminal)の core は実装済みだが、`ClairMobileRootView` は 709 行の単一 `List`(host/conversation/diff/reconnect 等の section)で、editor 画面も terminal 画面も無い。仕様 §10 の terminal attach と入力、ファイルの段階的読み込みを実画面として出すこと。mobile に full source editor を移植することは必須にしない(仕様 §10)。 **調査(2026-09-21、着手前に停止)**: mobile の全 transport(agent/workspace/verifier/terminal)は protocol と `Unavailable` 実装のみで、具象実装は test の `InProcessTerminalTransport` だけ。リポジトリに `NWListener`/`NWConnection` が無く、host 側にも遠隔 client 向け listener が無い(`T09` が足したのは same-user の Unix socket)。よって N10 の画面は fake transport 上でしか動かず、実機の iPhone→Mac terminal 経路は queue に存在しない。判断待ち: (a) 既存 seam の上に画面だけ先に作る、(b) host listener + mobile client adapter(TLS/pairing 越し、security 境界・公開 protocol に触れる)を別 task として先に立てる。 |
+| `N11` | `queued` | `D5` | `H03`, `T04`, `N02` | **P1**。遠隔 client 用の network transport。`N10` 着手時の調査で、host 側に遠隔 client 向け listener が無く(`T09` の control socket は same-user の Unix socket)、mobile の全 transport(agent/workspace/verifier/terminal/push)が `Unavailable` 実装のみで実機の iPhone→Mac 経路が存在しないと判明した。host 側に paired device 向け TLS listener(H03 の pairing/device key/grant scope を強制)を置き、mobile 側に `ClairMobileTerminalTransport`/`ClairMobileAgentTransport`/`ClairMobileWorkspaceReading`/`ClairMobileSessionVerifying` の具象 adapter を実装する。revocation・grant scope・epoch/cursor の既存契約(`H03`/`T04`)を変えずに載せる。security 境界と公開 protocol に触れるため、**実装前に設計をユーザーが確認する(user gate)**。`N08` の前提でもある。 |
 | `U03` | `queued` | `D3` | `U02`, `N10` | **P2**。mobile の host/project/session/activity/review/notification navigation を mock contract に合わせる。compact/regular size class と safe area に適応しつつ情報階層を変えない。 |
 | `U07` | `queued` | `D4` | `U05`, `U06`, `E11`, `E14` | **P2**。screenshot/interaction regression、VoiceOver、Dynamic Type、keyboard-only、reduced motion、contrast の final QA。差分は canvas 変更か native bug のどちらかへ分類する。Mac 分を先に行い、iOS 分は `N10`/`U03` が揃ってから追い QA とする。 |
 | `T07` | `queued` | `D5` | `T04`, `T06`, `T09` | **P3**。terminal integration gate。OpenCode TUI、shell、resize、alternate screen、flood、sleep/wake、network switch、Mac/mobile 同時入力、reattach、OSC 52/633 の実機 test と resource limits。`T09` の後でなければ「同じ session への同時入力」を実アプリで検証できない。 |
-| `N08` | `blocked` | `D5` | `H10`, `N06`, `N07`, `T02`, `N09` | **P3**。Mobile-on-Clair dogfood gate。iPhone だけを操作して実 terminal session 上で agent を起動し、依頼・承認・diff 確認・follow-up・完了通知・再接続まで行う。**Blocked**: iPhone/iPad 実機、Apple signing、APNs の外部依存。`N09` で Mac 側ペアリング bootstrap 面は解消済み。 |
+| `N08` | `blocked` | `D5` | `H10`, `N06`, `N07`, `T02`, `N09`, `N11` | **P3**。Mobile-on-Clair dogfood gate。iPhone だけを操作して実 terminal session 上で agent を起動し、依頼・承認・diff 確認・follow-up・完了通知・再接続まで行う。**Blocked**: iPhone/iPad 実機、Apple signing、APNs の外部依存。`N09` で Mac 側ペアリング bootstrap 面は解消済み。 |
 | `V10` | `queued` | `D5` | `V02`, `V03`, `V04`, `V05`, `V06`, `V07`, `V08`, `V09`, `T09`, `E11` | **P3**。Clair-on-Clair cutover gate。Stable から Clair source を開き、terminal/agent で Dev を build・起動して変更を確認できる。daily-driver blocker が無く、ccedit より快適と本人が確認する。CLI/MCP 経由の scripted 操作でも同じ流れが通ること。 |
 
 ## 完了タスク
@@ -122,6 +123,6 @@ ccedit(旧 Clair v1)を製品・資料ともに廃止した。これに伴い:
 
 ## 統計
 
-- 完了 50 / 全 67(2026-09-21 時点)
-- 残り 17(うち `N08` は blocked、人手 gate の active 6 件を含む)
+- 完了 50 / 全 68(2026-09-21 時点)
+- 残り 18(うち `N08` は blocked、人手 gate の active 6 件を含む)
 - `python3 .agents/skills/clair-task/scripts/task_lease.py validate` がこの数を検証する。
