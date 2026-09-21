@@ -51,6 +51,7 @@
 		A00000000000000000000084 /* ProjectGit.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000002F /* ProjectGit.swift */; };
 		A00000000000000000000085 /* ProjectGit.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000002F /* ProjectGit.swift */; };
 		A00000000000000000000086 /* ProjectGitTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000030 /* ProjectGitTests.swift */; };
+		A00000000000000000000191 /* PerformanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000190 /* PerformanceTests.swift */; };
 		A00000000000000000000087 /* AgentWorkflow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000091 /* AgentWorkflow.swift */; };
 		A00000000000000000000088 /* AgentActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000092 /* AgentActivity.swift */; };
 		A00000000000000000000089 /* AgentCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000093 /* AgentCoordinator.swift */; };
@@ -177,6 +178,7 @@
 		A0000000000000000000002E /* SessionBroker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionBroker.swift; sourceTree = "<group>"; };
 		A0000000000000000000002F /* ProjectGit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectGit.swift; sourceTree = "<group>"; };
 		A00000000000000000000030 /* ProjectGitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectGitTests.swift; sourceTree = "<group>"; };
+		A00000000000000000000190 /* PerformanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceTests.swift; sourceTree = "<group>"; };
 		A00000000000000000000091 /* AgentWorkflow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentWorkflow.swift; sourceTree = "<group>"; };
 		A00000000000000000000092 /* AgentActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActivity.swift; sourceTree = "<group>"; };
 		A00000000000000000000093 /* AgentCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentCoordinator.swift; sourceTree = "<group>"; };
@@ -400,6 +402,7 @@
 				A0000000000000000000002B /* NativeEditorTests.swift */,
 				A0000000000000000000002D /* ProjectNavigationTests.swift */,
 				A00000000000000000000030 /* ProjectGitTests.swift */,
+				A00000000000000000000190 /* PerformanceTests.swift */,
 				A00000000000000000000094 /* AgentWorkflowTests.swift */,
 				A00000000000000000000095 /* AgentActivityTests.swift */,
 				A00000000000000000000098 /* ManagedWorktreeTests.swift */,
@@ -803,6 +806,7 @@
 				A0000000000000000000007E /* NativeEditorTests.swift in Sources */,
 				A00000000000000000000081 /* ProjectNavigationTests.swift in Sources */,
 				A00000000000000000000086 /* ProjectGitTests.swift in Sources */,
+				A00000000000000000000191 /* PerformanceTests.swift in Sources */,
 				A0000000000000000000008D /* AgentActivityTests.swift in Sources */,
 				A0000000000000000000008E /* AgentWorkflowTests.swift in Sources */,
 				A0000000000000000000009C /* ManagedWorktreeTests.swift in Sources */,
