@@ -1,4 +1,4 @@
 interface:
   display_name: "Clair v2 Orchestrator"
   short_description: "Delegate and integrate the Clair v2 rewrite queue"
-  default_prompt: "Use $clair-v2-orchestrator to run the Clair v2 native rewrite queue autonomously until a real user decision or external credential is required."
+  default_prompt: "Use $clair-task run to work the Clair task queue autonomously until a real user decision or external credential is required."

@@ -55,10 +55,19 @@ unless the user overrides them in that invocation.
   change across the whole repo, or parallel work the user explicitly asked for.
   A cold worker re-derives context the controller already has, so it is the
   expensive path.
-- **A subagent, when spawned, runs on Sonnet.** This overrides the
-  difficulty-based routing below for the implementation worker. A `D5`
-  independent reviewer still uses the most capable available model, because a
-  completion gate must not be reviewed by the same class of model that wrote it.
+- **A spawned subagent runs on Sonnet, so write its prompt for a model with
+  less capability than yours.** Assume it knows nothing about this session: no
+  shared context, no memory of what you just read, no ability to infer what you
+  meant. The prompt must be self-contained and executable step by step — exact
+  file paths, exact commands to run, the acceptance criteria in full, the
+  concrete definition of done, and an explicit list of what it must not touch.
+  Prefer stating a thing twice over leaving it implied. If a step needs
+  judgement you already made, write the decision into the prompt rather than
+  asking the worker to re-derive it. See the
+  [dispatch payload](references/worker-contract.md#controller-dispatch-payload)
+  for the required contents. A `D5` independent reviewer still uses the most
+  capable available model, because a completion gate must not be reviewed by the
+  same class of model that wrote it.
 - **Write code under `/ponytail`.** Invoke the `ponytail` skill and follow it:
   climb the ladder (does it need to exist / already in this codebase / stdlib /
   native platform / installed dependency / one line / minimum that works), take

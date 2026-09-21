@@ -1,25 +1,53 @@
 # Worker and reviewer contract
 
 Read this reference only when dispatching or executing `worker` or `review`
-mode for `clair-v2-orchestrator`.
+mode for `clair-task`.
 
 ## Controller dispatch payload
 
+A worker runs on Sonnet with none of your context. Write the prompt so a model
+with less capability than yours can execute it start to finish without guessing.
+Assume it has not read the spec, the queue, the mock, or any file you read; it
+cannot infer your intent, and it will do whatever the prompt literally says.
+Prefer stating something twice over leaving it implied, and write any judgement
+you already made into the prompt instead of asking the worker to re-derive it.
+
 Every worker prompt must include:
 
-- explicit task ID and task-table text;
-- exact integration base SHA and branch;
-- assigned model and reasoning effort;
-- allowed repository/worktree and the requirement to start clean;
-- likely owned paths and known sibling tasks in the same wave;
-- required checks and serialized checks reserved for the controller;
-- the instruction to invoke `$clair-v2-orchestrator worker <ID> --base <SHA>`;
-- no queue edits, no integration, no push, and no next-task work.
+- **The task, quoted in full.** The task ID and the complete `outcome` cell text
+  from `docs/clair-tasks.md`, pasted verbatim — not a summary and not a link.
+- **The acceptance criteria as a checklist.** One line per condition, each one
+  independently checkable. "Done" must be mechanically decidable from this list.
+- **Exact starting state.** The integration base SHA, the branch name, the
+  worktree path, and the requirement to verify `git rev-parse HEAD` equals that
+  SHA before doing anything else.
+- **Exact paths.** The files and directories the worker is expected to change,
+  and the ones it must not touch. Repository-relative, spelled out. Name the
+  existing types/functions it should reuse so it does not reinvent them.
+- **The relevant contract, inlined.** The spec sections, invariant IDs, ADR
+  decisions, and principles that constrain this task — quote the binding
+  sentences rather than citing the section number, since the worker will not
+  read the document on its own.
+- **Exact commands.** The build, test, lint, and format commands to run,
+  copy-pasteable, with the expected result of each. Name any check reserved for
+  the controller so the worker does not run it.
+- **How to write the code.** Invoke `/ponytail` and follow it: shortest working
+  diff, reuse what exists, stdlib and native platform before new code, a
+  `ponytail:` comment naming the ceiling of any deliberate shortcut.
+- **What to do when stuck.** Report the concrete blocker with evidence and stop;
+  do not invent scope, do not substitute a different task, do not silently
+  narrow the acceptance criteria.
+- **The report format.** Lease ID, base SHA, commit range, changed paths, each
+  check with its actual output, and every acceptance criterion marked met or not.
+- **The boundary, stated as prohibitions.** No queue edits, no integration into
+  the integration branch, no push, no PR, no release, no work on any other task,
+  no deletion of pre-existing user changes.
+- **The invocation**: `$clair-task worker <ID> --base <SHA>`.
 
-Every reviewer prompt must include the same task ID and acceptance text, exact
-base and worker head/commit range, worker-reported changed paths and checks, and
-the instruction to invoke
-`$clair-v2-orchestrator review <ID> --base <SHA> --head <SHA>`.
+Every reviewer prompt must include the same task ID and full acceptance text,
+the exact base and worker head/commit range, the worker-reported changed paths
+and check output, and the instruction to invoke
+`$clair-task review <ID> --base <SHA> --head <SHA>`.
 
 Messages sent between agents are user-visible evidence. Write them legibly and
 summarize raw failures in Japanese.
@@ -38,7 +66,7 @@ summarize raw failures in Japanese.
    task that the controller has not already marked `active`:
 
    ```bash
-   python3 .agents/skills/clair-v2-orchestrator/scripts/task_lease.py acquire <ID>
+   python3 .agents/skills/clair-task/scripts/task_lease.py acquire <ID>
    ```
 
    Preserve the returned `lease_id`. Do not acquire `next`, another task, or a
