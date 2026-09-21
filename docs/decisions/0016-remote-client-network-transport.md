@@ -1,9 +1,10 @@
 ---
 id: ADR-0016
 title: "遠隔 client 用 network transport を host listener と mobile adapter で実装する"
-status: proposed
+status: accepted
 date: 2026-09-22
-deciders: []
+deciders:
+  - "Daiki"
 related_projects:
   - "p0020-mobile-agent-remote-control"
 related_issues: []
