@@ -1,5 +1,6 @@
 import AppKit
 import ClairAppKit
+import ClairDesignSystem
 import SwiftUI
 
 /// A bare executable (`make dev`, `swift run`) is not a bundled app, so macOS starts it as a background process:
@@ -9,6 +10,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     NSApp.setActivationPolicy(.regular)
     NSApp.activate(ignoringOtherApps: true)
     ClairDaemonLauncher.ensureRunning()  // T09: terminals are daemon-owned shells
+    // The native lights are laid out for a 28pt bar; centre them in our ChromeBudget.titlebar-tall chrome.
+    // Re-applied because AppKit resets their frames on resize / full screen.
+    for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResizeNotification, NSWindow.didExitFullScreenNotification] {
+      NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { n in
+        guard let w = n.object as? NSWindow, let close = w.standardWindowButton(.closeButton), let bar = close.superview?.superview else { return }
+        let h = ChromeBudget.titlebar
+        bar.setFrameSize(NSSize(width: bar.frame.width, height: h))
+        bar.setFrameOrigin(NSPoint(x: 0, y: w.frame.height - h))
+        for kind in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+          guard let b = w.standardWindowButton(kind) else { continue }
+          b.setFrameOrigin(NSPoint(x: b.frame.origin.x, y: (h - b.frame.height) / 2))
+        }
+      }
+    }
   }
 
   /// Spec §7: closing a window keeps the daemon; an explicit Clair quit stops it and its shells.

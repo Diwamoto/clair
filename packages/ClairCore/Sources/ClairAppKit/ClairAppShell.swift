@@ -518,9 +518,7 @@ import Observation
     /// already renders its settings-specific line and needs no change.
     private var settingsHeader: some View {
       HStack(spacing: 0) {
-        HStack(spacing: 8) {
-          ForEach([C.close, C.minimize, C.zoom], id: \.self) { Circle().fill($0).frame(width: 12, height: 12) }
-        }.frame(width: 76, alignment: .leading).padding(.leading, 20)
+        Color.clear.frame(width: 76 + 20)  // room for the native traffic lights
         Text("設定").font(.system(size: 13, weight: .semibold)).foregroundStyle(C.textPrimary)
         Spacer(minLength: 0)
         Button { store.run("settings.close") } label: {
