@@ -298,6 +298,7 @@ import Observation
   /// status 26. Built once; only sidebar panel and main are swapped. Pane
   /// contents other than the terminal are placeholders owned by U05/U06.
   public struct ClairAppShell: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var store: ClairWorkbenchStore
     private var st: WorkbenchState { store.state }
     @State private var query = ""
@@ -872,7 +873,10 @@ import Observation
           }
         }
         .padding(.horizontal, 56).padding(.vertical, 40).frame(maxWidth: 720 + 112, alignment: .leading).frame(maxWidth: .infinity)
+        // Destination change: short cross-fade on the screen token; SwiftUI retargets it mid-flight (interruptible), and reduce motion swaps instantly.
+        .id(st.section).transition(.opacity)
       }
+      .animation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration), value: st.section)
       .background(C.canvas)
     }
 
