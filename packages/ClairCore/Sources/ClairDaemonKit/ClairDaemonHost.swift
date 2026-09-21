@@ -233,6 +233,10 @@ public actor ClairDaemonHost {
   public let commandBoundary: ClairAgentCommandBoundary
   public let journal: ClairSessionJournal
   public nonisolated let terminal: ClairTerminalBoundary
+  #if os(macOS)
+    /// T09: the shells behind the Mac GUI's terminal surfaces (macOS daemon only).
+    public nonisolated let localTerminals: ClairLocalTerminalHost
+  #endif
   public let pushRegistry: ClairDaemonPushRegistry
   public let limits: ClairDaemonHostLimits
 
@@ -288,6 +292,9 @@ public actor ClairDaemonHost {
     )
     self.journal = ClairSessionJournal(limits: journalLimits)
     self.terminal = try ClairTerminalBoundary(authority: authority)
+    #if os(macOS)
+      self.localTerminals = ClairLocalTerminalHost(boundary: terminal)
+    #endif
     self.pushRegistry = try ClairDaemonPushRegistry(
       authority: authority, relay: pushRelay, clock: pushClock, capacity: pushCapacity
     )
@@ -876,6 +883,9 @@ public actor ClairDaemonHost {
   /// allowed to finish. The following reap synchronizes H06/H08 state and the
   /// daemon-wide slot/subscriber accounting with H04's terminal snapshots.
   public func shutdown() async {
+    #if os(macOS)
+      localTerminals.closeAll()
+    #endif
     await agentRuntime.shutdown()
     await agentRuntime.setLifecycleObserver(nil)
     _ = await reapExitedSessions()

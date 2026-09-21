@@ -8,6 +8,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSApp.setActivationPolicy(.regular)
     NSApp.activate(ignoringOtherApps: true)
+    ClairDaemonLauncher.ensureRunning()  // T09: terminals are daemon-owned shells
+  }
+
+  /// Spec §7: closing a window keeps the daemon; an explicit Clair quit stops it and its shells.
+  func applicationWillTerminate(_ notification: Notification) {
+    ClairDaemonLauncher.shutdown()
   }
 }
 

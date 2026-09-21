@@ -29,9 +29,14 @@ trap stop_all INT TERM
 
 printf 'dev: building Clair (daemon + macOS app)...\n'
 swift build --package-path "$package_path" --product ClairDaemon
+swift build --package-path "$package_path" --product clair
 swift build --package-path "$package_path" --product ClairMacApp
 
-daemon_args=()
+# The GUI's terminals are daemon-owned shells reached through `clair attach`; both live next to the app.
+export CLAIR_BIN_DIR="$bin_dir"
+dev_dir="$HOME/Library/Application Support/Clair Dev"
+
+daemon_args=(--directory "$dev_dir")
 [[ -n "${CLAIR_DEV_PROJECT_ROOT:-}" ]] && daemon_args+=(--project-root "$CLAIR_DEV_PROJECT_ROOT")
 [[ -n "${CLAIR_DEV_OPENCODE_EXECUTABLE:-}" ]] && daemon_args+=(--opencode-executable "$CLAIR_DEV_OPENCODE_EXECUTABLE")
 

@@ -22,6 +22,7 @@
     /// bare H01 lifecycle test), in which case `.issuePairing` fails closed
     /// with `.pairingUnavailable` instead of silently no-op'ing.
     private let pairingIssuer: (@Sendable () async throws -> ClairPairingLink)?
+    private let terminalHandler: (@Sendable (ClairDaemonTerminalRequest) -> ClairDaemonTerminalResponse)?
     /// Regenerated on every successful `start()` (see H10). This is the
     /// daemon-restart signal reported in `ClairDaemonHealth.instanceID`.
     private var instanceID = UUID()
@@ -29,11 +30,14 @@
     public init(
       configuration: ClairDaemonConfiguration,
       shutdownHandler: (@Sendable () async -> Void)? = nil,
-      pairingIssuer: (@Sendable () async throws -> ClairPairingLink)? = nil
+      pairingIssuer: (@Sendable () async throws -> ClairPairingLink)? = nil,
+      terminalHandler: (@Sendable (ClairDaemonTerminalRequest) -> ClairDaemonTerminalResponse)? =
+        nil
     ) {
       self.configuration = configuration
       self.shutdownHandler = shutdownHandler
       self.pairingIssuer = pairingIssuer
+      self.terminalHandler = terminalHandler
     }
 
     /// Convenience composition initializer for the real H10 daemon host.
@@ -46,7 +50,8 @@
       self.init(
         configuration: configuration,
         shutdownHandler: { await host.shutdown() },
-        pairingIssuer: { try await host.authority.issuePairingLink() }
+        pairingIssuer: { try await host.authority.issuePairingLink() },
+        terminalHandler: { [terminals = host.localTerminals] in terminals.handle($0) }
       )
     }
 
@@ -219,6 +224,11 @@
         }
       case .issuePairing:
         return issuePairing()
+      case .terminal(let request):
+        guard let terminalHandler else {
+          return .failure(ClairDaemonControlFailure(code: .unsupportedRequest))
+        }
+        return .terminal(terminalHandler(request))
       }
     }
 
@@ -385,6 +395,13 @@
 
     private func handle(client: Int32) {
       defer { Darwin.close(client) }
+
+      // The 0700 directory already keeps other users out; this also refuses a
+      // different-uid process that somehow holds the descriptor (terminal ops run code).
+      var peerUID: uid_t = 0
+      var peerGID: gid_t = 0
+      guard Darwin.getpeereid(client, &peerUID, &peerGID) == 0, peerUID == Darwin.geteuid()
+      else { return }
 
       let response: ClairDaemonControlResponse
       do {

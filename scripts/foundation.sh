@@ -23,6 +23,7 @@ app_targets=(
   ClairMacApp
   ClairMobileApp
   ClairDaemon
+  clair
 )
 
 usage() {

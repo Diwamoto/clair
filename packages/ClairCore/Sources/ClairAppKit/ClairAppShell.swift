@@ -131,6 +131,7 @@ import Observation
           lastError = e; return .failure(e)
         }
       }
+      let closing = id == "pane.close" ? Self.terminalKey(root: activeRoot ?? state.project, pane: state.tree.focused) : nil
       let r = registry.execute(id, input, confirmed: confirmed, state: &state)
       switch r {
       case .failure(let e) where e.code == .confirmationRequired: pending = (id, input)
@@ -138,12 +139,17 @@ import Observation
       case .failure(let e): lastError = e
       case .success:
         lastError = nil
+        if let closing { ClairDaemonLauncher.closeSession(key: closing) }  // T09: closing a pane ends its shell; closing a window does not
         refreshSleepAssertion()
         watchProject()
         if let persistURL { try? state.save(to: persistURL) }
       }
       return r
     }
+
+    /// Names the daemon shell behind one terminal pane. Keyed on the project path, not its name, so two
+    /// projects with the same folder name never share a shell.
+    static func terminalKey(root: String, pane: Int) -> String { "\(root)#\(pane)" }
 
     var activeRoot: String? { state.projects.first { $0.name == state.project }?.path }
 
@@ -779,7 +785,7 @@ import Observation
         } else {
         PaneView(
           node: st.tree.maximized.flatMap { id in st.tree.leaves.first { $0.id == id }.map { .leaf(id: $0.id, kind: $0.kind) } } ?? st.tree.root,
-          focused: st.tree.focused, launches: st.launches, onFocus: { store.run("pane.focus", ["id": .int($0)]) },
+          focused: st.tree.focused, launches: st.launches, project: store.activeRoot ?? st.project, onFocus: { store.run("pane.focus", ["id": .int($0)]) },
           onFacts: { store.facts(pane: $0, bells: $1, exit: $2) },
           onRatio: { store.run("pane.setRatio", ["id": .int($0), "ratio": .double($1)]) },
           editor: EditorPane(buffers: store.buffers, root: store.activeRoot, path: st.active, onEdit: { store.edited($0) }, onCaret: { store.buffers.setCaret($0, $1, in: $2) }),
@@ -1083,6 +1089,7 @@ import Observation
     let node: PaneTree.Node
     let focused: Int
     let launches: [Int: AgentLaunch]
+    let project: String
     let onFocus: (Int) -> Void
     let onFacts: (Int, Int, Int?) -> Void
     let onRatio: (Int, Double) -> Void
@@ -1099,7 +1106,7 @@ import Observation
     @ViewBuilder
     private func parts(_ axis: PaneTree.Axis, _ total: CGFloat, _ a: PaneTree.Node, _ b: PaneTree.Node, ratio: Double) -> some View {
       let h = axis == .horizontal
-      PaneView(node: a, focused: focused, launches: launches, onFocus: onFocus, onFacts: onFacts, onRatio: onRatio, editor: editor, run: run)
+      PaneView(node: a, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onRatio: onRatio, editor: editor, run: run)
         .frame(width: h ? total * ratio : nil, height: h ? nil : total * ratio)
       Rectangle().fill(L.paneDivider).frame(width: h ? 1 : nil, height: h ? nil : 1)
         .padding(h ? .horizontal : .vertical, -3).contentShape(Rectangle())
@@ -1107,7 +1114,7 @@ import Observation
           DragGesture(coordinateSpace: .named("split")).onChanged { v in
             onRatio(firstLeaf(a), Double((h ? v.location.x : v.location.y) / total))
           })
-      PaneView(node: b, focused: focused, launches: launches, onFocus: onFocus, onFacts: onFacts, onRatio: onRatio, editor: editor, run: run)
+      PaneView(node: b, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onRatio: onRatio, editor: editor, run: run)
     }
 
     var body: some View {
@@ -1122,7 +1129,7 @@ import Observation
           }
           ZStack {
             C.surface
-            if kind == .terminal { ClairGhosttySurface(launch: launches[id].map { ($0.command, $0.cwd) }, pane: id, onFacts: { onFacts(id, $0, $1) }) }  // ponytail: one surface per terminal leaf; session binding is U06
+            if kind == .terminal { ClairGhosttySurface(launch: launches[id].map { ($0.command, $0.cwd) }, pane: id, sessionKey: ClairWorkbenchStore.terminalKey(root: project, pane: id), onFacts: { onFacts(id, $0, $1) }) }  // one surface per terminal leaf, attached to the daemon shell keyed by project#pane
             else if kind == .editor { editor }
             else {
               // Agent output is a terminal (ADR-0002); this pane is where none is running, so offer the launch instead of a bare label.

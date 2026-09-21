@@ -27,6 +27,8 @@ let package = Package(
     .executableTarget(
       name: "clair",
       dependencies: [
+        .product(name: "ClairDaemonKit", package: "ClairCore"),
+        .product(name: "ClairTerminal", package: "ClairCore"),
         .product(name: "ClairWorkspace", package: "ClairCore")
       ]
     ),

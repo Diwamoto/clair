@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import ClairAppKit
+@testable import ClairDaemonKit
 @testable import ClairGhostty
 @testable import ClairTerminal
 

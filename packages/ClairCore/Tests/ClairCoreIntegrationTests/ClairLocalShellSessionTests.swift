@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-@testable import ClairAppKit
+@testable import ClairDaemonKit
 @testable import ClairTerminal
 
 #if os(macOS)

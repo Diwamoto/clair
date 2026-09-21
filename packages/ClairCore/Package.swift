@@ -152,6 +152,7 @@ let package = Package(
     .target(
       name: "ClairDaemonKit",
       dependencies: [
+        .target(name: "ClairPTY", condition: .when(platforms: [.macOS])),
         "ClairPush",
         "ClairAgent",
         "ClairShared",

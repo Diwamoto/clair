@@ -106,38 +106,46 @@ public final class ClairTerminalBoundary: @unchecked Sendable {
   public func install(snapshot: ClairAgentSessionSnapshot, process: any ClairTerminalProcess)
     throws
   {
+    guard snapshot.lifecycle == .running else { throw ClairTerminalError.staleSession }
+    try install(
+      sessionID: snapshot.identity.sessionID, scope: snapshot.identity.sessionScope,
+      generation: snapshot.processGeneration, process: process)
+  }
+
+  /// T09: a daemon-owned shell has no agent snapshot, but it goes through this same
+  /// boundary (journal, FIFO, dedupe, resize owner) as every other session.
+  public func install(
+    sessionID id: SessionID, scope: ResourceScope, generation: UInt64,
+    process: any ClairTerminalProcess
+  ) throws {
     try lock.withLock {
-      let id = snapshot.identity.sessionID
-      guard snapshot.lifecycle == .running, !process.terminalJournal.snapshot().isClosed else {
+      guard !process.terminalJournal.snapshot().isClosed else {
         throw ClairTerminalError.staleSession
       }
       if let old = sessions[id] {
-        if old.generation == snapshot.processGeneration, old.scope == snapshot.identity.sessionScope
-        {
-          return
-        }
-        guard old.scope == snapshot.identity.sessionScope,
-          old.generation < snapshot.processGeneration
-        else {
+        if old.generation == generation, old.scope == scope { return }
+        guard old.scope == scope, old.generation < generation else {
           throw ClairTerminalError.staleSession
         }
       } else if sessions.count >= maximumSessions {
         throw ClairTerminalError.capacity
       }
       sessions[id] = Session(
-        scope: snapshot.identity.sessionScope, generation: snapshot.processGeneration,
+        scope: scope, generation: generation,
         process: process, ledger: try OperationLedger(capacity: maximumOperations))
     }
   }
 
-  public func invalidate(snapshot: ClairAgentSessionSnapshot) {
+  public func invalidate(sessionID id: SessionID, generation: UInt64) {
     lock.withLock {
-      guard let current = sessions[snapshot.identity.sessionID],
-        current.generation == snapshot.processGeneration
-      else { return }
-      sessions[snapshot.identity.sessionID]?.active = false
-      sessions[snapshot.identity.sessionID]?.owner = nil
+      guard let current = sessions[id], current.generation == generation else { return }
+      sessions[id]?.active = false
+      sessions[id]?.owner = nil
     }
+  }
+
+  public func invalidate(snapshot: ClairAgentSessionSnapshot) {
+    invalidate(sessionID: snapshot.identity.sessionID, generation: snapshot.processGeneration)
   }
 
   public func attach(
@@ -244,6 +252,30 @@ public final class ClairTerminalBoundary: @unchecked Sendable {
     throws -> ClairTerminalInputResult
   {
     try commit(request)
+  }
+
+  /// T09: the local socket is synchronous and never retries, so it needs no dedupe record. Skipping
+  /// the ledger keeps a long-lived shell from exhausting the per-session operation window one
+  /// keystroke at a time; ordering against remote input is still the single lock below.
+  public func localWrite(scope: ResourceScope, generation: UInt64, bytes: Data) throws
+    -> ClairTerminalCommitOutcome
+  {
+    try lock.withLock {
+      guard let id = scope.sessionID, let session = sessions[id], session.scope == scope,
+        session.generation == generation
+      else { throw ClairTerminalError.staleSession }
+      guard session.active else { throw ClairTerminalError.closed }
+      return session.process.enqueueTerminalInput(bytes)
+    }
+  }
+
+  /// Drops a session for good (its journal is released). `invalidate` only fences it, which
+  /// leaves the slot counted against `maximumSessions`.
+  public func remove(sessionID id: SessionID, generation: UInt64) {
+    lock.withLock {
+      guard sessions[id]?.generation == generation else { return }
+      sessions.removeValue(forKey: id)
+    }
   }
 
   public func claimDesktopResizeOwner(scope: ResourceScope, generation: UInt64) throws

@@ -133,16 +133,19 @@
     case version
     case shutdown
     case issuePairing
+    case terminal(ClairDaemonTerminalRequest)
 
     private enum Kind: String, Codable {
       case health
       case version
       case shutdown
       case issuePairing = "issue_pairing"
+      case terminal
     }
 
     private enum CodingKeys: String, CodingKey {
       case kind
+      case terminal
     }
 
     private var kind: Kind {
@@ -155,6 +158,8 @@
         .shutdown
       case .issuePairing:
         .issuePairing
+      case .terminal:
+        .terminal
       }
     }
 
@@ -169,12 +174,16 @@
         self = .shutdown
       case .issuePairing:
         self = .issuePairing
+      case .terminal:
+        self = .terminal(
+          try container.decode(ClairDaemonTerminalRequest.self, forKey: .terminal))
       }
     }
 
     public func encode(to encoder: Encoder) throws {
       var container = encoder.container(keyedBy: CodingKeys.self)
       try container.encode(kind, forKey: .kind)
+      if case .terminal(let request) = self { try container.encode(request, forKey: .terminal) }
     }
   }
 
@@ -226,6 +235,7 @@
     case version(ClairDaemonVersion)
     case shutdownAccepted
     case pairingIssued(ClairDaemonPairingIssuance)
+    case terminal(ClairDaemonTerminalResponse)
     case failure(ClairDaemonControlFailure)
 
     private enum Kind: String, Codable {
@@ -233,6 +243,7 @@
       case version
       case shutdownAccepted = "shutdown_accepted"
       case pairingIssued = "pairing_issued"
+      case terminal
       case failure
     }
 
@@ -241,6 +252,7 @@
       case health
       case version
       case pairingIssued = "pairing_issued"
+      case terminal
       case failure
     }
 
@@ -256,6 +268,9 @@
       case .pairingIssued:
         self = .pairingIssued(
           try container.decode(ClairDaemonPairingIssuance.self, forKey: .pairingIssued))
+      case .terminal:
+        self = .terminal(
+          try container.decode(ClairDaemonTerminalResponse.self, forKey: .terminal))
       case .failure:
         self = .failure(try container.decode(ClairDaemonControlFailure.self, forKey: .failure))
       }
@@ -275,6 +290,9 @@
       case .pairingIssued(let issuance):
         try container.encode(Kind.pairingIssued, forKey: .kind)
         try container.encode(issuance, forKey: .pairingIssued)
+      case .terminal(let response):
+        try container.encode(Kind.terminal, forKey: .kind)
+        try container.encode(response, forKey: .terminal)
       case .failure(let failure):
         try container.encode(Kind.failure, forKey: .kind)
         try container.encode(failure, forKey: .failure)
@@ -428,6 +446,19 @@
       switch try request(.shutdown) {
       case .shutdownAccepted:
         return
+      case .failure(let failure):
+        throw ClairDaemonError.remoteFailure(failure.code)
+      default:
+        throw ClairDaemonError.unexpectedResponse
+      }
+    }
+
+    public func terminal(_ request: ClairDaemonTerminalRequest) throws
+      -> ClairDaemonTerminalResponse
+    {
+      switch try self.request(.terminal(request)) {
+      case .terminal(let response):
+        return response
       case .failure(let failure):
         throw ClairDaemonError.remoteFailure(failure.code)
       default:

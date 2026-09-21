@@ -1,3 +1,4 @@
+import ClairDaemonKit
 import ClairGhostty
 import ClairTerminal
 import Foundation
@@ -30,7 +31,9 @@ import Foundation
   /// side at all), so this view's own `draw(_:)` — the pre-vendor status
   /// placeholder — steps aside entirely once a real surface is live.
   public final class ClairGhosttySurfaceView: NSView {
-    public let session: ClairLocalShellSession
+    /// T09: nil in the product. The GUI never owns a PTY; the daemon does, and the real
+    /// surface runs `clair attach`. Only tests and the pre-vendor placeholder inject one.
+    public let session: ClairLocalShellSession?
     private var font: NSFont
     private var metrics: ClairGhosttyCellMetrics
     private var selectionRect: CGRect?
@@ -48,17 +51,7 @@ import Foundation
       launch: (command: String, cwd: String)? = nil,
       font: NSFont = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
     ) {
-      if let session {
-        self.session = session
-      } else if let started = try? ClairLocalShellSession() {
-        self.session = started
-      } else {
-        // The home directory always exists for a running process, so this
-        // fallback practically never throws; if it somehow does, failing to
-        // build a Ghostty surface at all is the correct outcome.
-        self.session = try! ClairLocalShellSession(
-          spec: .loginShell(workingDirectoryURL: URL(fileURLWithPath: "/private/tmp")))
-      }
+      self.session = session
       self.launch = launch
       self.font = font
       self.metrics = ClairGhosttyCellMetrics.measuring(font: font, contentScale: 1)
@@ -108,7 +101,7 @@ import Foundation
       // Only start the local-shell fallback PTY when no real surface took
       // over — a real surface spawns and owns its own child process, so
       // starting this one too would leave two live shells for one view.
-      if ghosttySurface == nil, !session.isRunning {
+      if ghosttySurface == nil, let session, !session.isRunning {
         do { try session.start() } catch {
           lastReportedError = String(describing: error)
         }
@@ -158,7 +151,7 @@ import Foundation
         let size = try? ClairGhosttySurfaceGeometry.terminalSize(
           forViewSize: bounds.size, metrics: metrics)
       else { return }
-      guard size != session.terminalSize else { return }
+      guard let session, size != session.terminalSize else { return }
       do { try session.resizeTerminal(size) } catch {
         lastReportedError = String(describing: error)
       }
@@ -268,7 +261,7 @@ import Foundation
         super.keyDown(with: event)
         return
       }
-      do { try session.write(bytes) } catch {
+      do { try session?.write(bytes) } catch {
         lastReportedError = String(describing: error)
       }
     }
@@ -504,7 +497,7 @@ import Foundation
         }
         return
       }
-      do { try session.write(Data(text.utf8)) } catch {
+      do { try session?.write(Data(text.utf8)) } catch {
         lastReportedError = String(describing: error)
       }
     }
@@ -520,7 +513,7 @@ import Foundation
     /// rendering.
     public override func scrollWheel(with event: NSEvent) {
       guard let ghosttySurface else {
-        let snapshot = session.terminalJournal.snapshot()
+        guard let snapshot = session?.terminalJournal.snapshot() else { return }
         let delta = Int64(event.scrollingDeltaY.rounded())
         let proposed = Int64(scrollbackOffset) - delta
         let clamped = max(Int64(snapshot.retainedStart), min(Int64(snapshot.endOffset), proposed))
@@ -549,18 +542,14 @@ import Foundation
       guard ghosttySurface == nil else { return }
       NSColor.black.setFill()
       dirtyRect.fill()
-      let snapshot = session.terminalJournal.snapshot()
-      let lines = [
-        "Clair macOS Ghostty surface (T03)",
-        status.summary,
-        "shell pid=\(session.processID) running=\(session.isRunning)",
-        "size=\(session.terminalSize.rows)x\(session.terminalSize.columns) "
-          + "cell=\(Int(metrics.cellWidth))x\(Int(metrics.cellHeight)) "
-          + "scale=\(metrics.contentScale)",
-        "scrollback offset=\(scrollbackOffset) retainedStart=\(snapshot.retainedStart) "
-          + "end=\(snapshot.endOffset)",
-        lastReportedError.map { "last surface error: \($0)" } ?? "",
-      ]
+      var lines = ["Clair macOS Ghostty surface (T03)", status.summary]
+      if let session {
+        let snapshot = session.terminalJournal.snapshot()
+        lines.append("shell pid=\(session.processID) running=\(session.isRunning)")
+        lines.append("size=\(session.terminalSize.rows)x\(session.terminalSize.columns)")
+        lines.append("scrollback offset=\(scrollbackOffset) retained=\(snapshot.retainedStart)")
+      }
+      lines.append(lastReportedError.map { "last surface error: \($0)" } ?? "")
       var origin = CGPoint(x: 8, y: 8)
       let attributes: [NSAttributedString.Key: Any] = [
         .font: font, .foregroundColor: NSColor.green,
@@ -581,12 +570,18 @@ import Foundation
     let launch: (command: String, cwd: String)?
     let onFacts: ((Int, Int?) -> Void)?
     let pane: Int?
-    public init(launch: (command: String, cwd: String)? = nil, pane: Int? = nil, onFacts: ((Int, Int?) -> Void)? = nil) {
-      self.launch = launch; self.pane = pane; self.onFacts = onFacts
+    /// `sessionKey` names the daemon-owned shell this surface attaches to (same key = same session).
+    let sessionKey: String
+    public init(launch: (command: String, cwd: String)? = nil, pane: Int? = nil, sessionKey: String, onFacts: ((Int, Int?) -> Void)? = nil) {
+      self.launch = launch; self.pane = pane; self.sessionKey = sessionKey; self.onFacts = onFacts
     }
 
     public func makeNSView(context: Context) -> ClairGhosttySurfaceView {
-      let v = ClairGhosttySurfaceView(launch: launch)
+      // The real surface's child is `clair attach`; the shell itself lives in the daemon.
+      let cwd = launch?.cwd ?? FileManager.default.homeDirectoryForCurrentUser.path
+      let attach = ClairDaemonLauncher.attachCommand(
+        key: sessionKey, cwd: cwd, command: launch.map(\.command).flatMap { $0.isEmpty ? nil : $0 })
+      let v = ClairGhosttySurfaceView(launch: (attach, cwd))
       v.onFacts = onFacts
       if let pane { ClairGhosttySurfaceView.register(v, pane: pane) }
       return v
