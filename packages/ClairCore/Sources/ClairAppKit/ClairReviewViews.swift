@@ -479,50 +479,107 @@
     @Binding var replacement: String
     @Binding var regex: Bool
     @Binding var caseSensitive: Bool
+    @Binding var selection: Int
     let hits: [SearchHit]
     let message: String
+    let searching: Bool
+    let replacing: Bool
     let search: () -> Void
     let replaceAll: () -> Void
+    let close: () -> Void
     let open: (SearchHit) -> Void
 
     var body: some View {
-      VStack(alignment: .leading, spacing: 6) {
-        TextField("検索", text: $query).onSubmit(search)
-        TextField("置換", text: $replacement)
+      VStack(alignment: .leading, spacing: 0) {
+        HStack(spacing: 8) {
+          Image(systemName: "magnifyingglass").font(.system(size: 14)).foregroundStyle(C.textTertiary)
+          Text("検索").font(.system(size: 12, weight: .semibold)).foregroundStyle(C.textPrimary)
+          Text("Project内のファイルを横断").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary)
+          Spacer(minLength: 0)
+          Button(action: close) { Image(systemName: "xmark").font(.system(size: 11, weight: .semibold)).frame(width: 24, height: 24) }
+            .buttonStyle(.plain).foregroundStyle(C.textTertiary).help("検索を閉じる")
+        }
+        .padding(.horizontal, 12).frame(height: 38)
+        .overlay(alignment: .bottom) { Rectangle().fill(L.hairline).frame(height: 1) }
+
+        HStack(spacing: 8) {
+          Image(systemName: "magnifyingglass").font(.system(size: 13)).foregroundStyle(C.textQuaternary)
+          TextField("Projectを検索", text: $query)
+            .textFieldStyle(.plain).font(.system(size: 13)).foregroundStyle(C.textPrimary)
+            .onSubmit(openSelected)
+            .onKeyPress(.downArrow) { selection = min(selection + 1, max(displayedHits.count - 1, 0)); return .handled }
+            .onKeyPress(.upArrow) { selection = max(selection - 1, 0); return .handled }
+            .onKeyPress(.escape) { close(); return .handled }
+            .onChange(of: query) { selection = 0; search() }
+          if searching { ProgressView().controlSize(.small) }
+          Text("\(hits.count)件 · \(Set(hits.map(\.path)).count)ファイル").font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary)
+        }
+        .padding(.horizontal, 8).frame(height: 40)
+        .background(C.chrome, in: RoundedRectangle(cornerRadius: Radius.control))
+        .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.hairline)).padding(12)
+
         HStack(spacing: 12) {
+          TextField("置換", text: $replacement).textFieldStyle(.plain).frame(minWidth: 180)
           Toggle("正規表現", isOn: $regex)
           Toggle("大文字小文字", isOn: $caseSensitive)
           Spacer()
-          Button("すべて置換", action: replaceAll).disabled(hits.isEmpty)
-        }.toggleStyle(.checkbox)
-        Text(message).foregroundStyle(C.textQuaternary)
-      }
-      // Live search: each change restarts the (debounced, cancellable) background run.
-      .onChange(of: query) { search() }
-      .onChange(of: regex) { search() }
-      .onChange(of: caseSensitive) { search() }
-      .textFieldStyle(.roundedBorder).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
-      .padding(.horizontal, 12).padding(.vertical, 8)
-      ForEach(groups, id: \.path) { g in
-        Text("\(g.path)  \(g.hits.count)").font(Typography.font(Typography.micro)).foregroundStyle(C.textTertiary)
-          .padding(.horizontal, 12).padding(.top, 6).lineLimit(1)
-        ForEach(Array(g.hits.enumerated()), id: \.offset) { _, h in
-          Button { open(h) } label: {
-            HStack(spacing: 6) {
-              Text("\(h.line)").font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary).frame(minWidth: 24, alignment: .trailing)
-              Text(h.text.trimmingCharacters(in: .whitespaces)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textPrimary).lineLimit(1)
-            }
-            .padding(.horizontal, 20).padding(.vertical, 3).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
-          }.buttonStyle(.plain)
+          Button(replacing ? "置換中…" : "すべて置換", action: replaceAll).disabled(hits.isEmpty || replacing || searching)
         }
+        .toggleStyle(.checkbox).font(Typography.font(Typography.micro)).foregroundStyle(C.textTertiary)
+        .padding(.horizontal, 12).padding(.bottom, 8).disabled(replacing)
+        .onChange(of: regex) { selection = 0; search() }
+        .onChange(of: caseSensitive) { selection = 0; search() }
+        if !message.isEmpty {
+          Text(message).font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary)
+            .padding(.horizontal, 12).padding(.bottom, 6)
+        }
+        ScrollView {
+          LazyVStack(alignment: .leading, spacing: 0) {
+            ForEach(indexedGroups, id: \.path) { group in
+              HStack(spacing: 6) {
+                Image(systemName: "doc.text").font(.system(size: 11)).foregroundStyle(C.textTertiary)
+                Text(URL(fileURLWithPath: group.path).lastPathComponent).font(.system(size: 11, weight: .semibold)).foregroundStyle(C.textTertiary)
+                Spacer(minLength: 0)
+                Text(group.path.split(separator: "/").dropLast().joined(separator: "/"))
+                  .font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary).lineLimit(1)
+              }
+              .padding(.horizontal, 8).frame(height: 26)
+              ForEach(group.hits, id: \.index) { item in
+                let selected = item.index == selection
+                Button { selection = item.index; open(item.hit) } label: {
+                  HStack(spacing: 8) {
+                    Text("\(item.hit.line)").font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary).frame(width: 32, alignment: .trailing)
+                    Text(item.hit.text.trimmingCharacters(in: .whitespaces)).font(Typography.font(Typography.chrome))
+                      .foregroundStyle(selected ? C.textPrimary : C.textSecondary).lineLimit(1)
+                    Spacer(minLength: 0)
+                  }
+                  .padding(.horizontal, 8).frame(height: 28)
+                  .background(selected ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
+                  .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).onHover { if $0 { selection = item.index } }
+              }
+            }
+          }.padding(.horizontal, 8).padding(.bottom, 8)
+        }.frame(minHeight: 120, maxHeight: 400)
       }
     }
 
-    /// Hits grouped by file in first-seen order; only the first 500 hits are rendered.
-    private var groups: [(path: String, hits: [SearchHit])] {
-      var order: [String] = [], by: [String: [SearchHit]] = [:]
-      for h in hits.prefix(500) { if by[h.path] == nil { order.append(h.path) }; by[h.path, default: []].append(h) }
+    private var displayedHits: [SearchHit] { Array(hits.prefix(500)) }
+
+    /// Hits grouped by file in first-seen order, retaining their flat keyboard-navigation index.
+    private var indexedGroups: [(path: String, hits: [(index: Int, hit: SearchHit)])] {
+      var order: [String] = [], by: [String: [(index: Int, hit: SearchHit)]] = [:]
+      for (index, hit) in displayedHits.enumerated() {
+        if by[hit.path] == nil { order.append(hit.path) }
+        by[hit.path, default: []].append((index, hit))
+      }
       return order.map { ($0, by[$0]!) }
+    }
+
+    private func openSelected() {
+      guard displayedHits.indices.contains(selection) else { search(); return }
+      open(displayedHits[selection])
     }
   }
 

@@ -22,6 +22,15 @@ final class WorkbenchCommandTests: XCTestCase {
     XCTAssertEqual(r.execute("state.snapshot", state: &viaHarness), .success(.snapshot(viaPalette)))
   }
 
+  func testProjectSearchIsACommandWithTheAdvertisedShortcut() throws {
+    var state = WorkbenchState()
+    XCTAssertEqual(r.commands.first { $0.id == "palette.search" }?.shortcut, "⌘⇧F")
+    _ = try r.execute("palette.search", state: &state).get()
+    XCTAssertEqual(state.palette, .search)
+    _ = try r.execute("palette.close", state: &state).get()
+    XCTAssertNil(state.palette)
+  }
+
   func testSchemaValidation() {
     var s = WorkbenchState()
     let bad: [(String, CommandInput)] = [

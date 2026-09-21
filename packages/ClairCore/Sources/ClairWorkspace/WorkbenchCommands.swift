@@ -13,7 +13,7 @@ public struct WorkbenchFile: Sendable, Codable, Equatable {
 }
 
 public struct WorkbenchState: Sendable, Codable, Equatable {
-  public enum Palette: String, Sendable, Codable { case commands, files }
+  public enum Palette: String, Sendable, Codable { case commands, files, search }
 
   public static let sections = ["一般", "AIプロバイダー", "エディタ", "ターミナル", "モバイル", "アップデート"]
   public static let toggleKeys = ["restoreLayout", "confirmClose", "showQuota", "preventSleepOnBattery", "formatOnSave", "showWhitespace", "terminalApprovals"]
@@ -209,6 +209,8 @@ public struct CommandRegistry: Sendable {
     case .files:
       return QuickOpen.rank(query, state.files)
         .map { PaletteItem(title: $0.path, hint: "", id: "tab.open", input: ["path": .string($0.path)]) }
+    case .search:
+      return []
     }
   }
 
@@ -394,6 +396,7 @@ extension CommandRegistry {
     },
     cmd("palette.commands", "コマンドパレット", .read, ai: false, shortcut: "⌘K", palette: false) { s, _ in s.palette = .commands; return .ok },
     cmd("palette.files", "ファイルへ移動", .read, ai: false, shortcut: "⌘P", palette: false) { s, _ in s.palette = .files; return .ok },
+    cmd("palette.search", "Project を検索", .read, ai: false, shortcut: "⌘⇧F", palette: false) { s, _ in s.palette = .search; return .ok },
     cmd("palette.close", "パレットを閉じる", .read, ai: false, palette: false) { s, _ in s.palette = nil; return .ok },
     // V08. Reading history is `state.snapshot`; mute changes what the user is told, so ai: false.
     cmd("notice.markRead", "通知を既読にする", .write, params: [CommandParam("project", .string, required: false)]) { s, i in

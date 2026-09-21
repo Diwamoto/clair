@@ -36,7 +36,7 @@
       store.run("project.switch", ["name": .string("clair")])
       store.run("tab.open", ["path": .string("apple/ClairApp/ProjectWorkspace.swift")])
       store.edited("apple/ClairApp/ProjectWorkspace.swift")
-      for (name, prep) in [("native", {}), ("palette", { store.run("palette.commands") }), ("quickopen", { store.run("palette.files") })] as [(String, () -> Void)] {
+      for (name, prep) in [("native", {}), ("palette", { store.run("palette.commands") }), ("quickopen", { store.run("palette.files") }), ("search", { store.run("palette.search") })] as [(String, () -> Void)] {
         prep()
         let host = NSHostingView(rootView: ClairAppShell(store: store).frame(width: 1440, height: 900))
         let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1440, height: 900), styleMask: [.titled], backing: .buffered, defer: false)

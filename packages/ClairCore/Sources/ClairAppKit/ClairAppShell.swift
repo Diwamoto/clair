@@ -319,7 +319,11 @@ import Observation
     @State private var hits: [SearchHit] = []
     @State private var searchMessage = ""
     @State private var searching = false
+    @State private var replacing = false
+    @State private var searchSelection = 0
+    @State private var searchGeneration = 0
     @State private var searchTask: Task<Void, Never>?
+    @State private var replaceTask: Task<Void, Never>?
     private let projectColors = [C.debugBlue, C.success, C.attention]
 
     public init() { _store = State(initialValue: ClairWorkbenchStore()) }
@@ -348,9 +352,15 @@ import Observation
       }
       .background(C.canvas)
       .frame(minWidth: 900, minHeight: 560)
-      .overlay { if let p = st.palette { paletteView(p) } }
+      .overlay {
+        if st.palette == .search { searchOverlay }
+        else if let p = st.palette { paletteView(p) }
+      }
       .animation(.easeOut(duration: 0.09), value: st.palette == nil)
-      .onChange(of: st.palette) { query = ""; selection = 0 }
+      .onChange(of: st.palette) {
+        query = ""; selection = 0
+        if st.palette == .search { searchSelection = 0; runSearch() }
+      }
       .onChange(of: st.project) { diff = nil; reloadChanges() }
       .onChange(of: st.files) { reloadChanges() }
       .onAppear { reloadChanges() }
@@ -384,7 +394,7 @@ import Observation
           }
         }
         HStack(spacing: 4) {
-          Button { sidebarMode = "magnifyingglass"; reloadChanges() } label: {
+          Button { store.run("palette.search") } label: {
             HStack(spacing: 4) {
               Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(C.textQuaternary)
               Text("ファイル、シンボル").font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
@@ -480,7 +490,7 @@ import Observation
     /// pair, and icons are bigger now that they own a whole column.
     private var activityBar: some View {
       VStack(spacing: 2) {
-        ForEach(["folder", "magnifyingglass", "clock.arrow.circlepath", "shield", "terminal", "bell", "ladybug"], id: \.self) { icon in
+        ForEach(["folder", "clock.arrow.circlepath", "shield", "terminal", "bell", "ladybug"], id: \.self) { icon in
           activityBarButton(icon)
         }
         Spacer(minLength: 0)
@@ -502,7 +512,7 @@ import Observation
     private var sidebar: some View {
       VStack(spacing: 0) {
         // Lazy: a Project can list thousands of files, and an eager tree makes accessibility traversal (and layout) block the main thread.
-        ScrollView { LazyVStack(alignment: .leading, spacing: 0) { sidebarMode == "magnifyingglass" ? AnyView(searchPanel) : sidebarMode == "clock.arrow.circlepath" ? AnyView(historyPanel) : sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "bell" ? AnyView(noticeList) : sidebarMode == "terminal" ? AnyView(sessionList) : AnyView(explorer) } }
+        ScrollView { LazyVStack(alignment: .leading, spacing: 0) { sidebarMode == "clock.arrow.circlepath" ? AnyView(historyPanel) : sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "bell" ? AnyView(noticeList) : sidebarMode == "terminal" ? AnyView(sessionList) : AnyView(explorer) } }
         Spacer(minLength: 0)
       }
       .frame(width: 242)
@@ -554,19 +564,28 @@ import Observation
     /// Runs off the main thread; a newer query cancels the running one and its result is dropped.
     private func runSearch() {
       searchTask?.cancel()
-      guard let root = store.activeRoot, !searchQuery.isEmpty else { hits = []; searchMessage = ""; searching = false; return }
+      searchGeneration += 1
+      let generation = searchGeneration
+      guard !replacing, let root = store.activeRoot, !searchQuery.isEmpty else {
+        if !replacing { hits = []; searchMessage = ""; searching = false }
+        return
+      }
       let (files, pattern) = (st.files, searchPattern)
       searching = true; searchMessage = "検索中…"
       searchTask = Task {
         // ponytail: 250 ms debounce for typing; the cancel above is what keeps stale results out.
-        try? await Task.sleep(nanoseconds: 250_000_000)
-        let result = await Task.detached(priority: .userInitiated) { Result { try ProjectSearch.find(root: root, files: files, pattern) } }.value
-        guard !Task.isCancelled else { return }
+        do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+        let worker = Task.detached(priority: .userInitiated) { Result { try ProjectSearch.find(root: root, files: files, pattern) } }
+        let result = await withTaskCancellationHandler(operation: { await worker.value }, onCancel: { worker.cancel() })
+        guard !Task.isCancelled, generation == searchGeneration else { return }
         searching = false
         switch result {
         case .success(let found):
           hits = found
+          searchSelection = min(searchSelection, max(found.count - 1, 0))
           searchMessage = found.isEmpty ? "一致なし" : "\(found.count) 件 / \(Set(found.map(\.path)).count) ファイル"
+        case .failure(let error) where error is CancellationError:
+          break
         case .failure(let error):
           hits = []
           searchMessage = error is SearchError ? "正規表現が不正です" : "検索できません: \(error)"
@@ -575,23 +594,40 @@ import Observation
     }
 
     private func runReplace() {
-      guard let root = store.activeRoot else { return }
+      guard !replacing, let root = store.activeRoot, !hits.isEmpty else { return }
       let (history, files, pattern, r) = (ClairWorkbenchStore.history, st.files, searchPattern, replaceText)
-      searchTask?.cancel(); searching = true; searchMessage = "置換中…"
-      searchTask = Task {
+      searchTask?.cancel(); searching = false; replacing = true; searchMessage = "置換中…"
+      replaceTask = Task {
         let result = await Task.detached(priority: .userInitiated) { Result { try ProjectSearch.replace(root: root, files: files, pattern, with: r, history: history) } }.value
+        replacing = false
         switch result {
-        case .success(let n): runSearch(); searchMessage = "\(n) 件を置換しました（履歴に退避済み）"
-        case .failure(let error): searching = false; searchMessage = "置換できません: \(error)"
+        case .success(let n): hits = []; searchMessage = "\(n) 件を置換しました（履歴に退避済み）"; runSearch()
+        case .failure(let error): searchMessage = "置換できません: \(error)"
         }
       }
     }
 
-    private var searchPanel: some View {
-      SearchPanel(
-        query: $searchQuery, replacement: $replaceText, regex: $searchRegex, caseSensitive: $searchCase,
-        hits: hits, message: searchMessage, search: runSearch, replaceAll: runReplace,
-        open: { store.run("tab.open", ["path": .string($0.path)]); store.buffers.reveal($0.path, line: $0.line) })
+    private func closeSearch() {
+      store.run("palette.close")
+      searchTask?.cancel(); searching = false; searchGeneration += 1
+    }
+
+    private var searchOverlay: some View {
+      ZStack(alignment: .top) {
+        Color(red: 8 / 255, green: 10 / 255, blue: 12 / 255).opacity(0.68).onTapGesture(perform: closeSearch)
+        SearchPanel(
+          query: $searchQuery, replacement: $replaceText, regex: $searchRegex, caseSensitive: $searchCase,
+          selection: $searchSelection, hits: hits, message: searchMessage, searching: searching, replacing: replacing,
+          search: runSearch, replaceAll: runReplace, close: closeSearch,
+          open: {
+            closeSearch(); store.run("tab.open", ["path": .string($0.path)])
+            store.buffers.reveal($0.path, line: $0.line)
+          })
+          .frame(width: 620).background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.overlay))
+          .overlay(RoundedRectangle(cornerRadius: Radius.overlay).stroke(L.strong))
+          .shadow(color: .black.opacity(0.62), radius: 24, y: 18).padding(.top, 44)
+          .transition(.scale(scale: 0.97, anchor: .top).combined(with: .opacity))
+      }
     }
 
     private var historyPanel: some View {
