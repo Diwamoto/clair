@@ -94,6 +94,7 @@ public enum WorkbenchFiles {
 
   /// `M`/`A`/`D`/`R`… from `git status`, `U` for untracked. Empty if not a repo or git fails.
   static func gitStatus(_ root: String) -> [String: String] {
+    #if os(macOS)
     guard FileManager.default.fileExists(atPath: root + "/.git") else { return [:] }
     let p = Process(), out = Pipe()
     p.executableURL = URL(fileURLWithPath: "/usr/bin/git")
@@ -111,6 +112,9 @@ public enum WorkbenchFiles {
       result[path] = c
     }
     return result
+    #else
+    return [:]  // ponytail: iOS has no git subprocess; the host supplies status over the wire.
+    #endif
   }
 }
 

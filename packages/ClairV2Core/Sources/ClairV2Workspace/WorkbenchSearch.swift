@@ -1,7 +1,9 @@
 import ClairV2EditorCore
-import CoreServices
 import CryptoKit
 import Foundation
+#if os(macOS)
+  import CoreServices
+#endif
 
 // V05: Quick Open ranking, project-wide search/replace (E04 core), file watcher with agent
 // live reload (principle 8: disk wins, unsaved buffer is discarded) and per-file local history.
@@ -89,6 +91,7 @@ extension WorkbenchState {
   }
 }
 
+#if os(macOS)
 /// FSEvents on a Project root; `onChange` gets root-relative paths (debounced by FSEvents latency).
 public final class FileWatcher: @unchecked Sendable {
   private var stream: FSEventStreamRef?
@@ -116,6 +119,7 @@ public final class FileWatcher: @unchecked Sendable {
 
   deinit { if let s = stream { FSEventStreamStop(s); FSEventStreamInvalidate(s); FSEventStreamRelease(s) } }
 }
+#endif
 
 /// Per-file snapshots under `dir` (Clair's data dir), never inside the Project.
 public struct LocalHistory: Sendable {

@@ -62,10 +62,11 @@ final class EditorFixtureGeneratorTests: XCTestCase {
 final class EditorBenchmarkTests: XCTestCase {
   func testHarnessRunsAndReports() async throws {
     let operation = EditorBenchmark.Operation(
-      name: "noop",
+      name: "spin",
       fixture: "unicode-corpus",
       iterations: 5,
-      closure: {}
+      // A noop can measure 0 ns below clock resolution, which made the > 0 assertion flaky.
+      closure: { var x = 0; for i in 0..<100_000 { x &+= i }; precondition(x != 1) }
     )
     let result = try await EditorBenchmark.run(operation)
     XCTAssertEqual(result.iterations, 5)

@@ -194,10 +194,14 @@ public enum ClairV2Updater {
     let staging = dir(c).appending(path: "staging-\(UUID().uuidString)")
     try fm.createDirectory(at: staging, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
     do {
+      #if os(macOS)
       let p = Process()
       p.executableURL = URL(fileURLWithPath: "/usr/bin/ditto"); p.arguments = ["-x", "-k", archive.path, staging.path]
       try p.run(); p.waitWithoutRunLoop()
       guard p.terminationStatus == 0 else { throw ClairV2UpdateError.installFailed("ditto exited \(p.terminationStatus)") }
+      #else
+      throw ClairV2UpdateError.installFailed("updates are macOS-only")
+      #endif
       let apps = try fm.contentsOfDirectory(at: staging, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]).filter { $0.pathExtension == "app" }
       guard apps.count == 1, let bundle = Bundle(url: apps[0]) else { throw ClairV2UpdateError.installFailed("archive must contain exactly one app bundle") }
       guard bundle.bundleIdentifier == c.channel.bundleIdentifier else { throw ClairV2UpdateError.installFailed("bundle identifier mismatch") }
@@ -231,6 +235,7 @@ public enum ClairV2Updater {
     do {
       try Data(helperScript.utf8).write(to: script, options: .atomic)
       try fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: script.path)
+      #if os(macOS)
       let h = Process()
       h.executableURL = URL(fileURLWithPath: "/usr/bin/nohup")
       h.arguments = ["/bin/sh", script.path, String(ProcessInfo.processInfo.processIdentifier), c.installURL.path, staged.path,
@@ -238,6 +243,9 @@ public enum ClairV2Updater {
         c.installURL.deletingPathExtension().lastPathComponent]
       h.standardInput = FileHandle.nullDevice; h.standardOutput = FileHandle.nullDevice; h.standardError = FileHandle.nullDevice
       try h.run()
+      #else
+      throw ClairV2UpdateError.installFailed("updates are macOS-only")
+      #endif
     } catch {
       try? fm.removeItem(at: pending(c)); try? fm.removeItem(at: script)
       throw ClairV2UpdateError.installFailed("\(error)")

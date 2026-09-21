@@ -7,11 +7,13 @@ import Foundation
 // ponytail: synchronous git on the GUI thread, no timeout; move off-thread if a huge repo stalls it.
 // ponytail: conflicts are aborted and reported (re-ask the agent); a native merge editor is not built.
 
+#if os(macOS)
 extension Process {
   /// `waitUntilExit()` spins the current run loop, so on the main thread SwiftUI re-renders mid-wait — while a
   /// `store.state` mutation that called us is still open — and traps on exclusive access. Poll instead.
   func waitWithoutRunLoop() { while isRunning { usleep(2000) } }
 }
+#endif
 
 public struct GitReview: Sendable, Codable, Equatable {
   public var base: String?
@@ -29,6 +31,7 @@ public enum WorkbenchGit {
 
   @discardableResult
   static func run(_ root: String, _ args: [String], merge: Bool = false) -> (ok: Bool, out: String) {
+    #if os(macOS)
     let p = Process(), out = Pipe()
     p.executableURL = URL(fileURLWithPath: "/usr/bin/git")
     p.arguments = ["-C", root] + args
@@ -37,6 +40,9 @@ public enum WorkbenchGit {
     let text = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
     p.waitWithoutRunLoop()
     return (p.terminationStatus == 0, text.trimmingCharacters(in: .whitespacesAndNewlines))
+    #else
+    return (false, "git is not available on iOS")
+    #endif
   }
 
   static func lines(_ root: String, _ args: [String]) -> [String] {
