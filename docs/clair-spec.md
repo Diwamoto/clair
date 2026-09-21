@@ -226,7 +226,7 @@ AI 連携などの境界で必要な場合だけ snapshot を生成する。
 ### 5.9 回帰の下限
 
 計測済みの失敗値は
-[`EditorBaselineEvidence.swift`](../packages/ClairV2Core/Sources/ClairV2EditorFixtures/EditorBaselineEvidence.swift)
+[`EditorBaselineEvidence.swift`](../packages/ClairCore/Sources/ClairEditorFixtures/EditorBaselineEvidence.swift)
 が機械可読な正本であり、性能テストは任意の数値ではなく
 `regressionCeiling(fixture:metric:)` に対して assert する。代表値(Apple M4、
 32 GiB、macOS 26.6.2、Swift 6.3.3 Release、~1164x710 viewport、13 pt
@@ -245,9 +245,9 @@ monospaced、wrap off、20 回反復の nearest-rank p95):
 これらは近づく目標ではなく、決定的に上回るべき下限である。
 
 fixture は
-[`EditorFixtureGenerator.swift`](../packages/ClairV2Core/Sources/ClairV2EditorFixtures/EditorFixtureGenerator.swift)
+[`EditorFixtureGenerator.swift`](../packages/ClairCore/Sources/ClairEditorFixtures/EditorFixtureGenerator.swift)
 が `10mb`(10 MiB)、`long-line`、`1mb-japanese`、`unicode-corpus` を決定的に
-生成する(`scripts/v2-editor-fixtures.sh generate`)。**UI 経路の file サイズ上限は
+生成する(`scripts/editor-fixtures.sh generate`)。**UI 経路の file サイズ上限は
 canonical fixture を開けるように設定する**。
 
 ### 5.10 Rendering と入力

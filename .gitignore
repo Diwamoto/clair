@@ -32,7 +32,7 @@ __pycache__/
 
 # Materialized libghostty/GhosttyKit vendor artifact and its build/fetch
 # cache (Config/ghostty-pin.json is the tracked source of truth; see
-# scripts/v2-ghostty.sh and docs/plans/clair-v2-t01-libghostty-foundation.md).
-/packages/ClairV2Core/Vendor/ghostty/
-/.cache/v2-ghostty/
-/ClairV2Mobile.xcodeproj/project.xcworkspace/
+# scripts/ghostty.sh and docs/plans/clair-t01-libghostty-foundation.md).
+/packages/ClairCore/Vendor/ghostty/
+/.cache/ghostty/
+/ClairMobile.xcodeproj/project.xcworkspace/

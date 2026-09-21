@@ -27,8 +27,8 @@ existing environment when one is already running.
 
 - **macOS app**: `make dev` builds and launches the app (Ctrl-C to stop).
 - **iOS app**: `make dev-ios` launches it in a Simulator.
-- **Swift tests**: `make v2-test` for the fast core/app unit tests,
-  `make v2-test-integration` for the slow real-subprocess/PTY/daemon tests.
+- **Swift tests**: `make test` for the fast core/app unit tests,
+  `make test-integration` for the slow real-subprocess/PTY/daemon tests.
 - **Workbench mock**: lives in `prototypes/clair-workbench`. Use
   `scripts/dev-server.sh` to start or reuse its local dev server (default port
   `5173`). Do not run `npm run dev` directly unless you are certain no server is
@@ -42,7 +42,7 @@ Node, Vite, Wrangler, or app processes behind.
 
 ## Verification
 
-Prefer narrow, fast checks (`make v2-test`, a single test filter, unit tests)
-during development. Run broader suites (`make v2-foundation`, `make lint`) only
+Prefer narrow, fast checks (`make test`, a single test filter, unit tests)
+during development. Run broader suites (`make foundation`, `make lint`) only
 when finishing a slice or before committing. Do not repeatedly launch the full
 app or simulator for every small change.

@@ -27,7 +27,7 @@ superseded_by: []
 P15AとP15Bはfunctional correctnessとして完了しており、性能評価は`L01`へ先送りされている。`L01`は未実行であり、
 「cceditより明確に快適」という[vision](../clair-spec.md)の成功条件は現時点で一度も検証されていない。
 
-native editor PoC(PoC と evidence doc は 2026-09-21 に削除。計測値は [`EditorBaselineEvidence.swift`](../../packages/ClairV2Core/Sources/ClairV2EditorFixtures/EditorBaselineEvidence.swift) が正本で、原文は Git 履歴にある)はCodeEditSourceEditor系を条件付き候補としたが、
+native editor PoC(PoC と evidence doc は 2026-09-21 に削除。計測値は [`EditorBaselineEvidence.swift`](../../packages/ClairCore/Sources/ClairEditorFixtures/EditorBaselineEvidence.swift) が正本で、原文は Git 履歴にある)はCodeEditSourceEditor系を条件付き候補としたが、
 NE-01（grammar許諾）、NE-03（実IME）、NE-11（本番接続）がblockedのままである。PoCの実測は10MBの初回色付けが
 約4.7秒、累積RSSが約1.1GiBであり、報告自身が「VS Code相当との判定は未達」と記録している。
 
@@ -64,7 +64,7 @@ font metrics、glyph atlas、run描画、damage管理、viewport scroll、選択
   - diff、merge、AI提案、コメントrailが常にbridge越しの後付けになる。
 - Evidence:
   - PoC測定では10MBの`setDocument`往復が約3秒、20回の選択で本文209,714,700 bytesがbridgeを通過した
-    （poc-measurements.md(PoC と evidence doc は 2026-09-21 に削除。計測値は [`EditorBaselineEvidence.swift`](../../packages/ClairV2Core/Sources/ClairV2EditorFixtures/EditorBaselineEvidence.swift) が正本で、原文は Git 履歴にある)）。
+    （poc-measurements.md(PoC と evidence doc は 2026-09-21 に削除。計測値は [`EditorBaselineEvidence.swift`](../../packages/ClairCore/Sources/ClairEditorFixtures/EditorBaselineEvidence.swift) が正本で、原文は Git 履歴にある)）。
 
 ### Option B: CodeEdit系を本番採用する（既存のNE-15〜NE-23）
 
@@ -78,7 +78,7 @@ font metrics、glyph atlas、run描画、damage管理、viewport scroll、選択
   - upstreamのREADMEがproduction readyでないと明記している。
   - terminalには何も寄与しない。
 - Evidence:
-  - poc-report.md(PoC と evidence doc は 2026-09-21 に削除。計測値は [`EditorBaselineEvidence.swift`](../../packages/ClairV2Core/Sources/ClairV2EditorFixtures/EditorBaselineEvidence.swift) が正本で、原文は Git 履歴にある)。
+  - poc-report.md(PoC と evidence doc は 2026-09-21 に削除。計測値は [`EditorBaselineEvidence.swift`](../../packages/ClairCore/Sources/ClairEditorFixtures/EditorBaselineEvidence.swift) が正本で、原文は Git 履歴にある)。
 
 ### Option C: SwiftTerm（terminal）とCodeEdit（editor）を個別に採用する
 
@@ -189,8 +189,8 @@ engineがすべての指標で現行既定と同等以上、かつ大規模fixtu
 - Project: [p0028-clair-text-engine](../projects/p0028-clair-text-engine/README.md)
 - Frontend decision: [ADR-0001](0001-adopt-swiftui-appkit-frontend.md)
 - Control plane ownership: [ADR-0010](0010-m1-control-plane-swift-with-selective-rust-migration.md)
-- Investigation: native editor PoC(PoC と evidence doc は 2026-09-21 に削除。計測値は [`EditorBaselineEvidence.swift`](../../packages/ClairV2Core/Sources/ClairV2EditorFixtures/EditorBaselineEvidence.swift) が正本で、原文は Git 履歴にある)、
-  poc-report.md(PoC と evidence doc は 2026-09-21 に削除。計測値は [`EditorBaselineEvidence.swift`](../../packages/ClairV2Core/Sources/ClairV2EditorFixtures/EditorBaselineEvidence.swift) が正本で、原文は Git 履歴にある)、
-  poc-measurements.md(PoC と evidence doc は 2026-09-21 に削除。計測値は [`EditorBaselineEvidence.swift`](../../packages/ClairV2Core/Sources/ClairV2EditorFixtures/EditorBaselineEvidence.swift) が正本で、原文は Git 履歴にある)
+- Investigation: native editor PoC(PoC と evidence doc は 2026-09-21 に削除。計測値は [`EditorBaselineEvidence.swift`](../../packages/ClairCore/Sources/ClairEditorFixtures/EditorBaselineEvidence.swift) が正本で、原文は Git 履歴にある)、
+  poc-report.md(PoC と evidence doc は 2026-09-21 に削除。計測値は [`EditorBaselineEvidence.swift`](../../packages/ClairCore/Sources/ClairEditorFixtures/EditorBaselineEvidence.swift) が正本で、原文は Git 履歴にある)、
+  poc-measurements.md(PoC と evidence doc は 2026-09-21 に削除。計測値は [`EditorBaselineEvidence.swift`](../../packages/ClairCore/Sources/ClairEditorFixtures/EditorBaselineEvidence.swift) が正本で、原文は Git 履歴にある)
 - Benchmark: [ccedit V1 baseline procedure](../benchmarks/clair-v1-baseline.md)
 - Queue: [P17〜P34](../clair-tasks.md)

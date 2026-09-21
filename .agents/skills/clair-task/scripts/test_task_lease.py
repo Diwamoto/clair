@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Functional tests for Clair v2 task leases in disposable Git worktrees."""
+"""Functional tests for Clair task leases in disposable Git worktrees."""
 
 from __future__ import annotations
 

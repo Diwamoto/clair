@@ -1,0 +1,465 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		B00000000000000000000040 /* ClairMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000020 /* ClairMobileApp.swift */; };
+		B00000000000000000000041 /* ClairMobileRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000021 /* ClairMobileRootView.swift */; };
+		B00000000000000000000046 /* ClairMobilePushDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000025 /* ClairMobilePushDelegate.swift */; };
+		B00000000000000000000042 /* ClairMobileKit in Frameworks */ = {isa = PBXBuildFile; productRef = B00000000000000000000011 /* ClairMobileKit */; };
+		B00000000000000000000043 /* ClairMobileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000023 /* ClairMobileTests.swift */; };
+		B00000000000000000000044 /* ClairMobileKit in Frameworks */ = {isa = PBXBuildFile; productRef = B00000000000000000000011 /* ClairMobileKit */; };
+		B00000000000000000000045 /* ClairMobileUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000024 /* ClairMobileUITests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		B00000000000000000000020 /* ClairMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClairMobileApp.swift; sourceTree = "<group>"; };
+		B00000000000000000000021 /* ClairMobileRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClairMobileRootView.swift; sourceTree = "<group>"; };
+		B00000000000000000000025 /* ClairMobilePushDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClairMobilePushDelegate.swift; sourceTree = "<group>"; };
+		B00000000000000000000022 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = apple/ClairMobileApp/Info.plist; sourceTree = SOURCE_ROOT; };
+		B00000000000000000000023 /* ClairMobileTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClairMobileTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000024 /* ClairMobileUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClairMobileUITests.swift; sourceTree = "<group>"; };
+		B00000000000000000000030 /* Clair Mobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Clair Mobile.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		B00000000000000000000031 /* ClairMobileTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ClairMobileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B00000000000000000000032 /* ClairMobileUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ClairMobileUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		B00000000000000000000051 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B00000000000000000000042 /* ClairMobileKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B00000000000000000000054 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B00000000000000000000044 /* ClairMobileKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B00000000000000000000057 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		B00000000000000000000002 = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000004 /* ClairMobileApp */,
+				B00000000000000000000005 /* ClairMobileTests */,
+				B00000000000000000000006 /* ClairMobileUITests */,
+				B00000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		B00000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000030 /* Clair Mobile.app */,
+				B00000000000000000000031 /* ClairMobileTests.xctest */,
+				B00000000000000000000032 /* ClairMobileUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		B00000000000000000000004 /* ClairMobileApp */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000020 /* ClairMobileApp.swift */,
+				B00000000000000000000021 /* ClairMobileRootView.swift */,
+				B00000000000000000000025 /* ClairMobilePushDelegate.swift */,
+				B00000000000000000000022 /* Info.plist */,
+			);
+			path = "packages/ClairApps/Sources/ClairMobileApp";
+			sourceTree = "<group>";
+		};
+		B00000000000000000000005 /* ClairMobileTests */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000023 /* ClairMobileTests.swift */,
+			);
+			path = apple/ClairMobileTests;
+			sourceTree = "<group>";
+		};
+		B00000000000000000000006 /* ClairMobileUITests */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000024 /* ClairMobileUITests.swift */,
+			);
+			path = apple/ClairMobileUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		B00000000000000000000060 /* ClairMobile */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B00000000000000000000081 /* Build configuration list for PBXNativeTarget "ClairMobile" */;
+			buildPhases = (
+				B00000000000000000000050 /* Sources */,
+				B00000000000000000000051 /* Frameworks */,
+				B00000000000000000000052 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ClairMobile;
+			packageProductDependencies = (
+				B00000000000000000000011 /* ClairMobileKit */,
+			);
+			productName = "Clair Mobile";
+			productReference = B00000000000000000000030 /* Clair Mobile.app */;
+			productType = "com.apple.product-type.application";
+		};
+		B00000000000000000000061 /* ClairMobileTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B00000000000000000000082 /* Build configuration list for PBXNativeTarget "ClairMobileTests" */;
+			buildPhases = (
+				B00000000000000000000053 /* Sources */,
+				B00000000000000000000054 /* Frameworks */,
+				B00000000000000000000055 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B00000000000000000000070 /* PBXTargetDependency */,
+			);
+			name = ClairMobileTests;
+			packageProductDependencies = (
+				B00000000000000000000011 /* ClairMobileKit */,
+			);
+			productName = ClairMobileTests;
+			productReference = B00000000000000000000031 /* ClairMobileTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		B00000000000000000000062 /* ClairMobileUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B00000000000000000000083 /* Build configuration list for PBXNativeTarget "ClairMobileUITests" */;
+			buildPhases = (
+				B00000000000000000000056 /* Sources */,
+				B00000000000000000000057 /* Frameworks */,
+				B00000000000000000000058 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B00000000000000000000071 /* PBXTargetDependency */,
+			);
+			name = ClairMobileUITests;
+			productName = ClairMobileUITests;
+			productReference = B00000000000000000000032 /* ClairMobileUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		B00000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2600;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					B00000000000000000000060 = {
+						CreatedOnToolsVersion = 2600;
+					};
+					B00000000000000000000061 = {
+						CreatedOnToolsVersion = 2600;
+						TestTargetID = B00000000000000000000060;
+					};
+					B00000000000000000000062 = {
+						CreatedOnToolsVersion = 2600;
+						TestTargetID = B00000000000000000000060;
+					};
+				};
+			};
+			buildConfigurationList = B00000000000000000000080 /* Build configuration list for PBXProject "ClairMobile" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = B00000000000000000000002;
+			packageReferences = (
+				B00000000000000000000010 /* XCLocalSwiftPackageReference "ClairCore" */,
+			);
+			productRefGroup = B00000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				B00000000000000000000060 /* ClairMobile */,
+				B00000000000000000000061 /* ClairMobileTests */,
+				B00000000000000000000062 /* ClairMobileUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		B00000000000000000000052 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B00000000000000000000055 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B00000000000000000000058 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		B00000000000000000000050 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B00000000000000000000040 /* ClairMobileApp.swift in Sources */,
+				B00000000000000000000041 /* ClairMobileRootView.swift in Sources */,
+				B00000000000000000000046 /* ClairMobilePushDelegate.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B00000000000000000000053 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B00000000000000000000043 /* ClairMobileTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B00000000000000000000056 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B00000000000000000000045 /* ClairMobileUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B00000000000000000000070 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B00000000000000000000060 /* ClairMobile */;
+		};
+		B00000000000000000000071 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B00000000000000000000060 /* ClairMobile */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		B00000000000000000000090 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		B00000000000000000000091 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		B00000000000000000000092 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3UY66R4X2N;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "$(SRCROOT)/apple/ClairMobileApp/Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.diwamoto.clair.mobile;
+				PRODUCT_MODULE_NAME = ClairMobile;
+				PRODUCT_NAME = "Clair Mobile";
+				SDKROOT = iphoneos;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		B00000000000000000000093 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3UY66R4X2N;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "$(SRCROOT)/apple/ClairMobileApp/Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.diwamoto.clair.mobile;
+				PRODUCT_MODULE_NAME = ClairMobile;
+				PRODUCT_NAME = "Clair Mobile";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		B00000000000000000000094 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.diwamoto.clair.mobile.tests;
+				PRODUCT_MODULE_NAME = ClairMobileTests;
+				PRODUCT_NAME = ClairMobileTests;
+				SDKROOT = iphoneos;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Clair Mobile.app/Clair Mobile";
+			};
+			name = Debug;
+		};
+		B00000000000000000000095 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.diwamoto.clair.mobile.tests;
+				PRODUCT_MODULE_NAME = ClairMobileTests;
+				PRODUCT_NAME = ClairMobileTests;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Clair Mobile.app/Clair Mobile";
+			};
+			name = Release;
+		};
+		B00000000000000000000096 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.diwamoto.clair.mobile.uitests;
+				PRODUCT_MODULE_NAME = ClairMobileUITests;
+				PRODUCT_NAME = ClairMobileUITests;
+				SDKROOT = iphoneos;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = ClairMobile;
+			};
+			name = Debug;
+		};
+		B00000000000000000000097 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.diwamoto.clair.mobile.uitests;
+				PRODUCT_MODULE_NAME = ClairMobileUITests;
+				PRODUCT_NAME = ClairMobileUITests;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = ClairMobile;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		B00000000000000000000080 /* Build configuration list for PBXProject "ClairMobile" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B00000000000000000000090 /* Debug */,
+				B00000000000000000000091 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B00000000000000000000081 /* Build configuration list for PBXNativeTarget "ClairMobile" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B00000000000000000000092 /* Debug */,
+				B00000000000000000000093 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B00000000000000000000082 /* Build configuration list for PBXNativeTarget "ClairMobileTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B00000000000000000000094 /* Debug */,
+				B00000000000000000000095 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B00000000000000000000083 /* Build configuration list for PBXNativeTarget "ClairMobileUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B00000000000000000000096 /* Debug */,
+				B00000000000000000000097 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		B00000000000000000000010 /* XCLocalSwiftPackageReference "ClairCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = packages/ClairCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		B00000000000000000000011 /* ClairMobileKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B00000000000000000000010 /* XCLocalSwiftPackageReference "ClairCore" */;
+			productName = ClairMobileKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = B00000000000000000000001 /* Project object */;
+}

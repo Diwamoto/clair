@@ -22,7 +22,7 @@ under the Apache License 2.0 or the MIT License, at the user's option.
 
 ## libghostty / GhosttyKit
 
-Clair's terminal engine (`ClairV2GhosttyABI`/`ClairV2Ghostty`) links the
+Clair's terminal engine (`ClairGhosttyABI`/`ClairGhostty`) links the
 pinned `libghostty-internal` static library, built from upstream Ghostty at
 the commit recorded in `Config/ghostty-pin.json`. Ghostty is available under
 the MIT License.
@@ -31,8 +31,8 @@ the MIT License.
 - Pinned commit: `d4c88d8069912b653d707191388ca98e24751f12` (`1.3.2-dev`)
 - License: MIT — Copyright (c) 2024 Mitchell Hashimoto, Ghostty contributors
 - The upstream `LICENSE` file is staged at vendor time to
-  `packages/ClairV2Core/Vendor/ghostty/LICENSE-ghostty` (git-ignored,
-  materialized by `scripts/v2-ghostty.sh vendor`, not redistributed from
+  `packages/ClairCore/Vendor/ghostty/LICENSE-ghostty` (git-ignored,
+  materialized by `scripts/ghostty.sh vendor`, not redistributed from
   this repository).
 
 Ghostty's macOS build statically links several third-party C++ libraries for

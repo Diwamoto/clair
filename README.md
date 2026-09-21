@@ -49,19 +49,19 @@ make dev-ios   # iOS Simulatorで起動する
 
 | コマンド | 内容 |
 | --- | --- |
-| `make v2-test` | 高速なcore/appユニットテストを実行する |
-| `make v2-test-integration` | 実subprocess/PTY/daemonの遅いテストを実行する |
-| `make v2-foundation` | package graph検証、全build、全テストを実行する |
+| `make test` | 高速なcore/appユニットテストを実行する |
+| `make test-integration` | 実subprocess/PTY/daemonの遅いテストを実行する |
+| `make foundation` | package graph検証、全build、全テストを実行する |
 | `make lint` | Swiftのフォーマットを検査する |
-| `make ci` | `lint`、`v2-foundation`、iOS Simulator buildをまとめて実行する |
+| `make ci` | `lint`、`foundation`、iOS Simulator buildをまとめて実行する |
 
-詳細な手動確認、出力先、復旧方法は[ローカル開発手順](docs/runbooks/clair-v2-verification.md)にまとめています。
+詳細な手動確認、出力先、復旧方法は[ローカル開発手順](docs/runbooks/clair-verification.md)にまとめています。
 
 ## リポジトリの構成
 
 ```text
-apple/       iOSアプリ(ClairV2Mobile)とそのテスト
-packages/    Swift package(ClairV2Core、ClairV2Apps)
+apple/       iOSアプリ(ClairMobile)とそのテスト
+packages/    Swift package(ClairCore、ClairApps)
 scripts/     build、run、test用の補助スクリプト
 docs/        仕様、タスク、architecture、decision、runbook
 ```
@@ -76,7 +76,7 @@ hosted agentは対象にしません。Goのlanguage intelligence、debugger、D
 - [タスク一覧](docs/clair-tasks.md) / [カンバン](docs/clair-kanban.html)
 - [ドキュメント案内](docs/README.md)
 - [現在のworkspace architecture](docs/architecture/development-workspace.md)
-- [ローカル検証手順](docs/runbooks/clair-v2-verification.md)
+- [ローカル検証手順](docs/runbooks/clair-verification.md)
 
 ### リポジトリ内の開発フロー
 

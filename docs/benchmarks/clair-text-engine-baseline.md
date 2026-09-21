@@ -103,4 +103,4 @@ summaryとcoverageの整合、privacy flag、host-local absolute pathの不在�
 - 比較はcomponentごとに、current-default surfaceとengine surfaceの間で行います。
 - engineが全metricで同等以上、かつ大規模fixtureで明確に優位でない限り、既定を切り替えません。
 - 実機の日本語IMEとVoiceOverはこのcontractの対象外です。`P19`と`P21`の手動確認結果を
-  [local development runbook](../runbooks/clair-v2-verification.md)へ記録し、gateの判断材料に含めます。
+  [local development runbook](../runbooks/clair-verification.md)へ記録し、gateの判断材料に含めます。

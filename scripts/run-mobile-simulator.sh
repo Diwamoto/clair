@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-derived_data="${CLAIR_MOBILE_DERIVED_DATA:-$repo_root/.build/xcode/v2-mobile-simulator}"
+derived_data="${CLAIR_MOBILE_DERIVED_DATA:-$repo_root/.build/xcode/mobile-simulator}"
 
 # Prefer an already-booted iPhone; allow an explicit device name or UDID.
 device_id="$(xcrun simctl list devices available --json | python3 -c '
@@ -45,7 +45,7 @@ trap terminate_app EXIT
 CLAIR_MOBILE_DESTINATION="platform=iOS Simulator,id=$device_id" \
     "$repo_root/scripts/build-mobile-simulator.sh"
 
-app_path="$derived_data/Build/Products/Debug-iphonesimulator/Clair v2 Mobile.app"
+app_path="$derived_data/Build/Products/Debug-iphonesimulator/Clair Mobile.app"
 bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app_path/Info.plist")"
 
 # bootstatus -b boots a shutdown device and reuses a running one.

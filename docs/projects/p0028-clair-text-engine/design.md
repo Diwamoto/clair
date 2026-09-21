@@ -137,7 +137,7 @@ terminal transcriptをsession終了後に保存しない方針は変更しない
 | performance | `P34`のgateのみ。基準値は`P17`で取得した現行既定とする |
 
 IMEとVoiceOverはunit testで完了を判定しない。手順は
-[local development runbook](../../runbooks/clair-v2-verification.md)へ追記し、実施結果をitemへ記録する。
+[local development runbook](../../runbooks/clair-verification.md)へ追記し、実施結果をitemへ記録する。
 
 ## Options considered
 
@@ -180,7 +180,7 @@ terminalは`P32`で切り替え、現行surfaceは同一commit内で置換する
 ## Documentation impact
 
 - [development workspace architecture](../../architecture/development-workspace.md)にengineの境界とthreading契約を追記する。
-- [local development runbook](../../runbooks/clair-v2-verification.md)にIMEとVoiceOverの手動確認手順を追記する。
+- [local development runbook](../../runbooks/clair-verification.md)にIMEとVoiceOverの手動確認手順を追記する。
 - native editor issues(2026-09-21 に削除、Git 履歴を参照)のNE-11とNE-15〜NE-23へsupersede注記を入れる。
 - 言語資産を同梱する際は`THIRD_PARTY_NOTICES.md`を更新する。
 
