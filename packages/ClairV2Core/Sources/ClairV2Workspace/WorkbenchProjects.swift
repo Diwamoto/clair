@@ -121,13 +121,14 @@ private struct WorkspaceSnapshot: Codable {
   var project: String
   var layouts: [String: ProjectLayout]
   var toggles: [String: Bool]
+  var choices: [String: String]?
 }
 
 extension WorkbenchState {
   public func save(to url: URL) throws {
     var s = self
     if !s.project.isEmpty { s.layouts[s.project] = s.layout }
-    let data = try JSONEncoder().encode(WorkspaceSnapshot(projects: s.projects, project: s.project, layouts: s.layouts, toggles: s.toggles))
+    let data = try JSONEncoder().encode(WorkspaceSnapshot(projects: s.projects, project: s.project, layouts: s.layouts, toggles: s.toggles, choices: s.choices))
     try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     try data.write(to: url, options: .atomic)
   }
@@ -138,6 +139,7 @@ extension WorkbenchState {
     else { return nil }
     var s = WorkbenchState()
     for (k, v) in snap.toggles where s.toggles[k] != nil { s.toggles[k] = v }
+    for (k, v) in snap.choices ?? [:] where WorkbenchState.choiceOptions[k]?.contains(v) == true { s.choices[k] = v }
     s.projects = snap.projects.filter { WorkbenchProject.normalized($0.path) != nil }
     guard let current = s.projects.first(where: { $0.name == snap.project }) ?? s.projects.first else { return s }
     if s.toggles["restoreLayout"] == true {

@@ -475,7 +475,7 @@ import Observation
         Image(systemName: "ellipsis").font(.system(size: 12)).foregroundStyle(C.chromeInkMuted).frame(width: 36, height: 32)
       }
       .padding(.vertical, 8)
-      .frame(width: ChromeBudget.activityBarWidth, maxHeight: .infinity)
+      .frame(width: ChromeBudget.activityBarWidth).frame(maxHeight: .infinity)
       .background(C.chrome)
       .overlay(alignment: .trailing) { Rectangle().fill(L.chromeSoft).frame(width: 1) }
     }
@@ -525,9 +525,19 @@ import Observation
     }
 
     private var settingsPanel: some View {
-      ScrollView { LazyVStack(alignment: .leading, spacing: 0) { sections } }
-        .frame(width: 242)
-        .background(C.chromeRaised)
+      VStack(alignment: .leading, spacing: 12) {
+        Text("設定を検索").font(.system(size: 11)).foregroundStyle(C.textQuaternary)
+          .padding(.horizontal, 8).frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
+          .background(C.chrome, in: RoundedRectangle(cornerRadius: Radius.control))
+          .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.hairline))
+        Text("ワークスペース").font(.system(size: 11, weight: .semibold)).foregroundStyle(C.textTertiary).padding(.horizontal, 8)
+        VStack(alignment: .leading, spacing: 0) { sections }
+        Spacer(minLength: 0)
+      }
+      .padding(.horizontal, 8).padding(.vertical, 16)
+      .frame(width: 220)
+      .background(C.chrome)
+      .overlay(alignment: .trailing) { Rectangle().fill(L.chrome).frame(width: 1) }
     }
 
     private var searchPattern: SearchPattern {
@@ -777,51 +787,101 @@ import Observation
       }
     }
 
+    private static let sectionNotes = ["一般": "ワークスペースの基本動作とアプリ全体の表示を設定します。"]
+
     private var settingsMain: some View {
       ScrollView {
-        VStack(alignment: .leading, spacing: 16) {
-          Text(st.section).font(.system(size: 20, weight: .semibold)).foregroundStyle(C.textPrimary)
-          if st.section == "一般" {
-            toggle("前回のレイアウトを復元", "restoreLayout")
-            toggle("閉じる前に確認", "confirmClose")
-            toggle("ステータスバーの利用枠を表示", "showQuota")
-          } else if st.section == "ターミナル" {
-            toggle("バッテリー駆動中もエージェント実行中はスリープさせない", "preventSleepOnBattery")
-          } else if st.section == "アップデート" {
+        VStack(alignment: .leading, spacing: 12) {
+          Text(st.section).font(.system(size: 26, weight: .semibold)).foregroundStyle(C.textPrimary)
+          Text(Self.sectionNotes[st.section] ?? "\(st.section) の設定です。").font(.system(size: 12)).foregroundStyle(C.textTertiary)
+            .padding(.bottom, 12)
+          switch st.section {
+          case "一般":
+            SettingsCard(title: "ワークスペース") {
+              switchRow("前回のレイアウトを復元", "restoreLayout", note: "Projectごとのファイル、ターミナル、分割位置を再開します。")
+              switchRow("閉じる前に確認", "confirmClose", note: "実行中のターミナルや未保存のエディタを閉じる前に確認します。")
+            }
+            SettingsCard(title: "インターフェース") { switchRow("ステータスバーの利用枠を表示", "showQuota") }
+          case "AIプロバイダー":
+            SettingsCard(title: "Agent") {
+              choiceRow("既定のAgent", "defaultAgent", note: "⌃⌘N で追加するときの初期選択。titlebarのタブは個別に選べます。")
+              choiceRow("承認ポリシー", "approvalPolicy", note: "ターミナル・Agent会話での変更提案を、どこまで自動で通すか。")
+            }
+          case "エディタ":
+            SettingsCard(title: "編集") {
+              switchRow("保存時に整形", "formatOnSave", note: "⌘S のタイミングでフォーマッタを実行します。")
+              choiceRow("タブ幅", "tabWidth")
+              switchRow("空白文字を表示", "showWhitespace", note: "タブ・行末の空白を薄く可視化します。")
+            }
+          case "ターミナル":
+            SettingsCard(title: "シェルと承認") {
+              choiceRow("デフォルトシェル", "defaultShell")
+              switchRow("コマンド実行前に確認", "terminalApprovals", note: "agentが実行するコマンドの承認プロンプト。")
+              choiceRow("スクロールバック", "scrollback")
+            }
+            SettingsCard(title: "電源") {
+              switchRow("バッテリー駆動中もエージェント実行中はスリープさせない", "preventSleepOnBattery")
+            }
+          case "アップデート":
             updateSection
-          } else if st.section == "モバイル" {
-            Text("同じネットワーク上の端末からセッションを確認します。").foregroundStyle(C.textTertiary)
-          } else {
-            // Undefined in the canvas (checklist §6.3): placeholder only, no invented content.
-            Text("この画面はデザインキャンバスにまだ存在しません。").foregroundStyle(C.textMuted)
+          case "モバイル":
+            SettingsCard(title: "モバイル") {
+              SettingsRow(title: "セッションの確認", note: "同じネットワーク上の端末からセッションを確認します。") { EmptyView() }
+            }
+          default:
+            EmptyView()
           }
         }
-        .font(Typography.font(Typography.chrome)).padding(40).frame(maxWidth: 720, alignment: .leading).frame(maxWidth: .infinity)
+        .padding(.horizontal, 56).padding(.vertical, 40).frame(maxWidth: 720 + 112, alignment: .leading).frame(maxWidth: .infinity)
       }
-      .background(C.chromeRaised)
+      .background(C.canvas)
     }
 
     @ViewBuilder private var updateSection: some View {
       let c = store.updateConfig
-      Text("\(c.channel.displayName) \(c.currentVersion)").foregroundStyle(C.textSecondary)
-      if c.channel == .dev {
-        Text("Dev ビルドは更新フィードを持ちません。").foregroundStyle(C.textMuted)
-      } else {
-        switch store.update {
-        case .idle: Text("最新の状態です。").foregroundStyle(C.textTertiary)
-        case .checking: Text("確認中…").foregroundStyle(C.textTertiary)
-        case .installing: Text("更新を適用しています。完了後に再起動します。").foregroundStyle(C.textTertiary)
-        case .failed(let m): Text(m).foregroundStyle(C.textTertiary)
-        case .available(let u):
-          Text("\(u.version) が利用できます。\(u.notes ?? "")").foregroundStyle(C.textSecondary)
-          Button("適用して再起動") { Task { await store.installUpdate() } }
+      SettingsCard(title: "更新チャンネル") {
+        SettingsRow(title: "チャンネル", note: "Dev は先行ビルド。署名検証・backup/rollback はどちらも同じです。") {
+          // The channel is the running bundle's identity (ADR-0008), not a preference, so it is shown, not switched.
+          SettingsSegmented(options: ["Stable", "Dev"], value: c.channel.displayName, onChange: { _ in })
+            .allowsHitTesting(false)
         }
-        Button("更新を確認") { Task { await store.checkForUpdate(manual: true) } }
+      }
+      SettingsCard(title: "バージョン") {
+        SettingsRow(title: "現在のバージョン", note: "\(c.channel.displayName) \(c.currentVersion)") {
+          if c.channel == .dev {
+            Text("Dev ビルドは更新フィードを持ちません。").font(.system(size: 11)).foregroundStyle(C.textMuted)
+          } else {
+            switch store.update {
+            case .idle: Text("最新の状態です。").font(.system(size: 11)).foregroundStyle(C.textTertiary)
+            case .checking: Text("確認中…").font(.system(size: 11)).foregroundStyle(C.textTertiary)
+            case .installing: Text("更新を適用しています。完了後に再起動します。").font(.system(size: 11)).foregroundStyle(C.textTertiary)
+            case .failed(let m): Text(m).font(.system(size: 11)).foregroundStyle(C.textTertiary)
+            case .available(let u):
+              HStack(spacing: 8) {
+                Text("\(u.version) が利用できます").font(.system(size: 11)).foregroundStyle(C.textSecondary)
+                Button("適用して再起動") { Task { await store.installUpdate() } }
+              }
+            }
+          }
+        }
+        if c.channel != .dev {
+          SettingsRow(title: "更新を確認") { Button("確認") { Task { await store.checkForUpdate(manual: true) } } }
+        }
       }
     }
 
-    private func toggle(_ title: String, _ key: String) -> some View {
-      Toggle(title, isOn: Binding(get: { st.toggles[key] ?? false }, set: { store.run("settings.set", ["key": .string(key), "value": .bool($0)]) })).foregroundStyle(C.textSecondary)
+    private func switchRow(_ title: String, _ key: String, note: String? = nil) -> some View {
+      SettingsRow(title: title, note: note) {
+        SettingsSwitch(on: st.toggles[key] ?? false) { store.run("settings.set", ["key": .string(key), "value": .bool($0)]) }
+      }
+    }
+
+    private func choiceRow(_ title: String, _ key: String, note: String? = nil) -> some View {
+      SettingsRow(title: title, note: note) {
+        SettingsSegmented(options: WorkbenchState.choiceOptions[key] ?? [], value: st.choices[key] ?? "") {
+          store.run("settings.choose", ["key": .string(key), "value": .string($0)])
+        }
+      }
     }
 
     /// U06/U05: facts only — branch, change/dirty counts, agent state. Ln/Col waits on an editor caret callback.

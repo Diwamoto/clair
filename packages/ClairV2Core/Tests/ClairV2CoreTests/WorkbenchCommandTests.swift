@@ -94,3 +94,17 @@ extension Result {
   var success: Success? { try? get() }
   var failure: Failure? { if case .failure(let e) = self { e } else { nil } }
 }
+
+final class SettingsChoiceTests: XCTestCase {
+  func testChooseAcceptsOnlyListedValuesAndRoundTrips() throws {
+    let r = CommandRegistry.workbench; var s = WorkbenchState()
+    XCTAssertEqual(s.choices["tabWidth"], "2")
+    _ = r.execute("settings.choose", ["key": .string("tabWidth"), "value": .string("4")], state: &s)
+    XCTAssertEqual(s.choices["tabWidth"], "4")
+    guard case .failure = r.execute("settings.choose", ["key": .string("tabWidth"), "value": .string("3")], state: &s) else { return XCTFail("3 is not an option") }
+    XCTAssertEqual(s.choices["tabWidth"], "4")
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent("ws-\(UUID()).json")
+    try s.save(to: url); defer { try? FileManager.default.removeItem(at: url) }
+    XCTAssertEqual(WorkbenchState.restore(from: url)?.choices["tabWidth"], "4")
+  }
+}

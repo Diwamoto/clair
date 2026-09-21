@@ -16,7 +16,15 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public enum Palette: String, Sendable, Codable { case commands, files }
 
   public static let sections = ["一般", "AIプロバイダー", "エディタ", "ターミナル", "モバイル", "アップデート"]
-  public static let toggleKeys = ["restoreLayout", "confirmClose", "showQuota", "preventSleepOnBattery"]
+  public static let toggleKeys = ["restoreLayout", "confirmClose", "showQuota", "preventSleepOnBattery", "formatOnSave", "showWhitespace", "terminalApprovals"]
+  /// Closed-set settings (the mock's segmented controls). The first option is the default.
+  public static let choiceOptions: [String: [String]] = [
+    "defaultAgent": ["claude", "codex"],
+    "approvalPolicy": ["毎回確認", "セッション中は許可", "自動承認"],
+    "tabWidth": ["2", "4", "8"],
+    "defaultShell": ["/bin/zsh", "/bin/bash"],
+    "scrollback": ["1000", "5000", "10000"],
+  ]
 
   // Sample tree only until a Project is opened (`project.open` replaces it with the real file system).
   public var files = [
@@ -40,7 +48,8 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var settingsOpen = false
   public var section = "一般"
   public var palette: Palette?
-  public var toggles = ["restoreLayout": true, "confirmClose": true, "showQuota": false, "preventSleepOnBattery": false]
+  public var toggles = ["restoreLayout": true, "confirmClose": true, "showQuota": false, "preventSleepOnBattery": false, "formatOnSave": false, "showWhitespace": false, "terminalApprovals": true]
+  public var choices = WorkbenchState.choiceOptions.mapValues { $0[0] }
 
   public init() {}
 }
@@ -337,6 +346,15 @@ extension CommandRegistry {
     cmd("settings.set", "設定を変更", .write, ai: false,
         params: [CommandParam("key", .string, allowed: WorkbenchState.toggleKeys), CommandParam("value", .bool)]) { s, i in
       s.toggles[i["key"]!.string!] = i["value"]!.bool!; return .ok
+    },
+    cmd("settings.choose", "設定の選択肢を変更", .write, ai: false,
+        params: [CommandParam("key", .string, allowed: WorkbenchState.choiceOptions.keys.sorted()), CommandParam("value", .string)],
+        preflight: { _, i throws(CommandError) in
+          let key = i["key"]?.string ?? "", v = i["value"]?.string ?? ""
+          try require(WorkbenchState.choiceOptions[key]?.contains(v) == true, "\(key) に \(v) は選べません")
+          return .write
+        }) { s, i in
+      s.choices[i["key"]!.string!] = i["value"]!.string!; return .ok
     },
     cmd("palette.commands", "コマンドパレット", .read, ai: false, shortcut: "⌘K", palette: false) { s, _ in s.palette = .commands; return .ok },
     cmd("palette.files", "ファイルへ移動", .read, ai: false, shortcut: "⌘P", palette: false) { s, _ in s.palette = .files; return .ok },
