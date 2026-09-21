@@ -139,6 +139,7 @@ import Observation
       case .failure(let e): lastError = e
       case .success:
         lastError = nil
+        if id == "file.open", case .int(let line)? = input["line"], let p = state.active { buffers.reveal(p, line: line) }
         if let closing { ClairDaemonLauncher.closeSession(key: closing) }  // T09: closing a pane ends its shell; closing a window does not
         refreshSleepAssertion()
         watchProject()
@@ -270,9 +271,10 @@ import Observation
 
     public var body: some Commands {
       CommandMenu("Clair") {
-        ForEach(CommandRegistry.workbench.commands.filter { $0.shortcut != nil }, id: \.id) { d in
+        let state = store?.state ?? WorkbenchState()
+        ForEach(CommandRegistry.workbench.commands.filter { state.shortcut(for: $0) != nil }, id: \.id) { d in
           Button(d.title) { store?.run(d.id) }
-            .keyboardShortcut(Self.shortcut(d.shortcut!))
+            .keyboardShortcut(Self.shortcut(state.shortcut(for: d)!))
             .disabled(store == nil)
         }
       }
@@ -285,7 +287,8 @@ import Observation
         m.insert(mod)
       }
       let k = s.last!
-      return KeyboardShortcut(k == "→" ? .rightArrow : KeyEquivalent(Character(k.lowercased())), modifiers: m)
+      let arrows: [Character: KeyEquivalent] = ["→": .rightArrow, "←": .leftArrow, "↑": .upArrow, "↓": .downArrow]
+      return KeyboardShortcut(arrows[k] ?? KeyEquivalent(Character(k.lowercased())), modifiers: m)
     }
   }
 

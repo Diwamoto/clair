@@ -29,11 +29,15 @@ final class WorkbenchIPCTests: XCTestCase {
 
   func testSplitSnapshotAssertViaCLIOnly() throws {
     let (_, url, _) = try serve()
+    let dir = URL.temporaryDirectory.appending(path: "clair-open-\(UUID().uuidString.prefix(8))")
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+    try Data("x".utf8).write(to: dir.appending(path: "f.md"))
+    XCTAssertEqual(try cli(["open", dir.appending(path: "f.md").path + ":12:3"], url).error, nil)
     guard case .pane? = try cli(["pane.splitRight"], url).result else { return XCTFail("split") }
-    XCTAssertEqual(try cli(["open", "docs/architecture/pane-layout.md:12:3"], url).error, nil)
     guard case .snapshot(let s)? = try cli(["state.snapshot"], url).result else { return XCTFail("no snapshot") }
     XCTAssertEqual(s.tree.leaves.count, WorkbenchState().tree.leaves.count + 1)
-    XCTAssertEqual(s.active, "docs/architecture/pane-layout.md")
+    XCTAssertEqual(s.active, "f.md")  // no Project owned it, so its folder became one
     // machine-readable error, state untouched
     XCTAssertEqual(try cli(["pane.focus", "id=99"], url).error?.code, .preconditionFailed)
     XCTAssertEqual(try cli(["nope"], url).error?.code, .unknownCommand)
@@ -73,7 +77,11 @@ final class WorkbenchIPCTests: XCTestCase {
       XCTAssertEqual($0 as? WorkbenchIPCError, .alreadyRunning)
     }
     XCTAssertEqual(WorkbenchCLI.parse(["settings.set", "key=showQuota", "value=true"])?.input, ["key": .string("showQuota"), "value": .bool(true)])
-    XCTAssertEqual(WorkbenchCLI.parse(["open", "a/b.swift:1:2"])?.input["path"], .string("a/b.swift"))
+    let cwd = FileManager.default.currentDirectoryPath
+    let rel = try XCTUnwrap(WorkbenchCLI.parse(["open", "a/b.swift:7:2"]))
+    XCTAssertEqual(rel.command, "file.open")
+    XCTAssertEqual(rel.input, ["path": .string(cwd + "/a/b.swift"), "line": .int(7)])
+    XCTAssertEqual(WorkbenchCLI.parse(["open", "/x/y.go"])?.input, ["path": .string("/x/y.go")])
     XCTAssertNil(WorkbenchCLI.parse([]))
     XCTAssertNil(WorkbenchCLI.parse(["pane.focus", "id"]))
   }

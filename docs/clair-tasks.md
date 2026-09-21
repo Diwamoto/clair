@@ -54,7 +54,7 @@ ccedit(旧 Clair v1)を製品・資料ともに廃止した。これに伴い:
 | `V03` | `active` | `D5` | `V01`, `V02` | **P1**。`clair mcp serve` の stdio MCP adapter。実装と threat test(4 件 + IPC 4 件)は完了。**残**: D5 独立レビュー(人手 gate)。 |
 | `V06` | `active` | `D5` | `V01`, `V04`, `H07`, `E09` | **P1**。Git/worktree workflow。stage/commit/switch、managed worktree、branch review(committed/uncommitted/untracked 分離)を実装済み(test 5 件)。conflict は abort して agent へ再依頼(原則 6 が許す経路)。**残**: D5 独立レビュー。 |
 | `V05` | `active` | `D4` | `V01`, `E04`, `V04` | **P1**。Quick Open、全文検索・置換、FSEvents watcher、local history を実装済み(test 5 件、10,000 file で scan 0.2s / rank 6ms)。**残**: 実機での見た目確認。 |
-| `V11` | `active` | `D3` | `V01`, `V02` | **P1**。仕様 §9 の未実装分。(1) shortcut を任意 command へユーザーが割り当てられるようにする(現状 shortcut は registry の固定 projection)。(2) `clair open path:line:column` を実装する(現状 CLI は `mcp serve` のみ)。path を所有する open Project の active pane へ開き、該当 Project が無ければ新規 Project として開く。 |
+| `V11` | `done` | `D3` | `V01`, `V02` | **P1**。仕様 §9 の未実装分。(1) shortcut を任意 command へユーザーが割り当てられるようにする(現状 shortcut は registry の固定 projection)。(2) `clair open path:line:column` を実装する(現状 CLI は `mcp serve` のみ)。path を所有する open Project の active pane へ開き、該当 Project が無ければ新規 Project として開く。 **完了(2026-09-21)**: (1) `file.open`(absolute path + 任意 `line`)を registry に追加。path を所有する open Project(入れ子は最深の root)へ切り替えて tab を開き、無ければ最寄りの Git root(無ければ file の folder)を新規 Project として開く。scan 対象外(`node_modules` 等/上限超)の file も開ける。`ai: false`(agent が読める範囲を勝手に広げない)。`clair open path:line:col` はこれに配線し、相対 path は CLI 側の cwd で絶対化する。line は editor の reveal へ渡す。(2) `shortcut.set`(command, shortcut)を追加。割り当ては `WorkbenchState.shortcuts` に持ち保存・復元され、メニューとパレットの hint は registry 既定ではなく有効な shortcut を投影する。`""` で既定を解除、`⇧⌘x`→`⌘⇧X` に正規化、⌃⌥⌘ を含まない key・重複・引数必須の command・未知の command は拒否。`ai: false`。test 追加(owner/入れ子/Git root/folder、不正入力、割り当て・衝突・解除・保存)。`make lint`/`build`/`test`/`mobile-build` 通過。**残**: col は editor の reveal が line 専用のため未反映、shortcut の割り当て UI(設定画面)は無く CLI/`shortcut.set` 経由のみ、実 GUI での目視確認。 |
 | `E14` | `queued` | `D3` | `E03`, `U05` | **P2**。multi-cursor の UI 手段を仕様 §5.5 の水準に上げる。core(`TextSelectionSet`、`TextSelection.rectangular`、1 undo 単位)は実装済みだが、UI からは ⌘クリックの cursor 追加しか使えない。⌘D(次の一致を選択)、⌥ドラッグの矩形選択、ダブル/トリプルクリックの語/行選択を追加する。あわせて editor pane の file サイズ上限(現 10,000,000 bytes)を canonical fixture `10mb`(10,485,760 bytes)が開ける値へ直す(仕様 §5.9)。 |
 | `E13` | `queued` | `D4` | `E05`, `E06`, `E11` | **P2**。code folding と soft wrap(仕様 §5.11)。どちらも core/view に実体が無い。fold 範囲は tree-sitter の構文範囲から導出し、fold state は `INV-TXN-003` の position mapping を通して編集に追従させる。fold された行をまたぐ caret 移動・検索・review anchor の扱いを決めること。soft wrap は `INV-PERF-001`/`003` を壊さない(長い 1 行も viewport 制限経路で扱う)。minimap は対象外(仕様 §14)。 |
 | `U04` | `active` | `D3` | `U02`, `E07`, `T03` | **P2**。macOS AppShell、titlebar、sidebar、pane/tab、status bar、command/settings を Workbench mock に合わせる。titlebar / sidebar / status bar / editor chrome / palette / Quick Open / settings / 承認カードは mock 準拠まで実装済み(オフスクリーン描画スナップショットで照合)。**残**: 実機の目視確認(人手)、quota メーター(データ源なし)。syntax highlight は `E11` へ分離した。 |
@@ -122,6 +122,6 @@ ccedit(旧 Clair v1)を製品・資料ともに廃止した。これに伴い:
 
 ## 統計
 
-- 完了 46 / 全 67(2026-09-21 時点)
-- 残り 21: P0 が 2、P1 が 7、P2 が 8、P3 が 3(うち `N08` は blocked)
+- 完了 50 / 全 67(2026-09-21 時点)
+- 残り 17(うち `N08` は blocked、人手 gate の active 6 件を含む)
 - `python3 .agents/skills/clair-task/scripts/task_lease.py validate` がこの数を検証する。

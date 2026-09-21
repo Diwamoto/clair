@@ -50,8 +50,30 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var palette: Palette?
   public var toggles = ["restoreLayout": true, "confirmClose": true, "showQuota": false, "preventSleepOnBattery": false, "formatOnSave": false, "showWhitespace": false, "terminalApprovals": true]
   public var choices = WorkbenchState.choiceOptions.mapValues { $0[0] }
+  /// V11: user shortcut assignments over the registry defaults. An empty string unassigns a default.
+  public var shortcuts: [String: String] = [:]
 
   public init() {}
+
+  /// The shortcut a command answers to now: the user's assignment, else its default.
+  public func shortcut(for d: CommandDescriptor) -> String? {
+    guard let s = shortcuts[d.id] else { return d.shortcut }
+    return s.isEmpty ? nil : s
+  }
+}
+
+extension WorkbenchState {
+  static let shortcutModifiers = ["⌃", "⌥", "⌘", "⇧"]  // canonical order; matches the registry defaults
+  static let shortcutKeys = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789,./;'[]-=`\\→←↑↓")
+
+  /// `⇧⌘d` → `⌘⇧D`. nil unless it is one key plus at least one of ⌃⌥⌘ (a bare or shift-only key would eat typing).
+  public static func canonicalShortcut(_ raw: String) -> String? {
+    guard let key = raw.last.map({ Character($0.uppercased()) }), shortcutKeys.contains(key) else { return nil }
+    let mods = raw.dropLast()
+    guard Set(mods).count == mods.count, mods.allSatisfy({ shortcutModifiers.contains(String($0)) }) else { return nil }
+    let ordered = shortcutModifiers.filter { mods.contains(Character($0)) }
+    return ordered.contains { $0 != "⇧" } ? ordered.joined() + String(key) : nil
+  }
 }
 
 /// Fixed risk class. Preflight may only raise it (ADR-0007).
@@ -179,7 +201,7 @@ public struct CommandRegistry: Sendable {
     switch kind {
     case .commands:
       return commands.filter { $0.inPalette && (state.isRepo || !($0.id.hasPrefix("git.") || $0.id.hasPrefix("worktree."))) && (q.isEmpty || $0.title.lowercased().contains(q)) }
-        .map { PaletteItem(title: $0.title, hint: $0.shortcut ?? "", id: $0.id, input: [:]) }
+        .map { PaletteItem(title: $0.title, hint: state.shortcut(for: $0) ?? "", id: $0.id, input: [:]) }
         + AgentProfile.all.map { PaletteItem(title: "\($0.title) を起動", hint: "", id: "agent.launch", input: ["profile": .string($0.id)]) }
           .filter { q.isEmpty || $0.title.lowercased().contains(q) }
     case .files:
@@ -229,7 +251,9 @@ extension CommandRegistry {
     if !ok { throw CommandError(.preconditionFailed, message()) }
   }
 
-  public static let workbench = CommandRegistry([
+  public static let workbench = CommandRegistry(core + [shortcutSet(core.map(\.descriptor))])
+
+  private static let core: [Command] = [
     cmd("pane.splitRight", "ペインを右に分割", .additive, shortcut: "⌃⌘D") { s, _ in
       s.tree.splitFocused(.horizontal); return .pane(s.tree.focused)
     },
@@ -288,10 +312,7 @@ extension CommandRegistry {
         preflight: { s, i throws(CommandError) in
           try require(s.files.contains { $0.path == i["path"]?.string }, "no file \(i["path"]!)"); return .read
         }) { s, i in
-      let p = i["path"]!.string!
-      if !s.tabs.contains(p) { s.tabs.append(p) }
-      s.active = p; s.settingsOpen = false; s.palette = nil
-      return .ok
+      s.openTab(i["path"]!.string!); return .ok
     },
     cmd("tab.activate", "タブを切り替え", .read, params: [CommandParam("path", .string)],
         preflight: { s, i throws(CommandError) in
@@ -324,11 +345,24 @@ extension CommandRegistry {
           try require(WorkbenchProject.normalized(i["path"]!.string!) != nil, "not a directory \(i["path"]!)"); return .additive
         }) { s, i in
       let path = WorkbenchProject.normalized(i["path"]!.string!)!
-      if let p = s.projects.first(where: { $0.path == path }) { s.switchProject(to: p); return .ok }
-      var name = URL(fileURLWithPath: path).lastPathComponent, n = 2
-      while s.projects.contains(where: { $0.name == name }) { name = "\(URL(fileURLWithPath: path).lastPathComponent) \(n)"; n += 1 }
-      let p = WorkbenchProject(name: name, path: path)
-      s.projects.append(p); s.switchProject(to: p)
+      s.openProject(WorkbenchProject(name: URL(fileURLWithPath: path).lastPathComponent, path: path)); return .ok
+    },
+    // V11 `clair open path:line`: the open Project that owns the file, else a new Project for its repository (or folder).
+    // ai: false — like project.open, an agent must not widen the readable file system on its own.
+    cmd("file.open", "パスからファイルを開く", .additive, ai: false,
+        params: [CommandParam("path", .string), CommandParam("line", .int, required: false)], palette: false,
+        preflight: { _, i throws(CommandError) in
+          let path = i["path"]!.string!
+          guard let file = WorkbenchProject.normalizedFile(path) else { throw CommandError(.preconditionFailed, "not a file \(path)") }
+          try require(i["line"]?.int.map { $0 >= 1 } ?? true, "line must be 1 or more")
+          return .additive
+        }) { s, i in
+      let file = WorkbenchProject.normalizedFile(i["path"]!.string!)!
+      let owner = s.owner(of: file) ?? WorkbenchProject.root(containing: file)
+      s.openProject(owner)
+      let rel = String(file.dropFirst(owner.path.count + 1))
+      if !s.files.contains(where: { $0.path == rel }) { s.files.append(WorkbenchFile(path: rel, status: nil)) }  // outside the scan (skipped dir / over the cap)
+      s.openTab(rel)
       return .ok
     },
     cmd("explorer.toggle", "フォルダを開閉", .read, params: [CommandParam("path", .string)]) { s, i in
@@ -383,5 +417,25 @@ extension CommandRegistry {
       return .ok
     },
     cmd("state.snapshot", "状態を取得", .read, palette: false) { s, _ in .snapshot(s) },
-  ] + gitCommands)
+  ] + gitCommands
+
+  private static func shortcutSet(_ known: [CommandDescriptor]) -> Command {
+    // V11. Only commands runnable without arguments can hold a shortcut. "" unassigns. ai: false — keys are the user's.
+    cmd("shortcut.set", "ショートカットを割り当て", .write, ai: false,
+        params: [CommandParam("command", .string), CommandParam("shortcut", .string)], palette: false,
+        preflight: { s, i throws(CommandError) in
+          let id = i["command"]!.string!, raw = i["shortcut"]!.string!
+          guard let d = known.first(where: { $0.id == id }) else { throw CommandError(.invalidInput, "unknown command \(id)") }
+          try require(!d.params.contains(where: \.required), "\(id) needs arguments, so a key cannot run it")
+          if raw.isEmpty { return .write }
+          guard let key = WorkbenchState.canonicalShortcut(raw) else { throw CommandError(.invalidInput, "\(raw) is not a shortcut (modifiers ⌃⌥⌘⇧ + one key, at least one of ⌃⌥⌘)") }
+          let taken = known.first { $0.id != id && s.shortcut(for: $0) == key }
+          try require(taken == nil, "\(key) is already \(taken!.id)")
+          return .write
+        }) { s, i in
+      let raw = i["shortcut"]!.string!
+      s.shortcuts[i["command"]!.string!] = WorkbenchState.canonicalShortcut(raw) ?? ""
+      return .ok
+    }
+  }
 }

@@ -173,9 +173,9 @@ public final class WorkbenchIPCServer: @unchecked Sendable {
   }
 }
 
-/// CLI argument → request. `clair open path[:line[:col]]` is `tab.open`;
-/// otherwise `clair <command-id> [key=value …]` with bool/int/double/string inference.
-// ponytail: line/col are parsed but dropped (registry has no cursor command until the editor binds to V04/V05);
+/// CLI argument → request. `clair open path[:line[:col]]` is `file.open` (a relative path is resolved against the
+/// caller's cwd, since the GUI's differs); otherwise `clair <command-id> [key=value …]` with bool/int/double/string inference.
+// ponytail: col is parsed but dropped (the editor reveal is line-only); a file literally named `x:12` needs `clair file.open path=…`;
 // value inference can't force a numeric-looking string, add `key:=json` when a string param needs it.
 public enum WorkbenchCLI {
   public static func parse(_ args: [String]) -> WorkbenchIPCRequest? {
@@ -183,8 +183,12 @@ public enum WorkbenchCLI {
     if first == "open" {
       guard args.count == 2 else { return nil }
       var parts = args[1].split(separator: ":", omittingEmptySubsequences: false).map(String.init)
-      while parts.count > 1, Int(parts.last!) != nil { parts.removeLast() }
-      return WorkbenchIPCRequest(command: "tab.open", input: ["path": .string(parts.joined(separator: ":"))])
+      var numbers: [Int] = []
+      while parts.count > 1, let n = Int(parts.last!) { numbers.insert(n, at: 0); parts.removeLast() }
+      let path = parts.joined(separator: ":")
+      var input: CommandInput = ["path": .string(path.hasPrefix("/") ? path : URL(fileURLWithPath: path, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath)).path)]
+      if let line = numbers.first { input["line"] = .int(line) }
+      return WorkbenchIPCRequest(command: "file.open", input: input)
     }
     var input = CommandInput()
     for a in args.dropFirst() {

@@ -19,6 +19,25 @@ public struct WorkbenchProject: Sendable, Codable, Equatable {
     var isDir: ObjCBool = false
     return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) && isDir.boolValue ? url.path : nil
   }
+
+  /// Absolute, symlink-resolved path of an existing regular file, or nil.
+  static func normalizedFile(_ path: String) -> String? {
+    guard path.hasPrefix("/") else { return nil }
+    let url = URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath()
+    var isDir: ObjCBool = false
+    return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) && !isDir.boolValue ? url.path : nil
+  }
+
+  /// The Project a file outside every open Project becomes: its nearest Git root, else its folder.
+  static func root(containing file: String) -> WorkbenchProject {
+    var dir = URL(fileURLWithPath: file).deletingLastPathComponent()
+    let folder = dir
+    while dir.path != "/" {
+      if FileManager.default.fileExists(atPath: dir.appending(path: ".git").path) { return WorkbenchProject(name: dir.lastPathComponent, path: dir.path) }
+      dir.deleteLastPathComponent()
+    }
+    return WorkbenchProject(name: folder.lastPathComponent, path: folder.path)
+  }
 }
 
 /// Restorable per-Project UI state.
@@ -37,6 +56,25 @@ extension WorkbenchState {
   var layout: ProjectLayout {
     get { ProjectLayout(tree: tree, tabs: tabs, active: active, dirty: dirty, collapsed: collapsed, launches: launches) }
     set { tree = newValue.tree; tabs = newValue.tabs; active = newValue.active; dirty = newValue.dirty; collapsed = newValue.collapsed; launches = newValue.launches }
+  }
+
+  /// The open Project with the deepest root containing `file` (a nested Project wins over its parent).
+  func owner(of file: String) -> WorkbenchProject? {
+    projects.filter { file.hasPrefix($0.path + "/") }.max { $0.path.count < $1.path.count }
+  }
+
+  /// Switches to the Project at `p.path`, adding it (under a unique name) if it is not open yet.
+  mutating func openProject(_ p: WorkbenchProject) {
+    if let open = projects.first(where: { $0.path == p.path }) { switchProject(to: open); return }
+    var name = p.name, n = 2
+    while projects.contains(where: { $0.name == name }) { name = "\(p.name) \(n)"; n += 1 }
+    let added = WorkbenchProject(name: name, path: p.path)
+    projects.append(added); switchProject(to: added)
+  }
+
+  mutating func openTab(_ path: String) {
+    if !tabs.contains(path) { tabs.append(path) }
+    active = path; settingsOpen = false; palette = nil
   }
 
   /// Stashes the current Project's layout, rescans the target's files and loads its layout.
@@ -126,13 +164,14 @@ private struct WorkspaceSnapshot: Codable {
   var layouts: [String: ProjectLayout]
   var toggles: [String: Bool]
   var choices: [String: String]?
+  var shortcuts: [String: String]?
 }
 
 extension WorkbenchState {
   public func save(to url: URL) throws {
     var s = self
     if !s.project.isEmpty { s.layouts[s.project] = s.layout }
-    let data = try JSONEncoder().encode(WorkspaceSnapshot(projects: s.projects, project: s.project, layouts: s.layouts, toggles: s.toggles, choices: s.choices))
+    let data = try JSONEncoder().encode(WorkspaceSnapshot(projects: s.projects, project: s.project, layouts: s.layouts, toggles: s.toggles, choices: s.choices, shortcuts: s.shortcuts))
     try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     try data.write(to: url, options: .atomic)
   }
@@ -144,6 +183,7 @@ extension WorkbenchState {
     var s = WorkbenchState()
     for (k, v) in snap.toggles where s.toggles[k] != nil { s.toggles[k] = v }
     for (k, v) in snap.choices ?? [:] where WorkbenchState.choiceOptions[k]?.contains(v) == true { s.choices[k] = v }
+    for (id, key) in snap.shortcuts ?? [:] where key.isEmpty || WorkbenchState.canonicalShortcut(key) == key { s.shortcuts[id] = key }
     s.projects = snap.projects.filter { WorkbenchProject.normalized($0.path) != nil }
     guard let current = s.projects.first(where: { $0.name == snap.project }) ?? s.projects.first else { return s }
     if s.toggles["restoreLayout"] == true {

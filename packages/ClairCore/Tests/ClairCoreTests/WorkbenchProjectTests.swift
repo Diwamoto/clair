@@ -134,4 +134,65 @@ final class WorkbenchProjectTests: XCTestCase {
     try CommandRegistry.workbench.execute("project.open", ["path": .string(dir.path)], state: &s).get()
     XCTAssertEqual(s.collapsed, ["a", "a/b"])
   }
+
+  // V11 `clair open`: the owning open Project wins (deepest root), else a Git root, else the folder.
+  func testFileOpenResolvesOwnerThenGitRootThenFolder() throws {
+    let outer = try folder("outer", ["a.txt", "inner/b.txt"]), inner = outer + "/inner"
+    var s = WorkbenchState()
+    open(outer, &s); open(inner, &s); open(outer, &s)
+    XCTAssertEqual(r.execute("file.open", ["path": .string(inner + "/b.txt")], state: &s).success, .ok)
+    XCTAssertEqual(s.project, "inner"); XCTAssertEqual(s.active, "b.txt")  // nested Project owns it, not outer
+    r.execute("file.open", ["path": .string(outer + "/a.txt"), "line": .int(3)], state: &s)
+    XCTAssertEqual(s.project, "outer"); XCTAssertEqual(s.active, "a.txt"); XCTAssertEqual(s.projects.count, 2)
+
+    let repo = try folder("repo", ["src/m.swift", ".git/HEAD"])
+    r.execute("file.open", ["path": .string(repo + "/src/m.swift")], state: &s)
+    XCTAssertEqual(s.projects.last?.path, repo); XCTAssertEqual(s.active, "src/m.swift")  // Git root, not src/
+
+    let loose = try folder("loose/deep", ["n.txt"])
+    r.execute("file.open", ["path": .string(loose + "/n.txt")], state: &s)
+    XCTAssertEqual(s.projects.last?.path, loose); XCTAssertEqual(s.active, "n.txt")  // no repo: its folder
+
+    let skipped = try folder("outer/node_modules", ["p.js"])
+    r.execute("file.open", ["path": .string(skipped + "/p.js")], state: &s)  // not in the scan, still opens
+    XCTAssertEqual(s.project, "outer"); XCTAssertEqual(s.active, "node_modules/p.js")
+  }
+
+  func testFileOpenRejectsBadInput() throws {
+    let a = try folder("a", ["f"])
+    var s = WorkbenchState()
+    for bad in [a, a + "/missing", "f"] {
+      XCTAssertEqual(r.execute("file.open", ["path": .string(bad)], state: &s).failure?.code, .preconditionFailed, bad)
+    }
+    XCTAssertEqual(r.execute("file.open", ["path": .string(a + "/f"), "line": .int(0)], state: &s).failure?.code, .preconditionFailed)
+    XCTAssertFalse(r.commands.first { $0.id == "file.open" }!.aiAvailable)
+    XCTAssertTrue(s.projects.isEmpty)
+  }
+
+  func testShortcutAssignmentConflictClearAndPersistence() throws {
+    var s = WorkbenchState()
+    let set = { (c: String, k: String, s: inout WorkbenchState) in self.r.execute("shortcut.set", ["command": .string(c), "shortcut": .string(k)], state: &s) }
+    XCTAssertEqual(set("pane.close", "⇧⌘x", &s).success, .ok)  // canonicalized
+    XCTAssertEqual(s.shortcuts["pane.close"], "⌘⇧X")
+    XCTAssertEqual(s.shortcut(for: r.commands.first { $0.id == "pane.close" }!), "⌘⇧X")
+    XCTAssertEqual(set("pane.equalize", "⌘⇧X", &s).failure?.code, .preconditionFailed)  // taken
+    XCTAssertEqual(set("pane.equalize", "⌃⌘W", &s).success, .ok)  // pane.close's old default is free now
+    XCTAssertEqual(set("pane.equalize", "X", &s).failure?.code, .invalidInput)  // bare key
+    XCTAssertEqual(set("pane.equalize", "⇧X", &s).failure?.code, .invalidInput)  // shift-only
+    XCTAssertEqual(set("pane.equalize", "⌘⌘X", &s).failure?.code, .invalidInput)
+    XCTAssertEqual(set("nope", "⌘X", &s).failure?.code, .invalidInput)
+    XCTAssertEqual(set("tab.open", "⌘X", &s).failure?.code, .preconditionFailed)  // needs arguments
+    XCTAssertEqual(set("file.save", "", &s).success, .ok)  // unassign a default
+    XCTAssertNil(s.shortcut(for: r.commands.first { $0.id == "file.save" }!))
+    XCTAssertFalse(r.commands.first { $0.id == "shortcut.set" }!.aiAvailable)
+    let hint = r.paletteItems(.commands, query: "ペインを閉じる", state: s).first?.hint
+    XCTAssertEqual(hint, "⌘⇧X")
+
+    let a = try folder("a", ["f"])
+    open(a, &s)
+    let url = tmp.appending(path: "ws.json")
+    try s.save(to: url)
+    let got = try XCTUnwrap(WorkbenchState.restore(from: url))
+    XCTAssertEqual(got.shortcuts, s.shortcuts)
+  }
 }
