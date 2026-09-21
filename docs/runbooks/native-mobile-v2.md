@@ -20,8 +20,7 @@ device identity、transport、APNs entitlement/provider、完成 UI は後続 ta
   internal tester 権限も必要である。
 - bundle ID は `com.diwamoto.clair.mobile` に固定する。証明書、provisioning profile、APNs key、
   App Store Connect API key は repository に保存しない。
-- Xcode bundle は `ClairV2Mobile.xcodeproj` を使う。既存の `Clair.xcodeproj` の
-  `ClairMobile` / `apple/ClairMobileApp` は v1 reference であり、この runbook の対象外である。
+- Xcode bundle は `ClairV2Mobile.xcodeproj` を使う。v1 の `Clair.xcodeproj` は削除済みである。
 
 ## Package and Simulator smoke
 

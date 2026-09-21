@@ -3,13 +3,12 @@
 Status: active verification guide
 Parent: [Clair v2 native rewrite plan](../clair-spec.md), [task queue](../clair-tasks.md)
 
-この runbook は Clair v2 のエディタ・ターミナル実装をローカルで確認するための手順である。v1（`apple/`、`packages/ClairMobileKit`）の確認には [`local-development.md`](clair-v2-verification.md) を使う。v2 は独立した Swift package 群で動作する。
+この runbook は Clair v2 のエディタ・ターミナル実装をローカルで確認するための手順である。v1 は 2026-09-21 に削除済みで、archive tag `archive/clair-v1-2026-09-14` からのみ復元できる。
 
 ## 前提
 
 - macOS 14.0 以降
 - Xcode 26 / Swift 6 以降（`make doctor` で確認）
-- リポジトリ pinned Rust toolchain（v2 foundation のみ Swift だが、混在ビルド時に必要）
 
 ```sh
 make doctor
@@ -215,7 +214,7 @@ swift test --package-path packages/ClairV2Core --filter ClairV2DaemonKitTests
 make v2-foundation
 ```
 
-`make run-dev` は v1 Clair Dev アプリ用である。v2 には使わない。
+Mac アプリは `make dev`、iOS Simulator は `make dev-ios` で起動する。
 
 ## 実機・通知・署名
 

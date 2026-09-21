@@ -2,7 +2,7 @@
 
 > エディタ、ターミナル、AIエージェント、Gitを、Project単位のmacOSネイティブワークスペースにまとめるIDE。
 
-Clairは、cceditの後継として開発している個人用のmacOSネイティブIDEです。
+Clairは、cceditの後継として(cceditは2026-09-21に廃止、復元はarchive tagから)開発している個人用のmacOSネイティブIDEです。
 VS Codeのような編集・検索・Gitの統合体験と、Ghosttyのような使い慣れたターミナル操作を、
 別々のアプリを行き来せずに一つのProject workspaceで扱えるようにします。
 
@@ -31,105 +31,39 @@ Clairで開発する最終的なdogfood cutoverと、UIの統合・磨き込み�
 
 - macOS 14.0以降
 - full Xcode 16以降（Command Line Toolsではなく、Xcode本体が選択されていること）
-- rustupで管理された、リポジトリ指定のRust 1.98.0 toolchain
-- Rustの`rustfmt`と`clippy`コンポーネント
-
-前提環境は、リポジトリのルートで次のコマンドから確認できます。
 
 ```sh
 make doctor
 ```
 
-`make doctor`でfull Xcodeが選択されていないと表示された場合は、環境に合わせて次を実行します。
+### 起動する
 
 ```sh
-sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-```
-
-Rust componentが不足している場合は、次を実行します。
-
-```sh
-rustup component add rustfmt clippy
-```
-
-### 開発版を起動する
-
-開発中はDevチャンネルを使います。次のコマンドが、Devアプリを初回ビルド・起動し、
-その後はネイティブソースを監視します。
-
-```sh
-make run-dev
+make dev       # macOSアプリをビルドして起動する（Ctrl-Cで停止）
+make dev-ios   # iOS Simulatorで起動する
 ```
 
 起動後、Projectsサイドバーの **Open Folder** から開きたいローカルフォルダを選びます。
-Git repositoryと通常のフォルダを同じProject modelで扱えます。
-
-これはホットリロードではなくホットリスタートです。ソースを変更すると自動でビルドとアプリの再起動を行います。
-再起動のたびに通常のアプリ終了が発生するため、
-未保存の編集内容と実行中のターミナルセッションは保持されません。必要な内容を保存してから利用してください。
-`CLAIR_WATCH_INTERVAL`で監視間隔（秒、デフォルトは1秒）を変更できます。
-監視中はコマンドがフォアグラウンドで動作し、Devアプリとライフサイクルを共有します。
-Devアプリを終了（`Cmd-Q`）すると監視も終了し、`Ctrl-C`で監視を止めるとDevアプリも終了します。
-ウインドウを閉じるだけではアプリは終了しないため、監視も継続します。
-`make watch-dev`は`make run-dev`の互換エイリアスです。
-
-### StableとDevを同時に起動する
-
-ローカルのStableチャンネルを起動する場合は、次を使います。
-
-```sh
-make run-stable
-```
-
-StableとDevは別バンドル・別のデータ領域なので、同時に起動できます。
-
-```sh
-make run-stable
-make run-dev
-```
-
-同じチャンネルをもう一度起動した場合は新しいプロセスを増やさず、既存のプロセスを前面に表示します。
-ローカルのStable/Devビルドはいずれも署名なしのDebugビルドです。
 
 ## よく使う開発コマンド
 
 | コマンド | 内容 |
 | --- | --- |
-| `make build-dev` | Devアプリをビルドする |
-| `make build-stable` | Stableアプリをビルドする |
-| `make run-dev` | ネイティブソースを監視し、変更時にDevをビルド・再起動する |
-| `make test` | RustとSwiftのテストを実行する |
-| `make test-mobile` | iOS/macOS共有のモバイルプロトコルテストを実行する |
-| `make lint` | Rust/Swiftのフォーマット、Clippy、Xcode解析、workspace検証を実行する |
-| `make smoke` | test、Swift-Rustリンク、bundle、artifactの一連のsmoke checkを実行する |
-| `make ci` | `lint`と`smoke`をまとめて実行する |
-| `make clean-artifacts` | 破棄可能なビルド成果物だけを削除する |
+| `make v2-test` | 高速なcore/appユニットテストを実行する |
+| `make v2-test-integration` | 実subprocess/PTY/daemonの遅いテストを実行する |
+| `make v2-foundation` | package graph検証、全build、全テストを実行する |
+| `make lint` | Swiftのフォーマットを検査する |
+| `make ci` | `lint`、`v2-foundation`、iOS Simulator buildをまとめて実行する |
 
 詳細な手動確認、出力先、復旧方法は[ローカル開発手順](docs/runbooks/clair-v2-verification.md)にまとめています。
-
-## Native CLI
-
-Rust製の`clair` CLIはRust workspaceからビルドされ、DebugアプリとStable releaseへ同梱されます。
-アプリバンドル内では`Clair.app/Contents/Resources/clair`、ソースツリーでは`target/debug/clair`から利用できます。
-CLIはSwift側のCommand Registryへ接続する薄いクライアントで、agentの状態と操作権限はClair本体が所有します。
-
-```sh
-target/debug/clair --channel dev agent list
-target/debug/clair --channel dev agent status <SESSION_ID>
-target/debug/clair --channel dev agent input <SESSION_ID> --text $'continue\n' --yes
-```
-
-アプリが起動していない場合は、ビルド済みアプリを自動起動します。`--no-launch`で起動せずに確認でき、
-`--app PATH`または`CLAIR_APP_PATH`で起動対象を指定できます。
 
 ## リポジトリの構成
 
 ```text
-apple/       SwiftUI/AppKitのmacOSアプリとSwiftテスト
-packages/    iOS/macOS共有Swift package（mobile control/host/client）
-crates/      Rust core、native CLI、local PTY host
-scripts/     build、run、test、smoke用の補助スクリプト
-docs/        product、architecture、decision、roadmap、runbook
+apple/       iOSアプリ(ClairV2Mobile)とそのテスト
+packages/    Swift package(ClairV2Core、ClairV2Apps)
+scripts/     build、run、test用の補助スクリプト
+docs/        仕様、タスク、architecture、decision、runbook
 ```
 
 ClairのM1は個人利用を中心とし、macOS専用のdesktopと自所有iPhone/iPad向けのearly mobile controlを対象にします。

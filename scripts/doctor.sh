@@ -3,9 +3,6 @@ set -uo pipefail
 
 mode="${1:-all}"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-expected_rust_channel="$(
-    awk -F '"' '/^channel = / { print $2; exit }' "$repo_root/rust-toolchain.toml"
-)"
 errors=0
 
 report_error() {
@@ -48,55 +45,17 @@ check_swift_format() {
     fi
 }
 
-check_rust() {
-    local tool
-    local rust_version_output
-    local actual_rust_version
-
-    for tool in rustc cargo; do
-        if ! command -v "$tool" >/dev/null 2>&1; then
-            report_error "$tool was not found; install rustup and the repository-pinned Rust toolchain."
-        fi
-    done
-
-    if command -v rustc >/dev/null 2>&1; then
-        if ! rust_version_output="$(rustc --version 2>&1)"; then
-            report_error "the repository Rust toolchain is unavailable; run 'rustup toolchain install $expected_rust_channel --profile minimal --component rustfmt --component clippy'."
-            return
-        fi
-        actual_rust_version="$(printf '%s\n' "$rust_version_output" | awk '{ print $2 }')"
-        if [[ "$actual_rust_version" != "$expected_rust_channel" ]]; then
-            report_error "Rust $expected_rust_channel is required; found $actual_rust_version."
-        else
-            printf 'doctor: %s\n' "$rust_version_output"
-        fi
-    fi
-
-    if command -v cargo >/dev/null 2>&1; then
-        if ! cargo fmt --version >/dev/null 2>&1; then
-            report_error "rustfmt is missing; run 'rustup component add rustfmt'."
-        fi
-        if ! cargo clippy --version >/dev/null 2>&1; then
-            report_error "Clippy is missing; run 'rustup component add clippy'."
-        fi
-    fi
-}
-
 case "$mode" in
     all)
         check_xcode
         check_swift_format
-        check_rust
         ;;
     xcode)
         check_xcode
         check_swift_format
         ;;
-    rust)
-        check_rust
-        ;;
     *)
-        printf 'usage: %s [all|xcode|rust]\n' "$0" >&2
+        printf 'usage: %s [all|xcode]\n' "$0" >&2
         exit 2
         ;;
 esac

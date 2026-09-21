@@ -12,9 +12,6 @@ concurrency:
   group: native-smoke-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  CARGO_TERM_COLOR: always
-
 jobs:
   build-test-lint:
     runs-on: macos-26
@@ -23,11 +20,6 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
-
-      - name: Select repository Rust toolchain
-        run: |
-          rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy
-          rustup show active-toolchain
 
       - name: Run native workspace checks
         run: make ci

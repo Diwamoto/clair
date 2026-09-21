@@ -1,9 +1,0 @@
-#include "Base.xcconfig"
-
-BUNDLE_LOADER = $(TEST_HOST)
-GENERATE_INFOPLIST_FILE = YES
-LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/../Frameworks @loader_path/../Frameworks
-PRODUCT_BUNDLE_IDENTIFIER = com.diwamoto.clair.tests
-PRODUCT_MODULE_NAME = ClairTests
-PRODUCT_NAME = ClairTests
-TEST_HOST = $(BUILT_PRODUCTS_DIR)/Clair Dev.app/Contents/MacOS/Clair Dev
