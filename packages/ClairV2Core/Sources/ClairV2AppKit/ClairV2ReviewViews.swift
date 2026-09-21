@@ -8,6 +8,7 @@
 
   private typealias C = DesignTokens.Color
   private typealias L = DesignTokens.Line
+  private typealias W = DesignTokens.Wash
 
   /// U05: which side of a change the diff pane is showing.
   struct DiffTarget: Equatable {
@@ -424,31 +425,50 @@
       }
     }
 
+    /// Mock `Activity.tsx` approval card: titled header with a right-aligned tag, the command in a canvas box,
+    /// a facts line, then right-aligned secondary/primary buttons. The mock's "session allow" has no gate behind it, so it is omitted.
     var body: some View {
-      VStack(alignment: .leading, spacing: 8) {
-        HStack(spacing: 6) {
-          Circle().fill(risk >= .destructive ? C.danger : C.attention).frame(width: 6, height: 6)
-          Text("AI が実行を求めています").font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textPrimary)
-          Spacer()
+      VStack(spacing: 0) {
+        HStack(spacing: 12) {
+          Text("AI が実行を求めています").font(.system(size: 13, weight: .semibold)).foregroundStyle(C.textPrimary)
+          Spacer(minLength: 0)
           TimelineView(.periodic(from: .now, by: 1)) { c in
-            Text("残り \(max(0, Int(deadline.timeIntervalSince(c.date).rounded(.up)))) 秒").font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary)
+            Text("残り \(max(0, Int(deadline.timeIntervalSince(c.date).rounded(.up)))) 秒").font(.system(size: 11)).monospacedDigit().foregroundStyle(C.textQuaternary)
           }
         }
-        Text(id).font(.system(size: 12, design: .monospaced)).foregroundStyle(C.code)
-        Text("リスク: \(risk.label)").font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
-        ForEach(input.keys.sorted(), id: \.self) { k in
-          Text("\(k): \(value(input[k]!))").font(.system(size: 11, design: .monospaced)).foregroundStyle(C.textSecondary).lineLimit(2)
+        .padding(.horizontal, 16).padding(.vertical, 12)
+        .overlay(alignment: .bottom) { Rectangle().fill(L.hairline).frame(height: 1) }
+        VStack(alignment: .leading, spacing: 8) {
+          VStack(alignment: .leading, spacing: 2) {
+            Text(id).foregroundStyle(C.textSecondary)
+            ForEach(input.keys.sorted(), id: \.self) { k in Text("\(k): \(value(input[k]!))").foregroundStyle(C.textTertiary).lineLimit(2) }
+          }
+          .font(.system(size: 12, design: .monospaced)).frame(maxWidth: .infinity, alignment: .leading).padding(8)
+          .background(C.canvas, in: RoundedRectangle(cornerRadius: Radius.card))
+          .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(L.hairline))
+          Text("リスク \(risk.label)").font(.system(size: 11)).foregroundStyle(risk >= .destructive ? C.danger : C.textQuaternary)
         }
+        .padding(.horizontal, 16).padding(.vertical, 12).frame(maxWidth: .infinity, alignment: .leading)
         HStack(spacing: 8) {
           Spacer()
-          Button("拒否") { decide(false) }.keyboardShortcut(.cancelAction)
-          Button("許可して実行") { decide(true) }.keyboardShortcut(.return, modifiers: .command)
-        }.padding(.top, 2)
+          approvalButton("拒否", primary: false) { decide(false) }.keyboardShortcut(.cancelAction)
+          approvalButton("許可して実行", primary: true) { decide(true) }.keyboardShortcut(.return, modifiers: .command)
+        }.padding(.horizontal, 16).padding(.bottom, 12)
       }
-      .padding(12).frame(width: 340, alignment: .leading)
-      .background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.card))
-      .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(C.attention.opacity(0.5)))
+      .frame(width: 380)
+      .background(W.faint).background(C.canvas, in: RoundedRectangle(cornerRadius: Radius.card))
+      .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(L.stronger))
+      .clipShape(RoundedRectangle(cornerRadius: Radius.card))
       .shadow(color: .black.opacity(0.35), radius: 12, y: 4)
+    }
+
+    private func approvalButton(_ title: String, primary: Bool, _ action: @escaping () -> Void) -> some View {
+      Button(action: action) {
+        Text(title).font(.system(size: 11, weight: primary ? .semibold : .regular))
+          .foregroundStyle(primary ? C.canvas : C.textSecondary)
+          .padding(.horizontal, 12).frame(minHeight: 30)
+          .background(primary ? C.textSecondary : W.medium, in: RoundedRectangle(cornerRadius: Radius.control))
+      }.buttonStyle(.plain)
     }
   }
 
