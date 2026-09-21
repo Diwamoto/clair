@@ -11,7 +11,7 @@
   /// U05: open editor buffers of the active Project. Owned by the workbench store; the store drops a
   /// path when the disk changed under it (principle 8: the unsaved buffer is discarded, not merged).
   @MainActor @Observable public final class EditorBuffers {
-    public enum Load { case ready(EditorTransactionManager), failed(String) }
+    public enum Load: @unchecked Sendable { case ready(EditorTransactionManager), failed(String) }
 
     private var loads: [String: Load] = [:]
     private var revisions: [String: Int] = [:]
@@ -27,7 +27,7 @@
     /// Search-hit jump target (1-based line); `nonce` makes a repeat jump to the same line still fire.
     private(set) var reveal: (path: String, line: Int, nonce: Int)?
     /// Above this the file is refused rather than loaded whole (large-file paths are E10's scope).
-    static let maxBytes = 10_000_000
+    nonisolated static let maxBytes = 10_000_000
 
     func reveal(_ path: String, line: Int) { reveal = (path, line, (reveal?.nonce ?? 0) + 1) }
 
@@ -47,7 +47,22 @@
     func refresh(_ path: String) { revisions[path, default: 0] += 1 }
 
     func drop(_ paths: Set<String>) {
-      for p in paths where loads.removeValue(forKey: p) != nil { revisions[p, default: 0] += 1 }
+      for p in paths where loads.removeValue(forKey: p) != nil || loading.contains(p) { revisions[p, default: 0] += 1 }
+    }
+
+    private var loading: Set<String> = []
+
+    /// Already-read buffer, or nil while it still has to be read (see `prefetch`).
+    func peek(_ path: String) -> Load? { loads[path] }
+
+    /// Reads and parses off the main thread so a tab switch never blocks on I/O. A drop while the read is in
+    /// flight bumps the revision and the stale result is discarded.
+    func prefetch(_ path: String, root: String) async {
+      guard loads[path] == nil, loading.insert(path).inserted else { return }
+      let rev = revision(path)
+      let l = await Task.detached(priority: .userInitiated) { Self.read(root + "/" + path) }.value
+      loading.remove(path)
+      if revision(path) == rev, loads[path] == nil { loads[path] = l }
     }
 
     func save(_ path: String, root: String) throws {
@@ -55,7 +70,7 @@
       try m.buffer.snapshot.string().write(toFile: root + "/" + path, atomically: true, encoding: .utf8)
     }
 
-    private static func read(_ full: String) -> Load {
+    nonisolated private static func read(_ full: String) -> Load {
       guard let data = FileManager.default.contents(atPath: full) else { return .failed("ファイルを読み込めません。") }
       guard data.count <= maxBytes else { return .failed("10 MB を超えるファイルは開けません。") }
       guard let text = String(data: data, encoding: .utf8), let buffer = try? TextBuffer(text) else {
@@ -75,13 +90,16 @@
 
     var body: some View {
       if let path, let root {
-        switch buffers.load(path, root: root) {
-        case .ready(let m):
+        switch buffers.peek(path) {
+        case nil:
+          // Instant feedback (breadcrumb + blank canvas) while the file is read in the background.
+          VStack(spacing: 0) { breadcrumb(path); C.canvas }.task(id: path) { await buffers.prefetch(path, root: root) }
+        case .ready(let m)?:
           VStack(spacing: 0) {
             breadcrumb(path)
             EditorSurface(manager: m, onCaret: { onCaret(path, $0, m.buffer.snapshot) }, reveal: buffers.reveal?.path == path ? buffers.reveal : nil, onEdit: { onEdit(path) }).id("\(path)#\(buffers.revision(path))")
           }
-        case .failed(let message): note(message)
+        case .failed(let message)?: note(message)
         }
       } else {
         note("ファイルを選択してください。")
@@ -106,6 +124,18 @@
     }
   }
 
+  /// U05: overlay scroller with no track; only the knob is drawn, squarer than AppKit's pill, in system label colours
+  /// so Light/Dark and Increase Contrast keep working.
+  private final class EditorScroller: NSScroller {
+    override class var isCompatibleWithOverlayScrollers: Bool { true }
+    override func drawKnobSlot(in slotRect: NSRect, highlight flag: Bool) {}
+    override func drawKnob() {
+      let r = rect(for: .knob).insetBy(dx: 2, dy: 2)
+      (hitPart == .knob ? NSColor.secondaryLabelColor : NSColor.tertiaryLabelColor).setFill()
+      NSBezierPath(roundedRect: r, xRadius: 2, yRadius: 2).fill()
+    }
+  }
+
   private struct EditorSurface: NSViewRepresentable {
     let manager: EditorTransactionManager
     let onCaret: (TextSelectionSet) -> Void
@@ -118,6 +148,8 @@
     func makeNSView(context: Context) -> NSScrollView {
       let scroll = NSScrollView()
       scroll.hasVerticalScroller = true; scroll.hasHorizontalScroller = true
+      scroll.scrollerStyle = .overlay; scroll.autohidesScrollers = true
+      scroll.verticalScroller = EditorScroller(); scroll.horizontalScroller = EditorScroller()
       scroll.drawsBackground = true; scroll.backgroundColor = NSColor(C.canvas)
       // Mock editor: 12px mono on 19px rows, One Dark on the canvas colour, 46px gutter.
       let view = ClairEditorView(

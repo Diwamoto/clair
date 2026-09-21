@@ -25,6 +25,7 @@ struct ClairMacApp: App {
     WindowGroup("Clair") {
       ClairAppShell()
     }
+    .windowStyle(.hiddenTitleBar)  // U04: one chrome — the app titlebar hosts the real traffic lights
     .commands { ClairCommandMenu() }
     WindowGroup("Pair a device", id: "clair-pairing") {
       ClairPairingBootstrapView()

@@ -38,6 +38,8 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var project = ""
   /// Layouts of inactive Projects (V04); the active one lives in the fields below.
   public var layouts: [String: ProjectLayout] = [:]
+  /// Last scanned tree per Project; not persisted, only makes switching back instant.
+  var filesCache: [String: [WorkbenchFile]] = [:]
   public var tree = PaneTree()
   public var tabs: [String] = ["apple/ClairApp/ContentView.swift"]
   public var active: String? = "apple/ClairApp/ContentView.swift"

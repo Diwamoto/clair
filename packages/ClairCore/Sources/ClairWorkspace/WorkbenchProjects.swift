@@ -79,9 +79,10 @@ extension WorkbenchState {
 
   /// Stashes the current Project's layout, rescans the target's files and loads its layout.
   mutating func switchProject(to p: WorkbenchProject) {
-    if !project.isEmpty { layouts[project] = layout }
+    if !project.isEmpty { layouts[project] = layout; filesCache[project] = files }
     project = p.name
-    files = WorkbenchFiles.scan(p.path)
+    // A revisited Project shows its last tree at once; the GUI rescans in the background (a scan walks the disk and runs `git status`).
+    files = filesCache[p.name] ?? WorkbenchFiles.scan(p.path)
     var l = layouts[p.name] ?? ProjectLayout()
     // Nothing folded yet (a new Project, or a layout saved before folding was the default): fold every directory,
     // since an unfolded tree of a big repo is thousands of rows. ponytail: a tree the user fully unfolded is folded again on the next switch.
@@ -127,7 +128,20 @@ public enum WorkbenchFiles {
       if paths.count >= limit { break }
     }
     let status = gitStatus(root)
-    return paths.sorted().map { WorkbenchFile(path: $0, status: status[$0]) }
+    return paths.sorted(by: treeOrder).map { WorkbenchFile(path: $0, status: status[$0]) }
+  }
+
+  /// Explorer order: in every directory, folders before files, each by name (case-insensitive, raw name breaks ties).
+  static func treeOrder(_ a: String, _ b: String) -> Bool {
+    let x = a.split(separator: "/"), y = b.split(separator: "/")
+    for i in 0..<min(x.count, y.count) {
+      if x[i] == y[i] { continue }
+      let xf = i == x.count - 1, yf = i == y.count - 1  // last component = file
+      if xf != yf { return yf }
+      let (l, r) = (x[i].lowercased(), y[i].lowercased())
+      return l != r ? l < r : x[i] < y[i]
+    }
+    return x.count < y.count
   }
 
   /// `M`/`A`/`D`/`R`… from `git status`, `U` for untracked. Empty if not a repo or git fails.

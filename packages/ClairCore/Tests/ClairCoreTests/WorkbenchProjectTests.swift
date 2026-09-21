@@ -35,7 +35,7 @@ final class WorkbenchProjectTests: XCTestCase {
     var s = WorkbenchState()
     open(a, &s)
     XCTAssertEqual(s.project, "a")
-    XCTAssertEqual(s.files.map(\.path), ["README.md", "src/main.swift"])
+    XCTAssertEqual(s.files.map(\.path), ["src/main.swift", "README.md"])
     XCTAssertEqual(s.tabs, [])
   }
 
@@ -123,6 +123,20 @@ final class WorkbenchProjectTests: XCTestCase {
     try git("mv", "old.txt", "renamed.txt")
     let m = Dictionary(uniqueKeysWithValues: WorkbenchFiles.scan(a).map { ($0.path, $0.status) })
     XCTAssertEqual(m["tracked.txt"], "M"); XCTAssertEqual(m["new.txt"], "U"); XCTAssertEqual(m["renamed.txt"], "R")
+  }
+
+  func testTreeOrderFoldersFirstThenNames() {
+    let paths = ["b.txt", "Z/x.txt", "a/z.txt", "a/B/y.txt", "a/a.txt", "A.txt"]
+    XCTAssertEqual(paths.sorted(by: WorkbenchFiles.treeOrder), ["a/B/y.txt", "a/a.txt", "a/z.txt", "Z/x.txt", "A.txt", "b.txt"])
+  }
+
+  func testSwitchBackReusesCachedTree() throws {
+    let a = try folder("ca", ["f.txt"]), b = try folder("cb", ["g.txt"])
+    var s = WorkbenchState()
+    s.openProject(WorkbenchProject(name: "ca", path: a)); s.openProject(WorkbenchProject(name: "cb", path: b))
+    try Data("n".utf8).write(to: URL(fileURLWithPath: a + "/late.txt"))
+    s.switchProject(to: s.projects[0])
+    XCTAssertEqual(s.files.map(\.path), ["f.txt"])  // cached; the GUI's background rescan picks up late.txt
   }
 
   func testDirectoriesStartFolded() throws {

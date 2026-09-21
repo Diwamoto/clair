@@ -167,6 +167,7 @@ import Observation
 
     private func watchProject() {
       guard watched != state.project else { return }
+      let first = watched.isEmpty
       watched = state.project
       guard let root = state.projects.first(where: { $0.name == state.project })?.path else { watcher = nil; return }
       watcher = FileWatcher(root: root) { [weak self] paths in
@@ -174,6 +175,7 @@ import Observation
         // One scan at a time: events arriving meanwhile are merged and rescanned once.
         DispatchQueue.main.async { self?.diskChanged(paths, root: root) }
       }
+      if !first { diskChanged([], root: root) }  // switched Projects showed a cached tree; refresh it off the main thread
     }
 
     private var scanning = false
@@ -369,10 +371,7 @@ import Observation
     /// Mock `AppTitlebar`: traffic lights, one tab group per Project (dot + name chip, then its file tabs), then the search field and window actions.
     private var titlebar: some View {
       HStack(spacing: 0) {
-        HStack(spacing: 8) {
-          ForEach([C.close, C.minimize, C.zoom], id: \.self) { Circle().fill($0).frame(width: 12, height: 12) }
-        }
-        .frame(width: 76, alignment: .leading).padding(.leading, 20)
+        Color.clear.frame(width: 76 + 20)  // room for the native traffic lights
         ScrollView(.horizontal, showsIndicators: false) {
           HStack(spacing: 4) {
             ForEach(Array(st.projects.enumerated()), id: \.element.name) { i, p in
@@ -443,7 +442,7 @@ import Observation
           }
         }
         if !folded {
-          HStack(spacing: 0) {
+          HStack(spacing: 4) {
             ForEach(Array(tabs.enumerated()), id: \.element) { i, path in
               if i > 0 { Rectangle().fill(L.chromeSoft).frame(width: 1, height: 18) }
               fileTab(path, projectActive: active, project: p.name, selected: path == current && active, dirty: dirty.contains(path))
@@ -493,13 +492,10 @@ import Observation
     }
 
     private func activityBarButton(_ icon: String) -> some View {
-      let on = sidebarMode == icon && !st.settingsOpen
-      return Button { if icon != "ladybug" { sidebarMode = icon; if icon == "folder" { diff = nil }; reloadChanges() } } label: {
-        Image(systemName: icon).font(.system(size: 16)).foregroundStyle(on ? C.chromeInk : C.chromeInkMuted)
-          .frame(width: 36, height: 36)
-          .background(on ? W.selected : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
-          .overlay(alignment: .topTrailing) { if icon == "bell", st.notices.unread() > 0 { Circle().fill(C.attention).frame(width: 6, height: 6).offset(x: -4, y: 4) } }
-      }.buttonStyle(.plain)
+      let ready = icon != "ladybug"  // Debug is V13; it must not look actionable until it works
+      return ActivityBarButton(icon: icon, on: sidebarMode == icon && !st.settingsOpen, enabled: ready, badge: icon == "bell" && st.notices.unread() > 0) {
+        sidebarMode = icon; if icon == "folder" { diff = nil }; reloadChanges()
+      }
     }
 
     private var sidebar: some View {
@@ -581,11 +577,15 @@ import Observation
 
     private func runReplace() {
       guard let root = store.activeRoot else { return }
-      let history = ClairWorkbenchStore.history
-      do {
-        let n = try ProjectSearch.replace(root: root, files: st.files, searchPattern, with: replaceText, history: history)
-        runSearch(); searchMessage = "\(n) 件を置換しました（履歴に退避済み）"
-      } catch { searchMessage = "置換できません: \(error)" }
+      let (history, files, pattern, r) = (ClairWorkbenchStore.history, st.files, searchPattern, replaceText)
+      searchTask?.cancel(); searching = true; searchMessage = "置換中…"
+      searchTask = Task {
+        let result = await Task.detached(priority: .userInitiated) { Result { try ProjectSearch.replace(root: root, files: files, pattern, with: r, history: history) } }.value
+        switch result {
+        case .success(let n): runSearch(); searchMessage = "\(n) 件を置換しました（履歴に退避済み）"
+        case .failure(let error): searching = false; searchMessage = "置換できません: \(error)"
+        }
+      }
     }
 
     private var searchPanel: some View {
@@ -657,6 +657,16 @@ import Observation
       }
     }
 
+    /// Rows outside a collapsed folder. `files` is in tree order, so a folder's descendants follow it contiguously: one pass, no per-row scan of `collapsed`.
+    private func visible(_ rows: [(id: String, label: String, depth: Int, file: WorkbenchFile?)]) -> [(id: String, label: String, depth: Int, file: WorkbenchFile?)] {
+      var hidden: String?
+      return rows.filter { r in
+        if let h = hidden { if r.id.hasPrefix(h) { return false }; hidden = nil }
+        if r.file == nil, st.collapsed.contains(r.id) { hidden = r.id + "/" }
+        return true
+      }
+    }
+
     /// Folders derived from the file paths; click toggles, files open a tab.
     private var explorer: some View {
       var out: [(id: String, label: String, depth: Int, file: WorkbenchFile?)] = []
@@ -679,7 +689,7 @@ import Observation
           Spacer(minLength: 0)
         }
         if !rootFolded {
-          ForEach(out.filter { r in !st.collapsed.contains { r.id.hasPrefix($0 + "/") } }, id: \.id) { r in
+          ForEach(visible(out), id: \.id) { r in
             if let f = r.file {
               let on = st.active == f.path && !st.settingsOpen
               let badge = st.dirty.contains(f.path) ? "M" : f.status
@@ -1033,6 +1043,29 @@ import Observation
   /// the rule read as a stray line rather than a state (mock review
   /// feedback). Both now share the `washSelected` tint and there is no
   /// rule; see checklist §2.4, 2026-09-20 amendment.
+  private struct ActivityBarButton: View {
+    let icon: String
+    let on: Bool
+    let enabled: Bool
+    let badge: Bool
+    let action: () -> Void
+    @State private var hovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+      Button(action: action) {
+        Image(systemName: icon).font(.system(size: 16)).foregroundStyle(on ? C.chromeInk : C.chromeInkMuted)
+          .frame(width: 36, height: 36)
+          .background(on || (hovered && enabled) ? W.selected : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
+          .overlay(alignment: .topTrailing) { if badge { Circle().fill(C.attention).frame(width: 6, height: 6).offset(x: -4, y: 4) } }
+          .opacity(enabled ? 1 : 0.35)
+      }
+      .buttonStyle(.plain).disabled(!enabled).help(enabled ? "" : "準備中")
+      .onHover { hovered = $0 }
+      .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: hovered)
+    }
+  }
+
   private struct FileTabButton: View {
     let path: String
     let name: String
@@ -1042,6 +1075,7 @@ import Observation
     let onClose: () -> Void
 
     @State private var isHovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
       let tint = selected ? C.chromeInk : C.textTertiary
@@ -1060,6 +1094,7 @@ import Observation
       .background((selected || isHovered) ? W.selected : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
       .contentShape(Rectangle())
       .onHover { isHovered = $0 }
+      .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: isHovered)  // short fade, no flicker
       .onTapGesture(perform: onActivate)
       .help(path)
     }
@@ -1083,9 +1118,10 @@ import Observation
       // button fades in on hover or while focused — the 24px bar itself is
       // always laid out so this never becomes a permanent line of chrome.
       HStack(spacing: Spacing.scale[0]) {
+        // Top-centre drag handle; no title/label (U06).
         Image(systemName: "ellipsis").font(.system(size: 11)).foregroundStyle(C.textQuaternary)
-          .opacity(isHovered ? 1 : 0)
-        Text(label).font(.system(size: 10)).foregroundStyle(C.textQuaternary).frame(maxWidth: .infinity)
+          .opacity(isHovered ? 1 : 0).frame(maxWidth: .infinity)
+          .accessibilityLabel(label)
         Button(action: onClose) {
           Image(systemName: "xmark").font(.system(size: 9, weight: .medium)).foregroundStyle(C.textQuaternary)
         }.buttonStyle(.plain).help("パネルを閉じる").opacity((isHovered || focused) ? 1 : 0)
