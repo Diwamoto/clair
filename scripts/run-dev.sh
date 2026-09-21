@@ -49,9 +49,29 @@ printf 'dev: launching Clair macOS app (Ctrl-C to stop everything)...\n'
 "$bin_dir/ClairMacApp" &
 app_pid=$!
 
+# Hot reload: when Swift sources change, rebuild the app and relaunch it. The daemon keeps
+# running (terminals survive); daemon-side changes still need a `make dev` restart.
+# ponytail: mtime polling (no fswatch dependency); swap for fswatch if the 1s scan gets slow.
+stamp="$(mktemp)"
+trap 'rm -f "$stamp"' EXIT
+watch_dirs=("$package_path/Sources" "$repo_root/packages/ClairCore/Sources")
+
 # Either process exiting on its own also ends the session. (`wait -n` needs
 # bash 4.3+; macOS ships bash 3.2, so poll instead.)
 while kill -0 "$daemon_pid" 2>/dev/null && kill -0 "$app_pid" 2>/dev/null; do
-    sleep 0.5
+    sleep 1
+    if [[ -n "$(find "${watch_dirs[@]}" -name '*.swift' -newer "$stamp" -print -quit)" ]]; then
+        touch "$stamp" # before the build, so edits made mid-build trigger another round
+        printf 'dev: change detected, rebuilding ClairMacApp...\n'
+        if swift build --package-path "$package_path" --product ClairMacApp; then
+            kill -TERM "$app_pid" 2>/dev/null || true
+            wait "$app_pid" 2>/dev/null || true
+            "$bin_dir/ClairMacApp" &
+            app_pid=$!
+            printf 'dev: reloaded\n'
+        else
+            printf 'dev: build failed; keeping the running app\n'
+        fi
+    fi
 done
 stop_all

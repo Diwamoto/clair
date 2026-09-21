@@ -39,7 +39,7 @@ make doctor
 ### 起動する
 
 ```sh
-make dev       # macOSアプリをビルドして起動する（Ctrl-Cで停止）
+make dev       # macOSアプリをビルドして起動する（Swift変更で自動再ビルド＆再起動、Ctrl-Cで停止）
 make dev-ios   # iOS Simulatorで起動する
 ```
 
