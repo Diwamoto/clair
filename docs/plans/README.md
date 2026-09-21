@@ -5,12 +5,7 @@
 単一projectの詳細な実装手順はproject bundleの `plan.md` に書きます。PoCの機能順序と現在状態は
 local queueで直接管理し、GitHub issueの作成や同期を必須にしません。
 
-Current cross-project plan and execution queue:
+仕様と実行順序の正本は [clair-spec.md](../clair-spec.md) と
+[clair-tasks.md](../clair-tasks.md) へ移動した。このディレクトリに残るのは、個別タスクの
+設計記録と、UI/検証のチェックリストだけである。
 
-- [Clair v2 native rewrite plan](clair-v2-native-rewrite.md)
-- [Clair v2 native rewrite task queue](clair-v2-native-rewrite-queue.md)
-
-Historical plans and execution records:
-
-- [Clair v2 roadmap](clair-v2-roadmap.md)
-- [PoC feature development queue](clair-poc-queue.md)

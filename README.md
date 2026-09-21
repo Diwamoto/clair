@@ -105,7 +105,7 @@ make run-dev
 | `make ci` | `lint`と`smoke`をまとめて実行する |
 | `make clean-artifacts` | 破棄可能なビルド成果物だけを削除する |
 
-詳細な手動確認、出力先、復旧方法は[ローカル開発手順](docs/runbooks/local-development.md)にまとめています。
+詳細な手動確認、出力先、復旧方法は[ローカル開発手順](docs/runbooks/clair-v2-verification.md)にまとめています。
 
 ## Native CLI
 
@@ -138,13 +138,11 @@ hosted agentは対象にしません。Goのlanguage intelligence、debugger、D
 
 ## ドキュメント
 
+- [仕様(正本)](docs/clair-spec.md)
+- [タスク一覧](docs/clair-tasks.md) / [カンバン](docs/clair-kanban.html)
 - [ドキュメント案内](docs/README.md)
-- [製品ビジョン](docs/product/vision.md)
-- [製品スコープ](docs/product/scope.md)
 - [現在のworkspace architecture](docs/architecture/development-workspace.md)
-- [ローカル開発手順](docs/runbooks/local-development.md)
-- [Clair v2 roadmap](docs/plans/clair-v2-roadmap.md)
-- [PoC feature queue](docs/plans/clair-poc-queue.md)
+- [ローカル検証手順](docs/runbooks/clair-v2-verification.md)
 
 ### リポジトリ内の開発フロー
 

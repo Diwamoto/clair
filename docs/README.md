@@ -6,7 +6,9 @@
 
 | 知りたいこと | 正本 |
 |---|---|
-| 何を実現したいか、何を対象外にするか | [product/](product/README.md) |
+| 仕様の正本(目的・原則・契約・完成の定義) | [clair-spec.md](clair-spec.md) |
+| 実行順序と残りタスク | [clair-tasks.md](clair-tasks.md) |
+| 進捗の可視化 | [clair-kanban.html](clair-kanban.html) |
 | 1件のissueをどう実装可能な単位へ落としたか | [projects/](projects/README.md) |
 | 現在のシステム構成と境界 | [architecture/](architecture/README.md) |
 | 何を、なぜ選び、何を選ばなかったか | [decisions/](decisions/README.md) |
@@ -15,11 +17,10 @@
 | 複数projectをまたぐ順序や移行計画 | [plans/](plans/README.md) |
 | release、migration、recoveryなどの操作手順 | [runbooks/](runbooks/README.md) |
 
-GitHub issueは必要な場合だけ課題、議論、外部共有を扱います。PoC期間の実装順序と状態は
-[local feature queue](plans/clair-poc-queue.md)を正本とし、issue作成やproject bundle作成を
-機能開発の前提にしません。project bundleがある場合は、実装の目的・要件・設計・受け入れ条件を
-リポジトリ側の文書に残します。issue本文とdocsが食い違う場合は、明示的な新しい決定がない限り、
-local queue、受け入れ可能なproject bundle、accepted ADRを実装の基準にします。
+GitHub issue は必要な場合だけ課題、議論、外部共有を扱います。実装順序と状態は
+[clair-tasks.md](clair-tasks.md) を正本とし、issue 作成や project bundle 作成を機能開発の
+前提にしません。issue 本文と docs が食い違う場合は、明示的な新しい決定がない限り
+[clair-spec.md](clair-spec.md)、[clair-tasks.md](clair-tasks.md)、accepted ADR を実装の基準にします。
 
 ## Project bundle
 
@@ -63,8 +64,8 @@ draft -> ready -> in-progress -> complete
 
 ## 標準フロー
 
-1. [local feature queue](plans/clair-poc-queue.md)からdependency-readyな機能sliceを選ぶ。
-2. ReversibleなPoCはqueueのoutcome、scope、functional checksだけで実装する。
+1. [clair-tasks.md](clair-tasks.md) から dependency-ready なタスクを選ぶ(`clair-task` skill)。
+2. Reversible な変更は queue の outcome と functional check だけで実装する。
 3. Product、安全性、互換性、data migration、cross-component interfaceの判断が必要な場合だけ、
    project bundle、investigation、ADRを追加する。
 4. 実装中の事実に合わせてqueue、architecture、runbookを更新する。

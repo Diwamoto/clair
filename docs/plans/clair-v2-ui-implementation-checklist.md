@@ -1,6 +1,6 @@
 # Clair v2 UI implementation checklist（`U01` freeze）
 
-このドキュメントは `docs/plans/clair-v2-native-rewrite-queue.md` の `U01` の deliverable。
+このドキュメントは `../clair-tasks.md` の `U01` の deliverable。
 Design canvas と Workbench mock（`prototypes/clair-workbench`）を同期した状態から、native
 実装（`U02`〜`U08`）が対象とする screen/state、tokens、layout、interaction、motion を
 **freeze** する。ここに書かれていない見た目・挙動は正本にないので、native 側で発明しない。
@@ -407,6 +407,6 @@ SwiftUI 実装方針（`NavigationStack` の push + `toolbar(.hidden, for: .tabB
 - `prototypes/clair-workbench/src/screens/Settings.tsx`
 - `prototypes/clair-workbench/src/screens/Overlays.tsx`
 - `prototypes/clair-workbench/src/screens/Mobile.tsx`
-- `docs/plans/clair-v2-native-rewrite.md`（section 2, 7, Phase 4/5）
-- `docs/plans/clair-v2-native-rewrite-queue.md`（Priority contract, Working rules,
+- `../clair-spec.md`（section 2, 7, Phase 4/5）
+- `../clair-tasks.md`（Priority contract, Working rules,
   Milestone gates, `U01`〜`U08` 行）

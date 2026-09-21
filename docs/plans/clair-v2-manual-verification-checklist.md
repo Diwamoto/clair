@@ -1,7 +1,7 @@
 # Clair v2 実機検証チェックリスト
 
 Date: 2026-09-21
-Parent: [native rewrite queue](clair-v2-native-rewrite-queue.md) / [kanban](clair-v2-kanban.html)
+Parent: [native rewrite queue](../clair-tasks.md) / [kanban](../clair-kanban.html)
 
 これまでの実装は、build と XCTest(`ClairV2CoreTests` 183 件 0 failure)までしか通っておらず、**GUI の実機操作はほぼ未確認**。
 この一覧は「自動テストでは確認できず、人が実機で見る必要があるもの」だけを集めたもの。各項目は `[ ]` を `[x]`(OK)/ `[!]`(NG、メモ)に書き換える。

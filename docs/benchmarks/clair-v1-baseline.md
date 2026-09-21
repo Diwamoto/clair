@@ -8,7 +8,7 @@ V1 source は `Diwamoto/ccedit` commit
 
 大容量 corpus は commit しません。まず [corpus recipe](corpus/README.md) を生成し、raw result は
 [`results/`](results/) の schema 1 に保存します。正式なV1 captureとClair captureは、
-[PoC queueの`L01`](../plans/clair-poc-queue.md#l01-final-load-and-performance)で利用者と一緒に取得します。
+[PoC queueの`L01`](../clair-tasks.md#l01-final-load-and-performance)で利用者と一緒に取得します。
 
 ## Preconditions
 

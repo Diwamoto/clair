@@ -14,7 +14,7 @@
 
 ## Dependencies
 
-- [M1 cutover](../../plans/clair-v2-roadmap.md) のnative Project/editor shell。現行コードで利用可能。
+- [M1 cutover](../../clair-spec.md) のnative Project/editor shell。現行コードで利用可能。
 - [M2/#26 Go editor](https://github.com/Diwamoto/clair/issues/26) はdebuggerのhard dependencyではない。DAP source/lineを使うため並行実装できる。
 - 利用者のmacOS環境にDelveがあること。無い環境でもfake DAPとUIの自動検証は実行する。
 

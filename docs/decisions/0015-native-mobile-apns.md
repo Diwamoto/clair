@@ -48,7 +48,7 @@ terminal protocolはclientの配布形態から独立している。これらの
 - Advantages: UserNotifications、APNs、Keychain、scene phase、background taskをAppleのsupported lifecycleで統合できる。署名済み
   buildをTestFlightで実機検証できる。
 - Disadvantages: Apple Developer account、bundle ID、signing、entitlement、App Store Connect、credential rotationを運用する必要がある。
-- Evidence: v2の[Native Rewrite Plan](../plans/clair-v2-native-rewrite.md)がnative mobileとAPNsをPhase 0から管理対象にしている。
+- Evidence: v2の[Native Rewrite Plan](../clair-spec.md)がnative mobileとAPNsをPhase 0から管理対象にしている。
 
 ## Decision
 
@@ -126,7 +126,7 @@ TestFlightの配布停止・期限管理を所有する。実装担当は、署�
 |---|---|---|
 | [ADR-0013](0013-self-only-mobile-pwa.md) | `superseded` | PWAをsupported clientとし、TestFlight/APNs/signingを必須にしない配布・通知方針。 |
 | [P0020 bundle](../projects/p0020-mobile-agent-remote-control/README.md) | PWA distribution path `superseded`; protocol evidence retained | host、pairing、scope、revoke、session protocolとnative referenceは再利用し、PWAのrequirements/design/planはv1 evidenceとして読む。 |
-| [Clair v2 roadmap](../plans/clair-v2-roadmap.md) | historical; PWA milestone `superseded` | 実装順の正本は[Native Rewrite Plan](../plans/clair-v2-native-rewrite.md)とtask queueへ移る。 |
+| [Clair v2 roadmap](../clair-spec.md) | historical; PWA milestone `superseded` | 実装順の正本は[Native Rewrite Plan](../clair-spec.md)とtask queueへ移る。 |
 
 ADR-0013がADR-0011のclient distribution and notification portionsだけをrefineしていた関係は維持する。ADR-0011のraw-terminal、
 private-network、host ownershipの結論と、ADR-0012のpairing・transport boundaryはこのADRでは変更しない。
@@ -162,8 +162,8 @@ private-network、host ownershipの結論と、ADR-0012のpairing・transport bo
 
 ## References
 
-- [Clair v2 Native Rewrite Plan](../plans/clair-v2-native-rewrite.md)
-- [Clair v2 native rewrite task queue](../plans/clair-v2-native-rewrite-queue.md)
+- [Clair v2 Native Rewrite Plan](../clair-spec.md)
+- [Clair v2 native rewrite task queue](../clair-tasks.md)
 - [P0020 mobile agent remote control](../projects/p0020-mobile-agent-remote-control/README.md)
 - [ADR-0011: early mobile agent control](0011-early-mobile-agent-control.md)
 - [ADR-0012: Orca-style pairing](0012-orca-style-mobile-pairing.md)

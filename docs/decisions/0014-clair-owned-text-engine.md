@@ -25,9 +25,9 @@ superseded_by: []
   `draw(_:)`は`dirtyRect`を使わず、scrollback上限4,000行と全列を毎回走査する。cceditのxterm.jsは差分描画である。
 
 P15AとP15Bはfunctional correctnessとして完了しており、性能評価は`L01`へ先送りされている。`L01`は未実行であり、
-「cceditより明確に快適」という[vision](../product/vision.md)の成功条件は現時点で一度も検証されていない。
+「cceditより明確に快適」という[vision](../clair-spec.md)の成功条件は現時点で一度も検証されていない。
 
-[native editor PoC](../issues/native-editor/README.md)はCodeEditSourceEditor系を条件付き候補としたが、
+native editor PoC(PoC と evidence doc は 2026-09-21 に削除。計測値は [`EditorBaselineEvidence.swift`](../../packages/ClairV2Core/Sources/ClairV2EditorFixtures/EditorBaselineEvidence.swift) が正本で、原文は Git 履歴にある)はCodeEditSourceEditor系を条件付き候補としたが、
 NE-01（grammar許諾）、NE-03（実IME）、NE-11（本番接続）がblockedのままである。PoCの実測は10MBの初回色付けが
 約4.7秒、累積RSSが約1.1GiBであり、報告自身が「VS Code相当との判定は未達」と記録している。
 
@@ -42,7 +42,7 @@ font metrics、glyph atlas、run描画、damage管理、viewport scroll、選択
 
 ## Decision drivers
 
-- 日常操作の体感がcceditより明確に快適であること。これは[vision](../product/vision.md)の成功条件である。
+- 日常操作の体感がcceditより明確に快適であること。これは[vision](../clair-spec.md)の成功条件である。
 - editorとterminalの双方をdaily-driver品質にすること。片方の妥協を製品の前提にしない。
 - 日本語IME、marked text、再変換、grapheme単位の操作の品質を落とさないこと。
 - 大規模fileと長行でlayoutが破綻しないこと。
@@ -64,7 +64,7 @@ font metrics、glyph atlas、run描画、damage管理、viewport scroll、選択
   - diff、merge、AI提案、コメントrailが常にbridge越しの後付けになる。
 - Evidence:
   - PoC測定では10MBの`setDocument`往復が約3秒、20回の選択で本文209,714,700 bytesがbridgeを通過した
-    （[poc-measurements.md](../issues/native-editor/evidence/poc-measurements.md)）。
+    （poc-measurements.md(PoC と evidence doc は 2026-09-21 に削除。計測値は [`EditorBaselineEvidence.swift`](../../packages/ClairV2Core/Sources/ClairV2EditorFixtures/EditorBaselineEvidence.swift) が正本で、原文は Git 履歴にある)）。
 
 ### Option B: CodeEdit系を本番採用する（既存のNE-15〜NE-23）
 
@@ -78,7 +78,7 @@ font metrics、glyph atlas、run描画、damage管理、viewport scroll、選択
   - upstreamのREADMEがproduction readyでないと明記している。
   - terminalには何も寄与しない。
 - Evidence:
-  - [poc-report.md](../issues/native-editor/evidence/poc-report.md)。
+  - poc-report.md(PoC と evidence doc は 2026-09-21 に削除。計測値は [`EditorBaselineEvidence.swift`](../../packages/ClairV2Core/Sources/ClairV2EditorFixtures/EditorBaselineEvidence.swift) が正本で、原文は Git 履歴にある)。
 
 ### Option C: SwiftTerm（terminal）とCodeEdit（editor）を個別に採用する
 
@@ -125,7 +125,7 @@ font metrics、glyph atlas、run描画、damage管理、viewport scroll、選択
 7. NE-11およびNE-15〜NE-23のCodeEdit本番採用経路はこの決定で置き換え、着手しない。NE-00〜NE-10とNE-14の成果、
    すなわち文書契約、anchor、任意差分model、安全な部分適用modelは前提として使う。
 8. 本programの各queue itemはslice単位のperformance evidenceを持つ。engineは性能そのものが受け入れ条件であるため、
-   「benchmarkは`L01`まで行わない」という[queue方針](../plans/clair-poc-queue.md)を本programに限り改める。
+   「benchmarkは`L01`まで行わない」という[queue方針](../clair-tasks.md)を本programに限り改める。
    比較対象は同一hostで取得した現行既定（CodeMirror editorと現行terminal surface）の基準値とする。
 
 ## Rationale
@@ -189,8 +189,8 @@ engineがすべての指標で現行既定と同等以上、かつ大規模fixtu
 - Project: [p0028-clair-text-engine](../projects/p0028-clair-text-engine/README.md)
 - Frontend decision: [ADR-0001](0001-adopt-swiftui-appkit-frontend.md)
 - Control plane ownership: [ADR-0010](0010-m1-control-plane-swift-with-selective-rust-migration.md)
-- Investigation: [native editor PoC](../issues/native-editor/README.md)、
-  [poc-report.md](../issues/native-editor/evidence/poc-report.md)、
-  [poc-measurements.md](../issues/native-editor/evidence/poc-measurements.md)
+- Investigation: native editor PoC(PoC と evidence doc は 2026-09-21 に削除。計測値は [`EditorBaselineEvidence.swift`](../../packages/ClairV2Core/Sources/ClairV2EditorFixtures/EditorBaselineEvidence.swift) が正本で、原文は Git 履歴にある)、
+  poc-report.md(PoC と evidence doc は 2026-09-21 に削除。計測値は [`EditorBaselineEvidence.swift`](../../packages/ClairV2Core/Sources/ClairV2EditorFixtures/EditorBaselineEvidence.swift) が正本で、原文は Git 履歴にある)、
+  poc-measurements.md(PoC と evidence doc は 2026-09-21 に削除。計測値は [`EditorBaselineEvidence.swift`](../../packages/ClairV2Core/Sources/ClairV2EditorFixtures/EditorBaselineEvidence.swift) が正本で、原文は Git 履歴にある)
 - Benchmark: [ccedit V1 baseline procedure](../benchmarks/clair-v1-baseline.md)
-- Queue: [P17〜P34](../plans/clair-poc-queue.md)
+- Queue: [P17〜P34](../clair-tasks.md)

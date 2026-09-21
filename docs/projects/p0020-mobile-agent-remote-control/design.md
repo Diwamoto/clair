@@ -1,6 +1,6 @@
 # Design
 
-> Historical scope note (2026-09-14): PWAをsupported clientとする設計は [ADR-0015](../../decisions/0015-native-mobile-apns.md) によりsupersededとなった。host/pairing/session protocolとnative referenceの境界はv1 evidenceとして保持し、Clair v2のcurrent client設計は [Clair v2 Native Rewrite Plan](../../plans/clair-v2-native-rewrite.md) を参照する。
+> Historical scope note (2026-09-14): PWAをsupported clientとする設計は [ADR-0015](../../decisions/0015-native-mobile-apns.md) によりsupersededとなった。host/pairing/session protocolとnative referenceの境界はv1 evidenceとして保持し、Clair v2のcurrent client設計は [Clair v2 Native Rewrite Plan](../../clair-spec.md) を参照する。
 
 ## Current state
 

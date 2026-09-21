@@ -1,9 +1,9 @@
 # Clair v2 ローカル動作確認手順
 
 Status: active verification guide
-Parent: [Clair v2 native rewrite plan](../plans/clair-v2-native-rewrite.md), [task queue](../plans/clair-v2-native-rewrite-queue.md)
+Parent: [Clair v2 native rewrite plan](../clair-spec.md), [task queue](../clair-tasks.md)
 
-この runbook は Clair v2 のエディタ・ターミナル実装をローカルで確認するための手順である。v1（`apple/`、`packages/ClairMobileKit`）の確認には [`local-development.md`](local-development.md) を使う。v2 は独立した Swift package 群で動作する。
+この runbook は Clair v2 のエディタ・ターミナル実装をローカルで確認するための手順である。v1（`apple/`、`packages/ClairMobileKit`）の確認には [`local-development.md`](clair-v2-verification.md) を使う。v2 は独立した Swift package 群で動作する。
 
 ## 前提
 

@@ -3,7 +3,7 @@
 GitHub issueを実装可能な単位へ変換したproject bundleを置きます。
 
 PoC期間の通常の機能sliceは
-[local feature queue](../plans/clair-poc-queue.md)だけで管理します。すべての機能を4文書へ
+[local feature queue](../clair-tasks.md)だけで管理します。すべての機能を4文書へ
 展開せず、重大なproduct/architecture判断、高riskなdata handling、複数componentにまたがる
 契約、または後から独立してreviewする必要がある作業だけをproject bundleにします。
 

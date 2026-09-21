@@ -30,7 +30,7 @@ ClairのネイティブmacOSワークスペースからGo Projectを起動また
 - Source issue: [#27](https://github.com/Diwamoto/clair/issues/27)
 - Parent issue: [#1](https://github.com/Diwamoto/clair/issues/1)
 - Dependency: [#26 Go/gopls](https://github.com/Diwamoto/clair/issues/26)
-- Roadmap: [Milestone 3B](../../plans/clair-v2-roadmap.md)
+- Roadmap: [Milestone 3B](../../clair-spec.md)
 - Feature matrix: [Debugger row](../../benchmarks/feature-parity-matrix.md)
 - Native shell: [development workspace architecture](../../architecture/development-workspace.md)
 - UI reference: `prototypes/clair-interaction-lab` Debug artboard and `prototypes/clair-workbench/src/screens/Debug.tsx`

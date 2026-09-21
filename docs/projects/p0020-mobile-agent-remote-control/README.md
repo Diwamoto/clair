@@ -25,7 +25,7 @@ related_investigations:
 ---
 
 > Supersession notice (2026-09-14): このprojectのhost/pairing/session protocolはv1 evidenceとして参照できるが、PWAをsupported clientとする
-> 配布・通知方針とその実装順は [ADR-0015](../../decisions/0015-native-mobile-apns.md) および [Clair v2 native rewrite plan](../../plans/clair-v2-native-rewrite.md)
+> 配布・通知方針とその実装順は [ADR-0015](../../decisions/0015-native-mobile-apns.md) および [Clair v2 native rewrite plan](../../clair-spec.md)
 > によりsupersededとなった。P0020のrequirements/design/planにあるPWA記述はv1 evidenceとして保持し、Clair v2のcurrent implementation inputにはしない。
 
 # Clair terminal上のcoding agentをmobileから操作するprotocol
@@ -50,7 +50,7 @@ device token/grant、端末単位のrevokeをClairが所有する。PWAのforegr
 - [Requirements](requirements.md)
 - [Design](design.md)
 - [Implementation plan](plan.md)
-- Accepted product scope: [Early mobile agent control](../../product/scope.md#early-mobile-agent-control)
+- Accepted product scope: [Early mobile agent control](../../clair-spec.md#early-mobile-agent-control)
 - Priority decision: [ADR-0011](../../decisions/0011-early-mobile-agent-control.md)
 - Historical distribution decision: [ADR-0013 (superseded)](../../decisions/0013-self-only-mobile-pwa.md)
 - Current native mobile/APNs decision: [ADR-0015](../../decisions/0015-native-mobile-apns.md)
@@ -58,8 +58,8 @@ device token/grant、端末単位のrevokeをClairが所有する。PWAのforegr
 ## Context
 
 - Source issue: [#20](https://github.com/Diwamoto/clair/issues/20)
-- Local PTY/session foundation: [P07](../../plans/clair-poc-queue.md#p07-local-session-lifecycle-and-reattach)
-- Raw agent foundation: [P09](../../plans/clair-poc-queue.md#p09-raw-agent-workflow-and-attention)
+- Local PTY/session foundation: [P07](../../clair-tasks.md#p07-local-session-lifecycle-and-reattach)
+- Raw agent foundation: [P09](../../clair-tasks.md#p09-raw-agent-workflow-and-attention)
 - Protocol prior art: [protocol landscape](../../investigations/p0020-protocol-landscape/README.md)
 
 ## Readiness

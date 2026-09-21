@@ -2,7 +2,7 @@ import Foundation
 
 /// Machine-readable form of the Clair v2 editor core invariants.
 ///
-/// The prose companion is `docs/editor/clair-v2-editor-invariants.md`. This type exists so that
+/// The prose companion is `../../../../docs/clair-spec.md`. This type exists so that
 /// `E02`+ can reference an invariant by stable ID from a test failure message instead of quoting
 /// a paragraph, and so a dropped invariant shows up as a compile/test break rather than a silent
 /// documentation edit.

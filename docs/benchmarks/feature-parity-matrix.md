@@ -1,6 +1,6 @@
 # Clair / ccedit feature parity matrix
 
-この matrix は [Clair v2 roadmap](../plans/clair-v2-roadmap.md) の M1 cutover 範囲を固定する。
+この matrix は [Clair v2 roadmap](../clair-spec.md) の M1 cutover 範囲を固定する。
 `must-have` は Clair Stable だけで Clair を開発し、別 bundle の Clair Dev を確認して ccedit を廃止するために必要なもの、
 `later` は roadmap 上の後続 milestone、`out-of-scope` は現在の product boundary から意図的に除外するものを表す。
 
@@ -9,7 +9,7 @@
 `not-verified` を parity 達成や性能比較の根拠として扱わない。
 
 このmatrixはscope確認用であり、機能ごとのperformance gateではない。Formal comparisonは
-[local PoC queueの`L01`](../plans/clair-poc-queue.md#l01-final-load-and-performance)だけで行う。
+[local PoC queueの`L01`](../clair-tasks.md#l01-final-load-and-performance)だけで行う。
 
 ## M1 must-have
 
@@ -63,6 +63,6 @@
 - `must-have` は local roadmap の M1 required capabilities と root roadmap issue #1 の M1 issue 群に対応する。
 - V1 に存在するという記述だけでは `must-have` や parity pass の根拠にしない。M1 outcome と product scope を優先する。
 - `later` は roadmap に明示された後続 milestone または Later issue に destination があり、M1 performance parity の pass/fail に含めない。
-- `out-of-scope` は未実装という意味ではなく、[product scope](../product/scope.md) と [product principles](../product/principles.md) が意図的に除外する capability を示す。
+- `out-of-scope` は未実装という意味ではなく、[product scope](../clair-spec.md) と [product principles](../clair-spec.md) が意図的に除外する capability を示す。
 - V1 と Clair の性能を直接比較できるのは、[benchmark procedure](clair-v1-baseline.md) と [ADR-0001](../decisions/0001-adopt-swiftui-appkit-frontend.md) に従い、固定 commit・corpus・操作 script・環境条件・raw samples が揃った場合だけとする。
-- cutover の最終判断は [product vision](../product/vision.md) に従い、機能数だけでなく Clair-on-Clair の実地利用と本人の体感確認を含む。
+- cutover の最終判断は [product vision](../clair-spec.md) に従い、機能数だけでなく Clair-on-Clair の実地利用と本人の体感確認を含む。

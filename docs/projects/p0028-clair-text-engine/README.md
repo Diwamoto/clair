@@ -36,9 +36,9 @@ fallbackとしてだけ残る。大規模fileと長行でlayoutが破綻せず�
 - Parent or related decisions: [ADR-0001](../../decisions/0001-adopt-swiftui-appkit-frontend.md)、
   [ADR-0010](../../decisions/0010-m1-control-plane-swift-with-selective-rust-migration.md)
 - Related architecture: [development workspace](../../architecture/development-workspace.md)
-- Related plans or runbooks: [PoC queue P17-P34](../../plans/clair-poc-queue.md)、
-  [local development](../../runbooks/local-development.md)
-- Superseded work: [native editor issues NE-11、NE-15〜NE-23](../../issues/native-editor/README.md)
+- Related plans or runbooks: [PoC queue P17-P34](../../clair-tasks.md)、
+  [local development](../../runbooks/clair-v2-verification.md)
+- Superseded work: native editor issues NE-11、NE-15〜NE-23(2026-09-21 に削除、Git 履歴を参照)
 
 ## Readiness
 

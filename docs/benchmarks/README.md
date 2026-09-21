@@ -5,7 +5,7 @@
 Benchmarkは通常の機能sliceの開始条件・完了条件にはしません。PoC期間はbuild、lint、unit、
 integration、manual functional smokeだけを実行し、corpus生成、反復timing、Instruments、
 ccedit V1とのformal comparisonは
-[PoC queueの`L01`](../plans/clair-poc-queue.md#l01-final-load-and-performance)で一度まとめて行います。
+[PoC queueの`L01`](../clair-tasks.md#l01-final-load-and-performance)で一度まとめて行います。
 Contract、generator、validatorは将来のL01用toolingとして独立してversion管理し、result取得済みとは扱いません。
 
 [ADR-0014](../decisions/0014-clair-owned-text-engine.md)のtext engine program（`P17`〜`P34`）だけは例外で、

@@ -122,7 +122,7 @@ backupを破棄するため、単なるfile move成功を更新成功と誤認�
 
 ## References
 
-- Product scope: [Clair product scope](../product/scope.md)
+- Product scope: [Clair product scope](../clair-spec.md)
 - Runtime identity: [ADR-0008](0008-stable-dev-runtime-identity.md)
 - Prior art: [ccedit updater implementation](https://github.com/Diwamoto/ccedit/blob/main/src/ipc/updater.ts)
 - Prior art: [ccedit release workflow](https://github.com/Diwamoto/ccedit/blob/main/.github/workflows/release.yml)

@@ -34,7 +34,7 @@ Clairで、変更差分を安全に確認・操作し、ソース行またはフ
 - Source issue: [#14](https://github.com/Diwamoto/clair/issues/14)
 - Parent issue: [#1](https://github.com/Diwamoto/clair/issues/1)
 - Related decisions: [ADR-0001](../../decisions/0001-adopt-swiftui-appkit-frontend.md), [ADR-0006](../../decisions/0006-adopt-project-owned-workspaces-and-optional-worktrees.md)
-- Product scope: [Git and worktree workflow](../../product/scope.md#git-and-worktree-workflow)
+- Product scope: [Git and worktree workflow](../../clair-spec.md#git-and-worktree-workflow)
 - Design evidence: [Clair Interaction Lab review panel](../../../prototypes/clair-interaction-lab/app/page.tsx)
 
 ## Readiness

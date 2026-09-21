@@ -3,7 +3,7 @@
 Status: implementation contract
 Date: 2026-09-14
 Task: `H03`
-Parent: [Clair v2 native rewrite](clair-v2-native-rewrite.md)
+Parent: [Clair v2 native rewrite](../clair-spec.md)
 Related decisions: [ADR-0012](../decisions/0012-orca-style-mobile-pairing.md), [ADR-0015](../decisions/0015-native-mobile-apns.md)
 
 This document is the D5 implementation contract for the host-side security

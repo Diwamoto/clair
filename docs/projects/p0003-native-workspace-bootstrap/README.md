@@ -35,8 +35,8 @@ localとGitHub Actionsで同じunsigned smoke buildを再現できる。
 - Parent roadmap: https://github.com/Diwamoto/clair/issues/1
 - Ordering dependency: https://github.com/Diwamoto/clair/issues/2
 - Related architecture: [Development workspace](../../architecture/development-workspace.md)
-- Related runbook: [Local development](../../runbooks/local-development.md)
-- Related plan: [Clair v2 roadmap](../../plans/clair-v2-roadmap.md)
+- Related runbook: [Local development](../../runbooks/clair-v2-verification.md)
+- Related plan: [Clair v2 roadmap](../../clair-spec.md)
 - Existing decision: [ADR-0001 SwiftUI + AppKit frontend](../../decisions/0001-adopt-swiftui-appkit-frontend.md)
 - Project decision: [ADR-0008 Stable / Dev runtime identity](../../decisions/0008-stable-dev-runtime-identity.md)
 

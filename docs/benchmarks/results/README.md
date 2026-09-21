@@ -1,7 +1,7 @@
 # Benchmark results
 
 Final load-test evidence is stored in dated subdirectories during
-[`L01 Final load and performance`](../../plans/clair-poc-queue.md#l01-final-load-and-performance).
+[`L01 Final load and performance`](../../clair-tasks.md#l01-final-load-and-performance).
 
 Text engine surface baselines for the [ADR-0014](../../decisions/0014-clair-owned-text-engine.md)
 program are stored the same way, under the profile described in

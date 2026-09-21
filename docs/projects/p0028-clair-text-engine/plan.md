@@ -1,6 +1,6 @@
 # Implementation plan
 
-実装単位は[PoC queue](../../plans/clair-poc-queue.md)の`P17`〜`P34`である。本文書は全体の順序と
+実装単位は[PoC queue](../../clair-tasks.md)の`P17`〜`P34`である。本文書は全体の順序と
 受け入れ条件の対応を示し、各itemの詳細はqueue側を正本とする。agentは
 [`clair-issue-executor`](../../../.agents/skills/clair-issue-executor/SKILL.md)で1itemずつ実行する。
 

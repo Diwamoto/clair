@@ -9,7 +9,7 @@ engine計測と比較します。
 
 これは[ccedit V1 baseline](clair-v1-baseline.md)とは別のcaptureです。V1 baselineはcutover全体を
 判断する`L01`のためのもので、engine programは比較対象をClair自身の現行既定に限ります。
-[PoC queue](../plans/clair-poc-queue.md)のbenchmark方針はこのprogramにだけ例外を設けており、
+[PoC queue](../clair-tasks.md)のbenchmark方針はこのprogramにだけ例外を設けており、
 他のfeature itemへ広げません。
 
 ## Identity and contract
@@ -103,4 +103,4 @@ summaryとcoverageの整合、privacy flag、host-local absolute pathの不在�
 - 比較はcomponentごとに、current-default surfaceとengine surfaceの間で行います。
 - engineが全metricで同等以上、かつ大規模fixtureで明確に優位でない限り、既定を切り替えません。
 - 実機の日本語IMEとVoiceOverはこのcontractの対象外です。`P19`と`P21`の手動確認結果を
-  [local development runbook](../runbooks/local-development.md)へ記録し、gateの判断材料に含めます。
+  [local development runbook](../runbooks/clair-v2-verification.md)へ記録し、gateの判断材料に含めます。

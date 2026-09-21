@@ -4,7 +4,7 @@ import XCTest
 @testable import ClairV2Review
 
 /// Covers the `E09` test matrix in
-/// `docs/editor/clair-v2-review-invariants.md` §6.
+/// `../../../../docs/clair-spec.md` §6.
 final class ReviewThreadManagerTests: XCTestCase {
   private let author = ReviewAuthor(displayName: "Ada", kind: .human)
 

@@ -100,7 +100,7 @@ Before changing production code, read:
 1. repository instructions (`AGENTS.md`);
 2. the selected queue entry in full, including status, dependencies, outcome,
    scope, checks, deferred behavior, and legacy coverage;
-3. `docs/product/scope.md`, `docs/product/principles.md`, the roadmap, and
+3. `../../../docs/clair-spec.md`, `../../../docs/clair-spec.md`, the roadmap, and
    accepted ADRs relevant to the item;
 4. an existing project bundle only when it matches the capability and is
    truthful and `ready`/`in-progress`.

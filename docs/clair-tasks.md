@@ -1,0 +1,127 @@
+# Clair 実行タスク一覧
+
+Status: active execution queue
+Date: 2026-09-21
+
+仕様の正本は [`clair-spec.md`](clair-spec.md)。進捗の可視化は
+[`clair-kanban.html`](clair-kanban.html)。この表が実行順序の正本であり、
+`.agents/skills/clair-task/scripts/task_lease.py` が機械的に読む。
+
+## 表の規約
+
+- status は `next` / `queued` / `active` / `blocked` / `done` のいずれか。
+- difficulty は `D1`〜`D5`。`D5` は独立レビュー必須。
+- 行の書式(`| \`ID\` | \`status\` | \`D#\` | deps | outcome |`)は lease helper が
+  parse する。崩さない。
+- status と実行証跡を編集するのは controller のみ。worker は queue を編集しない。
+- `done` は「統合済みブランチが完了条件を満たす」ことを意味する。worker ブランチ
+  だけで満たした状態は `done` にしない。
+- `blocked` は本物のユーザー gate か外部前提のみ。回復可能な実装失敗は `active`
+  のまま残す。
+
+## 優先度
+
+- **P0** — v1 廃止に伴う整理。他のすべてに先行する。
+- **P1** — 仕様の中核が実アプリで成立していない箇所。daily-driver の前提。
+- **P2** — UI 一致と最終 QA。
+- **P3** — 実機・人手 gate。外部依存があり日程を約束しない。
+
+## 2026-09-21 の再編
+
+ccedit(旧 Clair v1)を製品・資料ともに廃止した。これに伴い:
+
+- `U08` を「v1 全削除」に置き換え、依存を外した(QA 待ちにしない)。旧 UI の
+  cutover 判定は不要になり、単純な削除作業になった。
+- `B04` を追加。コードから `v2` の命名を除去する。製品に v1/v2 の区別は無い。
+- 仕様レビューで見つかった「core は実装済みだが実アプリに配線されていない」
+  gap を `E11`/`E12`/`T09`/`N10` として明示した。これらは queue に存在しないまま
+  「done 扱いの core」と「動かない実アプリ」の乖離を生んでいた。
+- `E13`/`E14`/`V11` を追加。仕様 §5.11 と §9 が要求していて未実装の項目。
+- `U03` の依存から `N08`(実機 dogfood gate)を外した。UI の実装が dogfood gate の
+  完了を待つ理由はない。
+- `V10` の依存から未定義の `G2` を外した。
+
+## 残りタスク
+
+| task | status | difficulty | depends | outcome |
+|---|---|---|---|---|
+| `U08` | `next` | `D3` | — | **P0**。v1 を全削除する。`apple/ClairApp`、`apple/ClairMobileApp`、`apple/ClairTests`、`apple/ClairTextKit`、`editor-web`、`Clair.xcodeproj`/`Clair.xcworkspace`、v1 専用 Makefile lane(`build-editor-web`、`build-stable`、`build-dev`、`run-stable`、`run-dev`、`test-swift`、`smoke-bundles` 等)、v1 専用 scripts、v1 前提の CI job を削除する。Rust crates(`crates/`、`Cargo.toml`、`test-rust`/`lint-rust`)は Swift 側が使っていないので同時に削除するが、削除前に `clair-ptyhost` に v2 が依存していないことを確認する。復元は archive tag からのみ。あわせて `README.md` の v1 前提の記述(`make run-dev`/`make test`/リポジトリ構成図/Rust CLI 説明)と `docs/runbooks/` を現状へ更新する。削除後に `make ci` に相当する経路が通ること。 |
+| `B04` | `queued` | `D3` | `U08` | **P0**。コードから `v2` の命名を除去する(仕様 §4)。`ClairV2Core`→`ClairCore` 等の package/target/module、`ClairV2*` の型名、`clair-v2-*` のファイル名、`ClairV2Mobile.xcodeproj`、`v2-*` の Makefile target と scripts、`CLAIR_CHANNEL` 以外の v2 由来の識別子。bundle ID と data 領域(`Clair v2`/`Clair Dev v2`)も改名するため、既存 workspace.json の移行経路を用意する(ADR-0008 の identity 契約を壊さない)。機械的な rename を 1 コミットにまとめ、意味のある変更を混ぜない。 |
+| `T09` | `queued` | `D5` | `T02`, `T04`, `T03` | **P1**。Mac GUI の terminal を daemon 所有 session へ付け替える(仕様 §7)。現状 GUI は `ClairV2LocalShellSession` で自前 PTY を持ち、`ClairV2MacApp` は daemon を起動も接続もしていないため、「Mac と mobile は同じ session の別 surface」が実アプリで成立していない。GUI から daemon の single-instance を起動・接続し、surface を `attach`/`detach` で session に繋ぎ、window を閉じても session が継続すること。既存の journal/epoch/cursor/gap-resync(`H08`/`T04`)をそのまま使い、GUI 専用の側路を作らない。Mac と mobile の同時入力が同じ PTY に到着順で適用されること。D5 独立レビュー必須。 |
+| `E11` | `queued` | `D4` | `E05`, `U05` | **P1**。syntax highlight を実ファイルで色として出す(仕様 §5.11)。現状 `SyntaxParser`(E05)には `ClairV2EditorLanguage` の外に呼び出し元が無く、`ClairEditorView.highlights` は常に空。日常的に使う言語の tree-sitter grammar を vendor し(Swift、Go、TypeScript/JS、Python、JSON、Markdown、Rust、shell を最低線)、parse 結果の capture を `EditorTokenKind` へ対応づけ、`EditorBuffers` から view へ渡す。`INV-PERF-005`(cancellable background、入力を止めない、欠けても正しさは損なわれない)と `INV-REV-002`(属性変更は revision を進めない)を満たすこと。差分 parse で 10 MiB fixture の打鍵が回帰しないことを計測する。 |
+| `E12` | `queued` | `D5` | `E05`, `E11` | **P1**。LSP を実アプリに配線する(仕様 §5.11、§9)。現状 `LSPDocumentSession` の呼び出し元は test だけで、language server を起動する経路が無く diagnostic も補完も出ない。server の起動・停止・crash 再起動、`ClairEditorView.diagnostics` への表示、補完、定義ジャンプ、参照検索、symbol 検索(palette の symbol 到達)を実装する。最初の第一級は gopls(仕様 §13)、それ以外は汎用経路で動けばよい。revision で stale な結果を拒否すること(`INV-REV-004`)。D5 独立レビュー必須。 |
+| `V09` | `active` | `D4` | `H01`, `T02`, `T09` | **P1**。Stable/Dev identity、署名 update、sleep 抑止は実装済み(test 7 件)。**残**: update restart 時の PTY reattach。これは GUI が daemon 所有 session を使うことが前提なので `T09` の後に行う。実 `.app` への適用確認も残る。 |
+| `V03` | `active` | `D5` | `V01`, `V02` | **P1**。`clair mcp serve` の stdio MCP adapter。実装と threat test(4 件 + IPC 4 件)は完了。**残**: D5 独立レビュー(人手 gate)。 |
+| `V06` | `active` | `D5` | `V01`, `V04`, `H07`, `E09` | **P1**。Git/worktree workflow。stage/commit/switch、managed worktree、branch review(committed/uncommitted/untracked 分離)を実装済み(test 5 件)。conflict は abort して agent へ再依頼(原則 6 が許す経路)。**残**: D5 独立レビュー。 |
+| `V05` | `active` | `D4` | `V01`, `E04`, `V04` | **P1**。Quick Open、全文検索・置換、FSEvents watcher、local history を実装済み(test 5 件、10,000 file で scan 0.2s / rank 6ms)。**残**: 実機での見た目確認。 |
+| `V11` | `queued` | `D3` | `V01`, `V02` | **P1**。仕様 §9 の未実装分。(1) shortcut を任意 command へユーザーが割り当てられるようにする(現状 shortcut は registry の固定 projection)。(2) `clair open path:line:column` を実装する(現状 CLI は `mcp serve` のみ)。path を所有する open Project の active pane へ開き、該当 Project が無ければ新規 Project として開く。 |
+| `E14` | `queued` | `D3` | `E03`, `U05` | **P2**。multi-cursor の UI 手段を仕様 §5.5 の水準に上げる。core(`TextSelectionSet`、`TextSelection.rectangular`、1 undo 単位)は実装済みだが、UI からは ⌘クリックの cursor 追加しか使えない。⌘D(次の一致を選択)、⌥ドラッグの矩形選択、ダブル/トリプルクリックの語/行選択を追加する。あわせて editor pane の file サイズ上限(現 10,000,000 bytes)を canonical fixture `10mb`(10,485,760 bytes)が開ける値へ直す(仕様 §5.9)。 |
+| `E13` | `queued` | `D4` | `E05`, `E06`, `E11` | **P2**。code folding と soft wrap(仕様 §5.11)。どちらも core/view に実体が無い。fold 範囲は tree-sitter の構文範囲から導出し、fold state は `INV-TXN-003` の position mapping を通して編集に追従させる。fold された行をまたぐ caret 移動・検索・review anchor の扱いを決めること。soft wrap は `INV-PERF-001`/`003` を壊さない(長い 1 行も viewport 制限経路で扱う)。minimap は対象外(仕様 §14)。 |
+| `U04` | `active` | `D3` | `U02`, `E07`, `T03` | **P2**。macOS AppShell、titlebar、sidebar、pane/tab、status bar、command/settings を Workbench mock に合わせる。titlebar / sidebar / status bar / editor chrome / palette / Quick Open / settings / 承認カードは mock 準拠まで実装済み(オフスクリーン描画スナップショットで照合)。**残**: 実機の目視確認(人手)、quota メーター(データ源なし)。syntax highlight は `E11` へ分離した。 |
+| `U05` | `active` | `D4` | `U04`, `E07`, `E09`, `V01` | **P2**。Mac の editor / diff / review / context menu を mock に合わせる。slice 11 まで完了(実ファイル接続、変更一覧+stage、diff pane、review thread 永続化、hunk ナビ、agent へ送る、コミット欄、行ドリフト追従、1 行 suggestion)。**残**: 実機での見た目確認。highlight は `E11`、multi-cursor UI は `E14` へ分離した。 |
+| `U06` | `active` | `D3` | `U04`, `T03`, `V01` | **P2**。Mac の terminal / agent activity / session list / 承認面を mock に合わせる。通知履歴、session list、承認カード、status bar 実データ化まで完了。描画性能は flood 下の main stall が overlay 有無で 5.3→5.7ms で悪化なし(2026-09-21 計測、`ClairV2GhosttyFloodPerfTests`)。**残**: 実機での見た目確認。GPU frame time は未計測。 |
+| `N10` | `queued` | `D4` | `E08`, `T05`, `N04` | **P2**。mobile app に editor / terminal surface を配線する。`E08`(iOS editor)と `T05`(iOS terminal)の core は実装済みだが、`ClairV2MobileRootView` は 709 行の単一 `List`(host/conversation/diff/reconnect 等の section)で、editor 画面も terminal 画面も無い。仕様 §10 の terminal attach と入力、ファイルの段階的読み込みを実画面として出すこと。mobile に full source editor を移植することは必須にしない(仕様 §10)。 |
+| `U03` | `queued` | `D3` | `U02`, `N10` | **P2**。mobile の host/project/session/activity/review/notification navigation を mock contract に合わせる。compact/regular size class と safe area に適応しつつ情報階層を変えない。 |
+| `U07` | `queued` | `D4` | `U05`, `U06`, `E11`, `E14` | **P2**。screenshot/interaction regression、VoiceOver、Dynamic Type、keyboard-only、reduced motion、contrast の final QA。差分は canvas 変更か native bug のどちらかへ分類する。Mac 分を先に行い、iOS 分は `N10`/`U03` が揃ってから追い QA とする。 |
+| `T07` | `queued` | `D5` | `T04`, `T06`, `T09` | **P3**。terminal integration gate。OpenCode TUI、shell、resize、alternate screen、flood、sleep/wake、network switch、Mac/mobile 同時入力、reattach、OSC 52/633 の実機 test と resource limits。`T09` の後でなければ「同じ session への同時入力」を実アプリで検証できない。 |
+| `N08` | `blocked` | `D5` | `H10`, `N06`, `N07`, `T02`, `N09` | **P3**。Mobile-on-Clair dogfood gate。iPhone だけを操作して実 terminal session 上で agent を起動し、依頼・承認・diff 確認・follow-up・完了通知・再接続まで行う。**Blocked**: iPhone/iPad 実機、Apple signing、APNs の外部依存。`N09` で Mac 側ペアリング bootstrap 面は解消済み。 |
+| `V10` | `queued` | `D5` | `V02`, `V03`, `V04`, `V05`, `V06`, `V07`, `V08`, `V09`, `T09`, `E11` | **P3**。Clair-on-Clair cutover gate。Stable から Clair source を開き、terminal/agent で Dev を build・起動して変更を確認できる。daily-driver blocker が無く、ccedit より快適と本人が確認する。CLI/MCP 経由の scripted 操作でも同じ流れが通ること。 |
+
+## 完了タスク
+
+証跡の詳細は Git 履歴と各タスクの設計 doc にある。
+
+| task | status | difficulty | depends | outcome |
+|---|---|---|---|---|
+| `B00` | `done` | `D2` | — | pre-rewrite checkpoint commit と archive tag。 |
+| `B01` | `done` | `D3` | `B00` | Swift packages、macOS app、iOS app、daemon executable の target と build/test lane。 |
+| `B02` | `done` | `D3` | `B00` | native mobile + APNs 方針の ADR(0015)。PWA 優先の旧方針を superseded に接続。 |
+| `B03` | `done` | `D5` | `B01` | `ProjectID`/`WorktreeID`/`SessionID`、revision、operation ID、capability、error、event envelope の共有型。 |
+| `H01` | `done` | `D4` | `B03` | GUI から独立した `ClairDaemon` lifecycle、single-instance ownership、local control channel。 |
+| `H02` | `done` | `D3` | `H01` | project/worktree catalog、file tree、bounded file read、changed-file summary の read-only API。 |
+| `H03` | `done` | `D5` | `B02`, `B03`, `H01` | client transport、one-time pairing、device key、host fingerprint、grant scope、revoke。threat tests 通過。 |
+| `H04` | `done` | `D5` | `H02` | OpenCode provider adapter。起動・再開・停止を project/worktree/session identity に関連付け。 |
+| `H05` | `done` | `D5` | `H04` | provider 非依存な conversation/tool-call/attention/completion/usage イベント正規化。 |
+| `H06` | `done` | `D5` | `H03`, `H05` | prompt/approval/deny/interrupt/stop を scoped command として実装。 |
+| `H07` | `done` | `D4` | `H02` | Git status、changed-file list、text/binary diff、hunk metadata。 |
+| `H08` | `done` | `D5` | `H03`, `H05`, `H06` | session journal、subscriber cursor、gap/resync、revision snapshot。 |
+| `H09` | `done` | `D4` | `B02`, `H03` | 最小 `ClairPushRelay` と APNs provider boundary。opaque event payload。 |
+| `H10` | `done` | `D5` | `H06`, `H07`, `H08`, `H09` | daemon の crash recovery、resource limits、structured diagnostics。 |
+| `N01` | `done` | `D3` | `B01`, `B02` | SwiftUI native app、composition root、environment、shared package 境界。 |
+| `N02` | `done` | `D4` | `B03`, `H03`, `N01` | typed client、Keychain device identity、pairing handshake、certificate 検証。 |
+| `N03` | `done` | `D3` | `N02` | host list、pair/re-pair、connection state、device scope、revoke。 |
+| `N04` | `done` | `D3` | `H02`, `N03` | project/worktree/session browser と recent destination。 |
+| `N05` | `done` | `D4` | `H05`, `H06`, `N04` | conversation stream、prompt composer、attention、approval。 |
+| `N06` | `done` | `D4` | `H07`, `N05` | changed-file list、native diff、hunk navigation、review follow-up。 |
+| `N07` | `done` | `D4` | `H08`, `H09`, `N03` | APNs registration、notification category、deep link、scene lifecycle。 |
+| `N09` | `done` | `D4` | `H03`, `N03` | Mac 側ペアリング bootstrap 面(`N08` が発見した gap の解消)。 |
+| `E01` | `done` | `D4` | `B01` | editor invariants、Unicode corpus、10MB/long-line fixture、benchmark harness、回帰の下限。 |
+| `E02` | `done` | `D5` | `E01` | rope text storage、line index、stable line ID、座標変換、immutable snapshot。 |
+| `E03` | `done` | `D5` | `E02` | transaction、SelectionSet、multi-cursor、矩形選択、Undo/Redo、外部編集マージ。 |
+| `E04` | `done` | `D3` | `E03` | literal/regex search、replace preview、replace one/all、選択範囲への適用。 |
+| `E05` | `done` | `D4` | `E02` | Tree-sitter incremental parse と LSP coordinate/lifecycle。 |
+| `E06` | `done` | `D5` | `E02`, `E05` | macOS custom `NSView`、CoreText visible-line layout、scroll、hit test、caret、selection。 |
+| `E07` | `done` | `D5` | `E03`, `E06` | `NSTextInputClient`、日本語 IME、marked text、clipboard、drag/drop、accessibility。 |
+| `E08` | `done` | `D5` | `E03`, `E05` | iOS/iPadOS editor surface、touch selection、hardware keyboard、IME、viewport virtualization。 |
+| `E09` | `done` | `D5` | `E03`, `E05`, `N06` | revision-aware review anchor、line comment、thread、stale/orphaned、suggestion transaction。 |
+| `E10` | `done` | `D5` | `E04`, `E07`, `E08`, `E09` | editor integration gate。edit/multi-cursor/search/review/save/外部編集と性能閾値。 |
+| `T01` | `done` | `D5` | `B01` | libghostty の pinned build、license、resource bundle、ABI pin。 |
+| `T02` | `done` | `D5` | `H01`, `H04`, `H05`, `H06`, `H08` | daemon-owned PTY/process/session ownership と raw I/O bridge。 |
+| `T03` | `done` | `D4` | `T01`, `T02`, `T08` | macOS Ghostty surface を workspace に接続。selection、copy/paste、scrollback、font/DPI、resize。 |
+| `T04` | `done` | `D5` | `T02`, `H08` | remote terminal binary stream、epoch/cursor、snapshot/gap、backpressure。 |
+| `T05` | `done` | `D5` | `T01`, `T04`, `N01`, `T08` | iOS/iPadOS Ghostty surface と remote session attach。 |
+| `T06` | `done` | `D4` | `T03`, `T05` | IME/CJK、paste guard、mouse reporting、focus、desktop-owned PTY geometry。 |
+| `T08` | `done` | `D5` | `T01` | Ghostty surface ABI pin(`T03` が発見した gap の解消)。 |
+| `U01` | `done` | `D2` | `B01` | Design canvas と Workbench の同期。対象 screen/state、tokens、layout の freeze。 |
+| `U02` | `done` | `D3` | `U01` | canvas tokens を Swift の color/type/spacing/radius/motion primitive へ。 |
+| `V01` | `done` | `D5` | `B03` | typed Command Registry(22 command)。palette/menu/shortcut を projection 化。 |
+| `V02` | `done` | `D4` | `V01`, `H01` | user-scoped Unix socket IPC(0600/0700、peer uid 検証)と `clair` CLI 基盤。 |
+| `V04` | `done` | `D4` | `V01`, `H02` | Project model と workspace 永続化。Git の有無を問わない folder、実 file tree、layout 復元。 |
+| `V07` | `done` | `D4` | `V01`, `V04`, `T03` | agent launch profile を raw terminal で複数起動。worktree cwd 対応。 |
+| `V08` | `done` | `D3` | `V04`, `V07` | Project badge、通知 history、macOS banner、Project/terminal 単位 mute。事実 signal のみ。 |
+
+## 統計
+
+- 完了 46 / 全 67(2026-09-21 時点)
+- 残り 21: P0 が 2、P1 が 7、P2 が 8、P3 が 3(うち `N08` は blocked)
+- `python3 .agents/skills/clair-task/scripts/task_lease.py validate` がこの数を検証する。

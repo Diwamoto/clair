@@ -25,7 +25,7 @@ superseded_by: []
 決める際、「既存のRust実装が持つgit、filesystem、history、settings、hooks、LSP/DAP、PTY
 lifecycle等のdomain/backend機能は再利用する」をdriverとし、「Rust coreはUI frameworkに
 依存させず、control planeをUniFFI、必要に応じてC ABIでSwiftへ公開する」と定めた。
-[product vision](../product/vision.md)も「cceditのRust coreとterminal基盤はClairへ移管
+[product vision](../clair-spec.md)も「cceditのRust coreとterminal基盤はClairへ移管
 して再利用する」と記述している。
 
 一方、2026-09-03時点の実装はこの前提と乖離している。M1の全vertical slice（P01〜P14、
@@ -36,7 +36,7 @@ worktree/catalog、update/lifecycleのcontrol planeはすべてSwift native実�
 動作する。`clair-core`はbootstrap smoke ABI 1関数のみを持ち、cceditのRust資産
 （git/fs/history約3,600行、Tauri command郡）はClair repositoryへ未移植である。
 
-[PoC queueのP15D](../plans/clair-poc-queue.md)はこの乖離を`blocked`とし、cutover前に
+[PoC queueのP15D](../clair-tasks.md)はこの乖離を`blocked`とし、cutover前に
 「(a) Tauri非依存Rust domainとversioned Swift bridgeへ移す」または「(b) Rust ownershipを
 PTY等へ狭めるsuperseding ADRとproduct docsをacceptする」のどちらかで一つのaccepted
 architectureへ揃えることを要求している。このdecisionを固定するため、2026-09-03に
@@ -190,9 +190,9 @@ vision.mdの「cceditのRust coreとterminal基盤はClairへ移管して再利�
 - Frontend decision: [ADR-0001](0001-adopt-swiftui-appkit-frontend.md)
 - Broker protocol: [ADR-0003](0003-versioned-session-broker-protocol.md)
 - Command Registry: [ADR-0007](0007-unify-operations-in-a-typed-command-registry.md)
-- Product vision: [Clair product vision](../product/vision.md)
-- Queue block: [P15D in PoC queue](../plans/clair-poc-queue.md)
-- P15B audit evidence: [PoC queue P15B entry](../plans/clair-poc-queue.md)
+- Product vision: [Clair product vision](../clair-spec.md)
+- Queue block: [P15D in PoC queue](../clair-tasks.md)
+- P15B audit evidence: [PoC queue P15B entry](../clair-tasks.md)
 - Language comparison (2026-09-03): fsnotify kqueue fd消費、Gitalyのgo-git離脱、
   pure Go ripgrep再実装のベンチマーク、gitoxideのstatus/checkoutベンチマーク
 - Issue: [#7](https://github.com/Diwamoto/clair/issues/7)、[#8](https://github.com/Diwamoto/clair/issues/8)

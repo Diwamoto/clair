@@ -142,7 +142,7 @@ Option Aをこのprojectの範囲で採用する。DAP adapterは`apple/ClairApp
 ## Documentation impact
 
 - このproject完了時に `docs/architecture/development-workspace.md` のdebug boundary/lifecycleを更新する。
-- [PoC queue](../../plans/clair-poc-queue.md) のM3B mappingと実装状態を更新する。
+- [PoC queue](../../clair-tasks.md) のM3B mappingと実装状態を更新する。
 - [feature parity matrix](../../benchmarks/feature-parity-matrix.md) は自動/手動evidenceを追記する。
 - 新しいcross-project decisionが発生した場合のみADRを追加し、既存ADRを改変しない。
 

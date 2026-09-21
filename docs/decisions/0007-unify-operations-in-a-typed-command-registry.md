@@ -103,8 +103,8 @@ Risk metadataをcommand authorが定義し、runtime targetをClairが検査す�
 
 ## References
 
-- [Product principles](../product/principles.md)
-- [Product scope](../product/scope.md)
+- [Product principles](../clair-spec.md)
+- [Product scope](../clair-spec.md)
 
 ## State owner(2026-09-19 追記、V01)
 

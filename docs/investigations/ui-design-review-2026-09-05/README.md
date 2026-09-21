@@ -20,7 +20,7 @@ ClairのUIには、Projectの色分け、一段のtitlebar、左navigator、edit
 
 ## Basis and scope
 
-判断の基準は [vision](../../product/vision.md)、[principles](../../product/principles.md)、[scope](../../product/scope.md)、[ADR-0006](../../decisions/0006-adopt-project-owned-workspaces-and-optional-worktrees.md)、[ADR-0007](../../decisions/0007-unify-operations-in-a-typed-command-registry.md)、[PoC queue](../../plans/clair-poc-queue.md) のP04–P12とP15C。
+判断の基準は [vision](../../clair-spec.md)、[principles](../../clair-spec.md)、[scope](../../clair-spec.md)、[ADR-0006](../../decisions/0006-adopt-project-owned-workspaces-and-optional-worktrees.md)、[ADR-0007](../../decisions/0007-unify-operations-in-a-typed-command-registry.md)、[PoC queue](../../clair-tasks.md) のP04–P12とP15C。
 
 P15Cには、左navigator、共通One Dark token、一段のtab、core navigation、比較の `adopt / avoid / surpass`、狭い・広い画面での検証がすでに記載されている。これらを新規の提案として数えず、現在のモックで成立しているかを確認した。
 
@@ -72,7 +72,7 @@ global一覧を許容する場合は、一覧のscopeと詳細の所有Project�
 
 **受け入れ案。** 他Projectの通知を選んだ後、対象Projectとterminalを迷わず特定でき、1回の操作で入力可能なterminalへ戻れる。終了済みsessionは履歴本文を期待させず、保持するmetadataを読める。
 
-根拠: [principles 1/3/8](../../product/principles.md)、queue P09/P15C、[Activity sidebar/detail](../../../prototypes/clair-interaction-lab/app/page.tsx) の `activitySidebar`、`visibleThreads`。
+根拠: [principles 1/3/8](../../clair-spec.md)、queue P09/P15C、[Activity sidebar/detail](../../../prototypes/clair-interaction-lab/app/page.tsx) の `activitySidebar`、`visibleThreads`。
 
 ### 2. 一段のtitlebarに、項目数が増えたときの規則が必要
 
@@ -144,7 +144,7 @@ P04/P05/P06のnative実装はqueue上では完了している。ここで必要�
 
 **受け入れ案。** 利用者が「どこからどこまでの差分か」「何が未commitか」「採用できない理由」「次に何をすればよいか」を画面から説明できる。review中に対象revisionが更新された場合、確認済み状態を黙って使い回さない。
 
-根拠: [principles 6](../../product/principles.md)、queue P11/P15C、[モックGit描画](../../../prototypes/clair-interaction-lab/app/page.tsx)。
+根拠: [principles 6](../../clair-spec.md)、queue P11/P15C、[モックGit描画](../../../prototypes/clair-interaction-lab/app/page.tsx)。
 
 ### 7. 文字を読みやすくし、chromeの密度を整理する
 

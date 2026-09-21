@@ -9,7 +9,7 @@ import XCTest
 /// isolation (storage, transactions, search, review) — this wires them into one
 /// document and exercises edit, multi-cursor, search/replace, review, save, and
 /// external agent edit together, on both the small-document correctness axis and
-/// the 10MB/long-line performance axis from `docs/editor/clair-v2-editor-invariants.md`.
+/// the 10MB/long-line performance axis from `../../../../docs/clair-spec.md`.
 ///
 /// Every place below that calls `EditorTransactionManager.apply`/`applyExternal`
 /// directly (not through `ReviewThreadManager`) also calls `reviews.rebase(through:)`

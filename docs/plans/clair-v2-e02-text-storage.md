@@ -4,7 +4,7 @@ Status: worker implementation complete; independent D5 review / integration pend
 Contract recorded before code changes: 2026-09-16
 Base: `04f86f85a5277eec3bb29ff1bee0a05ca1c168f0`
 
-親計画と [editor invariants](../editor/clair-v2-editor-invariants.md) を正本とする。
+親計画と [editor invariants](../clair-spec.md) を正本とする。
 ADR-0014 の Swift 所有という判断を踏襲し、旧 fallback / terminal に関する記述より
 現行 v2 計画を優先する。E03 の transaction / selection / undo、E05 の parser / LSP、
 view / IME / terminal はこの task に含めない。
