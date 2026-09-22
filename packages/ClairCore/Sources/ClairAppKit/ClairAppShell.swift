@@ -493,6 +493,7 @@ import Observation
     @State private var selection = 0
     // U05: sidebar mode + source-control view. GUI-local (no command); the stage buttons go through git.stage/unstage.
     @State private var sidebarMode = "folder"
+    @State private var quota: [ProviderQuota] = []
     @State private var collapsedGroups: Set<String> = []
     @State private var rootFolded = false
     @State private var changes: [GitChange] = []
@@ -1273,7 +1274,25 @@ import Observation
 
     /// U06/U05: facts only — branch, change/dirty counts, agent state. Ln/Col waits on an editor caret callback.
     /// Mock `AppStatusBar`: branch, ahead/behind, change count, caret, then the session count on the right. 26px, sans, `textTertiary`.
-    // ponytail: no quota meter (needs a provider usage source; the showQuota toggle exists but has no data yet).
+    /// Mock `QuotaMeter` (H11): the tightest window across providers; the tooltip lists every provider, unread ones included.
+    private var quotaMeter: some View {
+      let now = Date()
+      let top = ProviderQuota.tightest(quota)
+      let stale = quota.contains { $0.isStale(now: now) }
+      let tint = stale ? C.textQuaternary : C.textSecondary
+      return HStack(spacing: 6) {
+        if let top {
+          Text("\(top.provider) \(top.window.label)").foregroundStyle(C.textQuaternary)
+          Capsule().fill(L.strong).frame(width: 34, height: 4)
+            .overlay(alignment: .leading) { Capsule().fill(tint).frame(width: 34 * top.window.usedPercent / 100) }
+          Text("残り\(top.window.remainingPercent)%").fontWeight(.semibold).foregroundStyle(tint)
+        } else {
+          Text(quota.isEmpty ? "利用枠を取得中…" : "利用枠 —").foregroundStyle(C.textQuaternary)
+        }
+      }
+      .help(quota.map { $0.summary(now: now) }.joined(separator: "\n"))
+    }
+
     private var statusBar: some View {
       let agents = st.agentSessions.filter { $0.project == st.project && !$0.status.isExited }
       let waiting = agents.filter { $0.status == .attention }.count
@@ -1326,6 +1345,7 @@ import Observation
           if let caret { Text("Ln \(caret.line), Col \(caret.col)") }
         }
         Spacer()
+        if st.toggles["showQuota"] == true { quotaMeter }
         Button { sidebarMode = "terminal" } label: {
           HStack(spacing: 5) {
             if waiting > 0 { Circle().fill(C.attention).frame(width: 6, height: 6) }
@@ -1337,6 +1357,14 @@ import Observation
       .padding(.horizontal, 12).frame(height: ChromeBudget.statusBar)
       .background(C.chrome)
       .overlay(alignment: .top) { Rectangle().fill(L.chrome).frame(height: 1) }
+      // Off the main actor, every 5 min while the toggle is on; turning it off cancels the loop.
+      .task(id: st.toggles["showQuota"] == true) {
+        guard st.toggles["showQuota"] == true else { quota = []; return }
+        while !Task.isCancelled {
+          quota = await Task.detached(priority: .utility) { ProviderQuota.fetchAll() }.value
+          try? await Task.sleep(for: .seconds(300))
+        }
+      }
     }
 
     // MARK: palette (⌘K commands, ⌘P files)
