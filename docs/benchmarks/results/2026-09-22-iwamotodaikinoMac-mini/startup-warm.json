@@ -1,0 +1,16 @@
+{
+  "contract": "clair-v2-performance-budget",
+  "metric": "launch.warm_to_first_frame",
+  "unit": "ms",
+  "budget_ms": 300,
+  "build_configuration": "release",
+  "bundled": true,
+  "recorded_at": "2026-09-22T06:33:19Z",
+  "host": "iwamotodaikinoMac-mini.local",
+  "commit": "34e3232dff970a7200a8153eaefbefe0026f4b73",
+  "median_ms": 192.98,
+  "p95_ms": 195.18,
+  "max_ms": 195.18,
+  "samples_ms": [195.18,192.98,191.49,192.20,193.85],
+  "verdict": "pass"
+}

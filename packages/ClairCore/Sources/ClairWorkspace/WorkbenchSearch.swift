@@ -164,7 +164,7 @@ public struct LocalHistory: Sendable {
     func lines(_ d: Data?) -> [String] { d.flatMap { String(data: $0, encoding: .utf8) }?.components(separatedBy: "\n") ?? [] }
     let cur = lines(FileManager.default.contents(atPath: root + "/" + path)), old = lines(try? Data(contentsOf: version))
     let d = old.difference(from: cur)
-    return d.removals.compactMap { c -> String? in if case .remove(let i, let l, _) = c { "- \(l)" } else { nil } }
+    return d.removals.compactMap { c -> String? in if case .remove(_, let l, _) = c { "- \(l)" } else { nil } }
       + d.insertions.compactMap { c -> String? in if case .insert(_, let l, _) = c { "+ \(l)" } else { nil } }
   }
 

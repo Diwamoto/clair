@@ -3,6 +3,7 @@ SHELL := /bin/bash
 
 .PHONY: help doctor dev dev-ios build-mobile-simulator lint-swift lint ci
 .PHONY: build mobile-build test test-integration check foundation
+.PHONY: perf perf-budget perf-startup
 
 help: ## Show the supported development commands.
 	@awk 'BEGIN {FS = ":.*## "; printf "Clair development commands:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -35,6 +36,14 @@ check: ## Validate the Clair package graph and v1 dependency boundary.
 	@./scripts/foundation.sh check
 
 foundation: check build test test-integration ## Run the complete Clair foundation lane.
+
+perf-budget: ## Measure every operation against the 100 ms budget (BUDGET-OP-100).
+	@./scripts/benchmarks/run-budget.sh
+
+perf-startup: ## Measure bundled Release startup against half a Dock bounce.
+	@./scripts/benchmarks/run-startup.sh
+
+perf: perf-budget perf-startup ## Run the full Clair v2 performance budget gate.
 
 lint-swift: ## Check Swift formatting.
 	@swift format lint --recursive --parallel --strict apple

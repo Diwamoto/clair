@@ -46,6 +46,7 @@
       self.init(persistingAt: URL.applicationSupportDirectory.appending(path: "Clair/reviews.json"), asynchronously: true)
     }
 
+    /// Explicit files stay synchronous so tests and importers can observe a fully loaded store.
     convenience init(file: URL?) { self.init(persistingAt: file, asynchronously: false) }
 
     private init(persistingAt file: URL?, asynchronously: Bool) {
@@ -74,6 +75,7 @@
         managers[k] = ReviewThreadManager(threads: rs.map(\.thread))
         for r in rs { lines[r.id] = r.line; texts[r.id] = r.text }
       }
+      version += 1
     }
 
     private func key(_ root: String, _ path: String) -> String { root + "\0" + path }
@@ -172,12 +174,13 @@
     let onToggle: (GitChange, _ staged: Bool) -> Void
     /// Section-wide stage/unstage; the flag is the desired state.
     let onBulk: ([GitChange], _ stage: Bool) -> Void
-    /// Commits the staged files; returns an error message, nil on success.
-    let onCommit: (String) -> String?
+    /// Starts a commit through the typed command registry.
+    let onCommit: (String) -> Void
+    let busy: Bool
+    let operationMessage: String?
     @State private var message = ""
-    @State private var error: String?
 
-    private var canCommit: Bool { changes.contains(where: \.staged) && !message.trimmingCharacters(in: .whitespaces).isEmpty }
+    private var canCommit: Bool { !busy && changes.contains(where: \.staged) && !message.trimmingCharacters(in: .whitespaces).isEmpty }
 
     private var commitBox: some View {
       VStack(alignment: .leading, spacing: 6) {
@@ -187,7 +190,6 @@
           .background(C.surfaceActive, in: RoundedRectangle(cornerRadius: Radius.control))
           .onSubmit(commit)
         HStack {
-          if let error { Text(error).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).lineLimit(2) }
           Spacer()
           Button(action: commit) {
             Text("コミット").font(Typography.font(Typography.chromeStrong))
@@ -201,21 +203,29 @@
 
     private func commit() {
       guard canCommit else { return }
-      error = onCommit(message)
-      if error == nil { message = "" }
+      onCommit(message)
     }
 
     var body: some View {
-      if changes.isEmpty {
-        VStack(spacing: 4) {
-          Text("変更はありません").font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textSecondary)
-          Text("working tree はきれいです。").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary)
-        }.frame(maxWidth: .infinity).padding(16)
-      } else {
-        commitBox
-        section("ステージ済み", changes.filter(\.staged)) { DiffTarget(path: $0.path, staged: true, untracked: false) }
-        section("変更", changes.filter { $0.unstaged && !$0.untracked }) { DiffTarget(path: $0.path, staged: false, untracked: false) }
-        section("未追跡", changes.filter(\.untracked)) { DiffTarget(path: $0.path, staged: false, untracked: true) }
+      VStack(spacing: 0) {
+        if let operationMessage {
+          HStack(spacing: 6) {
+            if busy { ProgressView().controlSize(.small) }
+            Text(operationMessage).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).lineLimit(3)
+            Spacer(minLength: 0)
+          }.padding(.horizontal, 12).padding(.vertical, 8)
+        }
+        if changes.isEmpty {
+          VStack(spacing: 4) {
+            Text("変更はありません").font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textSecondary)
+            Text("working tree はきれいです。").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary)
+          }.frame(maxWidth: .infinity).padding(16)
+        } else {
+          commitBox
+          section("ステージ済み", changes.filter(\.staged)) { DiffTarget(path: $0.path, staged: true, untracked: false) }
+          section("変更", changes.filter { $0.unstaged && !$0.untracked }) { DiffTarget(path: $0.path, staged: false, untracked: false) }
+          section("未追跡", changes.filter(\.untracked)) { DiffTarget(path: $0.path, staged: false, untracked: true) }
+        }
       }
     }
 
@@ -229,7 +239,7 @@
           let stage = title != "ステージ済み"
           Button { onBulk(rows, stage) } label: {
             Text(stage ? "+" : "−").font(Typography.font(Typography.title)).foregroundStyle(C.textTertiary).frame(width: 18, height: 18)
-          }.buttonStyle(.plain).help(stage ? "すべてステージに追加" : "すべてステージから外す")
+          }.buttonStyle(.plain).disabled(busy).help(stage ? "すべてステージに追加" : "すべてステージから外す")
         }.padding(.leading, 20).padding(.trailing, 12).frame(height: 26)
         ForEach(rows, id: \.path) { c in
           let t = target(c), on = selected == t
@@ -241,7 +251,7 @@
             if c.untracked { Text("未追跡").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary) }
             Button { onToggle(c, !t.staged) } label: {
               Text(t.staged ? "−" : "+").font(Typography.font(Typography.title)).foregroundStyle(C.textTertiary).frame(width: 18, height: 18)
-            }.buttonStyle(.plain).help(t.staged ? "ステージを取り消す" : "ステージに追加")
+            }.buttonStyle(.plain).disabled(busy).help(t.staged ? "ステージを取り消す" : "ステージに追加")
           }
           .padding(.horizontal, 8).frame(height: 26)
           .background(on ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
@@ -291,12 +301,12 @@
     }
 
     nonisolated static func model(_ text: String) -> Model {
-      let rows = rows(text)
-      let counts = stats(rows)
+      let parsed = rows(text)
+      let counts = stats(parsed)
       return Model(
-        text: text, rows: rows, added: counts.added, removed: counts.removed,
-        hunks: rows.indices.filter { rows[$0].text.hasPrefix("@@") },
-        visibleLines: Set(rows.compactMap(\.newLine)))
+        text: text, rows: parsed, added: counts.added, removed: counts.removed,
+        hunks: parsed.indices.filter { parsed[$0].text.hasPrefix("@@") },
+        visibleLines: Set(parsed.compactMap(\.newLine)))
     }
 
     /// Parses `@@ -a,b +c,d @@` for `c`, then numbers context and added lines from there.
@@ -326,11 +336,11 @@
       let rows = model.rows
       let (added, removed) = (model.added, model.removed)
       let hunks = model.hunks
-      let suggestionsByLine = Dictionary(grouping: suggestions, by: \.line)
       // Threads/suggestions whose line is not in a hunk (or whose line went stale) would be invisible: list them on top.
       let visible = model.visibleLines
       let looseThreads = threads.filter { !visible.contains($0.key) }.sorted { $0.key < $1.key }
       let looseSuggestions = suggestions.filter { !visible.contains($0.line) }
+      let suggestionsByLine = Dictionary(grouping: suggestions, by: \.line)
       ScrollViewReader { proxy in
       VStack(spacing: 0) {
         HStack {
@@ -646,47 +656,65 @@
     @State private var loading = false
     @State private var message: String?
 
-    private func label(_ v: URL) -> String {
-      Double(v.lastPathComponent).map { Date(timeIntervalSince1970: $0).formatted(date: .abbreviated, time: .standard) } ?? v.lastPathComponent
+    private var key: String { (root ?? "") + "\0" + (path ?? "") }
+
+    private func label(_ version: URL) -> String {
+      Double(version.lastPathComponent).map {
+        Date(timeIntervalSince1970: $0).formatted(date: .abbreviated, time: .standard)
+      } ?? version.lastPathComponent
     }
 
     var body: some View {
-      if path == nil || (!loading && versions.isEmpty) {
-        Text(path == nil ? "ファイルを選択してください。" : "履歴はありません（保存・一括置換の直前に自動退避されます）。")
-          .font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).padding(12)
-      }
-      if loading { Text("履歴を読み込み中…").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary).padding(12) }
-      if let message { Text(message).font(Typography.font(Typography.chrome)).foregroundStyle(C.attention).padding(.horizontal, 12) }
-      ForEach(versions, id: \.self) { v in
-        Button { select(v) } label: {
-          HStack {
-            Text(label(v)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textPrimary)
-            Spacer()
-            Image(systemName: selected == v ? "chevron.down" : "chevron.right").font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary)
-          }
-          .padding(.horizontal, 20).padding(.vertical, 4).contentShape(Rectangle())
-        }.buttonStyle(.plain)
-        if selected == v {
-          if let preview {
-            VStack(alignment: .leading, spacing: 2) {
-              Text(preview.isEmpty ? "現在の内容と同一です。" : "復元で \(preview.filter { $0.hasPrefix("-") }.count) 行が消え、\(preview.filter { $0.hasPrefix("+") }.count) 行が戻ります")
-                .font(Typography.font(Typography.micro)).foregroundStyle(C.textTertiary)
-              ForEach(Array(preview.prefix(40).enumerated()), id: \.offset) { _, l in
-                Text(l).font(.system(size: 11, design: .monospaced)).foregroundStyle(l.hasPrefix("+") ? C.textPrimary : C.textQuaternary).lineLimit(1)
-              }
-              if preview.count > 40 { Text("… 他 \(preview.count - 40) 行").font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary) }
-              Button("この版に復元") { restore(v) }.disabled(preview.isEmpty || loading).padding(.top, 4)
+      Group {
+        if path == nil || (!loading && versions.isEmpty) {
+          Text(path == nil ? "ファイルを選択してください。" : "履歴はありません（保存・一括置換の直前に自動退避されます）。")
+            .font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).padding(12)
+        }
+        if loading && versions.isEmpty {
+          HStack(spacing: 6) {
+            ProgressView().controlSize(.small)
+            Text("履歴を読み込み中…").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary)
+          }.padding(12)
+        }
+        if let message {
+          Text(message).font(Typography.font(Typography.chrome)).foregroundStyle(C.attention).padding(.horizontal, 12)
+        }
+        ForEach(versions, id: \.self) { version in
+          Button { select(version) } label: {
+            HStack {
+              Text(label(version)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textPrimary)
+              Spacer()
+              Image(systemName: selected == version ? "chevron.down" : "chevron.right")
+                .font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary)
             }
-            .padding(.horizontal, 28).padding(.bottom, 6)
-          } else {
-            Text("差分を計算中…").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary).padding(.horizontal, 28).padding(.bottom, 6)
+            .padding(.horizontal, 20).padding(.vertical, 4).contentShape(Rectangle())
+          }.buttonStyle(.plain)
+          if selected == version {
+            if let preview {
+              VStack(alignment: .leading, spacing: 2) {
+                Text(preview.isEmpty ? "現在の内容と同一です。" : "復元で \(preview.filter { $0.hasPrefix("-") }.count) 行が消え、\(preview.filter { $0.hasPrefix("+") }.count) 行が戻ります")
+                  .font(Typography.font(Typography.micro)).foregroundStyle(C.textTertiary)
+                ForEach(Array(preview.prefix(40).enumerated()), id: \.offset) { _, line in
+                  Text(line).font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(line.hasPrefix("+") ? C.textPrimary : C.textQuaternary).lineLimit(1)
+                }
+                if preview.count > 40 {
+                  Text("… 他 \(preview.count - 40) 行").font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary)
+                }
+                Button("この版に復元") { restore(version) }.disabled(preview.isEmpty || loading).padding(.top, 4)
+              }
+              .padding(.horizontal, 28).padding(.bottom, 6)
+            } else {
+              HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text("比較中…").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary)
+              }.padding(.horizontal, 28).padding(.bottom, 6)
+            }
           }
         }
       }
       .task(id: key) { await loadVersions() }
     }
-
-    private var key: String { (root ?? "") + "\0" + (path ?? "") }
 
     private func loadVersions() async {
       selected = nil; preview = nil; message = nil
@@ -699,11 +727,11 @@
 
     private func select(_ version: URL) {
       guard selected != version, let root, let path else { selected = nil; preview = nil; return }
-      selected = version; preview = nil; message = nil
+      selected = version; preview = nil; message = nil; loading = true
       Task {
         let loaded = await Task.detached(priority: .userInitiated) { history.preview(version, root: root, path: path) }.value
         guard selected == version, self.root == root, self.path == path else { return }
-        preview = loaded
+        preview = loaded; loading = false
       }
     }
 
@@ -711,7 +739,9 @@
       guard let root, let path else { return }
       loading = true; message = nil
       Task {
-        let result = await Task.detached(priority: .userInitiated) { Result { try history.restore(version, root: root, path: path) } }.value
+        let result = await Task.detached(priority: .userInitiated) {
+          Result { try history.restore(version, root: root, path: path) }
+        }.value
         guard self.root == root, self.path == path else { return }
         loading = false
         switch result {

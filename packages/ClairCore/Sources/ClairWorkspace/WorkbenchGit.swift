@@ -4,7 +4,7 @@ import Foundation
 // argv array (never a shell), so branch/path/message text cannot inject anything. Only Projects
 // that are Git repositories get these commands (`WorkbenchState.isRepo`).
 // Managed worktrees live outside the repository and are opened as their own Project.
-// ponytail: synchronous git on the GUI thread, no timeout; move off-thread if a huge repo stalls it.
+// Calls are synchronous; UI callers dispatch the typed commands off the main actor.
 // ponytail: conflicts are aborted and reported (re-ask the agent); a native merge editor is not built.
 
 #if os(macOS)
@@ -30,16 +30,32 @@ public enum WorkbenchGit {
     .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appending(path: "Clair/worktrees")
 
   @discardableResult
-  static func run(_ root: String, _ args: [String], merge: Bool = false) -> (ok: Bool, out: String) {
+  static func run(_ root: String, _ args: [String], merge: Bool = false, input: String? = nil) -> (ok: Bool, out: String) {
     #if os(macOS)
     let p = Process(), out = Pipe()
     p.executableURL = URL(fileURLWithPath: "/usr/bin/git")
     p.arguments = ["-C", root] + args
+    p.environment = ProcessInfo.processInfo.environment.merging([
+      "GIT_TERMINAL_PROMPT": "0",
+      "GCM_INTERACTIVE": "never",
+      "GIT_ASKPASS": "/usr/bin/false",
+      "SSH_ASKPASS": "/usr/bin/false",
+      "SSH_ASKPASS_REQUIRE": "never",
+      "GIT_SSH_COMMAND": "/usr/bin/ssh -oBatchMode=yes",
+    ]) { _, commandValue in commandValue }
     p.standardOutput = out; p.standardError = merge ? out : FileHandle.nullDevice
+    let stdin = input.map { _ in Pipe() }
+    p.standardInput = stdin ?? FileHandle.nullDevice
     guard (try? p.run()) != nil else { return (false, "git not runnable") }
+    if let input, let stdin {
+      stdin.fileHandleForWriting.write(Data(input.utf8))
+      try? stdin.fileHandleForWriting.close()
+    }
     let text = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
     p.waitWithoutRunLoop()
-    return (p.terminationStatus == 0, text.trimmingCharacters(in: .whitespacesAndNewlines))
+    // Keep leading spaces: porcelain status uses them as the index/worktree column,
+    // and unified diff context lines are also significant. Only strip line endings.
+    return (p.terminationStatus == 0, text.trimmingCharacters(in: .newlines))
     #else
     return (false, "git is not available on iOS")
     #endif
@@ -55,13 +71,41 @@ public enum WorkbenchGit {
   public static func currentBranch(_ root: String) -> String? {
     let r = run(root, ["rev-parse", "--abbrev-ref", "HEAD"]); return r.ok && r.out != "HEAD" ? r.out : nil
   }
+  public static func branches(_ root: String) -> [String] {
+    lines(root, ["for-each-ref", "--format=%(refname:short)", "--sort=refname", "refs/heads"])
+  }
   /// Commits behind / ahead of the upstream; nil without one.
   public static func aheadBehind(_ root: String) -> (behind: Int, ahead: Int)? {
     let r = run(root, ["rev-list", "--left-right", "--count", "@{u}...HEAD"])
     let n = r.out.split(whereSeparator: \.isWhitespace).compactMap { Int($0) }
     return r.ok && n.count == 2 ? (n[0], n[1]) : nil
   }
+  /// Stage or unstage a validated group in one subprocess. This is materially cheaper than
+  /// spawning git and rescanning the repository once per sidebar row.
+  @discardableResult public static func setStaged(_ root: String, paths: [String], staged: Bool) -> String? {
+    guard !paths.isEmpty else { return nil }
+    let verb = staged ? ["add"] : ["restore", "--staged"]
+    let result = run(root, verb + ["--"] + paths, merge: true)
+    return result.ok ? nil : result.out
+  }
+
+  @discardableResult public static func commit(_ root: String, message: String) -> String? {
+    let result = run(root, ["commit", "-m", message], merge: true)
+    return result.ok ? nil : result.out
+  }
   static func isClean(_ root: String) -> Bool { run(root, ["status", "--porcelain"]).out.isEmpty }
+
+  static func remoteFailure(_ action: String, output: String) -> String {
+    let lower = output.lowercased()
+    let authentication = [
+      "authentication failed", "could not read username", "permission denied (publickey)",
+      "terminal prompts disabled", "credentials", "repository not found",
+    ].contains { lower.contains($0) }
+    let detail = output.isEmpty ? "Git から詳細が返りませんでした。" : output
+    return authentication
+      ? "認証が必要です。ターミナルで Git の認証を設定してください。\n\(detail)"
+      : "\(action) に失敗しました。\n\(detail)"
+  }
 }
 
 extension WorkbenchState {
@@ -69,9 +113,33 @@ extension WorkbenchState {
   /// False for a plain folder: Git commands are neither listed nor runnable.
   public var isRepo: Bool { current.map { FileManager.default.fileExists(atPath: $0.path + "/.git") } ?? false }
 
-  mutating func refreshStatus() {
+  mutating func refreshStatus(reconcileOpenFiles: Bool = false) {
     guard let p = current else { return }
-    files = WorkbenchFiles.scan(p.path)  // rescan: new/removed files must become stageable
+    if reconcileOpenFiles {
+      let scanned = WorkbenchFiles.scan(p.path)
+      files = scanned
+      filesCache[project] = scanned
+      let existing = Set(scanned.map(\.path))
+      tabs = tabs.filter(existing.contains)
+      dirty.formIntersection(tabs)
+      if active.map(tabs.contains) != true { active = tabs.last }
+      return
+    }
+    let status = WorkbenchFiles.gitStatus(p.path)
+    var known = Set<String>()
+    var refreshed = files.compactMap { file -> WorkbenchFile? in
+      known.insert(file.path)
+      // A D row is retained while Git reports it, then removed on the refresh after commit.
+      // The watcher owns arbitrary filesystem removals, so this hot Git path needs no 20k-file stat walk.
+      guard file.status != "D" || status[file.path] != nil else { return nil }
+      return WorkbenchFile(path: file.path, status: status[file.path])
+    }
+    // Preserve the already tree-ordered list. New Git-visible paths are deterministic here;
+    // the file watcher performs the canonical full tree-order scan in the background.
+    for path in status.keys.filter({ !known.contains($0) }).sorted() {
+      refreshed.append(WorkbenchFile(path: path, status: status[path]))
+    }
+    files = refreshed
   }
 
   func review(base: String?) -> GitReview {
@@ -79,10 +147,13 @@ extension WorkbenchState {
     let base = base ?? current?.origin.flatMap(WorkbenchGit.currentBranch)
       ?? ["main", "master"].first { WorkbenchGit.branchExists(root, $0) }
     let committed = base.map { WorkbenchGit.lines(root, ["diff", "--name-status", "\($0)...HEAD"]) } ?? []
+    let changes = WorkbenchGit.changes(root)
     return GitReview(
       base: base, committed: committed,
-      uncommitted: WorkbenchGit.lines(root, ["diff", "--name-status", "HEAD"]),
-      untracked: WorkbenchGit.lines(root, ["ls-files", "--others", "--exclude-standard"]))
+      uncommitted: changes.filter { !$0.untracked }.map {
+        "\($0.index != " " ? $0.index : $0.worktree)\t\($0.path)"
+      },
+      untracked: changes.filter(\.untracked).map(\.path))
   }
 }
 
@@ -93,8 +164,11 @@ extension CommandRegistry {
       return s.current!.path
     }
     @Sendable func inFiles(_ s: WorkbenchState, _ i: CommandInput) throws(CommandError) -> String {
-      _ = try repo(s)
-      guard let p = i["path"]?.string, s.files.contains(where: { $0.path == p }) else {
+      let root = try repo(s)
+      guard let p = i["path"]?.string,
+        (try? ClairWorkspacePath(p)) != nil,
+        s.files.contains(where: { $0.path == p }) || WorkbenchGit.changes(root).contains(where: { $0.path == p })
+      else {
         throw CommandError(.preconditionFailed, "no file \(i["path"]?.string ?? "")")
       }
       return p
@@ -127,10 +201,45 @@ extension CommandRegistry {
           preflight: { s, i throws(CommandError) in
             let root = try repo(s), b = try branch(i)
             guard WorkbenchGit.branchExists(root, b) else { throw CommandError(.preconditionFailed, "no branch \(b)") }
+            guard s.dirty.isEmpty else { throw CommandError(.preconditionFailed, "未保存のファイルを保存してから切り替えてください") }
             return .write
           }) { s, i in
-        let r = WorkbenchGit.run(s.current!.path, ["switch", i["name"]!.string!], merge: true)
-        s.refreshStatus(); return r.ok ? .ok : .text(r.out)
+        let root = s.current!.path
+        let switched = i["name"]!.string!
+        let r = WorkbenchGit.run(root, ["switch", switched], merge: true)
+        if r.ok {
+          if let index = s.projects.firstIndex(where: { $0.name == s.project }), s.projects[index].origin != nil {
+            s.projects[index].branch = switched
+          }
+          s.refreshStatus(reconcileOpenFiles: true)
+        }
+        return r.ok ? .ok : .text(r.out)
+      },
+      cmd("git.pull", "Pull", .external, ai: false, palette: false,
+          preflight: { s, _ throws(CommandError) in
+            let root = try repo(s)
+            guard WorkbenchGit.currentBranch(root) != nil else { throw CommandError(.preconditionFailed, "detached HEAD では pull できません") }
+            guard WorkbenchGit.run(root, ["rev-parse", "--verify", "@{u}"]).ok else {
+              throw CommandError(.preconditionFailed, "upstream が設定されていません")
+            }
+            guard s.dirty.isEmpty else { throw CommandError(.preconditionFailed, "未保存のファイルを保存してから pull してください") }
+            return .external
+          }) { s, _ in
+        let r = WorkbenchGit.run(s.current!.path, ["pull", "--ff-only"], merge: true)
+        if r.ok { s.refreshStatus(reconcileOpenFiles: true) }
+        return r.ok ? .ok : .text(WorkbenchGit.remoteFailure("Pull", output: r.out))
+      },
+      cmd("git.push", "Push", .external, ai: false, palette: false,
+          preflight: { s, _ throws(CommandError) in
+            let root = try repo(s)
+            guard WorkbenchGit.currentBranch(root) != nil else { throw CommandError(.preconditionFailed, "detached HEAD では push できません") }
+            guard WorkbenchGit.run(root, ["rev-parse", "--verify", "@{u}"]).ok else {
+              throw CommandError(.preconditionFailed, "upstream が設定されていません")
+            }
+            return .external
+          }) { s, _ in
+        let r = WorkbenchGit.run(s.current!.path, ["push"], merge: true)
+        return r.ok ? .ok : .text(WorkbenchGit.remoteFailure("Push", output: r.out))
       },
       // ai: false — deleting a branch is never an agent's call; individual confirmation for each.
       cmd("git.branchDelete", "ブランチを削除", .destructive, ai: false, params: [CommandParam("name", .string)], palette: false,
@@ -168,14 +277,16 @@ extension CommandRegistry {
           preflight: { s, _ throws(CommandError) in
             let root = try repo(s)
             guard s.current!.origin != nil else { throw CommandError(.preconditionFailed, "not a managed worktree") }
+            guard WorkbenchGit.currentBranch(root) != nil else { throw CommandError(.preconditionFailed, "managed worktree has detached HEAD") }
             guard WorkbenchGit.isClean(root) else { throw CommandError(.preconditionFailed, "commit or discard changes before adopting") }
             return .write
           }) { s, _ in
         let p = s.current!, base = p.origin!
-        let r = WorkbenchGit.run(base, ["merge", "--no-ff", "-m", "Merge \(p.branch!)", p.branch!], merge: true)
+        guard let branch = WorkbenchGit.currentBranch(p.path) else { return .text("managed worktree has detached HEAD") }
+        let r = WorkbenchGit.run(base, ["merge", "--no-ff", "-m", "Merge \(branch)", branch], merge: true)
         if r.ok { return .ok }
         WorkbenchGit.run(base, ["merge", "--abort"])
-        return .text("merge failed and was aborted; ask the agent to resolve conflicts on \(p.branch!):\n\(r.out)")
+        return .text("merge failed and was aborted; ask the agent to resolve conflicts on \(branch):\n\(r.out)")
       },
       // Refuses a dirty worktree (no --force); the branch is kept and deleted separately via git.branchDelete.
       cmd("worktree.remove", "worktree を削除", .destructive, ai: false,

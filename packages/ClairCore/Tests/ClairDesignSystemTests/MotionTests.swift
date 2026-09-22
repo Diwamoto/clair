@@ -5,7 +5,7 @@ import XCTest
 /// `SCREEN_MS`/`OVERLAY_MS`, `KIND`, `ORDER` and `transitionFor`).
 final class MotionTests: XCTestCase {
   func testDurationsMatchChecklist() {
-    XCTAssertEqual(Motion.screenDuration, 0.2, accuracy: 0.0001) // SCREEN_MS = 200
+    XCTAssertEqual(Motion.screenDuration, 0.16, accuracy: 0.0001) // SCREEN_MS = 160
     XCTAssertEqual(Motion.overlayDuration, 0.09, accuracy: 0.0001) // OVERLAY_MS = 90
   }
 

@@ -100,5 +100,13 @@
       XCTAssertTrue(q.stale)
       XCTAssertNotNil(s.apply(root: "/r", path: "g", id: q.id, in: m2))
     }
+
+    func testLargeDiffModelIsBounded() {
+      let body = (1...8_000).map { "+line \($0)" }.joined(separator: "\n")
+      let model = DiffView.model("@@ -0,0 +1,8000 @@\n" + body)
+      XCTAssertEqual(model.rows.count, DiffView.maxLines)
+      XCTAssertEqual(model.added, DiffView.maxLines - 1)
+      XCTAssertEqual(model.hunks, [0])
+    }
   }
 #endif

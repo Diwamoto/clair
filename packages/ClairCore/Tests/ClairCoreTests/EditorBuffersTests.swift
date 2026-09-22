@@ -5,12 +5,52 @@
   @testable import ClairEditorCore
   @testable import ClairWorkspace
 
+  private final class BlockingFileScanner: @unchecked Sendable {
+    private let lock = NSLock()
+    private var armed = false
+    let started = DispatchSemaphore(value: 0)
+    let release = DispatchSemaphore(value: 0)
+
+    func arm() { lock.withLock { armed = true } }
+    func waitUntilStarted() -> Bool { started.wait(timeout: .now() + 3) == .success }
+
+    func scan(_ root: String) -> [WorkbenchFile] {
+      let shouldBlock = lock.withLock {
+        defer { armed = false }
+        return armed
+      }
+      if shouldBlock {
+        started.signal()
+        release.wait()
+      }
+      return WorkbenchFiles.scan(root)
+    }
+  }
+
   @MainActor final class EditorBuffersTests: XCTestCase {
     private func root(_ files: [String: Data]) throws -> String {
       let d = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
       try FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
       for (n, data) in files { try data.write(to: d.appending(path: n)) }
       return d.path
+    }
+
+    private func waitUntil(
+      timeout: Duration = .seconds(3), _ condition: @escaping @MainActor () -> Bool
+    ) async -> Bool {
+      let clock = ContinuousClock()
+      let deadline = clock.now.advanced(by: timeout)
+      while clock.now < deadline {
+        if condition() { return true }
+        try? await Task.sleep(for: .milliseconds(20))
+      }
+      return condition()
+    }
+
+    private func openWatchedProject(_ root: String, in store: ClairWorkbenchStore) async throws {
+      _ = try store.run("project.open", ["path": .string(root)]).get()
+      let loaded = await waitUntil { store.state.files.contains { $0.path == "a.txt" } }
+      XCTAssertTrue(loaded)
     }
 
     func testEditSaveAndDiskDrop() throws {
@@ -83,6 +123,141 @@
 
       XCTAssertTrue(FileManager.default.fileExists(atPath: file.path))
       XCTAssertNotNil(WorkbenchState.restore(from: file, scanFiles: false))
+    }
+
+    func testBackgroundGitStageKeepsUnsavedEditorBuffer() async throws {
+      let r = try root(["a.txt": Data("a".utf8)])
+      defer { try? FileManager.default.removeItem(atPath: r) }
+      XCTAssertTrue(WorkbenchGit.run(r, ["init", "-b", "main"], merge: true).ok)
+      XCTAssertTrue(WorkbenchGit.run(r, ["-c", "user.name=t", "-c", "user.email=t@t", "add", "."], merge: true).ok)
+      XCTAssertTrue(WorkbenchGit.run(r, ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "init"], merge: true).ok)
+      try "disk".write(toFile: r + "/a.txt", atomically: true, encoding: .utf8)
+
+      let store = ClairWorkbenchStore(persistAt: nil)
+      store.state = WorkbenchState()
+      store.state.openProject(WorkbenchProject(name: "git-fixture", path: r))
+      store.state.openTab("a.txt")
+      guard case .ready(let manager) = store.buffers.load("a.txt", root: r) else { return XCTFail("load") }
+      _ = try manager.apply([TextEdit(range: TextUTF8Range(UTF8Offset(4), UTF8Offset(4)), replacement: "-unsaved")])
+      store.edited("a.txt")
+
+      let error = await store.performGitFromUI([("git.stage", ["path": .string("a.txt")])])
+      XCTAssertNil(error)
+      XCTAssertTrue(store.buffers.isOpen("a.txt"))
+      XCTAssertEqual(manager.buffer.snapshot.string(), "disk-unsaved")
+      XCTAssertTrue(store.state.dirty.contains("a.txt"))
+    }
+
+    func testEditMadeDuringSlowBranchSwitchIsPreserved() async throws {
+      let r = try root(["a.txt": Data("main".utf8)])
+      defer { try? FileManager.default.removeItem(atPath: r) }
+      XCTAssertTrue(WorkbenchGit.run(r, ["init", "-b", "main"], merge: true).ok)
+      XCTAssertTrue(WorkbenchGit.run(r, ["-c", "user.name=t", "-c", "user.email=t@t", "add", "."], merge: true).ok)
+      XCTAssertTrue(WorkbenchGit.run(r, ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "main"], merge: true).ok)
+      XCTAssertTrue(WorkbenchGit.run(r, ["switch", "-c", "topic"], merge: true).ok)
+      try "topic".write(toFile: r + "/a.txt", atomically: true, encoding: .utf8)
+      XCTAssertTrue(WorkbenchGit.run(r, ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-am", "topic"], merge: true).ok)
+      XCTAssertTrue(WorkbenchGit.run(r, ["switch", "main"], merge: true).ok)
+      let hook = r + "/.git/hooks/post-checkout"
+      try "#!/bin/sh\nsleep 0.25\n".write(toFile: hook, atomically: true, encoding: .utf8)
+      try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: hook)
+
+      let store = ClairWorkbenchStore(persistAt: nil)
+      try await openWatchedProject(r, in: store)
+      store.state.openTab("a.txt")
+      guard case .ready(let manager) = store.buffers.load("a.txt", root: r) else { return XCTFail("load") }
+
+      let switching = Task { await store.performGitFromUI([("git.switch", ["name": .string("topic")])]) }
+      try await Task.sleep(for: .milliseconds(50))
+      _ = try manager.apply([TextEdit(range: TextUTF8Range(UTF8Offset(4), UTF8Offset(4)), replacement: "-unsaved")])
+      store.edited("a.txt")
+
+      let switchError = await switching.value
+      XCTAssertNil(switchError)
+      XCTAssertEqual(WorkbenchGit.currentBranch(r), "topic")
+      XCTAssertTrue(store.buffers.isOpen("a.txt"))
+      XCTAssertEqual(manager.buffer.snapshot.string(), "main-unsaved")
+      XCTAssertTrue(store.state.dirty.contains("a.txt"))
+      XCTAssertEqual(try String(contentsOfFile: r + "/a.txt", encoding: .utf8), "topic")
+    }
+
+    func testBranchSwitchInvalidatesClosedTabCache() async throws {
+      let r = try root(["a.txt": Data("main".utf8)])
+      defer { try? FileManager.default.removeItem(atPath: r) }
+      XCTAssertTrue(WorkbenchGit.run(r, ["init", "-b", "main"], merge: true).ok)
+      XCTAssertTrue(WorkbenchGit.run(r, ["-c", "user.name=t", "-c", "user.email=t@t", "add", "."], merge: true).ok)
+      XCTAssertTrue(WorkbenchGit.run(r, ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "main"], merge: true).ok)
+      XCTAssertTrue(WorkbenchGit.run(r, ["switch", "-c", "topic"], merge: true).ok)
+      try "topic".write(toFile: r + "/a.txt", atomically: true, encoding: .utf8)
+      XCTAssertTrue(WorkbenchGit.run(r, ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-am", "topic"], merge: true).ok)
+      XCTAssertTrue(WorkbenchGit.run(r, ["switch", "main"], merge: true).ok)
+
+      let store = ClairWorkbenchStore(persistAt: nil)
+      try await openWatchedProject(r, in: store)
+      store.state.openTab("a.txt")
+      guard case .ready(let original) = store.buffers.load("a.txt", root: r) else { return XCTFail("load") }
+      XCTAssertEqual(original.buffer.snapshot.string(), "main")
+      _ = try store.run("tab.close", ["path": .string("a.txt")]).get()
+      XCTAssertTrue(store.buffers.isOpen("a.txt"))
+
+      let switchError = await store.performGitFromUI([("git.switch", ["name": .string("topic")])])
+      XCTAssertNil(switchError)
+      XCTAssertFalse(store.buffers.isOpen("a.txt"))
+      guard case .ready(let reloaded) = store.buffers.load("a.txt", root: r) else { return XCTFail("reload") }
+      XCTAssertEqual(reloaded.buffer.snapshot.string(), "topic")
+    }
+
+    func testWatcherReplaysExternalEditAfterGitCompletion() async throws {
+      let r = try root(["a.txt": Data("main".utf8)])
+      defer { try? FileManager.default.removeItem(atPath: r) }
+      XCTAssertTrue(WorkbenchGit.run(r, ["init", "-b", "main"], merge: true).ok)
+      XCTAssertTrue(WorkbenchGit.run(r, ["-c", "user.name=t", "-c", "user.email=t@t", "add", "."], merge: true).ok)
+      XCTAssertTrue(WorkbenchGit.run(r, ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "main"], merge: true).ok)
+      XCTAssertTrue(WorkbenchGit.run(r, ["switch", "-c", "topic"], merge: true).ok)
+
+      let store = ClairWorkbenchStore(persistAt: nil)
+      try await openWatchedProject(r, in: store)
+      let switchError = await store.performGitFromUI([("git.switch", ["name": .string("main")])])
+      XCTAssertNil(switchError)
+      try "agent".write(toFile: r + "/agent.txt", atomically: true, encoding: .utf8)
+      let observed = await waitUntil { store.state.files.contains { $0.path == "agent.txt" } }
+      XCTAssertTrue(observed)
+    }
+
+    func testEditStartedDuringReplayedScanRemainsDirty() async throws {
+      let r = try root(["a.txt": Data("main".utf8)])
+      defer { try? FileManager.default.removeItem(atPath: r) }
+      XCTAssertTrue(WorkbenchGit.run(r, ["init", "-b", "main"], merge: true).ok)
+      XCTAssertTrue(WorkbenchGit.run(r, ["-c", "user.name=t", "-c", "user.email=t@t", "add", "."], merge: true).ok)
+      XCTAssertTrue(WorkbenchGit.run(r, ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "main"], merge: true).ok)
+      XCTAssertTrue(WorkbenchGit.run(r, ["switch", "-c", "topic"], merge: true).ok)
+
+      let scanner = BlockingFileScanner()
+      let store = ClairWorkbenchStore(persistAt: nil, scanFiles: scanner.scan)
+      try await openWatchedProject(r, in: store)
+      let switchError = await store.performGitFromUI([("git.switch", ["name": .string("main")])])
+      XCTAssertNil(switchError)
+
+      scanner.arm()
+      try "disk-after".write(toFile: r + "/a.txt", atomically: true, encoding: .utf8)
+      try "agent".write(toFile: r + "/agent.txt", atomically: true, encoding: .utf8)
+      let replayStarted = await Task.detached { scanner.waitUntilStarted() }.value
+      XCTAssertTrue(replayStarted)
+      guard case .ready(let manager) = store.buffers.load("a.txt", root: r) else {
+        scanner.release.signal()
+        return XCTFail("load")
+      }
+      _ = try manager.apply([
+        TextEdit(range: TextUTF8Range(UTF8Offset(10), UTF8Offset(10)), replacement: "-unsaved")
+      ])
+      store.edited("a.txt")
+      scanner.release.signal()
+
+      let applied = await waitUntil { store.state.files.contains { $0.path == "agent.txt" } }
+      XCTAssertTrue(applied)
+      XCTAssertTrue(store.state.dirty.contains("a.txt"))
+      XCTAssertTrue(store.buffers.isOpen("a.txt"))
+      XCTAssertEqual(manager.buffer.snapshot.string(), "disk-after-unsaved")
     }
   }
 #endif

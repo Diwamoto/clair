@@ -27,7 +27,8 @@ public enum Screen: String, CaseIterable, Sendable {
 /// cross-fade of outgoing/incoming layers, etc.) is `U04`/`U05`/`U06` scope.
 public enum Motion {
   /// `SCREEN_MS = 200`: main-area screen changes.
-  public static let screenDuration: TimeInterval = 0.2
+  /// Keep screen-level feedback perceptibly immediate; the interaction budget is < 200 ms.
+  public static let screenDuration: TimeInterval = 0.16
   /// `OVERLAY_MS = 90`: overlays, panels and context menus.
   public static let overlayDuration: TimeInterval = 0.09
 

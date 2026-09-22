@@ -40,9 +40,19 @@ import Observation
     /// V04: workspace file (Projects + per-Project layout). nil disables persistence.
     // ponytail: single shared path; Stable/Dev data separation lands with V09.
     private let persistURL: URL?
+    private let scanFiles: @Sendable (String) -> [WorkbenchFile]
 
-    public init(persistAt url: URL? = ClairWorkbenchStore.defaultPersistURL) {
+    public convenience init(persistAt url: URL? = ClairWorkbenchStore.defaultPersistURL) {
+      self.init(persistAt: url, scanFiles: WorkbenchFiles.scan)
+    }
+
+    /// Injectable so the checkout/watcher race can be tested without slowing production scans.
+    init(
+      persistAt url: URL?,
+      scanFiles: @escaping @Sendable (String) -> [WorkbenchFile]
+    ) {
       persistURL = url
+      self.scanFiles = scanFiles
       if let url, let restored = WorkbenchState.restore(from: url, scanFiles: false) { state = restored }
       if state.projects.isEmpty {
         let root = Self.seedRoot
@@ -179,6 +189,51 @@ import Observation
       Task { await saveActiveFile() }
     }
 
+    /// Runs Git commands through the same typed registry as CLI/MCP without blocking SwiftUI.
+    /// A click on an explicitly labelled Pull/Push control is the native confirmation for its
+    /// external risk; non-UI callers still have to pass the registry confirmation gate.
+    func performGitFromUI(_ commands: [(String, CommandInput)], confirmed: Bool = false) async -> String? {
+      guard let root = activeRoot else { return "Git Project ではありません。" }
+      let project = state.project
+      let snapshot = state
+      let registry = registry
+      let changesWorkingTree = commands.contains { $0.0 == "git.switch" || $0.0 == "git.pull" }
+      if changesWorkingTree { beginGitFilesystemMutation(root: root) }
+      let result = await Task.detached(priority: .userInitiated) {
+        var detached = snapshot
+        for (id, input) in commands {
+          switch registry.execute(id, input, confirmed: confirmed, state: &detached) {
+          case .failure(let error): return (error.message as String?, detached)
+          case .success(.text(let message)): return (message as String?, detached)
+          case .success: continue
+          }
+        }
+        return (nil as String?, detached)
+      }.value
+      if changesWorkingTree { endGitFilesystemMutation(root: root) }
+      guard state.project == project, activeRoot == root else { return result.0 }
+      if changesWorkingTree {
+        buffers.dropAll(except: state.dirty)
+      }
+      if result.0 == nil {
+        state.files = result.1.files
+        if let updated = result.1.projects.first(where: { $0.name == project }),
+          let index = state.projects.firstIndex(where: { $0.name == project })
+        {
+          state.projects[index].branch = updated.branch
+        }
+        if changesWorkingTree {
+          let existing = Set(state.files.map(\.path))
+          let currentTabs = state.tabs
+          let dirty = state.dirty
+          state.tabs = currentTabs.filter { existing.contains($0) || dirty.contains($0) }
+          if state.active.map(state.tabs.contains) != true { state.active = state.tabs.last }
+        }
+        persistState()
+      }
+      return result.0
+    }
+
     private func saveActiveFile() async {
       guard let path = state.active, let root = activeRoot,
         case .ready(let manager)? = buffers.peek(path)
@@ -235,6 +290,29 @@ import Observation
     private var watcher: FileWatcher?
     private var watched = ""
     private var scanGeneration = 0
+    private var gitFilesystemMutationRoot: String?
+    private var gitFilesystemMutationGeneration = 0
+
+    private func beginGitFilesystemMutation(root: String) {
+      gitFilesystemMutationGeneration += 1
+      gitFilesystemMutationRoot = root
+    }
+
+    private func endGitFilesystemMutation(root: String) {
+      let generation = gitFilesystemMutationGeneration
+      Task { [weak self] in
+        try? await Task.sleep(for: .milliseconds(500))
+        guard let self, generation == self.gitFilesystemMutationGeneration,
+          self.gitFilesystemMutationRoot == root
+        else { return }
+        self.gitFilesystemMutationRoot = nil
+        guard let pending = self.pendingScan, pending.root == root else { return }
+        self.pendingScan = nil
+        self.diskChanged(
+          pending.paths, root: pending.root, generation: pending.generation,
+          preserveDirty: true)
+      }
+    }
 
     private func watchProject(refresh: Bool = false) {
       guard watched != state.project else { return }
@@ -251,30 +329,60 @@ import Observation
       if refresh || !first { diskChanged([], root: root, generation: generation) }
     }
 
-    private var scanning = false
-    private var pendingScan: (paths: Set<String>, root: String, generation: Int)?
+    func refreshProjectFiles() {
+      guard let root = activeRoot else { return }
+      diskChanged([], root: root, generation: scanGeneration)
+    }
 
-    private func diskChanged(_ paths: Set<String>, root: String, generation: Int) {
+    private(set) var scanning = false
+    private var pendingScan: (
+      paths: Set<String>, root: String, generation: Int, preserveDirty: Bool
+    )?
+
+    private func diskChanged(
+      _ paths: Set<String>, root: String, generation: Int, preserveDirty: Bool = false
+    ) {
       guard generation == scanGeneration, root == activeRoot else { return }
+      if gitFilesystemMutationRoot == root {
+        if var pending = pendingScan, pending.generation == generation {
+          pending.paths.formUnion(paths)
+          pending.preserveDirty = pending.preserveDirty || preserveDirty
+          pendingScan = pending
+        } else { pendingScan = (paths, root, generation, preserveDirty) }
+        return
+      }
       guard !scanning else {
         if var pending = pendingScan, pending.generation == generation {
-          pending.paths.formUnion(paths); pendingScan = pending
-        } else { pendingScan = (paths, root, generation) }
+          pending.paths.formUnion(paths)
+          pending.preserveDirty = pending.preserveDirty || preserveDirty
+          pendingScan = pending
+        } else { pendingScan = (paths, root, generation, preserveDirty) }
         return
       }
       scanning = true
       DispatchQueue.global(qos: .utility).async { [weak self] in
-        let files = WorkbenchFiles.scan(root)
+        let files = self?.scanFiles(root) ?? []
         DispatchQueue.main.async {
           guard let self else { return }
           self.scanning = false
-          if generation == self.scanGeneration, root == self.activeRoot {
-            self.state.applyDiskChange(paths, files: files)
-            self.buffers.drop(paths)
+          if generation == self.scanGeneration, root == self.activeRoot,
+            self.gitFilesystemMutationRoot != root
+          {
+            let changed = preserveDirty ? paths.subtracting(self.state.dirty) : paths
+            self.state.applyDiskChange(changed, files: files)
+            self.buffers.drop(changed)
+          } else if generation == self.scanGeneration, self.gitFilesystemMutationRoot == root {
+            if var pending = self.pendingScan, pending.generation == generation {
+              pending.paths.formUnion(paths)
+              pending.preserveDirty = pending.preserveDirty || preserveDirty
+              self.pendingScan = pending
+            } else { self.pendingScan = (paths, root, generation, preserveDirty) }
           }
           if let pending = self.pendingScan {
             self.pendingScan = nil
-            self.diskChanged(pending.paths, root: pending.root, generation: pending.generation)
+            self.diskChanged(
+              pending.paths, root: pending.root, generation: pending.generation,
+              preserveDirty: pending.preserveDirty)
           }
         }
       }
@@ -288,7 +396,8 @@ import Observation
       if let exit { fresh = state.notices.record(project: state.project, pane: pane, kind: .exited, exitCode: exit) ?? fresh }
       refreshSleepAssertion()
       guard let n = fresh, !NSApp.isActive,
-        Bundle.main.bundleIdentifier != nil  // UNUserNotificationCenter traps outside an app bundle (swift run)
+        Bundle.main.bundleURL.pathExtension == "app",
+        Bundle.main.bundleIdentifier != nil  // UNUserNotificationCenter traps outside an app bundle (swift run / XCTest)
       else { return }
       let body = state.launches[n.pane].flatMap { AgentProfile.named($0.profile)?.title }.map { "\($0): \(n.title)" } ?? n.title
       let c = UNUserNotificationCenter.current()
@@ -388,12 +497,19 @@ import Observation
     @State private var rootFolded = false
     @State private var changes: [GitChange] = []
     @State private var branch: String?
+    @State private var branches: [String] = []
     @State private var sync: (behind: Int, ahead: Int)?
     @State private var changesTask: Task<Void, Never>?
+    @State private var gitOperation: String?
+    @State private var gitMessage: String?
+    @State private var gitFailed = false
     @State private var diff: DiffTarget?
     @State private var loadedDiff: LoadedDiff?
+    @State private var diffTask: Task<Void, Never>?
     @State private var explorerRows: [ExplorerRow] = []
+    @State private var visibleExplorerRows: [ExplorerRow] = []
     @State private var explorerTask: Task<Void, Never>?
+    @State private var explorerVisibilityTask: Task<Void, Never>?
     // V05: search panel state (GUI-local).
     @State private var searchQuery = ""
     @State private var replaceText = ""
@@ -444,8 +560,14 @@ import Observation
         query = ""; selection = 0
         if st.palette == .search { searchSelection = 0; runSearch() }
       }
-      .onChange(of: st.project) { diff = nil; loadedDiff = nil; rebuildExplorer(); reloadChanges() }
+      .onChange(of: st.project) {
+        diff = nil; loadedDiff = nil; gitMessage = nil; gitFailed = false
+        if !st.isRepo && sidebarMode == "shield" { sidebarMode = "folder" }
+        rebuildExplorer(); reloadChanges()
+      }
       .onChange(of: st.files) { rebuildExplorer(); reloadChanges() }
+      .onChange(of: st.collapsed) { rebuildVisibleExplorer() }
+      .onChange(of: diff) { loadDiff() }
       .onAppear { rebuildExplorer(); reloadChanges() }
       .focusedSceneValue(\.clairWorkbench, store)
       .confirmationDialog(
@@ -586,7 +708,7 @@ import Observation
     }
 
     private func activityBarButton(_ icon: String) -> some View {
-      let ready = icon != "ladybug"  // Debug is V13; it must not look actionable until it works
+      let ready = icon != "ladybug" && (icon != "shield" || st.isRepo)
       return ActivityBarButton(icon: icon, on: sidebarMode == icon && !st.settingsOpen, enabled: ready, badge: icon == "bell" && st.notices.unread() > 0) {
         sidebarMode = icon
         if icon == "folder" { diff = nil }
@@ -719,8 +841,8 @@ import Observation
       return HistoryList(
         root: store.activeRoot, path: st.active, history: ClairWorkbenchStore.history,
         restored: {
-          guard let path = st.active else { return }
-          store.buffers.drop([path]); store.dropDirty(path)
+          guard let p = st.active else { return }
+          store.buffers.drop([p]); store.dropDirty(p)  // reload from disk; the pre-restore content is itself a new version
         })
     }
 
@@ -741,27 +863,43 @@ import Observation
     private var changesList: some View {
       ChangesList(
         changes: changes, selected: diff, onSelect: { diff = $0 },
-        onToggle: { c, stage in
-          store.run(stage ? "git.stage" : "git.unstage", ["path": .string(c.path)]); reloadChanges()
+        onToggle: { change, stage in
+          runGit(
+            [(stage ? "git.stage" : "git.unstage", ["path": .string(change.path)])],
+            label: stage ? "ステージ" : "ステージ解除")
         },
         onBulk: { rows, stage in
-          for c in rows { store.run(stage ? "git.stage" : "git.unstage", ["path": .string(c.path)]) }
-          reloadChanges()
+          runGit(
+            rows.map { (stage ? "git.stage" : "git.unstage", ["path": .string($0.path)]) },
+            label: stage ? "一括ステージ" : "一括ステージ解除")
         },
-        onCommit: { msg in
-          defer { reloadChanges() }
-          switch store.run("git.commit", ["message": .string(msg)]) {
-          case .failure(let e): return e.message
-          case .success(.text(let t)): return t
-          default: return nil
-          }
-        })
+        onCommit: { message in
+          runGit([("git.commit", ["message": .string(message)])], label: "コミット")
+        },
+        busy: gitOperation != nil,
+        operationMessage: gitOperation.map { "\($0)中…" } ?? gitMessage)
+    }
+
+    private func runGit(
+      _ commands: [(String, CommandInput)], label: String, confirmed: Bool = false
+    ) {
+      guard gitOperation == nil, !commands.isEmpty else { return }
+      let root = store.activeRoot
+      gitOperation = label; gitMessage = nil; gitFailed = false
+      Task {
+        let error = await store.performGitFromUI(commands, confirmed: confirmed)
+        gitOperation = nil
+        guard store.activeRoot == root else { return }
+        gitFailed = error != nil
+        gitMessage = error ?? "\(label)が完了しました。"
+        reloadChanges()
+      }
     }
 
     private func reloadChanges() {
       changesTask?.cancel()
       guard let root = store.activeRoot else {
-        changes = []; branch = nil; sync = nil; diff = nil
+        changes = []; branch = nil; branches = []; sync = nil; diff = nil
         return
       }
       changesTask = Task {
@@ -769,11 +907,13 @@ import Observation
         guard !Task.isCancelled else { return }
         async let loadedChanges = Task.detached(priority: .utility) { WorkbenchGit.changes(root) }.value
         async let loadedBranch = Task.detached(priority: .utility) { WorkbenchGit.currentBranch(root) }.value
+        async let loadedBranches = Task.detached(priority: .utility) { WorkbenchGit.branches(root) }.value
         async let loadedSync = Task.detached(priority: .utility) { WorkbenchGit.aheadBehind(root) }.value
-        let snapshot = await (loadedChanges, loadedBranch, loadedSync)
+        let snapshot = await (loadedChanges, loadedBranch, loadedBranches, loadedSync)
         guard !Task.isCancelled, store.activeRoot == root else { return }
-        changes = snapshot.0; branch = snapshot.1; sync = snapshot.2
+        changes = snapshot.0; branch = snapshot.1; branches = snapshot.2; sync = snapshot.3
         if let d = diff, !changes.contains(where: { $0.path == d.path }) { diff = nil }
+        else if diff != nil { loadDiff() }
       }
     }
 
@@ -791,17 +931,11 @@ import Observation
       let file: WorkbenchFile?
     }
 
-    private struct LoadedDiff: Sendable {
-      let key: String
-      let model: DiffView.Model
-      let fileLines: [String]
-    }
-
-    private func visible(_ rows: [ExplorerRow]) -> [ExplorerRow] {
+    nonisolated static func visibleExplorerRows(_ rows: [ExplorerRow], collapsed: Set<String>) -> [ExplorerRow] {
       var hidden: String?
       return rows.filter { r in
         if let h = hidden { if r.id.hasPrefix(h) { return false }; hidden = nil }
-        if r.file == nil, st.collapsed.contains(r.id) { hidden = r.id + "/" }
+        if r.file == nil, collapsed.contains(r.id) { hidden = r.id + "/" }
         return true
       }
     }
@@ -809,6 +943,12 @@ import Observation
     /// Folders derived from the file paths; click toggles, files open a tab.
     private var explorer: some View {
       return LazyVStack(alignment: .leading, spacing: 0) {
+        if store.scanning {
+          HStack(spacing: 6) {
+            ProgressView().controlSize(.small)
+            Text("ファイルを読み込み中…").font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+          }.padding(.horizontal, 16).frame(height: 28)
+        }
         // Project root: uppercase, branch glyph, no chevron — it reads as a
         // section label, not one more row in the same list as its children.
         // Folds the whole tree (GUI-local); click-to-collapse is unchanged.
@@ -818,7 +958,7 @@ import Observation
           Spacer(minLength: 0)
         }
         if !rootFolded {
-          ForEach(visible(explorerRows)) { r in
+          ForEach(visibleExplorerRows) { r in
             if let f = r.file {
               let on = st.active == f.path && !st.settingsOpen
               let badge = st.dirty.contains(f.path) ? "M" : f.status
@@ -854,6 +994,17 @@ import Observation
         let rows = await Task.detached(priority: .utility) { Self.explorerRows(for: files) }.value
         guard !Task.isCancelled, st.project == project, st.files == files else { return }
         explorerRows = rows
+        rebuildVisibleExplorer()
+      }
+    }
+
+    private func rebuildVisibleExplorer() {
+      explorerVisibilityTask?.cancel()
+      let rows = explorerRows, collapsed = st.collapsed
+      explorerVisibilityTask = Task {
+        let visible = await Task.detached(priority: .utility) { Self.visibleExplorerRows(rows, collapsed: collapsed) }.value
+        guard !Task.isCancelled, explorerRows == rows, st.collapsed == collapsed else { return }
+        visibleExplorerRows = visible
       }
     }
 
@@ -941,10 +1092,66 @@ import Observation
 
     private func name(_ path: String) -> String { String(path.split(separator: "/").last ?? "") }
 
+    private struct LoadedDiff {
+      let target: DiffTarget
+      let root: String
+      let model: DiffView.Model
+      let fileLines: [String]?
+    }
+
+    private func loadDiff() {
+      diffTask?.cancel(); loadedDiff = nil
+      guard let target = diff, let root = store.activeRoot else { return }
+      diffTask = Task {
+        async let rendered = Task.detached(priority: .userInitiated) {
+          DiffView.model(WorkbenchGit.diff(root, target.path, staged: target.staged, untracked: target.untracked))
+        }.value
+        async let lines = Task.detached(priority: .utility) {
+          (try? String(contentsOfFile: root + "/" + target.path, encoding: .utf8))?
+            .split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        }.value
+        async let prefetched: Void = store.buffers.prefetch(target.path, root: root)
+        let snapshot = await (rendered, lines, prefetched)
+        guard !Task.isCancelled, diff == target, store.activeRoot == root else { return }
+        loadedDiff = LoadedDiff(target: target, root: root, model: snapshot.0, fileLines: snapshot.1)
+      }
+    }
+
     private var main: some View {
       VStack(spacing: 0) {
-        if let d = diff, let root = store.activeRoot {
-          diffPane(d, root: root)
+        if let d = diff, let root = store.activeRoot, let loaded = loadedDiff,
+          loaded.target == d, loaded.root == root
+        {
+          let fileLines = loaded.fileLines
+          let buffer: EditorTransactionManager? = { if case .ready(let m)? = store.buffers.peek(d.path) { m } else { nil } }()
+          DiffView(
+            target: d, model: loaded.model,
+            threads: store.reviews.threads(root: root, d.path, in: fileLines),
+            suggestions: store.reviews.suggestions(root: root, d.path, current: buffer?.buffer.snapshot.revision),
+            onComment: { n, text, body in
+              if let m = buffer { store.reviews.add(root: root, path: d.path, line: n, text: text, body: body, snapshot: m.buffer.snapshot) }
+            },
+            onSuggest: { n, replacement in
+              if let m = buffer { store.reviews.suggest(root: root, path: d.path, line: n, replacement: replacement, snapshot: m.buffer.snapshot) }
+            },
+            onResolve: { store.reviews.resolve(root: root, path: d.path, id: $0) },
+            onApply: { id in
+              guard let m = buffer else { return "ファイルを開けません。" }
+              let e = store.reviews.apply(root: root, path: d.path, id: id, in: m)
+              if e == nil { store.buffers.refresh(d.path); store.edited(d.path) }
+              return e
+            },
+            onReject: { store.reviews.reject(root: root, path: d.path, id: $0) },
+            onSend: store.reviews.prompt(root: root, path: d.path, in: fileLines).map { text in
+              {
+                NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text, forType: .string)
+                // Paste is left to the user: a review comment must not run as an agent command unseen.
+                if let a = st.agentSessions.first(where: { $0.project == st.project && !$0.status.isExited }) { store.run("pane.focus", ["id": .int(a.pane)]); diff = nil }
+              }
+            },
+            onClose: { diff = nil })
+        } else if diff != nil {
+          ProgressView("差分を読み込み中…").frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
         PaneView(
           node: st.tree.maximized.flatMap { id in st.tree.leaves.first { $0.id == id }.map { .leaf(id: $0.id, kind: $0.kind) } } ?? st.tree.root,
@@ -955,64 +1162,6 @@ import Observation
           run: { _ = store.run($0, $1) })
         }
       }
-    }
-
-    @ViewBuilder private func diffPane(_ target: DiffTarget, root: String) -> some View {
-      let key = root + "\0" + target.path + "\0\(target.staged)\0\(target.untracked)"
-      if let loaded = loadedDiff, loaded.key == key {
-        let buffer: EditorTransactionManager? = {
-          if case .ready(let manager)? = store.buffers.peek(target.path) { manager } else { nil }
-        }()
-        DiffView(
-          target: target, model: loaded.model,
-          threads: store.reviews.threads(root: root, target.path, in: loaded.fileLines),
-          suggestions: store.reviews.suggestions(root: root, target.path, current: buffer?.buffer.snapshot.revision),
-          onComment: { line, text, body in
-            if let buffer { store.reviews.add(root: root, path: target.path, line: line, text: text, body: body, snapshot: buffer.buffer.snapshot) }
-          },
-          onSuggest: { line, replacement in
-            if let buffer { store.reviews.suggest(root: root, path: target.path, line: line, replacement: replacement, snapshot: buffer.buffer.snapshot) }
-          },
-          onResolve: { store.reviews.resolve(root: root, path: target.path, id: $0) },
-          onApply: { id in
-            guard let buffer else { return "ファイルを開けません。" }
-            let error = store.reviews.apply(root: root, path: target.path, id: id, in: buffer)
-            if error == nil { store.buffers.refresh(target.path); store.edited(target.path) }
-            return error
-          },
-          onReject: { store.reviews.reject(root: root, path: target.path, id: $0) },
-          onSend: store.reviews.prompt(root: root, path: target.path, in: loaded.fileLines).map { text in
-            {
-              NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text, forType: .string)
-              if let agent = st.agentSessions.first(where: { $0.project == st.project && !$0.status.isExited }) {
-                store.run("pane.focus", ["id": .int(agent.pane)]); diff = nil
-              }
-            }
-          },
-          onClose: { diff = nil })
-      } else {
-        Text("差分を読み込み中…")
-          .font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-          .task(id: key) { await loadDiff(target, root: root, key: key) }
-      }
-    }
-
-    private func loadDiff(_ target: DiffTarget, root: String, key: String) async {
-      async let model = Task.detached(priority: .userInitiated) {
-        DiffView.model(WorkbenchGit.diff(root, target.path, staged: target.staged, untracked: target.untracked))
-      }.value
-      async let lines = Task.detached(priority: .userInitiated) {
-        guard let data = FileManager.default.contents(atPath: root + "/" + target.path),
-          let text = String(data: data, encoding: .utf8)
-        else { return [String]() }
-        return text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-      }.value
-      async let buffer: Void = store.buffers.prefetch(target.path, root: root)
-      let loaded = await LoadedDiff(key: key, model: model, fileLines: lines)
-      _ = await buffer
-      guard !Task.isCancelled, diff == target, store.activeRoot == root else { return }
-      loadedDiff = loaded
     }
 
     private static let sectionNotes = ["一般": "ワークスペースの基本動作とアプリ全体の表示を設定します。"]
@@ -1127,9 +1276,44 @@ import Observation
           Text("設定 · \(st.section)")
         } else {
           if let branch {
-            HStack(spacing: 4) { Image(systemName: "arrow.triangle.branch").font(.system(size: 10)); Text(branch) }
+            Menu {
+              ForEach(branches, id: \.self) { candidate in
+                Button {
+                  if candidate != branch {
+                    runGit([("git.switch", ["name": .string(candidate)])], label: "ブランチ切替")
+                  }
+                } label: {
+                  if candidate == branch { Label(candidate, systemImage: "checkmark") }
+                  else { Text(candidate) }
+                }
+              }
+            } label: {
+              HStack(spacing: 4) {
+                Image(systemName: "arrow.triangle.branch").font(.system(size: 10))
+                Text(branch)
+              }
+            }
+            .menuStyle(.borderlessButton).fixedSize().disabled(gitOperation != nil)
           }
           if let sync { Text("↓\(sync.behind) ↑\(sync.ahead)").foregroundStyle(C.textQuaternary) }
+          if st.isRepo {
+            Button { runGit([("git.pull", [:])], label: "Pull", confirmed: true) } label: {
+              Image(systemName: "arrow.down").frame(width: 18, height: 18)
+            }.buttonStyle(.plain).disabled(gitOperation != nil).help("Pull")
+            Button { runGit([("git.push", [:])], label: "Push", confirmed: true) } label: {
+              Image(systemName: "arrow.up").frame(width: 18, height: 18)
+            }.buttonStyle(.plain).disabled(gitOperation != nil).help("Push")
+            if let gitOperation { ProgressView().controlSize(.small).help("\(gitOperation)中") }
+            if let gitMessage, gitOperation == nil {
+              HStack(spacing: 4) {
+                Image(systemName: gitFailed ? "exclamationmark.triangle" : "checkmark")
+                Text(gitMessage).lineLimit(1).truncationMode(.tail)
+              }
+              .foregroundStyle(gitFailed ? C.attention : C.textQuaternary)
+              .frame(maxWidth: 260, alignment: .leading)
+              .help(gitMessage)
+            }
+          }
           if !changes.isEmpty { Text("\(changes.count) 変更") }
           if !st.dirty.isEmpty { Text("未保存 \(st.dirty.count)").foregroundStyle(C.attention) }
           if let caret { Text("Ln \(caret.line), Col \(caret.col)") }

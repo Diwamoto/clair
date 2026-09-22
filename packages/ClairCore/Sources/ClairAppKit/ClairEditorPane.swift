@@ -55,6 +55,13 @@
       }
     }
 
+    /// Invalidates every clean cached or in-flight file after an operation may have replaced the
+    /// working tree. Closed tabs remain cached for fast reopen, so limiting this to visible tabs
+    /// would let a branch switch resurrect content from the previous branch.
+    func dropAll(except preserved: Set<String>) {
+      drop(Set(loads.keys).union(loading.keys).subtracting(preserved))
+    }
+
     private struct PendingLoad {
       let id: Int
       let task: Task<Load?, Never>
@@ -120,8 +127,11 @@
       if let path, let root {
         switch buffers.peek(path) {
         case nil:
-          // Instant feedback (breadcrumb + blank canvas) while the file is read in the background.
-          VStack(spacing: 0) { breadcrumb(path); C.canvas }.task(id: path) { await buffers.prefetch(path, root: root) }
+          // Instant feedback while the file is read and roped in the background.
+          VStack(spacing: 0) {
+            breadcrumb(path)
+            ProgressView("ファイルを読み込み中…").frame(maxWidth: .infinity, maxHeight: .infinity).background(C.canvas)
+          }.task(id: path) { await buffers.prefetch(path, root: root) }
         case .ready(let m)?:
           VStack(spacing: 0) {
             breadcrumb(path)

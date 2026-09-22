@@ -43,6 +43,7 @@ import Foundation
     private var ghosttyApp: GhosttyAppHandle?
     private var ghosttySurface: GhosttySurfaceHandle?
     private var pollTimer: Timer?
+    private var pollSequence: UInt = 0
 
     private let launch: (command: String, cwd: String)?
 
@@ -216,7 +217,7 @@ import Foundation
     /// driven by polling instead; `T08`'s own smoke test already
     /// established this exact pattern (poll `tick()` in a loop until
     /// expected output appears) rather than wiring the callback through.
-    // ponytail: fixed-interval polling, not event-driven wakeup. Wire
+    // ponytail: adaptive polling, not event-driven wakeup. Wire
     // `wakeup_cb` through to a real Swift callback (extending
     // `clair_ghostty_abi.c`'s runtime table, matching T08's own "future
     // task extends this table" invariant) if idle CPU use from this timer
@@ -225,7 +226,9 @@ import Foundation
       guard ghosttySurface != nil, pollTimer == nil else { return }
       let timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) {
         [weak self] _ in
-        Task { @MainActor in self?.pollGhosttySurface() }
+        // The timer is installed on the main run loop; avoid allocating an unstructured
+        // Task 30 times/second for every terminal pane.
+        MainActor.assumeIsolated { self?.pollGhosttySurfaceIfNeeded() }
       }
       RunLoop.main.add(timer, forMode: .common)
       pollTimer = timer
@@ -235,7 +238,18 @@ import Foundation
     public var onFacts: ((_ bells: Int, _ exitCode: Int?) -> Void)?
     private var exitReported = false
 
-    private func pollGhosttySurface() {
+    private func pollGhosttySurfaceIfNeeded() {
+      pollSequence &+= 1
+      let visible = !isHidden && window?.occlusionState.contains(.visible) == true
+      let focused = visible && window?.firstResponder === self
+      // Focused terminal: 30 Hz (33 ms). Background visible panes: 10 Hz (100 ms).
+      // Hidden/minimized windows still collect bells/exits, but only at 1 Hz.
+      let divisor: UInt = focused ? 1 : visible ? 3 : 30
+      guard pollSequence.isMultiple(of: divisor) else { return }
+      pollGhosttySurface(redraw: visible)
+    }
+
+    private func pollGhosttySurface(redraw: Bool = true) {
       guard let ghosttyApp else { return }
       do { try ghosttyApp.tick() } catch {
         lastReportedError = String(describing: error)
@@ -244,7 +258,7 @@ import Foundation
       let exit = exitReported ? nil : e.exitCode
       if exit != nil { exitReported = true }
       if e.bells > 0 || exit != nil { onFacts?(e.bells, exit) }
-      needsDisplay = true
+      if redraw { needsDisplay = true }
     }
 
     // MARK: - Keyboard input
