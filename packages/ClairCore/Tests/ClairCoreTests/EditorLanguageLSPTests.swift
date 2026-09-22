@@ -1,3 +1,5 @@
+import ClairEditorView
+import Foundation
 import LanguageServerProtocol
 import XCTest
 
@@ -132,5 +134,38 @@ final class EditorLanguageLSPTests: XCTestCase {
     let response = CompletionList(isIncomplete: false, items: [])
     XCTAssertNil(session.accept(response, requestedAtVersion: requestVersion))
     XCTAssertNotNil(session.accept(response, requestedAtVersion: session.version!))
+  }
+
+  // MARK: - E12
+
+  func testDiagnosticRebasesThroughEditsBeforeTheServerRepublishes() {
+    let span = EditorDiagnosticSpan(
+      range: TextUTF8Range(UTF8Offset(10), UTF8Offset(16)), severity: .error, message: "declared and not used")
+    // Insert 3 bytes before, delete 2 bytes after: the range shifts by +3 and keeps its message.
+    let moved = span.mapped(through: [
+      TextEdit(range: TextUTF8Range(UTF8Offset(0), UTF8Offset(0)), replacement: "abc"),
+      TextEdit(range: TextUTF8Range(UTF8Offset(20), UTF8Offset(22)), replacement: ""),
+    ])
+    XCTAssertEqual(moved.range, TextUTF8Range(UTF8Offset(13), UTF8Offset(19)))
+    XCTAssertEqual(moved.message, "declared and not used")
+    // Deleting the whole underlined text collapses it to an empty range instead of inverting it.
+    let gone = span.mapped(through: [TextEdit(range: TextUTF8Range(UTF8Offset(8), UTF8Offset(18)), replacement: "")])
+    XCTAssertEqual(gone.range.lowerBound, gone.range.upperBound)
+  }
+
+  func testInitializeParamsAdvertiseVersionedDiagnosticsAndPlainCompletion() throws {
+    let params = LanguageServerClient.initializeParams(root: URL(fileURLWithPath: "/tmp/a b"))
+    XCTAssertEqual(params.rootUri, "file:///tmp/a%20b")
+    XCTAssertEqual(params.workspaceFolders?.first?.name, "a b")
+    XCTAssertEqual(params.capabilities.textDocument?.publishDiagnostics?.versionSupport, true)
+    XCTAssertEqual(params.capabilities.textDocument?.completion?.completionItem?.snippetSupport, false)
+    XCTAssertEqual(params.capabilities.workspace?.configuration, true)
+    XCTAssertEqual(LanguageServerClient.path(LanguageServerClient.uri("/tmp/a b/main.go")), "/tmp/a b/main.go")
+  }
+
+  func testGoIsTheFirstClassServerAndPlainTextHasNone() {
+    XCTAssertEqual(EditorLanguageID.go.languageServer?.executable, "gopls")
+    XCTAssertNil(EditorLanguageID.markdown.languageServer)
+    XCTAssertNil(LanguageServerCommand(executable: "clair-no-such-server").resolve(path: "/usr/bin:/bin"))
   }
 }

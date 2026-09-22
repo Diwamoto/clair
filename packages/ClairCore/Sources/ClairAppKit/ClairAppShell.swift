@@ -1,6 +1,7 @@
 #if os(macOS)
   import ClairDesignSystem
   import ClairEditorCore
+  import ClairEditorLanguage
   import ClairWorkspace
   import IOKit.pwr_mgt
 import IOKit.ps
@@ -171,7 +172,11 @@ import Observation
       case .failure(let e): lastError = e
       case .success:
         lastError = nil
-        if id == "file.open", case .int(let line)? = input["line"], let p = state.active { buffers.reveal(p, line: line) }
+        if id == "file.open", case .int(let line)? = input["line"], let p = state.active {
+          let column: Int = if case .int(let c)? = input["column"] { c } else { 0 }
+          buffers.reveal(p, line: line, column: column)
+        }
+        if id == "editor.definition" || id == "editor.references" { navigate(references: id == "editor.references") }
         if let closing { ClairDaemonLauncher.closeSession(key: closing) }  // T09: closing a pane ends its shell; closing a window does not
         if id == "agent.launch" || id == "pane.close"
           || (id == "settings.set" && input["key"] == .string("preventSleepOnBattery"))
@@ -180,6 +185,61 @@ import Observation
         persistState()
       }
       return r
+    }
+
+    // MARK: - E12 language-server navigation
+
+    /// Rows of the symbols / references palette (filled from the language server, not the registry).
+    private(set) var languageItems: [PaletteItem] = []
+    /// A one-line result of the last navigation ("定義が見つかりません" …), shown in the status bar.
+    private(set) var languageNotice: String?
+
+    private func item(_ l: LanguageServerLocation, root: String) -> PaletteItem {
+      let shown = l.path.hasPrefix(root + "/") ? String(l.path.dropFirst(root.count + 1)) : l.path
+      return PaletteItem(
+        title: l.title, hint: "\(shown):\(l.line + 1)", id: "file.open",
+        input: ["path": .string(l.path), "line": .int(l.line + 1), "column": .int(l.character)])
+    }
+
+    /// Definition jumps straight to the (first) target; references open as a palette list.
+    private func navigate(references: Bool) {
+      guard let rel = state.active, let root = activeRoot, case .ready(let m)? = buffers.peek(rel),
+        let caret = m.selection.selections.last?.head
+      else { return }
+      let path = root + "/" + rel
+      guard EditorLanguageID.detect(path: rel)?.languageServer != nil else {
+        languageNotice = "このファイルの言語サーバーはありません"
+        return
+      }
+      languageNotice = nil
+      Task {
+        let found =
+          references
+          ? await buffers.language.references(path, root: root, at: caret)
+          : await buffers.language.definition(path, root: root, at: caret)
+        guard activeRoot == root, state.active == rel else { return }
+        guard let found, !found.isEmpty else {
+          languageNotice =
+            found == nil
+            ? "言語サーバーが応答しません" : (references ? "参照が見つかりません" : "定義が見つかりません")
+          return
+        }
+        if references {
+          languageItems = found.map { item($0, root: root) }
+          run("palette.references")
+        } else {
+          let target = found[0]
+          run("file.open", ["path": .string(target.path), "line": .int(target.line + 1), "column": .int(target.character)])
+        }
+      }
+    }
+
+    /// `workspace/symbol` for the ⌘T palette, across the active Project's running servers.
+    func searchSymbols(_ query: String) async {
+      guard let root = activeRoot else { languageItems = []; return }
+      let found = await buffers.language.symbols(root: root, matching: query)
+      guard activeRoot == root, state.palette == .symbols else { return }
+      languageItems = found.prefix(200).map { item($0, root: root) }
     }
 
     /// Menu/palette entry point. Saving may materialise and write a 10 MiB snapshot, so the native
@@ -1293,6 +1353,23 @@ import Observation
       .help(quota.map { $0.summary(now: now) }.joined(separator: "\n"))
     }
 
+    /// E12: the active file's language server and its diagnostic counts.
+    @ViewBuilder private var languageStatus: some View {
+      if let rel = st.active, let root = store.activeRoot {
+        let path = root + "/" + rel
+        if let server = store.buffers.language.statusText(path, root: root) {
+          Text(server.text).foregroundStyle(server.failed ? C.attention : C.textQuaternary).lineLimit(1)
+        }
+        if let spans = store.buffers.language.diagnostics[path]?.spans, !spans.isEmpty {
+          let errors = spans.filter { $0.severity == .error }.count
+          let warnings = spans.filter { $0.severity == .warning }.count
+          Text([errors > 0 ? "エラー \(errors)" : nil, warnings > 0 ? "警告 \(warnings)" : nil].compactMap { $0 }.joined(separator: " · "))
+            .foregroundStyle(errors > 0 ? C.attention : C.textTertiary)
+        }
+        if let notice = store.languageNotice { Text(notice).foregroundStyle(C.textQuaternary).lineLimit(1) }
+      }
+    }
+
     private var statusBar: some View {
       let agents = st.agentSessions.filter { $0.project == st.project && !$0.status.isExited }
       let waiting = agents.filter { $0.status == .attention }.count
@@ -1343,6 +1420,7 @@ import Observation
           if !changes.isEmpty { Text("\(changes.count) 変更") }
           if !st.dirty.isEmpty { Text("未保存 \(st.dirty.count)").foregroundStyle(C.attention) }
           if let caret { Text("Ln \(caret.line), Col \(caret.col)") }
+          languageStatus
         }
         Spacer()
         if st.toggles["showQuota"] == true { quotaMeter }
@@ -1370,7 +1448,13 @@ import Observation
     // MARK: palette (⌘K commands, ⌘P files)
 
     private func items(_ p: WorkbenchState.Palette) -> [PaletteItem] {
-      store.registry.paletteItems(p, query: query, state: st)
+      switch p {
+      case .symbols: return store.languageItems
+      case .references:
+        let q = query.lowercased()
+        return store.languageItems.filter { q.isEmpty || $0.hint.lowercased().contains(q) }
+      default: return store.registry.paletteItems(p, query: query, state: st)
+      }
     }
 
     private func paletteView(_ p: WorkbenchState.Palette) -> some View {
@@ -1389,6 +1473,13 @@ import Observation
               .onChange(of: query) { selection = 0 }
             Text("\(list.count) 件").font(.system(size: 11)).foregroundStyle(C.textQuaternary)
           }
+          // ⌘T: ask the language servers as the query changes (debounced; a newer query cancels this one).
+          .task(id: p == .symbols ? query : nil) {
+            guard p == .symbols else { return }
+            try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled else { return }
+            await store.searchSymbols(query)
+          }
           .padding(.horizontal, 8).frame(height: 40)
           .background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.control))
           .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.hairline))
@@ -1404,13 +1495,15 @@ import Observation
                   if p == .files {
                     Text(it.title).font(.system(size: 11)).lineLimit(1).truncationMode(.head).foregroundStyle(C.textQuaternary)
                   }
-                  HStack(spacing: 2) {
+                  if p == .symbols || p == .references {
+                    Text(it.hint).font(.system(size: 11)).lineLimit(1).truncationMode(.head).foregroundStyle(C.textQuaternary)
+                  } else { HStack(spacing: 2) {
                     ForEach(Array(it.hint), id: \.self) { k in
                       Text(String(k)).font(.system(size: 11)).monospacedDigit().foregroundStyle(on ? C.textSecondary : C.textTertiary)
                         .frame(minWidth: 20, minHeight: 20).padding(.horizontal, 4)
                         .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.hairline))
                     }
-                  }
+                  } }
                 }
                 .padding(.horizontal, 8).frame(height: 32)
                 .background(on ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))

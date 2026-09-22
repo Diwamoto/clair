@@ -39,7 +39,7 @@ extension TextEdit {
   /// in the same pre-transaction space) to its position after they are applied.
   /// An offset inside a replaced range collapses to the end of its replacement,
   /// matching the common "typing pushes the caret past what it typed" behavior.
-  static func map(_ offset: Int, through edits: [TextEdit]) -> Int {
+  public static func map(_ offset: Int, through edits: [TextEdit]) -> Int {
     var delta = 0
     for edit in edits {
       let start = edit.range.lowerBound.value

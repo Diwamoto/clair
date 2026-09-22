@@ -13,7 +13,7 @@ public struct WorkbenchFile: Sendable, Codable, Equatable {
 }
 
 public struct WorkbenchState: Sendable, Codable, Equatable {
-  public enum Palette: String, Sendable, Codable { case commands, files, search }
+  public enum Palette: String, Sendable, Codable { case commands, files, search, symbols, references }
 
   public static let sections = ["一般", "AIプロバイダー", "エディタ", "ターミナル", "モバイル", "アップデート"]
   public static let toggleKeys = ["restoreLayout", "confirmClose", "showQuota", "preventSleepOnBattery", "formatOnSave", "showWhitespace", "terminalApprovals"]
@@ -160,6 +160,10 @@ public struct PaletteItem: Sendable, Equatable {
   public let hint: String
   public let id: String
   public let input: CommandInput
+
+  public init(title: String, hint: String, id: String, input: CommandInput) {
+    self.title = title; self.hint = hint; self.id = id; self.input = input
+  }
 }
 
 public struct CommandRegistry: Sendable {
@@ -209,8 +213,8 @@ public struct CommandRegistry: Sendable {
     case .files:
       return QuickOpen.rank(query, state.files)
         .map { PaletteItem(title: $0.path, hint: "", id: "tab.open", input: ["path": .string($0.path)]) }
-    case .search:
-      return []
+    case .search, .symbols, .references:
+      return []  // search runs in the GUI; symbols/references come from the language server
     }
   }
 
@@ -354,11 +358,13 @@ extension CommandRegistry {
     // V11 `clair open path:line`: the open Project that owns the file, else a new Project for its repository (or folder).
     // ai: false — like project.open, an agent must not widen the readable file system on its own.
     cmd("file.open", "パスからファイルを開く", .additive, ai: false,
-        params: [CommandParam("path", .string), CommandParam("line", .int, required: false)], palette: false,
+        params: [CommandParam("path", .string), CommandParam("line", .int, required: false), CommandParam("column", .int, required: false)],
+        palette: false,
         preflight: { _, i throws(CommandError) in
           let path = i["path"]!.string!
           guard let file = WorkbenchProject.normalizedFile(path) else { throw CommandError(.preconditionFailed, "not a file \(path)") }
           try require(i["line"]?.int.map { $0 >= 1 } ?? true, "line must be 1 or more")
+          try require(i["column"]?.int.map { $0 >= 0 } ?? true, "column must be 0 or more")
           return .additive
         }) { s, i in
       let file = WorkbenchProject.normalizedFile(i["path"]!.string!)!
@@ -400,6 +406,14 @@ extension CommandRegistry {
     cmd("palette.files", "ファイルへ移動", .read, ai: false, shortcut: "⌘P", palette: false) { s, _ in s.palette = .files; return .ok },
     cmd("palette.search", "Project を検索", .read, ai: false, shortcut: "⌘⇧F", palette: false) { s, _ in s.palette = .search; return .ok },
     cmd("palette.close", "パレットを閉じる", .read, ai: false, palette: false) { s, _ in s.palette = nil; return .ok },
+    // E12: language-server navigation. The registry only validates and opens the palette; the GUI asks the
+    // server for the active file's caret (the answer is async and belongs to the editor, not to this state).
+    cmd("palette.symbols", "シンボルへ移動", .read, ai: false, shortcut: "⌘T", palette: false) { s, _ in s.palette = .symbols; return .ok },
+    cmd("palette.references", "参照一覧", .read, ai: false, palette: false) { s, _ in s.palette = .references; return .ok },
+    cmd("editor.definition", "定義へ移動", .read, ai: false, shortcut: "⌃⌘J",
+        preflight: { s, _ throws(CommandError) in try require(s.active != nil, "ファイルが開かれていません"); return .read }) { _, _ in .ok },
+    cmd("editor.references", "参照を検索", .read, ai: false, shortcut: "⌃⌘R",
+        preflight: { s, _ throws(CommandError) in try require(s.active != nil, "ファイルが開かれていません"); return .read }) { _, _ in .ok },
     // V08. Reading history is `state.snapshot`; mute changes what the user is told, so ai: false.
     cmd("notice.markRead", "通知を既読にする", .write, params: [CommandParam("project", .string, required: false)]) { s, i in
       s.notices.markRead(project: i["project"]?.string); return .ok

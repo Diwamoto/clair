@@ -60,9 +60,23 @@ public enum EditorDiagnosticSeverity: Sendable, Hashable {
 public struct EditorDiagnosticSpan: Sendable {
   public let range: TextUTF8Range
   public let severity: EditorDiagnosticSeverity
+  /// Shown as the hover tooltip over the underline (macOS).
+  public let message: String
 
-  public init(range: TextUTF8Range, severity: EditorDiagnosticSeverity) {
+  public init(range: TextUTF8Range, severity: EditorDiagnosticSeverity, message: String = "") {
     self.range = range
     self.severity = severity
+    self.message = message
+  }
+
+  /// `INV-REV-004`: carries a span from the pre-edit revision onto the
+  /// post-edit one instead of leaving it on stale offsets until the server
+  /// republishes. `edits` must be sorted and non-overlapping (what
+  /// `EditorTransactionManager.apply` already guarantees).
+  public func mapped(through edits: [TextEdit]) -> EditorDiagnosticSpan {
+    let lower = TextEdit.map(range.lowerBound.value, through: edits)
+    let upper = max(lower, TextEdit.map(range.upperBound.value, through: edits))
+    return EditorDiagnosticSpan(
+      range: TextUTF8Range(UTF8Offset(lower), UTF8Offset(upper)), severity: severity, message: message)
   }
 }

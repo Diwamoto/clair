@@ -63,14 +63,14 @@
       else { return }
       caret[path] = (p.line.value + 1, p.column.value + 1)
     }
-    /// Search-hit jump target (1-based line); `nonce` makes a repeat jump to the same line still fire.
-    private(set) var reveal: (path: String, line: Int, nonce: Int)?
+    /// Search-hit jump target (1-based line, 0-based UTF-16 column); `nonce` makes a repeat jump to the same line still fire.
+    private(set) var reveal: (path: String, line: Int, column: Int, nonce: Int)?
     /// Above this the file is refused rather than loaded whole (large-file paths are E10's scope).
     /// Spec §5.9: the canonical `10mb` fixture must open, and it is written in whole lines, so it lands a
     /// few bytes past 10 MiB — keep real headroom rather than an exact 10 MiB edge.
     nonisolated static let maxBytes = 16 * 1024 * 1024
 
-    func reveal(_ path: String, line: Int) { reveal = (path, line, (reveal?.nonce ?? 0) + 1) }
+    func reveal(_ path: String, line: Int, column: Int = 0) { reveal = (path, line, column, (reveal?.nonce ?? 0) + 1) }
 
     func isOpen(_ path: String) -> Bool { if case .ready = loads[path] { true } else { false } }
 
@@ -93,8 +93,26 @@
         let pending = loading.removeValue(forKey: path)
         pending?.task.cancel()
         if hadLoad || pending != nil { revisions[path, default: 0] += 1 }
+        if let open = languagePaths.removeValue(forKey: path) { language.close(open.path, root: open.root) }
       }
       dropHighlights(paths)
+    }
+
+    // MARK: - E12 language servers
+
+    let language = LanguageServices()
+    /// Buffers open on a language server: relative path → (absolute path, root).
+    private var languagePaths: [String: (path: String, root: String)] = [:]
+
+    /// Opens (or resyncs) the buffer on its language server and routes its diagnostics into `view`.
+    func attachLanguage(_ path: String, root: String, snapshot: TextSnapshot, view: ClairEditorView) {
+      let absolute = root + "/" + path
+      languagePaths[path] = (absolute, root)
+      language.attach(absolute, root: root, snapshot: snapshot) { [weak view] revision, spans in
+        // `INV-REV-004`: diagnostics for any other revision are dropped; the view already rebased the old ones.
+        guard let view, view.snapshot.revision == revision else { return }
+        view.diagnostics = spans
+      }
     }
 
     // MARK: - E11 syntax highlighting
@@ -240,7 +258,7 @@
             breadcrumb(path)
             ZStack(alignment: .topTrailing) {
               EditorSurface(
-                manager: m, buffers: buffers, path: path, onCaret: { onCaret(path, $0, m.buffer.snapshot) },
+                manager: m, buffers: buffers, root: root, path: path, onCaret: { onCaret(path, $0, m.buffer.snapshot) },
                 reveal: buffers.reveal?.path == path ? buffers.reveal : nil, onEdit: { onEdit(path) }
               ).id("\(path)#\(buffers.revision(path))")
               // E11 dogfood review (2026-09-22): a small corner spinner while
@@ -293,12 +311,16 @@
   private struct EditorSurface: NSViewRepresentable {
     let manager: EditorTransactionManager
     let buffers: EditorBuffers
+    let root: String
     let path: String
     let onCaret: (TextSelectionSet) -> Void
-    let reveal: (path: String, line: Int, nonce: Int)?
+    let reveal: (path: String, line: Int, column: Int, nonce: Int)?
     let onEdit: () -> Void
 
-    final class Coordinator { var nonce = 0 }
+    final class Coordinator {
+      var nonce = 0
+      var completion: CompletionController?
+    }
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -315,12 +337,19 @@
       view.caretColor = NSColor(C.textPrimary); view.selectionColor = NSColor(C.debugBlue).withAlphaComponent(0.3)
       view.gutterWidth = 46
       view.lineNumberColor = NSColor(C.lineNumber); view.currentLineNumberColor = NSColor(C.textTertiary)
-      view.onCommitEdits = { [weak view, manager, onEdit, buffers, path] edits in
+      let completion = CompletionController(language: buffers.language, path: root + "/" + path, root: root)
+      completion.view = view
+      context.coordinator.completion = completion
+      view.keyInterceptor = { [weak completion] in completion?.handle($0) ?? false }
+      view.onCommitEdits = { [weak view, manager, onEdit, buffers, path, root, weak completion] edits in
         guard let view else { return }
         let old = manager.buffer.snapshot
         guard let new = try? manager.apply(edits) else { return }
         view.applyEdits(edits, oldSnapshot: old, newSnapshot: new, selection: manager.selection)
         onEdit()
+        // E12: the server sees the same incremental edit, in order, then the list refilters.
+        buffers.language.change(root + "/" + path, root: root, edits: edits, old: old, new: new)
+        completion?.didEdit(edits)
         // E11: background differential reparse; never blocks this closure,
         // never touches `manager` (INV-REV-002 — see `updateHighlights`'s
         // doc comment).
@@ -328,18 +357,21 @@
           view?.highlights = spans
         }
       }
-      view.onSelectionChange = { [weak manager, onCaret] in manager?.setSelection($0); onCaret($0) }
+      view.onSelectionChange = { [weak manager, onCaret, weak completion] in
+        manager?.setSelection($0); onCaret($0); completion?.didMoveCaret()
+      }
       scroll.documentView = view
       // E11: kick off this file's initial background highlight parse once,
       // when its `ClairEditorView` is first created.
       buffers.startHighlighting(path, manager: manager) { [weak view] spans in view?.highlights = spans }
+      buffers.attachLanguage(path, root: root, snapshot: manager.buffer.snapshot, view: view)
       return scroll
     }
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
       guard let r = reveal, r.nonce != context.coordinator.nonce, let view = scroll.documentView as? ClairEditorView else { return }
       context.coordinator.nonce = r.nonce
-      DispatchQueue.main.async { view.reveal(line: r.line - 1) }  // after the new view is laid out and in a window
+      DispatchQueue.main.async { view.reveal(line: r.line - 1, utf16Column: r.column) }  // after the new view is laid out and in a window
     }
   }
 #endif

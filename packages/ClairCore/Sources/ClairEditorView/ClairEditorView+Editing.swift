@@ -16,6 +16,7 @@ import ClairEditorCore
   /// acceptance criteria do not require — add if the product asks for them.
   extension ClairEditorView {
     public override func keyDown(with event: NSEvent) {
+      if composition == nil, keyInterceptor?(event) == true { return }
       interpretKeyEvents([event])
     }
 

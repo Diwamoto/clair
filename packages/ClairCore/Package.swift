@@ -116,6 +116,9 @@ let package = Package(
     .package(
       url: "https://github.com/ChimeHQ/LanguageServerProtocol.git",
       revision: "82770aa7d6e54e52f3b4339c49a64ee794ad1cfe"),
+    // E12: the stdio transport under `LanguageServerProtocol`'s connection. Already resolved
+    // transitively; named here because `ClairEditorLanguage` imports it directly.
+    .package(url: "https://github.com/ChimeHQ/JSONRPC", from: "0.9.0"),
   ],
   targets: [
     .target(name: "ClairPTY"),
@@ -213,6 +216,7 @@ let package = Package(
         .product(name: "SwiftTreeSitter", package: "SwiftTreeSitter"),
         .product(name: "TreeSitter", package: "tree-sitter"),
         .product(name: "LanguageServerProtocol", package: "LanguageServerProtocol"),
+        .product(name: "JSONRPC", package: "JSONRPC"),
       ]
     ),
     // E11: production vendored tree-sitter grammars (raw generated C

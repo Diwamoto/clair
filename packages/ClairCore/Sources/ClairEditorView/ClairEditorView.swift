@@ -58,6 +58,10 @@ import ClairEditorCore
     /// its `EditorTransactionManager` (one call is one undo unit) and
     /// reflect back via `applyEdits`. See `ClairEditorView+Editing.swift`.
     public var onCommitEdits: (([TextEdit]) -> Void)?
+    /// E12: sees every key before text input does (not while an IME
+    /// composition is live); returning true swallows it. The completion list
+    /// uses this for ↑↓/Return/Tab/Esc.
+    public var keyInterceptor: ((NSEvent) -> Bool)?
 
     let renderer: EditorLineRenderer
     let font: NSFont
@@ -143,6 +147,10 @@ import ClairEditorCore
       selection: TextSelectionSet
     ) {
       renderer.invalidate(edits: edits, in: oldSnapshot)
+      if !diagnostics.isEmpty {
+        let sorted = edits.sorted { $0.range.lowerBound.value < $1.range.lowerBound.value }
+        diagnostics = diagnostics.map { $0.mapped(through: sorted) }
+      }
       self.snapshot = newSnapshot
       self.selection = selection
       syncFrameSize()
