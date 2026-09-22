@@ -31,8 +31,7 @@ import Observation
     public let updateConfig = ClairUpdateConfiguration.live()
     private var updateTask: Task<Void, Never>?
     private var sleepAssertion: IOPMAssertionID = 0
-    private let persistenceQueue = DispatchQueue(label: "com.diwamoto.clair.workspace-save", qos: .utility)
-    private var persistenceWork: DispatchWorkItem?
+    private var persistenceTask: Task<Void, Never>?
 
     /// V02: serves this store to `clair` CLI. Only the first window's store wins the socket.
     // ponytail: multi-window shares one socket owner; route by window when V04 adds per-Project windows.
@@ -73,7 +72,7 @@ import Observation
       watchProject(refresh: true)
     }
 
-    isolated deinit { ipc?.stop(); updateTask?.cancel(); releaseSleepAssertion() }
+    isolated deinit { ipc?.stop(); updateTask?.cancel(); persistenceTask?.cancel(); releaseSleepAssertion() }
 
     /// ADR-0009: 5 s after launch, then hourly. Never applies on its own.
     private func startAutomaticUpdateChecks() {
@@ -173,6 +172,39 @@ import Observation
       return r
     }
 
+    /// Menu/palette entry point. Saving may materialise and write a 10 MiB snapshot, so the native
+    /// UI acknowledges the shortcut immediately and completes the durable write off-main.
+    public func performFromUI(_ id: String, _ input: CommandInput = [:]) {
+      guard id == "file.save" else { _ = run(id, input); return }
+      Task { await saveActiveFile() }
+    }
+
+    private func saveActiveFile() async {
+      guard let path = state.active, let root = activeRoot,
+        case .ready(let manager)? = buffers.peek(path)
+      else { _ = run("file.save"); return }
+      let project = state.project
+      let snapshot = manager.buffer.snapshot
+      let history = Self.history
+      let result = await Task.detached(priority: .userInitiated) {
+        Result<Void, Error> {
+          try? history.record(root: root, path: path)
+          try snapshot.string().write(toFile: root + "/" + path, atomically: true, encoding: .utf8)
+        }
+      }.value
+      switch result {
+      case .success:
+        // An edit made while the snapshot was being written is still unsaved.
+        if manager.buffer.snapshot.revision == snapshot.revision {
+          if state.project == project { state.dirty.remove(path) }
+          else { state.layouts[project]?.dirty.remove(path) }
+        }
+        lastError = nil; persistState()
+      case .failure(let error):
+        lastError = CommandError(.preconditionFailed, "保存できません: \(error.localizedDescription)")
+      }
+    }
+
     /// Names the daemon shell behind one terminal pane. Keyed on the project path, not its name, so two
     /// projects with the same folder name never share a shell.
     static func terminalKey(root: String, pane: Int) -> String { "\(root)#\(pane)" }
@@ -191,10 +223,12 @@ import Observation
     private func persistState() {
       guard let persistURL else { return }
       let snapshot = state
-      persistenceWork?.cancel()
-      let work = DispatchWorkItem { try? snapshot.save(to: persistURL) }
-      persistenceWork = work
-      persistenceQueue.asyncAfter(deadline: .now() + .milliseconds(100), execute: work)
+      persistenceTask?.cancel()
+      persistenceTask = Task.detached(priority: .utility) {
+        try? await Task.sleep(for: .milliseconds(100))
+        guard !Task.isCancelled else { return }
+        try? snapshot.save(to: persistURL)
+      }
     }
 
     /// V05: agent/external disk changes refresh the tree and drop unsaved markers (principle 8).
@@ -320,7 +354,7 @@ import Observation
       CommandMenu("Clair") {
         let state = store?.state ?? WorkbenchState()
         ForEach(CommandRegistry.workbench.commands.filter { state.shortcut(for: $0) != nil }, id: \.id) { d in
-          Button(d.title) { store?.run(d.id) }
+          Button(d.title) { store?.performFromUI(d.id) }
             .keyboardShortcut(Self.shortcut(state.shortcut(for: d)!))
             .disabled(store == nil)
         }
@@ -357,6 +391,7 @@ import Observation
     @State private var sync: (behind: Int, ahead: Int)?
     @State private var changesTask: Task<Void, Never>?
     @State private var diff: DiffTarget?
+    @State private var loadedDiff: LoadedDiff?
     @State private var explorerRows: [ExplorerRow] = []
     @State private var explorerTask: Task<Void, Never>?
     // V05: search panel state (GUI-local).
@@ -409,7 +444,7 @@ import Observation
         query = ""; selection = 0
         if st.palette == .search { searchSelection = 0; runSearch() }
       }
-      .onChange(of: st.project) { diff = nil; rebuildExplorer(); reloadChanges() }
+      .onChange(of: st.project) { diff = nil; loadedDiff = nil; rebuildExplorer(); reloadChanges() }
       .onChange(of: st.files) { rebuildExplorer(); reloadChanges() }
       .onAppear { rebuildExplorer(); reloadChanges() }
       .focusedSceneValue(\.clairWorkbench, store)
@@ -681,17 +716,11 @@ import Observation
     }
 
     private var historyPanel: some View {
-      let history = ClairWorkbenchStore.history
       return HistoryList(
-        path: st.active, versions: st.active.flatMap { p in store.activeRoot.flatMap { try? history.versions(root: $0, path: p) } } ?? [],
-        preview: { v in
-          guard let root = store.activeRoot, let p = st.active else { return [] }
-          return history.preview(v, root: root, path: p)
-        },
-        restore: { v in
-          guard let root = store.activeRoot, let p = st.active else { return }
-          try? history.restore(v, root: root, path: p)
-          store.buffers.drop([p]); store.dropDirty(p)  // reload from disk; the pre-restore content is itself a new version
+        root: store.activeRoot, path: st.active, history: ClairWorkbenchStore.history,
+        restored: {
+          guard let path = st.active else { return }
+          store.buffers.drop([path]); store.dropDirty(path)
         })
     }
 
@@ -760,6 +789,12 @@ import Observation
       let label: String
       let depth: Int
       let file: WorkbenchFile?
+    }
+
+    private struct LoadedDiff: Sendable {
+      let key: String
+      let model: DiffView.Model
+      let fileLines: [String]
     }
 
     private func visible(_ rows: [ExplorerRow]) -> [ExplorerRow] {
@@ -909,34 +944,7 @@ import Observation
     private var main: some View {
       VStack(spacing: 0) {
         if let d = diff, let root = store.activeRoot {
-          let fileLines = (try? String(contentsOfFile: root + "/" + d.path, encoding: .utf8))?.split(separator: "\n", omittingEmptySubsequences: false)
-          let buffer: EditorTransactionManager? = { if case .ready(let m) = store.buffers.load(d.path, root: root) { m } else { nil } }()
-          DiffView(
-            target: d, text: WorkbenchGit.diff(root, d.path, staged: d.staged, untracked: d.untracked),
-            threads: store.reviews.threads(root: root, d.path, in: fileLines),
-            suggestions: store.reviews.suggestions(root: root, d.path, current: buffer?.buffer.snapshot.revision),
-            onComment: { n, text, body in
-              if let m = buffer { store.reviews.add(root: root, path: d.path, line: n, text: text, body: body, snapshot: m.buffer.snapshot) }
-            },
-            onSuggest: { n, replacement in
-              if let m = buffer { store.reviews.suggest(root: root, path: d.path, line: n, replacement: replacement, snapshot: m.buffer.snapshot) }
-            },
-            onResolve: { store.reviews.resolve(root: root, path: d.path, id: $0) },
-            onApply: { id in
-              guard let m = buffer else { return "ファイルを開けません。" }
-              let e = store.reviews.apply(root: root, path: d.path, id: id, in: m)
-              if e == nil { store.buffers.refresh(d.path); store.edited(d.path) }
-              return e
-            },
-            onReject: { store.reviews.reject(root: root, path: d.path, id: $0) },
-            onSend: store.reviews.prompt(root: root, path: d.path, in: fileLines).map { text in
-              {
-                NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text, forType: .string)
-                // Paste is left to the user: a review comment must not run as an agent command unseen.
-                if let a = st.agentSessions.first(where: { $0.project == st.project && !$0.status.isExited }) { store.run("pane.focus", ["id": .int(a.pane)]); diff = nil }
-              }
-            },
-            onClose: { diff = nil })
+          diffPane(d, root: root)
         } else {
         PaneView(
           node: st.tree.maximized.flatMap { id in st.tree.leaves.first { $0.id == id }.map { .leaf(id: $0.id, kind: $0.kind) } } ?? st.tree.root,
@@ -947,6 +955,64 @@ import Observation
           run: { _ = store.run($0, $1) })
         }
       }
+    }
+
+    @ViewBuilder private func diffPane(_ target: DiffTarget, root: String) -> some View {
+      let key = root + "\0" + target.path + "\0\(target.staged)\0\(target.untracked)"
+      if let loaded = loadedDiff, loaded.key == key {
+        let buffer: EditorTransactionManager? = {
+          if case .ready(let manager)? = store.buffers.peek(target.path) { manager } else { nil }
+        }()
+        DiffView(
+          target: target, model: loaded.model,
+          threads: store.reviews.threads(root: root, target.path, in: loaded.fileLines),
+          suggestions: store.reviews.suggestions(root: root, target.path, current: buffer?.buffer.snapshot.revision),
+          onComment: { line, text, body in
+            if let buffer { store.reviews.add(root: root, path: target.path, line: line, text: text, body: body, snapshot: buffer.buffer.snapshot) }
+          },
+          onSuggest: { line, replacement in
+            if let buffer { store.reviews.suggest(root: root, path: target.path, line: line, replacement: replacement, snapshot: buffer.buffer.snapshot) }
+          },
+          onResolve: { store.reviews.resolve(root: root, path: target.path, id: $0) },
+          onApply: { id in
+            guard let buffer else { return "ファイルを開けません。" }
+            let error = store.reviews.apply(root: root, path: target.path, id: id, in: buffer)
+            if error == nil { store.buffers.refresh(target.path); store.edited(target.path) }
+            return error
+          },
+          onReject: { store.reviews.reject(root: root, path: target.path, id: $0) },
+          onSend: store.reviews.prompt(root: root, path: target.path, in: loaded.fileLines).map { text in
+            {
+              NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text, forType: .string)
+              if let agent = st.agentSessions.first(where: { $0.project == st.project && !$0.status.isExited }) {
+                store.run("pane.focus", ["id": .int(agent.pane)]); diff = nil
+              }
+            }
+          },
+          onClose: { diff = nil })
+      } else {
+        Text("差分を読み込み中…")
+          .font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .task(id: key) { await loadDiff(target, root: root, key: key) }
+      }
+    }
+
+    private func loadDiff(_ target: DiffTarget, root: String, key: String) async {
+      async let model = Task.detached(priority: .userInitiated) {
+        DiffView.model(WorkbenchGit.diff(root, target.path, staged: target.staged, untracked: target.untracked))
+      }.value
+      async let lines = Task.detached(priority: .userInitiated) {
+        guard let data = FileManager.default.contents(atPath: root + "/" + target.path),
+          let text = String(data: data, encoding: .utf8)
+        else { return [String]() }
+        return text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+      }.value
+      async let buffer: Void = store.buffers.prefetch(target.path, root: root)
+      let loaded = await LoadedDiff(key: key, model: model, fileLines: lines)
+      _ = await buffer
+      guard !Task.isCancelled, diff == target, store.activeRoot == root else { return }
+      loadedDiff = loaded
     }
 
     private static let sectionNotes = ["一般": "ワークスペースの基本動作とアプリ全体の表示を設定します。"]
@@ -1159,7 +1225,7 @@ import Observation
     private func run(_ list: [PaletteItem]) {
       guard selection < list.count else { return }
       store.run("palette.close")
-      store.run(list[selection].id, list[selection].input)
+      store.performFromUI(list[selection].id, list[selection].input)
     }
   }
 

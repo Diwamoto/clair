@@ -27,7 +27,7 @@
     /// Search-hit jump target (1-based line); `nonce` makes a repeat jump to the same line still fire.
     private(set) var reveal: (path: String, line: Int, nonce: Int)?
     /// Above this the file is refused rather than loaded whole (large-file paths are E10's scope).
-    nonisolated static let maxBytes = 10_000_000
+    nonisolated static let maxBytes = 10 * 1024 * 1024
 
     func reveal(_ path: String, line: Int) { reveal = (path, line, (reveal?.nonce ?? 0) + 1) }
 
@@ -47,10 +47,20 @@
     func refresh(_ path: String) { revisions[path, default: 0] += 1 }
 
     func drop(_ paths: Set<String>) {
-      for p in paths where loads.removeValue(forKey: p) != nil || loading.contains(p) { revisions[p, default: 0] += 1 }
+      for path in paths {
+        let hadLoad = loads.removeValue(forKey: path) != nil
+        let pending = loading.removeValue(forKey: path)
+        pending?.task.cancel()
+        if hadLoad || pending != nil { revisions[path, default: 0] += 1 }
+      }
     }
 
-    private var loading: Set<String> = []
+    private struct PendingLoad {
+      let id: Int
+      let task: Task<Load?, Never>
+    }
+    private var loading: [String: PendingLoad] = [:]
+    private var loadID = 0
 
     /// Already-read buffer, or nil while it still has to be read (see `prefetch`).
     func peek(_ path: String) -> Load? { loads[path] }
@@ -58,11 +68,29 @@
     /// Reads and parses off the main thread so a tab switch never blocks on I/O. A drop while the read is in
     /// flight bumps the revision and the stale result is discarded.
     func prefetch(_ path: String, root: String) async {
-      guard loads[path] == nil, loading.insert(path).inserted else { return }
-      let rev = revision(path)
-      let l = await Task.detached(priority: .userInitiated) { Self.read(root + "/" + path) }.value
-      loading.remove(path)
-      if revision(path) == rev, loads[path] == nil { loads[path] = l }
+      while loads[path] == nil, !Task.isCancelled {
+        let rev = revision(path)
+        let pending: PendingLoad
+        if let existing = loading[path] {
+          pending = existing
+        } else {
+          loadID += 1
+          let worker = Task.detached(priority: .userInitiated) { () -> Load? in
+            guard !Task.isCancelled else { return nil }
+            let load = Self.read(root + "/" + path)
+            return Task.isCancelled ? nil : load
+          }
+          pending = PendingLoad(id: loadID, task: worker)
+          loading[path] = pending
+        }
+        let load = await withTaskCancellationHandler(
+          operation: { await pending.task.value },
+          onCancel: { pending.task.cancel() })
+        if loading[path]?.id == pending.id { loading.removeValue(forKey: path) }
+        guard !Task.isCancelled else { return }
+        guard let load else { continue }
+        if revision(path) == rev, loads[path] == nil { loads[path] = load }
+      }
     }
 
     func save(_ path: String, root: String) throws {
@@ -72,7 +100,7 @@
 
     nonisolated private static func read(_ full: String) -> Load {
       guard let data = FileManager.default.contents(atPath: full) else { return .failed("ファイルを読み込めません。") }
-      guard data.count <= maxBytes else { return .failed("10 MB を超えるファイルは開けません。") }
+      guard data.count <= maxBytes else { return .failed("10 MiB を超えるファイルは開けません。") }
       guard let text = String(data: data, encoding: .utf8), let buffer = try? TextBuffer(text) else {
         return .failed("UTF-8 のテキストではないため開けません。")
       }

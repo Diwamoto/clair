@@ -11,7 +11,7 @@
   private typealias W = DesignTokens.Wash
 
   /// U05: which side of a change the diff pane is showing.
-  struct DiffTarget: Equatable {
+  struct DiffTarget: Hashable, Sendable {
     let path: String
     let staged: Bool
     let untracked: Bool
@@ -38,12 +38,39 @@
     private var suggestionLines: [UUID: Int] = [:]
     private(set) var version = 0
     private let file: URL?
+    private let asynchronousPersistence: Bool
+    private let persistenceQueue = DispatchQueue(label: "com.diwamoto.clair.review-save", qos: .utility)
     static let you = ReviewAuthor(displayName: "あなた", kind: .human)
 
-    init(file: URL? = URL.applicationSupportDirectory.appending(path: "Clair/reviews.json")) {
+    convenience init() {
+      self.init(persistingAt: URL.applicationSupportDirectory.appending(path: "Clair/reviews.json"), asynchronously: true)
+    }
+
+    convenience init(file: URL?) { self.init(persistingAt: file, asynchronously: false) }
+
+    private init(persistingAt file: URL?, asynchronously: Bool) {
       self.file = file
-      guard let file, let d = try? Data(contentsOf: file), let all = try? JSONDecoder().decode([String: [ReviewThreadRecord]].self, from: d) else { return }
+      asynchronousPersistence = asynchronously
+      guard let file else { return }
+      if asynchronously {
+        Task { [weak self] in
+          let all = await Task.detached(priority: .utility) { Self.read(file) }.value
+          self?.load(all)
+        }
+      } else {
+        load(Self.read(file))
+      }
+    }
+
+    nonisolated private static func read(_ file: URL) -> [String: [ReviewThreadRecord]] {
+      guard let data = try? Data(contentsOf: file) else { return [:] }
+      return (try? JSONDecoder().decode([String: [ReviewThreadRecord]].self, from: data)) ?? [:]
+    }
+
+    private func load(_ all: [String: [ReviewThreadRecord]]) {
       for (k, rs) in all {
+        // A comment created before the startup read completed is newer than the disk snapshot.
+        guard managers[k] == nil else { continue }
         managers[k] = ReviewThreadManager(threads: rs.map(\.thread))
         for r in rs { lines[r.id] = r.line; texts[r.id] = r.text }
       }
@@ -54,17 +81,20 @@
     private func save() {
       guard let file else { return }
       let all = managers.mapValues { m in m.threads.compactMap { t in lines[t.id].map { ReviewThreadRecord(t, line: $0, text: texts[t.id]) } } }
-      try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-      try? JSONEncoder().encode(all).write(to: file, options: .atomic)
+      let write: @Sendable () -> Void = {
+        try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? JSONEncoder().encode(all).write(to: file, options: .atomic)
+      }
+      if asynchronousPersistence { persistenceQueue.async(execute: write) } else { write() }
     }
 
     /// Nearest 1-based line in `file` whose text equals `text`.
-    static func locate(_ text: String, near line: Int, in file: [Substring]) -> Int? {
+    static func locate(_ text: String, near line: Int, in file: [String]) -> Int? {
       file.indices.filter { file[$0] == text }.map { $0 + 1 }.min { abs($0 - line) < abs($1 - line) }
     }
 
     /// Where each thread sits now. Without `file` (or for a thread saved before texts were kept) the saved line is trusted.
-    private func placed(_ root: String, _ path: String, in file: [Substring]?) -> [(line: Int, saved: Int, thread: ReviewThread, stale: Bool)] {
+    private func placed(_ root: String, _ path: String, in file: [String]?) -> [(line: Int, saved: Int, thread: ReviewThread, stale: Bool)] {
       _ = version
       return (managers[key(root, path)]?.threads ?? []).compactMap { t in
         guard let saved = lines[t.id] else { return nil }
@@ -74,7 +104,7 @@
     }
 
     /// 1-based file line → threads on it; stale threads (their line's text is gone) are under key 0.
-    func threads(root: String, _ path: String, in file: [Substring]? = nil) -> [Int: [ReviewThread]] {
+    func threads(root: String, _ path: String, in file: [String]? = nil) -> [Int: [ReviewThread]] {
       var out: [Int: [ReviewThread]] = [:]
       for p in placed(root, path, in: file) { out[p.stale ? 0 : p.line, default: []].append(p.thread) }
       return out
@@ -92,7 +122,7 @@
     }
 
     /// Open threads as a prompt for an agent: one `path:line` heading per thread, comments beneath. Nil when nothing is open.
-    func prompt(root: String, path: String, in file: [Substring]? = nil) -> String? {
+    func prompt(root: String, path: String, in file: [String]? = nil) -> String? {
       let open = placed(root, path, in: file).filter { $0.thread.state == .open }.sorted { $0.line < $1.line }
       guard !open.isEmpty else { return nil }
       return "次のレビューコメントに対応してください。\n\n"
@@ -225,7 +255,7 @@
   /// Lines that exist on the new side can be commented.
   struct DiffView: View {
     let target: DiffTarget
-    let text: String
+    let model: Model
     /// Line → threads; key 0 holds stale ones (their line's text is gone).
     let threads: [Int: [ReviewThread]]
     let suggestions: [PlacedSuggestion]
@@ -245,39 +275,60 @@
     @State private var hunk = -1
     @State private var sent = false
     /// A diff this long is cut with a notice instead of laying out every row.
-    static let maxLines = 5000
+    nonisolated static let maxLines = 5000
 
-    struct Row { let text: Substring; let newLine: Int? }
+    struct Row: Sendable { let text: String; let newLine: Int? }
+
+    /// Immutable, pre-parsed diff data. Construct this away from the main actor; a large diff must
+    /// not be tokenised and counted again for every SwiftUI body evaluation.
+    struct Model: Sendable {
+      let text: String
+      let rows: [Row]
+      let added: Int
+      let removed: Int
+      let hunks: [Int]
+      let visibleLines: Set<Int>
+    }
+
+    nonisolated static func model(_ text: String) -> Model {
+      let rows = rows(text)
+      let counts = stats(rows)
+      return Model(
+        text: text, rows: rows, added: counts.added, removed: counts.removed,
+        hunks: rows.indices.filter { rows[$0].text.hasPrefix("@@") },
+        visibleLines: Set(rows.compactMap(\.newLine)))
+    }
 
     /// Parses `@@ -a,b +c,d @@` for `c`, then numbers context and added lines from there.
-    static func rows(_ text: String) -> [Row] {
+    nonisolated static func rows(_ text: String) -> [Row] {
       let all = text.split(separator: "\n", omittingEmptySubsequences: false)
       let body = all.drop { !$0.hasPrefix("@@") }
-      if body.isEmpty { return all.filter { $0.hasPrefix("Binary") }.map { Row(text: $0, newLine: nil) } }
+      if body.isEmpty { return all.filter { $0.hasPrefix("Binary") }.map { Row(text: String($0), newLine: nil) } }
       var n = 0
       return body.prefix(maxLines).map { l in
         if l.hasPrefix("@@") {
           n = l.split(separator: " ").first { $0.hasPrefix("+") }
             .flatMap { Int($0.dropFirst().split(separator: ",")[0]) } ?? 1
-          return Row(text: l, newLine: nil)
+          return Row(text: String(l), newLine: nil)
         }
-        if l.hasPrefix("-") || l.hasPrefix("\\") { return Row(text: l, newLine: nil) }
+        if l.hasPrefix("-") || l.hasPrefix("\\") { return Row(text: String(l), newLine: nil) }
         defer { n += 1 }
-        return Row(text: l, newLine: n)
+        return Row(text: String(l), newLine: n)
       }
     }
 
     /// Added / removed line counts (rows start at the first hunk, so `+++`/`---` file headers are excluded).
-    static func stats(_ rows: [Row]) -> (added: Int, removed: Int) {
+    nonisolated static func stats(_ rows: [Row]) -> (added: Int, removed: Int) {
       (rows.filter { $0.text.hasPrefix("+") }.count, rows.filter { $0.text.hasPrefix("-") }.count)
     }
 
     var body: some View {
-      let rows = Self.rows(text)
-      let (added, removed) = Self.stats(rows)
-      let hunks = rows.indices.filter { rows[$0].text.hasPrefix("@@") }
+      let rows = model.rows
+      let (added, removed) = (model.added, model.removed)
+      let hunks = model.hunks
+      let suggestionsByLine = Dictionary(grouping: suggestions, by: \.line)
       // Threads/suggestions whose line is not in a hunk (or whose line went stale) would be invisible: list them on top.
-      let visible = Set(rows.compactMap(\.newLine))
+      let visible = model.visibleLines
       let looseThreads = threads.filter { !visible.contains($0.key) }.sorted { $0.key < $1.key }
       let looseSuggestions = suggestions.filter { !visible.contains($0.line) }
       ScrollViewReader { proxy in
@@ -308,7 +359,7 @@
           }
           Button(action: onClose) { Image(systemName: "xmark").foregroundStyle(C.chromeInk) }.buttonStyle(.plain)
         }.padding(.horizontal, 12).frame(height: 32).background(C.chromeRaised)
-        if text.isEmpty {
+        if model.text.isEmpty {
           Text("差分はありません。").font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
           ScrollView([.vertical, .horizontal]) {
@@ -324,8 +375,8 @@
                 line(r).id(i)
                 if let n = r.newLine {
                   ForEach(threads[n] ?? []) { thread($0) }
-                  ForEach(suggestions.filter { $0.line == n }) { suggestion($0) }
-                  if composing == n { composer(n, text: r.text.dropFirst()) }
+                  ForEach(suggestionsByLine[n] ?? []) { suggestion($0) }
+                  if composing == n { composer(n, text: String(r.text.dropFirst())) }
                 }
               }
               if rows.count == Self.maxLines {
@@ -390,16 +441,16 @@
       .opacity(pending ? 1 : 0.6).padding(.leading, 28).padding(.vertical, 4)
     }
 
-    private func composer(_ n: Int, text: Substring) -> some View {
+    private func composer(_ n: Int, text: String) -> some View {
       let submit = {
-        if suggesting { onSuggest(n, draft) } else { onComment(n, String(text), draft) }
+        if suggesting { onSuggest(n, draft) } else { onComment(n, text, draft) }
         composing = nil
       }
       return HStack(spacing: 8) {
         TextField(suggesting ? "この行の置換後" : "コメント", text: $draft).textFieldStyle(.plain).font(Typography.font(Typography.chrome)).frame(width: 360)
           .onSubmit(submit)
         Button(suggesting ? "提案する" : "追加", action: submit).buttonStyle(.plain).foregroundStyle(C.textSecondary)
-        Button(suggesting ? "コメントに戻す" : "提案にする") { suggesting.toggle(); draft = suggesting ? String(text) : "" }
+        Button(suggesting ? "コメントに戻す" : "提案にする") { suggesting.toggle(); draft = suggesting ? text : "" }
           .buttonStyle(.plain).foregroundStyle(C.textTertiary)
         Button("キャンセル") { composing = nil }.buttonStyle(.plain).foregroundStyle(C.textTertiary)
       }
@@ -585,23 +636,29 @@
 
   /// V05: local history of the active file, newest first. Restoring snapshots the current content first.
   struct HistoryList: View {
+    let root: String?
     let path: String?
-    let versions: [URL]
-    let preview: (URL) -> [String]
-    let restore: (URL) -> Void
+    let history: LocalHistory
+    let restored: () -> Void
+    @State private var versions: [URL] = []
     @State private var selected: URL?
+    @State private var preview: [String]?
+    @State private var loading = false
+    @State private var message: String?
 
     private func label(_ v: URL) -> String {
       Double(v.lastPathComponent).map { Date(timeIntervalSince1970: $0).formatted(date: .abbreviated, time: .standard) } ?? v.lastPathComponent
     }
 
     var body: some View {
-      if path == nil || versions.isEmpty {
+      if path == nil || (!loading && versions.isEmpty) {
         Text(path == nil ? "ファイルを選択してください。" : "履歴はありません（保存・一括置換の直前に自動退避されます）。")
           .font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).padding(12)
       }
+      if loading { Text("履歴を読み込み中…").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary).padding(12) }
+      if let message { Text(message).font(Typography.font(Typography.chrome)).foregroundStyle(C.attention).padding(.horizontal, 12) }
       ForEach(versions, id: \.self) { v in
-        Button { selected = selected == v ? nil : v } label: {
+        Button { select(v) } label: {
           HStack {
             Text(label(v)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textPrimary)
             Spacer()
@@ -610,17 +667,56 @@
           .padding(.horizontal, 20).padding(.vertical, 4).contentShape(Rectangle())
         }.buttonStyle(.plain)
         if selected == v {
-          let diff = preview(v)
-          VStack(alignment: .leading, spacing: 2) {
-            Text(diff.isEmpty ? "現在の内容と同一です。" : "復元で \(diff.filter { $0.hasPrefix("-") }.count) 行が消え、\(diff.filter { $0.hasPrefix("+") }.count) 行が戻ります")
-              .font(Typography.font(Typography.micro)).foregroundStyle(C.textTertiary)
-            ForEach(Array(diff.prefix(40).enumerated()), id: \.offset) { _, l in
-              Text(l).font(.system(size: 11, design: .monospaced)).foregroundStyle(l.hasPrefix("+") ? C.textPrimary : C.textQuaternary).lineLimit(1)
+          if let preview {
+            VStack(alignment: .leading, spacing: 2) {
+              Text(preview.isEmpty ? "現在の内容と同一です。" : "復元で \(preview.filter { $0.hasPrefix("-") }.count) 行が消え、\(preview.filter { $0.hasPrefix("+") }.count) 行が戻ります")
+                .font(Typography.font(Typography.micro)).foregroundStyle(C.textTertiary)
+              ForEach(Array(preview.prefix(40).enumerated()), id: \.offset) { _, l in
+                Text(l).font(.system(size: 11, design: .monospaced)).foregroundStyle(l.hasPrefix("+") ? C.textPrimary : C.textQuaternary).lineLimit(1)
+              }
+              if preview.count > 40 { Text("… 他 \(preview.count - 40) 行").font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary) }
+              Button("この版に復元") { restore(v) }.disabled(preview.isEmpty || loading).padding(.top, 4)
             }
-            if diff.count > 40 { Text("… 他 \(diff.count - 40) 行").font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary) }
-            Button("この版に復元") { restore(v); selected = nil }.disabled(diff.isEmpty).padding(.top, 4)
+            .padding(.horizontal, 28).padding(.bottom, 6)
+          } else {
+            Text("差分を計算中…").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary).padding(.horizontal, 28).padding(.bottom, 6)
           }
-          .padding(.horizontal, 28).padding(.bottom, 6)
+        }
+      }
+      .task(id: key) { await loadVersions() }
+    }
+
+    private var key: String { (root ?? "") + "\0" + (path ?? "") }
+
+    private func loadVersions() async {
+      selected = nil; preview = nil; message = nil
+      guard let root, let path else { versions = []; return }
+      loading = true
+      let loaded = await Task.detached(priority: .utility) { try? history.versions(root: root, path: path) }.value
+      guard self.root == root, self.path == path, !Task.isCancelled else { return }
+      versions = loaded ?? []; loading = false
+    }
+
+    private func select(_ version: URL) {
+      guard selected != version, let root, let path else { selected = nil; preview = nil; return }
+      selected = version; preview = nil; message = nil
+      Task {
+        let loaded = await Task.detached(priority: .userInitiated) { history.preview(version, root: root, path: path) }.value
+        guard selected == version, self.root == root, self.path == path else { return }
+        preview = loaded
+      }
+    }
+
+    private func restore(_ version: URL) {
+      guard let root, let path else { return }
+      loading = true; message = nil
+      Task {
+        let result = await Task.detached(priority: .userInitiated) { Result { try history.restore(version, root: root, path: path) } }.value
+        guard self.root == root, self.path == path else { return }
+        loading = false
+        switch result {
+        case .success: selected = nil; preview = nil; restored(); await loadVersions()
+        case .failure(let error): message = "復元できません: \(error.localizedDescription)"
         }
       }
     }

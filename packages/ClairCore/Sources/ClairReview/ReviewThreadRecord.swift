@@ -2,7 +2,7 @@ import ClairEditorCore
 import Foundation
 
 /// On-disk form of a single-file line thread (U05). `text` is the anchored line's content, used to re-find the line after the file drifts.
-public struct ReviewThreadRecord: Codable, Equatable {
+public struct ReviewThreadRecord: Codable, Equatable, Sendable {
   public var id: UUID
   public var line: Int
   public var lower: Int

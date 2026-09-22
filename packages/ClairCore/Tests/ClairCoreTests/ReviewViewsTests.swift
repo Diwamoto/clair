@@ -4,6 +4,7 @@
   @testable import ClairAppKit
   @testable import ClairEditorCore
   @testable import ClairReview
+  @testable import ClairWorkspace
 
   @MainActor final class ReviewViewsTests: XCTestCase {
     func testDiffRowsNumberNewSideOnly() {
@@ -14,6 +15,24 @@
       XCTAssertTrue(DiffView.rows("").isEmpty)
       let st = DiffView.stats(r)
       XCTAssertEqual([st.added, st.removed], [2, 1])
+    }
+
+    func testLargeDiffParsingStaysWithinInteractionBudget() {
+      let text = "@@ -1,5000 +1,5000 @@\n" + (0..<5000).map { $0.isMultiple(of: 3) ? "+line \($0)" : " line \($0)" }.joined(separator: "\n")
+      let start = Date()
+      let model = DiffView.model(text)
+      let elapsed = Date().timeIntervalSince(start)
+      XCTAssertEqual(model.rows.count, DiffView.maxLines)
+      XCTAssertLessThan(elapsed, 0.2, "5,000-line diff parsing took \(elapsed)s")
+    }
+
+    func testTwentyThousandFileExplorerModelStaysWithinInteractionBudget() {
+      let files = (0..<20_000).map { WorkbenchFile(path: "Sources/G\($0 % 100)/file\($0).swift", status: nil) }
+      let start = Date()
+      let rows = ClairAppShell.explorerRows(for: files)
+      let elapsed = Date().timeIntervalSince(start)
+      XCTAssertGreaterThan(rows.count, files.count)
+      XCTAssertLessThan(elapsed, 0.2, "20,000-file explorer model took \(elapsed)s")
     }
 
     func testThreadAnchorsToLineAndResolves() throws {
@@ -55,7 +74,9 @@
     func testThreadFollowsItsLineAndGoesStale() throws {
       let s = ReviewStore(file: nil), snap = try TextBuffer("a\nb\nc").snapshot
       s.add(root: "/r", path: "f", line: 2, text: "b", body: "B", snapshot: snap)
-      func at(_ file: String) -> [Int: [ReviewThread]] { s.threads(root: "/r", "f", in: file.split(separator: "\n", omittingEmptySubsequences: false)) }
+      func at(_ file: String) -> [Int: [ReviewThread]] {
+        s.threads(root: "/r", "f", in: file.split(separator: "\n", omittingEmptySubsequences: false).map(String.init))
+      }
       XCTAssertEqual(at("a\nb\nc").keys.sorted(), [2])
       XCTAssertEqual(at("x\ny\na\nb\nc").keys.sorted(), [4])  // lines inserted above: follows
       XCTAssertEqual(at("a\nB\nc").keys.sorted(), [0])  // line reworded: stale
