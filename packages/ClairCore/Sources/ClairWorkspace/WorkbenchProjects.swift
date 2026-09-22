@@ -12,8 +12,15 @@ public struct WorkbenchProject: Sendable, Codable, Equatable {
   public var origin: String? = nil
   public var branch: String? = nil
 
+  public init(name: String, path: String, origin: String? = nil, branch: String? = nil) {
+    self.name = name
+    self.path = path
+    self.origin = origin
+    self.branch = branch
+  }
+
   /// Absolute, symlink-resolved directory path, or nil if `path` is not an existing directory.
-  static func normalized(_ path: String) -> String? {
+  public static func normalized(_ path: String) -> String? {
     guard path.hasPrefix("/") else { return nil }
     let url = URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath()
     var isDir: ObjCBool = false
@@ -64,12 +71,12 @@ extension WorkbenchState {
   }
 
   /// Switches to the Project at `p.path`, adding it (under a unique name) if it is not open yet.
-  mutating func openProject(_ p: WorkbenchProject) {
-    if let open = projects.first(where: { $0.path == p.path }) { switchProject(to: open); return }
+  public mutating func openProject(_ p: WorkbenchProject, scanFiles: Bool = true) {
+    if let open = projects.first(where: { $0.path == p.path }) { switchProject(to: open, scanFiles: scanFiles); return }
     var name = p.name, n = 2
     while projects.contains(where: { $0.name == name }) { name = "\(p.name) \(n)"; n += 1 }
     let added = WorkbenchProject(name: name, path: p.path)
-    projects.append(added); switchProject(to: added)
+    projects.append(added); switchProject(to: added, scanFiles: scanFiles)
   }
 
   mutating func openTab(_ path: String) {
@@ -77,20 +84,27 @@ extension WorkbenchState {
     active = path; settingsOpen = false; palette = nil
   }
 
-  /// Stashes the current Project's layout, rescans the target's files and loads its layout.
-  mutating func switchProject(to p: WorkbenchProject) {
+  /// Stashes the current Project's layout and loads the target's layout. The GUI can skip the
+  /// initial disk/Git scan so its first frame is never held up; its file watcher fills the tree
+  /// immediately afterwards on a utility queue.
+  public mutating func switchProject(to p: WorkbenchProject, scanFiles: Bool = true) {
     if !project.isEmpty { layouts[project] = layout; filesCache[project] = files }
     project = p.name
     // A revisited Project shows its last tree at once; the GUI rescans in the background (a scan walks the disk and runs `git status`).
-    files = filesCache[p.name] ?? WorkbenchFiles.scan(p.path)
+    let cached = filesCache[p.name]
+    files = cached ?? (scanFiles ? WorkbenchFiles.scan(p.path) : [])
     var l = layouts[p.name] ?? ProjectLayout()
     // Nothing folded yet (a new Project, or a layout saved before folding was the default): fold every directory,
     // since an unfolded tree of a big repo is thousands of rows. ponytail: a tree the user fully unfolded is folded again on the next switch.
     if l.collapsed.isEmpty { l.collapsed = WorkbenchFiles.directories(of: files) }
-    let paths = Set(files.map(\.path))
-    l.tabs = l.tabs.filter(paths.contains)
-    l.dirty.formIntersection(l.tabs)
-    if l.active.map(l.tabs.contains) != true { l.active = l.tabs.last }
+    // With a deferred first scan, keep restored tabs until the background result tells us which
+    // paths still exist. Cached and synchronous trees can be reconciled immediately.
+    if cached != nil || scanFiles {
+      let paths = Set(files.map(\.path))
+      l.tabs = l.tabs.filter(paths.contains)
+      l.dirty.formIntersection(l.tabs)
+      if l.active.map(l.tabs.contains) != true { l.active = l.tabs.last }
+    }
     if !l.tree.isValid { l.tree = PaneTree() }
     l.launches = l.launches.filter { id, _ in l.tree.leaves.contains { $0.id == id } }
     layout = l
@@ -191,7 +205,7 @@ extension WorkbenchState {
   }
 
   /// nil if nothing usable is stored. Missing roots are dropped; unsaved-edit markers are never restored (principle 8).
-  public static func restore(from url: URL) -> WorkbenchState? {
+  public static func restore(from url: URL, scanFiles: Bool = true) -> WorkbenchState? {
     guard let data = try? Data(contentsOf: url), let snap = try? JSONDecoder().decode(WorkspaceSnapshot.self, from: data)
     else { return nil }
     var s = WorkbenchState()
@@ -203,7 +217,7 @@ extension WorkbenchState {
     if s.toggles["restoreLayout"] == true {
       s.layouts = snap.layouts.mapValues { var l = $0; l.dirty = []; return l }
     }
-    s.switchProject(to: current)
+    s.switchProject(to: current, scanFiles: scanFiles)
     return s
   }
 }

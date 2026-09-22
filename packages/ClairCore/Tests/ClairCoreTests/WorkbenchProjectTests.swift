@@ -90,6 +90,24 @@ final class WorkbenchProjectTests: XCTestCase {
     XCTAssertNil(WorkbenchState.restore(from: url))
   }
 
+  func testDeferredRestoreDoesNotScanBeforeFirstFrame() throws {
+    let a = try folder("deferred", ["src/one.txt", "two.txt"])
+    var s = WorkbenchState()
+    open(a, &s)
+    r.execute("tab.open", ["path": .string("src/one.txt")], state: &s)
+    let url = tmp.appending(path: "deferred.json")
+    try s.save(to: url)
+
+    var restored = try XCTUnwrap(WorkbenchState.restore(from: url, scanFiles: false))
+    XCTAssertTrue(restored.files.isEmpty, "launch restore must not walk the Project or run git status")
+    XCTAssertEqual(restored.tabs, ["src/one.txt"], "tabs remain visible while the background scan starts")
+
+    restored.applyDiskChange([], files: WorkbenchFiles.scan(a))
+    XCTAssertEqual(restored.files.map(\.path), ["src/one.txt", "two.txt"])
+    XCTAssertEqual(restored.collapsed, ["src"])
+    XCTAssertEqual(restored.active, "src/one.txt")
+  }
+
   func testInvalidTreeAndRestoreLayoutOff() throws {
     let a = try folder("a", ["f"])
     var s = WorkbenchState()
@@ -137,6 +155,32 @@ final class WorkbenchProjectTests: XCTestCase {
     try Data("n".utf8).write(to: URL(fileURLWithPath: a + "/late.txt"))
     s.switchProject(to: s.projects[0])
     XCTAssertEqual(s.files.map(\.path), ["f.txt"])  // cached; the GUI's background rescan picks up late.txt
+  }
+
+  func testRapidProjectAndPaneFocusSwitchingKeepsOneProjectIdentity() throws {
+    let a = try folder("rapid-a", (0..<200).map { "src/a\($0).txt" })
+    let b = try folder("rapid-b", (0..<200).map { "lib/b\($0).txt" })
+    var s = WorkbenchState()
+    open(a, &s)
+    r.execute("tab.open", ["path": .string("src/a0.txt")], state: &s)
+    r.execute("pane.splitRight", state: &s)
+    open(b, &s)
+    r.execute("tab.open", ["path": .string("lib/b0.txt")], state: &s)
+    r.execute("pane.splitDown", state: &s)
+
+    let started = ProcessInfo.processInfo.systemUptime
+    for index in 0..<2_000 {
+      let name = index.isMultiple(of: 2) ? "rapid-a" : "rapid-b"
+      XCTAssertEqual(r.execute("project.switch", ["name": .string(name)], state: &s).success, .ok)
+      XCTAssertEqual(r.execute("pane.focusNext", state: &s).success, .ok)
+    }
+    let elapsed = ProcessInfo.processInfo.systemUptime - started
+
+    XCTAssertLessThan(elapsed, 1, "2,000 Project + pane focus transitions must stay far below one frame each")
+    XCTAssertEqual(s.project, "rapid-b")
+    XCTAssertEqual(s.active, "lib/b0.txt")
+    XCTAssertTrue(s.files.allSatisfy { $0.path.hasPrefix("lib/") }, "a stale Project tree must never cross into the active Project")
+    XCTAssertTrue(s.tree.leaves.contains { $0.id == s.tree.focused })
   }
 
   func testDirectoriesStartFolded() throws {

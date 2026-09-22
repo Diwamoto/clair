@@ -342,7 +342,7 @@ extension CommandRegistry {
     cmd("project.switch", "プロジェクトを切り替え", .read, params: [CommandParam("name", .string)],
         preflight: { s, i throws(CommandError) in
           try require(s.projects.contains { $0.name == i["name"]!.string! }, "no project \(i["name"]!)"); return .read
-        }) { s, i in s.switchProject(to: s.projects.first { $0.name == i["name"]!.string! }!); return .ok },
+        }) { s, i in s.switchProject(to: s.projects.first { $0.name == i["name"]!.string! }!, scanFiles: false); return .ok },
     // ai: false — an agent must not widen the readable file system on its own.
     cmd("project.open", "フォルダをプロジェクトとして開く", .additive, ai: false, params: [CommandParam("path", .string)],
         preflight: { _, i throws(CommandError) in
@@ -363,7 +363,9 @@ extension CommandRegistry {
         }) { s, i in
       let file = WorkbenchProject.normalizedFile(i["path"]!.string!)!
       let owner = s.owner(of: file) ?? WorkbenchProject.root(containing: file)
-      s.openProject(owner)
+      // The requested file can be opened immediately; the GUI fills the rest of a newly discovered
+      // Project in the background instead of blocking this command on a full walk + `git status`.
+      s.openProject(owner, scanFiles: false)
       let rel = String(file.dropFirst(owner.path.count + 1))
       if !s.files.contains(where: { $0.path == rel }) { s.files.append(WorkbenchFile(path: rel, status: nil)) }  // outside the scan (skipped dir / over the cap)
       s.openTab(rel)

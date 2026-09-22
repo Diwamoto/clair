@@ -9,7 +9,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSApp.setActivationPolicy(.regular)
     NSApp.activate(ignoringOtherApps: true)
-    ClairDaemonLauncher.ensureRunning()  // T09: terminals are daemon-owned shells
+    // Daemon health uses IPC and can wait on a stale socket. The first window never depends on it;
+    // terminal attachment already waits for the daemon when a terminal is actually opened.
+    Task.detached(priority: .utility) { ClairDaemonLauncher.ensureRunning() }
     // The native lights are laid out for a 28pt bar; centre them in our ChromeBudget.titlebar-tall chrome.
     // Re-applied because AppKit resets their frames on resize / full screen.
     for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResizeNotification, NSWindow.didExitFullScreenNotification] {

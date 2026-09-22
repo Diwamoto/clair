@@ -89,7 +89,16 @@ extension WorkbenchState {
 
   /// Same, with the (slow) scan already done off the main thread.
   public mutating func applyDiskChange(_ paths: Set<String>, files scanned: [WorkbenchFile]) {
+    let firstDeferredLoad = files.isEmpty && filesCache[project] == nil
     files = scanned
+    filesCache[project] = scanned
+    if firstDeferredLoad {
+      if collapsed.isEmpty { collapsed = WorkbenchFiles.directories(of: scanned) }
+      let existing = Set(scanned.map(\.path))
+      tabs = tabs.filter(existing.contains)
+      dirty.formIntersection(tabs)
+      if active.map(tabs.contains) != true { active = tabs.last }
+    }
     dirty.subtract(paths)
   }
 }

@@ -31,6 +31,8 @@ import Observation
     public let updateConfig = ClairUpdateConfiguration.live()
     private var updateTask: Task<Void, Never>?
     private var sleepAssertion: IOPMAssertionID = 0
+    private let persistenceQueue = DispatchQueue(label: "com.diwamoto.clair.workspace-save", qos: .utility)
+    private var persistenceWork: DispatchWorkItem?
 
     /// V02: serves this store to `clair` CLI. Only the first window's store wins the socket.
     // ponytail: multi-window shares one socket owner; route by window when V04 adds per-Project windows.
@@ -42,8 +44,11 @@ import Observation
 
     public init(persistAt url: URL? = ClairWorkbenchStore.defaultPersistURL) {
       persistURL = url
-      if let url, let restored = WorkbenchState.restore(from: url) { state = restored }
-      if state.projects.isEmpty { run("project.open", ["path": .string(Self.seedRoot)]) }
+      if let url, let restored = WorkbenchState.restore(from: url, scanFiles: false) { state = restored }
+      if state.projects.isEmpty {
+        let root = Self.seedRoot
+        state.openProject(WorkbenchProject(name: URL(fileURLWithPath: root).lastPathComponent, path: root), scanFiles: false)
+      }
       let store = self
       let server = WorkbenchIPCServer { req in
         if req.via == .mcp {
@@ -55,9 +60,17 @@ import Observation
         }
         return DispatchQueue.main.sync { MainActor.assumeIsolated { store.run(req.command, req.input) } }
       }
-      if (try? server.start()) != nil { ipc = server }
-      ClairUpdater.markStartupSuccess(updateConfig)  // tells a pending update helper this launch is healthy
+      Task.detached(priority: .utility) { [weak self] in
+        let started = (try? server.start()) != nil
+        await MainActor.run {
+          guard started, let self else { if started { server.stop() }; return }
+          self.ipc = server
+        }
+      }
+      let config = updateConfig
+      Task.detached(priority: .utility) { _ = ClairUpdater.markStartupSuccess(config) }
       startAutomaticUpdateChecks()
+      watchProject(refresh: true)
     }
 
     isolated deinit { ipc?.stop(); updateTask?.cancel(); releaseSleepAssertion() }
@@ -132,7 +145,17 @@ import Observation
         }
       }
       let closing = id == "pane.close" ? Self.terminalKey(root: activeRoot ?? state.project, pane: state.tree.focused) : nil
-      let r = registry.execute(id, input, confirmed: confirmed, state: &state)
+      let r: Result<CommandResult, CommandError>
+      if id == "project.open", input.count == 1, case .string(let raw)? = input["path"],
+        let path = WorkbenchProject.normalized(raw)
+      {
+        state.openProject(
+          WorkbenchProject(name: URL(fileURLWithPath: path).lastPathComponent, path: path),
+          scanFiles: false)
+        r = .success(.ok)
+      } else {
+        r = registry.execute(id, input, confirmed: confirmed, state: &state)
+      }
       switch r {
       case .failure(let e) where e.code == .confirmationRequired: pending = (id, input)
       // ponytail: kept for inspection only; no canvas error surface yet (U05/U07).
@@ -141,9 +164,11 @@ import Observation
         lastError = nil
         if id == "file.open", case .int(let line)? = input["line"], let p = state.active { buffers.reveal(p, line: line) }
         if let closing { ClairDaemonLauncher.closeSession(key: closing) }  // T09: closing a pane ends its shell; closing a window does not
-        refreshSleepAssertion()
+        if id == "agent.launch" || id == "pane.close"
+          || (id == "settings.set" && input["key"] == .string("preventSleepOnBattery"))
+        { refreshSleepAssertion() }
         watchProject()
-        if let persistURL { try? state.save(to: persistURL) }
+        persistState()
       }
       return r
     }
@@ -161,42 +186,62 @@ import Observation
 
     func edited(_ path: String) { state.dirty.insert(path) }  // the GUI owns dirty; never persisted (principle 8)
 
+    /// Workspace commands must never synchronously encode and replace the persistence file on the
+    /// main actor. Coalescing also keeps resize/focus bursts from queueing obsolete snapshots.
+    private func persistState() {
+      guard let persistURL else { return }
+      let snapshot = state
+      persistenceWork?.cancel()
+      let work = DispatchWorkItem { try? snapshot.save(to: persistURL) }
+      persistenceWork = work
+      persistenceQueue.asyncAfter(deadline: .now() + .milliseconds(100), execute: work)
+    }
+
     /// V05: agent/external disk changes refresh the tree and drop unsaved markers (principle 8).
     private var watcher: FileWatcher?
     private var watched = ""
+    private var scanGeneration = 0
 
-    private func watchProject() {
+    private func watchProject(refresh: Bool = false) {
       guard watched != state.project else { return }
       let first = watched.isEmpty
       watched = state.project
+      scanGeneration += 1
+      let generation = scanGeneration
       guard let root = state.projects.first(where: { $0.name == state.project })?.path else { watcher = nil; return }
       watcher = FileWatcher(root: root) { [weak self] paths in
         // Scan (directory walk + `git status`) off the main thread; only the state swap runs on it.
         // One scan at a time: events arriving meanwhile are merged and rescanned once.
-        DispatchQueue.main.async { self?.diskChanged(paths, root: root) }
+        DispatchQueue.main.async { self?.diskChanged(paths, root: root, generation: generation) }
       }
-      if !first { diskChanged([], root: root) }  // switched Projects showed a cached tree; refresh it off the main thread
+      if refresh || !first { diskChanged([], root: root, generation: generation) }
     }
 
     private var scanning = false
-    private var pendingPaths: Set<String> = []
+    private var pendingScan: (paths: Set<String>, root: String, generation: Int)?
 
-    private func diskChanged(_ paths: Set<String>, root: String) {
-      guard watched == state.project else { return }
-      pendingPaths.formUnion(paths)
-      guard !scanning else { return }
+    private func diskChanged(_ paths: Set<String>, root: String, generation: Int) {
+      guard generation == scanGeneration, root == activeRoot else { return }
+      guard !scanning else {
+        if var pending = pendingScan, pending.generation == generation {
+          pending.paths.formUnion(paths); pendingScan = pending
+        } else { pendingScan = (paths, root, generation) }
+        return
+      }
       scanning = true
-      let batch = pendingPaths; pendingPaths = []
       DispatchQueue.global(qos: .utility).async { [weak self] in
         let files = WorkbenchFiles.scan(root)
         DispatchQueue.main.async {
           guard let self else { return }
           self.scanning = false
-          if self.watched == self.state.project {
-            self.state.applyDiskChange(batch, files: files)
-            self.buffers.drop(batch)
+          if generation == self.scanGeneration, root == self.activeRoot {
+            self.state.applyDiskChange(paths, files: files)
+            self.buffers.drop(paths)
           }
-          if !self.pendingPaths.isEmpty { self.diskChanged([], root: root) }
+          if let pending = self.pendingScan {
+            self.pendingScan = nil
+            self.diskChanged(pending.paths, root: pending.root, generation: pending.generation)
+          }
         }
       }
     }
@@ -310,7 +355,10 @@ import Observation
     @State private var changes: [GitChange] = []
     @State private var branch: String?
     @State private var sync: (behind: Int, ahead: Int)?
+    @State private var changesTask: Task<Void, Never>?
     @State private var diff: DiffTarget?
+    @State private var explorerRows: [ExplorerRow] = []
+    @State private var explorerTask: Task<Void, Never>?
     // V05: search panel state (GUI-local).
     @State private var searchQuery = ""
     @State private var replaceText = ""
@@ -361,9 +409,9 @@ import Observation
         query = ""; selection = 0
         if st.palette == .search { searchSelection = 0; runSearch() }
       }
-      .onChange(of: st.project) { diff = nil; reloadChanges() }
-      .onChange(of: st.files) { reloadChanges() }
-      .onAppear { reloadChanges() }
+      .onChange(of: st.project) { diff = nil; rebuildExplorer(); reloadChanges() }
+      .onChange(of: st.files) { rebuildExplorer(); reloadChanges() }
+      .onAppear { rebuildExplorer(); reloadChanges() }
       .focusedSceneValue(\.clairWorkbench, store)
       .confirmationDialog(
         "未保存の変更を破棄しますか？", isPresented: Binding(get: { store.pending != nil }, set: { if !$0 { store.pending = nil } })
@@ -505,7 +553,9 @@ import Observation
     private func activityBarButton(_ icon: String) -> some View {
       let ready = icon != "ladybug"  // Debug is V13; it must not look actionable until it works
       return ActivityBarButton(icon: icon, on: sidebarMode == icon && !st.settingsOpen, enabled: ready, badge: icon == "bell" && st.notices.unread() > 0) {
-        sidebarMode = icon; if icon == "folder" { diff = nil }; reloadChanges()
+        sidebarMode = icon
+        if icon == "folder" { diff = nil }
+        if icon == "shield" { reloadChanges() }
       }
     }
 
@@ -680,10 +730,22 @@ import Observation
     }
 
     private func reloadChanges() {
-      changes = store.activeRoot.map(WorkbenchGit.changes) ?? []
-      branch = store.activeRoot.flatMap(WorkbenchGit.currentBranch)
-      sync = store.activeRoot.flatMap(WorkbenchGit.aheadBehind)
-      if let d = diff, !changes.contains(where: { $0.path == d.path }) { diff = nil }
+      changesTask?.cancel()
+      guard let root = store.activeRoot else {
+        changes = []; branch = nil; sync = nil; diff = nil
+        return
+      }
+      changesTask = Task {
+        try? await Task.sleep(for: .milliseconds(40))
+        guard !Task.isCancelled else { return }
+        async let loadedChanges = Task.detached(priority: .utility) { WorkbenchGit.changes(root) }.value
+        async let loadedBranch = Task.detached(priority: .utility) { WorkbenchGit.currentBranch(root) }.value
+        async let loadedSync = Task.detached(priority: .utility) { WorkbenchGit.aheadBehind(root) }.value
+        let snapshot = await (loadedChanges, loadedBranch, loadedSync)
+        guard !Task.isCancelled, store.activeRoot == root else { return }
+        changes = snapshot.0; branch = snapshot.1; sync = snapshot.2
+        if let d = diff, !changes.contains(where: { $0.path == d.path }) { diff = nil }
+      }
     }
 
     private var sections: some View {
@@ -693,7 +755,14 @@ import Observation
     }
 
     /// Rows outside a collapsed folder. `files` is in tree order, so a folder's descendants follow it contiguously: one pass, no per-row scan of `collapsed`.
-    private func visible(_ rows: [(id: String, label: String, depth: Int, file: WorkbenchFile?)]) -> [(id: String, label: String, depth: Int, file: WorkbenchFile?)] {
+    struct ExplorerRow: Identifiable, Sendable, Equatable {
+      let id: String
+      let label: String
+      let depth: Int
+      let file: WorkbenchFile?
+    }
+
+    private func visible(_ rows: [ExplorerRow]) -> [ExplorerRow] {
       var hidden: String?
       return rows.filter { r in
         if let h = hidden { if r.id.hasPrefix(h) { return false }; hidden = nil }
@@ -704,16 +773,6 @@ import Observation
 
     /// Folders derived from the file paths; click toggles, files open a tab.
     private var explorer: some View {
-      var out: [(id: String, label: String, depth: Int, file: WorkbenchFile?)] = []
-      var seen = Set<String>()
-      for f in st.files {
-        let parts = f.path.split(separator: "/").map(String.init)
-        for d in 0..<parts.count - 1 {
-          let id = parts[0...d].joined(separator: "/")
-          if seen.insert(id).inserted { out.append((id, parts[d], d + 1, nil)) }
-        }
-        out.append((f.path, parts.last!, parts.count, f))
-      }
       return LazyVStack(alignment: .leading, spacing: 0) {
         // Project root: uppercase, branch glyph, no chevron — it reads as a
         // section label, not one more row in the same list as its children.
@@ -724,7 +783,7 @@ import Observation
           Spacer(minLength: 0)
         }
         if !rootFolded {
-          ForEach(visible(out), id: \.id) { r in
+          ForEach(visible(explorerRows)) { r in
             if let f = r.file {
               let on = st.active == f.path && !st.settingsOpen
               let badge = st.dirty.contains(f.path) ? "M" : f.status
@@ -751,6 +810,35 @@ import Observation
           }
         }
       }.padding(.vertical, 4)
+    }
+
+    private func rebuildExplorer() {
+      explorerTask?.cancel()
+      let files = st.files, project = st.project
+      explorerTask = Task {
+        let rows = await Task.detached(priority: .utility) { Self.explorerRows(for: files) }.value
+        guard !Task.isCancelled, st.project == project, st.files == files else { return }
+        explorerRows = rows
+      }
+    }
+
+    nonisolated static func explorerRows(for files: [WorkbenchFile]) -> [ExplorerRow] {
+      var out: [ExplorerRow] = []
+      var seen = Set<String>()
+      out.reserveCapacity(files.count * 2)
+      for file in files {
+        guard !Task.isCancelled else { return [] }
+        let parts = file.path.split(separator: "/").map(String.init)
+        guard let name = parts.last else { continue }
+        if parts.count > 1 {
+          for depth in 0..<(parts.count - 1) {
+            let id = parts[0...depth].joined(separator: "/")
+            if seen.insert(id).inserted { out.append(ExplorerRow(id: id, label: parts[depth], depth: depth + 1, file: nil)) }
+          }
+        }
+        out.append(ExplorerRow(id: file.path, label: name, depth: parts.count, file: file))
+      }
+      return out
     }
 
     private func row(_ title: String, depth: Int, selected: Bool, badge: Character? = nil, _ action: @escaping () -> Void) -> some View {
