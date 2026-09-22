@@ -587,15 +587,20 @@ import Observation
     /// Mock `AppTitlebar`: traffic lights, one tab group per Project (dot + name chip, then its file tabs), then the search field and window actions.
     private var titlebar: some View {
       HStack(spacing: 0) {
-        Color.clear.frame(width: 76 + 20)  // room for the native traffic lights
-        ScrollView(.horizontal, showsIndicators: false) {
-          HStack(spacing: 4) {
-            ForEach(Array(st.projects.enumerated()), id: \.element.name) { i, p in
-              if i > 0 { Rectangle().fill(Color(white: 0.95, opacity: 0.09)).frame(width: 1, height: 22).padding(.horizontal, 4) }
-              projectGroup(p, color: projectColors[i % projectColors.count])
+        Color.clear.frame(width: 76 + 25)  // room for the native traffic lights (inset 5pt by AppDelegate)
+        // The scroll view swallows clicks on its empty tail, so the strip itself spans the viewport and carries the titlebar area.
+        GeometryReader { g in
+          ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 4) {
+              ForEach(Array(st.projects.enumerated()), id: \.element.name) { i, p in
+                if i > 0 { Rectangle().fill(Color(white: 0.95, opacity: 0.09)).frame(width: 1, height: 22).padding(.horizontal, 4) }
+                projectGroup(p, color: projectColors[i % projectColors.count])
+              }
+              Button(action: openFolder) { Image(systemName: "plus").font(.system(size: 13)).foregroundStyle(C.chromeInk).frame(width: 30, height: 30) }
+                .buttonStyle(.plain).help("フォルダを開く")
             }
-            Button(action: openFolder) { Image(systemName: "plus").font(.system(size: 13)).foregroundStyle(C.chromeInk).frame(width: 30, height: 30) }
-              .buttonStyle(.plain).help("フォルダを開く")
+            .frame(minWidth: g.size.width, minHeight: g.size.height, alignment: .leading)
+            .background(TitlebarArea())
           }
         }
         HStack(spacing: 4) {
@@ -615,6 +620,7 @@ import Observation
         }.padding(.horizontal, 12)
       }
       .frame(height: ChromeBudget.titlebar)
+      .background(TitlebarArea())
       .background(C.chrome)
       .overlay(alignment: .bottom) { Rectangle().fill(L.hairline).frame(height: 1) }
     }
@@ -735,7 +741,7 @@ import Observation
     /// already renders its settings-specific line and needs no change.
     private var settingsHeader: some View {
       HStack(spacing: 0) {
-        Color.clear.frame(width: 76 + 20)  // room for the native traffic lights
+        Color.clear.frame(width: 76 + 25)  // room for the native traffic lights (inset 5pt by AppDelegate)
         Text("設定").font(.system(size: 13, weight: .semibold)).foregroundStyle(C.textPrimary)
         Spacer(minLength: 0)
         Button { store.run("settings.close") } label: {
@@ -744,6 +750,7 @@ import Observation
         }.buttonStyle(.plain).padding(.trailing, 16).help("設定を閉じる")
       }
       .frame(height: ChromeBudget.titlebar)
+      .background(TitlebarArea())
       .background(C.chrome)
       .overlay(alignment: .bottom) { Rectangle().fill(L.hairline).frame(height: 1) }
     }
@@ -1411,6 +1418,25 @@ import Observation
       store.run("palette.close")
       store.performFromUI(list[selection].id, list[selection].input)
     }
+  }
+
+  /// Our SwiftUI titlebar covers AppKit's, so its empty areas re-implement the native titlebar: drag moves the window and
+  /// a double-click does what System Settings › Desktop & Dock › "Double-click a window's title bar to" says.
+  private struct TitlebarArea: NSViewRepresentable {
+    final class Area: NSView {
+      override var mouseDownCanMoveWindow: Bool { true }
+      override func mouseDown(with event: NSEvent) {
+        guard let w = window else { return }
+        guard event.clickCount == 2 else { return w.performDrag(with: event) }
+        switch UserDefaults.standard.string(forKey: "AppleActionOnDoubleClick") {
+        case "Minimize": w.miniaturize(nil)
+        case "None": break
+        default: w.zoom(nil)  // "Maximize" / "Fill" / unset
+        }
+      }
+    }
+    func makeNSView(context: Context) -> Area { Area() }
+    func updateNSView(_ nsView: Area, context: Context) {}
   }
 
   /// A titlebar file tab. Selected and hover used to be two different

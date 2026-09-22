@@ -20,14 +20,17 @@ import SwiftUI
     }
   }
 
+  private var lightsX: [CGFloat]?
+
   @objc private func layoutWindow(_ notification: Notification) {
     guard let w = notification.object as? NSWindow, let close = w.standardWindowButton(.closeButton), let bar = close.superview?.superview else { return }
     let h = ChromeBudget.titlebar
     bar.setFrameSize(NSSize(width: bar.frame.width, height: h))
     bar.setFrameOrigin(NSPoint(x: 0, y: w.frame.height - h))
-    for kind in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
-      guard let b = w.standardWindowButton(kind) else { continue }
-      b.setFrameOrigin(NSPoint(x: b.frame.origin.x, y: (h - b.frame.height) / 2))
+    let buttons = [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].compactMap { w.standardWindowButton($0) }
+    if lightsX == nil { lightsX = buttons.map { $0.frame.origin.x + 5 } }  // AppKit's own x, inset 5pt; absolute so re-layout never accumulates
+    for (b, x) in zip(buttons, lightsX ?? []) {
+      b.setFrameOrigin(NSPoint(x: x, y: (h - b.frame.height) / 2))
     }
   }
 
