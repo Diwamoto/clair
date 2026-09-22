@@ -1,6 +1,7 @@
 import AppKit
 import ClairAppKit
 import ClairDesignSystem
+import ClairWorkspace
 import SwiftUI
 
 /// A bare executable (`make dev`, `swift run`) is not a bundled app, so macOS starts it as a background process:
@@ -8,6 +9,7 @@ import SwiftUI
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSApp.setActivationPolicy(.regular)
+    NSApp.applicationIconImage = Self.appIcon()
     NSApp.activate(ignoringOtherApps: true)
     ClairStartupTrace.armIfRequested()  // BUDGET-START-HALFBOUNCE; no-op without CLAIR_STARTUP_TRACE
     // Daemon health uses IPC and can wait on a stale socket. The first window never depends on it;
@@ -17,6 +19,19 @@ import SwiftUI
     // Re-applied because AppKit resets their frames on resize / full screen.
     for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResizeNotification, NSWindow.didExitFullScreenNotification] {
       NotificationCenter.default.addObserver(self, selector: #selector(layoutWindow(_:)), name: name, object: nil)
+    }
+  }
+
+  /// U10: the v1 AppIcon / AppIconDev art (1024px, full bleed), masked to the macOS icon grid (824pt body,
+  /// ~185pt corners) because a runtime Dock icon is drawn as-is.
+  /// ponytail: runtime icon only; an installed `.app` also needs an `.icns` + `CFBundleIconFile` for Finder (V09 packaging).
+  private static func appIcon() -> NSImage? {
+    let name = ClairChannel.current == .dev ? "AppIconDev" : "AppIcon"
+    guard let url = Bundle.module.url(forResource: name, withExtension: "png"), let art = NSImage(contentsOf: url) else { return nil }
+    return NSImage(size: NSSize(width: 1024, height: 1024), flipped: false) { rect in
+      NSBezierPath(roundedRect: rect.insetBy(dx: 100, dy: 100), xRadius: 185, yRadius: 185).addClip()
+      art.draw(in: rect.insetBy(dx: 100, dy: 100))
+      return true
     }
   }
 

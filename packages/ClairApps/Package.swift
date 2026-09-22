@@ -22,7 +22,8 @@ let package = Package(
       name: "ClairMacApp",
       dependencies: [
         .product(name: "ClairAppKit", package: "ClairCore")
-      ]
+      ],
+      resources: [.copy("Resources/AppIcon.png"), .copy("Resources/AppIconDev.png")]
     ),
     .executableTarget(
       name: "clair",
