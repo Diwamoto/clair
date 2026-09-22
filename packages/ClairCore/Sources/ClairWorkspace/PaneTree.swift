@@ -44,9 +44,11 @@ public struct PaneTree: Sendable, Equatable, Codable {
     }
   }
 
+  /// `id` names the divider by the pane just before it: the split whose first child ends with that pane.
+  /// That split is unique; "first child contains id" also matched every enclosing split, so nested dividers moved together.
   public mutating func setRatio(splitContaining id: Int, _ ratio: Double) {
     root = Self.map(root) { n in
-      guard case .split(let ax, _, let a, let b) = n, Self.leaves(a).contains(where: { $0.id == id })
+      guard case .split(let ax, _, let a, let b) = n, Self.leaves(a).last?.id == id
       else { return nil }
       return .split(axis: ax, ratio: Self.clamp(ratio), first: a, second: b)
     }

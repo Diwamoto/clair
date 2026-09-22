@@ -1545,6 +1545,37 @@ import Observation
     }
   }
 
+  /// AppKit strip over a pane divider: resize cursor, and a drag that keeps going over the panes either side.
+  private struct SplitHandle: NSViewRepresentable {
+    let horizontal: Bool
+    let ratio: Double
+    let total: CGFloat
+    let onRatio: (Double) -> Void
+
+    final class Handle: NSView {
+      var parent: SplitHandle!
+      private var start: (point: NSPoint, ratio: Double)?
+      override var mouseDownCanMoveWindow: Bool { false }
+      override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+      override func resetCursorRects() { addCursorRect(bounds, cursor: parent.horizontal ? .resizeLeftRight : .resizeUpDown) }
+      override func mouseDown(with event: NSEvent) { start = (event.locationInWindow, parent.ratio) }
+      override func mouseDragged(with event: NSEvent) {
+        guard let start, parent.total > 0 else { return }
+        let p = event.locationInWindow
+        let delta = parent.horizontal ? p.x - start.point.x : start.point.y - p.y  // window y grows upward
+        parent.onRatio(start.ratio + Double(delta / parent.total))
+      }
+      override func mouseUp(with event: NSEvent) { start = nil }
+    }
+
+    func makeNSView(context: Context) -> Handle { let v = Handle(); v.parent = self; return v }
+    func updateNSView(_ v: Handle, context: Context) {
+      let flipped = v.parent?.horizontal != horizontal
+      v.parent = self
+      if flipped { v.window?.invalidateCursorRects(for: v) }
+    }
+  }
+
   private struct PaneView: View {
     let node: PaneTree.Node
     let focused: Int
@@ -1556,10 +1587,11 @@ import Observation
     let editor: EditorPane
     let run: (String, CommandInput) -> Void
 
-    private func firstLeaf(_ n: PaneTree.Node) -> Int {
+    /// The pane just before a divider names it (`PaneTree.setRatio`).
+    private func lastLeaf(_ n: PaneTree.Node) -> Int {
       switch n {
       case .leaf(let id, _): return id
-      case .split(_, _, let a, _): return firstLeaf(a)
+      case .split(_, _, _, let b): return lastLeaf(b)
       }
     }
 
@@ -1569,11 +1601,6 @@ import Observation
       PaneView(node: a, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onRatio: onRatio, editor: editor, run: run)
         .frame(width: h ? total * ratio : nil, height: h ? nil : total * ratio)
       Rectangle().fill(L.paneDivider).frame(width: h ? 1 : nil, height: h ? nil : 1)
-        .padding(h ? .horizontal : .vertical, -3).contentShape(Rectangle())
-        .gesture(
-          DragGesture(coordinateSpace: .named("split")).onChanged { v in
-            onRatio(firstLeaf(a), Double((h ? v.location.x : v.location.y) / total))
-          })
       PaneView(node: b, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onRatio: onRatio, editor: editor, run: run)
     }
 
@@ -1621,14 +1648,21 @@ import Observation
         }
       case .split(let axis, let ratio, let a, let b):
         GeometryReader { g in
-          let total = axis == .horizontal ? g.size.width : g.size.height
-          if axis == .horizontal {
-            HStack(spacing: 0) { parts(axis, total, a, b, ratio: ratio) }
-          } else {
-            VStack(spacing: 0) { parts(axis, total, a, b, ratio: ratio) }
+          let h = axis == .horizontal
+          let total = h ? g.size.width : g.size.height
+          ZStack(alignment: .topLeading) {
+            if h {
+              HStack(spacing: 0) { parts(axis, total, a, b, ratio: ratio) }
+            } else {
+              VStack(spacing: 0) { parts(axis, total, a, b, ratio: ratio) }
+            }
+            // Drawn after both panes so it sits above their terminal/editor NSViews, which otherwise take the drag.
+            let at = total * ratio + 0.5
+            SplitHandle(horizontal: h, ratio: ratio, total: total) { onRatio(lastLeaf(a), $0) }
+              .frame(width: h ? 7 : g.size.width, height: h ? g.size.height : 7)
+              .position(x: h ? at : g.size.width / 2, y: h ? g.size.height / 2 : at)
           }
         }
-        .coordinateSpace(name: "split")
       }
     }
   }

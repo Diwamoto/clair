@@ -35,6 +35,19 @@ final class PaneTreeTests: XCTestCase {
     XCTAssertEqual(r2, 0.5)
   }
 
+  func testRatioMovesOnlyThatDivider() {
+    var t = PaneTree()  // editor 1 | (agent 2 / terminal 3)
+    t.focus(1); t.splitFocused(.vertical)  // (1 / 4) | (2 / 3)
+    t.setRatio(splitContaining: 1, 0.3)  // divider between 1 and 4
+    guard case .split(_, let outer, .split(_, let inner, _, _), _) = t.root else { return XCTFail() }
+    XCTAssertEqual(outer, 0.62)
+    XCTAssertEqual(inner, 0.3)
+    t.setRatio(splitContaining: 4, 0.7)  // divider between left column and right column
+    guard case .split(_, let outer2, .split(_, let inner2, _, _), _) = t.root else { return XCTFail() }
+    XCTAssertEqual(outer2, 0.7)
+    XCTAssertEqual(inner2, 0.3)
+  }
+
   func testMaximizeFollowsFocus() {
     var t = PaneTree()
     t.toggleMaximize(); XCTAssertEqual(t.maximized, 1)
