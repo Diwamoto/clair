@@ -2,11 +2,50 @@
   import AppKit
   import ClairDesignSystem
   import ClairEditorCore
+  import ClairEditorLanguage
   import ClairEditorView
   import Observation
   import SwiftUI
 
   private typealias C = DesignTokens.Color
+
+  /// E11: one `SyntaxHighlighter` per open file, off the main thread.
+  /// `SyntaxHighlighter`/`SyntaxParser` are not `Sendable` (see
+  /// `SyntaxParser`'s doc comment — "keep one instance on its owning
+  /// actor"), so this actor, not `EditorBuffers` itself, is what actually
+  /// owns them; `EditorBuffers` only holds Sendable results and cancellable
+  /// `Task` handles. `INV-PERF-005`: every call here either returns fast or
+  /// is wrapped by its `EditorBuffers` caller in a `Task` that a file
+  /// switch/close cancels (`dropHighlights`); a language with no vendored
+  /// grammar (`EditorLanguageID.detect` returns nil) or a query that fails
+  /// to compile degrades to empty highlights, never a crash or a stuck
+  /// loading state.
+  actor SyntaxHighlightActor {
+    private var highlighters: [String: SyntaxHighlighter] = [:]
+
+    func drop(_ path: String) { highlighters.removeValue(forKey: path) }
+
+    /// Full parse, for a freshly opened file. `nil`/empty covers both "no
+    /// vendored grammar for this extension" and "grammar/query failed to
+    /// build" — either way the file still opens, just colorless.
+    func reset(_ path: String, snapshot: TextSnapshot) -> [EditorHighlightSpan] {
+      guard let id = EditorLanguageID.detect(path: path), let highlighter = try? SyntaxHighlighter(languageID: id)
+      else { return [] }
+      highlighters[path] = highlighter
+      return (try? highlighter.reset(to: snapshot)) ?? []
+    }
+
+    /// Differential reparse (`SyntaxParser.update`, never a from-scratch
+    /// reparse on keystroke). Returns `nil` when there is no highlighter yet
+    /// for `path` (undetected language, or racing ahead of the first
+    /// `reset`) so the caller knows to leave whatever it already has alone.
+    func update(
+      _ path: String, edits: [TextEdit], oldSnapshot: TextSnapshot, newSnapshot: TextSnapshot
+    ) -> [EditorHighlightSpan]? {
+      guard let highlighter = highlighters[path] else { return nil }
+      return try? highlighter.update(edits: edits, oldSnapshot: oldSnapshot, newSnapshot: newSnapshot)
+    }
+  }
 
   /// U05: open editor buffers of the active Project. Owned by the workbench store; the store drops a
   /// path when the disk changed under it (principle 8: the unsaved buffer is discarded, not merged).
@@ -55,6 +94,68 @@
         pending?.task.cancel()
         if hadLoad || pending != nil { revisions[path, default: 0] += 1 }
       }
+      dropHighlights(paths)
+    }
+
+    // MARK: - E11 syntax highlighting
+
+    private let syntax = SyntaxHighlightActor()
+    /// Paths whose first (`reset`) highlight parse hasn't finished yet. A
+    /// freshly opened file's `ProgressView` overlay (`EditorPane.body`) keys
+    /// off this so its first paint doesn't flash from colorless to colored
+    /// (dogfood review, 2026-09-22) — only the *initial* parse shows it;
+    /// per-keystroke `updateHighlights` never touches this set.
+    private(set) var highlightsLoading: Set<String> = []
+    private var highlightTasks: [String: Task<Void, Never>] = [:]
+
+    /// Kicks off the background initial parse for a freshly opened file.
+    /// Cancellable (`INV-PERF-005`): superseded by a second call for the
+    /// same path only if the first was already dropped, and `dropHighlights`
+    /// cancels it outright on file switch/close. `onSpans` lands back on the
+    /// main actor (this method is itself `@MainActor`-isolated, and `Task {
+    /// }` inherits that isolation around its `await`) and only ever assigns
+    /// `ClairEditorView.highlights` — an attribute overlay that never calls
+    /// through `EditorTransactionManager`, so it cannot advance the content
+    /// revision (`INV-REV-002`).
+    func startHighlighting(
+      _ path: String, manager: EditorTransactionManager, onSpans: @escaping ([EditorHighlightSpan]) -> Void
+    ) {
+      guard highlightTasks[path] == nil else { return }
+      highlightsLoading.insert(path)
+      let snapshot = manager.buffer.snapshot
+      let syntax = self.syntax
+      highlightTasks[path] = Task { [weak self] in
+        let spans = await syntax.reset(path, snapshot: snapshot)
+        guard !Task.isCancelled else { return }
+        onSpans(spans)
+        self?.highlightsLoading.remove(path)
+        self?.highlightTasks.removeValue(forKey: path)
+      }
+    }
+
+    /// Differential reparse after one committed edit. Same attribute-only
+    /// guarantee as `startHighlighting`: `onSpans` only ever reaches
+    /// `view.highlights`, never `manager`.
+    func updateHighlights(
+      _ path: String, edits: [TextEdit], oldSnapshot: TextSnapshot, newSnapshot: TextSnapshot,
+      onSpans: @escaping ([EditorHighlightSpan]) -> Void
+    ) {
+      let syntax = self.syntax
+      Task {
+        guard let spans = await syntax.update(path, edits: edits, oldSnapshot: oldSnapshot, newSnapshot: newSnapshot)
+        else { return }
+        guard !Task.isCancelled else { return }
+        onSpans(spans)
+      }
+    }
+
+    private func dropHighlights(_ paths: Set<String>) {
+      for path in paths {
+        highlightTasks.removeValue(forKey: path)?.cancel()
+        highlightsLoading.remove(path)
+      }
+      let syntax = self.syntax
+      Task { for path in paths { await syntax.drop(path) } }
     }
 
     /// Invalidates every clean cached or in-flight file after an operation may have replaced the
@@ -137,7 +238,20 @@
         case .ready(let m)?:
           VStack(spacing: 0) {
             breadcrumb(path)
-            EditorSurface(manager: m, onCaret: { onCaret(path, $0, m.buffer.snapshot) }, reveal: buffers.reveal?.path == path ? buffers.reveal : nil, onEdit: { onEdit(path) }).id("\(path)#\(buffers.revision(path))")
+            ZStack(alignment: .topTrailing) {
+              EditorSurface(
+                manager: m, buffers: buffers, path: path, onCaret: { onCaret(path, $0, m.buffer.snapshot) },
+                reveal: buffers.reveal?.path == path ? buffers.reveal : nil, onEdit: { onEdit(path) }
+              ).id("\(path)#\(buffers.revision(path))")
+              // E11 dogfood review (2026-09-22): a small corner spinner while
+              // the file's *initial* highlight parse is in flight, so a big
+              // file doesn't flash from colorless to colored — never shown
+              // again after this file's first parse, incremental updates on
+              // keystroke are fast enough (BUDGET-OP-100) to need nothing.
+              if buffers.highlightsLoading.contains(path) {
+                ProgressView().controlSize(.small).padding(8)
+              }
+            }
           }
         case .failed(let message)?: note(message)
         }
@@ -178,6 +292,8 @@
 
   private struct EditorSurface: NSViewRepresentable {
     let manager: EditorTransactionManager
+    let buffers: EditorBuffers
+    let path: String
     let onCaret: (TextSelectionSet) -> Void
     let reveal: (path: String, line: Int, nonce: Int)?
     let onEdit: () -> Void
@@ -199,15 +315,24 @@
       view.caretColor = NSColor(C.textPrimary); view.selectionColor = NSColor(C.debugBlue).withAlphaComponent(0.3)
       view.gutterWidth = 46
       view.lineNumberColor = NSColor(C.lineNumber); view.currentLineNumberColor = NSColor(C.textTertiary)
-      view.onCommitEdits = { [weak view, manager, onEdit] edits in
+      view.onCommitEdits = { [weak view, manager, onEdit, buffers, path] edits in
         guard let view else { return }
         let old = manager.buffer.snapshot
         guard let new = try? manager.apply(edits) else { return }
         view.applyEdits(edits, oldSnapshot: old, newSnapshot: new, selection: manager.selection)
         onEdit()
+        // E11: background differential reparse; never blocks this closure,
+        // never touches `manager` (INV-REV-002 — see `updateHighlights`'s
+        // doc comment).
+        buffers.updateHighlights(path, edits: edits, oldSnapshot: old, newSnapshot: new) { [weak view] spans in
+          view?.highlights = spans
+        }
       }
       view.onSelectionChange = { [weak manager, onCaret] in manager?.setSelection($0); onCaret($0) }
       scroll.documentView = view
+      // E11: kick off this file's initial background highlight parse once,
+      // when its `ClairEditorView` is first created.
+      buffers.startHighlighting(path, manager: manager) { [weak view] spans in view?.highlights = spans }
       return scroll
     }
 

@@ -181,6 +181,7 @@ let package = Package(
         "ClairDaemonKit",
         "ClairDesignSystem",
         "ClairEditorCore",
+        "ClairEditorLanguage",
         "ClairEditorView",
         .target(name: "ClairPTY", condition: .when(platforms: [.macOS])),
         "ClairGhostty",
@@ -199,10 +200,70 @@ let package = Package(
       name: "ClairEditorLanguage",
       dependencies: [
         "ClairEditorCore",
+        "ClairEditorView",
+        "ClairEditorLanguageGo",
+        "ClairEditorLanguageJSON",
+        "ClairEditorLanguageJavaScript",
+        "ClairEditorLanguageMarkdown",
+        "ClairEditorLanguagePython",
+        "ClairEditorLanguageRust",
+        "ClairEditorLanguageShell",
+        "ClairEditorLanguageSwift",
+        "ClairEditorLanguageTypeScript",
         .product(name: "SwiftTreeSitter", package: "SwiftTreeSitter"),
         .product(name: "TreeSitter", package: "tree-sitter"),
         .product(name: "LanguageServerProtocol", package: "LanguageServerProtocol"),
       ]
+    ),
+    // E11: production vendored tree-sitter grammars (raw generated C
+    // source, same vendoring pattern as `ClairEditorLanguageFixtures` — see
+    // each target's own `VENDOR.md`). Separate targets, not one combined
+    // target, because every grammar's `src/` has its own `parser.c`, and a
+    // shared target would collide on that filename.
+    .target(
+      name: "ClairEditorLanguageJSON",
+      publicHeadersPath: "include",
+      cSettings: [.headerSearchPath("src")]
+    ),
+    .target(
+      name: "ClairEditorLanguagePython",
+      publicHeadersPath: "include",
+      cSettings: [.headerSearchPath("src")]
+    ),
+    .target(
+      name: "ClairEditorLanguageGo",
+      publicHeadersPath: "include",
+      cSettings: [.headerSearchPath("src")]
+    ),
+    .target(
+      name: "ClairEditorLanguageRust",
+      publicHeadersPath: "include",
+      cSettings: [.headerSearchPath("src")]
+    ),
+    .target(
+      name: "ClairEditorLanguageShell",
+      publicHeadersPath: "include",
+      cSettings: [.headerSearchPath("src")]
+    ),
+    .target(
+      name: "ClairEditorLanguageJavaScript",
+      publicHeadersPath: "include",
+      cSettings: [.headerSearchPath("src")]
+    ),
+    .target(
+      name: "ClairEditorLanguageTypeScript",
+      publicHeadersPath: "include",
+      cSettings: [.headerSearchPath("src")]
+    ),
+    .target(
+      name: "ClairEditorLanguageMarkdown",
+      publicHeadersPath: "include",
+      cSettings: [.headerSearchPath("src")]
+    ),
+    .target(
+      name: "ClairEditorLanguageSwift",
+      publicHeadersPath: "include",
+      cSettings: [.headerSearchPath("src")]
     ),
     // E06: macOS custom NSView / CoreText viewport renderer. AppKit-only;
     // every file guards its body with `#if os(macOS)` (same pattern as
