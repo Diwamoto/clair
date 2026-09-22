@@ -108,9 +108,6 @@ import Foundation
         }
       }
       recomputeMetrics()
-      if let ghosttySurface {
-        try? ghosttySurface.setFocus(true)
-      }
       startPollTimerIfNeeded()
       window?.makeFirstResponder(self)
     }
@@ -206,6 +203,7 @@ import Foundation
       pollTimer = nil
       ghosttySurface?.close()
       ghosttySurface = nil
+      ghosttyFocused = nil
       ghosttyApp?.close()
       ghosttyApp = nil
     }
@@ -237,11 +235,21 @@ import Foundation
     /// V08: facts only — bells since the last poll and, once, the child's exit code.
     public var onFacts: ((_ bells: Int, _ exitCode: Int?) -> Void)?
     private var exitReported = false
+    private var ghosttyFocused: Bool?
 
     private func pollGhosttySurfaceIfNeeded() {
       pollSequence &+= 1
       let visible = !isHidden && window?.occlusionState.contains(.visible) == true
       let focused = visible && window?.firstResponder === self
+      // Only the key window's first responder is focused to Ghostty, so every
+      // other pane gets a steady unfocused caret instead of a blinking one.
+      // Synced from the poll (≤33 ms after focus moves) rather than from
+      // responder/key-window overrides, which would need four hooks.
+      let ghosttyFocus = focused && window?.isKeyWindow == true
+      if ghosttyFocus != ghosttyFocused, let ghosttySurface {
+        ghosttyFocused = ghosttyFocus
+        try? ghosttySurface.setFocus(ghosttyFocus)
+      }
       // Focused terminal: 30 Hz (33 ms). Background visible panes: 10 Hz (100 ms).
       // Hidden/minimized windows still collect bells/exits, but only at 1 Hz.
       let divisor: UInt = focused ? 1 : visible ? 3 : 30
