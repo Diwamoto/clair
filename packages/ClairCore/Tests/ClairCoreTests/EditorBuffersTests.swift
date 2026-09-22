@@ -94,7 +94,7 @@
         .write(to: URL(fileURLWithPath: r + "/too-large.swift"))
       await buffers.prefetch("too-large.swift", root: r)
       guard case .failed(let message)? = buffers.peek("too-large.swift") else { return XCTFail("size limit") }
-      XCTAssertTrue(message.contains("10 MiB"))
+      XCTAssertTrue(message.contains("\(EditorBuffers.maxBytes >> 20) MiB"))
     }
 
     func testDropDuringPrefetchRejectsTheOldSnapshot() async throws {

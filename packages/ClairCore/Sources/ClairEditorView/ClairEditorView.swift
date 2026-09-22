@@ -74,6 +74,8 @@ import ClairEditorCore
     private var caretTimer: Timer?
     var dragAnchor: UTF8Offset?
     var dragFixedSelections: [TextSelection] = []
+    /// Where a ⌥-drag block selection started (`ClairEditorView+MultiCursor.swift`).
+    var blockAnchor: NSPoint?
     /// The live IME composition, if any (`ClairEditorView+TextInput.swift`).
     /// A view-local overlay only — see `EditorComposition`'s doc comment.
     var composition: EditorComposition?
@@ -213,9 +215,6 @@ import ClairEditorCore
     /// gesture is resolved either way.
     private var pendingSelectionDrag: (downPoint: NSPoint, offset: UTF8Offset)?
 
-    // ponytail: single click/drag and cmd-click add-cursor cover the
-    // acceptance criteria (hit test -> caret/selection). Double/triple-click
-    // word/line selection is a UX nicety, not required here.
     public override func mouseDown(with event: NSEvent) {
       window?.makeFirstResponder(self)
       // A click anywhere unmarks an in-progress IME composition, matching
@@ -223,7 +222,19 @@ import ClairEditorCore
       // in favor of pointing elsewhere.
       if composition != nil { inputContext?.discardMarkedText() }
       let point = convert(event.locationInWindow, from: nil)
+      if event.modifierFlags.contains(.option) {
+        blockAnchor = point
+        updateBlockSelection(to: point)
+        return
+      }
       guard let offset = hitTestOffset(at: point) else { return }
+      if event.clickCount > 1 {
+        pendingSelectionDrag = nil
+        selectUnit(
+          at: offset, wholeLine: event.clickCount > 2,
+          adding: event.modifierFlags.contains(.command))
+        return
+      }
 
       if !event.modifierFlags.contains(.command),
         selection.selections.contains(where: {
@@ -240,6 +251,10 @@ import ClairEditorCore
     }
 
     public override func mouseDragged(with event: NSEvent) {
+      if blockAnchor != nil {
+        updateBlockSelection(to: convert(event.locationInWindow, from: nil))
+        return
+      }
       if let pending = pendingSelectionDrag {
         let point = convert(event.locationInWindow, from: nil)
         guard hypot(point.x - pending.downPoint.x, point.y - pending.downPoint.y) > 4 else {
@@ -266,6 +281,7 @@ import ClairEditorCore
         pendingSelectionDrag = nil
       }
       dragAnchor = nil
+      blockAnchor = nil
     }
 
     private func updateDragSelection(head: UTF8Offset) {

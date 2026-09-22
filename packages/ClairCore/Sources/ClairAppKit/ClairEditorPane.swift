@@ -27,7 +27,9 @@
     /// Search-hit jump target (1-based line); `nonce` makes a repeat jump to the same line still fire.
     private(set) var reveal: (path: String, line: Int, nonce: Int)?
     /// Above this the file is refused rather than loaded whole (large-file paths are E10's scope).
-    nonisolated static let maxBytes = 10 * 1024 * 1024
+    /// Spec §5.9: the canonical `10mb` fixture must open, and it is written in whole lines, so it lands a
+    /// few bytes past 10 MiB — keep real headroom rather than an exact 10 MiB edge.
+    nonisolated static let maxBytes = 16 * 1024 * 1024
 
     func reveal(_ path: String, line: Int) { reveal = (path, line, (reveal?.nonce ?? 0) + 1) }
 
@@ -107,7 +109,7 @@
 
     nonisolated private static func read(_ full: String) -> Load {
       guard let data = FileManager.default.contents(atPath: full) else { return .failed("ファイルを読み込めません。") }
-      guard data.count <= maxBytes else { return .failed("10 MiB を超えるファイルは開けません。") }
+      guard data.count <= maxBytes else { return .failed("\(maxBytes >> 20) MiB を超えるファイルは開けません。") }
       guard let text = String(data: data, encoding: .utf8), let buffer = try? TextBuffer(text) else {
         return .failed("UTF-8 のテキストではないため開けません。")
       }
