@@ -158,6 +158,22 @@ final class WorkbenchGitTests: XCTestCase {
     XCTAssertTrue(message.contains("ターミナル"))
   }
 
+  /// V14: a hung child is killed at the deadline instead of pinning its caller; the pipe read returns.
+  func testSubprocessDeadlineEndsAHungChild() throws {
+    let p = Process(), out = Pipe()
+    p.executableURL = URL(fileURLWithPath: "/bin/sleep")
+    p.arguments = ["30"]
+    p.standardOutput = out
+    try p.run()
+    let deadline = p.terminate(after: 0.2)
+    let start = Date()
+    _ = out.fileHandleForReading.readDataToEndOfFile()
+    p.waitWithoutRunLoop()
+    deadline.cancel()
+    XCTAssertLessThan(Date().timeIntervalSince(start), 5)
+    XCTAssertEqual(p.terminationReason, .uncaughtSignal)
+  }
+
   func testGitRunSuppressesAskpassProcesses() throws {
     let (_, root) = try repo()
     let directory = URL.temporaryDirectory.appending(path: "clair-v06-askpass-\(UUID().uuidString)")

@@ -12,6 +12,16 @@ extension Process {
   /// `waitUntilExit()` spins the current run loop, so on the main thread SwiftUI re-renders mid-wait — while a
   /// `store.state` mutation that called us is still open — and traps on exclusive access. Poll instead.
   func waitWithoutRunLoop() { while isRunning { usleep(2000) } }
+
+  /// Terminates the child if it outlives `seconds`, so a hung git (credential helper, network, index lock) cannot pin
+  /// its caller forever. Arm before reading the pipe — `readDataToEndOfFile` only returns once the child exits.
+  /// Cancel the returned item after the wait. Captures the pid, not the non-Sendable `Process`.
+  func terminate(after seconds: Double) -> DispatchWorkItem {
+    let pid = processIdentifier
+    let item = DispatchWorkItem { kill(pid, SIGTERM) }
+    DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + seconds, execute: item)
+    return item
+  }
 }
 #endif
 
@@ -28,6 +38,9 @@ public enum WorkbenchGit {
   /// Managed worktrees root. Tests point this at a temp dir.
   nonisolated(unsafe) public static var worktreeBase = FileManager.default
     .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appending(path: "Clair/worktrees")
+
+  /// Upper bound for one git subprocess. Generous because pull/push go over the network; it exists so a stall ends.
+  static let timeout = 120.0
 
   @discardableResult
   static func run(_ root: String, _ args: [String], merge: Bool = false, input: String? = nil) -> (ok: Bool, out: String) {
@@ -47,12 +60,17 @@ public enum WorkbenchGit {
     let stdin = input.map { _ in Pipe() }
     p.standardInput = stdin ?? FileHandle.nullDevice
     guard (try? p.run()) != nil else { return (false, "git not runnable") }
+    let deadline = p.terminate(after: timeout)
+    defer { deadline.cancel() }
     if let input, let stdin {
       stdin.fileHandleForWriting.write(Data(input.utf8))
       try? stdin.fileHandleForWriting.close()
     }
     let text = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
     p.waitWithoutRunLoop()
+    if p.terminationReason == .uncaughtSignal {
+      return (false, "git が \(Int(timeout)) 秒以内に終わらなかったため中断しました。\n\(text)")
+    }
     // Keep leading spaces: porcelain status uses them as the index/worktree column,
     // and unified diff context lines are also significant. Only strip line endings.
     return (p.terminationStatus == 0, text.trimmingCharacters(in: .newlines))

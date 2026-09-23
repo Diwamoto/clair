@@ -167,8 +167,11 @@ public enum WorkbenchFiles {
     p.arguments = ["-C", root, "status", "--porcelain=v1", "-z", "--untracked-files=all"]
     p.standardOutput = out; p.standardError = FileHandle.nullDevice
     guard (try? p.run()) != nil else { return [:] }
+    let deadline = p.terminate(after: WorkbenchGit.timeout)
+    defer { deadline.cancel() }
     let data = out.fileHandleForReading.readDataToEndOfFile()
-    p.waitWithoutRunLoop()  // ponytail: no timeout; add one if a huge repo stalls the GUI.
+    p.waitWithoutRunLoop()
+    guard p.terminationReason == .exit else { return [:] }
     var result: [String: String] = [:]
     var fields = String(decoding: data, as: UTF8.self).split(separator: "\0", omittingEmptySubsequences: true).makeIterator()
     while let f = fields.next(), f.count > 3 {
