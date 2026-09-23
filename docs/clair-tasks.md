@@ -142,6 +142,6 @@ ccedit(旧 Clair v1)を製品・資料ともに廃止した。これに伴い:
 
 ## 統計
 
-- 完了 69 / 全 77(2026-09-23 時点)
-- 残り 8(queued 3、blocked 5)
+- 完了 70 / 全 77(2026-09-24 時点)
+- 残り 7(queued 3、blocked 4)
 - `python3 .agents/skills/clair-task/scripts/task_lease.py validate` がこの数を検証する。
