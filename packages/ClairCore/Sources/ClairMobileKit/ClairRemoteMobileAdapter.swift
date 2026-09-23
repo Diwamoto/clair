@@ -195,6 +195,14 @@ public actor ClairRemoteMobileAdapter: ClairMobileTransport,
 
   // MARK: ClairMobileTerminalTransport
 
+  public func terminalSessions(
+    on connection: ClairAuthenticatedConnection
+  ) async throws -> [ClairRemoteTerminalSession] {
+    guard case .terminalSessions(let sessions) = try await call(.terminalSessions, on: connection)
+    else { throw ClairRemoteError.protocolViolation }
+    return sessions
+  }
+
   public func attach(
     scope: ResourceScope,
     generation: UInt64,

@@ -95,6 +95,7 @@ public actor ClairMobileConnectionComposition {
   private let identityStore: any ClairDeviceIdentityStore
   private var client: ClairMobileClient?
   private var surfaces: ClairMobileComposedSurfaces?
+  private var adapter: ClairRemoteMobileAdapter?
   private var reconnectController: ClairMobileReconnectController?
   private var pendingPushToken: Data?
   private var notice: ClairMobileCompositionSnapshot.Notice = .none
@@ -254,6 +255,13 @@ public actor ClairMobileConnectionComposition {
 
   public func composedSurfaces() -> ClairMobileComposedSurfaces? { surfaces }
 
+  /// N10: live terminal sessions this device may attach to, read from the host
+  /// on the current authenticated connection. Empty while disconnected.
+  public func terminalSessions() async throws -> [ClairRemoteTerminalSession] {
+    guard let adapter, let session = await client?.authenticatedSession else { return [] }
+    return try await adapter.terminalSessions(on: session.connection)
+  }
+
   public var reconnectState: ClairMobileReconnectState {
     get async { await reconnectController?.state ?? .idle }
   }
@@ -358,6 +366,7 @@ public actor ClairMobileConnectionComposition {
       await reconnect.recordDeviceToken(pendingPushToken)
     }
     self.client = client
+    self.adapter = adapter
     self.reconnectController = reconnect
     self.surfaces = ClairMobileComposedSurfaces(
       conversation: conversation,
@@ -375,6 +384,7 @@ public actor ClairMobileConnectionComposition {
     await surfaces?.conversation.bindAuthenticatedSession(nil)
     await surfaces?.diffReview.bindAuthenticatedSession(nil)
     client = nil
+    adapter = nil
     reconnectController = nil
     surfaces = nil
     notice = .none

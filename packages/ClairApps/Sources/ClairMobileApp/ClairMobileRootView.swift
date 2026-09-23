@@ -1,4 +1,10 @@
 import ClairMobileKit
+import ClairShared
+import ClairTerminal
+#if os(iOS)
+  import ClairTerminalView
+#endif
+import ClairTransport
 import SwiftUI
 
 private struct ClairMobileEnvironmentKey: EnvironmentKey {
@@ -52,12 +58,15 @@ struct ClairMobileRootView: View {
   @State private var reconnectState = ClairMobileReconnectState.idle
   @State private var reconnectError: String?
   @State private var hasProcessedLaunch = false
+  @State private var terminalSessions: [ClairRemoteTerminalSession] = []
+  @State private var terminalSessionsError: String?
 
   var body: some View {
     NavigationStack {
       List {
         hostSection
         destinationBrowserSection
+        terminalSessionsSection
         conversationSection
         diffReviewSection
         reconnectSection
@@ -643,6 +652,56 @@ struct ClairMobileRootView: View {
     }
   }
 
+  /// N10: the host's live terminal sessions this device may attach to. Each
+  /// opens the `MobileTerminal` push screen on the same authenticated channel.
+  private var terminalSessionsSection: some View {
+    Section("Terminals") {
+      if terminalSessions.isEmpty {
+        ContentUnavailableView(
+          "No terminal sessions",
+          systemImage: "terminal",
+          description: Text("Connect to a paired host with a running terminal session.")
+        )
+      }
+      ForEach(terminalSessions, id: \.self) { target in
+        NavigationLink {
+          #if os(iOS)
+            ClairMobileTerminalScreen(target: target, composition: composition)
+          #endif
+        } label: {
+          VStack(alignment: .leading) {
+            Text(target.scope.sessionID?.description ?? "terminal")
+            Text(target.scope.projectID.description)
+              .font(.caption)
+              .foregroundStyle(.secondary)
+          }
+        }
+        .accessibilityIdentifier("terminal-session-\(target.scope.sessionID?.description ?? "")")
+      }
+      Button("Refresh terminal sessions") {
+        Task { await refreshTerminalSessions() }
+      }
+      .disabled(!isClientConnected)
+      .accessibilityIdentifier("terminal-sessions-refresh")
+      if let terminalSessionsError {
+        Label(terminalSessionsError, systemImage: "exclamationmark.triangle")
+          .font(.footnote)
+          .foregroundStyle(.orange)
+          .accessibilityIdentifier("terminal-sessions-error")
+      }
+    }
+  }
+
+  private func refreshTerminalSessions() async {
+    do {
+      terminalSessions = try await composition.terminalSessions()
+      terminalSessionsError = nil
+    } catch {
+      terminalSessions = []
+      terminalSessionsError = error.localizedDescription
+    }
+  }
+
   private var navigationSection: some View {
     Section("Navigation") {
       ForEach(ClairMobileDestination.allCases) { destination in
@@ -808,6 +867,7 @@ struct ClairMobileRootView: View {
     }
     await refreshConversation()
     await refreshDiffReview()
+    await refreshTerminalSessions()
   }
 
   private func respondToApproval(requestID: String, approve: Bool) {
@@ -898,3 +958,148 @@ struct ClairMobileRootView: View {
     }
   }
 }
+
+#if os(iOS)
+  /// N10: the `MobileTerminal` artboard. A push screen over one host terminal
+  /// session: raw PTY bytes rendered by `ClairTerminalView`, a key bar, and a
+  /// composer. The viewport is client-local; it never resizes the remote PTY.
+  // ponytail: no gap banner or byte counter from the artboard yet; add when the
+  // session exposes journal gaps to the view.
+  private struct ClairMobileTerminalScreen: View {
+    let target: ClairRemoteTerminalSession
+    let composition: ClairMobileConnectionComposition
+    @State private var terminal: ClairMobileTerminalSession?
+    @State private var failure: String?
+    @State private var draft = ""
+
+    var body: some View {
+      VStack(spacing: 0) {
+        HStack(spacing: 7) {
+          Text(target.scope.projectID.description)
+          Text("·").foregroundStyle(.tertiary)
+          Text(target.scope.worktreeID?.description ?? "Project root")
+          Spacer()
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+
+        Divider()
+
+        if let terminal {
+          ClairTerminalViewRepresentable(
+            session: terminal, target: target, composition: composition,
+            failure: $failure
+          )
+          .accessibilityIdentifier("terminal-viewport")
+        } else {
+          Spacer()
+        }
+
+        if let failure {
+          Label(failure, systemImage: "exclamationmark.triangle")
+            .font(.footnote)
+            .foregroundStyle(.orange)
+            .padding(.horizontal, 16)
+            .accessibilityIdentifier("terminal-error")
+        }
+
+        Text("表示幅はこの端末だけのもの。PTYのcolumnsは変えない。")
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(.horizontal, 16)
+          .padding(.vertical, 7)
+
+        VStack(spacing: 9) {
+          HStack(spacing: 7) {
+            keyButton("esc", .escape)
+            keyButton("tab", .tab)
+            keyButton("^C", .control("c"))
+            Spacer()
+            keyButton("↑", .up)
+            keyButton("↓", .down)
+          }
+          HStack(spacing: 8) {
+            TextField("", text: $draft)
+              .font(.system(.body, design: .monospaced))
+              .textInputAutocapitalization(.never)
+              .autocorrectionDisabled()
+              .onSubmit(sendDraft)
+              .accessibilityIdentifier("terminal-composer")
+            Button(action: sendDraft) {
+              Image(systemName: "arrow.right")
+            }
+            .accessibilityLabel("Send")
+            .accessibilityIdentifier("terminal-send")
+          }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(.thinMaterial)
+      }
+      .navigationTitle(target.scope.sessionID?.description ?? "terminal")
+      .navigationBarTitleDisplayMode(.inline)
+      .task {
+        guard terminal == nil, let surfaces = await composition.composedSurfaces() else {
+          failure = "Not connected to a host."
+          return
+        }
+        do {
+          terminal = try ClairMobileTerminalSession(transport: surfaces.terminalTransport)
+        } catch {
+          failure = error.localizedDescription
+        }
+      }
+      .onDisappear {
+        let terminal = terminal
+        Task { await terminal?.background() }
+      }
+    }
+
+    private func keyButton(_ title: String, _ key: ClairTerminalKey) -> some View {
+      Button(title) {
+        let terminal = terminal
+        Task { await terminal?.sendKey(key) }
+      }
+      .font(.system(.footnote, design: .monospaced))
+      .buttonStyle(.bordered)
+      .accessibilityIdentifier("terminal-key-\(title)")
+    }
+
+    private func sendDraft() {
+      let text = draft
+      draft = ""
+      let terminal = terminal
+      Task {
+        if !text.isEmpty { await terminal?.sendKey(.text(text)) }
+        await terminal?.sendKey(.return)
+      }
+    }
+  }
+
+  /// Hosts the UIKit `ClairTerminalView` and attaches it once the authenticated
+  /// connection for the current generation is available.
+  private struct ClairTerminalViewRepresentable: UIViewRepresentable {
+    let session: ClairMobileTerminalSession
+    let target: ClairRemoteTerminalSession
+    let composition: ClairMobileConnectionComposition
+    @Binding var failure: String?
+
+    func makeUIView(context: Context) -> ClairTerminalView {
+      let view = ClairTerminalView(session: session)
+      Task { @MainActor in
+        guard let authenticated = await composition.authenticatedSession() else {
+          failure = "Not connected to a host."
+          return
+        }
+        view.attach(
+          scope: target.scope, generation: target.generation, connection: authenticated.connection)
+      }
+      return view
+    }
+
+    func updateUIView(_ view: ClairTerminalView, context: Context) {}
+  }
+#endif

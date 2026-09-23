@@ -360,6 +360,8 @@
         try await host.terminal.detach(try attachment(id), on: connection!)
         attachments.removeValue(forKey: id)
         return (.ok, nil)
+      case .terminalSessions:
+        return (.terminalSessions(await host.terminal.attachableSessions(on: connection!)), nil)
       case .terminalInput(let operationID, let scope, let epoch, let processGeneration):
         guard let binary else { throw ClairTerminalError.invalidOperation }
         let result = try await host.terminal.input(

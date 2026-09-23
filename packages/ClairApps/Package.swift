@@ -36,7 +36,8 @@ let package = Package(
     .executableTarget(
       name: "ClairMobileApp",
       dependencies: [
-        .product(name: "ClairMobileKit", package: "ClairCore")
+        .product(name: "ClairMobileKit", package: "ClairCore"),
+        .product(name: "ClairTerminalView", package: "ClairCore"),
       ]
     ),
     .executableTarget(

@@ -36,6 +36,8 @@ public enum ClairRemoteCall: Codable, Equatable, Sendable {
   case terminalRead(attachment: UUID, waitMilliseconds: UInt32)
   case terminalAcknowledge(attachment: UUID, cursor: ClairTerminalCursor)
   case terminalDetach(attachment: UUID)
+  /// N10: live terminal sessions this device may attach to.
+  case terminalSessions
   /// Followed by one raw frame carrying the input bytes.
   case terminalInput(
     operationID: OperationID, scope: ResourceScope, epoch: SessionEpoch, processGeneration: UInt64)
@@ -82,6 +84,8 @@ public enum ClairRemoteCall: Codable, Equatable, Sendable {
       return la == ra && lc == rc
     case (.terminalDetach(let left), .terminalDetach(let right)):
       return left == right
+    case (.terminalSessions, .terminalSessions):
+      return true
     case (
       .terminalInput(let lo, let ls, let le, let lg),
       .terminalInput(let ro, let rs, let re, let rg)
@@ -137,6 +141,7 @@ public enum ClairRemoteReply: Codable, Equatable, Sendable {
   /// Followed by one `ClairTerminalFrame.encoded()` frame.
   case terminalFrame
   case terminalIdle(isClosed: Bool)
+  case terminalSessions([ClairRemoteTerminalSession])
   case terminalInput(ClairTerminalCommitOutcome, OperationReceipt)
   case agentDispatched(outcome: ClairAgentCommandOutcome, receipt: OperationReceipt)
   case changedFileSummary(ClairChangedFileSummary)
@@ -147,6 +152,18 @@ public enum ClairRemoteReply: Codable, Equatable, Sendable {
     requiresRegistration: Bool)
   case ok
   case failure(code: String)
+}
+
+/// One attachable terminal session: the exact scope and process generation
+/// `terminalAttach` requires.
+public struct ClairRemoteTerminalSession: Codable, Equatable, Hashable, Sendable {
+  public let scope: ResourceScope
+  public let generation: UInt64
+
+  public init(scope: ResourceScope, generation: UInt64) {
+    self.scope = scope
+    self.generation = generation
+  }
 }
 
 public struct ClairRemoteResponse: Codable, Equatable, Sendable {

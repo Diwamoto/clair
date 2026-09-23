@@ -170,6 +170,10 @@ import Testing
         #expect(info.deviceID == credential.grant.deviceID)
 
         let scope = try ResourceScope(projectID: ClairLocalTerminalHost.projectID, sessionID: SessionID(mac.sessionID))
+        // N10: the device discovers the exact scope and generation it attaches with.
+        #expect(
+          try await client.call(.terminalSessions).0
+            == .terminalSessions([ClairRemoteTerminalSession(scope: scope, generation: 1)]))
         guard case .terminalAttached(let attachment, var cursor, _, _, _, false) = try await client.call(
           .terminalAttach(scope: scope, generation: 1, subscriberID: UUID(), cursor: nil)).0
         else { Issue.record("attach failed"); return }
@@ -352,6 +356,7 @@ import Testing
         let credential = try await h.pair(client, device, grantTerminal: false)
         _ = try await h.authenticate(client, device, credential)
         let scope = try ResourceScope(projectID: ClairLocalTerminalHost.projectID, sessionID: SessionID(mac.sessionID))
+        #expect(try await client.call(.terminalSessions).0 == .terminalSessions([]))
         await #expect(throws: ClairRemoteError.self) {
           _ = try await client.call(.terminalAttach(scope: scope, generation: 1, subscriberID: UUID(), cursor: nil))
         }

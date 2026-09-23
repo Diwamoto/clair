@@ -226,6 +226,26 @@ public final class ClairTerminalBoundary: @unchecked Sendable {
     }
   }
 
+  /// N10: the live sessions this connection may read, with the exact process
+  /// generation `attach` requires. Sessions outside the device scope are omitted.
+  public func attachableSessions(
+    on connection: ClairAuthenticatedConnection
+  ) async -> [ClairRemoteTerminalSession] {
+    let live = lock.withLock {
+      sessions.values
+        .filter { $0.active && !$0.process.terminalJournal.snapshot().isClosed }
+        .map { ClairRemoteTerminalSession(scope: $0.scope, generation: $0.generation) }
+    }
+    var visible: [ClairRemoteTerminalSession] = []
+    for session in live
+    where (try? await authority.authorizeRead(scope: session.scope, on: connection)) != nil {
+      visible.append(session)
+    }
+    return visible.sorted {
+      ($0.scope.sessionID?.description ?? "") < ($1.scope.sessionID?.description ?? "")
+    }
+  }
+
   public func snapshot(
     _ attachment: ClairTerminalAttachment, on connection: ClairAuthenticatedConnection
   ) async throws -> ClairTerminalStreamSnapshot {
