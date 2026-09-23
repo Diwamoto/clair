@@ -59,17 +59,18 @@ export const color = {
   zoom: '#28c840',
 } as const;
 
-// Hairlines and washes, exactly as they appear on the artboards.
+// Hairlines and washes. Structural rules are black (One Dark grooves);
+// strong/stronger/ring stay light so focus and emphasis remain visible.
 export const line = {
-  hairline: 'rgba(241,242,246,0.11)',
-  hairlineSoft: 'rgba(241,242,246,0.08)',
-  hairlineFaint: 'rgba(241,242,246,0.055)',
-  chrome: 'rgba(241,242,246,0.1)',
-  chromeSoft: 'rgba(241,242,246,0.09)',
+  hairline: 'rgba(0,0,0,0.4)',
+  hairlineSoft: 'rgba(0,0,0,0.32)',
+  hairlineFaint: 'rgba(0,0,0,0.24)',
+  chrome: 'rgba(0,0,0,0.36)',
+  chromeSoft: 'rgba(0,0,0,0.32)',
   strong: 'rgba(241,242,246,0.19)',
   stronger: 'rgba(241,242,246,0.28)',
   ring: 'rgba(241,242,246,0.32)',
-  paneDivider: 'rgba(241,242,246,0.15)',
+  paneDivider: 'rgba(0,0,0,0.5)',
 } as const;
 
 // TAB GROUP COLOURS — the one other place colour is allowed, alongside diff

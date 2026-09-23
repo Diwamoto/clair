@@ -9,18 +9,19 @@ final class LineWashGroupColorTests: XCTestCase {
   private typealias RGBACase = (name: String, color: Color, r: Int, g: Int, b: Int, a: Double)
 
   private static let offWhite = (r: 242, g: 244, b: 238)
+  private static let black = (r: 0, g: 0, b: 0)
   private static let pureWhite = (r: 255, g: 255, b: 255)
 
   private static let lineCases: [RGBACase] = [
-    ("hairline", DesignTokens.Line.hairline, offWhite.r, offWhite.g, offWhite.b, 0.11),
-    ("hairlineSoft", DesignTokens.Line.hairlineSoft, offWhite.r, offWhite.g, offWhite.b, 0.08),
-    ("hairlineFaint", DesignTokens.Line.hairlineFaint, offWhite.r, offWhite.g, offWhite.b, 0.055),
-    ("chrome", DesignTokens.Line.chrome, offWhite.r, offWhite.g, offWhite.b, 0.1),
-    ("chromeSoft", DesignTokens.Line.chromeSoft, offWhite.r, offWhite.g, offWhite.b, 0.09),
+    ("hairline", DesignTokens.Line.hairline, black.r, black.g, black.b, 0.4),
+    ("hairlineSoft", DesignTokens.Line.hairlineSoft, black.r, black.g, black.b, 0.32),
+    ("hairlineFaint", DesignTokens.Line.hairlineFaint, black.r, black.g, black.b, 0.24),
+    ("chrome", DesignTokens.Line.chrome, black.r, black.g, black.b, 0.36),
+    ("chromeSoft", DesignTokens.Line.chromeSoft, black.r, black.g, black.b, 0.32),
     ("strong", DesignTokens.Line.strong, offWhite.r, offWhite.g, offWhite.b, 0.19),
     ("stronger", DesignTokens.Line.stronger, offWhite.r, offWhite.g, offWhite.b, 0.28),
     ("ring", DesignTokens.Line.ring, offWhite.r, offWhite.g, offWhite.b, 0.32),
-    ("paneDivider", DesignTokens.Line.paneDivider, offWhite.r, offWhite.g, offWhite.b, 0.15),
+    ("paneDivider", DesignTokens.Line.paneDivider, black.r, black.g, black.b, 0.5),
   ]
 
   private static let washCases: [RGBACase] = [

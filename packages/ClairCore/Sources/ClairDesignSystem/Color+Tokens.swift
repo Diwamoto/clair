@@ -60,19 +60,20 @@ extension DesignTokens {
     public static let zoom = SwiftUI.Color(hex: "#28c840")
   }
 
-  /// Hairline / rule overlays — alpha-only washes of `rgba(242,244,238,x)`,
-  /// applied over whatever sits underneath rather than a flat fill.
+  /// Hairline / rule overlays — alpha-only washes applied over whatever sits
+  /// underneath. Structural rules are black (One Dark grooves); `strong`,
+  /// `stronger` and `ring` stay off-white so emphasis and focus stay visible.
   /// Transcribed from `tokens.ts`'s `line` map / checklist §2.1.
   public enum Line {
-    public static let hairline = SwiftUI.Color(rgb255: 242, 244, 238, alpha: 0.11)
-    public static let hairlineSoft = SwiftUI.Color(rgb255: 242, 244, 238, alpha: 0.08)
-    public static let hairlineFaint = SwiftUI.Color(rgb255: 242, 244, 238, alpha: 0.055)
-    public static let chrome = SwiftUI.Color(rgb255: 242, 244, 238, alpha: 0.1)
-    public static let chromeSoft = SwiftUI.Color(rgb255: 242, 244, 238, alpha: 0.09)
+    public static let hairline = SwiftUI.Color(rgb255: 0, 0, 0, alpha: 0.4)
+    public static let hairlineSoft = SwiftUI.Color(rgb255: 0, 0, 0, alpha: 0.32)
+    public static let hairlineFaint = SwiftUI.Color(rgb255: 0, 0, 0, alpha: 0.24)
+    public static let chrome = SwiftUI.Color(rgb255: 0, 0, 0, alpha: 0.36)
+    public static let chromeSoft = SwiftUI.Color(rgb255: 0, 0, 0, alpha: 0.32)
     public static let strong = SwiftUI.Color(rgb255: 242, 244, 238, alpha: 0.19)
     public static let stronger = SwiftUI.Color(rgb255: 242, 244, 238, alpha: 0.28)
     public static let ring = SwiftUI.Color(rgb255: 242, 244, 238, alpha: 0.32)
-    public static let paneDivider = SwiftUI.Color(rgb255: 242, 244, 238, alpha: 0.15)
+    public static let paneDivider = SwiftUI.Color(rgb255: 0, 0, 0, alpha: 0.5)
   }
 
   /// Surface washes — alpha-only fills used for hover/selected states.
