@@ -10,7 +10,7 @@ import Foundation
 
 #if canImport(UIKit)
   /// Thin native glue between UIKit/UserNotifications callbacks and
-  /// `ClairMobileReconnectController`. All product logic -- the typed
+  /// `ClairMobileConnectionComposition`. All product logic -- the typed
   /// verify-before-trust scene-lifecycle state machine, the push
   /// registration transport seam, and the category/`ClairPushEventKind`
   /// mapping -- lives in `ClairMobileKit` and is covered by
@@ -22,11 +22,9 @@ import Foundation
   /// unavailable (for example a macOS host build of this same executable
   /// target), which never registers for or receives push.
   final class ClairMobilePushDelegate: NSObject, UIApplicationDelegate {
-    /// Set by `ClairMobileApp` immediately after both this delegate and
-    /// the shared reconnect controller exist, so every callback below
-    /// forwards into the single instance the rest of the app also observes
-    /// through `EnvironmentValues.clairMobileReconnect`.
-    var reconnect: ClairMobileReconnectController?
+    /// Set by `ClairMobileApp` so callbacks use the same composition actor
+    /// as scene events and connection actions.
+    var composition: ClairMobileConnectionComposition?
 
     func application(
       _ application: UIApplication,
@@ -41,8 +39,8 @@ import Foundation
       _ application: UIApplication,
       didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
-      guard let reconnect else { return }
-      Task { await reconnect.recordDeviceToken(deviceToken) }
+      guard let composition else { return }
+      Task { await composition.recordDeviceToken(deviceToken) }
     }
 
     func application(
@@ -61,7 +59,7 @@ import Foundation
       didReceiveRemoteNotification userInfo: [AnyHashable: Any],
       fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
-      guard let reconnect,
+      guard let composition,
         JSONSerialization.isValidJSONObject(userInfo),
         let payload = try? JSONSerialization.data(withJSONObject: userInfo, options: [])
       else {
@@ -69,8 +67,8 @@ import Foundation
         return
       }
       Task {
-        let before = await reconnect.state
-        let after = await reconnect.handleRemoteNotificationPayload(payload)
+        let before = await composition.reconnectState
+        let after = await composition.handleRemoteNotificationPayload(payload)
         completionHandler(after == before ? .noData : .newData)
       }
     }

@@ -10,6 +10,7 @@ import Foundation
 /// for a command it can already prove is empty, duplicate, or stale.
 public enum ClairMobileConversationError: Error, Equatable, LocalizedError, Sendable {
   case notAttached
+  case staleGeneration
   case emptyPrompt
   case promptTooLarge
   case staleApproval
@@ -20,6 +21,8 @@ public enum ClairMobileConversationError: Error, Equatable, LocalizedError, Send
     switch self {
     case .notAttached:
       "No active agent session is attached."
+    case .staleGeneration:
+      "The connection changed. Reattach the session before retrying."
     case .emptyPrompt:
       "The prompt is empty."
     case .promptTooLarge:
@@ -272,6 +275,8 @@ public actor ClairMobileConversationController {
 
   private let transport: any ClairMobileAgentTransport
   private var attachment: Attachment?
+  private var boundSession: ClairMobileAuthenticatedSession?
+  private var hasStaleAttachment = false
   private var stateValue = ClairMobileConversationState()
   private var inFlight: [String: Task<ClairAgentCommandOutcome, Error>] = [:]
 
@@ -282,8 +287,7 @@ public actor ClairMobileConversationController {
   /// real scheduler timing with sleeps.
   private var dispatchObserverForTesting: (@Sendable (_ key: String, _ joined: Bool) -> Void)?
 
-  public init(transport: any ClairMobileAgentTransport = ClairMobileUnavailableAgentTransport())
-  {
+  public init(transport: any ClairMobileAgentTransport = ClairMobileUnavailableAgentTransport()) {
     self.transport = transport
   }
 
@@ -295,19 +299,45 @@ public actor ClairMobileConversationController {
 
   public var state: ClairMobileConversationState { stateValue }
   public var isAttached: Bool { attachment != nil }
+  public var connectionGeneration: UInt64? { boundSession?.generation }
+
+  /// Binds the controller to the app's current authenticated connection. An
+  /// attachment from an earlier generation is invalidated immediately.
+  public func bindAuthenticatedSession(_ session: ClairMobileAuthenticatedSession?) {
+    guard boundSession != session else { return }
+    if let attachment, attachment.connection != session?.connection {
+      self.attachment = nil
+      stateValue.reset(scope: nil, epoch: nil)
+      for task in inFlight.values { task.cancel() }
+      inFlight.removeAll()
+      hasStaleAttachment = true
+    }
+    boundSession = session
+  }
 
   /// Attaches (or re-attaches) to a live process generation and resets the
   /// transcript to a clean state scoped to it. Detaching then re-attaching is
   /// the expected shape of a background/foreground reconnect: no partial
   /// state from the previous attachment leaks into the new one.
   public func attach(_ attachment: Attachment) {
+    if let boundSession, attachment.connection != boundSession.connection {
+      self.attachment = nil
+      stateValue.reset(scope: nil, epoch: nil)
+      hasStaleAttachment = true
+      for task in inFlight.values { task.cancel() }
+      inFlight.removeAll()
+      return
+    }
     self.attachment = attachment
+    hasStaleAttachment = false
     inFlight.removeAll()
     stateValue.reset(scope: attachment.identity.sessionScope, epoch: attachment.epoch)
   }
 
   public func detach() {
     attachment = nil
+    hasStaleAttachment = false
+    for task in inFlight.values { task.cancel() }
     inFlight.removeAll()
   }
 
@@ -356,8 +386,7 @@ public actor ClairMobileConversationController {
     try await dispatch(.stop, key: "stop")
   }
 
-  private func respond(requestID: String, approve: Bool) async throws -> ClairAgentCommandOutcome
-  {
+  private func respond(requestID: String, approve: Bool) async throws -> ClairAgentCommandOutcome {
     guard let item = stateValue.pendingApprovals.first(where: { $0.requestID == requestID }) else {
       throw ClairMobileConversationError.staleApproval
     }
@@ -383,12 +412,24 @@ public actor ClairMobileConversationController {
     _ action: ClairAgentCommandAction,
     key: String
   ) async throws -> ClairAgentCommandOutcome {
-    guard let attachment else { throw ClairMobileConversationError.notAttached }
+    guard let attachment else {
+      throw hasStaleAttachment ? ClairMobileConversationError.staleGeneration : .notAttached
+    }
+    try ensureCurrent(attachment)
     if let existing = inFlight[key] {
       // A duplicate or rapid-repeat tap joins the single in-flight command
       // instead of dispatching a second one.
       dispatchObserverForTesting?(key, true)
-      return try await existing.value
+      do {
+        let outcome = try await existing.value
+        try ensureCurrent(attachment)
+        return outcome
+      } catch {
+        if self.attachment != attachment {
+          throw ClairMobileConversationError.staleGeneration
+        }
+        throw error
+      }
     }
     dispatchObserverForTesting?(key, false)
     let task = Task { [transport] () async throws -> ClairAgentCommandOutcome in
@@ -415,7 +456,27 @@ public actor ClairMobileConversationController {
       }
     }
     inFlight[key] = task
-    defer { inFlight[key] = nil }
-    return try await task.value
+    defer {
+      if self.attachment == attachment { inFlight[key] = nil }
+    }
+    do {
+      let outcome = try await task.value
+      try ensureCurrent(attachment)
+      return outcome
+    } catch {
+      if self.attachment != attachment {
+        throw ClairMobileConversationError.staleGeneration
+      }
+      throw error
+    }
+  }
+
+  private func ensureCurrent(_ attachment: Attachment) throws {
+    guard self.attachment == attachment,
+      boundSession == nil || boundSession?.connection == attachment.connection
+    else {
+      hasStaleAttachment = true
+      throw ClairMobileConversationError.staleGeneration
+    }
   }
 }

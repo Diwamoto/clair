@@ -325,6 +325,27 @@ public struct ClairMobileConnectionSummary: Equatable, Sendable {
   }
 }
 
+/// One live authenticated client session together with the client-local
+/// connection generation that produced it. The handle is inert outside the
+/// configured mobile transport; this value carries no credential or key
+/// material and is intended for composing the conversation, workspace, and
+/// terminal boundaries around the same authenticated channel.
+public struct ClairMobileAuthenticatedSession: Equatable, Sendable {
+  public let generation: UInt64
+  public let summary: ClairMobileConnectionSummary
+  public let connection: ClairAuthenticatedConnection
+
+  public init(
+    generation: UInt64,
+    summary: ClairMobileConnectionSummary,
+    connection: ClairAuthenticatedConnection
+  ) {
+    self.generation = generation
+    self.summary = summary
+    self.connection = connection
+  }
+}
+
 public enum ClairMobileClientState: Equatable, Sendable {
   case disconnected
   case connecting
@@ -367,6 +388,22 @@ public actor ClairMobileClient {
   }
 
   public var state: ClairMobileClientState { stateValue }
+
+  /// A point-in-time authenticated handle. `generation` changes whenever a
+  /// connection operation begins or an explicit disconnect invalidates one;
+  /// consumers can reject delayed callbacks from an older session.
+  public var authenticatedSession: ClairMobileAuthenticatedSession? {
+    guard case .authenticated(let summary) = stateValue,
+      let activeConnection
+    else {
+      return nil
+    }
+    return ClairMobileAuthenticatedSession(
+      generation: operationGeneration,
+      summary: summary,
+      connection: activeConnection
+    )
+  }
 
   /// Performs one-time pairing and persists the resulting opaque credential.
   /// Pairing itself does not create an authenticated session; callers invoke

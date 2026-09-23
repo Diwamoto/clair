@@ -12,18 +12,17 @@ extension EnvironmentValues {
   }
 }
 
-/// The reconnect controller is created once by `ClairMobileApp` (the
-/// composition root) rather than locally by this view, so the same instance
-/// receives both native push-delegate callbacks (device token, remote
-/// notification payloads) and this view's scene-lifecycle/deep-link events.
-private struct ClairMobileReconnectKey: EnvironmentKey {
-  static let defaultValue = ClairMobileReconnectController()
+/// Shared native client composition created by `ClairMobileApp`. It owns the
+/// credentials and authenticated handle; SwiftUI observes only its redacted
+/// snapshot and actor-backed feature surfaces.
+private struct ClairMobileCompositionKey: EnvironmentKey {
+  static let defaultValue = ClairMobileConnectionComposition()
 }
 
 extension EnvironmentValues {
-  var clairMobileReconnect: ClairMobileReconnectController {
-    get { self[ClairMobileReconnectKey.self] }
-    set { self[ClairMobileReconnectKey.self] = newValue }
+  var clairMobileComposition: ClairMobileConnectionComposition {
+    get { self[ClairMobileCompositionKey.self] }
+    set { self[ClairMobileCompositionKey.self] = newValue }
   }
 }
 
@@ -32,10 +31,16 @@ struct ClairMobileRootView: View {
   @Environment(\.scenePhase) private var scenePhase
   @State private var store = ClairMobileStore()
   @State private var hostManagement = ClairMobileHostManagementState()
+  @State private var compositionSnapshot = ClairMobileCompositionSnapshot(
+    clientState: .disconnected,
+    sessionGeneration: nil,
+    connectionSummary: nil
+  )
   @State private var destinationBrowser = ClairMobileDestinationBrowserState()
   @State private var showingPairing = false
   @State private var pairingCode = ""
   @State private var pairingError: String?
+  @State private var isPairing = false
   @State private var conversation = ClairMobileConversationController()
   @State private var conversationSnapshot = ClairMobileConversationState()
   @State private var conversationDraft = ""
@@ -43,7 +48,7 @@ struct ClairMobileRootView: View {
   @State private var diffReview = ClairMobileDiffReviewController()
   @State private var diffReviewSnapshot = ClairMobileDiffReviewState()
   @State private var diffReviewError: String?
-  @Environment(\.clairMobileReconnect) private var reconnect
+  @Environment(\.clairMobileComposition) private var composition
   @State private var reconnectState = ClairMobileReconnectState.idle
   @State private var reconnectError: String?
   @State private var hasProcessedLaunch = false
@@ -71,7 +76,18 @@ struct ClairMobileRootView: View {
       // reconnect state machine as any other foreground: the last cached
       // destination (if any) is re-verified against the host, never trusted
       // silently just because the process just started.
-      dispatchReconnectEvent(.launched(deepLink: nil))
+      Task {
+        compositionSnapshot = ClairMobileCompositionSnapshot(
+          clientState: .connecting,
+          sessionGeneration: nil,
+          connectionSummary: nil
+        )
+        compositionSnapshot = await composition.restoreAndReconnect()
+        hostManagement = await composition.hostManagementState()
+        await refreshComposedSurfaces()
+        reconnectState = await composition.handle(.launched(deepLink: nil))
+        compositionSnapshot = await composition.snapshot
+      }
     }
     .onOpenURL { url in
       // A deep link handed to an already-running process is processed
@@ -105,7 +121,13 @@ struct ClairMobileRootView: View {
       // controller has already recorded.
       guard let scope, scope.isSessionScope else { return }
       Task {
-        _ = await reconnect.registerPendingPushTokenIfNeeded(
+        guard let generation = compositionSnapshot.sessionGeneration else { return }
+        _ = await composition.attachReadSurfaces(to: scope, generation: generation)
+        if scope.isSessionScope, let deepLink = try? ClairMobileDeepLink(scope: scope) {
+          reconnectState = await composition.handle(.launched(deepLink: deepLink))
+        }
+        await refreshDiffReview()
+        _ = await composition.registerPendingPushTokenIfNeeded(
           environment: environment.pushEnvironment, scope: scope
         )
       }
@@ -450,6 +472,11 @@ struct ClairMobileRootView: View {
                   .font(.footnote)
                   .foregroundStyle(.red)
               }
+              Button("Confirm fingerprint and pair") {
+                beginPairing()
+              }
+              .disabled(pairing.state != .ready || isPairing)
+              .accessibilityIdentifier("confirm-host-pairing")
             }
           }
           Section {
@@ -477,15 +504,50 @@ struct ClairMobileRootView: View {
 
   private var connectionSection: some View {
     Section("Connection") {
-      LabeledContent("State", value: store.state.connection.rawValue)
+      LabeledContent("State", value: connectionStateDescription)
+      if let summary = compositionSnapshot.connectionSummary {
+        LabeledContent("Host", value: summary.hostID.description)
+        LabeledContent("Endpoint", value: summary.endpoint.value)
+      }
+      if let generation = compositionSnapshot.sessionGeneration {
+        LabeledContent("Connection generation", value: String(generation))
+      }
+      switch compositionSnapshot.notice {
+      case .none:
+        EmptyView()
+      case .staleGeneration:
+        Label(
+          "This surface belongs to an older connection. Reconnect before retrying.",
+          systemImage: "arrow.clockwise.circle"
+        )
+        .font(.footnote)
+        .foregroundStyle(.orange)
+        .accessibilityIdentifier("connection-stale-generation")
+      case .endpointPinFailure:
+        Label(
+          "The host or endpoint pin changed. Verify the fingerprint and pair again.",
+          systemImage: "exclamationmark.shield"
+        )
+        .font(.footnote)
+        .foregroundStyle(.red)
+        .accessibilityIdentifier("connection-endpoint-pin-failure")
+      }
+      if case .failed(let error) = compositionSnapshot.clientState {
+        Text(error.localizedDescription)
+          .font(.footnote)
+          .foregroundStyle(.orange)
+          .accessibilityIdentifier("connection-error")
+      }
       Button("Connect") {
-        store.send(.connectRequested)
+        connect()
       }
-      .disabled(store.state.connection == .connected)
+      .disabled(isClientConnected || isClientConnecting)
+      .accessibilityIdentifier("connect-host")
       Button("Disconnect") {
-        store.send(.disconnectRequested)
+        disconnect()
       }
-      .disabled(store.state.connection == .disconnected)
+      .disabled(!isClientConnected && !isClientConnecting)
+      .accessibilityIdentifier("disconnect-host")
     }
   }
 
@@ -620,6 +682,41 @@ struct ClairMobileRootView: View {
     }
   }
 
+  private var isClientConnected: Bool {
+    if case .authenticated = compositionSnapshot.clientState { return true }
+    return false
+  }
+
+  private var isClientConnecting: Bool {
+    switch compositionSnapshot.clientState {
+    case .connecting, .pairing, .reconnecting:
+      true
+    case .disconnected, .authenticated, .failed:
+      false
+    }
+  }
+
+  private var connectionStateDescription: String {
+    switch compositionSnapshot.status {
+    case .disconnected:
+      "Disconnected"
+    case .connecting:
+      "Connecting"
+    case .pairing:
+      "Pairing"
+    case .connected:
+      "Connected"
+    case .reconnecting:
+      "Reconnecting"
+    case .staleGeneration:
+      "Stale connection generation"
+    case .endpointPinFailure:
+      "Host or endpoint pin failure"
+    case .failed(let error):
+      "Failed: \(error.localizedDescription)"
+    }
+  }
+
   private func command(for phase: ScenePhase) -> ClairMobileCommand {
     switch phase {
     case .active:
@@ -637,6 +734,80 @@ struct ClairMobileRootView: View {
     let text = conversationDraft
     conversationDraft = ""
     dispatchLifecycleCommand { _ = try await conversation.submitPrompt(text) }
+  }
+
+  private func beginPairing() {
+    guard let displayedPairing = hostManagement.pairing,
+      displayedPairing.state == .ready,
+      !isPairing
+    else { return }
+    pairingError = nil
+    isPairing = true
+    compositionSnapshot = ClairMobileCompositionSnapshot(
+      clientState: .pairing,
+      sessionGeneration: compositionSnapshot.sessionGeneration,
+      connectionSummary: compositionSnapshot.connectionSummary
+    )
+    Task {
+      compositionSnapshot = await composition.pair(
+        usingCode: pairingCode,
+        expectedHostID: displayedPairing.hostID,
+        expectedFingerprint: displayedPairing.fingerprint,
+        displayName: "Clair Mobile",
+        confirmHostFingerprint: true
+      )
+      isPairing = false
+      if isClientConnected {
+        hostManagement = await composition.hostManagementState()
+        await refreshComposedSurfaces()
+        showingPairing = false
+        pairingCode = ""
+        hostManagement.clearPairing()
+      } else if case .failed(let error) = compositionSnapshot.clientState {
+        pairingError =
+          error == .invalidHandshake
+          ? "That pairing code could not be read. Check it was copied in full."
+          : error.localizedDescription
+      }
+    }
+  }
+
+  private func connect() {
+    compositionSnapshot = ClairMobileCompositionSnapshot(
+      clientState: .connecting,
+      sessionGeneration: compositionSnapshot.sessionGeneration,
+      connectionSummary: compositionSnapshot.connectionSummary
+    )
+    Task {
+      compositionSnapshot = await composition.reconnect()
+      hostManagement = await composition.hostManagementState()
+      await refreshComposedSurfaces()
+    }
+  }
+
+  private func disconnect() {
+    Task {
+      compositionSnapshot = await composition.disconnect()
+      hostManagement = await composition.hostManagementState()
+      await refreshComposedSurfaces()
+    }
+  }
+
+  private func refreshComposedSurfaces() async {
+    guard let surfaces = await composition.composedSurfaces() else { return }
+    conversation = surfaces.conversation
+    diffReview = surfaces.diffReview
+    reconnectState = await surfaces.reconnect.state
+    if let scope = destinationBrowser.selectedScope,
+      let generation = compositionSnapshot.sessionGeneration
+    {
+      _ = await composition.attachReadSurfaces(to: scope, generation: generation)
+      if scope.isSessionScope, let deepLink = try? ClairMobileDeepLink(scope: scope) {
+        reconnectState = await composition.handle(.launched(deepLink: deepLink))
+      }
+    }
+    await refreshConversation()
+    await refreshDiffReview()
   }
 
   private func respondToApproval(requestID: String, approve: Bool) {
@@ -659,6 +830,9 @@ struct ClairMobileRootView: View {
         try await action()
       } catch {
         conversationError = error.localizedDescription
+        if let error = error as? ClairMobileConversationError, error == .staleGeneration {
+          compositionSnapshot = await composition.markStaleGeneration()
+        }
       }
       await refreshConversation()
     }
@@ -679,6 +853,9 @@ struct ClairMobileRootView: View {
         try await action()
       } catch {
         diffReviewError = error.localizedDescription
+        if let error = error as? ClairMobileDiffReviewError, error == .staleGeneration {
+          compositionSnapshot = await composition.markStaleGeneration()
+        }
       }
       await refreshDiffReview()
     }
@@ -702,8 +879,22 @@ struct ClairMobileRootView: View {
   /// machine on its own), then refreshes this view's snapshot. The actor's
   /// state is authoritative regardless of how quickly the view redraws.
   private func dispatchReconnectEvent(_ event: ClairMobileSceneEvent) {
+    switch event {
+    case .launched, .foregrounded:
+      compositionSnapshot = ClairMobileCompositionSnapshot(
+        clientState: .reconnecting,
+        sessionGeneration: compositionSnapshot.sessionGeneration,
+        connectionSummary: compositionSnapshot.connectionSummary
+      )
+    case .backgrounded, .pushWake:
+      break
+    }
     Task {
-      reconnectState = await reconnect.handle(event)
+      reconnectState = await composition.handle(event)
+      compositionSnapshot = await composition.snapshot
+      if compositionSnapshot.sessionGeneration != nil {
+        await refreshComposedSurfaces()
+      }
     }
   }
 }

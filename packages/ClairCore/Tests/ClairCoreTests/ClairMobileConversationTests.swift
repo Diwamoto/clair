@@ -226,6 +226,59 @@ private struct N05Fixture: Sendable {
   }
 }
 
+@Test
+func n13ConversationRejectsAnAttachmentFromAnOlderClientGeneration() async throws {
+  let fixture = try await N05Fixture.make()
+  let presentation = await fixture.authority.presentation()
+  let summary = ClairMobileConnectionSummary(
+    hostID: presentation.hostID,
+    hostFingerprint: presentation.fingerprint,
+    deviceID: fixture.connection.deviceID,
+    endpoint: presentation.endpoint,
+    negotiatedProtocol: fixture.connection.negotiatedProtocol
+  )
+  let current = ClairMobileAuthenticatedSession(
+    generation: 1,
+    summary: summary,
+    connection: fixture.connection
+  )
+  let staleHandle = ClairAuthenticatedConnection(clientInfo: fixture.connection.info)
+  let replacement = ClairMobileAuthenticatedSession(
+    generation: 2,
+    summary: summary,
+    connection: staleHandle
+  )
+  let conversation = ClairMobileConversationController(transport: fixture.boundaryTransport)
+  await conversation.attach(try fixture.attachment())
+  await conversation.bindAuthenticatedSession(current)
+  await conversation.bindAuthenticatedSession(replacement)
+
+  do {
+    _ = try await conversation.submitPrompt("must not use the old connection")
+    Issue.record("A stale connection generation unexpectedly dispatched a prompt.")
+  } catch let error as ClairMobileConversationError {
+    #expect(error == .staleGeneration)
+  }
+  #expect(await conversation.connectionGeneration == 2)
+  #expect(await conversation.isAttached == false)
+
+  let diffReview = ClairMobileDiffReviewController()
+  await diffReview.attach(
+    try ClairMobileDiffReviewController.Attachment(
+      scope: fixture.identity.scope,
+      connection: fixture.connection
+    )
+  )
+  await diffReview.bindAuthenticatedSession(current)
+  await diffReview.bindAuthenticatedSession(replacement)
+  do {
+    _ = try await diffReview.refreshChangedFiles()
+    Issue.record("A stale diff attachment unexpectedly read from the host.")
+  } catch let error as ClairMobileDiffReviewError {
+    #expect(error == .staleGeneration)
+  }
+}
+
 // MARK: - Duplicate / rapid-repeat tap safety
 
 @Suite(.serialized)

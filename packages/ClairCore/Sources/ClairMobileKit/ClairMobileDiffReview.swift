@@ -10,6 +10,7 @@ import Foundation
 /// command dispatch.
 public enum ClairMobileDiffReviewError: Error, Equatable, LocalizedError, Sendable {
   case notAttached
+  case staleGeneration
   case invalidScope(ResourceScope)
   case fileNotFound(ClairWorkspacePath)
   case transportFailed
@@ -18,6 +19,8 @@ public enum ClairMobileDiffReviewError: Error, Equatable, LocalizedError, Sendab
     switch self {
     case .notAttached:
       "No Project or Worktree is attached for review."
+    case .staleGeneration:
+      "The connection changed. Reattach the Project or Worktree before retrying."
     case .invalidScope(let scope):
       "Diff review requires a Project or Worktree scope, not a session scope: \(scope)."
     case .fileNotFound(let path):
@@ -220,6 +223,8 @@ public actor ClairMobileDiffReviewController {
 
   private let reader: any ClairMobileWorkspaceReading
   private var attachment: Attachment?
+  private var boundSession: ClairMobileAuthenticatedSession?
+  private var hasStaleAttachment = false
   private var stateValue = ClairMobileDiffReviewState()
   private var inFlightChangedFiles: Task<ClairChangedFileSummary, Error>?
   private var inFlightDiffs: [String: Task<ClairGitDiff, Error>] = [:]
@@ -232,13 +237,37 @@ public actor ClairMobileDiffReviewController {
 
   public var state: ClairMobileDiffReviewState { stateValue }
   public var isAttached: Bool { attachment != nil }
+  public var connectionGeneration: UInt64? { boundSession?.generation }
+
+  /// Binds diff reads to the composition root's current authenticated
+  /// connection and drops any attachment created for an older generation.
+  public func bindAuthenticatedSession(_ session: ClairMobileAuthenticatedSession?) {
+    guard boundSession != session else { return }
+    if let attachment, attachment.connection != session?.connection {
+      self.attachment = nil
+      stateValue.reset(scope: nil)
+      inFlightChangedFiles = nil
+      inFlightDiffs.removeAll()
+      hasStaleAttachment = true
+    }
+    boundSession = session
+  }
 
   /// Attaches (or re-attaches) to a Project/Worktree scope and resets to a
   /// clean state. Re-attaching after a destination change is the expected
   /// shape: no stale changed-file/diff data from a previous scope leaks into
   /// the new one.
   public func attach(_ attachment: Attachment) {
+    if let boundSession, attachment.connection != boundSession.connection {
+      self.attachment = nil
+      stateValue.reset(scope: nil)
+      hasStaleAttachment = true
+      inFlightChangedFiles = nil
+      inFlightDiffs.removeAll()
+      return
+    }
     self.attachment = attachment
+    hasStaleAttachment = false
     inFlightChangedFiles = nil
     inFlightDiffs.removeAll()
     stateValue.reset(scope: attachment.scope)
@@ -246,6 +275,7 @@ public actor ClairMobileDiffReviewController {
 
   public func detach() {
     attachment = nil
+    hasStaleAttachment = false
     inFlightChangedFiles = nil
     inFlightDiffs.removeAll()
   }
@@ -255,9 +285,21 @@ public actor ClairMobileDiffReviewController {
   /// instead of racing two reads.
   @discardableResult
   public func refreshChangedFiles() async throws -> ClairChangedFileSummary {
-    guard let attachment else { throw ClairMobileDiffReviewError.notAttached }
+    guard let attachment else {
+      throw hasStaleAttachment ? ClairMobileDiffReviewError.staleGeneration : .notAttached
+    }
+    try ensureCurrent(attachment)
     if let existing = inFlightChangedFiles {
-      return try await existing.value
+      do {
+        let summary = try await existing.value
+        try ensureCurrent(attachment)
+        return summary
+      } catch {
+        if self.attachment != attachment {
+          throw ClairMobileDiffReviewError.staleGeneration
+        }
+        throw error
+      }
     }
     let task = Task { [reader] () async throws -> ClairChangedFileSummary in
       do {
@@ -270,10 +312,20 @@ public actor ClairMobileDiffReviewController {
       }
     }
     inFlightChangedFiles = task
-    defer { inFlightChangedFiles = nil }
-    let summary = try await task.value
-    stateValue.applyChangedFiles(summary)
-    return summary
+    defer {
+      if self.attachment == attachment { inFlightChangedFiles = nil }
+    }
+    do {
+      let summary = try await task.value
+      try ensureCurrent(attachment)
+      stateValue.applyChangedFiles(summary)
+      return summary
+    } catch {
+      if self.attachment != attachment {
+        throw ClairMobileDiffReviewError.staleGeneration
+      }
+      throw error
+    }
   }
 
   /// Loads (or joins an in-flight load of) the diff for one changed file and
@@ -286,7 +338,10 @@ public actor ClairMobileDiffReviewController {
     _ path: ClairWorkspacePath,
     basis: ClairGitDiffBasis = .workingTree
   ) async throws -> ClairGitDiff {
-    guard let attachment else { throw ClairMobileDiffReviewError.notAttached }
+    guard let attachment else {
+      throw hasStaleAttachment ? ClairMobileDiffReviewError.staleGeneration : .notAttached
+    }
+    try ensureCurrent(attachment)
     if let summary = stateValue.changedFiles,
       !summary.files.contains(where: { $0.path == path })
     {
@@ -294,7 +349,16 @@ public actor ClairMobileDiffReviewController {
     }
     let key = "\(basis.rawValue):\(path.rawValue)"
     if let existing = inFlightDiffs[key] {
-      return try await existing.value
+      do {
+        let diff = try await existing.value
+        try ensureCurrent(attachment)
+        return diff
+      } catch {
+        if self.attachment != attachment {
+          throw ClairMobileDiffReviewError.staleGeneration
+        }
+        throw error
+      }
     }
     let task = Task { [reader] () async throws -> ClairGitDiff in
       do {
@@ -309,10 +373,20 @@ public actor ClairMobileDiffReviewController {
       }
     }
     inFlightDiffs[key] = task
-    defer { inFlightDiffs[key] = nil }
-    let diff = try await task.value
-    stateValue.applyDiff(diff, path: path)
-    return diff
+    defer {
+      if self.attachment == attachment { inFlightDiffs[key] = nil }
+    }
+    do {
+      let diff = try await task.value
+      try ensureCurrent(attachment)
+      stateValue.applyDiff(diff, path: path)
+      return diff
+    } catch {
+      if self.attachment != attachment {
+        throw ClairMobileDiffReviewError.staleGeneration
+      }
+      throw error
+    }
   }
 
   /// Pure, synchronous hunk-cursor navigation. Never touches the transport,
@@ -325,4 +399,13 @@ public actor ClairMobileDiffReviewController {
 
   @discardableResult
   public func previousHunk() -> Bool { stateValue.moveToPreviousHunk() }
+
+  private func ensureCurrent(_ attachment: Attachment) throws {
+    guard self.attachment == attachment,
+      boundSession == nil || boundSession?.connection == attachment.connection
+    else {
+      hasStaleAttachment = true
+      throw ClairMobileDiffReviewError.staleGeneration
+    }
+  }
 }

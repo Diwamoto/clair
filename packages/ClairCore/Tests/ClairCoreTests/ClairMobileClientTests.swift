@@ -176,6 +176,45 @@ func n02PairingPersistsOpaqueIdentityAndReconnectsAfterClientRestart() async thr
 }
 
 @Test
+func n13AuthenticatedSessionExposesAndInvalidatesConnectionGeneration() async throws {
+  let fixture = try N02Fixture.make()
+  let client = try fixture.makeClient()
+  let link = try await fixture.authority.issuePairingLink(lifetime: 60)
+  _ = try await client.pair(using: link, displayName: "N13 device", confirmHostFingerprint: true)
+
+  _ = try await client.reconnect()
+  let first = try #require(await client.authenticatedSession)
+  #expect(first.generation > 0)
+  #expect(first.summary.hostID == link.hostID)
+
+  await client.disconnect()
+  #expect(await client.authenticatedSession == nil)
+
+  _ = try await client.reconnect()
+  let second = try #require(await client.authenticatedSession)
+  #expect(second.generation > first.generation)
+  #expect(second.connection != first.connection)
+}
+
+@Test
+func n13CompositionSnapshotSurfacesStaleGenerationAndPinFailures() {
+  let stale = ClairMobileCompositionSnapshot(
+    clientState: .disconnected,
+    sessionGeneration: nil,
+    connectionSummary: nil,
+    notice: .staleGeneration
+  )
+  #expect(stale.status == .staleGeneration)
+
+  let pinFailure = ClairMobileCompositionSnapshot(
+    clientState: .failed(.hostIdentityMismatch),
+    sessionGeneration: nil,
+    connectionSummary: nil
+  )
+  #expect(pinFailure.status == .endpointPinFailure)
+}
+
+@Test
 func n03PairingPresentationDistinguishesExpiredLinksAndFingerprintChanges() async throws {
   let fixture = try N02Fixture.make()
   let link = try await fixture.authority.issuePairingLink(lifetime: 60)

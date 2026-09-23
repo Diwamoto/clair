@@ -45,6 +45,7 @@ public final class ClairMobileTerminalSession {
   private var connection: ClairAuthenticatedConnection?
   private var scope: ResourceScope?
   private var generation: UInt64?
+  public private(set) var connectionGeneration: UInt64?
   private var pumpTask: Task<Void, Never>?
 
   public private(set) var state: ClairMobileTerminalSessionState = .detached
@@ -93,10 +94,31 @@ public final class ClairMobileTerminalSession {
       try terminal.resize(columns: Int(resolved.size.columns), rows: Int(resolved.size.rows))
       try? terminal.scrollToBottom()
       state = .attached
-      startPump(on: connection)
+      startPump(on: connection, connectionGeneration: connectionGeneration)
     } catch {
       state = .failed
     }
+  }
+
+  /// Preferred composition-root entry point. The remote terminal's process
+  /// generation remains the `generation` argument; this separate client
+  /// generation fences the authenticated channel across reconnects.
+  public func foreground(
+    scope: ResourceScope,
+    generation: UInt64,
+    using session: ClairMobileAuthenticatedSession
+  ) async {
+    if state != .detached {
+      if connectionGeneration == session.generation,
+        self.connection == session.connection,
+        self.scope == scope
+      {
+        return
+      }
+      await background()
+    }
+    connectionGeneration = session.generation
+    await foreground(scope: scope, generation: generation, on: session.connection)
   }
 
   /// Tries `lastAcknowledgedCursor` first (resume exactly where this device
@@ -132,6 +154,7 @@ public final class ClairMobileTerminalSession {
     }
     attachment = nil
     self.connection = nil
+    connectionGeneration = nil
     state = .detached
   }
 
@@ -188,10 +211,18 @@ public final class ClairMobileTerminalSession {
     try? terminal.selectedText(from: start, to: end)
   }
 
-  private func startPump(on connection: ClairAuthenticatedConnection) {
+  private func startPump(
+    on connection: ClairAuthenticatedConnection,
+    connectionGeneration: UInt64?
+  ) {
     pumpTask = Task { [weak self] in
       while let self, !Task.isCancelled {
-        guard await self.pumpOnce(on: connection) else { break }
+        guard
+          await self.pumpOnce(
+            on: connection,
+            connectionGeneration: connectionGeneration
+          )
+        else { break }
       }
     }
   }
@@ -199,22 +230,29 @@ public final class ClairMobileTerminalSession {
   /// One read/write/acknowledge cycle. Returns `false` when the pump should
   /// stop (detached concurrently, or a terminal error). A `nil` frame (no
   /// new bytes yet) backs off briefly instead of busy-polling.
-  private func pumpOnce(on connection: ClairAuthenticatedConnection) async -> Bool {
+  private func pumpOnce(
+    on connection: ClairAuthenticatedConnection,
+    connectionGeneration: UInt64?
+  ) async -> Bool {
     guard let attachment else { return false }
     do {
       guard let frame = try await transport.read(attachment, on: connection) else {
+        guard self.connectionGeneration == connectionGeneration else { return false }
         try? await Task.sleep(nanoseconds: 50_000_000)
         return true
       }
+      guard self.connectionGeneration == connectionGeneration else { return false }
       try terminal.write(frame.bytes)
       modes.feed(frame.bytes)
       try await transport.acknowledge(attachment, cursor: frame.nextCursor, on: connection)
+      guard self.connectionGeneration == connectionGeneration else { return false }
       lastAcknowledgedCursor = frame.nextCursor
       if let snapshot = try? terminal.snapshot() {
         onScreenUpdate?(snapshot)
       }
       return true
     } catch {
+      guard self.connectionGeneration == connectionGeneration else { return false }
       state = .failed
       return false
     }

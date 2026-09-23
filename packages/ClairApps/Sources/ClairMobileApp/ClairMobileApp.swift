@@ -4,11 +4,9 @@ import SwiftUI
 @main
 struct ClairMobileApp: App {
   private let environment: ClairMobileEnvironment
-  // Owned once here (the composition root) so the same instance receives
-  // both native push-delegate callbacks (device token, remote notification
-  // payloads) and the root view's scene-lifecycle/deep-link events -- never
-  // two independently-drifting copies of reconnect state.
-  private let reconnect = ClairMobileReconnectController()
+  // One actor owns the protected client, pinned adapter, and transport-backed
+  // feature controllers shared by the root view and native push callbacks.
+  private let composition = ClairMobileConnectionComposition()
 
   #if canImport(UIKit)
     @UIApplicationDelegateAdaptor(ClairMobilePushDelegate.self) private var pushDelegate
@@ -26,10 +24,10 @@ struct ClairMobileApp: App {
     WindowGroup {
       ClairMobileRootView()
         .environment(\.clairMobile, environment)
-        .environment(\.clairMobileReconnect, reconnect)
+        .environment(\.clairMobileComposition, composition)
         .onAppear {
           #if canImport(UIKit)
-            pushDelegate.reconnect = reconnect
+            pushDelegate.composition = composition
           #endif
         }
     }

@@ -38,6 +38,35 @@ struct ClairMobileTerminalSessionTests {
     #expect(engine.scrollToBottomCallCount == 1)
   }
 
+  @Test func compositionSessionSuppliesItsGenerationSeparatelyFromProcessGeneration() async throws {
+    let f = try T05Fixture()
+    let client = try await f.pair()
+    let presentation = await f.authority.presentation()
+    let summary = ClairMobileConnectionSummary(
+      hostID: presentation.hostID,
+      hostFingerprint: presentation.fingerprint,
+      deviceID: client.connection.deviceID,
+      endpoint: presentation.endpoint,
+      negotiatedProtocol: client.connection.negotiatedProtocol
+    )
+    let authenticatedSession = ClairMobileAuthenticatedSession(
+      generation: 42,
+      summary: summary,
+      connection: client.connection
+    )
+    let session = ClairMobileTerminalSession(
+      transport: f.transport,
+      engine: FakeTerminalEngine()
+    )
+
+    await session.foreground(scope: f.scope, generation: 1, using: authenticatedSession)
+    try await waitUntil { session.state == .attached }
+
+    #expect(session.connectionGeneration == 42)
+    await session.background()
+    #expect(session.connectionGeneration == nil)
+  }
+
   @Test func backgroundDetachesReleasingTheSubscriberSlot() async throws {
     // maximumSubscribers: 1 turns "did background() actually release the
     // slot" into something directly observable: a second device's attach
@@ -132,7 +161,8 @@ struct ClairMobileTerminalSessionTests {
   @Test func streamEnabledModesShapePasteMouseAndFocusInput() async throws {
     let f = try T05Fixture()
     let client = try await f.pair()
-    f.process.terminalJournal.appendOrFail(Data("\u{1B}[?2004h\u{1B}[?1004h\u{1B}[?1000h\u{1B}[?1006h".utf8))
+    f.process.terminalJournal.appendOrFail(
+      Data("\u{1B}[?2004h\u{1B}[?1004h\u{1B}[?1000h\u{1B}[?1006h".utf8))
     let session = ClairMobileTerminalSession(
       transport: f.transport, engine: FakeTerminalEngine())
     await session.foreground(scope: f.scope, generation: 1, on: client.connection)
