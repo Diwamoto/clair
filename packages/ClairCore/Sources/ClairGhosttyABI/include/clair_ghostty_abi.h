@@ -420,6 +420,12 @@ static ghostty_config_t (*const clair_ghostty_probe_config_new)(void) =
     ghostty_config_new;
 static void (*const clair_ghostty_probe_config_free)(ghostty_config_t) =
     ghostty_config_free;
+static void (*const clair_ghostty_probe_config_load_file)(ghostty_config_t, const char *) =
+    ghostty_config_load_file;
+static void (*const clair_ghostty_probe_config_finalize)(ghostty_config_t) =
+    ghostty_config_finalize;
+static uint32_t (*const clair_ghostty_probe_config_diagnostics_count)(ghostty_config_t) =
+    ghostty_config_diagnostics_count;
 static ghostty_app_t (*const clair_ghostty_probe_app_new)(
     const ghostty_runtime_config_s *, ghostty_config_t) = ghostty_app_new;
 static void (*const clair_ghostty_probe_app_free)(ghostty_app_t) = ghostty_app_free;
@@ -473,6 +479,11 @@ int clair_ghostty_init(uintptr_t argc, char **argv);
 clair_ghostty_info_s clair_ghostty_info(void);
 clair_ghostty_config_t clair_ghostty_config_new(void);
 void clair_ghostty_config_free(clair_ghostty_config_t config);
+// U06: Clair's own terminal theme (palette/colors) as a Ghostty config file. Only
+// the given file is read — never the user's ~/.config/ghostty.
+void clair_ghostty_config_load_file(clair_ghostty_config_t config, const char *path);
+void clair_ghostty_config_finalize(clair_ghostty_config_t config);
+uint32_t clair_ghostty_config_diagnostics_count(clair_ghostty_config_t config);
 
 // clair_ghostty_app_new/surface_new/surface_config_new are real functions
 // (not macros) defined in clair_ghostty_abi.c: they own the conversion

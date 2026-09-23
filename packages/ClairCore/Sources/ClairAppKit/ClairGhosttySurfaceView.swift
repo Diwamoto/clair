@@ -177,7 +177,9 @@ import Foundation
       // reference to.
       var app: GhosttyAppHandle?
       do {
-        let newApp = try GhosttyRuntime.shared.retainApp()
+        let newApp = try GhosttyRuntime.shared.retainApp { config in
+          if let theme = Self.themePath { try config.loadFileAndFinalize(theme) }
+        }
         app = newApp
         let config = GhosttySurfaceConfig(
           platform: .macOS(Unmanaged.passUnretained(self).toOpaque()),
@@ -197,6 +199,40 @@ import Foundation
         ghosttySurface = nil
       }
     }
+
+    /// U06: the mock's terminal is the editor's One Dark on the pane surface (`tokens.ts`: canvas, code,
+    /// codeString/Type/Func/Keyword, danger, textPrimary), not Ghostty's xterm defaults whose dark
+    /// blue/black vanish on #282c34. `minimum-contrast` keeps any app-chosen colour readable.
+    static let theme = """
+      background = #282c34
+      foreground = #abb2bf
+      cursor-color = #abb2bf
+      selection-background = #383d47
+      minimum-contrast = 3
+      palette = 0=#3f4451
+      palette = 1=#e27b83
+      palette = 2=#98c379
+      palette = 3=#e5c07b
+      palette = 4=#61afef
+      palette = 5=#c678dd
+      palette = 6=#56b6c2
+      palette = 7=#abb2bf
+      palette = 8=#5c6370
+      palette = 9=#e27b83
+      palette = 10=#98c379
+      palette = 11=#e5c07b
+      palette = 12=#61afef
+      palette = 13=#c678dd
+      palette = 14=#56b6c2
+      palette = 15=#f1f2f6
+
+      """
+
+    /// libghostty reads config from a file only; written once per process. nil (defaults) if the write fails.
+    static let themePath: String? = {
+      let url = FileManager.default.temporaryDirectory.appending(path: "clair-ghostty-theme-\(getpid())")
+      return (try? Data(theme.utf8).write(to: url, options: .atomic)) != nil ? url.path : nil
+    }()
 
     private func teardownGhosttySurface() {
       pollTimer?.invalidate()

@@ -32,6 +32,18 @@ void clair_ghostty_config_free(clair_ghostty_config_t config) {
   ghostty_config_free((ghostty_config_t)config);
 }
 
+void clair_ghostty_config_load_file(clair_ghostty_config_t config, const char *path) {
+  ghostty_config_load_file((ghostty_config_t)config, path);
+}
+
+void clair_ghostty_config_finalize(clair_ghostty_config_t config) {
+  ghostty_config_finalize((ghostty_config_t)config);
+}
+
+uint32_t clair_ghostty_config_diagnostics_count(clair_ghostty_config_t config) {
+  return ghostty_config_diagnostics_count((ghostty_config_t)config);
+}
+
 // --- Runtime callback table (T08) -----------------------------------------
 //
 // libghostty's app requires real, non-null callbacks for wakeup, clipboard
@@ -255,6 +267,9 @@ int clair_ghostty_abi_is_vendored(void) {
   return clair_ghostty_probe_init != 0 && clair_ghostty_probe_info != 0 &&
          clair_ghostty_probe_config_new != 0 &&
          clair_ghostty_probe_config_free != 0 &&
+         clair_ghostty_probe_config_load_file != 0 &&
+         clair_ghostty_probe_config_finalize != 0 &&
+         clair_ghostty_probe_config_diagnostics_count != 0 &&
          clair_ghostty_probe_app_new != 0 && clair_ghostty_probe_app_free != 0 &&
          clair_ghostty_probe_app_tick != 0 &&
          clair_ghostty_probe_surface_config_new != 0 &&

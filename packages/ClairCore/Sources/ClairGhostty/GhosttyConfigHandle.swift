@@ -39,6 +39,22 @@ public final class GhosttyConfigHandle {
     return try body()
   }
 
+  /// U06: loads one Ghostty config file (Clair's terminal theme) and finalizes the config.
+  /// libghostty reports bad lines as diagnostics and keeps its defaults, so a broken file never
+  /// stops a terminal from opening. Returns that diagnostic count (0 = every line applied).
+  @discardableResult
+  public func loadFileAndFinalize(_ path: String) throws -> Int {
+    try withValidHandle {
+      #if CLAIR_GHOSTTY_VENDORED
+        path.withCString { clair_ghostty_config_load_file(raw, $0) }
+        clair_ghostty_config_finalize(raw)
+        return Int(clair_ghostty_config_diagnostics_count(raw))
+      #else
+        return 0
+      #endif
+    }
+  }
+
   #if CLAIR_GHOSTTY_VENDORED
     /// Module-internal escape hatch for `GhosttyRuntime.withApp`, which
     /// needs the raw `clair_ghostty_config_t` to call `ghostty_app_new`.

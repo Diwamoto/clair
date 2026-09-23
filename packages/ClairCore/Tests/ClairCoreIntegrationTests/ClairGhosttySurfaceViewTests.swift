@@ -127,5 +127,35 @@ import Testing
       #expect(weakView == nil)
       #expect(weakWindow == nil)
     }
+
+    /// U06: the Clair theme file is loaded + finalized into the real config and the surface still spawns
+    /// and renders its child (a bad key would only be a Ghostty diagnostic, so this guards finalize).
+    @Test(.enabled(if: GhosttyRuntime.isVendored)) @MainActor
+    func u06ThemedConfigStillRunsARealShell() throws {
+      let theme = try #require(ClairGhosttySurfaceView.themePath)
+      #expect(try String(contentsOfFile: theme, encoding: .utf8).contains("palette = 4=#61afef"))
+      let runtime = GhosttyRuntime()
+      try runtime.activate()
+      var diagnostics = -1
+      let app = try runtime.retainApp { diagnostics = try $0.loadFileAndFinalize(theme) }
+      #expect(diagnostics == 0)  // every theme line is a key libghostty accepts
+      defer { app.close() }
+      let view = NSView(frame: NSRect(x: 0, y: 0, width: 640, height: 400))
+      view.wantsLayer = true
+      let marker = "CLAIRU06-\(UUID().uuidString.prefix(8))"
+      let surface = try app.retainSurface(
+        GhosttySurfaceConfig(
+          platform: .macOS(Unmanaged.passUnretained(view).toOpaque()), workingDirectory: NSTemporaryDirectory(),
+          command: "/bin/sh", initialInput: "printf '\\033[34m\(marker)\\033[0m\\n'\n"))
+      defer { surface.close() }
+      try surface.setSize(widthPixels: 640, heightPixels: 400)
+      var seen = false
+      for _ in 0..<100 where !seen {
+        try app.tick()
+        Thread.sleep(forTimeInterval: 0.05)
+        seen = try surface.readText(.screen)?.contains(marker) ?? false
+      }
+      #expect(seen)
+    }
   }
 #endif
