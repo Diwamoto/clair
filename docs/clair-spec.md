@@ -390,8 +390,8 @@ mobile は薄い操作クライアントとして次を行う。
 取得する。APNs 認証情報を Mac アプリへ埋め込まない。relay は配送だけを担当し、
 コード内容、agent の秘密、プロジェクト全体を保持しない。
 
-mobile に terminal output や diff を永続 cache しない。mobile への full source
-editor や merge editor の移植は必須にしない。
+mobile に terminal output や diff を永続 cache しない。mobile は source editor や
+merge editor を持たない(2026-09-23 オーナー決定)。
 
 ## 11. Runtime identity と更新
 
