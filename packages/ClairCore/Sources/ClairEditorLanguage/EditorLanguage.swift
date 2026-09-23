@@ -1,11 +1,15 @@
 import ClairEditorLanguageGo
+import ClairEditorLanguageJava
 import ClairEditorLanguageJSON
 import ClairEditorLanguageJavaScript
 import ClairEditorLanguageMarkdown
+import ClairEditorLanguagePHP
 import ClairEditorLanguagePython
+import ClairEditorLanguageRuby
 import ClairEditorLanguageRust
 import ClairEditorLanguageShell
 import ClairEditorLanguageSwift
+import ClairEditorLanguageTerraform
 import ClairEditorLanguageTypeScript
 import Foundation
 import SwiftTreeSitter
@@ -13,7 +17,7 @@ import SwiftTreeSitter
 /// E11 §5.11: the languages a real Clair user opens daily. Detected from the
 /// file's extension (or, for shell, its shebang) — see `detect(path:contents:)`.
 public enum EditorLanguageID: String, Sendable, CaseIterable {
-  case swift, go, typescript, javascript, python, json, markdown, rust, shell
+  case swift, go, typescript, javascript, python, json, markdown, rust, shell, ruby, java, php, terraform
 
   /// The grammar + query pair for this language, built once and cached
   /// (`Query` compilation is expensive — E05's `SyntaxParser` doc comment on
@@ -46,6 +50,10 @@ public enum EditorLanguageID: String, Sendable, CaseIterable {
     case "md", "markdown": return .markdown
     case "rs": return .rust
     case "sh", "bash", "zsh": return .shell
+    case "rb", "rake", "gemspec": return .ruby
+    case "java": return .java
+    case "php": return .php
+    case "tf", "tfvars", "hcl": return .terraform
     case "":
       // No extension: only shell identifies itself this way, via shebang.
       if let shebangLine, shebangLine.hasPrefix("#!"), shebangLine.contains("sh") {
@@ -106,6 +114,15 @@ public struct EditorGrammar: Sendable {
       return EditorGrammar(language: Language(tree_sitter_rust()), queryText: HighlightQueries.rust)
     case .shell:
       return EditorGrammar(language: Language(tree_sitter_bash()), queryText: HighlightQueries.shell)
+    case .ruby:
+      return EditorGrammar(language: Language(tree_sitter_ruby()), queryText: HighlightQueries.ruby)
+    case .java:
+      return EditorGrammar(language: Language(tree_sitter_java()), queryText: HighlightQueries.java)
+    case .php:
+      return EditorGrammar(language: Language(tree_sitter_php()), queryText: HighlightQueries.php)
+    case .terraform:
+      return EditorGrammar(
+        language: Language(tree_sitter_terraform()), queryText: HighlightQueries.terraform)
     }
   }
 }

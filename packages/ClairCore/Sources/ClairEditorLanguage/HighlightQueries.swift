@@ -1350,4 +1350,682 @@ enum HighlightQueries {
 
 (backslash_escape) @string.escape
 """#
+
+  static let ruby = #"""
+(identifier) @variable
+
+((identifier) @function.method
+ (#is-not? local))
+
+[
+  "alias"
+  "and"
+  "begin"
+  "break"
+  "case"
+  "class"
+  "def"
+  "do"
+  "else"
+  "elsif"
+  "end"
+  "ensure"
+  "for"
+  "if"
+  "in"
+  "module"
+  "next"
+  "or"
+  "rescue"
+  "retry"
+  "return"
+  "then"
+  "unless"
+  "until"
+  "when"
+  "while"
+  "yield"
+] @keyword
+
+((identifier) @keyword
+ (#match? @keyword "^(private|protected|public)$"))
+
+(constant) @constructor
+
+; Function calls
+
+"defined?" @function.method.builtin
+
+(call
+  method: [(identifier) (constant)] @function.method)
+
+((identifier) @function.method.builtin
+ (#eq? @function.method.builtin "require"))
+
+; Function definitions
+
+(alias (identifier) @function.method)
+(setter (identifier) @function.method)
+(method name: [(identifier) (constant)] @function.method)
+(singleton_method name: [(identifier) (constant)] @function.method)
+
+; Identifiers
+
+[
+  (class_variable)
+  (instance_variable)
+] @property
+
+((identifier) @constant.builtin
+ (#match? @constant.builtin "^__(FILE|LINE|ENCODING)__$"))
+
+(file) @constant.builtin
+(line) @constant.builtin
+(encoding) @constant.builtin
+
+(hash_splat_nil
+  "**" @operator) @constant.builtin
+
+((constant) @constant
+ (#match? @constant "^[A-Z\\d_]+$"))
+
+[
+  (self)
+  (super)
+] @variable.builtin
+
+(block_parameter (identifier) @variable.parameter)
+(block_parameters (identifier) @variable.parameter)
+(destructured_parameter (identifier) @variable.parameter)
+(hash_splat_parameter (identifier) @variable.parameter)
+(lambda_parameters (identifier) @variable.parameter)
+(method_parameters (identifier) @variable.parameter)
+(splat_parameter (identifier) @variable.parameter)
+
+(keyword_parameter name: (identifier) @variable.parameter)
+(optional_parameter name: (identifier) @variable.parameter)
+
+; Literals
+
+[
+  (string)
+  (bare_string)
+  (subshell)
+  (heredoc_body)
+  (heredoc_beginning)
+] @string
+
+[
+  (simple_symbol)
+  (delimited_symbol)
+  (hash_key_symbol)
+  (bare_symbol)
+] @string.special.symbol
+
+(regex) @string.special.regex
+(escape_sequence) @escape
+
+[
+  (integer)
+  (float)
+] @number
+
+[
+  (nil)
+  (true)
+  (false)
+] @constant.builtin
+
+(interpolation
+  "#{" @punctuation.special
+  "}" @punctuation.special) @embedded
+
+(comment) @comment
+
+; Operators
+
+[
+"="
+"=>"
+"->"
+] @operator
+
+[
+  ","
+  ";"
+  "."
+] @punctuation.delimiter
+
+[
+  "("
+  ")"
+  "["
+  "]"
+  "{"
+  "}"
+  "%w("
+  "%i("
+] @punctuation.bracket
+"""#
+
+  static let java = #"""
+; Variables
+
+(identifier) @variable
+
+; Methods
+
+(method_declaration
+  name: (identifier) @function.method)
+(method_invocation
+  name: (identifier) @function.method)
+(super) @function.builtin
+
+; Annotations
+
+(annotation
+  name: (identifier) @attribute)
+(marker_annotation
+  name: (identifier) @attribute)
+
+"@" @operator
+
+; Types
+
+(type_identifier) @type
+
+(interface_declaration
+  name: (identifier) @type)
+(class_declaration
+  name: (identifier) @type)
+(enum_declaration
+  name: (identifier) @type)
+
+((field_access
+  object: (identifier) @type)
+ (#match? @type "^[A-Z]"))
+((scoped_identifier
+  scope: (identifier) @type)
+ (#match? @type "^[A-Z]"))
+((method_invocation
+  object: (identifier) @type)
+ (#match? @type "^[A-Z]"))
+((method_reference
+  . (identifier) @type)
+ (#match? @type "^[A-Z]"))
+
+(constructor_declaration
+  name: (identifier) @type)
+
+[
+  (boolean_type)
+  (integral_type)
+  (floating_point_type)
+  (floating_point_type)
+  (void_type)
+] @type.builtin
+
+; Constants
+
+((identifier) @constant
+ (#match? @constant "^_*[A-Z][A-Z\\d_]+$"))
+
+; Builtins
+
+(this) @variable.builtin
+
+; Literals
+
+[
+  (hex_integer_literal)
+  (decimal_integer_literal)
+  (octal_integer_literal)
+  (decimal_floating_point_literal)
+  (hex_floating_point_literal)
+] @number
+
+[
+  (character_literal)
+  (string_literal)
+] @string
+(escape_sequence) @string.escape
+
+[
+  (true)
+  (false)
+  (null_literal)
+] @constant.builtin
+
+[
+  (line_comment)
+  (block_comment)
+] @comment
+
+; Keywords
+
+[
+  "abstract"
+  "assert"
+  "break"
+  "case"
+  "catch"
+  "class"
+  "continue"
+  "default"
+  "do"
+  "else"
+  "enum"
+  "exports"
+  "extends"
+  "final"
+  "finally"
+  "for"
+  "if"
+  "implements"
+  "import"
+  "instanceof"
+  "interface"
+  "module"
+  "native"
+  "new"
+  "non-sealed"
+  "open"
+  "opens"
+  "package"
+  "permits"
+  "private"
+  "protected"
+  "provides"
+  "public"
+  "requires"
+  "record"
+  "return"
+  "sealed"
+  "static"
+  "strictfp"
+  "switch"
+  "synchronized"
+  "throw"
+  "throws"
+  "to"
+  "transient"
+  "transitive"
+  "try"
+  "uses"
+  "volatile"
+  "when"
+  "while"
+  "with"
+  "yield"
+] @keyword
+"""#
+
+  static let php = #"""
+[
+  (php_tag)
+  (php_end_tag)
+] @tag
+
+; Keywords
+
+[
+  "and"
+  "as"
+  "break"
+  "case"
+  "catch"
+  "class"
+  "clone"
+  "const"
+  "continue"
+  "declare"
+  "default"
+  "do"
+  "echo"
+  "else"
+  "elseif"
+  "enddeclare"
+  "endfor"
+  "endforeach"
+  "endif"
+  "endswitch"
+  "endwhile"
+  "enum"
+  "exit"
+  "extends"
+  "finally"
+  "fn"
+  "for"
+  "foreach"
+  "function"
+  "global"
+  "goto"
+  "if"
+  "implements"
+  "include"
+  "include_once"
+  "instanceof"
+  "insteadof"
+  "interface"
+  "match"
+  "namespace"
+  "new"
+  "or"
+  "print"
+  "require"
+  "require_once"
+  "return"
+  "switch"
+  "throw"
+  "trait"
+  "try"
+  "use"
+  "while"
+  "xor"
+  "yield"
+  "yield from"
+  (abstract_modifier)
+  (final_modifier)
+  (readonly_modifier)
+  (static_modifier)
+  (visibility_modifier)
+] @keyword
+
+(function_static_declaration "static" @keyword)
+
+; Namespace
+
+(namespace_definition
+  name: (namespace_name
+    (name) @module))
+
+(namespace_name
+  (name) @module)
+
+(namespace_use_clause
+  [
+    (name) @type
+    (qualified_name
+      (name) @type)
+    alias: (name) @type
+  ])
+
+(namespace_use_clause
+  type: "function"
+  [
+    (name) @function
+    (qualified_name
+      (name) @function)
+    alias: (name) @function
+  ])
+
+(namespace_use_clause
+  type: "const"
+  [
+    (name) @constant
+    (qualified_name
+      (name) @constant)
+    alias: (name) @constant
+  ])
+
+(relative_name "namespace" @module.builtin)
+
+; Variables
+
+(relative_scope) @variable.builtin
+
+(variable_name) @variable
+
+(method_declaration name: (name) @constructor
+  (#eq? @constructor "__construct"))
+
+(object_creation_expression [
+  (name) @constructor
+  (qualified_name (name) @constructor)
+  (relative_name (name) @constructor)
+])
+
+((name) @constant
+ (#match? @constant "^_?[A-Z][A-Z\\d_]+$"))
+((name) @constant.builtin
+ (#match? @constant.builtin "^__[A-Z][A-Z\d_]+__$"))
+(const_declaration (const_element (name) @constant))
+
+; Types
+
+(primitive_type) @type.builtin
+(cast_type) @type.builtin
+(named_type [
+  (name) @type
+  (qualified_name (name) @type)
+  (relative_name (name) @type)
+]) @type
+(named_type (name) @type.builtin
+  (#any-of? @type.builtin "static" "self"))
+
+(scoped_call_expression
+  scope: [
+    (name) @type
+    (qualified_name (name) @type)
+    (relative_name (name) @type)
+  ])
+
+; Functions
+
+(array_creation_expression "array" @function.builtin)
+(list_literal "list" @function.builtin)
+(exit_statement "exit" @function.builtin "(")
+
+(method_declaration
+  name: (name) @function.method)
+
+(function_call_expression
+  function: [
+    (qualified_name (name))
+    (relative_name (name))
+    (name)
+  ] @function)
+
+(scoped_call_expression
+  name: (name) @function)
+
+(member_call_expression
+  name: (name) @function.method)
+
+(function_definition
+  name: (name) @function)
+
+; Member
+
+(property_element
+  (variable_name) @property)
+
+(member_access_expression
+  name: (variable_name (name)) @property)
+(member_access_expression
+  name: (name) @property)
+
+; Basic tokens
+[
+  (string)
+  (string_content)
+  (encapsed_string)
+  (heredoc)
+  (heredoc_body)
+  (nowdoc_body)
+] @string
+(boolean) @constant.builtin
+(null) @constant.builtin
+(integer) @number
+(float) @number
+(comment) @comment
+
+((name) @variable.builtin
+ (#eq? @variable.builtin "this"))
+
+"$" @operator
+"""#
+
+  static let terraform = #"""
+; highlights.scm
+[
+  "!"
+  "*"
+  "/"
+  "%"
+  "+"
+  "-"
+  ">"
+  ">="
+  "<"
+  "<="
+  "=="
+  "!="
+  "&&"
+  "||"
+] @operator
+
+[
+  "{"
+  "}"
+  "["
+  "]"
+  "("
+  ")"
+] @punctuation.bracket
+
+[
+  "."
+  ".*"
+  ","
+  "[*]"
+] @punctuation.delimiter
+
+[
+  (ellipsis)
+  "?"
+  "=>"
+] @punctuation.special
+
+[
+  ":"
+  "="
+] @none
+
+[
+  "for"
+  "endfor"
+  "in"
+] @keyword.repeat
+
+[
+  "if"
+  "else"
+  "endif"
+] @keyword.conditional
+
+[
+  (quoted_template_start) ; "
+  (quoted_template_end) ; "
+  (template_literal) ; non-interpolation/directive content
+] @string
+
+[
+  (heredoc_identifier) ; END
+  (heredoc_start) ; << or <<-
+] @punctuation.delimiter
+
+[
+  (template_interpolation_start) ; ${
+  (template_interpolation_end) ; }
+  (template_directive_start) ; %{
+  (template_directive_end) ; }
+  (strip_marker) ; ~
+] @punctuation.special
+
+(numeric_lit) @number
+
+(bool_lit) @boolean
+
+(null_lit) @constant
+
+(comment) @comment @spell
+
+(identifier) @variable
+
+(body
+  (block
+    (identifier) @keyword))
+
+(body
+  (block
+    (body
+      (block
+        (identifier) @type))))
+
+(function_call
+  (identifier) @function)
+
+(attribute
+  (identifier) @variable.member)
+
+; { key: val }
+;
+; highlight identifier keys as though they were block attributes
+(object_elem
+  key: (expression
+    (variable_expr
+      (identifier) @variable.member)))
+
+; var.foo, data.bar
+;
+; first element in get_attr is a variable.builtin or a reference to a variable.builtin
+(expression
+  (variable_expr
+    (identifier) @variable.builtin)
+  (get_attr
+    (identifier) @variable.member))
+
+; inherits: hcl
+
+; Terraform specific references
+;
+;
+; local/module/data/var/output
+(expression
+  (variable_expr
+    (identifier) @variable.builtin
+    (#any-of? @variable.builtin "data" "var" "local" "module" "output"))
+  (get_attr
+    (identifier) @variable.member))
+
+; path.root/cwd/module
+(expression
+  (variable_expr
+    (identifier) @type.builtin
+    (#eq? @type.builtin "path"))
+  (get_attr
+    (identifier) @variable.builtin
+    (#any-of? @variable.builtin "root" "cwd" "module")))
+
+; terraform.workspace
+(expression
+  (variable_expr
+    (identifier) @type.builtin
+    (#eq? @type.builtin "terraform"))
+  (get_attr
+    (identifier) @variable.builtin
+    (#eq? @variable.builtin "workspace")))
+
+; Terraform specific keywords
+; FIXME: ideally only for identifiers under a `variable` block to minimize false positives
+((identifier) @type.builtin
+  (#any-of? @type.builtin "bool" "string" "number" "object" "tuple" "list" "map" "set" "any"))
+
+(object_elem
+  val: (expression
+    (variable_expr
+      (identifier) @type.builtin
+      (#any-of? @type.builtin "bool" "string" "number" "object" "tuple" "list" "map" "set" "any"))))
+"""#
 }

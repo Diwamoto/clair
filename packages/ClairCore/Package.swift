@@ -213,6 +213,10 @@ let package = Package(
         "ClairEditorLanguageShell",
         "ClairEditorLanguageSwift",
         "ClairEditorLanguageTypeScript",
+        "ClairEditorLanguageRuby",
+        "ClairEditorLanguageJava",
+        "ClairEditorLanguagePHP",
+        "ClairEditorLanguageTerraform",
         .product(name: "SwiftTreeSitter", package: "SwiftTreeSitter"),
         .product(name: "TreeSitter", package: "tree-sitter"),
         .product(name: "LanguageServerProtocol", package: "LanguageServerProtocol"),
@@ -266,6 +270,26 @@ let package = Package(
     ),
     .target(
       name: "ClairEditorLanguageSwift",
+      publicHeadersPath: "include",
+      cSettings: [.headerSearchPath("src")]
+    ),
+    .target(
+      name: "ClairEditorLanguageRuby",
+      publicHeadersPath: "include",
+      cSettings: [.headerSearchPath("src")]
+    ),
+    .target(
+      name: "ClairEditorLanguageJava",
+      publicHeadersPath: "include",
+      cSettings: [.headerSearchPath("src")]
+    ),
+    .target(
+      name: "ClairEditorLanguagePHP",
+      publicHeadersPath: "include",
+      cSettings: [.headerSearchPath("src")]
+    ),
+    .target(
+      name: "ClairEditorLanguageTerraform",
       publicHeadersPath: "include",
       cSettings: [.headerSearchPath("src")]
     ),

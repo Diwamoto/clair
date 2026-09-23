@@ -131,6 +131,48 @@ final class EditorHighlightingRegressionTests: XCTestCase {
         fi
         """,
       expectAnyOf: [.keyword, .string, .comment, .variable]),
+    Sample(
+      path: "app.rb",
+      source: """
+        # Greets.
+        class Greeter
+          def hello(name)
+            puts "hi #{name}"
+          end
+        end
+        """,
+      expectAnyOf: [.keyword, .string, .comment, .function]),
+    Sample(
+      path: "Main.java",
+      source: """
+        // Entry point.
+        public class Main {
+            public static void main(String[] args) {
+                System.out.println("hi" + 1);
+            }
+        }
+        """,
+      expectAnyOf: [.keyword, .string, .comment, .type, .function]),
+    Sample(
+      path: "index.php",
+      source: """
+        <?php
+        // Greets.
+        function hello(string $name): string {
+            return "hi " . $name;
+        }
+        """,
+      expectAnyOf: [.keyword, .string, .comment, .function]),
+    Sample(
+      path: "main.tf",
+      source: """
+        # Bucket.
+        resource "aws_s3_bucket" "logs" {
+          bucket = var.name
+          count  = 2
+        }
+        """,
+      expectAnyOf: [.keyword, .string, .comment, .number]),
   ]
 
   func testRealFileSnippetsProduceColoredSpansForEveryTargetLanguage() throws {

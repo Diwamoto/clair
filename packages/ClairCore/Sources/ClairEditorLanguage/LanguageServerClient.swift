@@ -25,7 +25,7 @@ extension EditorLanguageID {
     case .python: LanguageServerCommand(executable: "pyright-langserver", arguments: ["--stdio"])
     case .rust: LanguageServerCommand(executable: "rust-analyzer")
     case .swift: LanguageServerCommand(executable: "sourcekit-lsp")
-    case .json, .markdown, .shell: nil
+    case .json, .markdown, .shell, .ruby, .java, .php, .terraform: nil
     }
   }
 
