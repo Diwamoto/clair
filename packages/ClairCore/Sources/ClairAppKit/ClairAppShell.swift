@@ -14,6 +14,30 @@ import Observation
   private typealias L = DesignTokens.Line
   private typealias W = DesignTokens.Wash
 
+  /// Plain button plus the Workbench hover wash, so every chrome control answers the pointer.
+  struct HoverWashStyle: ButtonStyle {
+    var radius: CGFloat = Radius.card
+    func makeBody(configuration: Configuration) -> some View { HoverBody(configuration: configuration, radius: radius) }
+    private struct HoverBody: View {
+      let configuration: ButtonStyleConfiguration
+      let radius: CGFloat
+      @State private var hovered = false
+      @Environment(\.isEnabled) private var enabled
+      @Environment(\.accessibilityReduceMotion) private var reduceMotion
+      var body: some View {
+        configuration.label
+          .overlay((hovered && enabled) || configuration.isPressed ? DesignTokens.Wash.selected : .clear, in: RoundedRectangle(cornerRadius: radius))
+          .contentShape(Rectangle())
+          .onHover { hovered = $0 }
+          .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: hovered)
+      }
+    }
+  }
+
+  extension ButtonStyle where Self == HoverWashStyle {
+    static var hoverWash: HoverWashStyle { HoverWashStyle() }
+  }
+
   /// V01: the GUI process owns `WorkbenchState` (ADR-0007 state owner). Every
   /// mutation goes through `CommandRegistry.workbench`; a destructive effective
   /// risk parks the call in `pending` until the native confirmation approves it.
@@ -317,6 +341,7 @@ import Observation
     /// Menu/palette entry point. Saving may materialise and write a 10 MiB snapshot, so the native
     /// UI acknowledges the shortcut immediately and completes the durable write off-main.
     public func performFromUI(_ id: String, _ input: CommandInput = [:]) {
+      if id == "pane.close", state.panesClosed { _ = run("pane.open", ["kind": .string("editor")]); return }
       guard id == "file.save" else { _ = run(id, input); return }
       Task { await saveActiveFile() }
     }
@@ -619,7 +644,9 @@ import Observation
   /// contents other than the terminal are placeholders owned by U05/U06.
   public struct ClairAppShell: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
     @State private var store: ClairWorkbenchStore
+    @State private var draggingPane: Int?
     private var st: WorkbenchState { store.state }
     @State private var query = ""
     @State private var selection = 0
@@ -628,6 +655,7 @@ import Observation
     @State private var debugMode = "debug"
     @State private var debugPID = ""
     @State private var quota: [ProviderQuota] = []
+    @State private var quotaHovered = false
     @State private var collapsedGroups: Set<String> = []
     @State private var rootFolded = false
     @State private var changes: [GitChange] = []
@@ -708,6 +736,9 @@ import Observation
       .onChange(of: st.collapsed) { rebuildVisibleExplorer() }
       .onChange(of: diff) { loadDiff() }
       .onAppear { rebuildExplorer(); reloadChanges() }
+      .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ClairCloseFocusedPaneShortcut"))) { _ in
+        if controlActiveState == .key { store.performFromUI("pane.close") }
+      }
       .focusedSceneValue(\.clairWorkbench, store)
       .confirmationDialog(
         store.pending?.id == "debug.restart" ? "デバッグを再起動しますか？" : "未保存の変更を破棄しますか？", isPresented: Binding(get: { store.pending != nil }, set: { if !$0 { store.pending = nil } })
@@ -737,7 +768,7 @@ import Observation
                 projectGroup(p, color: projectColors[i % projectColors.count])
               }
               Button(action: openFolder) { Image(systemName: "plus").font(.system(size: 13)).foregroundStyle(C.chromeInk).frame(width: 30, height: 30) }
-                .buttonStyle(.plain).help("フォルダを開く")
+                .buttonStyle(.hoverWash).help("フォルダを開く")
             }
             .frame(minWidth: g.size.width, minHeight: g.size.height, alignment: .leading)
             .background(TitlebarArea())
@@ -753,8 +784,8 @@ import Observation
             }
             .padding(.horizontal, 8).frame(width: 200, height: 28)
             .background(C.chrome, in: RoundedRectangle(cornerRadius: Radius.card))
-            .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(L.hairline))
-          }.buttonStyle(.plain).help("検索")
+            .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(L.hairlineFaint))
+          }.buttonStyle(.hoverWash).help("検索")
           titlebarAction("command", "コマンドパレット", on: st.palette == .commands) { store.run("palette.commands") }
           titlebarAction("gearshape", "設定", on: st.settingsOpen) { store.run(st.settingsOpen ? "settings.close" : "settings.open") }
         }.padding(.horizontal, 12)
@@ -769,7 +800,7 @@ import Observation
       Button(action: action) {
         Image(systemName: icon).font(.system(size: 13)).foregroundStyle(on ? C.chromeInk : C.chromeInkMuted)
           .frame(width: 30, height: 30).background(on ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
-      }.buttonStyle(.plain).help(help)
+      }.buttonStyle(.hoverWash).help(help)
     }
 
     /// The chip toggles the group's tab strip (GUI-local; it never changes the active Project).
@@ -796,7 +827,7 @@ import Observation
             }
           }
         }
-        .buttonStyle(.plain).help("\(p.name) タブグループを\(folded ? "展開" : "折りたたむ")")
+        .buttonStyle(.hoverWash).help("\(p.name) タブグループを\(folded ? "展開" : "折りたたむ")")
         .contextMenu {
           let muted = st.notices.mutedProjects.contains(p.name)
           Button(muted ? "通知のミュートを解除" : "通知をミュート") {
@@ -866,7 +897,7 @@ import Observation
     private var sidebar: some View {
       VStack(spacing: 0) {
         // Lazy: a Project can list thousands of files, and an eager tree makes accessibility traversal (and layout) block the main thread.
-        ScrollView { LazyVStack(alignment: .leading, spacing: 0) { sidebarMode == "clock.arrow.circlepath" ? AnyView(historyPanel) : sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "bell" ? AnyView(noticeList) : sidebarMode == "terminal" ? AnyView(sessionList) : sidebarMode == "ladybug" ? AnyView(debugPanel) : AnyView(explorer) } }
+        ScrollView { LazyVStack(alignment: .leading, spacing: 0) { sidebarMode == "clock.arrow.circlepath" ? AnyView(historyPanel) : sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "bell" ? AnyView(noticeList) : sidebarMode == "terminal" ? AnyView(sessionList) : sidebarMode == "ladybug" ? AnyView(debugPanel) : AnyView(explorer) }.clairScroller() }
         Spacer(minLength: 0)
       }
       .frame(width: 242)
@@ -888,7 +919,7 @@ import Observation
         Button { store.run("settings.close") } label: {
           Image(systemName: "xmark").font(.system(size: 13, weight: .medium)).foregroundStyle(C.chromeInkMuted)
             .frame(width: 26, height: 26)
-        }.buttonStyle(.plain).padding(.trailing, 16).help("設定を閉じる")
+        }.buttonStyle(.hoverWash).padding(.trailing, 16).help("設定を閉じる")
       }
       .frame(height: ChromeBudget.titlebar)
       .background(TitlebarArea())
@@ -1092,42 +1123,40 @@ import Observation
     private var explorer: some View {
       return LazyVStack(alignment: .leading, spacing: 0) {
         if store.scanning {
-          HStack(spacing: 6) {
-            ProgressView().controlSize(.small)
-            Text("ファイルを読み込み中…").font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
-          }.padding(.horizontal, 16).frame(height: 28)
-        }
-        // Project root: uppercase, branch glyph, no chevron — it reads as a
-        // section label, not one more row in the same list as its children.
-        // Folds the whole tree (GUI-local); click-to-collapse is unchanged.
-        treeRow(depth: 0, selected: false, action: { rootFolded.toggle() }) {
-          Image(systemName: "arrow.triangle.branch").font(.system(size: 9)).foregroundStyle(C.textTertiary)
-          Text(st.project).font(.system(size: 11, weight: .semibold)).textCase(.uppercase).foregroundStyle(C.textPrimary)
-          Spacer(minLength: 0)
-        }
-        if !rootFolded {
-          ForEach(visibleExplorerRows) { r in
-            if let f = r.file {
-              let on = st.active == f.path && !st.settingsOpen
-              let badge = st.dirty.contains(f.path) ? "M" : f.status
-              treeRow(depth: r.depth, selected: on, action: { store.run("tab.open", ["path": .string(f.path)]) }) {
-                Image(systemName: f.path.hasSuffix(".md") ? "text.alignleft" : "doc.text").font(.system(size: 10)).foregroundStyle(on ? C.textSecondary : C.textTertiary).frame(width: 12)
-                Text(r.label).font(.system(size: 11, weight: on ? .semibold : .regular)).foregroundStyle(on ? C.textPrimary : C.textSecondary).lineLimit(1)
-                Spacer(minLength: 0)
-                if let b = badge { Text(b).font(.system(size: 11, weight: .semibold)).foregroundStyle(b == "A" || b == "?" ? C.success : C.attention) }
-              }
-              .contextMenu { fileMenu(f.path, tab: false) }
-            } else {
-              let open = !st.collapsed.contains(r.id)
-              treeRow(depth: r.depth, selected: false, action: { store.run("explorer.toggle", ["path": .string(r.id)]) }) {
-                chevron(open: open)
-                Text(r.label).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary).lineLimit(1)
-                Spacer(minLength: 0)
-              }
-              .contextMenu {
-                Button(open ? "折りたたむ" : "開く") { store.run("explorer.toggle", ["path": .string(r.id)]) }
-                Divider()
-                pathItems(r.id)
+          Text("Loading...").font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+            .padding(.horizontal, 16).frame(height: 28)
+        } else {
+          // Project root: uppercase, branch glyph, no chevron — it reads as a
+          // section label, not one more row in the same list as its children.
+          // Folds the whole tree (GUI-local); click-to-collapse is unchanged.
+          treeRow(depth: 0, selected: false, action: { rootFolded.toggle() }) {
+            Text(st.project).font(.system(size: 11, weight: .semibold)).textCase(.uppercase).foregroundStyle(C.textPrimary)
+            Spacer(minLength: 0)
+          }
+          if !rootFolded {
+            ForEach(visibleExplorerRows) { r in
+              if let f = r.file {
+                let on = st.active == f.path && !st.settingsOpen
+                let badge = st.dirty.contains(f.path) ? "M" : f.status
+                treeRow(depth: r.depth, selected: on, action: { store.run("tab.open", ["path": .string(f.path)]) }) {
+                  Image(systemName: f.path.hasSuffix(".md") ? "text.alignleft" : "doc.text").font(.system(size: 10)).foregroundStyle(on ? C.textSecondary : C.textTertiary).frame(width: 12)
+                  Text(r.label).font(.system(size: 11, weight: on ? .semibold : .regular)).foregroundStyle(on ? C.textPrimary : C.textSecondary).lineLimit(1)
+                  Spacer(minLength: 0)
+                  if let b = badge { Text(b).font(.system(size: 11, weight: .semibold)).foregroundStyle(b == "A" || b == "?" ? C.success : C.attention) }
+                }
+                .contextMenu { fileMenu(f.path, tab: false) }
+              } else {
+                let open = !st.collapsed.contains(r.id)
+                treeRow(depth: r.depth, selected: false, action: { store.run("explorer.toggle", ["path": .string(r.id)]) }) {
+                  chevron(open: open)
+                  Text(r.label).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary).lineLimit(1)
+                  Spacer(minLength: 0)
+                }
+                .contextMenu {
+                  Button(open ? "折りたたむ" : "開く") { store.run("explorer.toggle", ["path": .string(r.id)]) }
+                  Divider()
+                  pathItems(r.id)
+                }
               }
             }
           }
@@ -1188,14 +1217,15 @@ import Observation
         .rotationEffect(.degrees(open ? 90 : 0)).frame(width: 10)
     }
 
-    /// Mock explorer row: an inset 26px pill (8px margin outside the fill), 12px indent per level.
+    /// Explorer row: an inset, rounded 28px tab with 12px indent per level.
     private func treeRow<Content: View>(depth: Int, selected: Bool, action: @escaping () -> Void, @ViewBuilder _ content: () -> Content) -> some View {
       Button(action: action) {
         HStack(spacing: 4, content: content)
-          .padding(.leading, 8 + CGFloat(depth) * 12).padding(.trailing, 8).frame(height: 26)
-          .background(selected ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
-          .padding(.horizontal, 8).contentShape(Rectangle())
-      }.buttonStyle(.plain)
+          .padding(.leading, 8 + CGFloat(depth) * 12).padding(.trailing, 8).frame(height: 28)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .background(selected ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
+          .contentShape(Rectangle())
+      }.buttonStyle(.hoverWash).padding(.horizontal, 8)
     }
 
     // MARK: context menus (checklist §3.6). ponytail: native NSMenu, not the canvas's custom overlay;
@@ -1250,7 +1280,7 @@ import Observation
           }
           .labelsHidden().controlSize(.small)
           Button { startDebugFromUI() } label: { Image(systemName: "play.fill").foregroundStyle(C.debugBlue) }
-            .buttonStyle(.plain).help("デバッグを開始")
+            .buttonStyle(.hoverWash).help("デバッグを開始")
             .disabled(debugMode == "attach" ? (Int(debugPID) ?? 0) <= 0 : !(st.active?.hasSuffix(".go") ?? false))
         }.padding(.horizontal, 12)
         if debugMode == "attach" {
@@ -1268,13 +1298,13 @@ import Observation
                 Label("\(URL(fileURLWithPath: path).lastPathComponent):\(status?.line ?? line)",
                   systemImage: status?.verified == true ? "circle.fill" : "circle.dotted")
                   .font(.system(size: 11)).foregroundStyle(status?.verified == false ? C.attention : C.textSecondary)
-              }.buttonStyle(.plain).help(status?.message ?? (status == nil ? "未検証" : "検証済み"))
+              }.buttonStyle(.hoverWash).help(status?.message ?? (status == nil ? "未検証" : "検証済み"))
                 .padding(.horizontal, 12).padding(.vertical, 3)
             }
           }
         } else { debugEmpty("設定されていません") }
         Button { toggleBreakpointAtCaret() } label: { Label("現在の行に追加", systemImage: "plus") }
-          .buttonStyle(.plain).font(.system(size: 11)).padding(.horizontal, 12).padding(.top, 6)
+          .buttonStyle(.hoverWash).font(.system(size: 11)).padding(.horizontal, 12).padding(.top, 6)
           .disabled(st.active == nil)
         debugSection("スレッドとコールスタック")
         if let session = store.debugSession, !session.threads.isEmpty {
@@ -1282,7 +1312,7 @@ import Observation
             Button { _ = store.run("debug.selectThread", ["id": .int(thread.id)]) } label: {
               Label(thread.name, systemImage: session.selectedThread == thread.id ? "checkmark.circle.fill" : "circle.grid.2x2")
                 .font(.system(size: 11)).foregroundStyle(session.selectedThread == thread.id ? C.textPrimary : C.textTertiary)
-            }.buttonStyle(.plain).padding(.horizontal, 12).padding(.vertical, 3)
+            }.buttonStyle(.hoverWash).padding(.horizontal, 12).padding(.vertical, 3)
           }
         }
         if let session = store.debugSession, !session.frames.isEmpty {
@@ -1293,7 +1323,7 @@ import Observation
                 Text(frame.path.map { "\(URL(fileURLWithPath: $0).lastPathComponent):\(frame.line)" } ?? "場所不明")
                   .foregroundStyle(C.textQuaternary)
               }.font(.system(size: 11)).frame(maxWidth: .infinity, alignment: .leading)
-            }.buttonStyle(.plain).padding(.horizontal, 12).padding(.vertical, 4)
+            }.buttonStyle(.hoverWash).padding(.horizontal, 12).padding(.vertical, 4)
               .background(session.selectedFrame == frame.id ? C.chromeRaised : Color.clear)
           }
         } else { debugEmpty("停止すると表示されます") }
@@ -1310,7 +1340,7 @@ import Observation
                 }
                 Spacer(minLength: 0)
               }.font(.system(size: 11)).padding(.leading, 12 + CGFloat(variable.depth * 12)).padding(.trailing, 12).padding(.vertical, 4)
-            }.buttonStyle(.plain).disabled(variable.reference == 0)
+            }.buttonStyle(.hoverWash).disabled(variable.reference == 0)
           }
         } else { debugEmpty("停止すると表示されます") }
       }.frame(maxWidth: .infinity, alignment: .leading)
@@ -1402,7 +1432,7 @@ import Observation
       Button { _ = store.run(command, confirmed: command == "debug.restart") } label: {
         Image(systemName: symbol).font(.system(size: 12)).foregroundStyle(command == "debug.stop" ? C.danger : C.textSecondary)
           .frame(width: 28, height: 28)
-      }.buttonStyle(.plain).help(title).disabled(!enabled)
+      }.buttonStyle(.hoverWash).help(title).disabled(!enabled)
     }
 
     // MARK: main
@@ -1470,6 +1500,8 @@ import Observation
             onClose: { diff = nil })
         } else if diff != nil {
           ProgressView("差分を読み込み中…").frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if st.panesClosed {
+          EmptyPanesView(open: { store.run("pane.open", ["kind": .string($0)]) })
         } else {
         PaneView(
           node: st.tree.maximized.flatMap { id in st.tree.leaves.first { $0.id == id }.map { .leaf(id: $0.id, kind: $0.kind) } } ?? st.tree.root,
@@ -1477,7 +1509,7 @@ import Observation
           onFacts: { store.facts(pane: $0, bells: $1, exit: $2) },
           onRatio: { store.run("pane.setRatio", ["id": .int($0), "ratio": .double($1)]) },
           editor: EditorPane(buffers: store.buffers, root: store.activeRoot, path: st.active, softWrap: st.toggles["softWrap"] == true, onEdit: { store.edited($0) }, onCaret: { store.buffers.setCaret($0, $1, in: $2) }),
-          run: { _ = store.run($0, $1) })
+          run: { _ = store.run($0, $1) }, dragging: $draggingPane)
         }
       }
     }
@@ -1586,13 +1618,19 @@ import Observation
     /// U06/U05: facts only — branch, change/dirty counts, agent state. Ln/Col waits on an editor caret callback.
     /// Mock `AppStatusBar`: branch, ahead/behind, change count, caret, then the session count on the right. 26px, sans, `textTertiary`.
     /// Mock `QuotaMeter` (H11): the tightest window across providers; the tooltip lists every provider, unread ones included.
+    private func quotaTint(_ usedPercent: Double) -> Color {
+      if usedPercent <= 50 { return C.success }
+      if usedPercent <= 90 { return C.attention }
+      return C.danger
+    }
+
     private var quotaMeter: some View {
       let now = Date()
       let top = ProviderQuota.tightest(quota)
       let stale = quota.contains { $0.isStale(now: now) }
-      let tint = stale ? C.textQuaternary : C.textSecondary
       return HStack(spacing: 6) {
         if let top {
+          let tint = stale ? C.textQuaternary : quotaTint(top.window.usedPercent)
           Text("\(top.provider) \(top.window.label)").foregroundStyle(C.textQuaternary)
           Capsule().fill(L.strong).frame(width: 34, height: 4)
             .overlay(alignment: .leading) { Capsule().fill(tint).frame(width: 34 * top.window.usedPercent / 100) }
@@ -1601,7 +1639,56 @@ import Observation
           Text(quota.isEmpty ? "利用枠を取得中…" : "利用枠 —").foregroundStyle(C.textQuaternary)
         }
       }
-      .help(quota.map { $0.summary(now: now) }.joined(separator: "\n"))
+      .contentShape(Rectangle())
+      .onHover { quotaHovered = $0 }
+      .popover(isPresented: $quotaHovered, arrowEdge: .top) {
+        VStack(alignment: .leading, spacing: 12) {
+          if quota.isEmpty {
+            Text("利用枠を取得中…").foregroundStyle(C.textTertiary)
+          }
+          ForEach(quota, id: \.provider) { provider in
+            VStack(alignment: .leading, spacing: 7) {
+              HStack {
+                Text(provider.provider).fontWeight(.semibold)
+                Spacer()
+                if case .ok = provider.state {
+                  Text(provider.isStale(now: now) ? "古い値 · \(provider.fetchedAt.formatted(date: .omitted, time: .shortened)) 取得" : "\(provider.fetchedAt.formatted(date: .omitted, time: .shortened)) 取得")
+                    .foregroundStyle(C.textQuaternary)
+                }
+              }
+              switch provider.state {
+              case .ok(let windows):
+                ForEach(windows, id: \.minutes) { window in
+                  VStack(spacing: 4) {
+                    HStack(spacing: 8) {
+                      Text(window.label)
+                      Spacer(minLength: 8)
+                      Text(window.resetText(now: now)).foregroundStyle(C.textQuaternary)
+                      Text("残り\(window.remainingPercent)%").fontWeight(.semibold)
+                    }
+                    GeometryReader { geometry in
+                      Capsule().fill(L.strong)
+                        .overlay(alignment: .leading) {
+                          Capsule().fill(provider.isStale(now: now) ? C.textQuaternary : quotaTint(window.usedPercent))
+                            .frame(width: geometry.size.width * min(max(window.usedPercent / 100, 0), 1))
+                        }
+                    }
+                    .frame(height: 4)
+                    .accessibilityHidden(true)
+                  }
+                  .accessibilityElement(children: .combine)
+                }
+              case .unavailable(let reason):
+                Text("取得できません — \(reason)").foregroundStyle(C.textTertiary)
+              case .unsupported(let reason):
+                Text("未対応 — \(reason)").foregroundStyle(C.textTertiary)
+              }
+            }
+          }
+        }
+        .font(Typography.font(Typography.chrome)).monospacedDigit()
+        .frame(width: 340).padding(12)
+      }
     }
 
     /// E12: the active file's language server and its diagnostic counts.
@@ -1649,14 +1736,14 @@ import Observation
             }
             .menuStyle(.borderlessButton).fixedSize().disabled(gitOperation != nil)
           }
-          if let sync { Text("↓\(sync.behind) ↑\(sync.ahead)").foregroundStyle(C.textQuaternary) }
           if st.isRepo {
-            Button { runGit([("git.pull", [:])], label: "Pull", confirmed: true) } label: {
-              Image(systemName: "arrow.down").frame(width: 18, height: 18)
-            }.buttonStyle(.plain).disabled(gitOperation != nil).help("Pull")
-            Button { runGit([("git.push", [:])], label: "Push", confirmed: true) } label: {
-              Image(systemName: "arrow.up").frame(width: 18, height: 18)
-            }.buttonStyle(.plain).disabled(gitOperation != nil).help("Push")
+            // VS Code-style sync: one button shows ↓behind ↑ahead and runs pull then push.
+            Button { runGit([("git.pull", [:]), ("git.push", [:])], label: "Sync", confirmed: true) } label: {
+              HStack(spacing: 3) {
+                Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 10))
+                if let sync, sync.behind + sync.ahead > 0 { Text("\(sync.behind)↓ \(sync.ahead)↑") }
+              }.frame(minHeight: 18)
+            }.buttonStyle(.hoverWash).disabled(gitOperation != nil).help(sync.map { "\(branch ?? "") の同期: pull \($0.behind) 件 / push \($0.ahead) 件\nクリックで Pull → Push" } ?? "同期 (Pull → Push)")
             if let gitOperation { ProgressView().controlSize(.small).help("\(gitOperation)中") }
             if let gitMessage, gitOperation == nil {
               HStack(spacing: 4) {
@@ -1680,7 +1767,7 @@ import Observation
             if waiting > 0 { Circle().fill(C.attention).frame(width: 6, height: 6) }
             Text("\(agents.count) セッション" + (waiting > 0 ? " · 入力待ち \(waiting)" : ""))
           }
-        }.buttonStyle(.plain)
+        }.buttonStyle(.hoverWash)
       }
       .font(Typography.font(Typography.chrome)).monospacedDigit().foregroundStyle(C.textTertiary)
       .padding(.horizontal, 12).frame(height: ChromeBudget.statusBar)
@@ -1771,7 +1858,7 @@ import Observation
                   .foregroundStyle(p == mode ? C.textPrimary : C.textTertiary)
                   .padding(.horizontal, 8).frame(height: 20)
                   .background(p == mode ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
-              }.buttonStyle(.plain)
+              }.buttonStyle(.hoverWash)
             }
             Spacer()
           }
@@ -1859,11 +1946,13 @@ import Observation
         Text(name).font(.system(size: 11, weight: selected ? .semibold : .regular)).foregroundStyle(tint).lineLimit(1).truncationMode(.tail)
         Spacer(minLength: 0)
         if dirty { Circle().fill(selected ? C.textTertiary : C.textQuaternary).frame(width: 6, height: 6) }
-        if selected {
-          Button(action: onClose) {
-            Image(systemName: "xmark").font(.system(size: 9, weight: .medium)).foregroundStyle(C.textTertiary)
-          }.buttonStyle(.plain).help("閉じる")
+        Button(action: onClose) {
+          Image(systemName: "xmark").font(.system(size: 9, weight: .medium)).foregroundStyle(C.textTertiary)
         }
+        .buttonStyle(.hoverWash)
+        .help("閉じる")
+        .opacity((selected || isHovered) ? 1 : 0)
+        .allowsHitTesting(selected || isHovered)
       }
       .padding(.horizontal, 8).frame(width: 200, height: 38)
       .background((selected || isHovered) ? W.selected : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
@@ -1884,6 +1973,8 @@ import Observation
     let label: String
     let focused: Bool
     let onSwap: (Int, Int) -> Void
+    let onDragStart: () -> Void
+    var onDragEnd: () -> Void = {}
     let onClose: () -> Void
     @State private var isHovered = false
     @State private var isDropTarget = false
@@ -1899,23 +1990,84 @@ import Observation
           .accessibilityLabel(label)
         Button(action: onClose) {
           Image(systemName: "xmark").font(.system(size: 9, weight: .medium)).foregroundStyle(C.textQuaternary)
-        }.buttonStyle(.plain).help("パネルを閉じる").opacity((isHovered || focused) ? 1 : 0)
+        }.buttonStyle(.hoverWash).help("パネルを閉じる").opacity((isHovered || focused) ? 1 : 0)
       }
       .padding(.horizontal, 8).frame(height: 24).frame(maxWidth: .infinity)
       .background(C.canvas)
       .overlay(Rectangle().fill(isDropTarget ? L.ring : .clear).frame(height: 1), alignment: .bottom)
       .contentShape(Rectangle())
       .onHover { isHovered = $0 }
-      .onDrag { NSItemProvider(object: NSString(string: "\(id)")) }
+      .onDrag({ onDragStart(); return NSItemProvider(object: NSString(string: "\(id)")) }, preview: {
+        if let shot = ClairGhosttySurfaceView.snapshot(pane: id) {
+          let scale = min(1, 360 / max(shot.size.width, 1))
+          Image(nsImage: shot).resizable()
+            .frame(width: shot.size.width * scale, height: shot.size.height * scale)
+            .clipShape(RoundedRectangle(cornerRadius: Radius.card))
+            .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(L.ring, lineWidth: 1))
+            .opacity(0.9)
+        } else {
+        VStack(spacing: 0) {
+          Image(systemName: "ellipsis").font(.system(size: 11)).foregroundStyle(C.textQuaternary)
+            .frame(maxWidth: .infinity).frame(height: 24).background(C.canvas)
+          Image(systemName: "terminal").font(.system(size: 28, weight: .light)).foregroundStyle(C.textTertiary)
+            .frame(maxWidth: .infinity, maxHeight: .infinity).background(C.surface)
+        }
+        .frame(width: 240, height: 150)
+        .clipShape(RoundedRectangle(cornerRadius: Radius.card))
+        .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(L.ring, lineWidth: 1))
+        .opacity(0.9)
+        }
+      })
       .onDrop(of: [.text], isTargeted: $isDropTarget) { providers in
         guard let provider = providers.first else { return false }
         provider.loadObject(ofClass: NSString.self) { object, _ in
           guard let fromID = (object as? NSString).flatMap({ Int($0 as String) }) else { return }
-          Task { @MainActor in onSwap(fromID, id) }
+          Task { @MainActor in onSwap(fromID, id); onDragEnd() }
         }
         return true
       }
     }
+  }
+
+  /// Drag-time overlay on a pane: highlights the half nearest the cursor where the dragged pane will land.
+  // ponytail: a cancelled drag (dropped outside any pane) leaves the zones up until a click; add an NSDraggingSource end hook if that annoys.
+  private struct PaneDropZones: View, DropDelegate {
+    let onMove: (PaneTree.Edge) -> Void
+    let onCancel: () -> Void
+    @State private var edge: PaneTree.Edge?
+    @State private var size: CGSize = .zero
+
+    var body: some View {
+      GeometryReader { g in
+        ZStack {
+          Color.clear.contentShape(Rectangle()).onTapGesture(perform: onCancel)
+          if let edge {
+            let side = edge == .left || edge == .right
+            RoundedRectangle(cornerRadius: Radius.card)
+              .fill(L.ring.opacity(0.18))
+              .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(L.ring, lineWidth: 1.5))
+              .padding(4)
+              .frame(width: side ? g.size.width / 2 : g.size.width, height: side ? g.size.height : g.size.height / 2)
+              .frame(maxWidth: .infinity, maxHeight: .infinity,
+                     alignment: [.left: .leading, .right: .trailing, .top: .top, .bottom: .bottom][edge]!)
+              .allowsHitTesting(false)
+          }
+        }
+        .onAppear { size = g.size }
+        .onChange(of: g.size) { size = $0 }
+      }
+      .onDrop(of: [.text], delegate: self)
+    }
+
+    private func nearest(_ p: CGPoint) -> PaneTree.Edge {
+      guard size.width > 0, size.height > 0 else { return .right }
+      let x = p.x / size.width, y = p.y / size.height
+      return [(PaneTree.Edge.left, x), (.right, 1 - x), (.top, y), (.bottom, 1 - y)].min { $0.1 < $1.1 }!.0
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? { edge = nearest(info.location); return DropProposal(operation: .move) }
+    func dropExited(info: DropInfo) { edge = nil }
+    func performDrop(info: DropInfo) -> Bool { onMove(nearest(info.location)); edge = nil; return true }
   }
 
   /// AppKit strip over a pane divider: resize cursor, and a drag that keeps going over the panes either side.
@@ -1949,6 +2101,26 @@ import Observation
     }
   }
 
+  /// Every pane closed: a quiet centre with the ways back in.
+  private struct EmptyPanesView: View {
+    let open: (String) -> Void
+
+    var body: some View {
+      VStack(spacing: 14) {
+        Image(systemName: "square.dashed").font(.system(size: 40, weight: .ultraLight)).foregroundStyle(.secondary)
+        Text("開いているペインはありません").font(.headline)
+        HStack(spacing: 10) {
+          Button("ターミナルを開く") { open("terminal") }
+          Button("エディタを開く") { open("editor") }
+        }
+        Text("⌘W でエディタを開けます").font(.caption).foregroundStyle(.secondary)
+      }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .background(C.surface)
+    }
+  }
+
+
   private struct PaneView: View {
     let node: PaneTree.Node
     let focused: Int
@@ -1959,6 +2131,8 @@ import Observation
     let onRatio: (Int, Double) -> Void
     let editor: EditorPane
     let run: (String, CommandInput) -> Void
+    /// Pane whose header handle is being dragged; other panes show edge drop zones meanwhile.
+    @Binding var dragging: Int?
 
     /// The pane just before a divider names it (`PaneTree.setRatio`).
     private func lastLeaf(_ n: PaneTree.Node) -> Int {
@@ -1971,10 +2145,10 @@ import Observation
     @ViewBuilder
     private func parts(_ axis: PaneTree.Axis, _ total: CGFloat, _ a: PaneTree.Node, _ b: PaneTree.Node, ratio: Double) -> some View {
       let h = axis == .horizontal
-      PaneView(node: a, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onRatio: onRatio, editor: editor, run: run)
+      PaneView(node: a, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onRatio: onRatio, editor: editor, run: run, dragging: $dragging)
         .frame(width: h ? total * ratio : nil, height: h ? nil : total * ratio)
       Rectangle().fill(L.paneDivider).frame(width: h ? 1 : nil, height: h ? nil : 1)
-      PaneView(node: b, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onRatio: onRatio, editor: editor, run: run)
+      PaneView(node: b, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onRatio: onRatio, editor: editor, run: run, dragging: $dragging)
     }
 
     var body: some View {
@@ -1985,16 +2159,23 @@ import Observation
             PaneHeaderView(
               id: id, label: "ターミナル", focused: id == focused,
               onSwap: { run("pane.swap", ["idA": .int($0), "idB": .int($1)]) },
+              onDragStart: { dragging = id }, onDragEnd: { dragging = nil },
               onClose: { run("pane.focus", ["id": .int(id)]); run("pane.close", [:]) })
           }
           ZStack {
             C.surface
             if kind == .terminal { ClairGhosttySurface(launch: launches[id].map { ($0.command, $0.cwd) }, pane: id, sessionKey: ClairWorkbenchStore.terminalKey(root: project, pane: id), focused: id == focused, onFocus: { if id != focused { onFocus(id) } }, onFacts: { onFacts(id, $0, $1) }) }  // one surface per terminal leaf, attached to the daemon shell keyed by project#pane
             else { editor }
+            if let from = dragging, from != id {
+              PaneDropZones { edge in
+                run("pane.move", ["id": .int(from), "target": .int(id), "edge": .string(edge.rawValue)])
+                dragging = nil
+              } onCancel: { dragging = nil }
+            }
           }
         }
-        // Mock: a pane has no header to say it is focused, so the others recede instead of the focused one getting a frame.
-        .opacity(id == focused ? 1 : 0.75)
+        // Keep the editor fully legible even when another pane is focused.
+        .opacity(kind == .editor || id == focused ? 1 : 0.75)
         .onTapGesture { onFocus(id) }
         // ponytail: the libghostty NSView may consume right-clicks, so terminal panes might not show this; copy/paste/clear items wait on U06 surface commands.
         .contextMenu {

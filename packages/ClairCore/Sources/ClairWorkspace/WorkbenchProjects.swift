@@ -80,6 +80,8 @@ extension WorkbenchState {
   }
 
   mutating func openTab(_ path: String) {
+    panesClosed = false
+    tree.ensureEditorAtLeft()
     if !tabs.contains(path) { tabs.append(path) }
     active = path; settingsOpen = false; palette = nil
   }

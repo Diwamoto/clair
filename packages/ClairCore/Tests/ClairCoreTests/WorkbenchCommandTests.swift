@@ -47,18 +47,38 @@ final class WorkbenchCommandTests: XCTestCase {
     XCTAssertEqual(s, WorkbenchState(), "failed commands must not mutate state")
   }
 
-  func testPreflightEscalatesCloseWithDirtyBufferToDestructive() {
+  func testClosingEditorReplacesItAndKeepsItLeftmost() throws {
+    var s = WorkbenchState()
+    let old = s.tree.focused
+    try r.execute("pane.close", state: &s).get()
+    XCTAssertFalse(s.panesClosed)
+    XCTAssertEqual(s.tree.leaves.map(\.kind), [.editor, .terminal, .terminal])
+    XCTAssertNotEqual(s.tree.focused, old)
+    XCTAssertEqual(s.tree.leaves.first?.id, s.tree.focused)
+    XCTAssertEqual(r.execute("pane.move", ["id": .int(3), "target": .int(s.tree.focused), "edge": .string("left")], state: &s).failure?.code, .preconditionFailed)
+    XCTAssertEqual(r.execute("pane.swap", ["idA": .int(s.tree.focused), "idB": .int(2)], state: &s).failure?.code, .preconditionFailed)
+  }
+
+  func testOpeningFileRepairsLegacyTerminalOnlyLayout() {
+    var s = WorkbenchState()
+    s.tree = PaneTree(single: .terminal)
+    s.panesClosed = true
+    _ = r.execute("tab.open", ["path": .string("docs/architecture/pane-layout.md")], state: &s)
+    XCTAssertFalse(s.panesClosed)
+    XCTAssertEqual(s.tree.leaves.map(\.kind), [.editor, .terminal])
+    XCTAssertEqual(s.active, "docs/architecture/pane-layout.md")
+  }
+
+  func testClosingEditorPreservesDirtyBuffer() {
     var s = WorkbenchState()
     XCTAssertEqual(r.preflight("pane.close", [:], s).success, .write)
     s.dirty.insert(s.active!)
-    XCTAssertEqual(r.preflight("pane.close", [:], s).success, .destructive)
+    XCTAssertEqual(r.preflight("pane.close", [:], s).success, .write)
     XCTAssertEqual(r.preflight("tab.close", [:], s).success, .destructive)
 
-    let before = s
-    XCTAssertEqual(r.execute("pane.close", state: &s).failure?.code, .confirmationRequired)
-    XCTAssertEqual(s, before)
-    XCTAssertEqual(r.execute("pane.close", confirmed: true, state: &s), .success(.ok))
-    XCTAssertEqual(s.tree.leaves.count, 2)
+    XCTAssertEqual(r.execute("pane.close", state: &s), .success(.ok))
+    XCTAssertEqual(s.tree.leaves.count, 3)
+    XCTAssertTrue(s.dirty.contains(s.active!))
 
     s.tree.focus(2)  // closing a non-editor pane keeps the buffer → stays write
     XCTAssertEqual(r.preflight("pane.close", [:], s).success, .write)
@@ -74,8 +94,6 @@ final class WorkbenchCommandTests: XCTestCase {
 
   func testLastPaneAndTabPreconditions() {
     var s = WorkbenchState()
-    r.execute("pane.close", state: &s); r.execute("pane.close", state: &s)
-    XCTAssertEqual(r.execute("pane.close", state: &s).failure?.code, .preconditionFailed)
     r.execute("tab.close", state: &s)
     XCTAssertNil(s.active)
     XCTAssertEqual(r.execute("tab.close", state: &s).failure?.code, .preconditionFailed)

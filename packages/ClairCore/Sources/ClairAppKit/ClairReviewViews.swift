@@ -196,7 +196,7 @@
               .foregroundStyle(canCommit ? C.textPrimary : C.textQuaternary)
               .padding(.horizontal, 10).frame(height: 24)
               .background(canCommit ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
-          }.buttonStyle(.plain).disabled(!canCommit)
+          }.buttonStyle(.hoverWash).disabled(!canCommit)
         }
       }.padding(.horizontal, 12).padding(.vertical, 8)
     }
@@ -239,7 +239,7 @@
           let stage = title != "ステージ済み"
           Button { onBulk(rows, stage) } label: {
             Text(stage ? "+" : "−").font(Typography.font(Typography.title)).foregroundStyle(C.textTertiary).frame(width: 18, height: 18)
-          }.buttonStyle(.plain).disabled(busy).help(stage ? "すべてステージに追加" : "すべてステージから外す")
+          }.buttonStyle(.hoverWash).disabled(busy).help(stage ? "すべてステージに追加" : "すべてステージから外す")
         }.padding(.leading, 20).padding(.trailing, 12).frame(height: 26)
         ForEach(rows, id: \.path) { c in
           let t = target(c), on = selected == t
@@ -251,7 +251,7 @@
             if c.untracked { Text("未追跡").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary) }
             Button { onToggle(c, !t.staged) } label: {
               Text(t.staged ? "−" : "+").font(Typography.font(Typography.title)).foregroundStyle(C.textTertiary).frame(width: 18, height: 18)
-            }.buttonStyle(.plain).disabled(busy).help(t.staged ? "ステージを取り消す" : "ステージに追加")
+            }.buttonStyle(.hoverWash).disabled(busy).help(t.staged ? "ステージを取り消す" : "ステージに追加")
           }
           .padding(.horizontal, 8).frame(height: 26)
           .background(on ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
@@ -358,16 +358,16 @@
                 hunk = min(max(hunk + d, 0), hunks.count - 1)
                 withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(hunks[hunk], anchor: .top) }
               } label: { Image(systemName: d < 0 ? "chevron.up" : "chevron.down").foregroundStyle(C.chromeInk) }
-                .buttonStyle(.plain).keyboardShortcut(d < 0 ? .upArrow : .downArrow, modifiers: .option)
+                .buttonStyle(.hoverWash).keyboardShortcut(d < 0 ? .upArrow : .downArrow, modifiers: .option)
                 .help(d < 0 ? "前の hunk (⌥↑)" : "次の hunk (⌥↓)")
             }
           }
           if let onSend {
             Button { onSend(); sent = true } label: {
               Text(sent ? "コピー済み（⌘V で貼り付け）" : "agent に送る").font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary)
-            }.buttonStyle(.plain).help("未解決コメントをプロンプトとしてコピーし、agent のターミナルへ移動")
+            }.buttonStyle(.hoverWash).help("未解決コメントをプロンプトとしてコピーし、agent のターミナルへ移動")
           }
-          Button(action: onClose) { Image(systemName: "xmark").foregroundStyle(C.chromeInk) }.buttonStyle(.plain)
+          Button(action: onClose) { Image(systemName: "xmark").foregroundStyle(C.chromeInk) }.buttonStyle(.hoverWash)
         }.padding(.horizontal, 12).frame(height: 32).background(C.chromeRaised)
         if model.text.isEmpty {
           Text("差分はありません。").font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -420,7 +420,7 @@
           }
         }
         if t.state == .open {
-          Button("解決する") { onResolve(t.id) }.buttonStyle(.plain).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+          Button("解決する") { onResolve(t.id) }.buttonStyle(.hoverWash).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
         } else {
           Text("解決済み").font(Typography.font(Typography.chrome)).foregroundStyle(C.success)
         }
@@ -437,8 +437,8 @@
           .padding(.horizontal, 6).frame(maxWidth: .infinity, alignment: .leading).background(C.success.opacity(0.12))
         if pending {
           HStack(spacing: 8) {
-            Button("適用") { applyError = onApply(p.id) }.buttonStyle(.plain).foregroundStyle(p.stale ? C.textQuaternary : C.textPrimary).disabled(p.stale)
-            Button("却下") { onReject(p.id) }.buttonStyle(.plain).foregroundStyle(C.textTertiary)
+            Button("適用") { applyError = onApply(p.id) }.buttonStyle(.hoverWash).foregroundStyle(p.stale ? C.textQuaternary : C.textPrimary).disabled(p.stale)
+            Button("却下") { onReject(p.id) }.buttonStyle(.hoverWash).foregroundStyle(C.textTertiary)
             if p.stale { Text("バッファが変更されたため適用できません").foregroundStyle(C.attention) }
             else if let applyError { Text(applyError).foregroundStyle(C.attention) }
           }.font(Typography.font(Typography.chrome))
@@ -459,10 +459,10 @@
       return HStack(spacing: 8) {
         TextField(suggesting ? "この行の置換後" : "コメント", text: $draft).textFieldStyle(.plain).font(Typography.font(Typography.chrome)).frame(width: 360)
           .onSubmit(submit)
-        Button(suggesting ? "提案する" : "追加", action: submit).buttonStyle(.plain).foregroundStyle(C.textSecondary)
+        Button(suggesting ? "提案する" : "追加", action: submit).buttonStyle(.hoverWash).foregroundStyle(C.textSecondary)
         Button(suggesting ? "コメントに戻す" : "提案にする") { suggesting.toggle(); draft = suggesting ? text : "" }
-          .buttonStyle(.plain).foregroundStyle(C.textTertiary)
-        Button("キャンセル") { composing = nil }.buttonStyle(.plain).foregroundStyle(C.textTertiary)
+          .buttonStyle(.hoverWash).foregroundStyle(C.textTertiary)
+        Button("キャンセル") { composing = nil }.buttonStyle(.hoverWash).foregroundStyle(C.textTertiary)
       }
       .padding(8).background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.card)).padding(.leading, 28).padding(.vertical, 4)
     }
@@ -529,7 +529,7 @@
           .foregroundStyle(primary ? C.canvas : C.textSecondary)
           .padding(.horizontal, 12).frame(minHeight: 30)
           .background(primary ? C.textSecondary : W.medium, in: RoundedRectangle(cornerRadius: Radius.control))
-      }.buttonStyle(.plain)
+      }.buttonStyle(.hoverWash)
     }
   }
 
@@ -558,7 +558,7 @@
           Text("Project内のファイルを横断").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary)
           Spacer(minLength: 0)
           Button(action: close) { Image(systemName: "xmark").font(.system(size: 11, weight: .semibold)).frame(width: 24, height: 24) }
-            .buttonStyle(.plain).foregroundStyle(C.textTertiary).help("検索を閉じる")
+            .buttonStyle(.hoverWash).foregroundStyle(C.textTertiary).help("検索を閉じる")
         }
         .padding(.horizontal, 12).frame(height: 38)
         .overlay(alignment: .bottom) { Rectangle().fill(L.hairline).frame(height: 1) }
@@ -579,14 +579,24 @@
         .background(C.chrome, in: RoundedRectangle(cornerRadius: Radius.control))
         .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.hairline)).padding(12)
 
-        HStack(spacing: 12) {
-          TextField("置換", text: $replacement).textFieldStyle(.plain).frame(minWidth: 180)
-          Toggle("正規表現", isOn: $regex)
-          Toggle("大文字小文字", isOn: $caseSensitive)
-          Spacer()
-          Button(replacing ? "置換中…" : "すべて置換", action: replaceAll).disabled(hits.isEmpty || replacing || searching)
+        HStack(spacing: 6) {
+          HStack(spacing: 8) {
+            Image(systemName: "arrow.2.squarepath").font(.system(size: 12)).foregroundStyle(C.textQuaternary)
+            TextField("置換", text: $replacement).textFieldStyle(.plain).font(.system(size: 12)).foregroundStyle(C.textPrimary)
+          }
+          .padding(.horizontal, 8).frame(height: 30)
+          .background(C.chrome, in: RoundedRectangle(cornerRadius: Radius.control))
+          .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.hairline))
+          chip(".*", on: $regex, help: "正規表現")
+          chip("Aa", on: $caseSensitive, help: "大文字小文字を区別")
+          let canReplace = !hits.isEmpty && !replacing && !searching
+          Button(action: replaceAll) {
+            Text(replacing ? "置換中…" : "すべて置換").font(.system(size: 11, weight: .semibold))
+              .foregroundStyle(canReplace ? C.canvas : C.textQuaternary)
+              .padding(.horizontal, 12).frame(height: 30)
+              .background(canReplace ? C.textSecondary : W.medium, in: RoundedRectangle(cornerRadius: Radius.control))
+          }.buttonStyle(.hoverWash).disabled(!canReplace)
         }
-        .toggleStyle(.checkbox).font(Typography.font(Typography.micro)).foregroundStyle(C.textTertiary)
         .padding(.horizontal, 12).padding(.bottom, 8).disabled(replacing)
         .onChange(of: regex) { selection = 0; search() }
         .onChange(of: caseSensitive) { selection = 0; search() }
@@ -618,12 +628,23 @@
                   .background(selected ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
                   .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain).onHover { if $0 { selection = item.index } }
+                .buttonStyle(.hoverWash).onHover { if $0 { selection = item.index } }
               }
             }
           }.padding(.horizontal, 8).padding(.bottom, 8)
         }.frame(minHeight: 120, maxHeight: 400)
       }
+    }
+
+    /// Option toggle drawn as a code-styled chip (VS Code idiom) instead of a system checkbox.
+    private func chip(_ label: String, on: Binding<Bool>, help: String) -> some View {
+      Button { on.wrappedValue.toggle() } label: {
+        Text(label).font(.system(size: 11, weight: .semibold, design: .monospaced))
+          .foregroundStyle(on.wrappedValue ? C.textPrimary : C.textQuaternary)
+          .frame(width: 30, height: 30)
+          .background(on.wrappedValue ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
+          .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(on.wrappedValue ? L.ring : L.hairline))
+      }.buttonStyle(.hoverWash).help(help).accessibilityLabel(help).accessibilityAddTraits(on.wrappedValue ? .isSelected : [])
     }
 
     private var displayedHits: [SearchHit] { Array(hits.prefix(500)) }
@@ -688,7 +709,7 @@
                 .font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary)
             }
             .padding(.horizontal, 20).padding(.vertical, 4).contentShape(Rectangle())
-          }.buttonStyle(.plain)
+          }.buttonStyle(.hoverWash)
           if selected == version {
             if let preview {
               VStack(alignment: .leading, spacing: 2) {
@@ -785,7 +806,7 @@
             Spacer(minLength: 0)
           }
           .padding(.horizontal, 20).padding(.vertical, 4).contentShape(Rectangle())
-        }.buttonStyle(.plain)
+        }.buttonStyle(.hoverWash)
       }
     }
   }
@@ -804,7 +825,7 @@
         Button("すべて既読") { run("notice.markRead", [:]) }.disabled(log.unread() == 0)
         Button("消去") { run("notice.clear", [:]) }.disabled(log.items.isEmpty)
       }
-      .buttonStyle(.plain).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+      .buttonStyle(.hoverWash).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
       .padding(.horizontal, 20).frame(height: 26)
       if log.items.isEmpty {
         Text("通知はありません").font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textSecondary)

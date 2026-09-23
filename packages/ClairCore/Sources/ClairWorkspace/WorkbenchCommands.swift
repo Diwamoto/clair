@@ -41,6 +41,8 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   /// Last scanned tree per Project; not persisted, only makes switching back instant.
   var filesCache: [String: [WorkbenchFile]] = [:]
   public var tree = PaneTree()
+  /// Every pane was closed (⌘W on the last one): the shell shows the empty panel instead of `tree`. Transient.
+  public var panesClosed = false
   public var tabs: [String] = ["apple/ClairApp/ContentView.swift"]
   public var active: String? = "apple/ClairApp/ContentView.swift"
   public var dirty: Set<String> = []
@@ -281,6 +283,21 @@ extension CommandRegistry {
     cmd("pane.setRatio", "分割比を変更", .read, params: [CommandParam("id", .int), CommandParam("ratio", .double)]) { s, i in
       s.tree.setRatio(splitContaining: i["id"]!.int!, i["ratio"]!.double!); return .ok
     },
+    // Dropping a header handle on another pane's edge moves the pane there.
+    cmd("pane.move", "ペインを移動", .write, params: [CommandParam("id", .int), CommandParam("target", .int), CommandParam("edge", .string)],
+        preflight: { s, i throws(CommandError) in
+          let a = i["id"]?.int, b = i["target"]?.int
+          try require(a != nil && b != nil && a != b, "need two different pane ids")
+          try require(s.tree.leaves.contains { $0.id == a } && s.tree.leaves.contains { $0.id == b }, "no such pane")
+          try require(i["edge"]?.string.flatMap(PaneTree.Edge.init(rawValue:)) != nil, "edge must be left/right/top/bottom")
+          var moved = s.tree
+          moved.moveLeaf(a!, to: b!, PaneTree.Edge(rawValue: i["edge"]!.string!)!)
+          try require(moved != s.tree, "the leftmost pane must remain an editor")
+          return .write
+        }) { s, i in
+      s.tree.moveLeaf(i["id"]!.int!, to: i["target"]!.int!, PaneTree.Edge(rawValue: i["edge"]!.string!)!)
+      return .ok
+    },
     // Header drag handle drop target swaps what two panes show; tree shape/ratios/focus stay put.
     cmd("pane.swap", "ペインの表示を入れ替え", .write, params: [CommandParam("idA", .int), CommandParam("idB", .int)],
         preflight: { s, i throws(CommandError) in
@@ -289,6 +306,10 @@ extension CommandRegistry {
           try require(a != b, "cannot swap a pane with itself")
           try require(s.tree.leaves.contains { $0.id == a }, "no pane \(a!)")
           try require(s.tree.leaves.contains { $0.id == b }, "no pane \(b!)")
+          var swapped = s.tree
+          swapped.swapLeaves(a!, b!)
+          try require(swapped != s.tree || s.tree.leaves.first { $0.id == a }?.kind == s.tree.leaves.first { $0.id == b }?.kind,
+            "the leftmost pane must remain an editor")
           return .write
         }) { s, i in
       let a = i["idA"]!.int!, b = i["idB"]!.int!
@@ -296,17 +317,31 @@ extension CommandRegistry {
       (s.launches[a], s.launches[b]) = (s.launches[b], s.launches[a])
       return .ok
     },
-    // Closing the last editor pane while buffers are dirty discards them → destructive.
-    cmd("pane.close", "ペインを閉じる", .write, shortcut: "⌃⌘W",
+    // The leftmost editor is replaced on close; open buffers remain available.
+    cmd("pane.close", "ペインを閉じる", .write, shortcut: "⌘W",
         preflight: { s, _ throws(CommandError) in
-          let leaves = s.tree.leaves
-          try require(leaves.count > 1, "the last pane cannot be closed")
-          let editors = leaves.filter { $0.kind == .editor }
-          return editors.count == 1 && editors[0].id == s.tree.focused && !s.dirty.isEmpty ? .destructive : .write
+          try require(!s.panesClosed, "no pane to close")
+          return .write
         }) { s, _ in
+      if s.tree.leaves.first?.id == s.tree.focused, s.tree.leaves.first?.kind == .editor {
+        s.tree.replaceFocusedEditor()
+        return .ok
+      }
+      // The tree cannot be empty, so closing the last pane hides it behind the empty panel.
+      if s.tree.leaves.count == 1 {
+        s.tree.ensureEditorAtLeft()
+        s.launches = s.launches.filter { id, _ in s.tree.leaves.contains { $0.id == id } }
+        return .ok
+      }
       s.tree.closeFocused()
       s.launches = s.launches.filter { id, _ in s.tree.leaves.contains { $0.id == id } }
       return .ok
+    },
+    cmd("pane.open", "ペインを開く", .additive, params: [CommandParam("kind", .string, allowed: ["editor", "terminal"])]) { s, i in
+      s.tree = PaneTree(single: .editor)
+      if i["kind"]!.string! == "terminal" { s.tree.splitFocused(.horizontal, kind: .terminal) }
+      s.panesClosed = false
+      return .pane(s.tree.focused)
     },
     // External: spawns a user-configured executable. ai: false — an agent must not start agents (V07/ADR-0002).
     cmd("agent.launch", "エージェントを起動", .external, ai: false,

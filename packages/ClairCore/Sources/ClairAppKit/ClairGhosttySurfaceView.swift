@@ -569,6 +569,18 @@ import Foundation
       v.sendText(text); return true
     }
 
+    /// What the pane shows right now, for the header drag preview. libghostty draws into its own Metal
+    /// layer, which `cacheDisplay` can't read, so this grabs the composited pixels of our own window.
+    // ponytail: CGWindowListCreateImage is deprecated (macOS 14); move to ScreenCaptureKit when it is removed.
+    public static func snapshot(pane: Int) -> NSImage? {
+      guard let v = byPane[pane]?.view, let window = v.window, let screenH = NSScreen.screens.first?.frame.height else { return nil }
+      let r = window.convertToScreen(v.convert(v.bounds, to: nil))
+      let cg = CGRect(x: r.minX, y: screenH - r.maxY, width: r.width, height: r.height)
+      guard let image = CGWindowListCreateImage(cg, .optionIncludingWindow, CGWindowID(window.windowNumber), [.boundsIgnoreFraming, .bestResolution])
+      else { return nil }
+      return NSImage(cgImage: image, size: r.size)
+    }
+
     func sendText(_ text: String) {
       guard !text.isEmpty else { return }
       if let ghosttySurface {

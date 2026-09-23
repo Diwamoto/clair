@@ -51,7 +51,7 @@
             Text(o).font(.system(size: 11, weight: on ? .semibold : .regular))
               .foregroundStyle(on ? C.textPrimary : C.textSecondary)
               .padding(.horizontal, 10).frame(height: 26).background(on ? C.surfaceActive : .clear)
-          }.buttonStyle(.plain)
+          }.buttonStyle(HoverWashStyle(radius: 0))
         }
       }
       .clipShape(RoundedRectangle(cornerRadius: Radius.control))

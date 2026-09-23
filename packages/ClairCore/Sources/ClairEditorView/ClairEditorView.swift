@@ -464,7 +464,7 @@ import ClairEditorCore
       context.restoreGState()
     }
 
-    /// Right-aligned 1-based number in the gutter, 12pt from the text column edge.
+    /// Right-aligned 1-based number with room for the fold marker beside it.
     private func drawLineNumber(_ index: Int, top: CGFloat, context: CGContext) {
       let current = selection.selections.first.flatMap { try? snapshot.position(at: $0.head, columnUnit: UTF8Unit.self, rounding: .down).line.value } == index
       let s = NSAttributedString(
@@ -473,7 +473,7 @@ import ClairEditorCore
       let width = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
       context.saveGState()
       context.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
-      context.textPosition = CGPoint(x: gutterWidth - 12 - width, y: top + baselineShift + ascent)
+      context.textPosition = CGPoint(x: gutterWidth - 18 - width, y: top + baselineShift + ascent)
       CTLineDraw(line, context)
       context.restoreGState()
     }

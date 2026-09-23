@@ -275,7 +275,7 @@ import ClairEditorCore
     func handleFoldClick(at point: NSPoint) -> Bool {
       let (line, sub) = rowMap.line(atRow: Int((max(point.y, 0) / lineHeight).rounded(.down)))
       guard sub == 0 || point.x >= textInset else { return false }
-      if gutterWidth > 0, point.x < gutterWidth, point.x >= gutterWidth - 12 {
+      if gutterWidth > 0, point.x < gutterWidth, point.x >= gutterWidth - 14 {
         guard fold(onLine: line) != nil || foldCandidate(onLine: line) != nil else { return false }
         toggleFold(line: line)
         return true
@@ -289,17 +289,26 @@ import ClairEditorCore
       return false
     }
 
-    /// ⌄ open / › folded, ccedit's CodeMirror glyphs, in the last 12pt of the gutter.
+    /// Filled triangles with space on either side, centered on the line-number row.
     func drawFoldMarker(_ line: Int, top: CGFloat, context: CGContext) {
       let folded = fold(onLine: line) != nil
       guard gutterWidth > 0, folded || foldCandidate(onLine: line) != nil else { return }
-      let s = NSAttributedString(
-        string: folded ? "›" : "⌄", attributes: [.font: font, .foregroundColor: folded ? currentLineNumberColor : lineNumberColor])
-      let ct = CTLineCreateWithAttributedString(s)
+      let left = gutterWidth - 11
+      let mid = top + lineHeight / 2
       context.saveGState()
-      context.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
-      context.textPosition = CGPoint(x: gutterWidth - 10, y: top + (lineHeight + font.ascender + font.descender) / 2)
-      CTLineDraw(ct, context)
+      let color = folded ? currentLineNumberColor : lineNumberColor
+      context.setFillColor((color.blended(withFraction: 0.4, of: textColor) ?? color).cgColor)
+      if folded {
+        context.move(to: CGPoint(x: left, y: mid - 5))
+        context.addLine(to: CGPoint(x: left + 9, y: mid))
+        context.addLine(to: CGPoint(x: left, y: mid + 5))
+      } else {
+        context.move(to: CGPoint(x: left, y: mid - 4))
+        context.addLine(to: CGPoint(x: left + 10, y: mid - 4))
+        context.addLine(to: CGPoint(x: left + 5, y: mid + 4))
+      }
+      context.closePath()
+      context.fillPath()
       context.restoreGState()
     }
 

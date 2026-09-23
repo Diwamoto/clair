@@ -15,6 +15,15 @@ import SwiftUI
     // Daemon health uses IPC and can wait on a stale socket. The first window never depends on it;
     // terminal attachment already waits for the daemon when a terminal is actually opened.
     Task.detached(priority: .utility) { ClairDaemonLauncher.ensureRunning() }
+    // Handle ⌘W before either the system Close menu or the terminal view consumes it.
+    NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+      if event.charactersIgnoringModifiers == "w", event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command {
+        guard (event.window ?? NSApp.keyWindow)?.title != "Pair a device" else { return event }
+        NotificationCenter.default.post(name: Notification.Name("ClairCloseFocusedPaneShortcut"), object: nil)
+        return nil
+      }
+      return event
+    }
     // The native lights are laid out for a 28pt bar; centre them in our ChromeBudget.titlebar-tall chrome.
     // Re-applied because AppKit resets their frames on resize / full screen.
     for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResizeNotification, NSWindow.didExitFullScreenNotification] {
@@ -49,6 +58,18 @@ import SwiftUI
     }
   }
 
+  /// ⌘Q asks first: quitting also stops the daemon's shells. An update relaunch is already confirmed.
+  func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+    // The startup benchmark quits itself unattended (CLAIR_STARTUP_TRACE=exit).
+    if ClairDaemonLauncher.keepsSessionsOnQuit || ProcessInfo.processInfo.environment["CLAIR_STARTUP_TRACE"] != nil { return .terminateNow }
+    let alert = NSAlert()
+    alert.messageText = "Clair を終了しますか？"
+    alert.informativeText = "実行中のターミナルとエージェントも終了します。"
+    alert.addButton(withTitle: "終了")
+    alert.addButton(withTitle: "キャンセル")
+    return alert.runModal() == .alertFirstButtonReturn ? .terminateNow : .terminateCancel
+  }
+
   /// Spec §7: closing a window keeps the daemon; an explicit Clair quit stops it and its shells.
   func applicationWillTerminate(_ notification: Notification) {
     ClairDaemonLauncher.shutdown()
@@ -64,7 +85,10 @@ struct ClairMacApp: App {
       ClairAppShell().ignoresSafeArea(.container, edges: .top)  // content runs under the (hidden) titlebar; no second band above ours
     }
     .windowStyle(.hiddenTitleBar)  // U04: one chrome — the app titlebar hosts the real traffic lights
-    .commands { ClairCommandMenu() }
+    .commands {
+      CommandGroup(replacing: .saveItem) {}  // drops File ▸ Close (⌘W); ⌘W closes the focused pane instead
+      ClairCommandMenu()
+    }
     WindowGroup("Pair a device", id: "clair-pairing") {
       ClairPairingBootstrapView()
     }

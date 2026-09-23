@@ -293,7 +293,7 @@
           // Instant feedback while the file is read and roped in the background.
           VStack(spacing: 0) {
             breadcrumb(path)
-            ProgressView("ファイルを読み込み中…").frame(maxWidth: .infinity, maxHeight: .infinity).background(C.canvas)
+            Text("Loading...").frame(maxWidth: .infinity, maxHeight: .infinity).background(C.canvas)
           }.task(id: path) { await buffers.prefetch(path, root: root) }
         case .ready(let m)?:
           VStack(spacing: 0) {
@@ -340,16 +340,40 @@
     }
   }
 
-  /// U05: overlay scroller with no track; only the knob is drawn, squarer than AppKit's pill, in system label colours
-  /// so Light/Dark and Increase Contrast keep working.
-  private final class EditorScroller: NSScroller {
+  /// U05: overlay scroller with no track; only the knob is drawn, squarer than AppKit's pill, in Clair text tokens.
+  /// Shared by the editor and SwiftUI scroll views (`.clairScroller()`).
+  final class ClairScroller: NSScroller {
     override class var isCompatibleWithOverlayScrollers: Bool { true }
+    // Half of AppKit's thickness, so the hit area matches the thin knob.
+    override class func scrollerWidth(for controlSize: NSControl.ControlSize, scrollerStyle: NSScroller.Style) -> CGFloat {
+      super.scrollerWidth(for: controlSize, scrollerStyle: scrollerStyle) / 2
+    }
     override func drawKnobSlot(in slotRect: NSRect, highlight flag: Bool) {}
     override func drawKnob() {
-      let r = rect(for: .knob).insetBy(dx: 2, dy: 2)
-      (hitPart == .knob ? NSColor.secondaryLabelColor : NSColor.tertiaryLabelColor).setFill()
+      let k = rect(for: .knob)
+      let r = k.height > k.width ? k.insetBy(dx: 1, dy: 2) : k.insetBy(dx: 2, dy: 1)
+      NSColor(hitPart == .knob ? C.textSecondary : C.textTertiary).withAlphaComponent(hitPart == .knob ? 0.7 : 0.45).setFill()
       NSBezierPath(roundedRect: r, xRadius: 2, yRadius: 2).fill()
     }
+  }
+
+  /// Swaps the enclosing SwiftUI `ScrollView`'s AppKit scrollers for `ClairScroller`.
+  private struct ClairScrollerInstaller: NSViewRepresentable {
+    final class Probe: NSView {
+      override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard let scroll = enclosingScrollView, !(scroll.verticalScroller is ClairScroller) else { return }
+        scroll.scrollerStyle = .overlay; scroll.autohidesScrollers = true
+        scroll.verticalScroller = ClairScroller(); scroll.horizontalScroller = ClairScroller()
+      }
+    }
+    func makeNSView(context: Context) -> Probe { Probe() }
+    func updateNSView(_ nsView: Probe, context: Context) {}
+  }
+
+  extension View {
+    /// Apply to the content inside a `ScrollView`.
+    func clairScroller() -> some View { background(ClairScrollerInstaller()) }
   }
 
   private struct EditorSurface: NSViewRepresentable {
@@ -375,15 +399,15 @@
       let scroll = NSScrollView()
       scroll.hasVerticalScroller = true; scroll.hasHorizontalScroller = true
       scroll.scrollerStyle = .overlay; scroll.autohidesScrollers = true
-      scroll.verticalScroller = EditorScroller(); scroll.horizontalScroller = EditorScroller()
+      scroll.verticalScroller = ClairScroller(); scroll.horizontalScroller = ClairScroller()
       scroll.drawsBackground = true; scroll.backgroundColor = NSColor(C.canvas)
-      // Mock editor: 12px mono on 19px rows, One Dark on the canvas colour, 46px gutter.
+      // Mock editor: 12px mono on 19px rows, One Dark on the canvas colour, 54px gutter.
       let view = ClairEditorView(
         snapshot: manager.buffer.snapshot, selection: manager.selection,
         font: .monospacedSystemFont(ofSize: 12, weight: .regular), lineHeight: 19)
       view.background = NSColor(C.canvas); view.textColor = NSColor(C.code)
       view.caretColor = NSColor(C.textPrimary); view.selectionColor = NSColor(C.debugBlue).withAlphaComponent(0.3)
-      view.gutterWidth = 46
+      view.gutterWidth = 54
       view.lineNumberColor = NSColor(C.lineNumber); view.currentLineNumberColor = NSColor(C.textTertiary)
       view.debugStoppedLine = debugLine; view.debugBreakpoints = debugBreakpoints
       view.debugLineColor = NSColor(C.debugBlue).withAlphaComponent(0.14)

@@ -44,6 +44,13 @@ public struct PaneTree: Sendable, Equatable, Codable {
     nextID = 4
   }
 
+  /// One pane of `kind`: what the empty workspace reopens into.
+  public init(single kind: PaneKind) {
+    root = .leaf(id: 1, kind: kind)
+    focused = 1
+    nextID = 2
+  }
+
   /// Leaves in first-to-last (appearance) order.
   public var leaves: [(id: Int, kind: PaneKind)] { Self.leaves(root) }
 
@@ -87,10 +94,33 @@ public struct PaneTree: Sendable, Equatable, Codable {
     if maximized == target { maximized = nil }
   }
 
+  /// Closing the anchored editor replaces its pane, keeping the left edge available for files.
+  public mutating func replaceFocusedEditor() {
+    guard leaves.first?.id == focused, leaves.first?.kind == .editor else { return }
+    let old = focused
+    let replacement = nextID
+    nextID += 1
+    root = Self.map(root) { n in
+      guard case .leaf(let id, .editor) = n, id == old else { return nil }
+      return .leaf(id: replacement, kind: .editor)
+    }
+    focused = replacement
+    if maximized == old { maximized = replacement }
+  }
+
+  public mutating func ensureEditorAtLeft() {
+    guard leaves.first?.kind != .editor else { return }
+    let editor = nextID
+    nextID += 1
+    root = .split(axis: .horizontal, ratio: 0.62, first: .leaf(id: editor, kind: .editor), second: root)
+    focused = editor
+    maximized = nil
+  }
+
   /// False for a decoded tree that could crash or mislead the UI (restore degrades to the default layout).
   public var isValid: Bool {
     let ids = leaves.map(\.id)
-    return Set(ids).count == ids.count && ids.contains(focused) && (maximized.map(ids.contains) ?? true)
+    return leaves.first?.kind == .editor && Set(ids).count == ids.count && ids.contains(focused) && (maximized.map(ids.contains) ?? true)
       && nextID > (ids.max() ?? 0)
   }
 
@@ -122,12 +152,34 @@ public struct PaneTree: Sendable, Equatable, Codable {
     let all = leaves
     guard let kindA = all.first(where: { $0.id == idA })?.kind, let kindB = all.first(where: { $0.id == idB })?.kind
     else { return }
+    guard !(all.first?.id == idA && kindB != .editor), !(all.first?.id == idB && kindA != .editor) else { return }
     root = Self.map(root) { n in
       guard case .leaf(let id, _) = n else { return nil }
       if id == idA { return .leaf(id: idA, kind: kindB) }
       if id == idB { return .leaf(id: idB, kind: kindA) }
       return nil
     }
+  }
+
+  public enum Edge: String, Sendable, CaseIterable { case left, right, top, bottom }
+
+  /// Moves leaf `id` beside `target`, splitting `target` in half on `edge`; the moved pane keeps its id
+  /// (so its terminal session) and takes focus.
+  public mutating func moveLeaf(_ id: Int, to target: Int, _ edge: Edge) {
+    guard id != target, let kind = leaves.first(where: { $0.id == id })?.kind,
+      leaves.contains(where: { $0.id == target }), let pruned = Self.remove(root, id)
+    else { return }
+    let moved = Node.leaf(id: id, kind: kind)
+    let axis: Axis = edge == .left || edge == .right ? .horizontal : .vertical
+    let before = edge == .left || edge == .top
+    let candidate = Self.map(pruned) { n in
+      guard case .leaf(let i, _) = n, i == target else { return nil }
+      return .split(axis: axis, ratio: 0.5, first: before ? moved : n, second: before ? n : moved)
+    }
+    guard Self.leaves(candidate).first?.kind == .editor else { return }
+    root = candidate
+    focused = id
+    maximized = nil
   }
 
   private static func clamp(_ r: Double) -> Double { min(max(r, ratioRange.lowerBound), ratioRange.upperBound) }
