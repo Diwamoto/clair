@@ -21,4 +21,10 @@ int clair_pty_spawn(const char *path, char *const argv[], char *const envp[],
                     int cwd_fd, uint16_t rows, uint16_t columns,
                     clair_pty_handle *result);
 int clair_pty_resize(int master_fd, uint16_t rows, uint16_t columns);
+
+// Start a debugger adapter as the leader of its own process group. Killing the
+// group also stops debugserver/debuggee children if the adapter hangs or exits.
+int clair_spawn_isolated(const char *path, char *const argv[], char *const envp[],
+                        const char *cwd, int32_t *pid);
+void clair_unregister_isolated(int32_t pid);
 #endif

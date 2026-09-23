@@ -48,6 +48,9 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var launches: [Int: AgentLaunch] = [:]
   public var notices = NotificationLog()
   public var settingsOpen = false
+  /// Transient UI navigation request. The sidebar selection itself belongs to the app shell.
+  public var debugNavigationGeneration = 0
+  public var debugPhase = "idle"  // transient; refreshed by the GUI before a debugger command
   public var section = "一般"
   public var palette: Palette?
   public var toggles = ["restoreLayout": true, "confirmClose": true, "showQuota": false, "preventSleepOnBattery": false, "formatOnSave": false, "showWhitespace": false, "softWrap": false, "terminalApprovals": true]
@@ -450,6 +453,61 @@ extension CommandRegistry {
       if i["muted"]!.bool! { s.notices.mutedPanes.insert(k) } else { s.notices.mutedPanes.remove(k) }
       return .ok
     },
+    // V13: all debugger controls share the typed command boundary. The GUI owns
+    // the live adapter; these commands validate targets before it performs I/O.
+    cmd("debug.open", "実行とデバッグ", .read, ai: false, shortcut: "⌘⇧D") { s, _ in
+      s.debugNavigationGeneration += 1; return .ok
+    },
+    cmd("debug.launch", "Go をデバッグ起動", .external, ai: false,
+        params: [CommandParam("program", .string), CommandParam("mode", .string, required: false, allowed: ["debug", "test", "exec"])], palette: false,
+        preflight: { s, i throws(CommandError) in
+          guard let root = s.projects.first(where: { $0.name == s.project })?.path else { throw CommandError(.preconditionFailed, "Project が開かれていません") }
+          let path = URL(fileURLWithPath: i["program"]!.string!, relativeTo: URL(fileURLWithPath: root)).standardizedFileURL.resolvingSymlinksInPath().path
+          try require(path == root || path.hasPrefix(root + "/"), "起動対象は Project 内にしてください")
+          try require(FileManager.default.fileExists(atPath: path), "起動対象がありません: \(path)")
+          try require(["idle", "ended", "failed"].contains(s.debugPhase), "デバッグセッションが既に実行中です")
+          return .external
+        }) { _, _ in .ok },
+    cmd("debug.attach", "Go プロセスに接続", .external, ai: false, params: [CommandParam("pid", .int)], palette: false,
+        preflight: { s, i throws(CommandError) in
+          try require(s.projects.contains { $0.name == s.project }, "Project が開かれていません")
+          try require(i["pid"]!.int! > 0, "PID は正の整数にしてください")
+          try require(["idle", "ended", "failed"].contains(s.debugPhase), "デバッグセッションが既に実行中です")
+          return .external
+        }) { _, _ in .ok },
+    cmd("debug.breakpoint", "ブレークポイントを切り替え", .write, ai: false,
+        params: [CommandParam("path", .string), CommandParam("line", .int)], palette: false,
+        preflight: { s, i throws(CommandError) in
+          guard let root = s.projects.first(where: { $0.name == s.project })?.path else { throw CommandError(.preconditionFailed, "Project が開かれていません") }
+          let path = URL(fileURLWithPath: i["path"]!.string!).standardizedFileURL.resolvingSymlinksInPath().path
+          try require(path.hasPrefix(root + "/"), "ファイルが Project 外です")
+          try require(FileManager.default.fileExists(atPath: path), "ファイルがありません: \(path)")
+          try require(i["line"]!.int! > 0, "行は 1 以上にしてください")
+          return .write
+        }) { _, _ in .ok },
+    cmd("debug.selectThread", "デバッグスレッドを選択", .read, ai: false,
+        params: [CommandParam("id", .int)], palette: false,
+        preflight: { s, _ throws(CommandError) in try require(s.debugPhase == "stopped", "停止中の session がありません"); return .read }) { _, _ in .ok },
+    cmd("debug.selectFrame", "スタックフレームを選択", .read, ai: false,
+        params: [CommandParam("id", .int)], palette: false,
+        preflight: { s, _ throws(CommandError) in try require(s.debugPhase == "stopped", "停止中の session がありません"); return .read }) { _, _ in .ok },
+    cmd("debug.expandVariable", "変数を展開", .read, ai: false,
+        params: [CommandParam("id", .string)], palette: false,
+        preflight: { s, _ throws(CommandError) in try require(s.debugPhase == "stopped", "停止中の session がありません"); return .read }) { _, _ in .ok },
+    cmd("debug.continue", "デバッグを続行", .write, ai: false,
+        preflight: { s, _ throws(CommandError) in try require(s.debugPhase == "stopped", "停止中の session がありません"); return .write }) { _, _ in .ok },
+    cmd("debug.pause", "デバッグを一時停止", .write, ai: false,
+        preflight: { s, _ throws(CommandError) in try require(s.debugPhase == "running", "実行中の session がありません"); return .write }) { _, _ in .ok },
+    cmd("debug.stepOver", "ステップオーバー", .write, ai: false,
+        preflight: { s, _ throws(CommandError) in try require(s.debugPhase == "stopped", "停止中の session がありません"); return .write }) { _, _ in .ok },
+    cmd("debug.stepInto", "ステップイン", .write, ai: false,
+        preflight: { s, _ throws(CommandError) in try require(s.debugPhase == "stopped", "停止中の session がありません"); return .write }) { _, _ in .ok },
+    cmd("debug.stepOut", "ステップアウト", .write, ai: false,
+        preflight: { s, _ throws(CommandError) in try require(s.debugPhase == "stopped", "停止中の session がありません"); return .write }) { _, _ in .ok },
+    cmd("debug.restart", "デバッグを再起動", .external, ai: false,
+        preflight: { s, _ throws(CommandError) in try require(!["idle", "ended"].contains(s.debugPhase), "再起動する session がありません"); return .external }) { _, _ in .ok },
+    cmd("debug.stop", "デバッグを終了", .write, ai: false,
+        preflight: { s, _ throws(CommandError) in try require(!["idle", "ended"].contains(s.debugPhase), "終了する session がありません"); return .write }) { _, _ in .ok },
     cmd("state.snapshot", "状態を取得", .read, palette: false) { s, _ in .snapshot(s) },
   ] + gitCommands
 

@@ -280,6 +280,9 @@
     let root: String?
     let path: String?
     var softWrap = false
+    var debugLine: Int? = nil
+    var debugBreakpoints: Set<Int> = []
+    var onToggleDebugBreakpoint: ((Int) -> Void)? = nil
     let onEdit: (String) -> Void
     let onCaret: (String, TextSelectionSet, TextSnapshot) -> Void
 
@@ -297,7 +300,9 @@
             breadcrumb(path)
             ZStack(alignment: .topTrailing) {
               EditorSurface(
-                manager: m, buffers: buffers, root: root, path: path, softWrap: softWrap, onCaret: { onCaret(path, $0, m.buffer.snapshot) },
+                manager: m, buffers: buffers, root: root, path: path, softWrap: softWrap,
+                debugLine: debugLine, debugBreakpoints: debugBreakpoints, onToggleDebugBreakpoint: onToggleDebugBreakpoint,
+                onCaret: { onCaret(path, $0, m.buffer.snapshot) },
                 reveal: buffers.reveal?.path == path ? buffers.reveal : nil, onEdit: { onEdit(path) }
               ).id("\(path)#\(buffers.revision(path))")
               // E11 dogfood review (2026-09-22): a small corner spinner while
@@ -353,6 +358,9 @@
     let root: String
     let path: String
     let softWrap: Bool
+    let debugLine: Int?
+    let debugBreakpoints: Set<Int>
+    let onToggleDebugBreakpoint: ((Int) -> Void)?
     let onCaret: (TextSelectionSet) -> Void
     let reveal: (path: String, line: Int, column: Int, nonce: Int)?
     let onEdit: () -> Void
@@ -377,6 +385,10 @@
       view.caretColor = NSColor(C.textPrimary); view.selectionColor = NSColor(C.debugBlue).withAlphaComponent(0.3)
       view.gutterWidth = 46
       view.lineNumberColor = NSColor(C.lineNumber); view.currentLineNumberColor = NSColor(C.textTertiary)
+      view.debugStoppedLine = debugLine; view.debugBreakpoints = debugBreakpoints
+      view.debugLineColor = NSColor(C.debugBlue).withAlphaComponent(0.14)
+      view.debugBreakpointColor = NSColor(C.danger)
+      view.onToggleBreakpoint = onToggleDebugBreakpoint
       let completion = CompletionController(language: buffers.language, path: root + "/" + path, root: root)
       completion.view = view
       context.coordinator.completion = completion
@@ -412,6 +424,11 @@
     }
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
+      if let view = scroll.documentView as? ClairEditorView {
+        view.debugStoppedLine = debugLine
+        view.debugBreakpoints = debugBreakpoints
+        view.onToggleBreakpoint = onToggleDebugBreakpoint
+      }
       if let view = scroll.documentView as? ClairEditorView, view.softWrap != softWrap {
         view.softWrap = softWrap
         scroll.hasHorizontalScroller = !softWrap

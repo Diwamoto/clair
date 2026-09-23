@@ -51,6 +51,12 @@ import ClairEditorCore
     public var lineNumberColor: NSColor = .secondaryLabelColor { didSet { needsDisplay = true } }
     /// Line number of the caret's line is drawn in this colour instead.
     public var currentLineNumberColor: NSColor = .labelColor { didSet { needsDisplay = true } }
+    /// V13: debugger decoration is a viewport overlay, never a document edit.
+    public var debugStoppedLine: Int? { didSet { needsDisplay = true } }  // 1-based
+    public var debugBreakpoints: Set<Int> = [] { didSet { needsDisplay = true } }  // 1-based
+    public var debugLineColor: NSColor = .systemBlue.withAlphaComponent(0.14) { didSet { needsDisplay = true } }
+    public var debugBreakpointColor: NSColor = .systemRed { didSet { needsDisplay = true } }
+    public var onToggleBreakpoint: ((Int) -> Void)?
     /// Called after a mouse-driven selection change. The owner is
     /// responsible for reconciling this back into its
     /// `EditorTransactionManager`; this view does not own that state.
@@ -262,6 +268,10 @@ import ClairEditorCore
       // in favor of pointing elsewhere.
       if composition != nil { inputContext?.discardMarkedText() }
       let point = convert(event.locationInWindow, from: nil)
+      if point.x >= 0, point.x < 16, let onToggleBreakpoint {
+        let (line, subrow) = rowMap.line(atRow: Int(max(point.y, 0) / lineHeight))
+        if subrow == 0 { onToggleBreakpoint(line + 1); return }
+      }
       if handleFoldClick(at: point) { return }
       if event.modifierFlags.contains(.option) {
         blockAnchor = point
@@ -408,10 +418,18 @@ import ClairEditorCore
         }
         let isComposingLine = composingLine?.value == index
         for seg in segs where seg.top + lineHeight > dirtyRect.minY && seg.top < dirtyRect.maxY {
+          if index + 1 == debugStoppedLine {
+            context.setFillColor(debugLineColor.cgColor)
+            context.fill(CGRect(x: 0, y: seg.top, width: bounds.width, height: lineHeight))
+          }
           if !isComposingLine { drawSelections(seg, context: context) }
           drawText(seg, context: context)
           if seg.isFirst, gutterWidth > 0 {
             drawLineNumber(index, top: seg.top, context: context)
+            if debugBreakpoints.contains(index + 1) {
+              context.setFillColor(debugBreakpointColor.cgColor)
+              context.fillEllipse(in: CGRect(x: 5, y: seg.top + (lineHeight - 8) / 2, width: 8, height: 8))
+            }
             drawFoldMarker(index, top: seg.top, context: context)
           }
           if !isComposingLine {

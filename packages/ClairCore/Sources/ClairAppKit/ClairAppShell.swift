@@ -25,6 +25,16 @@ import Observation
     /// U05: open editor buffers of the active Project, keyed by relative path.
     public let buffers = EditorBuffers()
     let reviews = ReviewStore()
+    /// V13: a managed worktree is a separate Project and keeps its own debug session.
+    private var debugSessions: [String: ClairDebugSession] = [:]
+    var debugSession: ClairDebugSession? { activeRoot.flatMap { debugSessions[$0] } }
+    private func debugger() -> ClairDebugSession? {
+      guard let project = state.projects.first(where: { $0.name == state.project }) else { return nil }
+      if let existing = debugSessions[project.path] { return existing }
+      let session = ClairDebugSession(project: project)
+      debugSessions[project.path] = session
+      return session
+    }
 
     /// V09: update flow state (Stable only; Dev has no feed).
     public enum UpdateStatus: Equatable { case idle, checking, available(ClairUpdate), installing, failed(String) }
@@ -155,6 +165,17 @@ import Observation
 
     @discardableResult
     public func run(_ id: String, _ input: CommandInput = [:], confirmed: Bool = false) -> Result<CommandResult, CommandError> {
+      if id.hasPrefix("debug.") {
+        state.debugPhase = switch debugSession?.phase {
+        case .idle, nil: "idle"
+        case .starting: "starting"
+        case .configuring: "configuring"
+        case .running: "running"
+        case .stopped: "stopped"
+        case .ended: "ended"
+        case .failed: "failed"
+        }
+      }
       // `file.save` from any caller (⌘S, CLI, MCP) writes the buffer first; a failed write keeps the dirty marker.
       if id == "file.save", let p = state.active, let root = activeRoot, buffers.isOpen(p) {
         do {
@@ -188,6 +209,7 @@ import Observation
           buffers.reveal(p, line: line, column: column)
         }
         if id == "editor.definition" || id == "editor.references" { navigate(references: id == "editor.references") }
+        if id.hasPrefix("debug.") { runDebugCommand(id, input) }
         if let view = state.active.flatMap(buffers.view) {
           switch id {
           case "editor.fold": view.foldAtCaret()
@@ -205,6 +227,34 @@ import Observation
         persistState()
       }
       return r
+    }
+
+    private func runDebugCommand(_ id: String, _ input: CommandInput) {
+      guard let session = debugger() else { return }
+      switch id {
+      case "debug.launch":
+        guard case .string(let program)? = input["program"] else { return }
+        let mode: String = if case .string(let value)? = input["mode"] { value } else { "debug" }
+        Task { await session.start(.launch(program: program, mode: mode)) }
+      case "debug.attach":
+        guard case .int(let pid)? = input["pid"] else { return }
+        Task { await session.start(.attach(pid: pid)) }
+      case "debug.breakpoint":
+        guard case .string(let path)? = input["path"], case .int(let line)? = input["line"] else { return }
+        session.toggleBreakpoint(path: URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath().path, line: line)
+      case "debug.selectThread":
+        if case .int(let id)? = input["id"] { session.selectThread(id) }
+      case "debug.selectFrame":
+        if case .int(let id)? = input["id"] { session.selectFrame(id) }
+      case "debug.expandVariable":
+        if case .string(let id)? = input["id"], let variable = session.variables.first(where: { $0.id == id }) { session.expandVariable(variable) }
+      case "debug.continue", "debug.pause", "debug.stepOver", "debug.stepInto", "debug.stepOut":
+        let request = ["debug.stepOver": "next", "debug.stepInto": "stepIn", "debug.stepOut": "stepOut"][id] ?? String(id.dropFirst(6))
+        Task { await session.control(request) }
+      case "debug.restart": Task { await session.restart() }
+      case "debug.stop": Task { await session.stop() }
+      default: break
+      }
     }
 
     // MARK: - E12 language-server navigation
@@ -575,6 +625,8 @@ import Observation
     @State private var selection = 0
     // U05: sidebar mode + source-control view. GUI-local (no command); the stage buttons go through git.stage/unstage.
     @State private var sidebarMode = "folder"
+    @State private var debugMode = "debug"
+    @State private var debugPID = ""
     @State private var quota: [ProviderQuota] = []
     @State private var collapsedGroups: Set<String> = []
     @State private var rootFolded = false
@@ -643,6 +695,10 @@ import Observation
         query = ""; selection = 0
         if st.palette == .search { searchSelection = 0; runSearch() }
       }
+      .onChange(of: st.debugNavigationGeneration) { sidebarMode = "ladybug" }
+      .onChange(of: store.debugSession?.frames.first) { _, frame in
+        if sidebarMode == "ladybug", let frame { openDebugFrame(frame) }
+      }
       .onChange(of: st.project) {
         diff = nil; loadedDiff = nil; gitMessage = nil; gitFailed = false
         if !st.isRepo && sidebarMode == "shield" { sidebarMode = "folder" }
@@ -654,9 +710,10 @@ import Observation
       .onAppear { rebuildExplorer(); reloadChanges() }
       .focusedSceneValue(\.clairWorkbench, store)
       .confirmationDialog(
-        "未保存の変更を破棄しますか？", isPresented: Binding(get: { store.pending != nil }, set: { if !$0 { store.pending = nil } })
+        store.pending?.id == "debug.restart" ? "デバッグを再起動しますか？" : "未保存の変更を破棄しますか？", isPresented: Binding(get: { store.pending != nil }, set: { if !$0 { store.pending = nil } })
       ) {
-        Button("破棄して続行", role: .destructive) { store.confirm() }
+        if store.pending?.id == "debug.restart" { Button("再起動") { store.confirm() } }
+        else { Button("破棄して続行", role: .destructive) { store.confirm() } }
       }
       .overlay(alignment: .topTrailing) {
         if let a = store.mcpApproval {
@@ -797,18 +854,19 @@ import Observation
     }
 
     private func activityBarButton(_ icon: String) -> some View {
-      let ready = icon != "ladybug" && (icon != "shield" || st.isRepo)
+      let ready = icon != "shield" || st.isRepo
       return ActivityBarButton(icon: icon, on: sidebarMode == icon && !st.settingsOpen, enabled: ready, badge: icon == "bell" && st.notices.unread() > 0) {
         sidebarMode = icon
         if icon == "folder" { diff = nil }
         if icon == "shield" { reloadChanges() }
+        if icon == "ladybug" { store.run("debug.open") }
       }
     }
 
     private var sidebar: some View {
       VStack(spacing: 0) {
         // Lazy: a Project can list thousands of files, and an eager tree makes accessibility traversal (and layout) block the main thread.
-        ScrollView { LazyVStack(alignment: .leading, spacing: 0) { sidebarMode == "clock.arrow.circlepath" ? AnyView(historyPanel) : sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "bell" ? AnyView(noticeList) : sidebarMode == "terminal" ? AnyView(sessionList) : AnyView(explorer) } }
+        ScrollView { LazyVStack(alignment: .leading, spacing: 0) { sidebarMode == "clock.arrow.circlepath" ? AnyView(historyPanel) : sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "bell" ? AnyView(noticeList) : sidebarMode == "terminal" ? AnyView(sessionList) : sidebarMode == "ladybug" ? AnyView(debugPanel) : AnyView(explorer) } }
         Spacer(minLength: 0)
       }
       .frame(width: 242)
@@ -1178,6 +1236,175 @@ import Observation
       Button("Finder で表示") { full.map { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: $0)]) } }.disabled(full == nil)
     }
 
+    // MARK: V13 Debug (Workbench Debug screen, with VS Code style run configuration)
+
+    private var debugPanel: some View {
+      VStack(alignment: .leading, spacing: 0) {
+        Text("実行とデバッグ").font(.system(size: 11, weight: .semibold)).foregroundStyle(C.textTertiary)
+          .padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 8)
+        HStack(spacing: 6) {
+          Picker("構成", selection: $debugMode) {
+            Text("Go: 現在のファイル").tag("debug")
+            Text("Go: 現在の package をテスト").tag("test")
+            Text("プロセスに attach").tag("attach")
+          }
+          .labelsHidden().controlSize(.small)
+          Button { startDebugFromUI() } label: { Image(systemName: "play.fill").foregroundStyle(C.debugBlue) }
+            .buttonStyle(.plain).help("デバッグを開始")
+            .disabled(debugMode == "attach" ? (Int(debugPID) ?? 0) <= 0 : !(st.active?.hasSuffix(".go") ?? false))
+        }.padding(.horizontal, 12)
+        if debugMode == "attach" {
+          TextField("PID", text: $debugPID).textFieldStyle(.roundedBorder).padding(.horizontal, 12).padding(.top, 6)
+        }
+        Text(debugSetupMessage)
+          .font(.system(size: 11)).foregroundStyle(C.textTertiary)
+          .padding(.horizontal, 12).padding(.top, 8).fixedSize(horizontal: false, vertical: true)
+        debugSection("ブレークポイント")
+        if let session = store.debugSession, !session.breakpoints.isEmpty {
+          ForEach(session.breakpoints.keys.sorted(), id: \.self) { path in
+            ForEach((session.breakpoints[path] ?? []).sorted(), id: \.self) { line in
+              let status = session.breakpointStatus[path]?[line]
+              Button { _ = store.run("debug.breakpoint", ["path": .string(path), "line": .int(line)]) } label: {
+                Label("\(URL(fileURLWithPath: path).lastPathComponent):\(status?.line ?? line)",
+                  systemImage: status?.verified == true ? "circle.fill" : "circle.dotted")
+                  .font(.system(size: 11)).foregroundStyle(status?.verified == false ? C.attention : C.textSecondary)
+              }.buttonStyle(.plain).help(status?.message ?? (status == nil ? "未検証" : "検証済み"))
+                .padding(.horizontal, 12).padding(.vertical, 3)
+            }
+          }
+        } else { debugEmpty("設定されていません") }
+        Button { toggleBreakpointAtCaret() } label: { Label("現在の行に追加", systemImage: "plus") }
+          .buttonStyle(.plain).font(.system(size: 11)).padding(.horizontal, 12).padding(.top, 6)
+          .disabled(st.active == nil)
+        debugSection("スレッドとコールスタック")
+        if let session = store.debugSession, !session.threads.isEmpty {
+          ForEach(session.threads) { thread in
+            Button { _ = store.run("debug.selectThread", ["id": .int(thread.id)]) } label: {
+              Label(thread.name, systemImage: session.selectedThread == thread.id ? "checkmark.circle.fill" : "circle.grid.2x2")
+                .font(.system(size: 11)).foregroundStyle(session.selectedThread == thread.id ? C.textPrimary : C.textTertiary)
+            }.buttonStyle(.plain).padding(.horizontal, 12).padding(.vertical, 3)
+          }
+        }
+        if let session = store.debugSession, !session.frames.isEmpty {
+          ForEach(session.frames) { frame in
+            Button { _ = store.run("debug.selectFrame", ["id": .int(frame.id)]); openDebugFrame(frame) } label: {
+              VStack(alignment: .leading, spacing: 2) {
+                Text(frame.name).foregroundStyle(C.textPrimary).lineLimit(1)
+                Text(frame.path.map { "\(URL(fileURLWithPath: $0).lastPathComponent):\(frame.line)" } ?? "場所不明")
+                  .foregroundStyle(C.textQuaternary)
+              }.font(.system(size: 11)).frame(maxWidth: .infinity, alignment: .leading)
+            }.buttonStyle(.plain).padding(.horizontal, 12).padding(.vertical, 4)
+              .background(session.selectedFrame == frame.id ? C.chromeRaised : Color.clear)
+          }
+        } else { debugEmpty("停止すると表示されます") }
+        debugSection("変数")
+        if let session = store.debugSession, !session.variables.isEmpty {
+          ForEach(session.variables) { variable in
+            Button { _ = store.run("debug.expandVariable", ["id": .string(variable.id)]) } label: {
+              HStack(alignment: .top, spacing: 4) {
+                Image(systemName: variable.reference > 0 ? "chevron.right" : "")
+                  .frame(width: 10)
+                VStack(alignment: .leading, spacing: 2) {
+                  Text(variable.name).foregroundStyle(C.textPrimary)
+                  Text(variable.value).foregroundStyle(C.textQuaternary).lineLimit(2)
+                }
+                Spacer(minLength: 0)
+              }.font(.system(size: 11)).padding(.leading, 12 + CGFloat(variable.depth * 12)).padding(.trailing, 12).padding(.vertical, 4)
+            }.buttonStyle(.plain).disabled(variable.reference == 0)
+          }
+        } else { debugEmpty("停止すると表示されます") }
+      }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func debugSection(_ title: String) -> some View {
+      Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(C.textTertiary)
+        .padding(.horizontal, 12).padding(.top, 16).padding(.bottom, 5)
+    }
+    private func debugEmpty(_ text: String) -> some View {
+      Text(text).font(.system(size: 11)).foregroundStyle(C.textQuaternary).padding(.horizontal, 12)
+    }
+
+    private var debugSetupMessage: String {
+      guard let session = store.debugSession else { return "Go ファイルを開き、構成を選んで開始してください。Delve (dlv) が必要です。" }
+      switch session.phase {
+      case .idle: return "構成を選んで開始してください。"
+      case .starting: return "Delve に接続中…"
+      case .configuring: return "ブレークポイントを設定中…"
+      case .running: return "実行中 · \(session.project.name)"
+      case .stopped: return "停止: \(session.stoppedReason ?? "一時停止")"
+      case .ended: return "デバッグセッションは終了しました"
+      case .failed(let error): return error
+      }
+    }
+
+    private func startDebugFromUI() {
+      if debugMode == "attach" {
+        guard let pid = Int(debugPID), pid > 0 else { return }
+        _ = store.run("debug.attach", ["pid": .int(pid)], confirmed: true)
+      } else {
+        guard let rel = st.active, rel.hasSuffix(".go"), let root = store.activeRoot else { return }
+        let program = debugMode == "test" ? URL(fileURLWithPath: root + "/" + rel).deletingLastPathComponent().path : root + "/" + rel
+        _ = store.run("debug.launch", ["program": .string(program), "mode": .string(debugMode)], confirmed: true)
+      }
+    }
+
+    private func toggleBreakpointAtCaret() {
+      guard let rel = st.active, let root = store.activeRoot, let caret = store.buffers.caret[rel] else { return }
+      _ = store.run("debug.breakpoint", ["path": .string(root + "/" + rel), "line": .int(caret.line)])
+    }
+
+    private func openDebugFrame(_ frame: ClairDebugSession.Frame) {
+      guard let path = frame.path, let root = store.activeRoot, path.hasPrefix(root + "/") else { return }
+      _ = store.run("file.open", ["path": .string(path), "line": .int(frame.line)])
+    }
+
+    private var debugMain: some View {
+      VStack(spacing: 0) {
+        HStack(spacing: 4) {
+          debugAction("play.fill", "続行", "debug.continue", enabled: store.debugSession?.phase == .stopped)
+          debugAction("pause.fill", "一時停止", "debug.pause", enabled: store.debugSession?.phase == .running)
+          debugAction("arrow.turn.down.right", "ステップオーバー", "debug.stepOver", enabled: store.debugSession?.phase == .stopped)
+          debugAction("arrow.down.right", "ステップイン", "debug.stepInto", enabled: store.debugSession?.phase == .stopped)
+          debugAction("arrow.up.right", "ステップアウト", "debug.stepOut", enabled: store.debugSession?.phase == .stopped)
+          Rectangle().fill(L.hairline).frame(width: 1, height: 18).padding(.horizontal, 4)
+          debugAction("arrow.clockwise", "再起動", "debug.restart", enabled: store.debugSession != nil)
+          debugAction("stop.fill", "終了", "debug.stop", enabled: store.debugSession != nil)
+          Spacer(minLength: 0)
+          Text(debugSetupMessage).font(.system(size: 11)).foregroundStyle(C.textTertiary).lineLimit(1)
+        }.padding(.horizontal, 12).frame(height: 42).background(C.chromeRaised)
+        EditorPane(buffers: store.buffers, root: store.activeRoot, path: st.active,
+          softWrap: st.toggles["softWrap"] == true,
+          debugLine: store.debugSession?.frames.first(where: { $0.id == store.debugSession?.selectedFrame }).flatMap { $0.path == store.activeRoot.map { $0 + "/" + (st.active ?? "") } ? $0.line : nil },
+          debugBreakpoints: Set(store.debugSession?.breakpointStatus[(store.activeRoot ?? "") + "/" + (st.active ?? "")]?.values
+            .filter(\.verified).map(\.line) ?? []),
+          onToggleDebugBreakpoint: { line in
+            guard let root = store.activeRoot, let path = st.active else { return }
+            _ = store.run("debug.breakpoint", ["path": .string(root + "/" + path), "line": .int(line)])
+          },
+          onEdit: { store.edited($0) }, onCaret: { store.buffers.setCaret($0, $1, in: $2) })
+        Rectangle().fill(L.paneDivider).frame(height: 1)
+        VStack(alignment: .leading, spacing: 0) {
+          Text("デバッグコンソール").font(.system(size: 11, weight: .semibold)).foregroundStyle(C.textQuaternary)
+            .padding(.horizontal, 12).frame(height: 26)
+          Rectangle().fill(L.hairline).frame(height: 1)
+          ScrollView {
+            LazyVStack(alignment: .leading, spacing: 2) {
+              ForEach(Array((store.debugSession?.console ?? []).enumerated()), id: \.offset) { _, line in
+                Text(line).font(.system(size: 11, design: .monospaced)).foregroundStyle(C.textTertiary)
+              }
+            }.padding(8).frame(maxWidth: .infinity, alignment: .leading)
+          }
+        }.frame(height: 160).background(C.canvas)
+      }
+    }
+
+    private func debugAction(_ symbol: String, _ title: String, _ command: String, enabled: Bool) -> some View {
+      Button { _ = store.run(command, confirmed: command == "debug.restart") } label: {
+        Image(systemName: symbol).font(.system(size: 12)).foregroundStyle(command == "debug.stop" ? C.danger : C.textSecondary)
+          .frame(width: 28, height: 28)
+      }.buttonStyle(.plain).help(title).disabled(!enabled)
+    }
+
     // MARK: main
 
     private func name(_ path: String) -> String { String(path.split(separator: "/").last ?? "") }
@@ -1209,7 +1436,8 @@ import Observation
 
     private var main: some View {
       VStack(spacing: 0) {
-        if let d = diff, let root = store.activeRoot, let loaded = loadedDiff,
+        if sidebarMode == "ladybug" { debugMain }
+        else if let d = diff, let root = store.activeRoot, let loaded = loadedDiff,
           loaded.target == d, loaded.root == root
         {
           let fileLines = loaded.fileLines

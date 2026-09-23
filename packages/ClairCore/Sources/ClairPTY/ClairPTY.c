@@ -1,4 +1,10 @@
 #include "ClairPTY.h"
+#include <spawn.h>
+#include <fcntl.h>
+#include <pthread.h>
+#include <signal.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #include <TargetConditionals.h>
 #if defined(__APPLE__) && !TARGET_OS_IPHONE
 #include <errno.h>
@@ -238,3 +244,59 @@ int clair_pty_spawn(const char *p, char *const a[], char *const e[], int c,
                     uint16_t r, uint16_t n, clair_pty_handle *h) { return ENOTSUP; }
 int clair_pty_resize(int fd, uint16_t r, uint16_t c) { return -1; }
 #endif
+
+// At normal app exit, no debugger process group may outlive Clair. Explicit
+// stop unregisters after reaping; the fixed cap also bounds leaked adapters.
+static pthread_mutex_t isolated_lock = PTHREAD_MUTEX_INITIALIZER;
+static pid_t isolated_pids[32];
+static pthread_once_t isolated_once = PTHREAD_ONCE_INIT;
+static void stop_isolated_at_exit(void) {
+  pthread_mutex_lock(&isolated_lock);
+  for (size_t i = 0; i < 32; ++i) if (isolated_pids[i] > 0) kill(-isolated_pids[i], SIGKILL);
+  pthread_mutex_unlock(&isolated_lock);
+}
+static void register_isolated_cleanup(void) { atexit(stop_isolated_at_exit); }
+
+void clair_unregister_isolated(int32_t pid) {
+  pthread_mutex_lock(&isolated_lock);
+  for (size_t i = 0; i < 32; ++i) if (isolated_pids[i] == pid) isolated_pids[i] = 0;
+  pthread_mutex_unlock(&isolated_lock);
+}
+
+int clair_spawn_isolated(const char *path, char *const argv[], char *const envp[],
+                        const char *cwd, int32_t *pid) {
+  posix_spawn_file_actions_t actions;
+  posix_spawnattr_t attr;
+  int error = posix_spawn_file_actions_init(&actions);
+  if (error) return error;
+  error = posix_spawnattr_init(&attr);
+  if (error) { posix_spawn_file_actions_destroy(&actions); return error; }
+  error = posix_spawn_file_actions_addchdir_np(&actions, cwd);
+  if (!error) error = posix_spawn_file_actions_addopen(&actions, 0, "/dev/null", O_RDONLY, 0);
+  if (!error) error = posix_spawn_file_actions_addopen(&actions, 1, "/dev/null", O_WRONLY, 0);
+  if (!error) error = posix_spawn_file_actions_addopen(&actions, 2, "/dev/null", O_WRONLY, 0);
+  if (!error) error = posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETPGROUP);
+  if (!error) error = posix_spawnattr_setpgroup(&attr, 0);
+  if (!error) {
+    pid_t child = 0;
+    error = posix_spawn(&child, path, &actions, &attr, argv, envp);
+    if (!error) {
+      pthread_once(&isolated_once, register_isolated_cleanup);
+      pthread_mutex_lock(&isolated_lock);
+      size_t slot = 0;
+      while (slot < 32 && isolated_pids[slot] > 0) ++slot;
+      if (slot == 32) {
+        kill(-child, SIGKILL);
+        waitpid(child, NULL, 0);
+        error = ENOSPC;
+      } else {
+        isolated_pids[slot] = child;
+        *pid = (int32_t)child;
+      }
+      pthread_mutex_unlock(&isolated_lock);
+    }
+  }
+  posix_spawnattr_destroy(&attr);
+  posix_spawn_file_actions_destroy(&actions);
+  return error;
+}
