@@ -54,12 +54,13 @@ import ClairEditorCore
       // rect (not `bounds`) for a view with no window — intersect with
       // `bounds` so that degenerate case still yields a real, in-range
       // rect instead of feeding a huge/NaN-adjacent value into line math.
-      let visible = EditorViewGeometry.visibleLineRange(
-        visibleRect: bounds.intersection(visibleRect), lineHeight: lineHeight,
-        lineCount: snapshot.lineCount)
-      guard !visible.isEmpty,
-        let firstLine = try? snapshot.line(at: TextLineIndex(visible.lowerBound)),
-        let lastLine = try? snapshot.line(at: TextLineIndex(visible.upperBound - 1)),
+      let rect = bounds.intersection(visibleRect)
+      let rows = rect.height > 0
+        ? Int((rect.minY / lineHeight).rounded(.down))..<(Int(((rect.maxY - 0.001) / lineHeight).rounded(.down)) + 1) : 0..<0
+      let visible = rowMap.lines(inRows: rows)
+      guard let firstIndex = visible.first?.line, let lastIndex = visible.last?.line,
+        let firstLine = try? snapshot.line(at: TextLineIndex(firstIndex)),
+        let lastLine = try? snapshot.line(at: TextLineIndex(lastIndex)),
         let start = try? snapshot.convert(firstLine.contentRange.lowerBound, to: UTF16Unit.self)
           .value,
         let end = try? snapshot.convert(lastLine.contentRange.upperBound, to: UTF16Unit.self).value

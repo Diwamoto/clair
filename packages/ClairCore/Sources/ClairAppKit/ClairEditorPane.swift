@@ -28,11 +28,12 @@
     /// Full parse, for a freshly opened file. `nil`/empty covers both "no
     /// vendored grammar for this extension" and "grammar/query failed to
     /// build" — either way the file still opens, just colorless.
-    func reset(_ path: String, snapshot: TextSnapshot) -> [EditorHighlightSpan] {
+    func reset(_ path: String, snapshot: TextSnapshot) -> SyntaxResult {
       guard let id = EditorLanguageID.detect(path: path), let highlighter = try? SyntaxHighlighter(languageID: id)
-      else { return [] }
+      else { return SyntaxResult(spans: [], folds: [], revision: snapshot.revision) }
       highlighters[path] = highlighter
-      return (try? highlighter.reset(to: snapshot)) ?? []
+      let spans = (try? highlighter.reset(to: snapshot)) ?? []
+      return SyntaxResult(spans: spans, folds: highlighter.foldRanges, revision: snapshot.revision)
     }
 
     /// Differential reparse (`SyntaxParser.update`, never a from-scratch
@@ -41,9 +42,26 @@
     /// `reset`) so the caller knows to leave whatever it already has alone.
     func update(
       _ path: String, edits: [TextEdit], oldSnapshot: TextSnapshot, newSnapshot: TextSnapshot
-    ) -> [EditorHighlightSpan]? {
-      guard let highlighter = highlighters[path] else { return nil }
-      return try? highlighter.update(edits: edits, oldSnapshot: oldSnapshot, newSnapshot: newSnapshot)
+    ) -> SyntaxResult? {
+      guard let highlighter = highlighters[path],
+        let spans = try? highlighter.update(edits: edits, oldSnapshot: oldSnapshot, newSnapshot: newSnapshot)
+      else { return nil }
+      return SyntaxResult(spans: spans, folds: highlighter.foldRanges, revision: newSnapshot.revision)
+    }
+  }
+
+  /// One parse's highlights and E13 fold candidates, tagged with the revision they describe.
+  struct SyntaxResult: Sendable {
+    let spans: [EditorHighlightSpan]
+    let folds: [TextUTF8Range]
+    let revision: TextRevision
+
+    /// Paints the result; fold candidates only land on the revision they were computed for
+    /// (`INV-REV-004` — a stale one would fold the wrong lines; the view maps the old set meanwhile).
+    @MainActor func apply(to view: ClairEditorView?) {
+      guard let view else { return }
+      view.highlights = spans
+      if view.snapshot.revision == revision { view.foldRanges = folds }
     }
   }
 
@@ -94,6 +112,7 @@
         pending?.task.cancel()
         if hadLoad || pending != nil { revisions[path, default: 0] += 1 }
         if let open = languagePaths.removeValue(forKey: path) { language.close(open.path, root: open.root) }
+        savedFolds[path] = nil
       }
       dropHighlights(paths)
     }
@@ -136,16 +155,16 @@
     /// through `EditorTransactionManager`, so it cannot advance the content
     /// revision (`INV-REV-002`).
     func startHighlighting(
-      _ path: String, manager: EditorTransactionManager, onSpans: @escaping ([EditorHighlightSpan]) -> Void
+      _ path: String, manager: EditorTransactionManager, onSpans: @escaping (SyntaxResult) -> Void
     ) {
       guard highlightTasks[path] == nil else { return }
       highlightsLoading.insert(path)
       let snapshot = manager.buffer.snapshot
       let syntax = self.syntax
       highlightTasks[path] = Task { [weak self] in
-        let spans = await syntax.reset(path, snapshot: snapshot)
+        let result = await syntax.reset(path, snapshot: snapshot)
         guard !Task.isCancelled else { return }
-        onSpans(spans)
+        onSpans(result)
         self?.highlightsLoading.remove(path)
         self?.highlightTasks.removeValue(forKey: path)
       }
@@ -156,14 +175,33 @@
     /// `view.highlights`, never `manager`.
     func updateHighlights(
       _ path: String, edits: [TextEdit], oldSnapshot: TextSnapshot, newSnapshot: TextSnapshot,
-      onSpans: @escaping ([EditorHighlightSpan]) -> Void
+      onSpans: @escaping (SyntaxResult) -> Void
     ) {
       let syntax = self.syntax
       Task {
-        guard let spans = await syntax.update(path, edits: edits, oldSnapshot: oldSnapshot, newSnapshot: newSnapshot)
+        guard let result = await syntax.update(path, edits: edits, oldSnapshot: oldSnapshot, newSnapshot: newSnapshot)
         else { return }
         guard !Task.isCancelled else { return }
-        onSpans(spans)
+        onSpans(result)
+      }
+    }
+
+    // MARK: - E13 folding
+
+    /// Folds per path with the revision they were last valid at, so a rebuilt view (tab switch) restores them.
+    private var savedFolds: [String: (revision: TextRevision, folds: [TextUTF8Range])] = [:]
+    private var views: [String: WeakView] = [:]
+    private struct WeakView { weak var view: ClairEditorView? }
+
+    /// The live editor view of `path`, for commands that act on its caret (fold/unfold).
+    func view(_ path: String) -> ClairEditorView? { views[path]?.view }
+
+    func attachFolds(_ path: String, view: ClairEditorView) {
+      views[path] = WeakView(view: view)
+      if let saved = savedFolds[path], saved.revision == view.snapshot.revision { view.folds = saved.folds }
+      view.onFoldsChange = { [weak self, weak view] folds in
+        guard let view else { return }
+        self?.savedFolds[path] = (view.snapshot.revision, folds)
       }
     }
 
@@ -241,6 +279,7 @@
     let buffers: EditorBuffers
     let root: String?
     let path: String?
+    var softWrap = false
     let onEdit: (String) -> Void
     let onCaret: (String, TextSelectionSet, TextSnapshot) -> Void
 
@@ -258,7 +297,7 @@
             breadcrumb(path)
             ZStack(alignment: .topTrailing) {
               EditorSurface(
-                manager: m, buffers: buffers, root: root, path: path, onCaret: { onCaret(path, $0, m.buffer.snapshot) },
+                manager: m, buffers: buffers, root: root, path: path, softWrap: softWrap, onCaret: { onCaret(path, $0, m.buffer.snapshot) },
                 reveal: buffers.reveal?.path == path ? buffers.reveal : nil, onEdit: { onEdit(path) }
               ).id("\(path)#\(buffers.revision(path))")
               // E11 dogfood review (2026-09-22): a small corner spinner while
@@ -313,6 +352,7 @@
     let buffers: EditorBuffers
     let root: String
     let path: String
+    let softWrap: Bool
     let onCaret: (TextSelectionSet) -> Void
     let reveal: (path: String, line: Int, column: Int, nonce: Int)?
     let onEdit: () -> Void
@@ -353,8 +393,8 @@
         // E11: background differential reparse; never blocks this closure,
         // never touches `manager` (INV-REV-002 — see `updateHighlights`'s
         // doc comment).
-        buffers.updateHighlights(path, edits: edits, oldSnapshot: old, newSnapshot: new) { [weak view] spans in
-          view?.highlights = spans
+        buffers.updateHighlights(path, edits: edits, oldSnapshot: old, newSnapshot: new) { [weak view] in
+          $0.apply(to: view)
         }
       }
       view.onSelectionChange = { [weak manager, onCaret, weak completion] in
@@ -363,12 +403,19 @@
       scroll.documentView = view
       // E11: kick off this file's initial background highlight parse once,
       // when its `ClairEditorView` is first created.
-      buffers.startHighlighting(path, manager: manager) { [weak view] spans in view?.highlights = spans }
+      buffers.startHighlighting(path, manager: manager) { [weak view] in $0.apply(to: view) }
+      view.softWrap = softWrap
+      scroll.hasHorizontalScroller = !softWrap
+      buffers.attachFolds(path, view: view)
       buffers.attachLanguage(path, root: root, snapshot: manager.buffer.snapshot, view: view)
       return scroll
     }
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
+      if let view = scroll.documentView as? ClairEditorView, view.softWrap != softWrap {
+        view.softWrap = softWrap
+        scroll.hasHorizontalScroller = !softWrap
+      }
       guard let r = reveal, r.nonce != context.coordinator.nonce, let view = scroll.documentView as? ClairEditorView else { return }
       context.coordinator.nonce = r.nonce
       DispatchQueue.main.async { view.reveal(line: r.line - 1, utf16Column: r.column) }  // after the new view is laid out and in a window

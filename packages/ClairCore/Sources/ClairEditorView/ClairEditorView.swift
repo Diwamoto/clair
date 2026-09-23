@@ -21,7 +21,9 @@ import ClairEditorCore
     // `internal(set)`, not `private(set)`: E07's editing/IME/drag extensions
     // (separate files, same module) update selection locally the same way
     // this file's mouse handling always has.
-    public internal(set) var selection: TextSelectionSet
+    public internal(set) var selection: TextSelectionSet {
+      didSet { openFoldsAroundSelection() }
+    }
     public var highlights: [EditorHighlightSpan] = [] {
       didSet {
         renderer.invalidateAll()
@@ -62,6 +64,37 @@ import ClairEditorCore
     /// composition is live); returning true swallows it. The completion list
     /// uses this for ↑↓/Return/Tab/Esc.
     public var keyInterceptor: ((NSEvent) -> Bool)?
+    /// Copy/cut/paste target. Tests pass a private one so parallel runs never race on (or clobber) the user's clipboard.
+    public var pasteboard: NSPasteboard = .general
+
+    // E13 (`ClairEditorView+Rows.swift`).
+    /// Wrap long lines to the view width instead of scrolling sideways.
+    public var softWrap = false {
+      didSet {
+        guard softWrap != oldValue else { return }
+        recomputeWraps()
+        knownContentWidth = 0
+        syncFrameSize()
+        needsDisplay = true
+      }
+    }
+    /// Foldable syntax ranges from the host's parse (one per header line, sorted); mapped through edits.
+    public var foldRanges: [TextUTF8Range] = [] { didSet { needsDisplay = true } }
+    /// Currently folded ranges (each one of `foldRanges` at the time it was folded).
+    public var folds: [TextUTF8Range] = [] {
+      didSet {
+        guard folds != oldValue else { return }
+        recomputeHidden()
+        syncFrameSize()
+        needsDisplay = true
+        onFoldsChange?(folds)
+      }
+    }
+    /// Called whenever `folds` changes, so a host can restore them on a rebuilt view.
+    public var onFoldsChange: (([TextUTF8Range]) -> Void)?
+    var rowMap: EditorRowMap
+    var wrapColumns = 80
+    let charAdvance: CGFloat
 
     let renderer: EditorLineRenderer
     let font: NSFont
@@ -96,6 +129,9 @@ import ClairEditorCore
       let natural = (font.ascender - font.descender + font.leading).rounded(.up)
       self.lineHeight = max(lineHeight ?? natural, natural)
       self.baselineShift = ((self.lineHeight - natural) / 2).rounded(.down)
+      self.rowMap = EditorRowMap(lineCount: snapshot.lineCount)
+      let digit = CTLineCreateWithAttributedString(NSAttributedString(string: "0", attributes: [.font: font]))
+      self.charAdvance = max(CGFloat(CTLineGetTypographicBounds(digit, nil, nil, nil)), 1)
       super.init(frame: .zero)
       wantsLayer = true
       registerForDraggedTypes([.string])
@@ -135,6 +171,8 @@ import ClairEditorCore
       self.highlights = highlights
       self.diagnostics = diagnostics
       renderer.invalidateAll()
+      folds = []
+      recomputeWraps()
       knownContentWidth = 0
       syncFrameSize()
       needsDisplay = true
@@ -147,11 +185,14 @@ import ClairEditorCore
       selection: TextSelectionSet
     ) {
       renderer.invalidate(edits: edits, in: oldSnapshot)
+      let sorted = edits.sorted { $0.range.lowerBound.value < $1.range.lowerBound.value }
       if !diagnostics.isEmpty {
-        let sorted = edits.sorted { $0.range.lowerBound.value < $1.range.lowerBound.value }
         diagnostics = diagnostics.map { $0.mapped(through: sorted) }
       }
       self.snapshot = newSnapshot
+      updateWraps(sorted, old: oldSnapshot)
+      mapFolds(through: sorted, old: oldSnapshot)
+      if !folds.isEmpty { recomputeHidden() }
       self.selection = selection
       syncFrameSize()
       needsDisplay = true
@@ -163,9 +204,10 @@ import ClairEditorCore
     public func reveal(line: Int) {
       let i = min(max(line, 0), snapshot.lineCount - 1)
       guard let l = try? snapshot.line(at: TextLineIndex(i)) else { return }
-      selection = TextSelectionSet(cursor: l.contentRange.lowerBound)
+      selection = TextSelectionSet(cursor: l.contentRange.lowerBound)  // opens a fold around it first
       onSelectionChange?(selection)
-      scrollToVisible(NSRect(x: 0, y: CGFloat(i) * lineHeight - 3 * lineHeight, width: 1, height: 7 * lineHeight))
+      syncFrameSize()
+      scrollToVisible(NSRect(x: 0, y: rowTop(i) - 3 * lineHeight, width: 1, height: 7 * lineHeight))
       window?.makeFirstResponder(self)
       needsDisplay = true
     }
@@ -186,8 +228,9 @@ import ClairEditorCore
 
     private func syncFrameSize() {
       let clipWidth = enclosingScrollView?.contentView.bounds.width ?? bounds.width
-      let width = max(knownContentWidth, clipWidth)
-      let height = CGFloat(snapshot.lineCount) * lineHeight
+      if softWrap, currentWrapColumns() != wrapColumns { recomputeWraps() }
+      let width = softWrap ? clipWidth : max(knownContentWidth, clipWidth)
+      let height = CGFloat(rowMap.rowCount) * lineHeight
       let newSize = NSSize(width: width, height: height)
       guard newSize != frame.size else { return }
       setFrameSize(newSize)
@@ -199,20 +242,7 @@ import ClairEditorCore
     /// document offset, snapping to the nearest character boundary CoreText
     /// reports for that line.
     public func hitTestOffset(at point: NSPoint) -> UTF8Offset? {
-      guard snapshot.lineCount > 0 else { return nil }
-      let index = EditorViewGeometry.lineIndex(
-        atY: point.y, lineHeight: lineHeight, lineCount: snapshot.lineCount)
-      guard
-        let (textLine, ctLine) = try? renderer.line(
-          at: TextLineIndex(index), in: snapshot, highlights: highlights,
-          colorOverrides: tokenColors)
-      else { return nil }
-      let localX = point.x - textInset
-      let charIndex = CTLineGetStringIndexForPosition(ctLine, CGPoint(x: localX, y: 0))
-      guard charIndex != kCFNotFound else { return nil }
-      let position = TextLinePosition<UTF16Unit>(
-        line: textLine.index, column: UTF16Offset(charIndex))
-      return try? snapshot.offset(at: position, rounding: .down)
+      rowHitTest(point)
     }
 
     // MARK: - Mouse / selection
@@ -230,6 +260,7 @@ import ClairEditorCore
       // in favor of pointing elsewhere.
       if composition != nil { inputContext?.discardMarkedText() }
       let point = convert(event.locationInWindow, from: nil)
+      if handleFoldClick(at: point) { return }
       if event.modifierFlags.contains(.option) {
         blockAnchor = point
         updateBlockSelection(to: point)
@@ -345,44 +376,52 @@ import ClairEditorCore
       context.setFillColor(background.cgColor)
       context.fill(dirtyRect)
 
-      let visible = EditorViewGeometry.visibleLineRange(
-        visibleRect: dirtyRect, lineHeight: lineHeight, lineCount: snapshot.lineCount)
+      let firstRow = Int((max(dirtyRect.minY, 0) / lineHeight).rounded(.down))
+      let lastRow = Int((max(dirtyRect.maxY - 0.001, 0) / lineHeight).rounded(.down))
+      let visible = rowMap.lines(inRows: firstRow..<(lastRow + 1))
       guard !visible.isEmpty else { return }
 
       let composingLine = self.composingLine
       var measuredWidth: CGFloat = 0
-      for index in visible {
-        let built: (line: TextLine, ctLine: CTLine)?
-        if let composition, composingLine?.value == index {
-          built = try? renderer.composedLine(
-            at: TextLineIndex(index), in: snapshot, composition: composition)
-        } else {
-          built = try? renderer.line(
-            at: TextLineIndex(index), in: snapshot, highlights: highlights,
-            colorOverrides: tokenColors)
-        }
-        guard let (textLine, ctLine) = built else { continue }
-        let top = EditorViewGeometry.lineOrigin(index, lineHeight: lineHeight)
+      for (index, _) in visible {
         // A composing line's local UTF-16 offsets no longer line up with the
         // committed buffer (the composition text is spliced in over it), so
         // selection/caret overlays — which are computed from committed
         // coordinates — are skipped for exactly that one line while it is
         // composing (`INV-INPUT-009`: the OS candidate window is the only
         // composition cursor shown).
+        // ponytail: a composing line is drawn on one row even when soft
+        // wrap would break it; it rewraps as soon as the text is committed.
+        let segs: [EditorRowSegment]
+        if let composition, composingLine?.value == index {
+          guard let (textLine, ctLine) = try? renderer.composedLine(at: TextLineIndex(index), in: snapshot, composition: composition)
+          else { continue }
+          segs = [
+            EditorRowSegment(
+              textLine: textLine, ctLine: ctLine, top: rowTop(index), start: 0, end: CTLineGetStringRange(ctLine).length,
+              shift: 0, isFirst: true, isLast: true)
+          ]
+        } else {
+          segs = segments(index)
+        }
         let isComposingLine = composingLine?.value == index
-
-        if !isComposingLine {
-          drawSelections(for: textLine, ctLine: ctLine, top: top, context: context)
+        for seg in segs where seg.top + lineHeight > dirtyRect.minY && seg.top < dirtyRect.maxY {
+          if !isComposingLine { drawSelections(seg, context: context) }
+          drawText(seg, context: context)
+          if seg.isFirst, gutterWidth > 0 {
+            drawLineNumber(index, top: seg.top, context: context)
+            drawFoldMarker(index, top: seg.top, context: context)
+          }
+          if !isComposingLine {
+            drawDiagnostics(seg, context: context)
+            drawCarets(seg, context: context)
+          }
+          if seg.isLast, fold(onLine: index) != nil { drawPlaceholder(after: seg, context: context) }
         }
-        drawText(ctLine, top: top, context: context)
-        if gutterWidth > 0 { drawLineNumber(index, top: top, context: context) }
-        if !isComposingLine {
-          drawDiagnostics(for: textLine, ctLine: ctLine, top: top, context: context)
-          drawCarets(for: textLine, ctLine: ctLine, top: top, context: context)
+        if !softWrap, let seg = segs.first {
+          let width = CGFloat(CTLineGetTypographicBounds(seg.ctLine, nil, nil, nil))
+          measuredWidth = max(measuredWidth, width + textInset * 2)
         }
-
-        let width = CGFloat(CTLineGetTypographicBounds(ctLine, nil, nil, nil))
-        measuredWidth = max(measuredWidth, width + textInset * 2)
       }
       if measuredWidth > knownContentWidth {
         knownContentWidth = measuredWidth
@@ -395,11 +434,13 @@ import ClairEditorCore
     /// mirrors glyphs unless the text matrix cancels it out locally. Fills
     /// elsewhere in this method need no such adjustment — only text drawing
     /// does.
-    private func drawText(_ ctLine: CTLine, top: CGFloat, context: CGContext) {
+    private func drawText(_ seg: EditorRowSegment, context: CGContext) {
       context.saveGState()
+      // A wrapped piece is the whole line moved left and clipped to its own width.
+      if !(seg.isFirst && seg.isLast) { context.clip(to: CGRect(x: textInset, y: seg.top, width: seg.width, height: lineHeight)) }
       context.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
-      context.textPosition = CGPoint(x: textInset, y: top + baselineShift + ascent)
-      CTLineDraw(ctLine, context)
+      context.textPosition = CGPoint(x: textInset - seg.shift, y: seg.top + baselineShift + ascent)
+      CTLineDraw(seg.ctLine, context)
       context.restoreGState()
     }
 
@@ -417,49 +458,44 @@ import ClairEditorCore
       context.restoreGState()
     }
 
-    private func drawSelections(
-      for textLine: TextLine, ctLine: CTLine, top: CGFloat, context: CGContext
-    ) {
+    /// `local` clipped to the piece `seg` shows, or nil when they do not overlap.
+    private func clip(_ range: TextUTF8Range, to seg: EditorRowSegment) -> Range<Int>? {
+      guard let local = try? localUTF16Range(of: range, clippedTo: seg.textLine, in: snapshot) else { return nil }
+      let lower = max(local.lowerBound, seg.start)
+      let upper = min(local.upperBound, seg.end)
+      return lower < upper ? lower..<upper : nil
+    }
+
+    private func drawSelections(_ seg: EditorRowSegment, context: CGContext) {
       guard selection.selections.contains(where: { !$0.isEmpty }) else { return }
       context.setFillColor(selectionColor.cgColor)
       for range in selection.selections.map(\.range) {
-        guard let local = try? localUTF16Range(of: range, clippedTo: textLine, in: snapshot) else {
-          continue
-        }
-        let x1 = CTLineGetOffsetForStringIndex(ctLine, local.lowerBound, nil)
-        let x2 = CTLineGetOffsetForStringIndex(ctLine, local.upperBound, nil)
-        context.fill(CGRect(x: textInset + x1, y: top, width: x2 - x1, height: lineHeight))
+        guard let local = clip(range, to: seg) else { continue }
+        let x1 = seg.x(local.lowerBound)
+        let x2 = seg.x(local.upperBound)
+        context.fill(CGRect(x: textInset + x1, y: seg.top, width: x2 - x1, height: lineHeight))
       }
     }
 
-    private func drawCarets(
-      for textLine: TextLine, ctLine: CTLine, top: CGFloat, context: CGContext
-    ) {
+    private func drawCarets(_ seg: EditorRowSegment, context: CGContext) {
       guard caretVisible, window?.firstResponder === self else { return }
       for cursor in selection.selections where cursor.isEmpty {
         guard
           let position = try? snapshot.position(
             at: cursor.head, columnUnit: UTF16Unit.self, rounding: .down),
-          position.line == textLine.index
+          position.line == seg.textLine.index, seg.owns(position.column.value)
         else { continue }
-        let x = CTLineGetOffsetForStringIndex(ctLine, position.column.value, nil)
         context.setFillColor(caretColor.cgColor)
-        context.fill(CGRect(x: textInset + x, y: top, width: 1.5, height: lineHeight))
+        context.fill(CGRect(x: textInset + seg.x(position.column.value), y: seg.top, width: 1.5, height: lineHeight))
       }
     }
 
-    private func drawDiagnostics(
-      for textLine: TextLine, ctLine: CTLine, top: CGFloat, context: CGContext
-    ) {
+    private func drawDiagnostics(_ seg: EditorRowSegment, context: CGContext) {
       for diagnostic in diagnostics {
-        guard
-          let local = try? localUTF16Range(of: diagnostic.range, clippedTo: textLine, in: snapshot)
-        else { continue }
-        let x1 = textInset + CTLineGetOffsetForStringIndex(ctLine, local.lowerBound, nil)
-        let x2 = textInset + CTLineGetOffsetForStringIndex(ctLine, local.upperBound, nil)
+        guard let local = clip(diagnostic.range, to: seg) else { continue }
         drawSquiggle(
-          from: x1, to: x2, baseline: top + lineHeight - 2, color: diagnostic.severity.color,
-          context: context)
+          from: textInset + seg.x(local.lowerBound), to: textInset + seg.x(local.upperBound),
+          baseline: seg.top + lineHeight - 2, color: diagnostic.severity.color, context: context)
       }
     }
 

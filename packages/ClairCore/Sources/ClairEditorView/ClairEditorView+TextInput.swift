@@ -179,9 +179,12 @@ import ClairEditorCore
         let localStart = try? snapshot.convert(bufferRange.lowerBound, to: UTF16Unit.self).value,
         let localEnd = try? snapshot.convert(bufferRange.upperBound, to: UTF16Unit.self).value
       else { return .zero }
-      let x1 = CTLineGetOffsetForStringIndex(ctLine, localStart - lineStartUTF16, nil)
-      let x2 = CTLineGetOffsetForStringIndex(ctLine, localEnd - lineStartUTF16, nil)
-      let top = EditorViewGeometry.lineOrigin(textLine.index.value, lineHeight: lineHeight)
+      // The wrapped row holding the start, in committed coordinates (a composing line is drawn unwrapped).
+      let seg = composition == nil ? segments(textLine.index.value).last { $0.start <= localStart - lineStartUTF16 } : nil
+      let shift = seg?.shift ?? 0
+      let x1 = CTLineGetOffsetForStringIndex(ctLine, localStart - lineStartUTF16, nil) - shift
+      let x2 = CTLineGetOffsetForStringIndex(ctLine, localEnd - lineStartUTF16, nil) - shift
+      let top = seg?.top ?? rowTop(textLine.index.value)
       let localRect = NSRect(x: textInset + x1, y: top, width: max(x2 - x1, 1), height: lineHeight)
       let windowRect = convert(localRect, to: nil)
       return window?.convertToScreen(windowRect) ?? windowRect

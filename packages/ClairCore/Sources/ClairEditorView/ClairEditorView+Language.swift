@@ -37,14 +37,8 @@ import ClairEditorCore
 
     /// The primary caret's rect in this view's (flipped) coordinates.
     public func primaryCaretRect() -> NSRect? {
-      guard let head = selection.selections.last?.head,
-        let position = try? snapshot.position(at: head, columnUnit: UTF16Unit.self, rounding: .down),
-        let (_, ctLine) = try? renderer.line(
-          at: position.line, in: snapshot, highlights: highlights, colorOverrides: tokenColors)
-      else { return nil }
-      let x = CTLineGetOffsetForStringIndex(ctLine, position.column.value, nil)
-      return NSRect(
-        x: textInset + x, y: CGFloat(position.line.value) * lineHeight, width: 1, height: lineHeight)
+      guard let head = selection.selections.last?.head else { return nil }
+      return caretRect(for: head)
     }
 
     /// Moves the caret to `line`/`utf16Column` (0-based, clamped) and scrolls there.

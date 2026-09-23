@@ -16,7 +16,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public enum Palette: String, Sendable, Codable { case commands, files, search, symbols, references }
 
   public static let sections = ["一般", "AIプロバイダー", "エディタ", "ターミナル", "モバイル", "アップデート"]
-  public static let toggleKeys = ["restoreLayout", "confirmClose", "showQuota", "preventSleepOnBattery", "formatOnSave", "showWhitespace", "terminalApprovals"]
+  public static let toggleKeys = ["restoreLayout", "confirmClose", "showQuota", "preventSleepOnBattery", "formatOnSave", "showWhitespace", "softWrap", "terminalApprovals"]
   /// Closed-set settings (the mock's segmented controls). The first option is the default.
   public static let choiceOptions: [String: [String]] = [
     "defaultAgent": ["claude", "codex"],
@@ -50,7 +50,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var settingsOpen = false
   public var section = "一般"
   public var palette: Palette?
-  public var toggles = ["restoreLayout": true, "confirmClose": true, "showQuota": false, "preventSleepOnBattery": false, "formatOnSave": false, "showWhitespace": false, "terminalApprovals": true]
+  public var toggles = ["restoreLayout": true, "confirmClose": true, "showQuota": false, "preventSleepOnBattery": false, "formatOnSave": false, "showWhitespace": false, "softWrap": false, "terminalApprovals": true]
   public var choices = WorkbenchState.choiceOptions.mapValues { $0[0] }
   /// V11: user shortcut assignments over the registry defaults. An empty string unassigns a default.
   public var shortcuts: [String: String] = [:]
@@ -410,6 +410,19 @@ extension CommandRegistry {
     // server for the active file's caret (the answer is async and belongs to the editor, not to this state).
     cmd("palette.symbols", "シンボルへ移動", .read, ai: false, shortcut: "⌘T", palette: false) { s, _ in s.palette = .symbols; return .ok },
     cmd("palette.references", "参照一覧", .read, ai: false, palette: false) { s, _ in s.palette = .references; return .ok },
+    // E13: soft wrap is a persisted setting (ccedit: 設定 › エディタ「行の折り返し」, ⌥Z). Folding acts on the active
+    // editor's caret, so like editor.definition the registry validates and the GUI performs it on the view.
+    cmd("editor.toggleWrap", "行の折り返しを切り替え", .write, ai: false, shortcut: "⌥Z") { s, _ in
+      s.toggles["softWrap"] = !(s.toggles["softWrap"] ?? false); return .ok
+    },
+    cmd("editor.fold", "折りたたむ", .read, ai: false, shortcut: "⌥⌘[",
+        preflight: { s, _ throws(CommandError) in try require(s.active != nil, "ファイルが開かれていません"); return .read }) { _, _ in .ok },
+    cmd("editor.unfold", "展開する", .read, ai: false, shortcut: "⌥⌘]",
+        preflight: { s, _ throws(CommandError) in try require(s.active != nil, "ファイルが開かれていません"); return .read }) { _, _ in .ok },
+    cmd("editor.foldAll", "すべて折りたたむ", .read, ai: false, shortcut: "⌃⌥[",
+        preflight: { s, _ throws(CommandError) in try require(s.active != nil, "ファイルが開かれていません"); return .read }) { _, _ in .ok },
+    cmd("editor.unfoldAll", "すべて展開する", .read, ai: false, shortcut: "⌃⌥]",
+        preflight: { s, _ throws(CommandError) in try require(s.active != nil, "ファイルが開かれていません"); return .read }) { _, _ in .ok },
     cmd("editor.definition", "定義へ移動", .read, ai: false, shortcut: "⌃⌘J",
         preflight: { s, _ throws(CommandError) in try require(s.active != nil, "ファイルが開かれていません"); return .read }) { _, _ in .ok },
     cmd("editor.references", "参照を検索", .read, ai: false, shortcut: "⌃⌘R",

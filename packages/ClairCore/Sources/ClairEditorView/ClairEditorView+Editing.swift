@@ -87,7 +87,7 @@ import ClairEditorCore
     }
 
     @objc public func paste(_ sender: Any?) {
-      guard let text = NSPasteboard.general.string(forType: .string) else { return }
+      guard let text = pasteboard.string(forType: .string) else { return }
       onCommitEdits?(selection.edits(replacingEachWith: text))
     }
 
@@ -101,7 +101,6 @@ import ClairEditorCore
         try? snapshot.text(in: $0.range)
       }
       guard !texts.isEmpty else { return false }
-      let pasteboard = NSPasteboard.general
       pasteboard.clearContents()
       return pasteboard.setString(texts.joined(separator: "\n"), forType: .string)
     }
@@ -151,6 +150,16 @@ import ClairEditorCore
     }
 
     private func moveVertical(lineDelta: Int, extend: Bool) {
+      // E13: with folds or soft wrap, ↑↓ move by visual row (skipping folded lines, stepping through wrapped ones).
+      if !rowMap.isIdentity {
+        let transform: (TextSelection) throws -> TextSelection = { [self] cursor in
+          let edge = lineDelta < 0 ? UTF8Offset(0) : UTF8Offset(self.snapshot.utf8Count)
+          let head = self.verticalTarget(from: cursor.head, rows: lineDelta) ?? edge
+          return extend ? TextSelection(anchor: cursor.anchor, head: head) : TextSelection(cursor: head)
+        }
+        guard let updated = try? mapSelections(transform) else { return }
+        return applyLocalSelection(updated)
+      }
       let transform: (TextSelection) throws -> TextSelection = { [self] cursor in
         let position = try self.snapshot.position(at: cursor.head, columnUnit: UTF16Unit.self)
         let targetLine = TextLineIndex(

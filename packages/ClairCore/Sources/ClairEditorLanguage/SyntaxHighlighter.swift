@@ -39,6 +39,9 @@ public final class SyntaxHighlighter {
   public let languageID: EditorLanguageID
   private let parser: SyntaxParser
   private let query: Query?
+  /// E13: foldable ranges of the last parse — one per header line (the
+  /// widest multi-line syntax node starting on it), sorted by start.
+  public private(set) var foldRanges: [TextUTF8Range] = []
 
   public init(languageID: EditorLanguageID) throws {
     self.languageID = languageID
@@ -53,6 +56,7 @@ public final class SyntaxHighlighter {
   /// the result, `parser`'s own state is left exactly as it was before.
   public func reset(to snapshot: TextSnapshot) throws -> [EditorHighlightSpan] {
     let tree = try parser.reset(to: snapshot)
+    foldRanges = Self.folds(tree: tree)
     return Self.spans(tree: tree, query: query)
   }
 
@@ -67,7 +71,29 @@ public final class SyntaxHighlighter {
     edits: [TextEdit], oldSnapshot: TextSnapshot, newSnapshot: TextSnapshot
   ) throws -> [EditorHighlightSpan] {
     let tree = try parser.update(edits: edits, oldSnapshot: oldSnapshot, newSnapshot: newSnapshot)
+    foldRanges = Self.folds(tree: tree)
     return Self.spans(tree: tree, query: query)
+  }
+
+  /// Walks every named node once (same order of cost as the highlight query pass).
+  static func folds(tree: Tree) -> [TextUTF8Range] {
+    guard let root = tree.rootNode else { return [] }
+    var widest: [UInt32: (start: UInt32, end: UInt32)] = [:]
+    // `node.parent` walks from the root in tree-sitter, so the root is excluded by position instead.
+    func visit(_ node: Node, root: Bool) {
+      let rows = node.pointRange
+      if !root, node.isNamed, rows.upperBound.row > rows.lowerBound.row {
+        let bytes = node.byteRange
+        let row = rows.lowerBound.row
+        if widest[row].map({ bytes.upperBound > $0.end }) ?? true {
+          widest[row] = (min(bytes.lowerBound, widest[row]?.start ?? .max), bytes.upperBound)
+        }
+      }
+      node.enumerateChildren { visit($0, root: false) }
+    }
+    visit(root, root: true)
+    return widest.values.sorted { $0.start < $1.start }
+      .map { TextUTF8Range(UTF8Offset(Int($0.start)), UTF8Offset(Int($0.end))) }
   }
 
   private static func spans(tree: Tree, query: Query?) -> [EditorHighlightSpan] {

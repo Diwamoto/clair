@@ -175,6 +175,7 @@
       let manager = EditorTransactionManager(
         buffer: buffer, selection: TextSelectionSet(cursor: UTF8Offset(0)))
       let view = ClairEditorView(snapshot: buffer.snapshot, selection: manager.selection)
+      view.pasteboard = NSPasteboard(name: NSPasteboard.Name("clair-test-\(UUID().uuidString)"))
       self.manager = manager
       self.view = view
       view.onCommitEdits = { [weak view, weak manager] edits in
@@ -390,7 +391,7 @@
 
       h.view.copy(nil)
 
-      let pasteboard = NSPasteboard.general
+      let pasteboard = h.view.pasteboard
       XCTAssertEqual(pasteboard.string(forType: .string), "hello")
       // `NSPasteboard` itself declares the legacy `NSStringPboardType` alias
       // for any `.string` write; the invariant this proves is that *we*
@@ -409,14 +410,14 @@
 
       h.view.cut(nil)
 
-      XCTAssertEqual(NSPasteboard.general.string(forType: .string), "hello ")
+      XCTAssertEqual(h.view.pasteboard.string(forType: .string), "hello ")
       XCTAssertEqual(h.manager.buffer.snapshot.string(), "world")
     }
 
     func testPasteInsertsPasteboardStringAtEachCursor() throws {
       let h = try harness("()")
-      NSPasteboard.general.clearContents()
-      NSPasteboard.general.setString("mid", forType: .string)
+      h.view.pasteboard.clearContents()
+      h.view.pasteboard.setString("mid", forType: .string)
       h.select(TextSelectionSet(cursor: UTF8Offset(1)))
 
       h.view.paste(nil)

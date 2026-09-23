@@ -68,13 +68,13 @@ import ClairEditorCore
     /// screenful, sluggish when a drag spans tens of thousands of lines.
     func updateBlockSelection(to point: NSPoint) {
       guard let anchor = blockAnchor, snapshot.lineCount > 0 else { return }
-      let first = EditorViewGeometry.lineIndex(
-        atY: anchor.y, lineHeight: lineHeight, lineCount: snapshot.lineCount)
-      let last = EditorViewGeometry.lineIndex(
-        atY: point.y, lineHeight: lineHeight, lineCount: snapshot.lineCount)
+      // ponytail: rows map to lines, but x is taken on each line's first row;
+      // a block across soft-wrapped lines selects by that first row only.
+      let first = rowMap.line(atRow: Int((max(anchor.y, 0) / lineHeight).rounded(.down))).line
+      let last = rowMap.line(atRow: Int((max(point.y, 0) / lineHeight).rounded(.down))).line
       let left = min(anchor.x, point.x)
       let right = max(anchor.x, point.x)
-      let selections = (min(first, last)...max(first, last)).compactMap { index -> TextSelection? in
+      let selections = (min(first, last)...max(first, last)).filter { !rowMap.isHidden($0) }.compactMap { index -> TextSelection? in
         guard let low = offset(line: index, x: left, rounding: .down),
           let high = offset(line: index, x: right, rounding: .up)
         else { return nil }
@@ -162,7 +162,7 @@ import ClairEditorCore
       applySelection(updated)
       scrollToVisible(
         NSRect(
-          x: 0, y: CGFloat(line.value) * lineHeight - 3 * lineHeight, width: 1,
+          x: 0, y: rowTop(line.value) - 3 * lineHeight, width: 1,
           height: 7 * lineHeight))
     }
 

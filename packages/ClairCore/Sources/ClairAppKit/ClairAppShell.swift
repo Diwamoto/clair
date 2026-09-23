@@ -177,6 +177,15 @@ import Observation
           buffers.reveal(p, line: line, column: column)
         }
         if id == "editor.definition" || id == "editor.references" { navigate(references: id == "editor.references") }
+        if let view = state.active.flatMap(buffers.view) {
+          switch id {
+          case "editor.fold": view.foldAtCaret()
+          case "editor.unfold": view.unfoldAtCaret()
+          case "editor.foldAll": view.foldAll()
+          case "editor.unfoldAll": view.unfoldAll()
+          default: break
+          }
+        }
         if let closing { ClairDaemonLauncher.closeSession(key: closing) }  // T09: closing a pane ends its shell; closing a window does not
         if id == "agent.launch" || id == "pane.close"
           || (id == "settings.set" && input["key"] == .string("preventSleepOnBattery"))
@@ -1226,7 +1235,7 @@ import Observation
           focused: st.tree.focused, launches: st.launches, project: store.activeRoot ?? st.project, onFocus: { store.run("pane.focus", ["id": .int($0)]) },
           onFacts: { store.facts(pane: $0, bells: $1, exit: $2) },
           onRatio: { store.run("pane.setRatio", ["id": .int($0), "ratio": .double($1)]) },
-          editor: EditorPane(buffers: store.buffers, root: store.activeRoot, path: st.active, onEdit: { store.edited($0) }, onCaret: { store.buffers.setCaret($0, $1, in: $2) }),
+          editor: EditorPane(buffers: store.buffers, root: store.activeRoot, path: st.active, softWrap: st.toggles["softWrap"] == true, onEdit: { store.edited($0) }, onCaret: { store.buffers.setCaret($0, $1, in: $2) }),
           run: { _ = store.run($0, $1) })
         }
       }
@@ -1257,6 +1266,7 @@ import Observation
               switchRow("保存時に整形", "formatOnSave", note: "⌘S のタイミングでフォーマッタを実行します。")
               choiceRow("タブ幅", "tabWidth")
               switchRow("空白文字を表示", "showWhitespace", note: "タブ・行末の空白を薄く可視化します。")
+              switchRow("行の折り返し", "softWrap", note: "長い行をエディタの幅に合わせて折り返します。⌥Z でも切り替えられます。")
             }
           case "ターミナル":
             SettingsCard(title: "シェルと承認") {
