@@ -128,6 +128,33 @@ import Testing
       #expect(weakWindow == nil)
     }
 
+    /// U06: the store's focused pane is the only surface holding the keyboard (so only its caret blinks),
+    /// a store focus change moves the keyboard there, and a click-driven focus reports back to the store.
+    @Test @MainActor
+    func u06OnlyTheStoreFocusedSurfaceTakesTheKeyboard() async throws {
+      let window = NSWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 400, height: 100), styleMask: [.borderless],
+        backing: .buffered, defer: true)
+      let root = NSView(frame: window.contentRect(forFrameRect: window.frame))
+      window.contentView = root
+      let a = ClairGhosttySurfaceView(), b = ClairGhosttySurfaceView()
+      var reported: [String] = []
+      a.onFocus = { reported.append("a") }
+      b.onFocus = { reported.append("b") }
+      a.wantsFocus = true
+      root.addSubview(a)
+      root.addSubview(b)  // mounted last, but not focused: must not steal the keyboard
+      #expect(window.firstResponder === a)
+
+      a.wantsFocus = false
+      b.wantsFocus = true
+      try await Task.sleep(for: .milliseconds(20))
+      #expect(window.firstResponder === b)
+
+      window.makeFirstResponder(a)  // what AppKit does on a click
+      #expect(reported == ["a", "b", "a"])
+    }
+
     /// U06: the Clair theme file is loaded + finalized into the real config and the surface still spawns
     /// and renders its child (a bad key would only be a Ghostty diagnostic, so this guards finalize).
     @Test(.enabled(if: GhosttyRuntime.isVendored)) @MainActor

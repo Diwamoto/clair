@@ -109,7 +109,28 @@ import Foundation
       }
       recomputeMetrics()
       startPollTimerIfNeeded()
-      window?.makeFirstResponder(self)
+      // Only the store's focused pane takes the keyboard; every surface grabbing it on mount
+      // left the last-mounted pane typing while another one looked active.
+      if wantsFocus { window?.makeFirstResponder(self) }
+    }
+
+    /// U06: the store's focused pane is the one source of truth. A click lands on this NSView
+    /// (SwiftUI's tap gesture never sees it), so report it; a store focus change moves the keyboard here.
+    public var onFocus: (() -> Void)?
+    public var wantsFocus = false {
+      didSet {
+        guard wantsFocus, !oldValue, let window, window.firstResponder !== self else { return }
+        DispatchQueue.main.async { [weak self] in
+          guard let self, self.wantsFocus else { return }
+          self.window?.makeFirstResponder(self)
+        }
+      }
+    }
+
+    public override func becomeFirstResponder() -> Bool {
+      let ok = super.becomeFirstResponder()
+      if ok { onFocus?() }
+      return ok
     }
 
     public override func viewDidChangeBackingProperties() {
@@ -630,8 +651,14 @@ import Foundation
     let pane: Int?
     /// `sessionKey` names the daemon-owned shell this surface attaches to (same key = same session).
     let sessionKey: String
-    public init(launch: (command: String, cwd: String)? = nil, pane: Int? = nil, sessionKey: String, onFacts: ((Int, Int?) -> Void)? = nil) {
+    let focused: Bool
+    let onFocus: (() -> Void)?
+    public init(
+      launch: (command: String, cwd: String)? = nil, pane: Int? = nil, sessionKey: String, focused: Bool = false,
+      onFocus: (() -> Void)? = nil, onFacts: ((Int, Int?) -> Void)? = nil
+    ) {
       self.launch = launch; self.pane = pane; self.sessionKey = sessionKey; self.onFacts = onFacts
+      self.focused = focused; self.onFocus = onFocus
     }
 
     public func makeNSView(context: Context) -> ClairGhosttySurfaceView {
@@ -641,10 +668,16 @@ import Foundation
         key: sessionKey, cwd: cwd, command: launch.map(\.command).flatMap { $0.isEmpty ? nil : $0 })
       let v = ClairGhosttySurfaceView(launch: (attach, cwd))
       v.onFacts = onFacts
+      v.onFocus = onFocus
+      v.wantsFocus = focused
       if let pane { ClairGhosttySurfaceView.register(v, pane: pane) }
       return v
     }
 
-    public func updateNSView(_ nsView: ClairGhosttySurfaceView, context: Context) { nsView.onFacts = onFacts }
+    public func updateNSView(_ nsView: ClairGhosttySurfaceView, context: Context) {
+      nsView.onFacts = onFacts
+      nsView.onFocus = onFocus
+      nsView.wantsFocus = focused
+    }
   }
 #endif

@@ -1989,7 +1989,7 @@ import Observation
           }
           ZStack {
             C.surface
-            if kind == .terminal { ClairGhosttySurface(launch: launches[id].map { ($0.command, $0.cwd) }, pane: id, sessionKey: ClairWorkbenchStore.terminalKey(root: project, pane: id), onFacts: { onFacts(id, $0, $1) }) }  // one surface per terminal leaf, attached to the daemon shell keyed by project#pane
+            if kind == .terminal { ClairGhosttySurface(launch: launches[id].map { ($0.command, $0.cwd) }, pane: id, sessionKey: ClairWorkbenchStore.terminalKey(root: project, pane: id), focused: id == focused, onFocus: { if id != focused { onFocus(id) } }, onFacts: { onFacts(id, $0, $1) }) }  // one surface per terminal leaf, attached to the daemon shell keyed by project#pane
             else { editor }
           }
         }
