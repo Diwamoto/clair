@@ -230,6 +230,7 @@ import Foundation
       cursor-color = #abb2bf
       selection-background = #383d47
       minimum-contrast = 3
+      window-padding-x = 8
       palette = 0=#3f4451
       palette = 1=#e27b83
       palette = 2=#98c379
