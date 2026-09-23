@@ -1690,7 +1690,8 @@ import Observation
       .task(id: st.toggles["showQuota"] == true) {
         guard st.toggles["showQuota"] == true else { quota = []; return }
         while !Task.isCancelled {
-          quota = await Task.detached(priority: .utility) { ProviderQuota.fetchAll() }.value
+          let previous = quota
+          quota = await Task.detached(priority: .utility) { await ProviderQuota.fetchAll(previous: previous) }.value
           try? await Task.sleep(for: .seconds(300))
         }
       }

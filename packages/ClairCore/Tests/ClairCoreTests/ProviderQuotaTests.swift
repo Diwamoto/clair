@@ -51,6 +51,59 @@
       XCTAssertTrue(q[0].summary(now: now.addingTimeInterval(601)).contains("古い値"))
     }
 
+    func testParsesOpenCodeGoWindows() {
+      // Recorded from opencode.ai/zen/go/v1/usage on 2026-09-23.
+      let body =
+        #"{"usage":{"rolling":{"status":"ok","percent":0,"resetsAt":"2026-09-23T10:59:34.091Z"},"weekly":{"status":"ok","percent":0,"resetsAt":"2026-09-28T00:00:00.000Z"},"monthly":{"status":"ok","percent":76,"resetsAt":"2026-09-30T16:27:14.000Z"}}}"#
+      guard case .ok(let w) = ProviderQuota.parseOpenCode(Data(body.utf8)) else { return XCTFail() }
+      XCTAssertEqual(w.map(\.label), ["5時間", "7日間", "1か月"])
+      XCTAssertEqual(w.map(\.remainingPercent), [100, 100, 24])
+      XCTAssertEqual(w[0].resetsAt, Date(timeIntervalSince1970: 1_790_161_174.091))
+      guard case .unavailable = ProviderQuota.parseOpenCode(Data(#"{"error":{"type":"AuthError"}}"#.utf8)) else {
+        return XCTFail("an error body must not read as a number")
+      }
+    }
+
+    func testParsesClaudeWindows() {
+      // Trimmed from api.anthropic.com/api/oauth/usage on 2026-09-23 (microsecond timestamps, many null windows).
+      let body =
+        #"{"five_hour":{"utilization":56.0,"resets_at":"2026-09-23T09:49:59.731944+00:00","locked_reason":null},"seven_day":{"utilization":14.0,"resets_at":"2026-09-26T00:59:59.731979+00:00"},"seven_day_opus":null,"extra_usage":{"is_enabled":false,"utilization":3.742}}"#
+      guard case .ok(let w) = ProviderQuota.parseClaude(Data(body.utf8)) else { return XCTFail() }
+      XCTAssertEqual(w.map(\.label), ["5時間", "7日間"])
+      XCTAssertEqual(w.map(\.remainingPercent), [44, 86])
+      XCTAssertEqual(w[0].resetsAt.timeIntervalSince1970, 1_790_156_999.731, accuracy: 0.001)
+      guard case .unavailable = ProviderQuota.parseClaude(Data(#"{"type":"error"}"#.utf8)) else {
+        return XCTFail("an error body must not read as a number")
+      }
+    }
+
+    func testThrottledClaudeIsNotAskedAgainBeforeRetryAfter() async {
+      let now = Date(timeIntervalSince1970: 1_790_100_000)
+      var held = ProviderQuota(provider: "Claude Code", state: .unavailable("held"), fetchedAt: now)
+      held.notBefore = now.addingTimeInterval(60)
+      // Returned as-is without touching the Keychain or the network.
+      let again = await ProviderQuota.claudeCode(previous: held, now: now.addingTimeInterval(30))
+      XCTAssertEqual(again, held)
+    }
+
+    /// `CLAIR_LIVE_QUOTA=1`: asks api.anthropic.com with this machine's Claude Code login.
+    func testLiveClaude() async throws {
+      try XCTSkipUnless(ProcessInfo.processInfo.environment["CLAIR_LIVE_QUOTA"] == "1")
+      let q = await ProviderQuota.claudeCode(previous: nil, now: Date())
+      print("live claude:", q.state)
+      guard case .ok(let w) = q.state else { return XCTFail("\(q.state)") }
+      XCTAssertEqual(w.count, 2)
+    }
+
+    /// `CLAIR_LIVE_QUOTA=1`: asks opencode.ai with this machine's OpenCode Go key.
+    func testLiveOpenCode() async throws {
+      try XCTSkipUnless(ProcessInfo.processInfo.environment["CLAIR_LIVE_QUOTA"] == "1")
+      let state = await ProviderQuota.openCode()
+      print("live opencode:", state)
+      guard case .ok(let w) = state else { return XCTFail("\(state)") }
+      XCTAssertEqual(w.count, 3)
+    }
+
     /// `CLAIR_LIVE_QUOTA=1`: asks the real Codex CLI on this machine.
     func testLiveCodex() throws {
       try XCTSkipUnless(ProcessInfo.processInfo.environment["CLAIR_LIVE_QUOTA"] == "1")

@@ -12,6 +12,7 @@ struct ProviderQuota: Sendable, Equatable {
 
     var label: String {
       switch minutes {
+      case ProviderQuota.monthMinutes: "1か月"
       case let m where m.isMultiple(of: 1440): "\(m / 1440)日間"
       case let m where m.isMultiple(of: 60): "\(m / 60)時間"
       default: "\(minutes)分間"
@@ -40,6 +41,8 @@ struct ProviderQuota: Sendable, Equatable {
   let provider: String
   let state: State
   let fetchedAt: Date
+  /// A throttled provider (HTTP 429) is not asked again before this.
+  var notBefore: Date? = nil
 
   /// Older than two refresh intervals: the numbers may no longer be true (e.g. after sleep).
   func isStale(now: Date) -> Bool { now.timeIntervalSince(fetchedAt) > 600 }
@@ -65,17 +68,125 @@ struct ProviderQuota: Sendable, Equatable {
     }.max { $0.1.usedPercent < $1.1.usedPercent }
   }
 
-  /// Blocking (spawns a process): call off the main actor.
-  static func fetchAll(now: Date = Date()) -> [ProviderQuota] {
+  /// OpenCode Go's monthly window renews on the subscription day, not every 30 days; this only names it.
+  static let monthMinutes = 43200
+
+  /// Codex blocks (spawns a process), so the caller runs this off the main actor.
+  /// `previous` carries a throttled provider's last answer forward instead of asking again.
+  static func fetchAll(previous: [ProviderQuota] = [], now: Date = Date()) async -> [ProviderQuota] {
     [
       ProviderQuota(provider: "Codex", state: codex(), fetchedAt: now),
-      // ponytail: Claude Code exposes `rate_limits` only to a statusLine command, so reading it means launching `claude`
-      // with an injected `--settings` hook (ADR-0002 runs the agent TUI unmodified) — pending an owner decision.
-      ProviderQuota(
-        provider: "Claude Code", state: .unsupported("statusLine hook 未接続"), fetchedAt: now),
-      // ponytail: OpenCode has no local usage API; its Go plan's HTTP usage endpoint needs the user's key. Add with that decision.
-      ProviderQuota(provider: "OpenCode", state: .unsupported("利用枠 API なし"), fetchedAt: now),
+      await claudeCode(previous: previous.first { $0.provider == "Claude Code" }, now: now),
+      ProviderQuota(provider: "OpenCode", state: await openCode(), fetchedAt: now),
     ]
+  }
+
+  /// Claude Code's own `/usage` source: the undocumented `api.anthropic.com/api/oauth/usage`, authorized with the
+  /// OAuth token Claude Code keeps in the login Keychain (owner-approved 2026-09-23, as Orca/CodexBar do).
+  /// Only `claudeAiOauth.accessToken` is kept from that item; the token goes only to api.anthropic.com.
+  static func claudeCode(previous: ProviderQuota?, now: Date, timeout: TimeInterval = 12) async -> ProviderQuota {
+    if let previous, let notBefore = previous.notBefore, now < notBefore { return previous }
+    func answer(_ state: State) -> ProviderQuota { ProviderQuota(provider: "Claude Code", state: state, fetchedAt: now) }
+    guard let oauth = claudeCredentials()?["claudeAiOauth"] as? [String: Any],
+      let token = oauth["accessToken"] as? String, !token.isEmpty
+    else { return answer(.unavailable("Claude Code にログインしていません")) }
+    if let expires = (oauth["expiresAt"] as? NSNumber)?.doubleValue, expires / 1000 < now.timeIntervalSince1970 {
+      return answer(.unavailable("Claude Code のログインが期限切れです(claude を一度起動すると更新されます)"))
+    }
+    var request = URLRequest(url: URL(string: "https://api.anthropic.com/api/oauth/usage")!, timeoutInterval: timeout)
+    request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    request.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
+    // ponytail: fixed Claude Code UA — without one the endpoint's bucket 429s at once; read `claude --version` if a pinned one stops working.
+    request.setValue("claude-code/2.1.280", forHTTPHeaderField: "User-Agent")
+    guard let (body, response) = try? await URLSession.shared.data(for: request),
+      let http = response as? HTTPURLResponse
+    else { return answer(.unavailable("api.anthropic.com に接続できません")) }
+    switch http.statusCode {
+    case 200: return answer(parseClaude(body))
+    case 401, 403: return answer(.unavailable("Claude Code の認証に失敗しました(\(http.statusCode))"))
+    case 429:
+      // Keep the last numbers (they turn stale on their own) and stay away until the server says so.
+      let wait = http.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init) ?? 900
+      var held = previous ?? answer(.unavailable("利用枠 API の呼び出し制限中です"))
+      held.notBefore = now.addingTimeInterval(max(wait, 300))
+      return held
+    default: return answer(.unavailable("api.anthropic.com が HTTP \(http.statusCode) を返しました"))
+    }
+  }
+
+  /// The Keychain item Claude Code writes on macOS (via `security`, so reading it the same way needs no prompt),
+  /// or `~/.claude/.credentials.json` where Claude Code keeps it as a file.
+  static func claudeCredentials() -> [String: Any]? {
+    let process = Process()
+    let output = Pipe()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+    process.arguments = ["find-generic-password", "-s", "Claude Code-credentials", "-w"]
+    process.standardOutput = output
+    process.standardError = FileHandle.nullDevice
+    var data: Data?
+    if (try? process.run()) != nil {
+      data = output.fileHandleForReading.readDataToEndOfFile()
+      process.waitUntilExit()
+      if process.terminationStatus != 0 { data = nil }
+    }
+    data = data ?? (try? Data(
+      contentsOf: FileManager.default.homeDirectoryForCurrentUser.appending(path: ".claude/.credentials.json")))
+    return data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+  }
+
+  /// `five_hour` / `seven_day`: `{"utilization":0-100,"resets_at":ISO-8601}`, recorded 2026-09-23.
+  /// ponytail: per-model weekly windows (`seven_day_opus`/`_sonnet`) are skipped; add them with their own labels if needed.
+  static func parseClaude(_ body: Data) -> State {
+    let o = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
+    let windows = [("five_hour", 300), ("seven_day", 10080)].compactMap { name, minutes -> Window? in
+      guard let w = o?[name] as? [String: Any],
+        let used = (w["utilization"] as? NSNumber)?.doubleValue,
+        let reset = (w["resets_at"] as? String).flatMap(isoDate)
+      else { return nil }
+      return Window(minutes: minutes, usedPercent: min(max(used, 0), 100), resetsAt: reset)
+    }
+    return windows.isEmpty ? .unavailable("このアカウントには利用枠の情報がありません") : .ok(windows)
+  }
+
+  static func isoDate(_ s: String) -> Date? {
+    let iso = ISO8601DateFormatter()
+    iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return iso.date(from: s)
+  }
+
+  /// OpenCode Go's usage endpoint, authorized with the Go key OpenCode itself stored (owner-approved 2026-09-23).
+  /// The key goes only to opencode.ai over HTTPS — the host OpenCode already sends it to.
+  static func openCode(timeout: TimeInterval = 12) async -> State {
+    let data = ProcessInfo.processInfo.environment["XDG_DATA_HOME"].map { URL(fileURLWithPath: $0) }
+      ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: ".local/share")
+    guard let file = try? Data(contentsOf: data.appending(path: "opencode/auth.json")),
+      let auth = try? JSONSerialization.jsonObject(with: file) as? [String: Any],
+      let key = (auth["opencode-go"] as? [String: Any])?["key"] as? String, !key.isEmpty
+    else { return .unavailable("OpenCode Go にログインしていません(opencode auth login)") }
+    var request = URLRequest(url: URL(string: "https://opencode.ai/zen/go/v1/usage")!, timeoutInterval: timeout)
+    request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+    guard let (body, response) = try? await URLSession.shared.data(for: request),
+      let status = (response as? HTTPURLResponse)?.statusCode
+    else { return .unavailable("opencode.ai に接続できません") }
+    switch status {
+    case 200: return parseOpenCode(body)
+    case 401, 403: return .unavailable("OpenCode Go の認証に失敗しました(\(status))")
+    default: return .unavailable("opencode.ai が HTTP \(status) を返しました")
+    }
+  }
+
+  /// `{"usage":{"rolling"|"weekly"|"monthly":{"percent":0-100,"resetsAt":ISO-8601}}}`, recorded 2026-09-23.
+  static func parseOpenCode(_ body: Data) -> State {
+    let usage = (try? JSONSerialization.jsonObject(with: body) as? [String: Any])?["usage"] as? [String: Any]
+    let windows = [("rolling", 300), ("weekly", 10080), ("monthly", monthMinutes)].compactMap {
+      name, minutes -> Window? in
+      guard let w = usage?[name] as? [String: Any],
+        let used = (w["percent"] as? NSNumber)?.doubleValue,
+        let reset = (w["resetsAt"] as? String).flatMap(isoDate)
+      else { return nil }
+      return Window(minutes: minutes, usedPercent: min(max(used, 0), 100), resetsAt: reset)
+    }
+    return windows.isEmpty ? .unavailable("このアカウントには利用枠の情報がありません") : .ok(windows)
   }
 
   /// Codex's own app-server protocol: `account/rateLimits/read` over stdio JSON-RPC.
