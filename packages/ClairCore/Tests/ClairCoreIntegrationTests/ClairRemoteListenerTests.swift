@@ -3,6 +3,7 @@ import Testing
 
 @testable import ClairAgent
 @testable import ClairDaemonKit
+@testable import ClairMobileKit
 @testable import ClairPush
 @testable import ClairShared
 @testable import ClairTerminal
@@ -14,6 +15,149 @@ import Testing
   /// authentication and the terminal boundary; everything else is refused or closed.
   @Suite(.serialized)
   struct ClairRemoteListenerTests {
+
+    @Test func n12PinnedMobileAdapterRoutesEveryMobileBoundaryOverTLS() async throws {
+      guard #available(macOS 15, *) else { return }
+      let root = URL(fileURLWithPath: "/private/tmp/clair-n12-workspace-\(UUID().uuidString)")
+      try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+      defer { try? FileManager.default.removeItem(at: root) }
+      try Data("before\n".utf8).write(to: root.appendingPathComponent("README.md"))
+      try runGit(["init", "--quiet"], at: root)
+      try runGit(["add", "README.md"], at: root)
+      try runGit(
+        [
+          "-c", "user.name=Clair Tests", "-c", "user.email=clair-tests@example.invalid",
+          "commit", "--quiet", "-m", "initial",
+        ], at: root)
+      try Data("before\nafter\n".utf8).write(to: root.appendingPathComponent("README.md"))
+
+      let projectID = try ProjectID("n12-project")
+      let projectScope = try ResourceScope(projectID: projectID)
+      let workspace = try ClairWorkspaceRuntime(projects: [
+        try ClairProjectRoot(id: projectID, rootURL: root)
+      ])
+      try await withHost(workspace: workspace) { h in
+        let hostIdentity = try ClairHostIdentity(
+          hostID: ClairHostID("n11-host"), publicKey: h.hostKey.publicKey)
+        let hostPin = ClairHostPin(identity: hostIdentity)
+        let adapter = ClairRemoteMobileAdapter(
+          endpoint: try ClairTransportEndpoint("tls://127.0.0.1:\(h.port)"), pinnedTo: hostPin)
+
+        let presentation = try await adapter.presentation()
+        let certificateFingerprint = try await adapter.certificateFingerprint()
+        #expect(certificateFingerprint != nil)
+        try hostPin.validate(presentation, certificateFingerprint: certificateFingerprint)
+
+        let wrongCertificatePin = try ClairCertificateFingerprint(String(repeating: "0", count: 64))
+        let wrongPinAdapter = ClairRemoteMobileAdapter(
+          endpoint: try ClairTransportEndpoint("tls://127.0.0.1:\(h.port)"),
+          pinnedTo: ClairHostPin(
+            identity: hostIdentity, certificateFingerprint: wrongCertificatePin))
+        await #expect(throws: ClairRemoteError.pinMismatch) {
+          _ = try await wrongPinAdapter.presentation()
+        }
+
+        let device = ClairDeviceKey()
+        let link = try await h.authority.issuePairingLink(lifetime: 60)
+        let pairingRequest = ClairPairingRequest(
+          link: link, devicePublicKey: device.publicKey, displayName: "N12 fixture",
+          clientOffer: .current, confirmedHostFingerprint: true)
+        let pairing = try await adapter.pair(pairingRequest)
+        let terminalScope = try ResourceScope(projectID: ClairLocalTerminalHost.projectID)
+        let grant = try await h.authority.updateGrant(
+          deviceID: pairing.credential.grant.deviceID,
+          capabilities: CapabilitySet([.view, .writeTerminal, .steerAgent]),
+          visibleScopes: [projectScope, terminalScope])
+        let credential = ClairDeviceCredential(grant: grant, token: pairing.credential.token)
+        let challenge = try await adapter.beginAuthentication(
+          ClairReconnectRequest(
+            hostID: hostIdentity.hostID, hostFingerprint: hostIdentity.fingerprint,
+            deviceID: grant.deviceID, token: credential.token, clientOffer: .current,
+            resourceScope: nil))
+        let connection = try await adapter.authenticate(try challenge.makeProof(using: device))
+        #expect(await adapter.isConnectionActive(connection))
+        try await adapter.authorizeRead(scope: projectScope, on: connection)
+
+        let summary = try await adapter.changedFileSummary(for: projectScope, on: connection)
+        #expect(summary.files.contains(where: { $0.path.rawValue == "README.md" }))
+        let diff = try await adapter.diff(
+          for: projectScope, path: try ClairWorkspacePath("README.md"), basis: .workingTree,
+          on: connection)
+        #expect(diff.text?.contains("+after") == true)
+
+        let sessionID = try SessionID("n12-session")
+        let identity = try ClairAgentSessionIdentity(
+          provider: ClairProviderIdentity(providerID: .openCode, version: .unknown),
+          scope: projectScope, sessionID: sessionID)
+        let epoch = try SessionEpoch(1)
+        _ = try await h.host.journal.open(identity: identity, epoch: epoch, processGeneration: 1)
+        let eventPayload = ClairAgentEventPayload.conversation(
+          ClairAgentConversationEvent(role: .assistant, text: "retained"))
+        _ = try await h.host.journal.append(
+          try EventEnvelope(
+            eventID: EventID("n12-event"), kind: eventPayload.kind.wireKind,
+            scope: identity.sessionScope, epoch: epoch, revision: Revision(1), payload: eventPayload
+          ))
+        let cursor = try await adapter.verify(
+          scope: identity.sessionScope, cachedCursor: nil, on: connection)
+        #expect(cursor.scope == identity.sessionScope)
+        #expect(cursor.epoch == epoch)
+        #expect(cursor.revision == Revision(1))
+        let cachedCursor = try ReplayCursor(scope: identity.sessionScope, epoch: epoch)
+        #expect(
+          try await adapter.verify(
+            scope: identity.sessionScope, cachedCursor: cachedCursor, on: connection)
+            == cachedCursor)
+        let fencedCursor = try ReplayCursor(
+          scope: identity.sessionScope, epoch: SessionEpoch(2), revision: .zero)
+        #expect(
+          try await adapter.verify(
+            scope: identity.sessionScope, cachedCursor: fencedCursor, on: connection) == cursor)
+
+        let snapshot = ClairAgentSessionSnapshot(
+          identity: identity, workingDirectoryURL: root, lifecycle: .running,
+          processID: nil, processGeneration: 1, exit: nil, failure: nil,
+          outputWasTruncated: false)
+        try await h.host.commandBoundary.install(
+          snapshot: snapshot, epoch: epoch, endpoint: N12CommittingEndpoint())
+        let payload = try ClairAgentCommandPayload(
+          epoch: epoch, processGeneration: 1, action: .prompt("hello"))
+        let command = ClairAgentCommand(
+          operationID: try OperationID("n12-agent-command"), scope: identity.sessionScope,
+          kind: .agentInput, capability: .steerAgent, payload: payload)
+        #expect(try await adapter.dispatch(command, on: connection) == .committed)
+
+        let token = try ClairPushDeviceToken(Data([0x01, 0x02, 0x03]))
+        let registration = try await adapter.register(
+          token: token, environment: .sandbox, scope: identity.sessionScope, on: connection)
+        #expect(registration.scope == identity.sessionScope)
+        #expect(registration.environment == .sandbox)
+        #expect(registration.requiresRegistration == false)
+        #expect(registration.expiresAt > Date())
+        try await adapter.unregister(environment: .sandbox, on: connection)
+
+        let mac = try h.attachMac(key: "n12-mobile-pane")
+        #expect(try h.read(mac, until: "READY"))
+        let mobileTerminalScope = try ResourceScope(
+          projectID: ClairLocalTerminalHost.projectID, sessionID: SessionID(mac.sessionID))
+        let attachment = try await adapter.attach(
+          scope: mobileTerminalScope, generation: 1, cursor: nil, on: connection)
+        try await adapter.input(Data("from-mobile\n".utf8), attachment: attachment, on: connection)
+        var seen = Data()
+        var terminalCursor = attachment.cursor
+        for _ in 0..<50 where seen.range(of: Data("<from-mobile>".utf8)) == nil {
+          guard let frame = try await adapter.read(attachment, on: connection) else { continue }
+          #expect(frame.cursor == terminalCursor)
+          seen.append(frame.bytes)
+          terminalCursor = frame.nextCursor
+          try await adapter.acknowledge(attachment, cursor: terminalCursor, on: connection)
+        }
+        #expect(String(decoding: seen, as: UTF8.self).contains("<from-mobile>"))
+        #expect(try h.read(mac, until: "<from-mobile>"))
+        try await adapter.detach(attachment, on: connection)
+        await adapter.close(connection)
+      }
+    }
 
     @Test func n11PairAuthenticateAndShareTheMacShellOverTLS() async throws {
       try await withHost { h in
@@ -215,11 +359,15 @@ import Testing
     }
 
     private func withHost(
-      hostKey: ClairHostSigningKey = ClairHostSigningKey(), grants: [ClairPersistedDeviceGrant] = [],
-      limits: ClairRemoteListenerLimits = .init(), failSaves: Bool = false, _ body: (RemoteHost) async throws -> Void
+      hostKey: ClairHostSigningKey = ClairHostSigningKey(),
+      grants: [ClairPersistedDeviceGrant] = [],
+      limits: ClairRemoteListenerLimits = .init(), failSaves: Bool = false,
+      workspace: ClairWorkspaceRuntime? = nil, _ body: (RemoteHost) async throws -> Void
     ) async throws {
       guard #available(macOS 15, *) else { return }
-      let h = try await RemoteHost(hostKey: hostKey, grants: grants, limits: limits, failSaves: failSaves)
+      let h = try await RemoteHost(
+        hostKey: hostKey, grants: grants, limits: limits, failSaves: failSaves,
+        workspace: workspace)
       do { try await body(h) } catch {
         await h.stop()
         throw error
@@ -244,12 +392,13 @@ import Testing
 
     @available(macOS 15, *)
     init(
-      hostKey: ClairHostSigningKey, grants: [ClairPersistedDeviceGrant], limits: ClairRemoteListenerLimits,
-      failSaves: Bool
+      hostKey: ClairHostSigningKey, grants: [ClairPersistedDeviceGrant],
+      limits: ClairRemoteListenerLimits,
+      failSaves: Bool, workspace suppliedWorkspace: ClairWorkspaceRuntime?
     ) async throws {
       self.hostKey = hostKey
       directory = URL(fileURLWithPath: "/private/tmp/clair-n11-\(UUID().uuidString.prefix(8))")
-      let workspace = try ClairWorkspaceRuntime(projects: [])
+      let workspace = try suppliedWorkspace ?? ClairWorkspaceRuntime(projects: [])
       authority = try ClairPairingAuthority(
         hostID: ClairHostID("n11-host"), endpoint: ClairTransportEndpoint("tls://127.0.0.1:1"),
         hostKey: hostKey, persistedGrants: grants)
@@ -355,6 +504,23 @@ import Testing
   private struct N11NoRelay: ClairPushSending {
     func send(_ delivery: ClairPushDelivery) throws -> ClairPushDeliveryResult {
       ClairPushDeliveryResult(status: .unavailable)
+    }
+  }
+
+  private struct N12CommittingEndpoint: ClairAgentCommandEndpoint {
+    func commit(_ effect: ClairAgentCommandEffect) -> ClairAgentCommandOutcome { .committed }
+  }
+
+  private func runGit(_ arguments: [String], at root: URL) throws {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+    process.arguments = ["-C", root.path] + arguments
+    process.standardOutput = Pipe()
+    process.standardError = Pipe()
+    try process.run()
+    process.waitUntilExit()
+    guard process.terminationStatus == 0 else {
+      throw CocoaError(.fileWriteUnknown)
     }
   }
 #endif

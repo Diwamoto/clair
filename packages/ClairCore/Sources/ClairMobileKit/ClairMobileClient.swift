@@ -216,7 +216,28 @@ public struct ClairNetworkTLSMobileTransportBoundary: Sendable {
     to endpoint: ClairTransportEndpoint,
     pinnedTo host: ClairHostPin
   ) async throws -> any ClairNativeTransportChannel {
-    throw ClairMobileTransportBoundaryError.unavailable
+    guard let components = URLComponents(string: endpoint.value),
+      components.scheme?.lowercased() == "tls",
+      let hostname = components.host, !hostname.isEmpty,
+      let rawPort = components.port, (1...Int(UInt16.max)).contains(rawPort),
+      components.user == nil, components.password == nil,
+      components.query == nil, components.fragment == nil,
+      components.path.isEmpty || components.path == "/"
+    else {
+      throw ClairTransportError.invalidEndpoint
+    }
+
+    let channel = try await ClairTLSChannel.connect(
+      host: hostname, port: UInt16(rawPort), pinnedTo: host.fingerprint)
+    if let expected = host.certificateFingerprint {
+      guard let observed = channel.peerCertificateFingerprint,
+        (try? ClairCertificateFingerprint(sha256Digest: observed)) == expected
+      else {
+        await channel.close()
+        throw ClairRemoteError.pinMismatch
+      }
+    }
+    return channel
   }
 }
 
@@ -742,6 +763,37 @@ public actor ClairMobileClient {
     }
     if error is ClairMobileTransportBoundaryError {
       return .transportUnavailable
+    }
+    if let error = error as? ClairRemoteError {
+      switch error {
+      case .pinMismatch:
+        return .hostIdentityMismatch
+      case .closed:
+        return .connectionClosed
+      case .connectionFailed:
+        return .transportUnavailable
+      case .protocolViolation:
+        return .invalidHandshake
+      case .remote(let code):
+        switch code {
+        case "pairingExpired": return .pairingExpired
+        case "pairingUnavailable": return .pairingUnavailable
+        case "pairingConsumed": return .pairingReplayRejected
+        case "deviceRevoked": return .deviceRevoked
+        case "credentialExpired": return .credentialExpired
+        case "connectionClosed": return .connectionClosed
+        case "notPaired", "deviceNotFound": return .notPaired
+        case "hostIdentityMismatch": return .hostIdentityMismatch
+        case "authenticationFailed", "invalidToken", "invalidDeviceKey", "generationMismatch",
+          "challengeExpired", "challengeConsumed", "challengeMismatch":
+          return .authenticationFailed
+        case "invalidProtocolOffer", "noCompatibleVersion", "unsupportedMajor":
+          return .protocolNegotiationFailed
+        case "capabilityDenied", "capabilityMismatch":
+          return .capabilityNegotiationFailed
+        default: return .invalidHandshake
+        }
+      }
     }
     guard let error = error as? ClairTransportError else {
       return .invalidHandshake

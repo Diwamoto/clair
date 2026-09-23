@@ -1,5 +1,8 @@
+import ClairAgent
+import ClairPush
 import ClairShared
 import ClairTerminal
+import ClairWorkspace
 import CryptoKit
 import Foundation
 import Network
@@ -36,11 +39,79 @@ public enum ClairRemoteCall: Codable, Equatable, Sendable {
   /// Followed by one raw frame carrying the input bytes.
   case terminalInput(
     operationID: OperationID, scope: ResourceScope, epoch: SessionEpoch, processGeneration: UInt64)
+  case agentDispatch(ClairAgentCommand)
+  case workspaceChangedFiles(ResourceScope)
+  case workspaceDiff(scope: ResourceScope, path: ClairWorkspacePath, basis: ClairGitDiffBasis)
+  case sessionVerify(scope: ResourceScope, cachedCursor: ReplayCursor?)
+  case pushRegister(token: Data, environment: ClairPushEnvironment, scope: ResourceScope)
+  case pushUnregister(ClairPushEnvironment)
 
   public var requiresAuthentication: Bool {
     switch self {
     case .presentation, .pair, .beginAuthentication, .authenticate: false
     default: true
+    }
+  }
+
+  public static func == (lhs: Self, rhs: Self) -> Bool {
+    switch (lhs, rhs) {
+    case (.presentation, .presentation):
+      return true
+    case (.pair(let left), .pair(let right)):
+      return left == right
+    case (.beginAuthentication(let left), .beginAuthentication(let right)):
+      return left == right
+    case (.authenticate(let left), .authenticate(let right)):
+      return left == right
+    case (.authorizeRead(let left), .authorizeRead(let right)):
+      return left == right
+    case (
+      .terminalAttach(let ls, let lg, let li, let lc),
+      .terminalAttach(let rs, let rg, let ri, let rc)
+    ):
+      return ls == rs && lg == rg && li == ri && lc == rc
+    case (
+      .terminalRead(let la, let lw),
+      .terminalRead(let ra, let rw)
+    ):
+      return la == ra && lw == rw
+    case (
+      .terminalAcknowledge(let la, let lc),
+      .terminalAcknowledge(let ra, let rc)
+    ):
+      return la == ra && lc == rc
+    case (.terminalDetach(let left), .terminalDetach(let right)):
+      return left == right
+    case (
+      .terminalInput(let lo, let ls, let le, let lg),
+      .terminalInput(let ro, let rs, let re, let rg)
+    ):
+      return lo == ro && ls == rs && le == re && lg == rg
+    case (.agentDispatch(let left), .agentDispatch(let right)):
+      return left.operationID == right.operationID && left.scope == right.scope
+        && left.kind == right.kind && left.baseRevision == right.baseRevision
+        && left.capability == right.capability && left.payload == right.payload
+    case (.workspaceChangedFiles(let left), .workspaceChangedFiles(let right)):
+      return left == right
+    case (
+      .workspaceDiff(let ls, let lp, let lb),
+      .workspaceDiff(let rs, let rp, let rb)
+    ):
+      return ls == rs && lp == rp && lb == rb
+    case (
+      .sessionVerify(let ls, let lc),
+      .sessionVerify(let rs, let rc)
+    ):
+      return ls == rs && lc == rc
+    case (
+      .pushRegister(let lt, let le, let ls),
+      .pushRegister(let rt, let re, let rs)
+    ):
+      return lt == rt && le == re && ls == rs
+    case (.pushUnregister(let left), .pushUnregister(let right)):
+      return left == right
+    default:
+      return false
     }
   }
 }
@@ -67,6 +138,13 @@ public enum ClairRemoteReply: Codable, Equatable, Sendable {
   case terminalFrame
   case terminalIdle(isClosed: Bool)
   case terminalInput(ClairTerminalCommitOutcome, OperationReceipt)
+  case agentDispatched(outcome: ClairAgentCommandOutcome, receipt: OperationReceipt)
+  case changedFileSummary(ClairChangedFileSummary)
+  case gitDiff(ClairGitDiff)
+  case sessionVerified(ReplayCursor)
+  case pushRegistered(
+    scope: ResourceScope, environment: ClairPushEnvironment, expiresAt: UInt64,
+    requiresRegistration: Bool)
   case ok
   case failure(code: String)
 }
@@ -106,10 +184,14 @@ extension ClairHostFingerprint {
 public final class ClairTLSChannel: ClairNativeTransportChannel, @unchecked Sendable {
   private let connection: NWConnection
   private let lock = NSLock()
+  private var peerCertificateFingerprintValue: Data?
   private var decoder = BoundedFrameDecoder(limits: ClairRemoteWire.limits)
   private var ready: [Data] = []
 
   public var remoteDescription: String { "\(connection.endpoint)" }
+  public var peerCertificateFingerprint: Data? {
+    lock.withLock { peerCertificateFingerprintValue }
+  }
 
   private init(_ connection: NWConnection) {
     self.connection = connection
@@ -126,6 +208,7 @@ public final class ClairTLSChannel: ClairNativeTransportChannel, @unchecked Send
     host: String, port: UInt16, pinnedTo pin: ClairHostFingerprint, queue: DispatchQueue = .global()
   ) async throws -> ClairTLSChannel {
     let tls = NWProtocolTLS.Options()
+    let fingerprint = ClairRemoteCertificateFingerprintBox()
     sec_protocol_options_set_min_tls_protocol_version(tls.securityProtocolOptions, .TLSv13)
     sec_protocol_options_set_verify_block(
       tls.securityProtocolOptions,
@@ -134,14 +217,22 @@ public final class ClairTLSChannel: ClairNativeTransportChannel, @unchecked Send
         guard let leaf = (SecTrustCopyCertificateChain(trust) as? [SecCertificate])?.first,
           let key = SecCertificateCopyKey(leaf)
         else { return complete(false) }
+        fingerprint.set(Data(SHA256.hash(data: SecCertificateCopyData(leaf) as Data)))
         complete(ClairHostFingerprint.ofCertificateKey(key) == pin)
       }, queue)
-    guard let port = NWEndpoint.Port(rawValue: port) else { throw ClairRemoteError.connectionFailed("port") }
-    return try await start(
-      NWConnection(host: NWEndpoint.Host(host), port: port, using: NWParameters(tls: tls)), queue: queue)
+    guard let port = NWEndpoint.Port(rawValue: port) else {
+      throw ClairRemoteError.connectionFailed("port")
+    }
+    let channel = try await start(
+      NWConnection(host: NWEndpoint.Host(host), port: port, using: NWParameters(tls: tls)),
+      queue: queue)
+    channel.lock.withLock { channel.peerCertificateFingerprintValue = fingerprint.get() }
+    return channel
   }
 
-  private static func start(_ connection: NWConnection, queue: DispatchQueue) async throws -> ClairTLSChannel {
+  private static func start(_ connection: NWConnection, queue: DispatchQueue) async throws
+    -> ClairTLSChannel
+  {
     let channel = ClairTLSChannel(connection)
     let once = ClairOnce()
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
@@ -231,9 +322,13 @@ public actor ClairRemoteClient {
     self.channel = channel
   }
 
+  public var isOpen: Bool { failure == nil }
+
   /// `binary` carries terminal input bytes; the returned data is a
   /// `ClairTerminalFrame.encoded()` frame when the reply is `.terminalFrame`.
-  public func call(_ call: ClairRemoteCall, binary: Data? = nil) async throws -> (ClairRemoteReply, Data?) {
+  public func call(_ call: ClairRemoteCall, binary: Data? = nil) async throws -> (
+    ClairRemoteReply, Data?
+  ) {
     let (reply, data) = try await reply(to: try enqueue([(call, binary)])[0])
     if case .failure(let code) = reply { throw ClairRemoteError.remote(code: code) }
     return (reply, data)
@@ -301,4 +396,12 @@ public actor ClairRemoteClient {
     waiting = [:]
     for continuation in pending.values { continuation.resume(throwing: error) }
   }
+}
+
+private final class ClairRemoteCertificateFingerprintBox: @unchecked Sendable {
+  private let lock = NSLock()
+  private var value: Data?
+
+  func set(_ value: Data) { lock.withLock { self.value = value } }
+  func get() -> Data? { lock.withLock { value } }
 }

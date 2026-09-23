@@ -1,5 +1,6 @@
 #if os(macOS)
 
+  import ClairPush
   import ClairShared
   import ClairTerminal
   import ClairTransport
@@ -363,9 +364,41 @@
         guard let binary else { throw ClairTerminalError.invalidOperation }
         let result = try await host.terminal.input(
           ClairTerminalInputRequest(
-            operationID: operationID, scope: scope, epoch: epoch, processGeneration: processGeneration,
+            operationID: operationID, scope: scope, epoch: epoch,
+            processGeneration: processGeneration,
             bytes: binary), on: connection!)
         return (.terminalInput(result.outcome, result.receipt), nil)
+      case .agentDispatch(let command):
+        let result = try await host.commandBoundary.execute(command, on: connection!)
+        return (.agentDispatched(outcome: result.outcome, receipt: result.receipt), nil)
+      case .workspaceChangedFiles(let scope):
+        guard scope.sessionID == nil else { throw ClairDaemonHostError.unauthorized }
+        let summary = try await host.changedFiles(
+          projectID: scope.projectID, worktreeID: scope.worktreeID, on: connection!)
+        return (.changedFileSummary(summary), nil)
+      case .workspaceDiff(let scope, let path, let basis):
+        guard scope.sessionID == nil else { throw ClairDaemonHostError.unauthorized }
+        let diff = try await host.diff(
+          projectID: scope.projectID, worktreeID: scope.worktreeID,
+          path: path, basis: basis, on: connection!)
+        return (.gitDiff(diff), nil)
+      case .sessionVerify(let scope, let cachedCursor):
+        let cursor = try await host.verifySessionCursor(
+          scope: scope, cachedCursor: cachedCursor, on: connection!)
+        return (.sessionVerified(cursor), nil)
+      case .pushRegister(let tokenBytes, let environment, let scope):
+        let token = try ClairPushDeviceToken(tokenBytes)
+        let registration = try await host.registerPush(
+          token: token, environment: environment, scope: scope, on: connection!)
+        return (
+          .pushRegistered(
+            scope: registration.scope, environment: registration.environment,
+            expiresAt: registration.expiresAt,
+            requiresRegistration: registration.requiresRegistration), nil
+        )
+      case .pushUnregister(let environment):
+        try await host.unregisterPush(environment: environment, on: connection!)
+        return (.ok, nil)
       }
     }
 

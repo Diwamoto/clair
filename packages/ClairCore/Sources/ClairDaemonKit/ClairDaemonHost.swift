@@ -777,6 +777,67 @@ public actor ClairDaemonHost {
     )
   }
 
+  /// Remote mobile registration advances the host-owned generation so a
+  /// re-created client adapter never reuses a stale APNs token generation.
+  public func registerPush(
+    token: ClairPushDeviceToken,
+    environment: ClairPushEnvironment,
+    scope: ResourceScope,
+    on connection: ClairAuthenticatedConnection
+  ) async throws -> ClairPushRegistrationSnapshot {
+    let current = try await pushRegistry.snapshot(
+      device: connection.deviceID, environment: environment)
+    let (generation, overflow) = (current?.generation ?? 0).addingReportingOverflow(1)
+    guard !overflow else { throw ClairPushError.staleGeneration }
+    return try await pushRegistry.register(
+      token: token, generation: generation, environment: environment, scope: scope,
+      on: connection)
+  }
+
+  /// The wire client intentionally has no host registry generation. Resolve
+  /// the current record under this authenticated device, then unregister it
+  /// through the existing authorization boundary.
+  public func unregisterPush(
+    environment: ClairPushEnvironment,
+    on connection: ClairAuthenticatedConnection
+  ) async throws {
+    guard
+      let snapshot = try await pushRegistry.snapshot(
+        device: connection.deviceID, environment: environment),
+      !snapshot.requiresRegistration
+    else { return }
+    try await pushRegistry.unregister(
+      environment: environment, generation: snapshot.generation, on: connection)
+  }
+
+  /// Resolves a cached cursor against the authoritative bounded journal. A
+  /// temporary subscriber is detached before the verified or resync cursor is returned.
+  public func verifySessionCursor(
+    scope: ResourceScope,
+    cachedCursor: ReplayCursor?,
+    on connection: ClairAuthenticatedConnection
+  ) async throws -> ReplayCursor {
+    guard scope.sessionID != nil,
+      cachedCursor == nil || cachedCursor?.scope == scope
+    else { throw ClairSessionJournalError.invalidCursor }
+    try await requireReadAccess(scope: scope, on: connection)
+
+    guard let cachedCursor else {
+      return try journal.snapshot(scope: scope).cursor
+    }
+    let subscriberID = try ClairJournalSubscriberID("remote-verify-\(UUID().uuidString)")
+    let catchUp = try await subscribeJournal(subscriberID, cursor: cachedCursor, on: connection)
+    try await detachJournal(subscriberID, scope: scope, on: connection)
+    switch catchUp {
+    case .upToDate(let snapshot), .resyncRequired(let snapshot):
+      return try snapshot.cursor
+    case .replay(_, _):
+      // The caller has not received the replay events, so preserve its cursor.
+      // Returning the journal head here would silently skip retained events.
+      return cachedCursor
+    }
+  }
+
   public func sendPush(
     _ event: ClairDaemonPushEvent,
     to device: ClairDeviceID,

@@ -1005,6 +1005,13 @@ public struct ClairAuthenticatedConnection: Equatable, Sendable {
   public let info: ClairConnectionInfo
   private let handle: ClairConnectionHandle
 
+  /// Creates the mobile client's inert view of a remotely authenticated
+  /// connection. Its random local handle is deliberately unknown to any host
+  /// authority, so it cannot authorize or close a host-side connection.
+  public init(clientInfo: ClairConnectionInfo) {
+    self.init(info: clientInfo)
+  }
+
   init(info: ClairConnectionInfo) {
     self.info = info
     self.handle = ClairConnectionHandle()
