@@ -3,7 +3,17 @@ import Foundation
 /// Pane layout model for the Mac AppShell (checklist §3.1). Pure value type so
 /// split/close/maximize/equalize/focus rules are testable without any UI.
 public enum PaneKind: String, Sendable, Equatable, Codable {
-  case editor, agent, terminal
+  case editor, terminal
+
+  /// U06: the Agent panel is gone — an agent is a raw terminal session (ADR-0002), so a saved
+  /// `agent` leaf restores as a terminal instead of failing the whole workspace restore.
+  public init(from decoder: Decoder) throws {
+    let raw = try decoder.singleValueContainer().decode(String.self)
+    guard let kind = raw == "agent" ? .terminal : Self(rawValue: raw) else {
+      throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "unknown pane kind \(raw)"))
+    }
+    self = kind
+  }
 }
 
 public struct PaneTree: Sendable, Equatable, Codable {
@@ -21,14 +31,14 @@ public struct PaneTree: Sendable, Equatable, Codable {
   public private(set) var maximized: Int?
   private var nextID: Int
 
-  /// editor (left, 0.62) | agent (top right) / terminal (bottom right, 0.55)
+  /// editor (left, 0.62) | terminal for an agent (top right) / terminal (bottom right, 0.55)
   public init() {
     root = .split(
       axis: .horizontal, ratio: 0.62,
       first: .leaf(id: 1, kind: .editor),
       second: .split(
         axis: .vertical, ratio: 0.55,
-        first: .leaf(id: 2, kind: .agent),
+        first: .leaf(id: 2, kind: .terminal),
         second: .leaf(id: 3, kind: .terminal)))
     focused = 1
     nextID = 4

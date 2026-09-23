@@ -1754,29 +1754,14 @@ import Observation
         VStack(spacing: 0) {
           if kind != .editor {
             PaneHeaderView(
-              id: id, label: kind == .terminal ? "ターミナル" : "Agent", focused: id == focused,
+              id: id, label: "ターミナル", focused: id == focused,
               onSwap: { run("pane.swap", ["idA": .int($0), "idB": .int($1)]) },
               onClose: { run("pane.focus", ["id": .int(id)]); run("pane.close", [:]) })
           }
           ZStack {
             C.surface
             if kind == .terminal { ClairGhosttySurface(launch: launches[id].map { ($0.command, $0.cwd) }, pane: id, sessionKey: ClairWorkbenchStore.terminalKey(root: project, pane: id), onFacts: { onFacts(id, $0, $1) }) }  // one surface per terminal leaf, attached to the daemon shell keyed by project#pane
-            else if kind == .editor { editor }
-            else {
-              // Agent output is a terminal (ADR-0002); this pane is where none is running, so offer the launch instead of a bare label.
-              VStack(spacing: 8) {
-                Text("エージェントは起動していません").font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textTertiary)
-                HStack(spacing: 6) {
-                  ForEach(AgentProfile.all, id: \.id) { p in
-                    Button { run("agent.launch", ["profile": .string(p.id)]) } label: {
-                      Text(p.title).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary)
-                        .padding(.horizontal, 10).frame(height: 26)
-                        .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(L.hairline))
-                    }.buttonStyle(.plain)
-                  }
-                }
-              }
-            }
+            else { editor }
           }
         }
         // Mock: a pane has no header to say it is focused, so the others recede instead of the focused one getting a frame.

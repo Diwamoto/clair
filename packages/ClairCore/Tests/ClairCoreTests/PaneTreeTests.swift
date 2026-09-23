@@ -5,7 +5,7 @@ import XCTest
 final class PaneTreeTests: XCTestCase {
   func testInitialLayoutAndFocusOrder() {
     var t = PaneTree()
-    XCTAssertEqual(t.leaves.map(\.kind), [.editor, .agent, .terminal])
+    XCTAssertEqual(t.leaves.map(\.kind), [.editor, .terminal, .terminal])
     t.focusNext(); XCTAssertEqual(t.focused, 2)
     t.focusNext(); t.focusNext(); XCTAssertEqual(t.focused, 1)  // wraps
   }
@@ -13,7 +13,7 @@ final class PaneTreeTests: XCTestCase {
   func testSplitCopiesKindAndFocusesNew() {
     var t = PaneTree()
     t.splitFocused(.vertical)
-    XCTAssertEqual(t.leaves.map(\.kind), [.editor, .editor, .agent, .terminal])
+    XCTAssertEqual(t.leaves.map(\.kind), [.editor, .editor, .terminal, .terminal])
     XCTAssertEqual(t.focused, 4)
   }
 
@@ -58,20 +58,27 @@ final class PaneTreeTests: XCTestCase {
   func testSwapLeavesExchangesKindButNotShapeOrFocus() {
     var t = PaneTree()
     t.focus(2)
-    t.swapLeaves(2, 3)
-    XCTAssertEqual(t.leaves.map(\.kind), [.editor, .terminal, .agent])
+    t.swapLeaves(1, 3)
+    XCTAssertEqual(t.leaves.map(\.kind), [.terminal, .terminal, .editor])
     XCTAssertEqual(t.focused, 2)  // ids/focus stay put; only what they show moves
-    guard case .split(_, let ratio, _, let right) = t.root, case .split(_, _, let a, let b) = right
+    guard case .split(_, let ratio, let left, let right) = t.root, case .split(_, _, _, let b) = right
     else { return XCTFail() }
     XCTAssertEqual(ratio, 0.62)
-    guard case .leaf(2, .terminal) = a, case .leaf(3, .agent) = b else { return XCTFail() }
+    guard case .leaf(1, .terminal) = left, case .leaf(3, .editor) = b else { return XCTFail() }
   }
 
   func testSwapLeavesIgnoresSelfOrUnknownID() {
     var t = PaneTree()
     t.swapLeaves(1, 1)
-    XCTAssertEqual(t.leaves.map(\.kind), [.editor, .agent, .terminal])
+    XCTAssertEqual(t.leaves.map(\.kind), [.editor, .terminal, .terminal])
     t.swapLeaves(1, 99)
-    XCTAssertEqual(t.leaves.map(\.kind), [.editor, .agent, .terminal])
+    XCTAssertEqual(t.leaves.map(\.kind), [.editor, .terminal, .terminal])
+  }
+
+  /// U06: a workspace saved with the removed Agent panel restores it as a terminal.
+  func testSavedAgentLeafRestoresAsTerminal() throws {
+    let json = #"{"leaf":{"id":2,"kind":"agent"}}"#
+    XCTAssertEqual(try JSONDecoder().decode(PaneTree.Node.self, from: Data(json.utf8)), .leaf(id: 2, kind: .terminal))
+    XCTAssertThrowsError(try JSONDecoder().decode(PaneKind.self, from: Data(#""chat""#.utf8)))
   }
 }
