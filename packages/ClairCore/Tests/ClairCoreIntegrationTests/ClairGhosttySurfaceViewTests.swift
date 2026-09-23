@@ -11,6 +11,19 @@ import Testing
 
   @Suite
   struct ClairGhosttySurfaceViewTests {
+    @Test @MainActor func t10MarkedTextUsesUTF16AndEscapeCancellationClearsIt() {
+      let view = ClairGhosttySurfaceView()
+      view.setMarkedText(
+        "かな😀", selectedRange: NSRange(location: 4, length: 0),
+        replacementRange: NSRange(location: NSNotFound, length: 0))
+      #expect(view.hasMarkedText())
+      #expect(view.markedRange() == NSRange(location: 0, length: 4))
+      #expect(view.selectedRange() == NSRange(location: 4, length: 0))
+      view.unmarkText()
+      #expect(!view.hasMarkedText())
+      #expect(view.markedRange().location == NSNotFound)
+    }
+
     @Test func t03EnterKeyEncodesToCarriageReturn() {
       let event = NSEvent.keyEvent(
         with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,

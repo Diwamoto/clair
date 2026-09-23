@@ -214,6 +214,16 @@ void clair_ghostty_surface_text(
   ghostty_surface_text((ghostty_surface_t)surface, text, text_len);
 }
 
+void clair_ghostty_surface_preedit(
+    clair_ghostty_surface_t surface, const char *text, uintptr_t text_len) {
+  ghostty_surface_preedit((ghostty_surface_t)surface, text, text_len);
+}
+
+void clair_ghostty_surface_ime_point(
+    clair_ghostty_surface_t surface, double *x, double *y, double *width, double *height) {
+  ghostty_surface_ime_point((ghostty_surface_t)surface, x, y, width, height);
+}
+
 bool clair_ghostty_surface_mouse_button(
     clair_ghostty_surface_t surface, clair_ghostty_mouse_state_e state,
     clair_ghostty_mouse_button_e button, clair_ghostty_input_mods_e mods) {

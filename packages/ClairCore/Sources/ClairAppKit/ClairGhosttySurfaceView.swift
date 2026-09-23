@@ -44,6 +44,10 @@ import Foundation
     private var ghosttySurface: GhosttySurfaceHandle?
     private var pollTimer: Timer?
     private var pollSequence: UInt = 0
+    private var markedText = ""
+    private var markedSelection = NSRange(location: 0, length: 0)
+    private var interpretingKey = false
+    private var committedText: String?
 
     private let launch: (command: String, cwd: String)?
 
@@ -257,6 +261,8 @@ import Foundation
     }()
 
     private func teardownGhosttySurface() {
+      markedText = ""
+      committedText = nil
       pollTimer?.invalidate()
       pollTimer = nil
       ghosttySurface?.close()
@@ -332,9 +338,33 @@ import Foundation
     public override func keyDown(with event: NSEvent) {
       if let ghosttySurface {
         let action: GhosttyKeyAction = event.isARepeat ? .repeatKey : .press
-        do { try ghosttySurface.sendKey(Self.ghosttyKeyEvent(event, action: action)) } catch {
+        // AppKit's input method owns printable keys while composing. Keep its
+        // provisional text on the surface and send only the committed result.
+        let wasComposing = hasMarkedText()
+        committedText = nil
+        interpretingKey = true
+        interpretKeyEvents([event])
+        interpretingKey = false
+        do {
+          if let text = committedText, !text.isEmpty {
+            var key = Self.ghosttyKeyEvent(event, action: action)
+            if wasComposing {
+              key = GhosttyKeyEvent(
+                action: action, mods: [], consumedMods: [], keyCode: 0,
+                text: text, unshiftedCodepoint: 0)
+            } else {
+              key = GhosttyKeyEvent(
+                action: action, mods: key.mods, consumedMods: key.consumedMods,
+                keyCode: key.keyCode, text: text, unshiftedCodepoint: key.unshiftedCodepoint)
+            }
+            try ghosttySurface.sendKey(key)
+          } else if !wasComposing && !hasMarkedText() {
+            try ghosttySurface.sendKey(Self.ghosttyKeyEvent(event, action: action))
+          }
+        } catch {
           lastReportedError = String(describing: error)
         }
+        committedText = nil
         return
       }
       guard let bytes = Self.encode(event) else {
@@ -347,10 +377,14 @@ import Foundation
     }
 
     public override func keyUp(with event: NSEvent) {
-      guard let ghosttySurface else { return }
+      guard let ghosttySurface, !hasMarkedText() else { return }
       do { try ghosttySurface.sendKey(Self.ghosttyKeyEvent(event, action: .release)) } catch {
         lastReportedError = String(describing: error)
       }
+    }
+
+    public override func doCommand(by selector: Selector) {
+      // keyDown forwards non-text keys after the input method has had a chance to handle them.
     }
 
     /// Builds a real key event for `ghostty_surface_key`. `keyCode` is the
@@ -361,10 +395,6 @@ import Foundation
     /// without the control modifier (libghostty encodes the control
     /// sequence itself from `mods`) and PUA-range function-key characters
     /// are dropped (letting `keyCode` alone drive them).
-    // ponytail: no IME preedit/composing support (no `NSTextInputClient`
-    // conformance, no `ghostty_surface_preedit` calls) — matches this
-    // view's pre-T03 keyboard path, which had none either, so this is not
-    // a regression. Add if Clair needs CJK/dead-key input in this surface.
     nonisolated static func ghosttyKeyEvent(_ event: NSEvent, action: GhosttyKeyAction)
       -> GhosttyKeyEvent
     {
@@ -654,6 +684,85 @@ import Foundation
         NSColor.selectedTextBackgroundColor.withAlphaComponent(0.3).setFill()
         selectionRect.fill()
       }
+    }
+  }
+
+  extension ClairGhosttySurfaceView: @preconcurrency NSTextInputClient {
+    public func hasMarkedText() -> Bool { !markedText.isEmpty }
+
+    public func markedRange() -> NSRange {
+      guard hasMarkedText() else { return NSRange(location: NSNotFound, length: 0) }
+      return NSRange(location: 0, length: (markedText as NSString).length)
+    }
+
+    public func selectedRange() -> NSRange {
+      hasMarkedText() ? markedSelection : NSRange(location: 0, length: 0)
+    }
+
+    public func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
+      let text = (string as? NSAttributedString)?.string ?? (string as? String) ?? ""
+      markedText = text
+      let length = (text as NSString).length
+      let start = min(max(0, selectedRange.location), length)
+      markedSelection = NSRange(
+        location: start,
+        length: min(max(0, selectedRange.length), length - start))
+      do { try ghosttySurface?.setPreedit(text) } catch {
+        lastReportedError = String(describing: error)
+      }
+    }
+
+    public func unmarkText() {
+      markedText = ""
+      markedSelection = NSRange(location: 0, length: 0)
+      do { try ghosttySurface?.setPreedit(nil) } catch {
+        lastReportedError = String(describing: error)
+      }
+    }
+
+    public func insertText(_ string: Any, replacementRange: NSRange) {
+      let text = (string as? NSAttributedString)?.string ?? (string as? String) ?? ""
+      unmarkText()
+      guard !text.isEmpty else { return }
+      if interpretingKey {
+        committedText = (committedText ?? "") + text
+      } else {
+        do {
+          try ghosttySurface?.sendKey(
+            GhosttyKeyEvent(action: .press, mods: [], keyCode: 0, text: text))
+        } catch {
+          lastReportedError = String(describing: error)
+        }
+      }
+    }
+
+    public func validAttributesForMarkedText() -> [NSAttributedString.Key] { [] }
+
+    public func attributedSubstring(
+      forProposedRange range: NSRange, actualRange: NSRangePointer?
+    ) -> NSAttributedString? {
+      guard hasMarkedText() else { return nil }
+      let length = (markedText as NSString).length
+      guard range.location <= length else { return nil }
+      let safe = NSRange(
+        location: range.location, length: min(range.length, length - range.location))
+      actualRange?.pointee = safe
+      return NSAttributedString(string: (markedText as NSString).substring(with: safe))
+    }
+
+    public func characterIndex(for point: NSPoint) -> Int { selectedRange().location }
+
+    public func firstRect(
+      forCharacterRange range: NSRange, actualRange: NSRangePointer?
+    ) -> NSRect {
+      actualRange?.pointee = range
+      let point = try? ghosttySurface?.imePoint()
+      let rect = NSRect(
+        x: point?.minX ?? 0, y: point?.minY ?? 0,
+        width: max(1, point?.width ?? 1),
+        height: max(1, point?.height ?? CGFloat(metrics.cellHeight)))
+      let windowRect = convert(rect, to: nil)
+      return window?.convertToScreen(windowRect) ?? windowRect
     }
   }
 

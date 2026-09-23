@@ -1,6 +1,7 @@
 #if CLAIR_GHOSTTY_VENDORED
   import ClairGhosttyABI
 #endif
+import CoreGraphics
 import Foundation
 
 /// Which platform view backs a `ghostty_surface_t`. Mirrors
@@ -439,6 +440,37 @@ public final class GhosttySurfaceHandle {
       text.withCString { pointer in
         clair_ghostty_surface_text(raw, pointer, UInt(text.utf8.count))
       }
+    #else
+      throw GhosttyError.runtimeUnavailable
+    #endif
+  }
+
+  /// Display IME composition without writing it to the child PTY.
+  public func setPreedit(_ text: String?) throws {
+    guard isValid else { throw GhosttyError.handleExpired }
+    #if CLAIR_GHOSTTY_VENDORED
+      if let text, !text.isEmpty {
+        text.withCString { pointer in
+          clair_ghostty_surface_preedit(raw, pointer, UInt(text.utf8.count))
+        }
+      } else {
+        clair_ghostty_surface_preedit(raw, nil, 0)
+      }
+    #else
+      throw GhosttyError.runtimeUnavailable
+    #endif
+  }
+
+  /// Cursor rectangle for the macOS input method candidate window, in surface points.
+  public func imePoint() throws -> CGRect {
+    guard isValid else { throw GhosttyError.handleExpired }
+    #if CLAIR_GHOSTTY_VENDORED
+      var x = 0.0
+      var y = 0.0
+      var width = 0.0
+      var height = 0.0
+      clair_ghostty_surface_ime_point(raw, &x, &y, &width, &height)
+      return CGRect(x: x, y: y, width: width, height: height)
     #else
       throw GhosttyError.runtimeUnavailable
     #endif

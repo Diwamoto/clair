@@ -448,6 +448,10 @@ static bool (*const clair_ghostty_probe_surface_key)(ghostty_surface_t, ghostty_
     ghostty_surface_key;
 static void (*const clair_ghostty_probe_surface_text)(ghostty_surface_t, const char *, uintptr_t) =
     ghostty_surface_text;
+static void (*const clair_ghostty_probe_surface_preedit)(ghostty_surface_t, const char *, uintptr_t) =
+    ghostty_surface_preedit;
+static void (*const clair_ghostty_probe_surface_ime_point)(ghostty_surface_t, double *, double *, double *, double *) =
+    ghostty_surface_ime_point;
 static bool (*const clair_ghostty_probe_surface_mouse_button)(
     ghostty_surface_t, ghostty_input_mouse_state_e, ghostty_input_mouse_button_e,
     ghostty_input_mods_e) = ghostty_surface_mouse_button;
@@ -522,6 +526,10 @@ bool clair_ghostty_surface_key(
     clair_ghostty_surface_t surface, clair_ghostty_input_key_s event);
 void clair_ghostty_surface_text(
     clair_ghostty_surface_t surface, const char *text, uintptr_t text_len);
+void clair_ghostty_surface_preedit(
+    clair_ghostty_surface_t surface, const char *text, uintptr_t text_len);
+void clair_ghostty_surface_ime_point(
+    clair_ghostty_surface_t surface, double *x, double *y, double *width, double *height);
 bool clair_ghostty_surface_mouse_button(
     clair_ghostty_surface_t surface, clair_ghostty_mouse_state_e state,
     clair_ghostty_mouse_button_e button, clair_ghostty_input_mods_e mods);
