@@ -37,11 +37,20 @@ import ClairEditorCore
     func rowTop(_ line: Int) -> CGFloat { CGFloat(rowMap.row(of: line)) * lineHeight }
 
     /// Where the rows of `textLine` start (local UTF-16), `[0]` when unwrapped.
+    ///
+    /// ponytail: a wrapped line is still measured whole (like its `CTLine`), once
+    /// per revision; a multi-MB single line pays that on each edit to it.
     private func rowStarts(_ textLine: TextLine) -> [Int] {
-      guard softWrap, rowMap.rows(of: textLine.index.value) > 1,
-        let text = try? snapshot.text(in: textLine.contentRange)
-      else { return [0] }
-      return [0] + EditorWrap.breaks(Substring(text), columns: wrapColumns)
+      let line = textLine.index.value
+      guard softWrap, rowMap.rows(of: line) > 1 else { return [0] }
+      if wrapCache.revision != snapshot.revision || wrapCache.columns != wrapColumns {
+        wrapCache = (snapshot.revision, wrapColumns, [:])
+      }
+      if let cached = wrapCache.starts[line] { return cached }
+      guard let text = try? snapshot.text(in: textLine.contentRange) else { return [0] }
+      let starts = [0] + EditorWrap.breaks(Substring(text), columns: wrapColumns)
+      wrapCache.starts[line] = starts
+      return starts
     }
 
     func segments(_ line: Int) -> [EditorRowSegment] {

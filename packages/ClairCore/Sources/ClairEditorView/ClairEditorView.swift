@@ -93,6 +93,8 @@ import ClairEditorCore
     /// Called whenever `folds` changes, so a host can restore them on a rebuilt view.
     public var onFoldsChange: (([TextUTF8Range]) -> Void)?
     var rowMap: EditorRowMap
+    /// Row starts of wrapped lines drawn at this revision and width, so scrolling never re-walks a long line.
+    var wrapCache: (revision: TextRevision?, columns: Int, starts: [Int: [Int]]) = (nil, 0, [:])
     var wrapColumns = 80
     let charAdvance: CGFloat
 
