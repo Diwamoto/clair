@@ -258,7 +258,9 @@ import Observation
     func searchSymbols(_ query: String) async {
       guard let root = activeRoot else { languageItems = []; return }
       let found = await buffers.language.symbols(root: root, matching: query)
-      guard activeRoot == root, state.palette == .symbols else { return }
+      // `.task(id: query)` cancels the previous search; servers may answer out of order, so an older
+      // query's late reply must not replace the newer one.
+      guard !Task.isCancelled, activeRoot == root, state.palette == .symbols else { return }
       languageItems = found.prefix(200).map { item($0, root: root) }
     }
 
