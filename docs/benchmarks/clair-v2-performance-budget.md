@@ -3,9 +3,7 @@
 Clair v2 の性能契約の正本。ここで定めた予算は「近づける目標」ではなく、
 **超えたら失敗**として機械的に検証される。
 
-[v1 baseline](clair-v1-baseline.md) は ccedit との比較契約、
-[text engine baseline](clair-text-engine-baseline.md) は editor surface の
-slice 計測。本書は v2 の**全機能**に対する予算契約であり、この 2 つの上位に立つ。
+本書は Clair の**全機能**に対する予算契約である。
 
 ## 1. 予算
 
@@ -95,7 +93,7 @@ affordance が UI 層に存在しないと落ち、さらに p95 が 100 ms を�
 
 ## 4. 計測規約
 
-[`metric-contract.json`](metric-contract.json) の percentile rule を継承する。
+percentile rule:
 
 - nearest-rank p95、`sorted[ceil(0.95 * n) - 1]`
 - 1 回の warm-up を捨ててから計測する

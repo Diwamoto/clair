@@ -10,8 +10,6 @@ Design canvas と Workbench mock（`prototypes/clair-workbench`）を同期し�
 
 - UI の正本は **`prototypes/clair-workbench`**（Design canvas を実際に動く React 実装に
   落としたモック。`prototypes/clair-workbench/README.md` 参照）。
-- `prototypes/clair-interaction-lab` は旧い静止画モックで、`clair-workbench` と競合する
-  場合は本チェックリストの対象にしない（`clair-native-rewrite-queue.md` P2 節の記載通り）。
 - 値はすべて `prototypes/clair-workbench/src/tokens.ts` / `motion.tsx` / `data.ts` /
   `store.tsx` / `chrome.tsx` / `menus.tsx` / `contextMenu.tsx` / `mobile-artboards.ts` /
   `screens/*.tsx` から機械的に写した。React 側の都合による値は使っていない。
@@ -251,7 +249,7 @@ panel id が選ばれた場合の共有 panel。`App.tsx` の `Ide()` の panel/
 
 ## 4. Screen/state 一覧（Mobile、`#/mobile`）
 
-モバイルは **デスクトップの縮小版ではない**。`docs/projects/p0020-mobile-agent-remote-control/`
+モバイルは **デスクトップの縮小版ではない**。`docs/clair-spec.md`
 の non-goal（mobile full IDE、source editor、file browser、diff/review を除外）に従い、
 「席を離れたあと agent を見て返す」経路だけを持つ。IDE をそのまま縮小した画面は作らない。
 色はグレースケールのみ（diff/debug/タブグループ以外は無色というルールがモバイルにも

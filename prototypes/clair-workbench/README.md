@@ -290,7 +290,7 @@ sidebarの中、breadcrumbはstatus barへ移す。splitしても縦chromeは74p
 ## モバイル
 
 モバイルは**デスクトップの縮小版ではない**。仕様
-（`docs/projects/p0020-mobile-agent-remote-control/`）が non-goal として
+（`docs/clair-spec.md`）が non-goal として
 「mobile full IDE、source editor、file browser、diff/review」を明示的に外して
 いるので、モバイルが持つのは**席を離れたあと agent を見て返すための経路だけ**。
 IDE をそのまま小さくした画面は作らない。

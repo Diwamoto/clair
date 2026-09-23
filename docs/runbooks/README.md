@@ -11,9 +11,10 @@ development、release、migration、rollback、recoveryなど、人またはagen
 - failure時の停止条件とrecovery
 - 最終検証日または検証対象version
 
-設計理由はrunbookへ重複させず、関連ADRやarchitectureへリンクします。
+設計理由はrunbookへ重複させず、関連ADRやspecへリンクします。
 
 Current runbooks:
 
 - [Local development](clair-verification.md)
 - [Clair v2 native mobile build and TestFlight smoke](native-mobile.md)
+- [Release and update distribution](release.md)

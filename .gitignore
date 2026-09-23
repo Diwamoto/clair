@@ -27,8 +27,6 @@ __pycache__/
 # Standalone docs site project (own repo, own remote — not part of this history).
 /docs-site/
 
-# Seeded Claude Design canvas output. Re-seed from the .dc.html sources.
-/docs/investigations/ui-design-review/clair-workspace-redesign.html
 
 # Materialized libghostty/GhosttyKit vendor artifact and its build/fetch
 # cache (Config/ghostty-pin.json is the tracked source of truth; see
