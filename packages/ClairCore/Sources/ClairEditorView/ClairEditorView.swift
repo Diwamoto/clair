@@ -113,6 +113,7 @@ import ClairEditorCore
 
     let renderer: EditorLineRenderer
     let font: NSFont
+    private let blameFont: NSFont
     private let ascent: CGFloat
     /// The fixed per-row height every line occupies (no soft-wrap, one row
     /// per document line). Exposed so a host can scroll a given line into
@@ -139,6 +140,7 @@ import ClairEditorCore
       self.snapshot = snapshot
       self.selection = selection
       self.font = font
+      self.blameFont = NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask)
       self.renderer = EditorLineRenderer(font: font)
       self.ascent = font.ascender
       let natural = (font.ascender - font.descender + font.leading).rounded(.up)
@@ -451,7 +453,7 @@ import ClairEditorCore
             let endX = textInset + seg.x(seg.end)
             let x = endX + 120
             let label = CTLineCreateWithAttributedString(NSAttributedString(
-              string: annotation.text, attributes: [.font: font, .foregroundColor: blameColor]))
+              string: annotation.text, attributes: [.font: blameFont, .foregroundColor: blameColor]))
             context.saveGState()
             context.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
             context.textPosition = CGPoint(x: x, y: seg.top + baselineShift + ascent)
