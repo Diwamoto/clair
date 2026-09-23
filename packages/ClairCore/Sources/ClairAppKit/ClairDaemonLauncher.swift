@@ -65,8 +65,10 @@ import Foundation
     @MainActor public static var keepsSessionsOnQuit = false
 
     /// Explicit Clair quit ends the daemon and its shells (spec §7); an update restart does not.
+    /// Under `make dev` the script owns the daemon (shared by every dev session), so quitting one
+    /// app must not kill the shells of the others.
     @MainActor public static func shutdown() {
-      guard !keepsSessionsOnQuit else { return }
+      guard !keepsSessionsOnQuit, ProcessInfo.processInfo.environment["CLAIR_DEV_SUPERVISED"] == nil else { return }
       try? client.shutdown()
     }
 

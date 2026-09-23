@@ -10,9 +10,11 @@ if CommandLine.arguments.dropFirst().starts(with: ["mcp", "serve"]) {
   }
   exit(0)
 }
-// T09: `clair attach` is the child a Ghostty surface runs; `clair daemon stop` ends the daemon and its shells.
+// T09: `clair attach` is the child a Ghostty surface runs; `clair daemon stop` ends the daemon and its shells;
+// `clair daemon status` exits 0 only when the daemon answers (used by `make dev`).
 if CommandLine.arguments.dropFirst().first == "attach" { exit(runAttach(Array(CommandLine.arguments.dropFirst(2)))) }
 if CommandLine.arguments.dropFirst().starts(with: ["daemon", "stop"]) { exit(runDaemonStop(Array(CommandLine.arguments.dropFirst(3)))) }
+if CommandLine.arguments.dropFirst().starts(with: ["daemon", "status"]) { exit(runDaemonStatus(Array(CommandLine.arguments.dropFirst(3)))) }
 guard let request = WorkbenchCLI.parse(Array(CommandLine.arguments.dropFirst())) else {
   FileHandle.standardError.write(Data("usage: clair open <path[:line[:col]]> | clair <command-id> [key=value ...]\n".utf8))
   exit(2)

@@ -114,3 +114,10 @@ func runDaemonStop(_ args: [String]) -> Int32 {
   do { try daemonClient(f["directory"]).shutdown() } catch { return fail("\(error)") }
   return 0
 }
+
+func runDaemonStatus(_ args: [String]) -> Int32 {
+  guard let f = flags(args), Set(f.keys).isSubset(of: ["directory"]) else {
+    return fail("usage: clair daemon status [--directory <dir>]")
+  }
+  return (try? daemonClient(f["directory"]).health()) == nil ? 1 : 0
+}

@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-.PHONY: help doctor dev dev-ios build-mobile-simulator lint-swift lint ci
+.PHONY: help doctor dev dev-daemon-restart dev-ios build-mobile-simulator lint-swift lint ci
 .PHONY: build mobile-build test test-integration check foundation
 .PHONY: perf perf-budget perf-startup
 
@@ -11,8 +11,13 @@ help: ## Show the supported development commands.
 doctor: ## Check full Xcode and Swift format.
 	@./scripts/doctor.sh
 
-dev: ## Build and launch the Clair macOS app (Ctrl-C to stop).
+dev: ## Build and launch the Clair macOS app (Ctrl-C to stop). Sessions share one daemon.
 	@./scripts/run-dev.sh
+
+dev-daemon-restart: ## Rebuild and restart the shared dev daemon; running `make dev` sessions bring it back.
+	@swift build --package-path packages/ClairApps --product ClairDaemon
+	@swift build --package-path packages/ClairApps --product clair
+	@CLAIR_CHANNEL=dev packages/ClairApps/.build/arm64-apple-macosx/debug/clair daemon stop || true
 
 dev-ios: ## Build and launch Clair Mobile in an iOS Simulator.
 	@./scripts/run-mobile-simulator.sh
