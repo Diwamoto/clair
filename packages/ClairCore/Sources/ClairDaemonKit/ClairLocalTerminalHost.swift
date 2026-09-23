@@ -112,6 +112,7 @@
         if let existing = byKey[key], existing.process.isRunning, existing.cwd == cwd,
           existing.command == command
         {
+          try? existing.process.resizeAndRedraw(size)
           return opened(existing)
         }
         // Shells that exited on their own were only kept so their last output could be read.

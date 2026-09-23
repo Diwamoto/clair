@@ -32,6 +32,18 @@ import Testing
       }
     }
 
+    @Test func t09ReattachAtTheSameSizeStillMakesTheForegroundAppRepaint() async throws {
+      // A polling loop, since a trap cannot run while `read` blocks.
+      let daemon = try LocalDaemon(
+        command: "trap 'printf WINCH' WINCH; printf READY; while :; do sleep 0.05; done")
+      let first = try daemon.attach(key: "pane-1")
+      #expect(try daemon.read(first, until: "READY"))
+      // Same size as before: only an explicit SIGWINCH makes claude/vim redraw over the replay.
+      let second = try daemon.attach(key: "pane-1")
+      #expect(try daemon.read(second, until: "WINCH"))
+      await daemon.stop()
+    }
+
     @Test func t09MacAndPairedMobileShareOnePTYAndInputArrivesInOrder() async throws {
       try await withDaemon { daemon in
         let mac = try daemon.attach(key: "pane-1")

@@ -204,6 +204,16 @@ import Foundation
       }
     }
 
+    /// A reattaching client replays history drawn at whatever size the shell had, and an
+    /// unchanged size raises no SIGWINCH, so a full-screen app (claude, vim) would never repaint.
+    /// Nudging the height makes the kernel signal the foreground job, which redraws at `newSize`.
+    // ponytail: two SIGWINCHs back to back (the master can't name the foreground pgrp on macOS).
+    public func resizeAndRedraw(_ newSize: ClairTerminalSize) throws {
+      let nudge = newSize.rows > 1 ? newSize.rows - 1 : newSize.rows + 1
+      try resizeTerminal(ClairTerminalSize(rows: nudge, columns: newSize.columns))
+      try resizeTerminal(newSize)
+    }
+
     public func terminate() {
       _ = commitTerminalSignal(SIGTERM)
     }
