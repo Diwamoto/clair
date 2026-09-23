@@ -618,8 +618,7 @@ function Pane({ node }: { node: PaneNode }) {
   const wb = useWorkbench();
 
   if (node.kind === 'leaf') {
-    // A pane has no header to say it is focused, so the ones that are not
-    // sit back a step.
+    // Keep editor content fully legible even when another pane is focused.
     return (
       <div
         style={{
@@ -628,7 +627,7 @@ function Pane({ node }: { node: PaneNode }) {
           flexDirection: 'column',
           minWidth: 0,
           minHeight: 0,
-          opacity: wb.focusedPane === node.id ? 1 : 0.75,
+          opacity: node.pane === 'editor' || wb.focusedPane === node.id ? 1 : 0.75,
         }}
       >
         {node.pane === 'editor' ? <EditorPane node={node} /> : node.pane === 'agent' ? <AgentPane node={node} /> : <TerminalPane node={node} />}
