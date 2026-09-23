@@ -56,8 +56,15 @@ import Foundation
       _ = try? client.terminal(.close(key: key))
     }
 
-    /// Explicit Clair quit ends the daemon and its shells (spec §7).
-    public static func shutdown() {
+    /// V09: set just before an update restart. The daemon and its shells then outlive this process and
+    /// the relaunched app's restored panes reattach by the same `project#pane` key (ADR-0009).
+    /// ponytail: the old daemon keeps serving until the next explicit quit; a control-protocol change
+    /// across versions would need a version handshake before relying on this.
+    @MainActor public static var keepsSessionsOnQuit = false
+
+    /// Explicit Clair quit ends the daemon and its shells (spec §7); an update restart does not.
+    @MainActor public static func shutdown() {
+      guard !keepsSessionsOnQuit else { return }
       try? client.shutdown()
     }
 

@@ -5,9 +5,8 @@ import Foundation
 // Ported from the v1 updater (apple/ClairApp/ClairUpdate.swift) with the same manifest and signed
 // payload, so scripts/generate-update-manifest.swift and the release workflow stay valid.
 // Apply only works from an installed `/Applications/<Name>.app`; a SwiftPM binary reports `.notInstalled`.
-// ponytail: PTYs are owned by the GUI-side libghostty surface today, so "update restart reattaches
-// the PTY" (ADR-0009) is NOT met — sessions end on restart. Needs the Mac surface attached to the
-// daemon-owned session (T02) first; tracked as a V09 gap.
+// Update restart keeps the PTYs: shells are daemon-owned (T09) and `installUpdate` leaves the daemon
+// running, so restored panes reattach by key (`ClairDaemonLauncher.keepsSessionsOnQuit`).
 
 public enum ClairChannel: String, Sendable, Codable, CaseIterable {
   case stable, dev

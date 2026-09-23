@@ -111,6 +111,10 @@ import Observation
       update = .installing
       do {
         try await ClairUpdater.install(u, updateConfig)
+        // The relaunched app must restore these pane ids to find its shells again: flush now, not in 100 ms.
+        persistenceTask?.cancel()
+        if let persistURL { try? state.save(to: persistURL) }
+        ClairDaemonLauncher.keepsSessionsOnQuit = true
         NSApp.terminate(nil)
       } catch { update = .failed("\(error)") }
     }
