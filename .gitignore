@@ -1,9 +1,6 @@
 # macOS
 .DS_Store
 
-# Rust
-/target/
-
 # Xcode and local Swift state
 /.build/
 /packages/*/.build/
@@ -11,7 +8,6 @@
 *.xcresult
 *.xcuserstate
 xcuserdata/
-/Clair.xcodeproj/project.xcworkspace/
 
 # Python
 __pycache__/
@@ -20,18 +16,13 @@ __pycache__/
 /generated/
 /.tmp/
 
-# Local CodeMirror build dependencies and disposable build output.
-/editor-web/node_modules/
-/editor-web/dist/
-
 # Standalone docs site project (own repo, own remote — not part of this history).
 /docs-site/
-
 
 # Materialized libghostty/GhosttyKit vendor artifact and its build/fetch
 # cache (Config/ghostty-pin.json is the tracked source of truth; see
 # scripts/ghostty.sh and docs/plans/clair-t01-libghostty-foundation.md).
-/packages/ClairCore/Vendor/ghostty/
+/packages/ClairCore/Vendor/ghostty
 /.cache/ghostty/
 /ClairMobile.xcodeproj/project.xcworkspace/
 
