@@ -1145,7 +1145,7 @@ func h10EveryDependentComponentFailsClosedAfterASimulatedDaemonRestart() async t
     )
     let processID = try #require(running.processID)
     let directory = URL(fileURLWithPath: "/private/tmp")
-      .appendingPathComponent("clair-h10-runtime-(UUID().uuidString)", isDirectory: true)
+      .appendingPathComponent("clair-h10-runtime-\(UUID().uuidString)", isDirectory: true)
     defer { try? FileManager.default.removeItem(at: directory) }
     let configuration = try ClairDaemonConfiguration(
       paths: ClairDaemonPaths(directoryURL: directory)
