@@ -1,4 +1,5 @@
 import ClairEditorCore
+import CoreGraphics
 
 // Cross-platform (E06 macOS + E08 iOS): these span/kind types carry no
 // AppKit/UIKit behavior beyond `PlatformColor` (`PlatformTypes.swift`), so
@@ -12,19 +13,26 @@ import ClairEditorCore
 public enum EditorTokenKind: Sendable, Hashable {
   case keyword, string, comment, number, type, function, variable, plain
 
-  /// A default, theme-agnostic color. `ClairEditorView.tokenColors` lets a
-  /// caller override any subset; full design-system theming is a `U05`
-  /// concern.
+  /// Atom One Dark, matching `ClairColor.Surface.code*` in the design
+  /// system. `ClairEditorView.tokenColors` lets a caller override any subset.
   public var defaultColor: PlatformColor {
     switch self {
-    case .keyword: return .systemPink
-    case .string: return .systemRed
-    case .comment: return .systemGray
-    case .number: return .systemBlue
-    case .type: return .systemTeal
-    case .function: return .systemPurple
+    case .keyword: return .oneDark(0xc678dd)
+    case .string: return .oneDark(0x98c379)
+    case .comment: return .oneDark(0x5c6370)
+    case .number: return .oneDark(0xd19a66)
+    case .type: return .oneDark(0xe5c07b)
+    case .function: return .oneDark(0x61afef)
     case .variable, .plain: return .editorLabel
     }
+  }
+}
+
+extension PlatformColor {
+  fileprivate static func oneDark(_ rgb: Int) -> PlatformColor {
+    PlatformColor(
+      red: CGFloat((rgb >> 16) & 0xff) / 255, green: CGFloat((rgb >> 8) & 0xff) / 255,
+      blue: CGFloat(rgb & 0xff) / 255, alpha: 1)
   }
 }
 
