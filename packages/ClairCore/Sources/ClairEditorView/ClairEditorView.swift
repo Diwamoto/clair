@@ -51,6 +51,13 @@ import ClairEditorCore
     public var lineNumberColor: NSColor = .secondaryLabelColor { didSet { needsDisplay = true } }
     /// Line number of the caret's line is drawn in this colour instead.
     public var currentLineNumberColor: NSColor = .labelColor { didSet { needsDisplay = true } }
+    /// An attribute-only annotation for the selected line; never changes the document revision.
+    public var blameAnnotation: (line: Int, text: String)? {
+      didSet {
+        if blameAnnotation?.line != oldValue?.line || blameAnnotation?.text != oldValue?.text { needsDisplay = true }
+      }
+    }
+    public var blameColor: NSColor = .tertiaryLabelColor { didSet { needsDisplay = true } }
     /// V13: debugger decoration is a viewport overlay, never a document edit.
     public var debugStoppedLine: Int? { didSet { needsDisplay = true } }  // 1-based
     public var debugBreakpoints: Set<Int> = [] { didSet { needsDisplay = true } }  // 1-based
@@ -394,6 +401,9 @@ import ClairEditorCore
       guard !visible.isEmpty else { return }
 
       let composingLine = self.composingLine
+      let selectedLine = selection.selections.first.flatMap {
+        try? snapshot.position(at: $0.head, columnUnit: UTF8Unit.self, rounding: .down).line.value
+      }
       var measuredWidth: CGFloat = 0
       for (index, _) in visible {
         // A composing line's local UTF-16 offsets no longer line up with the
@@ -435,6 +445,21 @@ import ClairEditorCore
           if !isComposingLine {
             drawDiagnostics(seg, context: context)
             drawCarets(seg, context: context)
+          }
+          if seg.isLast, selectedLine == index, blameAnnotation?.line == index,
+            let annotation = blameAnnotation {
+            let endX = textInset + seg.x(seg.end)
+            let x = endX + 120
+            let label = CTLineCreateWithAttributedString(NSAttributedString(
+              string: annotation.text, attributes: [.font: font, .foregroundColor: blameColor]))
+            context.saveGState()
+            context.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
+            context.textPosition = CGPoint(x: x, y: seg.top + baselineShift + ascent)
+            CTLineDraw(label, context)
+            context.restoreGState()
+            if !softWrap {
+              measuredWidth = max(measuredWidth, x + CGFloat(CTLineGetTypographicBounds(label, nil, nil, nil)) + textInset)
+            }
           }
           if seg.isLast, fold(onLine: index) != nil { drawPlaceholder(after: seg, context: context) }
         }

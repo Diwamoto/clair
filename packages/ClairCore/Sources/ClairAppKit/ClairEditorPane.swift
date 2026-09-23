@@ -367,6 +367,7 @@
             ZStack(alignment: .topTrailing) {
               EditorSurface(
                 manager: m, buffers: buffers, root: root, path: path, softWrap: softWrap,
+                blame: selectedBlame(path, manager: m),
                 debugLine: debugLine, debugBreakpoints: debugBreakpoints, onToggleDebugBreakpoint: onToggleDebugBreakpoint,
                 onCaret: { onCaret(path, $0, m.buffer.snapshot) },
                 reveal: buffers.reveal?.path == path ? buffers.reveal : nil, onEdit: { onEdit(path) }
@@ -388,6 +389,17 @@
       }
     }
 
+    private func selectedBlame(_ path: String, manager: EditorTransactionManager) -> (line: Int, text: String)? {
+      guard let lines = buffers.blame[path] else { return nil }
+      let initial = manager.selection.selections.first.flatMap {
+        try? manager.buffer.snapshot.position(at: $0.head, columnUnit: UTF8Unit.self, rounding: .down).line.value + 1
+      }
+      guard let line = buffers.caret[path]?.line ?? initial,
+        lines.indices.contains(line - 1) else { return nil }
+      let info = lines[line - 1]
+      return (line - 1, String("\(info.author) · \(info.summary)".prefix(160)))
+    }
+
     /// Mock `PathBreadcrumb`: 24px, directory parts quiet, the file name semibold.
     private func breadcrumb(_ path: String) -> some View {
       let parts = path.split(separator: "/").map(String.init)
@@ -398,12 +410,6 @@
             .foregroundStyle(i == parts.count - 1 ? C.textSecondary : C.textQuaternary).lineLimit(1)
         }
         Spacer(minLength: 0)
-        if let line = buffers.caret[path]?.line, let lines = buffers.blame[path], lines.indices.contains(line - 1) {
-          let info = lines[line - 1]
-          Text("\(info.author) · \(info.summary)")
-            .font(.system(size: 10)).foregroundStyle(C.textQuaternary).lineLimit(1)
-            .help("行 \(line): \(info.author) · \(info.summary)")
-        }
       }.padding(.horizontal, 12).frame(height: 24).background(C.canvas)
     }
 
@@ -454,6 +460,7 @@
     let root: String
     let path: String
     let softWrap: Bool
+    let blame: (line: Int, text: String)?
     let debugLine: Int?
     let debugBreakpoints: Set<Int>
     let onToggleDebugBreakpoint: ((Int) -> Void)?
@@ -481,6 +488,7 @@
       view.caretColor = NSColor(C.textPrimary); view.selectionColor = NSColor(C.debugBlue).withAlphaComponent(0.3)
       view.gutterWidth = 54
       view.lineNumberColor = NSColor(C.lineNumber); view.currentLineNumberColor = NSColor(C.textTertiary)
+      view.blameAnnotation = blame; view.blameColor = NSColor(C.textQuaternary)
       view.debugStoppedLine = debugLine; view.debugBreakpoints = debugBreakpoints
       view.debugLineColor = NSColor(C.debugBlue).withAlphaComponent(0.14)
       view.debugBreakpointColor = NSColor(C.danger)
@@ -523,6 +531,7 @@
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
       if let view = scroll.documentView as? ClairEditorView {
+        view.blameAnnotation = blame
         view.debugStoppedLine = debugLine
         view.debugBreakpoints = debugBreakpoints
         view.onToggleBreakpoint = onToggleDebugBreakpoint

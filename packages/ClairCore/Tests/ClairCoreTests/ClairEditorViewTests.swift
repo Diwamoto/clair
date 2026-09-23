@@ -79,6 +79,19 @@
       )
     }
 
+    func testBlameUsesOnlySelectedLineAndExtendsPastItsText() throws {
+      let view = try makeView("short\nsecond")
+      let annotation = String(repeating: "blame ", count: 18)
+      view.blameAnnotation = (line: 1, text: annotation)
+      try renderOffscreen(view)
+      XCTAssertEqual(view.frame.width, 400, accuracy: 0.01)
+
+      view.blameAnnotation = (line: 0, text: annotation)
+      try renderOffscreen(view)
+      XCTAssertGreaterThan(view.frame.width, 400)
+      XCTAssertEqual(view.snapshot.string(), "short\nsecond")
+    }
+
     func testHitTestRoundTripsToClickedCharacter() throws {
       let text = "hello world\nsecond line"
       let view = try makeView(text)
