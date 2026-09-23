@@ -12,13 +12,23 @@ import SwiftTreeSitter
 ///
 /// ponytail: coarse first-component matching, not the full capture
 /// hierarchy (e.g. `@keyword.return` and `@keyword.function` both just
-/// become `.keyword`). `EditorTokenKind` only has 8 cases; a richer palette
+/// become `.keyword`). `EditorTokenKind` only has 9 cases; a richer palette
 /// would need `EditorTokenKind` itself to grow first.
 enum CaptureMapping {
   static func kind(for nameComponents: [String]) -> EditorTokenKind {
     guard let first = nameComponents.first else { return .plain }
     switch first {
     case "keyword": return .keyword
+    // JSON object keys, Markdown headings/markers, JSX tags: One Dark red.
+    case "string" where nameComponents.last == "key": return .tag
+    case "tag": return .tag
+    case "text":
+      switch nameComponents.dropFirst().first {
+      case "title": return .tag
+      case "literal": return .string
+      case "uri", "reference": return .function
+      default: return .plain
+      }
     case "string", "character": return .string
     case "comment": return .comment
     case "number", "float": return .number

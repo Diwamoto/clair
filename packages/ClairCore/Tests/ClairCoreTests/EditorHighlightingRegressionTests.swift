@@ -216,12 +216,23 @@ final class EditorHighlightingRegressionTests: XCTestCase {
 
   func testCaptureMappingResolvesKnownFirstComponents() {
     XCTAssertEqual(CaptureMapping.kind(for: ["keyword"]), .keyword)
-    XCTAssertEqual(CaptureMapping.kind(for: ["string", "special", "key"]), .string)
+    XCTAssertEqual(CaptureMapping.kind(for: ["string", "special"]), .string)
     XCTAssertEqual(CaptureMapping.kind(for: ["comment"]), .comment)
     XCTAssertEqual(CaptureMapping.kind(for: ["number"]), .number)
     XCTAssertEqual(CaptureMapping.kind(for: ["type", "builtin"]), .type)
     XCTAssertEqual(CaptureMapping.kind(for: ["function", "method"]), .function)
     XCTAssertEqual(CaptureMapping.kind(for: ["variable", "parameter"]), .variable)
+    XCTAssertEqual(CaptureMapping.kind(for: ["string", "special", "key"]), .tag)
+    XCTAssertEqual(CaptureMapping.kind(for: ["text", "title"]), .tag)
+    XCTAssertEqual(CaptureMapping.kind(for: ["text", "literal"]), .string)
+  }
+
+  func testJSONKeysAndMarkdownHeadingsGetTheirOwnColor() throws {
+    for (path, source) in [("a.json", #"{"k": "v"}"#), ("a.md", "# Title\n\n- item\n")] {
+      let id = try XCTUnwrap(EditorLanguageID.detect(path: path))
+      let spans = try SyntaxHighlighter(languageID: id).reset(to: TextBuffer(source).snapshot)
+      XCTAssertTrue(spans.contains { $0.kind == .tag }, path)
+    }
   }
 
   func testIncrementalUpdateAfterEditStillProducesSpans() throws {

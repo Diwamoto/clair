@@ -1318,7 +1318,7 @@ enum HighlightQueries {
   (atx_h6_marker)
   (setext_h1_underline)
   (setext_h2_underline)
-] @punctuation.special
+] @tag
 
 [
   (link_title)
@@ -1341,7 +1341,7 @@ enum HighlightQueries {
   (list_marker_dot)
   (list_marker_parenthesis)
   (thematic_break)
-] @punctuation.special
+] @tag
 
 [
   (block_continuation)

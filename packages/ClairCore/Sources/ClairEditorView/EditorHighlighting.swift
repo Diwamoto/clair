@@ -11,7 +11,7 @@ import CoreGraphics
 /// per-language wiring task's job, not this rendering primitive's; E06
 /// only needs to prove the viewport can paint spans it is handed.
 public enum EditorTokenKind: Sendable, Hashable {
-  case keyword, string, comment, number, type, function, variable, plain
+  case keyword, string, comment, number, type, function, tag, variable, plain
 
   /// Atom One Dark, matching `ClairColor.Surface.code*` in the design
   /// system. `ClairEditorView.tokenColors` lets a caller override any subset.
@@ -23,6 +23,7 @@ public enum EditorTokenKind: Sendable, Hashable {
     case .number: return .oneDark(0xd19a66)
     case .type: return .oneDark(0xe5c07b)
     case .function: return .oneDark(0x61afef)
+    case .tag: return .oneDark(0xe06c75)
     case .variable, .plain: return .editorLabel
     }
   }
