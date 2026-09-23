@@ -87,28 +87,7 @@ fi
 app="$package_path/.build/dev-bundle/Clair Dev.app"
 icon_png="$package_path/Sources/ClairMacApp/Resources/AppIconDev.png"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-if [[ "$icon_png" -nt "$app/Contents/Resources/AppIcon.icns" ]]; then
-    # Same macOS-grid mask as ClairMacApp.appIcon(): 824pt body, 185pt corners on a 1024 canvas.
-    iconset="$(mktemp -d)/AppIcon.iconset"
-    mkdir -p "$iconset"
-    swift - "$icon_png" "$iconset/icon_512x512@2x.png" <<'SWIFT'
-import AppKit
-let a = CommandLine.arguments, art = NSImage(contentsOfFile: a[1])!
-let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 1024, pixelsHigh: 1024, bitsPerSample: 8, samplesPerPixel: 4,
-  hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
-NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
-let r = NSRect(x: 100, y: 100, width: 824, height: 824)
-NSBezierPath(roundedRect: r, xRadius: 185, yRadius: 185).addClip()
-art.draw(in: r)
-try! rep.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: a[2]))
-SWIFT
-    for s in 16 32 128 256 512; do
-        sips -z $s $s "$iconset/icon_512x512@2x.png" --out "$iconset/icon_${s}x${s}.png" >/dev/null
-        sips -z $((s * 2)) $((s * 2)) "$iconset/icon_512x512@2x.png" --out "$iconset/icon_${s}x${s}@2x.png" >/dev/null
-    done
-    iconutil -c icns "$iconset" -o "$app/Contents/Resources/AppIcon.icns"
-    rm -rf "$(dirname "$iconset")"
-fi
+[[ "$icon_png" -nt "$app/Contents/Resources/AppIcon.icns" ]] && "$repo_root/scripts/make-icns.sh" "$icon_png" "$app/Contents/Resources/AppIcon.icns"
 cat >"$app/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

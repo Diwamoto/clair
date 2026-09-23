@@ -415,9 +415,11 @@ merge editor を持たない(2026-09-23 オーナー決定)。
 
 - Clair Stable と Clair Dev を別 bundle ID、別 settings 領域で並行起動する
   ([ADR-0008](decisions/0008-stable-dev-runtime-identity.md))
-- GitHub Actions で Stable artifact に署名を付け、公開 GitHub Release へ発行する
-  ([ADR-0009](decisions/0009-stable-github-update-distribution.md))。Apple
-  Developer ID signing と notarization は一般配布が必要になるまで後続判断
+- `VERSION` を変更した master への push で、self-hosted runner が Stable artifact を
+  build・署名し、公開ミラー `Diwamoto/clair-releases` の GitHub Release へ発行する
+  ([ADR-0009](decisions/0009-stable-github-update-distribution.md)、
+  [release runbook](runbooks/release.md))。Apple Developer ID signing と notarization は
+  一般配布が必要になるまで後続判断
 - app 内で update を表示し、click で download・reattach・restart する
 - Stable から Clair source を開き、terminal/agent で Dev を build・起動して変更を
   確認できる
