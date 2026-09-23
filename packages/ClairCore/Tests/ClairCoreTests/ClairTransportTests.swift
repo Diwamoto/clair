@@ -193,6 +193,36 @@ func h03PairingReturnsAViewOnlyGrantAndRedactsSecretDescriptions() async throws 
 }
 
 @Test
+func n11PersistedGrantsReconnectAfterAuthorityRestart() async throws {
+  let hostKey = ClairHostSigningKey()
+  let clock = H03TestClock()
+  let scope = try ResourceScope(projectID: ProjectID("persisted-project"))
+  let endpoint = try ClairTransportEndpoint("tls://127.0.0.1:4242")
+  let authority = try ClairPairingAuthority(
+    hostID: ClairHostID("persisted-host"), endpoint: endpoint, hostKey: hostKey,
+    defaultVisibleScopes: [scope], clock: clock
+  )
+  let client = ClairNativeClientTransport(deviceKey: ClairDeviceKey())
+  let link = try await authority.issuePairingLink()
+  let result = try await client.pair(
+    using: link, with: authority, displayName: "Persisted iPhone",
+    confirmHostFingerprint: true
+  )
+  let persisted = await authority.persistedGrants()
+  #expect(persisted.count == 1)
+  #expect(!String(describing: persisted).contains(result.credential.token.rawRepresentation.base64EncodedString()))
+
+  let restarted = try ClairPairingAuthority(
+    hostID: ClairHostID("persisted-host"), endpoint: endpoint, hostKey: hostKey,
+    defaultVisibleScopes: [scope], persistedGrants: persisted, clock: clock
+  )
+  let connection = try await client.reconnect(
+    to: await restarted.presentation(), using: restarted
+  )
+  try await restarted.authorizeRead(scope: scope, on: connection)
+}
+
+@Test
 func h03DefaultDenyRejectsUnpairedEmptyScopeAndEmptyCapability() async throws {
   let emptyScopeFixture = try H03Fixture.make(defaultVisibleScopes: [])
   let emptyScopePaired = try await pairClient(emptyScopeFixture)

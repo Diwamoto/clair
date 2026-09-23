@@ -89,12 +89,15 @@
     public let directoryURL: URL
     public let socketURL: URL
     public let lockURL: URL
+    /// N11: host key + device grant digests, owner-only, beside the control socket.
+    public let pairingStateURL: URL
 
     public init(directoryURL: URL) {
       let directory = directoryURL.standardizedFileURL
       self.directoryURL = directory
       self.socketURL = directory.appendingPathComponent("control.sock", isDirectory: false)
       self.lockURL = directory.appendingPathComponent("daemon.lock", isDirectory: false)
+      self.pairingStateURL = directory.appendingPathComponent("pairing-state.json", isDirectory: false)
     }
 
     public static var `default`: Self {

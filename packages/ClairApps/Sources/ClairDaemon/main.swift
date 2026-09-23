@@ -14,12 +14,17 @@ private struct ClairUnavailablePushRelay: ClairPushSending {
   }
 }
 
+private final class ClairBlockingResult<T>: @unchecked Sendable {
+  var value: Result<T, Error>?
+}
+
 @main
 struct ClairDaemonMain {
   static func main() {
     do {
       let configuration = try ClairDaemonConfiguration(paths: daemonPaths())
-      let runtime = try makeRuntime(configuration: configuration)
+      let remotePort = argument("--remote-port").flatMap(UInt16.init) ?? 0
+      let (runtime, host, pairingStore) = try makeRuntime(configuration: configuration, remotePort: remotePort)
       signal(SIGINT, SIG_IGN)
       signal(SIGTERM, SIG_IGN)
       let interrupt = DispatchSource.makeSignalSource(signal: SIGINT, queue: .global())
@@ -31,6 +36,7 @@ struct ClairDaemonMain {
       interrupt.resume()
       terminate.resume()
       try runtime.start()
+      let remote = remotePort == 0 ? nil : startRemoteListener(host: host, store: pairingStore, port: remotePort)
       withExtendedLifetime(interrupt) {
         withExtendedLifetime(terminate) {
           while runtime.state != .stopped {
@@ -40,6 +46,7 @@ struct ClairDaemonMain {
           }
         }
       }
+      if let remote { _ = try? blocking { await remote.stop() } }
       interrupt.cancel()
       terminate.cancel()
     } catch {
@@ -49,9 +56,47 @@ struct ClairDaemonMain {
     }
   }
 
+  /// N11: the remote client listener (loopback TLS, ADR-0016). A failure here is reported and
+  /// the daemon keeps serving the local GUI; remote devices simply cannot connect.
+  private static func startRemoteListener(
+    host: ClairDaemonHost, store: ClairDaemonPairingStore, port: UInt16
+  ) -> ClairRemoteListener? {
+    guard #available(macOS 15, *) else {
+      FileHandle.standardError.write(Data("ClairDaemon: remote listener needs macOS 15\n".utf8))
+      return nil
+    }
+    do {
+      let hostKey = try store.loadOrCreateHostKey().0
+      let listener = ClairRemoteListener(
+        host: host, identity: try ClairRemoteTLSIdentity.make(hostKey: hostKey), port: port,
+        onGrantsChanged: { grants in
+          do { try store.save(hostKey: hostKey, grants: grants) } catch {
+            FileHandle.standardError.write(Data("ClairDaemon: cannot save device grants: \(error)\n".utf8))
+            throw error
+          }
+        })
+      _ = try blocking { try await listener.start() }
+      return listener
+    } catch {
+      FileHandle.standardError.write(Data("ClairDaemon: remote listener unavailable: \(error)\n".utf8))
+      return nil
+    }
+  }
+
+  private static func blocking<T: Sendable>(_ body: @escaping @Sendable () async throws -> T) throws -> T {
+    let done = DispatchSemaphore(value: 0)
+    let result = ClairBlockingResult<T>()
+    Task.detached {
+      do { result.value = .success(try await body()) } catch { result.value = .failure(error) }
+      done.signal()
+    }
+    done.wait()
+    return try result.value!.get()
+  }
+
   private static func makeRuntime(
-    configuration: ClairDaemonConfiguration
-  ) throws -> ClairDaemonRuntime {
+    configuration: ClairDaemonConfiguration, remotePort: UInt16
+  ) throws -> (ClairDaemonRuntime, ClairDaemonHost, ClairDaemonPairingStore) {
     // The executable owns the same H10 composition root as the fixture suite.
     // Local host registration supplies the executable and project, never a
     // remote caller's shell command. No provider credentials are copied into
@@ -64,11 +109,18 @@ struct ClairDaemonMain {
       try root.map { [try ClairProjectRoot(id: projectID, rootURL: URL(fileURLWithPath: $0))] }
       ?? []
     let workspace = try ClairWorkspaceRuntime(projects: projects)
+    let pairingStore = ClairDaemonPairingStore(paths: configuration.paths)
+    let persistedPairing = try pairingStore.loadOrCreateHostKey()
     let authority = try ClairPairingAuthority(
       hostID: try ClairHostID("clair-daemon"),
-      endpoint: try ClairTransportEndpoint("wss://127.0.0.1/clair"),
-      defaultVisibleScopes: root == nil ? [] : [try ResourceScope(projectID: projectID)]
+      // What a pairing link points at. A private-route client dials its own tailnet name
+      // for the same passthrough port; the pin, not the endpoint, identifies the host.
+      endpoint: try ClairTransportEndpoint("tls://127.0.0.1:\(remotePort == 0 ? 47_611 : remotePort)"),
+      hostKey: persistedPairing.0,
+      defaultVisibleScopes: root == nil ? [] : [try ResourceScope(projectID: projectID)],
+      persistedGrants: persistedPairing.1
     )
+    try pairingStore.save(hostKey: persistedPairing.0, grants: persistedPairing.1)
     var providers: [any ClairAgentProviderAdapter] = []
     if let executable {
       let inherited = ProcessInfo.processInfo.environment
@@ -90,7 +142,7 @@ struct ClairDaemonMain {
       agentRuntime: agentRuntime,
       pushRelay: ClairUnavailablePushRelay()
     )
-    return ClairDaemonRuntime(configuration: configuration, host: host)
+    return (ClairDaemonRuntime(configuration: configuration, host: host), host, pairingStore)
   }
 
   private static func argument(_ name: String) -> String? {

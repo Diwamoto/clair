@@ -1163,6 +1163,23 @@ public enum ClairNativeTransportCodec {
   }
 }
 
+/// Durable, non-secret portion of a paired-device grant. The opaque device
+/// token is never retained here: only its SHA-256 digest is needed to verify a
+/// later reconnect proof. Operation ledgers and live connections intentionally
+/// restart empty; a request may be retried once immediately after a daemon
+/// restart (ponytail: persistence ceiling; add durable operation receipts if
+/// restart-spanning exactly-once dispatch becomes a product requirement).
+public struct ClairPersistedDeviceGrant: Codable, Equatable, Sendable {
+  public let grant: ClairDeviceGrant
+  public let tokenDigest: Data
+
+  public init(grant: ClairDeviceGrant, tokenDigest: Data) throws {
+    guard tokenDigest.count == 32 else { throw ClairTransportError.invalidGrant }
+    self.grant = grant
+    self.tokenDigest = tokenDigest
+  }
+}
+
 /// The typed hand-off from H03 authorization to H06 dispatch. H03 issues and
 /// revalidates this ticket; H06 must perform effect/dispatch linearization
 /// immediately after validation in its own actor.
@@ -1230,6 +1247,7 @@ public actor ClairPairingAuthority {
     defaultVisibleScopes: [ResourceScope] = [],
     challengeLifetime: TimeInterval = 30,
     tokenLifetime: TimeInterval = 30 * 24 * 60 * 60,
+    persistedGrants: [ClairPersistedDeviceGrant] = [],
     clock: any ClairTransportClock = ClairSystemTransportClock()
   ) throws {
     guard challengeLifetime > 0, challengeLifetime.isFinite, challengeLifetime <= 300 else {
@@ -1254,6 +1272,29 @@ public actor ClairPairingAuthority {
     self.challengeLifetime = challengeLifetime
     self.tokenLifetime = tokenLifetime
     self.clock = clock
+    guard persistedGrants.count <= ClairTransportValidation.maximumDeviceGrants else {
+      throw ClairTransportError.grantLimitReached
+    }
+    for persisted in persistedGrants {
+      guard grants[persisted.grant.deviceID] == nil else {
+        throw ClairTransportError.invalidGrant
+      }
+      grants[persisted.grant.deviceID] = StoredGrant(
+        grant: persisted.grant,
+        tokenDigest: persisted.tokenDigest,
+        operationLedger: try OperationLedger(),
+        activeConnections: []
+      )
+    }
+  }
+
+  /// Returns exactly the durable grant state needed after a daemon restart.
+  /// Pairing links, challenges, operation receipts, and live connections are
+  /// deliberately excluded because none remains valid across a restart.
+  public func persistedGrants() -> [ClairPersistedDeviceGrant] {
+    grants.values.compactMap { stored in
+      try? ClairPersistedDeviceGrant(grant: stored.grant, tokenDigest: stored.tokenDigest)
+    }.sorted { $0.grant.deviceID.rawValue < $1.grant.deviceID.rawValue }
   }
 
   public func presentation(

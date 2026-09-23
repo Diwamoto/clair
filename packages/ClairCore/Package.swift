@@ -150,7 +150,7 @@ let package = Package(
     ),
     .target(
       name: "ClairTransport",
-      dependencies: ["ClairShared"]
+      dependencies: ["ClairShared", "ClairTerminal"]
     ),
     .target(
       name: "ClairDaemonKit",
