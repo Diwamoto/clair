@@ -65,6 +65,37 @@
       XCTAssertFalse(b.isOpen("a.txt"))
     }
 
+    func testBlamePublishesWholeFileAndDropsWithBuffer() async throws {
+      let r = try root(["a.txt": Data("first\nsecond\n".utf8)])
+      defer { try? FileManager.default.removeItem(atPath: r) }
+      func git(_ arguments: [String]) throws {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        p.currentDirectoryURL = URL(fileURLWithPath: r)
+        p.arguments = arguments
+        p.standardOutput = FileHandle.nullDevice
+        p.standardError = FileHandle.nullDevice
+        try p.run()
+        p.waitUntilExit()
+        XCTAssertEqual(p.terminationStatus, 0, "git \(arguments)")
+      }
+      try git(["init", "-q"])
+      try git(["add", "a.txt"])
+      try git(["-c", "user.name=Blame Tester", "-c", "user.email=blame@example.invalid", "commit", "-qm", "initial lines"])
+
+      let buffers = EditorBuffers()
+      guard case .ready(let manager) = buffers.load("a.txt", root: r) else { return XCTFail("load") }
+      buffers.startBlame("a.txt", root: r, snapshot: manager.buffer.snapshot)
+      XCTAssertNil(buffers.blame["a.txt"], "no partial annotation while Git is working")
+      let loaded = await waitUntil { buffers.blame["a.txt"] != nil }
+      XCTAssertTrue(loaded)
+      XCTAssertEqual(buffers.blame["a.txt"]?.count, 2) // Git has no entry for the empty line after the final newline.
+      XCTAssertEqual(buffers.blame["a.txt"]?.first?.author, "Blame Tester")
+      XCTAssertEqual(buffers.blame["a.txt"]?.first?.summary, "initial lines")
+      buffers.drop(["a.txt"])
+      XCTAssertNil(buffers.blame["a.txt"])
+    }
+
     func testBinaryAndMissingFilesAreRefused() throws {
       let r = try root(["b.bin": Data([0xff, 0xfe, 0x00])])
       let b = EditorBuffers()

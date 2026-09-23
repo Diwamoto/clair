@@ -9,6 +9,47 @@
 
   private typealias C = DesignTokens.Color
 
+  struct EditorBlame: Sendable, Equatable {
+    let author: String
+    let summary: String
+  }
+
+  /// Reads one complete working-tree blame off the UI thread. The result is published atomically.
+  private enum EditorBlameLoader {
+    static func load(root: String, path: String) -> [EditorBlame]? {
+      let process = Process()
+      process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+      process.currentDirectoryURL = URL(fileURLWithPath: root)
+      process.arguments = ["-c", "core.quotePath=false", "blame", "--line-porcelain", "--", path]
+      let pipe = Pipe()
+      process.standardOutput = pipe
+      process.standardError = FileHandle.nullDevice
+      do { try process.run() } catch { return nil }
+
+      var result: [EditorBlame] = []
+      var author = ""
+      var summary = ""
+      var pending = Data()
+      while !Task<Never, Never>.isCancelled {
+        let chunk = pipe.fileHandleForReading.readData(ofLength: 64 * 1024)
+        if chunk.isEmpty { break }
+        pending.append(chunk)
+        var start = pending.startIndex
+        while let newline = pending[start...].firstIndex(of: 10) {
+          let line = String(decoding: pending[start..<newline], as: UTF8.self)
+          if line.hasPrefix("author ") { author = String(line.dropFirst(7)) }
+          else if line.hasPrefix("summary ") { summary = String(line.dropFirst(8)) }
+          else if line.hasPrefix("\t") { result.append(EditorBlame(author: author, summary: summary)) }
+          start = pending.index(after: newline)
+        }
+        pending.removeSubrange(..<start)
+      }
+      if Task<Never, Never>.isCancelled { process.terminate() }
+      process.waitUntilExit()
+      return process.terminationStatus == 0 && !Task<Never, Never>.isCancelled ? result : nil
+    }
+  }
+
   /// E11: one `SyntaxHighlighter` per open file, off the main thread.
   /// `SyntaxHighlighter`/`SyntaxParser` are not `Sendable` (see
   /// `SyntaxParser`'s doc comment — "keep one instance on its owning
@@ -74,6 +115,28 @@
     private var revisions: [String: Int] = [:]
     /// 1-based caret of each open file (status bar Ln/Col); grapheme columns.
     private(set) var caret: [String: (line: Int, col: Int)] = [:]
+    private(set) var blame: [String: [EditorBlame]] = [:]
+    private var blameTasks: [String: Task<Void, Never>] = [:]
+
+    func startBlame(_ path: String, root: String, snapshot: TextSnapshot) {
+      guard blame[path] == nil, blameTasks[path] == nil else { return }
+      let rev = snapshot.revision
+      blameTasks[path] = Task { [weak self] in
+        let worker = Task.detached(priority: .utility) { EditorBlameLoader.load(root: root, path: path) }
+        let result = await withTaskCancellationHandler(operation: { await worker.value }, onCancel: { worker.cancel() })
+        guard let self, !Task.isCancelled else { return }
+        self.blameTasks[path] = nil
+        // A completed file-wide result only belongs to the exact content revision opened above.
+        guard case .ready(let manager) = self.loads[path], manager.buffer.snapshot.revision == rev,
+          let result, result.count == snapshot.lineCount || result.count == snapshot.lineCount - 1 else { return }
+        self.blame[path] = result
+      }
+    }
+
+    func dropBlame(_ path: String) {
+      blameTasks.removeValue(forKey: path)?.cancel()
+      blame[path] = nil
+    }
 
     func setCaret(_ path: String, _ sel: TextSelectionSet, in snapshot: TextSnapshot) {
       guard let head = sel.selections.first?.head,
@@ -107,6 +170,7 @@
 
     func drop(_ paths: Set<String>) {
       for path in paths {
+        dropBlame(path)
         let hadLoad = loads.removeValue(forKey: path) != nil
         let pending = loading.removeValue(forKey: path)
         pending?.task.cancel()
@@ -262,6 +326,8 @@
     func save(_ path: String, root: String) throws {
       guard case .ready(let m) = loads[path] else { return }
       try m.buffer.snapshot.string().write(toFile: root + "/" + path, atomically: true, encoding: .utf8)
+      dropBlame(path)
+      startBlame(path, root: root, snapshot: m.buffer.snapshot)
     }
 
     nonisolated private static func read(_ full: String) -> Load {
@@ -332,6 +398,12 @@
             .foregroundStyle(i == parts.count - 1 ? C.textSecondary : C.textQuaternary).lineLimit(1)
         }
         Spacer(minLength: 0)
+        if let line = buffers.caret[path]?.line, let lines = buffers.blame[path], lines.indices.contains(line - 1) {
+          let info = lines[line - 1]
+          Text("\(info.author) · \(info.summary)")
+            .font(.system(size: 10)).foregroundStyle(C.textQuaternary).lineLimit(1)
+            .help("行 \(line): \(info.author) · \(info.summary)")
+        }
       }.padding(.horizontal, 12).frame(height: 24).background(C.canvas)
     }
 
@@ -422,6 +494,7 @@
         let old = manager.buffer.snapshot
         guard let new = try? manager.apply(edits) else { return }
         view.applyEdits(edits, oldSnapshot: old, newSnapshot: new, selection: manager.selection)
+        buffers.dropBlame(path)
         onEdit()
         // E12: the server sees the same incremental edit, in order, then the list refilters.
         buffers.language.change(root + "/" + path, root: root, edits: edits, old: old, new: new)
@@ -440,6 +513,7 @@
       // E11: kick off this file's initial background highlight parse once,
       // when its `ClairEditorView` is first created.
       buffers.startHighlighting(path, manager: manager) { [weak view] in $0.apply(to: view) }
+      buffers.startBlame(path, root: root, snapshot: manager.buffer.snapshot)
       view.softWrap = softWrap
       scroll.hasHorizontalScroller = !softWrap
       buffers.attachFolds(path, view: view)
