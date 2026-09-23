@@ -6,24 +6,43 @@ import Foundation
 // Invariants/threat tests: docs/plans/clair-v03-mcp.md.
 
 public enum MCPGate {
-  /// Runs an `via: mcp` request. `approve` blocks until a human answers in the GUI; `run` executes with confirmation.
+  /// Re-checks the live state right before execution; nil means the approval still covers it.
+  public typealias Recheck = @Sendable (WorkbenchState) -> CommandError?
+
+  /// Runs an `via: mcp` request. `approve` blocks until a human answers in the GUI. `run` must call the
+  /// recheck on the live state and execute in the same main-actor turn, passing `confirmed` through.
   public static func handle(
     _ req: WorkbenchIPCRequest, registry: CommandRegistry,
     snapshot: () -> WorkbenchState,
     approve: (String, CommandInput, CommandRisk) -> Bool,
-    run: (String, CommandInput) -> Result<CommandResult, CommandError>
+    run: (_ recheck: Recheck, _ confirmed: Bool) -> Result<CommandResult, CommandError>
   ) -> Result<CommandResult, CommandError> {
     guard let d = registry.commands.first(where: { $0.id == req.command }) else {
       return .failure(CommandError(.unknownCommand, req.command))
     }
     guard d.aiAvailable else { return .failure(CommandError(.notAvailableToAI, "\(req.command) is not available to AI")) }
-    switch registry.preflight(req.command, req.input, snapshot()) {
+    let seen = snapshot()
+    switch registry.preflight(req.command, req.input, seen) {
     case .failure(let e): return .failure(e)
+    case .success(let risk) where risk < .write:
+      return run({ _ in nil }, false)
     case .success(let risk):
-      if risk >= .write, !approve(req.command, req.input, risk) {
+      guard approve(req.command, req.input, risk) else {
         return .failure(CommandError(.denied, "\(req.command) was not approved in Clair"))
       }
-      return run(req.command, req.input)
+      // The human approved `risk` on `seen`. Implicit targets (active tab, focused pane, project) and the
+      // risk itself may have moved while the card was up; never run something broader than what was shown.
+      return run({ now in
+        guard now.project == seen.project, now.active == seen.active, now.tree.focused == seen.tree.focused else {
+          return CommandError(.denied, "\(req.command): Clair の状態が承認中に変わったため実行しませんでした")
+        }
+        switch registry.preflight(req.command, req.input, now) {
+        case .failure(let e): return e
+        case .success(let r) where r > risk:
+          return CommandError(.denied, "\(req.command): 承認時より危険度が上がったため実行しませんでした")
+        case .success: return nil
+        }
+      }, risk >= .destructive)
     }
   }
 }
@@ -54,11 +73,7 @@ public enum MCPServer {
       guard let name = p?["name"] as? String, registry.commands.contains(where: { $0.id == name && $0.aiAvailable }) else {
         return reply(id, error: (-32602, "unknown tool"))
       }
-      var input = CommandInput()
-      for (k, v) in (p?["arguments"] as? [String: Any]) ?? [:] {
-        if let b = v as? Bool { input[k] = .bool(b) } else if let i = v as? Int { input[k] = .int(i) }
-        else if let d = v as? Double { input[k] = .double(d) } else if let s = v as? String { input[k] = .string(s) }
-      }
+      guard let input = arguments(p?["arguments"]) else { return reply(id, error: (-32602, "invalid arguments")) }
       let out: (String, Bool)
       do {
         let r = try call(WorkbenchIPCRequest(command: name, input: input, via: .mcp))
@@ -69,6 +84,22 @@ public enum MCPServer {
       return reply(id, result: ["content": [["type": "text", "text": out.0]], "isError": out.1])
     default: return reply(id, error: (-32601, "method not found"))
     }
+  }
+
+  /// JSON scalars only. NSNumber bridges 0/1 to Bool, so JSON booleans are told apart by their CF type;
+  /// null/array/object are rejected rather than dropped (a dropped `path` would retarget the active tab).
+  static func arguments(_ raw: Any?) -> CommandInput? {
+    guard let raw else { return [:] }
+    guard let dict = raw as? [String: Any] else { return nil }
+    var input = CommandInput()
+    for (k, v) in dict {
+      if let s = v as? String { input[k] = .string(s); continue }
+      guard let n = v as? NSNumber else { return nil }
+      if CFGetTypeID(n) == CFBooleanGetTypeID() { input[k] = .bool(n.boolValue) }
+      else if CFNumberIsFloatType(n) { input[k] = .double(n.doubleValue) }
+      else { input[k] = .int(n.intValue) }
+    }
+    return input
   }
 
   private static func tool(_ d: CommandDescriptor) -> [String: Any] {

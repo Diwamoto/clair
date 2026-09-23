@@ -66,7 +66,14 @@ import Observation
             req, registry: CommandRegistry.workbench,
             snapshot: { DispatchQueue.main.sync { MainActor.assumeIsolated { store.state } } },
             approve: { store.requestMCPApproval($0, $1, $2) },
-            run: { id, input in DispatchQueue.main.sync { MainActor.assumeIsolated { store.run(id, input, confirmed: true) } } })
+            run: { recheck, confirmed in
+              DispatchQueue.main.sync {
+                MainActor.assumeIsolated {
+                  if let e = recheck(store.state) { return .failure(e) }
+                  return store.run(req.command, req.input, confirmed: confirmed)
+                }
+              }
+            })
         }
         return DispatchQueue.main.sync { MainActor.assumeIsolated { store.run(req.command, req.input) } }
       }
