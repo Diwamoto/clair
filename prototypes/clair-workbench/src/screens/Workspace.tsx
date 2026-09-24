@@ -1,20 +1,24 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 
+import { targetRing, useContextMenu } from '../contextMenu';
 import { files, tree } from '../data';
 import { HighlightedLine } from '../highlight';
-import { IconBranchSmall } from '../icons';
+import { IconBranchSmall, IconChevron, IconCloseThin, IconEllipsis, IconFolder } from '../icons';
+import { copyText, editorMenu, fileMenu, folderMenu, readClipboard, streamMenu } from '../menus';
 import { useWorkbench, type PaneNode } from '../store';
 import { FileIcon } from '../chrome';
-import { color, line, mono } from '../tokens';
+import { color, fs, line, mono, radius, space } from '../tokens';
 
 const byPath = new Map(files.map((f) => [f.path, f]));
 
-const INDENT: Record<number, number> = { 0: 10, 1: 22, 2: 36, 3: 55 };
+// One level of tree indent.
+const INDENT = 12;
 
 /* ── sidebar ──────────────────────────────────────────────────────────── */
 
 export function ExplorerPanel() {
   const wb = useWorkbench();
+  const menu = useContextMenu();
 
   const hidden = (parent: string | undefined) => {
     let cursor = parent;
@@ -26,29 +30,49 @@ export function ExplorerPanel() {
   };
 
   return (
-    <div className="scroll" style={{ position: 'absolute', inset: 0, padding: '6px 0' }}>
+    <div className="scroll" style={{ position: 'absolute', inset: 0, padding: '4px 0' }}>
         {tree.map((node) => {
           if (node.type !== 'project' && hidden(node.parent)) return null;
 
+          const targeted = wb.contextMenu?.target === node.id;
+          // Every row is the same inset pill: the 8px margin sits outside the
+          // background, so the trailing badges line up on every row.
+          const row = (selected: boolean): React.CSSProperties => ({
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            height: 24,
+            width: 'calc(100% - 16px)',
+            margin: '0 8px',
+            padding: `0 8px 0 ${8 + node.depth * INDENT}px`,
+            borderRadius: radius.control,
+            background: selected ? color.surfaceActive : undefined,
+            boxShadow: targeted ? targetRing : undefined,
+          });
+          const chevron = (open: boolean) => (
+            <IconChevron
+              size={10}
+              color={color.textTertiary}
+              style={{ flexShrink: 0, transform: open ? 'rotate(90deg)' : undefined }}
+            />
+          );
+
           if (node.type === 'project') {
-            const open = !wb.collapsed.has(node.id);
+            // The repo root keeps its click-to-collapse behaviour but drops
+            // the chevron — it reads as a section label (uppercase, like a
+            // heading), not one more row in the same list as its children.
             return (
               <button
                 key={node.id}
+                className="hoverable"
                 onClick={() => wb.toggleFolder(node.id)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  height: 24,
-                  width: '100%',
-                  padding: '0 10px',
-                  color: color.attention,
-                }}
+                onContextMenu={(event) => menu(event, (w) => folderMenu(w, node.id, node.name, true), node.id)}
+                style={{ ...row(false), color: color.textPrimary }}
               >
-                {open ? '▾' : '▸'}
                 <IconBranchSmall size={10} />
-                <span style={{ fontSize: 11, fontWeight: 700, marginLeft: 1 }}>{node.name}</span>
+                <span style={{ fontSize: fs.secondary, fontWeight: 600, textTransform: 'uppercase' }}>
+                  {node.name}
+                </span>
               </button>
             );
           }
@@ -58,19 +82,14 @@ export function ExplorerPanel() {
             return (
               <button
                 key={node.id}
+                className="hoverable"
                 onClick={() => wb.toggleFolder(node.id)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  height: 24,
-                  width: '100%',
-                  padding: `0 10px 0 ${INDENT[node.depth] ?? 22}px`,
-                  color: color.textSecondary,
-                }}
+                onContextMenu={(event) => menu(event, (w) => folderMenu(w, node.id, node.name, false), node.id)}
+                style={{ ...row(false), color: color.textSecondary }}
               >
-                {open ? '▾' : '▸'}
-                <span style={{ fontSize: 11, marginLeft: 3 }}>{node.name}</span>
+                {chevron(open)}
+                <IconFolder size={12} color={color.textTertiary} />
+                <span style={{ fontSize: fs.secondary }}>{node.name}</span>
               </button>
             );
           }
@@ -84,25 +103,15 @@ export function ExplorerPanel() {
               key={node.id}
               className={selected ? undefined : 'hoverable'}
               onClick={() => wb.openFile(node.path)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                width: selected ? 'calc(100% - 16px)' : '100%',
-                height: selected ? 28 : 26,
-                padding: `0 10px 0 ${(INDENT[node.depth] ?? 36) - (selected ? 8 : 0)}px`,
-                margin: selected ? '0 8px' : undefined,
-                borderRadius: selected ? 7 : undefined,
-                background: selected ? 'rgba(255,255,255,0.08)' : undefined,
-                color: selected ? color.textPrimary : color.textTertiary,
-              }}
+              onContextMenu={(event) => menu(event, (w) => fileMenu(w, node.path, 'tree'), node.id)}
+              style={{ ...row(selected), color: selected ? color.textPrimary : color.textSecondary }}
             >
-              <FileIcon kind={file?.kind ?? 'swift'} tint={selected ? '#cfd3ce' : color.textTertiary} />
-              <span style={{ fontSize: 11, flex: 1, fontWeight: selected ? 500 : 400 }}>{node.name}</span>
+              <FileIcon kind={file?.kind ?? 'swift'} tint={selected ? color.textSecondary : color.textTertiary} />
+              <span style={{ fontSize: fs.secondary, flex: 1, fontWeight: selected ? 600 : 400 }}>{node.name}</span>
               {status ? (
                 <span
                   style={{
-                    fontSize: 10,
+                    fontSize: fs.secondary,
                     fontWeight: 600,
                     color: status === 'A' ? color.success : color.attention,
                   }}
@@ -136,7 +145,7 @@ function PathBreadcrumb({ path }: { path: string }) {
         flexShrink: 0,
         display: 'flex',
         alignItems: 'center',
-        gap: 5,
+        gap: space[1],
         padding: '0 12px',
         overflow: 'hidden',
         background: color.canvas,
@@ -147,11 +156,11 @@ function PathBreadcrumb({ path }: { path: string }) {
         return (
           <Fragment key={i}>
             {i > 0 ? (
-              <span style={{ fontSize: 10, color: color.textQuaternary, flexShrink: 0 }}>›</span>
+              <span style={{ fontSize: fs.caption, color: color.textQuaternary, flexShrink: 0 }}>›</span>
             ) : null}
             <span
               style={{
-                fontSize: 11,
+                fontSize: fs.caption,
                 fontWeight: last ? 600 : 400,
                 color: last ? color.textSecondary : color.textQuaternary,
                 whiteSpace: 'nowrap',
@@ -179,6 +188,48 @@ function EditorPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
   const preRef = useRef<HTMLPreElement>(null);
   const gutterRef = useRef<HTMLDivElement>(null);
   const [caretLine, setCaretLine] = useState(1);
+  const menu = useContextMenu();
+
+  // The selection is read when the menu opens, not when an item runs: by
+  // then focus has moved into the menu and back.
+  const openMenu = (event: React.MouseEvent) => {
+    const area = areaRef.current;
+    if (!area) return;
+    const start = area.selectionStart;
+    const end = area.selectionEnd;
+    const selection = area.value.slice(start, end);
+    const first = area.value.slice(0, start).split('\n').length;
+    const refocus = (caret?: number) =>
+      requestAnimationFrame(() => {
+        area.focus();
+        if (caret !== undefined) area.setSelectionRange(caret, caret);
+      });
+
+    menu(event, (w) =>
+      editorMenu(w, {
+        paneId: node.id,
+        path,
+        selection,
+        lines: [first, first + selection.split('\n').length - 1],
+        copy: () => {
+          copyText(selection);
+          refocus();
+        },
+        cut: () => {
+          copyText(selection);
+          w.editFile(path, area.value.slice(0, start) + area.value.slice(end));
+          refocus(start);
+        },
+        paste: () => {
+          void readClipboard().then((text) => {
+            if (text === null) return refocus();
+            w.editFile(path, area.value.slice(0, start) + text + area.value.slice(end));
+            refocus(start + text.length);
+          });
+        },
+      }),
+    );
+  };
 
   // The highlighted layer and the gutter follow the textarea's own scroll.
   const syncScroll = useCallback(() => {
@@ -223,7 +274,7 @@ function EditorPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
             flexShrink: 0,
             padding: '8px 0',
             textAlign: 'right',
-            fontSize: 12,
+            fontSize: fs.secondary,
             lineHeight: '19px',
             color: color.lineNumber,
             overflow: 'hidden',
@@ -242,8 +293,8 @@ function EditorPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
             aria-hidden
             style={{
               margin: 0,
-              padding: '8px 12px 8px 0',
-              fontSize: 12,
+              padding: '8px 16px 8px 0',
+              fontSize: fs.secondary,
               lineHeight: '19px',
               color: color.code,
               whiteSpace: 'pre',
@@ -266,6 +317,7 @@ function EditorPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
             }}
             onKeyUp={syncCaret}
             onClick={syncCaret}
+            onContextMenu={openMenu}
             onScroll={syncScroll}
             onKeyDown={(e) => {
               if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
@@ -278,14 +330,14 @@ function EditorPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
               inset: 0,
               width: '100%',
               height: '100%',
-              padding: '8px 12px 8px 0',
+              padding: '8px 16px 8px 0',
               border: 0,
               outline: 'none',
               resize: 'none',
               background: 'transparent',
               color: 'transparent',
               caretColor: color.textPrimary,
-              fontSize: 12,
+              fontSize: fs.secondary,
               lineHeight: '19px',
               whiteSpace: 'pre',
               overflow: 'auto',
@@ -297,32 +349,117 @@ function EditorPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
   );
 }
 
+/** The text selected inside this pane — not a selection left in another one. */
+function selectionWithin(pane: HTMLElement) {
+  const selection = window.getSelection();
+  if (!selection?.anchorNode || !pane.contains(selection.anchorNode)) return '';
+  return selection.toString();
+}
+
 function LogLine({ text, tone }: { text: string; tone?: string }) {
   const tint =
     tone === 'add' ? color.success : tone === 'del' ? color.danger : tone === 'dim' ? color.codeComment : undefined;
   return <div style={{ color: tint }}>{text || ' '}</div>;
 }
 
-function AgentPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
+/**
+ * The header a terminal/agent pane shows on hover: a drag handle (three
+ * dots, draggable to another pane to swap what each one shows — the tree
+ * shape and split ratios stay put) and a close button (hover, or while the
+ * pane is focused). Editor panes keep their own breadcrumb instead; this is
+ * only for the panes that had no header at all before.
+ */
+function PaneHeader({ node, label }: { node: Extract<PaneNode, { kind: 'leaf' }>; label: string }) {
   const wb = useWorkbench();
+  const focused = wb.focusedPane === node.id;
+  const [dragOver, setDragOver] = useState(false);
+
   return (
     <div
-      onMouseDown={() => wb.setFocusedPane(node.id)}
-      className="cl scroll"
+      draggable
+      onDragStart={(event) => {
+        event.dataTransfer.setData('text/pane-id', node.id);
+        event.dataTransfer.effectAllowed = 'move';
+      }}
+      onDragOver={(event) => {
+        event.preventDefault();
+        setDragOver(true);
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(event) => {
+        event.preventDefault();
+        setDragOver(false);
+        const fromId = event.dataTransfer.getData('text/pane-id');
+        if (fromId) wb.swapPanes(fromId, node.id);
+      }}
       style={{
-        flex: 1,
-        minHeight: 0,
+        height: 24,
+        flexShrink: 0,
+        display: 'flex',
+        alignItems: 'center',
+        gap: space[1],
+        padding: '0 6px 0 8px',
         background: color.canvas,
-        padding: '20px 12px 10px 12px',
-        fontSize: 11,
-        lineHeight: '17px',
-        color: color.code,
-        whiteSpace: 'pre',
+        borderBottom: `1px solid ${dragOver ? line.ring : 'transparent'}`,
+        cursor: 'grab',
       }}
     >
-      {wb.agentLog.map((l, i) => (
-        <LogLine key={i} text={l.text} tone={l.tone === 'accent' ? undefined : l.tone} />
-      ))}
+      <span className="pane-header-actions" style={{ display: 'flex', alignItems: 'center', color: color.textQuaternary }}>
+        <IconEllipsis size={12} />
+      </span>
+      <span style={{ flex: 1, textAlign: 'center', fontSize: fs.caption, color: color.textQuaternary }}>{label}</span>
+      <button
+        onClick={(event) => {
+          event.stopPropagation();
+          wb.closePane(node.id);
+        }}
+        title="パネルを閉じる"
+        aria-label="パネルを閉じる"
+        className={`pane-header-actions${focused ? ' pane-visible' : ''}`}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 18,
+          height: 18,
+          borderRadius: radius.control,
+          color: color.textQuaternary,
+        }}
+      >
+        <IconCloseThin size={11} />
+      </button>
+    </div>
+  );
+}
+
+function AgentPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
+  const wb = useWorkbench();
+  const menu = useContextMenu();
+  return (
+    <div className="pane-hoverable" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
+      <PaneHeader node={node} label="Agent" />
+      <div
+        onMouseDown={() => wb.setFocusedPane(node.id)}
+        onContextMenu={(event) => {
+          const selection = selectionWithin(event.currentTarget);
+          menu(event, (w) => streamMenu(w, { paneId: node.id, kind: 'agent', selection }));
+        }}
+        className="cl scroll"
+        style={{
+          flex: 1,
+          minHeight: 0,
+          background: color.canvas,
+          padding: '20px 12px 8px 12px',
+          fontSize: fs.caption,
+          lineHeight: '17px',
+          color: color.code,
+          whiteSpace: 'pre',
+        }}
+      >
+        {wb.agentLog.map((l, i) => (
+          <LogLine key={i} text={l.text} tone={l.tone === 'accent' ? undefined : l.tone} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -332,6 +469,7 @@ function TerminalPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const menu = useContextMenu();
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -341,60 +479,81 @@ function TerminalPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
   const prompt = wb.awaitingApproval ? 'Apply this change? [y/N] ' : '$ ';
 
   return (
-    <div
-      ref={scrollRef}
-      onMouseDown={() => {
-        wb.setFocusedPane(node.id);
-        inputRef.current?.focus();
-      }}
-      className="cl scroll"
-      style={{
-        flex: 1,
-        minHeight: 0,
-        background: color.canvas,
-        padding: '20px 12px 10px 12px',
-        fontSize: 11,
-        lineHeight: '17px',
-        color: color.code,
-        whiteSpace: 'pre',
-        cursor: 'text',
-      }}
-    >
-      {wb.terminal.map((l, i) => (
-        <LogLine key={i} text={l.text} tone={l.tone} />
-      ))}
-      <div style={{ display: 'flex', alignItems: 'center' }}>
-        <span style={{ color: wb.awaitingApproval ? color.code : color.codeComment }}>{prompt}</span>
-        <span style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center' }}>
-          <span>{input}</span>
-          <span
-            className="caret"
-            style={{ display: 'inline-block', width: 7, height: 14, background: color.code, marginLeft: 1 }}
-          />
-          <input
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                wb.runTerminal(input);
-                setInput('');
-              }
-            }}
-            style={{
-              position: 'absolute',
-              inset: 0,
-              width: '100%',
-              border: 0,
-              outline: 'none',
-              background: 'transparent',
-              color: 'transparent',
-              caretColor: 'transparent',
-              fontFamily: mono,
-              fontSize: 11,
-            }}
-          />
-        </span>
+    <div className="pane-hoverable" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
+      <PaneHeader node={node} label="ターミナル" />
+      <div
+        ref={scrollRef}
+        onMouseDown={(event) => {
+          wb.setFocusedPane(node.id);
+          // A right-click must not move focus into the prompt: that would drop
+          // the text selection the menu is about to copy.
+          if (event.button !== 2 && !event.ctrlKey) inputRef.current?.focus();
+        }}
+        onContextMenu={(event) => {
+          const selection = selectionWithin(event.currentTarget);
+          menu(event, (w) =>
+            streamMenu(w, {
+              paneId: node.id,
+              kind: 'terminal',
+              selection,
+              paste: () => {
+                void readClipboard().then((text) => {
+                  if (text) setInput((current) => current + text.replace(/\n/g, ' '));
+                  requestAnimationFrame(() => inputRef.current?.focus());
+                });
+              },
+            }),
+          );
+        }}
+        className="cl scroll"
+        style={{
+          flex: 1,
+          minHeight: 0,
+          background: color.canvas,
+          padding: '20px 12px 8px 12px',
+          fontSize: fs.caption,
+          lineHeight: '17px',
+          color: color.code,
+          whiteSpace: 'pre',
+          cursor: 'text',
+        }}
+      >
+        {wb.terminal.map((l, i) => (
+          <LogLine key={i} text={l.text} tone={l.tone} />
+        ))}
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <span style={{ color: wb.awaitingApproval ? color.code : color.codeComment }}>{prompt}</span>
+          <span style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center' }}>
+            <span>{input}</span>
+            <span
+              className="caret"
+              style={{ display: 'inline-block', width: 7, height: 14, background: color.code, marginLeft: 2 }}
+            />
+            <input
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  wb.runTerminal(input);
+                  setInput('');
+                }
+              }}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: '100%',
+                border: 0,
+                outline: 'none',
+                background: 'transparent',
+                color: 'transparent',
+                caretColor: 'transparent',
+                fontFamily: mono,
+                fontSize: fs.caption,
+              }}
+            />
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -437,7 +596,7 @@ function Divider({
         flexShrink: 0,
         width: horizontal ? 1 : undefined,
         height: horizontal ? undefined : 1,
-        background: strong ? 'rgba(242,244,238,0.3)' : line.paneDivider,
+        background: strong ? 'rgba(241,242,246,0.3)' : line.paneDivider,
         cursor: horizontal ? 'col-resize' : 'row-resize',
         touchAction: 'none',
       }}
@@ -460,9 +619,21 @@ function Pane({ node }: { node: PaneNode }) {
   const wb = useWorkbench();
 
   if (node.kind === 'leaf') {
-    if (node.pane === 'editor') return <EditorPane node={node} />;
-    if (node.pane === 'agent') return <AgentPane node={node} />;
-    return <TerminalPane node={node} />;
+    // Keep editor content fully legible even when another pane is focused.
+    return (
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          minWidth: 0,
+          minHeight: 0,
+          opacity: node.pane === 'editor' || wb.focusedPane === node.id ? 1 : 0.75,
+        }}
+      >
+        {node.pane === 'editor' ? <EditorPane node={node} /> : node.pane === 'agent' ? <AgentPane node={node} /> : <TerminalPane node={node} />}
+      </div>
+    );
   }
 
   const horizontal = node.orientation === 'horizontal';
@@ -524,7 +695,7 @@ export function WorkspaceMain() {
 export function WorkspaceStatus() {
   const wb = useWorkbench();
   return (
-    <span className="cl">
+    <span className="tnum">
       Ln {wb.cursor.line}, Col {wb.cursor.column}
     </span>
   );

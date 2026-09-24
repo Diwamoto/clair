@@ -113,5 +113,5 @@ APIを使うための十分に保守的なdeployment baselineである。
 - Project: [p0003-native-workspace-bootstrap](../projects/p0003-native-workspace-bootstrap/README.md)
 - Issue: https://github.com/Diwamoto/clair/issues/2
 - Issue: https://github.com/Diwamoto/clair/issues/3
-- Product scope: [Clair product scope](../product/scope.md)
+- Product scope: [Clair product scope](../clair-spec.md)
 - Existing frontend decision: [ADR-0001](0001-adopt-swiftui-appkit-frontend.md)

@@ -21,11 +21,12 @@ html {
 
 body {
   background: #101214;
-  color: #f1f3ef;
-  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN',
-    'SF Pro Text', system-ui, sans-serif;
-  font-size: 11px;
-  -webkit-font-smoothing: antialiased;
+  color: #f1f2f6;
+  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', sans-serif;
+  font-size: 13px;
+  /* Proportional kana for UI text; long-form text and code switch it back
+     off with .prose / .cl. */
+  font-feature-settings: 'palt' 1;
   overscroll-behavior: none;
 }
 
@@ -47,7 +48,57 @@ textarea {
 }
 
 .cl {
-  font-family: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace;
+  font-family: 'SF Mono', ui-monospace, Menlo, 'Hiragino Sans', monospace;
+  font-feature-settings: normal;
+}
+
+/* Long-form text: chat, settings descriptions, prompts. */
+.prose {
+  font-feature-settings: normal;
+}
+
+/* Numbers that line up: status bar, tables, times, counts, +N / −N. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* EMPHASIS (Tokens): emphasis is lightness, never a new hue. Primary = the
+   brightest ink on the darkest surface; everything else is an outline. */
+.btn-primary {
+  background: #f1f2f6;
+  color: #282c34;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+.btn-primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
+.btn-secondary {
+  background: transparent;
+  color: #caccd2;
+  border: 1px solid rgba(241, 242, 246, 0.19);
+}
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  background: transparent;
+  color: #caccd2;
+  font-weight: 400;
+  border: 1px solid rgba(241, 242, 246, 0.19);
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Focus ring: keyboard focus only, one style for fields and buttons. Fields
+   drawn as a wrapper around a bare input use .field. */
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+.field:has(:focus-visible) {
+  outline: none;
+  box-shadow: 0 0 0 1px rgba(241, 242, 246, 0.32);
+}
+.field input:focus-visible {
+  box-shadow: none;
 }
 
 /* surfaceHover / surfaceActive from the Tokens artboard. */
@@ -65,19 +116,54 @@ textarea {
   justify-content: center;
   width: 30px;
   height: 28px;
-  border-radius: 7px;
-  color: #707871;
+  border-radius: 6px;
+  color: #81858d;
 }
 
 .act:hover {
-  background: #2e333c;
-  color: #c9cec8;
+  /* Same white wash as the "selected" state (wash.selected in tokens.ts) —
+     hover and selected are meant to read as one tint, not two. */
+  background: rgba(255, 255, 255, 0.08);
+  color: #caccd2;
+}
+
+.tab-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.msg-time {
+  opacity: 0;
+}
+.msg:hover .msg-time {
+  opacity: 1;
+}
+
+.go-hint {
+  visibility: hidden;
+}
+.rail-row:hover .go-hint {
+  visibility: visible;
+}
+
+/* Terminal/agent pane header: the drag handle and close button only show up
+   on hover, or (close button only) while the pane is focused — a header
+   that's visible all the time would put a permanent line of chrome above
+   every pane, which is exactly what the "no header per pane" rule avoids. */
+.pane-header-actions {
+  opacity: 0;
+  transition: opacity 80ms linear;
+}
+.pane-hoverable:hover .pane-header-actions {
+  opacity: 1;
+}
+.pane-header-actions.pane-visible {
+  opacity: 1;
 }
 
 .scroll {
   overflow: auto;
   scrollbar-width: thin;
-  scrollbar-color: rgba(242, 244, 238, 0.15) transparent;
+  scrollbar-color: rgba(241, 242, 246, 0.15) transparent;
 }
 
 .scroll::-webkit-scrollbar {
@@ -90,8 +176,8 @@ textarea {
 }
 
 .scroll::-webkit-scrollbar-thumb {
-  background: rgba(242, 244, 238, 0.15);
-  border-radius: 3px;
+  background: rgba(241, 242, 246, 0.15);
+  border-radius: 4px;
 }
 
 .no-scrollbar::-webkit-scrollbar {
@@ -259,7 +345,21 @@ textarea {
   }
 }
 
+/* context menu — opens from the corner nearest the pointer (transform-origin
+   is set per panel), on the same overlay budget; it closes without animating
+   so a chosen item takes effect at once. */
+.ctx-menu {
+  animation: ctx-menu 90ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+@keyframes ctx-menu {
+  from {
+    transform: scale(0.97);
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .ctx-menu,
   .screen-layer,
   .overlay-scrim,
   .overlay-panel {

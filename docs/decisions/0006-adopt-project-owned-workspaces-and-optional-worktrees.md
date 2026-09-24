@@ -100,8 +100,8 @@ Worktree identity自体は引き続きstable entityとして必要である。�
 
 ## References
 
-- [Product vision](../product/vision.md)
-- [Product principles](../product/principles.md)
-- [Product scope](../product/scope.md)
+- [Product vision](../clair-spec.md)
+- [Product principles](../clair-spec.md)
+- [Product scope](../clair-spec.md)
 - [Superseded ADR-0005](0005-adopt-worktree-first-agent-orchestration.md)
-- [PoC queue: managed worktrees and branch adoption](../plans/clair-poc-queue.md#p10-managed-worktrees)
+- [PoC queue: managed worktrees and branch adoption](../clair-tasks.md#p10-managed-worktrees)

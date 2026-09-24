@@ -1,9 +1,7 @@
 # Clair Workbench — 動くモック
 
 Clair UI の Design canvas を **実際に動く React 実装** に落としたモック。
-`prototypes/clair-interaction-lab` がキャンバスの静止画（artboard の HTML を
-そのまま埋め込んで文字一致でクリックを付けたもの）なのに対し、こちらは
-状態を持った本物のコンポーネントとして組み直してある。IDE として触った
+状態を持った本物のコンポーネントとして組み直してあり、IDE として触った
 ときの操作感を確認するのが目的。
 
 このモック自身も Artifact として公開されている
@@ -29,7 +27,7 @@ artboard が定義しているトークン（`surfaceHover` / `surfaceActive` /
 EMPTY STATE コンポーネント）だけで作っている。新しい見た目は足していない。
 
 キャンバス側が間違っている・足りないと分かったら、**モックで直さずキャンバスを
-直す**。手順は `.claude/skills/clair-design-sync`。
+直す**。手順は `.claude/skills/clair-workbench-sync`。
 
 ## アプリの外枠
 
@@ -107,7 +105,8 @@ clair-releases は汎用のプレースホルダー）から1タブずつ立て�
 
 **グループカラー**。色は chip 自身の塗り（背景14〜22%・枠28〜55%の alpha、
 `withAlpha`、`tokens.ts`）として乗る — 別立てのドットは持たない。chip を
-右クリックすると `GROUP_COLOR_KEYS`（`tokens.ts`）を順番にサイクルする
+右クリックすると右クリックメニュー（下記）が開き、その先頭に
+`GROUP_COLOR_KEYS`（`tokens.ts`）の見本が並ぶので、そこで選ぶ
 （Chromeがタブグループの色pickerを右クリック起点に置くのと同じ）。左クリックは
 これまで通り折りたたみのトグル。同じ色でグループ全体（chip + タブ）の下に
 2pxのアンダーラインも敷く — どこまでが1つのグループのタブかを縦の区切り線
@@ -132,6 +131,55 @@ Tokens artboard の「PROJECT識別 — 色を使わない」という既存ル�
 エクスプローラーのツリーのままにしてある。ここを埋めるのはキャンバス側の作業で、
 モック側で発明はしない。（マージグラフは今回の変更でセッションと同じ立場から
 外れ、変更を確認と同じ panel を使うようになった。）
+
+### 右クリックメニュー
+
+IDE の中ではブラウザ（アプリでは AppKit）のメニューを一切出さない。Tokens の
+CONTROLS「nativeを混ぜない」をメニューにも当てはめた。部品は
+`src/contextMenu.tsx`（`ContextMenuLayer` / `useContextMenu`）、各面が何を
+持つかは `src/menus.tsx`。正本はキャンバスの **ContextMenu** artboard。
+
+| 面 | ヘッダー | 中身 |
+| --- | --- | --- |
+| titlebar の project chip | Project名・パス | 色見本 / 切り替え・折りたたみ・名前を変更 / 左右へ移動 / Projectを閉じる |
+| ファイルのタブ | ファイル名・ディレクトリ | タブを閉じる系 / 分割して開く / Agentに送る › / 変更を確認 / パスのコピー・Finder |
+| Claude Code / codex のタブ | セッション | 開く / Agentsの一覧 / Agentを追加 |
+| ファイルツリー | 名前・パス | 開く / 分割して開く / Agentに送る › / 変更を確認 / パスのコピー・Finder（フォルダは開閉とパス） |
+| エディタ | なし | 切り取り・コピー・ペースト / Agentに送る › / 保存 / 分割・最大化 / ペインを閉じる |
+| ターミナル・agent 出力 | なし | コピー・ペースト・クリア（agent は会話を開く）/ 分割・最大化 / ペインを閉じる |
+
+見た目は既存トークンだけで組んである。地は chromeRaised、枠は line.strong、
+半径は overlay の 10、影はコマンドパレットと同じで、scrim は敷かない。行は
+26px・半径 6（padding 4 の内側で 10 と同心）。hover とキーボード選択はどちらも
+surfaceActive の塗りだけ。破壊的な項目は最後に置いて weight 700（赤にしない）。
+開くときは LATENCY BUDGET の palette 表示に合わせて 90ms、ポインタに近い角から
+0.97→1。閉じるときは動かさない。
+
+ルールは3つ。**ヘッダーは対象がオブジェクト（ファイル・Project・セッション）の
+ときだけ**で、選択範囲やペインには出さない。**いま実行できないだけの操作は
+disabled で残し**（位置を覚えられるように）、その対象に意味のない操作は出さない。
+**同じ操作は同じ名前**（「Agentに送る ›」「右に分割」はどこでも同じ文言・
+ショートカット）。右クリックした行・タブ・chip は、メニューが開いている間
+line.ring のリングをまとう。
+
+キーボードは ↑↓ / → で submenu / ← / ↵ / esc（1段ずつ閉じる）。外側のクリックは
+閉じるだけで下に届けず、別の場所の右クリックはそこで開き直す。
+
+**chip の右クリックは「色を送る」から「メニュー」に変わった。** 色はメニュー
+先頭の見本で選ぶ。native 版の project メニュー（切り替え・名前変更・
+グループカラー・移動・閉じる）と同じ項目を持たせたうえで、titlebar の並びは横
+なので「上へ/下へ移動」は「左へ/右へ移動」にした。名前の変更は chip がその場で
+入力欄になる（↵ で確定、esc で戻す）。
+
+**モックでは動かないもの**: 「Finderで表示」はブラウザから開けないので、押しても
+閉じるだけ。コピー / ペーストは Clipboard API を使うので、Artifact の枠が
+許可しない環境ではペーストが黙って何もしない。
+
+**キャンバスとの差分**: `ContextMenu` artboard を新規追加した（chip・ツリー＋
+submenu・エディタ・ターミナルの4場面と、ANATOMY / STATES / RULES）。Tokens の
+GROUP COLORS の「右クリックで色を送る」を「メニュー先頭の見本で選ぶ」に書き換え、
+CONTROLS に右クリックメニューの1行を足した。分割アイコン（`IconSplitRight` /
+`IconSplitDown`）はこの artboard が初出。
 
 ### パンくず
 
@@ -234,11 +282,15 @@ sidebarの中、breadcrumbはstatus barへ移す。splitしても縦chromeは74p
   現在行とコンソールが動く。
 - **セッション** — exit したセッションの再起動、行から画面遷移。
 - **設定** — トグルとセクション切り替えが実際に効く。
+- **右クリックメニュー** — chip・タブ・ファイルツリー・エディタ・ターミナル・
+  agent 出力で開く。色見本、Project の改名・並べ替え・閉じる、タブをまとめて
+  閉じる、分割して開く、Agent に送る（clair の Claude Code には `@path` つきで
+  会話に届く）、切り取り / コピー / ペースト、ペイン操作が実際に効く。
 
 ## モバイル
 
 モバイルは**デスクトップの縮小版ではない**。仕様
-（`docs/projects/p0020-mobile-agent-remote-control/`）が non-goal として
+（`docs/clair-spec.md`）が non-goal として
 「mobile full IDE、source editor、file browser、diff/review」を明示的に外して
 いるので、モバイルが持つのは**席を離れたあと agent を見て返すための経路だけ**。
 IDE をそのまま小さくした画面は作らない。

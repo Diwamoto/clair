@@ -1,8 +1,10 @@
 # Clair
 
+[English version here](README_en.md)
+
 > エディタ、ターミナル、AIエージェント、Gitを、Project単位のmacOSネイティブワークスペースにまとめるIDE。
 
-Clairは、cceditの後継として開発している個人用のmacOSネイティブIDEです。
+Clairは、個人で開発しているmacOSネイティブIDEです。
 VS Codeのような編集・検索・Gitの統合体験と、Ghosttyのような使い慣れたターミナル操作を、
 別々のアプリを行き来せずに一つのProject workspaceで扱えるようにします。
 
@@ -31,103 +33,39 @@ Clairで開発する最終的なdogfood cutoverと、UIの統合・磨き込み�
 
 - macOS 14.0以降
 - full Xcode 16以降（Command Line Toolsではなく、Xcode本体が選択されていること）
-- rustupで管理された、リポジトリ指定のRust 1.98.0 toolchain
-- Rustの`rustfmt`と`clippy`コンポーネント
-
-前提環境は、リポジトリのルートで次のコマンドから確認できます。
 
 ```sh
 make doctor
 ```
 
-`make doctor`でfull Xcodeが選択されていないと表示された場合は、環境に合わせて次を実行します。
+### 起動する
 
 ```sh
-sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-```
-
-Rust componentが不足している場合は、次を実行します。
-
-```sh
-rustup component add rustfmt clippy
-```
-
-### 開発版を起動する
-
-開発中はDevチャンネルを使います。次のコマンドが、Devアプリを初回ビルド・起動し、
-その後はネイティブソースを監視します。
-
-```sh
-make run-dev
+make dev       # macOSアプリをビルドして起動する（Swift変更で自動再ビルド＆再起動、Ctrl-Cで停止）
+make dev-ios   # iOS Simulatorで起動する
 ```
 
 起動後、Projectsサイドバーの **Open Folder** から開きたいローカルフォルダを選びます。
-Git repositoryと通常のフォルダを同じProject modelで扱えます。
-
-これはホットリロードではなくホットリスタートです。ソースを変更すると自動でビルドとアプリの再起動を行います。
-再起動のたびに通常のアプリ終了が発生するため、
-未保存の編集内容と実行中のターミナルセッションは保持されません。必要な内容を保存してから利用してください。
-`CLAIR_WATCH_INTERVAL`で監視間隔（秒、デフォルトは1秒）を変更できます。
-監視中はコマンドがフォアグラウンドで動作するため、終了するときは`Ctrl-C`を押します。
-`make watch-dev`は`make run-dev`の互換エイリアスです。
-
-### StableとDevを同時に起動する
-
-ローカルのStableチャンネルを起動する場合は、次を使います。
-
-```sh
-make run-stable
-```
-
-StableとDevは別バンドル・別のデータ領域なので、同時に起動できます。
-
-```sh
-make run-stable
-make run-dev
-```
-
-同じチャンネルをもう一度起動した場合は新しいプロセスを増やさず、既存のプロセスを前面に表示します。
-ローカルのStable/Devビルドはいずれも署名なしのDebugビルドです。
 
 ## よく使う開発コマンド
 
 | コマンド | 内容 |
 | --- | --- |
-| `make build-dev` | Devアプリをビルドする |
-| `make build-stable` | Stableアプリをビルドする |
-| `make run-dev` | ネイティブソースを監視し、変更時にDevをビルド・再起動する |
-| `make test` | RustとSwiftのテストを実行する |
-| `make test-mobile` | iOS/macOS共有のモバイルプロトコルテストを実行する |
-| `make lint` | Rust/Swiftのフォーマット、Clippy、Xcode解析、workspace検証を実行する |
-| `make smoke` | test、Swift-Rustリンク、bundle、artifactの一連のsmoke checkを実行する |
-| `make ci` | `lint`と`smoke`をまとめて実行する |
-| `make clean-artifacts` | 破棄可能なビルド成果物だけを削除する |
+| `make test` | 高速なcore/appユニットテストを実行する |
+| `make test-integration` | 実subprocess/PTY/daemonの遅いテストを実行する |
+| `make foundation` | package graph検証、全build、全テストを実行する |
+| `make lint` | Swiftのフォーマットを検査する |
+| `make ci` | `lint`、`foundation`、iOS Simulator buildをまとめて実行する |
 
-詳細な手動確認、出力先、復旧方法は[ローカル開発手順](docs/runbooks/local-development.md)にまとめています。
-
-## Native CLI
-
-Rust製の`clair` CLIはRust workspaceからビルドされ、DebugアプリとStable releaseへ同梱されます。
-アプリバンドル内では`Clair.app/Contents/Resources/clair`、ソースツリーでは`target/debug/clair`から利用できます。
-CLIはSwift側のCommand Registryへ接続する薄いクライアントで、agentの状態と操作権限はClair本体が所有します。
-
-```sh
-target/debug/clair --channel dev agent list
-target/debug/clair --channel dev agent status <SESSION_ID>
-target/debug/clair --channel dev agent input <SESSION_ID> --text $'continue\n' --yes
-```
-
-アプリが起動していない場合は、ビルド済みアプリを自動起動します。`--no-launch`で起動せずに確認でき、
-`--app PATH`または`CLAIR_APP_PATH`で起動対象を指定できます。
+詳細な手動確認、出力先、復旧方法は[ローカル開発手順](docs/runbooks/clair-verification.md)にまとめています。
 
 ## リポジトリの構成
 
 ```text
-apple/       SwiftUI/AppKitのmacOSアプリとSwiftテスト
-packages/    iOS/macOS共有Swift package（mobile control/host/client）
-crates/      Rust core、native CLI、local PTY host
-scripts/     build、run、test、smoke用の補助スクリプト
-docs/        product、architecture、decision、roadmap、runbook
+apple/       iOSアプリ(ClairMobile)とそのテスト
+packages/    Swift package(ClairCore、ClairApps)
+scripts/     build、run、test用の補助スクリプト
+docs/        仕様、タスク、architecture、decision、runbook
 ```
 
 ClairのM1は個人利用を中心とし、macOS専用のdesktopと自所有iPhone/iPad向けのearly mobile controlを対象にします。
@@ -136,20 +74,27 @@ hosted agentは対象にしません。Goのlanguage intelligence、debugger、D
 
 ## ドキュメント
 
+- [仕様(正本)](docs/clair-spec.md)
+- [タスク一覧](docs/clair-tasks.md) / [カンバン](docs/clair-kanban.html)
 - [ドキュメント案内](docs/README.md)
-- [製品ビジョン](docs/product/vision.md)
-- [製品スコープ](docs/product/scope.md)
 - [現在のworkspace architecture](docs/architecture/development-workspace.md)
-- [ローカル開発手順](docs/runbooks/local-development.md)
-- [Clair v2 roadmap](docs/plans/clair-v2-roadmap.md)
-- [PoC feature queue](docs/plans/clair-poc-queue.md)
+- [ローカル検証手順](docs/runbooks/clair-verification.md)
 
-### リポジトリ内の開発フロー
+### 開発の進め方
 
-実装の目的・要件・設計・検証手順は、必要に応じて`docs/projects/`のproject bundleへ残します。
-Project bundleを使う作業では、次のproject-local Codex skillを利用できます。
+開発は[タスク一覧](docs/clair-tasks.md)をキューとして、AIエージェント用skill `/clair-task`
+(`.agents/skills/clair-task/`)で一件ずつ進めています。仕様は[`docs/clair-spec.md`](docs/clair-spec.md)を正本とし、
+各タスクの結果・計測・残課題はタスク一覧の行に記録して、[カンバン](docs/clair-kanban.html)を再生成します。
 
-- `$issue-to-project-docs <GitHub issue>` — issueから実装可能なproject文書を作成する
-- `$project-implementer <project code>` — 文書化済みprojectを実装・検証する
-- `$clair-issue-executor P01`または`$clair-issue-executor next` — PoC queueの一項目を実装する
-- `$clair-session-commit` — 完了したsliceを分離・検証してcommitする
+## コントリビューション
+
+個人プロジェクトですが、バグ報告やバグ修正のPull Requestは歓迎です。
+大きな機能追加は、先にIssueで相談してもらえると助かります。
+
+## セキュリティ
+
+脆弱性の報告方法は[SECURITY.md](SECURITY.md)を参照してください。
+
+## ライセンス
+
+[MIT](LICENSE)。第三者コンポーネントは[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)に記載しています。

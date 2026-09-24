@@ -1,6 +1,6 @@
 ---
 name: clair-workbench-sync
-description: Change Clair's UI in the workbench mock (prototypes/clair-workbench) and the Clair UI Design canvas together, in one pass. Use when the user gives UI feedback on the running mock — layout, chrome, navigation, motion, component behaviour — and the change is a design decision, not just a mock detail. Covers editing and republishing the canvas artifact itself. For the older static interaction-lab mock use clair-design-sync instead; for native Swift work use clair-mock-implement.
+description: Change Clair's UI in the workbench mock (prototypes/clair-workbench) and the Clair UI Design canvas together, in one pass. Use when the user gives UI feedback on the running mock — layout, chrome, navigation, motion, component behaviour — and the change is a design decision, not just a mock detail. Covers editing and republishing the canvas artifact itself. Native Swift work goes through the task queue (clair-task) instead.
 ---
 
 # Clair Workbench Sync
@@ -37,16 +37,13 @@ file paths, component names, commands, and raw tool output as they are.
   radius, 7-step spacing, latency budget, chrome budget). `Tokens` is the
   one artboard that defines rules rather than a screen; read it before
   deciding anything the other artboards do not literally draw.
-- **Workbench mock**: `/Users/daiki/Projects/clair/prototypes/clair-workbench`
+- **Workbench mock**: `prototypes/clair-workbench`
   — Vite + React + TypeScript, a real implementation with state, not an
   embedded copy of the artboards. Published privately as an Artifact so it
   can be opened from a phone; `README.md` there records the current URL,
   the shell structure, and the motion model.
-- **Not this skill's mock**: `prototypes/clair-interaction-lab` embeds the
-  artboard HTML verbatim. [`clair-design-sync`](../clair-design-sync/SKILL.md)
-  owns that one and only flows Design → mock. Leave it alone here.
-- **Native work** is [`clair-mock-implement`](../clair-mock-implement/SKILL.md).
-  This skill never edits `apple/`.
+- **Native work** goes through the task queue ([`clair-task`](../clair-task/SKILL.md)).
+  This skill never edits `apple/` or `packages/`.
 - `scripts/canvas_edit.py` in this skill directory extracts and repacks the
   canvas artifact.
 

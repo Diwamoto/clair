@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 
 import { activityItems } from '../data';
-import { IconSearch } from '../icons';
+import { IconArrowRight, IconSearch } from '../icons';
 import { useWorkbench } from '../store';
 
-import { color, line, wash } from '../tokens';
+import { color, fs, line, radius, space, wash } from '../tokens';
 
 export function ActivityPanel() {
   const wb = useWorkbench();
@@ -19,13 +19,13 @@ export function ActivityPanel() {
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 8,
+              gap: space[2],
               height: 40,
               padding: '0 12px',
               margin: '8px 12px',
-              borderRadius: 6,
-              background: color.canvas,
-              border: `1px solid ${line.strong}`,
+              borderRadius: radius.card,
+              background: color.chrome,
+              border: `1px solid ${line.hairline}`,
             }}
           >
             <IconSearch size={13} color={color.textQuaternary} />
@@ -39,12 +39,12 @@ export function ActivityPanel() {
                 border: 0,
                 outline: 'none',
                 background: 'transparent',
-                fontSize: 11,
+                fontSize: fs.caption,
                 color: color.textSecondary,
               }}
             />
           </div>
-          <div style={{ display: 'flex', gap: 5, padding: '0 12px 8px' }}>
+          <div style={{ display: 'flex', gap: space[1], padding: '0 12px 8px' }}>
             {(['すべて', 'clair', 'ccedit'] as const).map((s) => {
               const on = scope === s;
               return (
@@ -56,11 +56,11 @@ export function ActivityPanel() {
                     alignItems: 'center',
                     height: 22,
                     padding: '0 8px',
-                    borderRadius: 4,
+                    borderRadius: radius.control,
                     background: on ? wash.raised : 'transparent',
                     border: on ? `1px solid ${line.hairline}` : '1px solid transparent',
                     color: on ? color.textSecondary : color.textQuaternary,
-                    fontSize: 10,
+                    fontSize: fs.caption,
                   }}
                 >
                   {s}
@@ -74,15 +74,17 @@ export function ActivityPanel() {
               return (
                 <button
                   key={item.id}
+                  className={selected ? undefined : 'hoverable'}
                   onClick={() => wb.setActiveActivity(item.id)}
                   style={{
                     display: 'flex',
                     alignItems: 'flex-start',
-                    gap: 10,
-                    width: '100%',
-                    padding: '9px 14px',
-                    background: selected ? 'rgba(242,244,238,0.055)' : undefined,
-                    borderLeft: `2px solid ${selected ? color.textSecondary : 'transparent'}`,
+                    gap: space[2],
+                    width: 'calc(100% - 16px)',
+                    margin: '0 8px',
+                    padding: '8px',
+                    borderRadius: radius.control,
+                    background: selected ? color.surfaceActive : undefined,
                   }}
                 >
                   <span
@@ -92,12 +94,12 @@ export function ActivityPanel() {
                       flex: '0 0 18px',
                       borderRadius: '50%',
                       background:
-                        item.state === 'done' ? 'rgba(242,244,238,0.05)' : selected || item.state === 'attention' ? wash.strongest : wash.selected,
+                        item.state === 'done' ? 'rgba(241,242,246,0.05)' : selected || item.state === 'attention' ? wash.strongest : wash.selected,
                       color: item.state === 'done' ? color.textQuaternary : selected || item.state === 'attention' ? color.textPrimary : color.textSecondary,
                       display: 'grid',
                       placeItems: 'center',
-                      fontSize: 10,
-                      marginTop: 1,
+                      fontSize: fs.caption,
+                      marginTop: 2,
                     }}
                   >
                     {item.glyph}
@@ -107,14 +109,14 @@ export function ActivityPanel() {
                       style={{
                         display: 'block',
                         color: selected ? color.textPrimary : color.textSecondary,
-                        fontSize: 11,
-                        fontWeight: 500,
+                        fontSize: fs.caption,
+                        fontWeight: 400,
                         textAlign: 'left',
                       }}
                     >
                       {item.title}
                     </strong>
-                    <small style={{ display: 'block', marginTop: 4, color: color.textMuted, fontSize: 10 }}>
+                    <small style={{ display: 'block', marginTop: 4, color: color.textQuaternary, fontSize: fs.caption }}>
                       {item.meta}
                     </small>
                   </span>
@@ -126,10 +128,18 @@ export function ActivityPanel() {
   );
 }
 
+// One 720px column for messages, approval card and composer alike.
+const COLUMN: CSSProperties = { width: '100%', maxWidth: 720, margin: '0 auto', padding: '0 16px' };
+
 export function ActivityMain() {
   const wb = useWorkbench();
   const [draft, setDraft] = useState('');
   const feedRef = useRef<HTMLDivElement>(null);
+  const send = () => {
+    if (!draft.trim()) return;
+    wb.sendMessage(draft.trim());
+    setDraft('');
+  };
 
   useEffect(() => {
     const el = feedRef.current;
@@ -140,35 +150,37 @@ export function ActivityMain() {
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, background: color.canvas }}>
           <div ref={feedRef} className="scroll" style={{ minHeight: 0, flex: 1, padding: '26px 0 16px' }}>
             {wb.messages.map((m) => (
-              <div key={m.id} style={{ maxWidth: 640, margin: '0 auto 16px', padding: '0 30px' }}>
+              <div key={m.id} className="msg" style={{ ...COLUMN, marginBottom: space[4] }}>
                 <div
+                  className="prose"
                   style={{
-                    padding: '12px 16px',
-                    borderRadius: 10,
-                    background: m.from === 'user' ? wash.strong : 'rgba(242,244,238,0.045)',
+                    padding: m.from === 'user' ? '12px 16px' : 0,
+                    borderRadius: radius.overlay,
+                    background: m.from === 'user' ? wash.strong : undefined,
                     color: m.from === 'user' ? color.textPrimary : color.textSecondary,
-                    fontSize: 13,
+                    fontSize: fs.body,
                     lineHeight: 1.55,
-                    maxWidth: '85%',
+                    maxWidth: m.from === 'user' ? '85%' : undefined,
                     marginLeft: m.from === 'user' ? 'auto' : undefined,
+                    width: m.from === 'user' ? 'fit-content' : undefined,
                   }}
                 >
                   {m.text}
                 </div>
                 <div
-                  className="cl"
-                  style={{ marginTop: 6, color: color.textMuted, fontSize: 10, textAlign: m.from === 'user' ? 'right' : 'left' }}
+                  className="tnum msg-time"
+                  style={{ marginTop: space[1], color: color.textQuaternary, fontSize: fs.caption, textAlign: m.from === 'user' ? 'right' : 'left' }}
                 >
                   {m.time}
                 </div>
               </div>
             ))}
 
-            <div style={{ maxWidth: 640, margin: '0 auto 16px', padding: '0 30px' }}>
+            <div style={{ ...COLUMN, marginBottom: space[4] }}>
               <div
                 style={{
                   border: `1px solid ${line.stronger}`,
-                  borderRadius: 8,
+                  borderRadius: radius.card,
                   background: wash.faint,
                   overflow: 'hidden',
                 }}
@@ -178,112 +190,114 @@ export function ActivityMain() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    gap: 12,
+                    gap: space[3],
                     padding: '12px 16px',
-                    borderBottom: `1px solid rgba(242,244,238,0.14)`,
+                    borderBottom: `1px solid rgba(241,242,246,0.14)`,
                     color: color.textPrimary,
-                    fontSize: 12.5,
+                    fontSize: fs.body,
                     fontWeight: 600,
                   }}
                 >
                   変更を適用してテストを実行しますか？
-                  <span className="cl" style={{ color: color.textMuted, fontWeight: 400, fontSize: 10 }}>
+                  <span className="tnum" style={{ color: color.textQuaternary, fontWeight: 400, fontSize: fs.caption }}>
                     PermissionRequest
                   </span>
                 </div>
-                <div style={{ padding: '14px 16px', display: 'grid', gap: 10 }}>
+                <div style={{ padding: '12px 16px', display: 'grid', gap: space[2] }}>
                   <div
                     className="cl scroll"
                     style={{
-                      padding: '9px 11px',
+                      padding: '8px 8px',
                       border: `1px solid ${line.hairline}`,
-                      borderRadius: 6,
+                      borderRadius: radius.card,
                       background: color.canvas,
                       color: color.textSecondary,
-                      fontSize: 12.5,
+                      fontSize: fs.body,
                       whiteSpace: 'pre',
                     }}
                   >
                     git diff --check &amp;&amp; swift test --package-path packages/ClairMobileKit
                   </div>
-                  <div className="cl" style={{ display: 'flex', gap: 18, color: color.textMuted, fontSize: 10, flexWrap: 'wrap' }}>
+                  <div className="tnum" style={{ display: 'flex', gap: space[4], color: color.textQuaternary, fontSize: fs.caption, flexWrap: 'wrap' }}>
                     <span>作業ディレクトリ ~/Projects/ccedit</span>
                     <span>リスク ローカルのテストコマンドを実行</span>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 8, padding: '0 16px 14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: space[2], padding: '0 16px 12px' }}>
                   {(
                     [
-                      ['拒否', line.hairline, 'transparent', color.textTertiary, 400],
-                      ['セッション中は許可', line.strong, wash.medium, color.textSecondary, 400],
-                      ['今回だけ許可', line.stronger, wash.strong, color.textPrimary, 600],
+                      ['拒否', 'btn-secondary'],
+                      ['セッション中は許可', 'btn-secondary'],
+                      ['今回だけ許可', 'btn-primary'],
                     ] as const
-                  ).map(([label, border, bg, fg, weight]) => {
-                    const chosen = wb.approvalDecision === label;
-                    return (
-                      <button
-                        key={label}
-                        onClick={() => wb.setApprovalDecision(label)}
-                        style={{
-                          flex: 1,
-                          textAlign: 'center',
-                          minHeight: 30,
-                          lineHeight: '30px',
-                          border: `1px solid ${chosen ? line.ring : border}`,
-                          borderRadius: 4,
-                          background: chosen ? color.surfaceActive : bg,
-                          color: chosen ? color.textPrimary : fg,
-                          fontSize: 11,
-                          fontWeight: weight,
-                        }}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
+                  ).map(([label, cls]) => (
+                    <button
+                      key={label}
+                      className={cls}
+                      onClick={() => wb.setApprovalDecision(label)}
+                      style={{
+                        textAlign: 'center',
+                        minHeight: 30,
+                        padding: '0 12px',
+                        borderRadius: radius.control,
+                        fontSize: fs.caption,
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
               </div>
               {wb.approvalDecision ? (
-                <div className="cl" style={{ marginTop: 8, color: color.textMuted, fontSize: 10 }}>
+                <div className="tnum" style={{ marginTop: 8, color: color.textQuaternary, fontSize: fs.caption }}>
                   {wb.approvalDecision} を選択しました。
                 </div>
               ) : null}
             </div>
           </div>
 
-          <div
-            style={{
-              flexShrink: 0,
-              margin: '0 20px 16px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              padding: '0 14px',
-              height: 46,
-              borderRadius: 8,
-              background: color.panel,
-              border: `1px solid ${line.strong}`,
-            }}
-          >
-            <input
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && draft.trim()) {
-                  wb.sendMessage(draft.trim());
-                  setDraft('');
-                }
-              }}
-              placeholder="Agentにメッセージ…"
+          <div style={{ ...COLUMN, flexShrink: 0, marginBottom: space[4] }}>
+            <div
+              className="field"
               style={{
-                flex: 1,
-                border: 0,
-                outline: 'none',
-                background: 'transparent',
-                color: color.textPrimary,
-                fontSize: 12.5,
+                display: 'flex',
+                alignItems: 'center',
+                gap: space[2],
+                padding: '0 8px 0 12px',
+                height: 46,
+                borderRadius: radius.card,
+                background: color.canvas,
+                border: `1px solid ${line.hairline}`,
               }}
-            />
+            >
+              <input
+                className="prose"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') send();
+                }}
+                placeholder="Agentにメッセージ…"
+                style={{
+                  flex: 1,
+                  border: 0,
+                  outline: 'none',
+                  background: 'transparent',
+                  color: color.textPrimary,
+                  fontSize: fs.body,
+                }}
+              />
+              <button
+                className="btn-primary"
+                aria-label="送信"
+                title="送信"
+                disabled={!draft.trim()}
+                onClick={send}
+                style={{ width: 28, height: 28, display: 'grid', placeItems: 'center', borderRadius: radius.control, flexShrink: 0 }}
+              >
+                <IconArrowRight size={14} style={{ transform: 'rotate(-90deg)' }} />
+              </button>
+            </div>
           </div>
     </div>
   );
@@ -291,7 +305,7 @@ export function ActivityMain() {
 
 export function ActivityStatus() {
   return (
-    <span className="cl" style={{ color: color.textMuted }}>
+    <span className="tnum" style={{ color: color.textQuaternary }}>
       Claude Code · 実行中
     </span>
   );

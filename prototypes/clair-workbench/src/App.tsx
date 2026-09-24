@@ -9,6 +9,7 @@ import {
   useState,
 } from 'react';
 
+import { ContextMenuLayer } from './contextMenu';
 import { AddAgentOverlay, CommandPalette, SearchOverlay } from './screens/Overlays';
 import { ActivityMain, ActivityPanel, ActivityStatus } from './screens/Activity';
 import {
@@ -24,12 +25,12 @@ import {
 import { AgentsPanel, MergeGraphMain, SessionsMain, SessionsStatus } from './screens/Sessions';
 import { MobileApp } from './screens/Mobile';
 import { ReviewMain, ReviewPanel, ReviewStatus } from './screens/Review';
-import { SettingsMain, SettingsPanel, SettingsStatus } from './screens/Settings';
+import { SettingsScreen } from './screens/Settings';
 import { ExplorerPanel, WorkspaceMain, WorkspaceStatus } from './screens/Workspace';
 import { AppShell, navIdFor } from './chrome';
 import { PanelStage, ScreenStage } from './motion';
 import { WorkbenchProvider, useWorkbench } from './store';
-import { color, line } from './tokens';
+import { color, fs, line, radius, space } from './tokens';
 
 /* ── routing ──────────────────────────────────────────────────────────── */
 
@@ -231,8 +232,6 @@ function Ide() {
       ) : (
         <DebugPanel />
       )
-    ) : panelId === 'settings' ? (
-      <SettingsPanel />
     ) : (
       <ExplorerPanel />
     );
@@ -248,8 +247,6 @@ function Ide() {
       <DebugMain />
     ) : wb.screen === 'debugAgent' ? (
       <DebugAgentMain />
-    ) : wb.screen === 'settings' ? (
-      <SettingsMain />
     ) : wb.screen === 'sessions' ? (
       <SessionsMain />
     ) : (
@@ -265,8 +262,6 @@ function Ide() {
       <DebugStatus />
     ) : wb.screen === 'debugAgent' ? (
       <DebugAgentStatus />
-    ) : wb.screen === 'settings' ? (
-      <SettingsStatus />
     ) : wb.screen === 'sessions' ? (
       <SessionsStatus />
     ) : wb.screen === 'workspace' ? (
@@ -277,7 +272,16 @@ function Ide() {
     wb.screen === 'debug' ? <DebugBadge /> : wb.screen === 'debugAgent' ? <DebugAgentBadge /> : null;
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+    <div
+      // An app, not a page: nowhere in the IDE shows the browser's own menu.
+      // A surface with a menu of its own has already claimed the event.
+      onContextMenu={(event) => {
+        if (event.defaultPrevented) return;
+        event.preventDefault();
+        wb.closeContextMenu();
+      }}
+      style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}
+    >
       <AppShell
         titlebarExtra={titlebarExtra}
         statusContext={status}
@@ -285,9 +289,12 @@ function Ide() {
         main={<ScreenStage screen={wb.screen}>{main}</ScreenStage>}
       />
 
+      {wb.screen === 'settings' ? <SettingsScreen onClose={() => wb.setScreen('workspace')} /> : null}
+
       {wb.overlay === 'command' || wb.overlay === 'quickOpen' ? <CommandPalette /> : null}
       {wb.overlay === 'search' ? <SearchOverlay /> : null}
       {wb.overlay === 'addAgent' ? <AddAgentOverlay /> : null}
+      <ContextMenuLayer />
     </div>
   );
 }
@@ -375,9 +382,9 @@ function ViewerBar({
     minWidth: 30,
     height: 26,
     padding: '0 8px',
-    borderRadius: 4,
+    borderRadius: radius.control,
     color: color.textSecondary,
-    fontSize: 12,
+    fontSize: fs.secondary,
   };
   return (
     <div
@@ -389,12 +396,12 @@ function ViewerBar({
         zIndex: 90,
         display: 'flex',
         alignItems: 'center',
-        gap: 2,
+        gap: space[0],
         height: 34,
-        padding: '0 6px',
-        borderRadius: 8,
+        padding: '0 4px',
+        borderRadius: radius.card,
         background: color.chromeRaised,
-        border: '1px solid rgba(242,244,238,0.14)',
+        border: '1px solid rgba(241,242,246,0.14)',
         boxShadow: '0 8px 20px rgba(0,0,0,0.4)',
       }}
     >
@@ -402,7 +409,7 @@ function ViewerBar({
         −
       </button>
       <button
-        style={{ ...button, color: autoFit ? color.textPrimary : color.textSecondary, fontSize: 10, fontWeight: 600 }}
+        style={{ ...button, color: autoFit ? color.textPrimary : color.textSecondary, fontSize: fs.caption, fontWeight: 600 }}
         onClick={onFit}
       >
         {Math.round(scale * 100)}%
@@ -410,10 +417,10 @@ function ViewerBar({
       <button style={button} onClick={onZoomIn} aria-label="拡大">
         +
       </button>
-      <div style={{ width: 1, height: 18, background: 'rgba(242,244,238,0.14)', margin: '0 4px' }} />
+      <div style={{ width: 1, height: 18, background: 'rgba(241,242,246,0.14)', margin: '0 4px' }} />
       <RouteLink
         to="mobile"
-        style={{ ...button, textDecoration: 'none', fontSize: 10, fontWeight: 600, color: color.textTertiary }}
+        style={{ ...button, textDecoration: 'none', fontSize: fs.caption, fontWeight: 600, color: color.textTertiary }}
       >
         モバイル
       </RouteLink>
@@ -441,12 +448,12 @@ function MobileStage({ viewport }: { viewport: { width: number; height: number }
             display: 'flex',
             alignItems: 'center',
             height: 24,
-            padding: '0 9px',
-            borderRadius: 12,
-            background: 'rgba(242,244,238,0.07)',
-            border: '1px solid rgba(242,244,238,0.22)',
+            padding: '0 8px',
+            borderRadius: radius.overlay,
+            background: 'rgba(241,242,246,0.07)',
+            border: '1px solid rgba(241,242,246,0.22)',
             color: color.textSecondary,
-            fontSize: 10,
+            fontSize: fs.caption,
             fontWeight: 600,
             textDecoration: 'none',
           }}
@@ -469,7 +476,7 @@ function MobileStage({ viewport }: { viewport: { width: number; height: number }
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 16,
+        gap: space[4],
       }}
     >
       <div style={{ width: PHONE.width * scale, height: PHONE.height * scale }}>
@@ -479,7 +486,7 @@ function MobileStage({ viewport }: { viewport: { width: number; height: number }
             height: PHONE.height,
             transform: `scale(${scale})`,
             transformOrigin: 'top left',
-            borderRadius: 44,
+            borderRadius: radius.device,
             overflow: 'hidden',
             border: `1px solid ${line.strong}`,
             boxShadow: '0 24px 70px rgba(0,0,0,0.5)',
@@ -494,12 +501,12 @@ function MobileStage({ viewport }: { viewport: { width: number; height: number }
           display: 'flex',
           alignItems: 'center',
           height: 24,
-          padding: '0 11px',
-          borderRadius: 12,
-          background: 'rgba(242,244,238,0.07)',
-          border: '1px solid rgba(242,244,238,0.22)',
+          padding: '0 8px',
+          borderRadius: radius.overlay,
+          background: 'rgba(241,242,246,0.07)',
+          border: '1px solid rgba(241,242,246,0.22)',
           color: color.textSecondary,
-          fontSize: 10,
+          fontSize: fs.caption,
           fontWeight: 600,
           textDecoration: 'none',
         }}

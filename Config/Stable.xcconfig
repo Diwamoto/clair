@@ -1,5 +1,0 @@
-#include "App.xcconfig"
-
-PRODUCT_BUNDLE_IDENTIFIER = com.diwamoto.clair
-PRODUCT_NAME = Clair
-SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) CLAIR_STABLE

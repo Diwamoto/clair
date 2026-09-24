@@ -1,0 +1,48 @@
+name: Release
+
+# Publishes Clair to this repository's GitHub Releases when a push to master changes VERSION
+# (docs/runbooks/release.md). The work lives in scripts/release.sh so any other CI can run it too.
+on:
+  push:
+    branches: [master]
+    paths: [VERSION]
+  workflow_dispatch:
+
+permissions:
+  contents: write # push the v<VERSION> tag and create the release
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-26
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      # libghostty is built from the pinned commit with zig + Metal; only a pin change rebuilds it.
+      - name: Restore libghostty
+        id: ghostty
+        uses: actions/cache@v6
+        with:
+          path: packages/ClairCore/Vendor/ghostty
+          key: ghostty-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Config/ghostty-pin.json', 'scripts/ghostty.sh') }}
+
+      - name: Vendor libghostty
+        if: steps.ghostty.outputs.cache-hit != 'true'
+        run: |
+          xcodebuild -downloadComponent MetalToolchain
+          ./scripts/ghostty.sh vendor
+
+      - name: Test
+        run: make test
+
+      - name: Build, sign and publish
+        env:
+          CLAIR_UPDATE_PRIVATE_KEY: ${{ secrets.CLAIR_UPDATE_PRIVATE_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/release.sh

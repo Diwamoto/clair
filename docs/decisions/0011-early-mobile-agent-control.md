@@ -83,7 +83,7 @@ decided here remain in force.
 ## References
 
 - Project: [p0020-mobile-agent-remote-control](../projects/p0020-mobile-agent-remote-control/README.md)
-- Product scope: [Early mobile agent control](../product/scope.md#early-mobile-agent-control)
-- Roadmap: [Milestone 1.5](../plans/clair-v2-roadmap.md#milestone-15-early-mobile-agent-control)
+- Product scope: [Early mobile agent control](../clair-spec.md#early-mobile-agent-control)
+- Roadmap: [Milestone 1.5](../clair-spec.md#milestone-15-early-mobile-agent-control)
 - Prior local foundation: [development workspace architecture](../architecture/development-workspace.md)
 - Historical follow-up: [ADR-0004 outbound E2EE relay](0004-outbound-e2ee-relay.md)

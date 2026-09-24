@@ -126,7 +126,7 @@ gpui-componentのeditorとdockは有望であり、GPUI案を非現実的とは�
 
 PoC期間はSwiftUI/AppKit/Rust境界のbuild、unit/integration、IME、terminal/editor操作の
 functional smokeだけを各featureで確認する。V1とのformal performance comparisonは
-[PoC queueの`L01`](../plans/clair-poc-queue.md#l01-final-load-and-performance)まで行わない。
+[PoC queueの`L01`](../clair-tasks.md#l01-final-load-and-performance)まで行わない。
 L01では同一のfixtureと操作scriptを用いて、統合済みClairとV1を比較する。
 
 - cold/warm launchからfirst interactiveまでの時間。

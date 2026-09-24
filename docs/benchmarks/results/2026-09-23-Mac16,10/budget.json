@@ -1,0 +1,380 @@
+{
+  "budgetMillis" : 100,
+  "buildConfiguration" : "release",
+  "contract" : "clair-v2-performance-budget",
+  "corpusLayoutVersion" : 1,
+  "host" : "Mac16,10",
+  "measurements" : [
+    {
+      "affordance" : "scanning",
+      "id" : "tree.scan.20k",
+      "iterations" : 5,
+      "maxRSSBytes" : 357466112,
+      "medianMillis" : 967.80725,
+      "mode" : "background",
+      "p95Millis" : 970.214375,
+      "verdict" : "background+loading"
+    },
+    {
+      "affordance" : "scanning",
+      "id" : "tree.scan.dirty",
+      "iterations" : 5,
+      "maxRSSBytes" : 373555200,
+      "medianMillis" : 236.892333,
+      "mode" : "background",
+      "p95Millis" : 241.302834,
+      "verdict" : "background+loading"
+    },
+    {
+      "budgetMillis" : 100,
+      "id" : "tree.directories.20k",
+      "iterations" : 20,
+      "maxRSSBytes" : 373604352,
+      "medianMillis" : 20.009958,
+      "mode" : "mainThread",
+      "p95Millis" : 20.584333,
+      "verdict" : "pass"
+    },
+    {
+      "affordance" : "scanning",
+      "id" : "tree.order.sort.20k",
+      "iterations" : 5,
+      "maxRSSBytes" : 373604352,
+      "medianMillis" : 33.091208,
+      "mode" : "background",
+      "p95Millis" : 33.424875,
+      "verdict" : "background"
+    },
+    {
+      "affordance" : "scanning",
+      "id" : "tree.order.sort.deep",
+      "iterations" : 5,
+      "maxRSSBytes" : 373637120,
+      "medianMillis" : 1.989084,
+      "mode" : "background",
+      "p95Millis" : 2.07225,
+      "verdict" : "background"
+    },
+    {
+      "affordance" : "scanning",
+      "id" : "git.status.dirty",
+      "iterations" : 5,
+      "maxRSSBytes" : 374358016,
+      "medianMillis" : 24.42,
+      "mode" : "background",
+      "p95Millis" : 24.759875,
+      "verdict" : "background"
+    },
+    {
+      "budgetMillis" : 100,
+      "id" : "git.changes.dirty",
+      "iterations" : 5,
+      "maxRSSBytes" : 374947840,
+      "medianMillis" : 23.846,
+      "mode" : "mainThread",
+      "p95Millis" : 24.22225,
+      "verdict" : "pass"
+    },
+    {
+      "budgetMillis" : 100,
+      "id" : "git.diff.one-file",
+      "iterations" : 5,
+      "maxRSSBytes" : 375160832,
+      "medianMillis" : 9.698375,
+      "mode" : "mainThread",
+      "p95Millis" : 10.309458,
+      "verdict" : "pass"
+    },
+    {
+      "budgetMillis" : 100,
+      "id" : "git.currentBranch",
+      "iterations" : 20,
+      "maxRSSBytes" : 375930880,
+      "medianMillis" : 8.670292,
+      "mode" : "mainThread",
+      "p95Millis" : 9.533625,
+      "verdict" : "pass"
+    },
+    {
+      "budgetMillis" : 100,
+      "id" : "git.refreshStatus.dirty",
+      "iterations" : 5,
+      "maxRSSBytes" : 377405440,
+      "medianMillis" : 25.142042,
+      "mode" : "mainThread",
+      "p95Millis" : 25.964667,
+      "verdict" : "pass"
+    },
+    {
+      "budgetMillis" : 100,
+      "id" : "git.review.dirty",
+      "iterations" : 5,
+      "maxRSSBytes" : 378781696,
+      "medianMillis" : 42.912334,
+      "mode" : "mainThread",
+      "p95Millis" : 43.719041,
+      "verdict" : "pass"
+    },
+    {
+      "budgetMillis" : 100,
+      "id" : "palette.files.rank.20k[s]",
+      "iterations" : 20,
+      "maxRSSBytes" : 385302528,
+      "medianMillis" : 26.736833,
+      "mode" : "mainThread",
+      "p95Millis" : 27.172833,
+      "verdict" : "pass"
+    },
+    {
+      "budgetMillis" : 100,
+      "id" : "palette.files.rank.20k[servicehandler]",
+      "iterations" : 20,
+      "maxRSSBytes" : 385302528,
+      "medianMillis" : 27.242583,
+      "mode" : "mainThread",
+      "p95Millis" : 27.597833,
+      "verdict" : "pass"
+    },
+    {
+      "budgetMillis" : 100,
+      "id" : "palette.files.rank.20k[shi42]",
+      "iterations" : 20,
+      "maxRSSBytes" : 385351680,
+      "medianMillis" : 21.840333,
+      "mode" : "mainThread",
+      "p95Millis" : 22.171958,
+      "verdict" : "pass"
+    },
+    {
+      "budgetMillis" : 100,
+      "id" : "palette.commands.filter",
+      "iterations" : 20,
+      "maxRSSBytes" : 385351680,
+      "medianMillis" : 0.054916,
+      "mode" : "mainThread",
+      "p95Millis" : 0.057541,
+      "verdict" : "pass"
+    },
+    {
+      "affordance" : "searching",
+      "id" : "search.find.deep-200",
+      "iterations" : 5,
+      "maxRSSBytes" : 388071424,
+      "medianMillis" : 5.225041,
+      "mode" : "background",
+      "p95Millis" : 5.356542,
+      "verdict" : "background"
+    },
+    {
+      "affordance" : "searching",
+      "id" : "search.find.20k",
+      "iterations" : 3,
+      "maxRSSBytes" : 407568384,
+      "medianMillis" : 417.999375,
+      "mode" : "background",
+      "p95Millis" : 421.518209,
+      "verdict" : "background+loading"
+    },
+    {
+      "affordance" : "searching",
+      "id" : "search.find.regex.20k",
+      "iterations" : 3,
+      "maxRSSBytes" : 412155904,
+      "medianMillis" : 439.6405,
+      "mode" : "background",
+      "p95Millis" : 442.999542,
+      "verdict" : "background+loading"
+    },
+    {
+      "affordance" : "replacing",
+      "id" : "search.replace.deep-200",
+      "iterations" : 5,
+      "maxRSSBytes" : 414760960,
+      "medianMillis" : 43.800208,
+      "mode" : "background",
+      "p95Millis" : 44.639084,
+      "verdict" : "background"
+    },
+    {
+      "affordance" : "prefetch",
+      "id" : "file.rope.10mb",
+      "iterations" : 5,
+      "maxRSSBytes" : 446464000,
+      "medianMillis" : 497.825208,
+      "mode" : "background",
+      "p95Millis" : 507.256917,
+      "verdict" : "background+loading"
+    },
+    {
+      "affordance" : "prefetch",
+      "id" : "file.rope.long-line",
+      "iterations" : 5,
+      "maxRSSBytes" : 446464000,
+      "medianMillis" : 51.398625,
+      "mode" : "background",
+      "p95Millis" : 52.263291,
+      "verdict" : "background"
+    },
+    {
+      "affordance" : "prefetch",
+      "id" : "file.rope.1mb-japanese",
+      "iterations" : 5,
+      "maxRSSBytes" : 446464000,
+      "medianMillis" : 45.572792,
+      "mode" : "background",
+      "p95Millis" : 45.820583,
+      "verdict" : "background"
+    },
+    {
+      "budgetMillis" : 100,
+      "id" : "file.save.10mb",
+      "iterations" : 5,
+      "maxRSSBytes" : 451936256,
+      "medianMillis" : 3.401417,
+      "mode" : "mainThread",
+      "p95Millis" : 3.630667,
+      "verdict" : "pass"
+    },
+    {
+      "budgetMillis" : 100,
+      "id" : "history.record.10mb",
+      "iterations" : 5,
+      "maxRSSBytes" : 451969024,
+      "medianMillis" : 3.161583,
+      "mode" : "mainThread",
+      "p95Millis" : 3.1755,
+      "verdict" : "pass"
+    },
+    {
+      "affordance" : "loading",
+      "id" : "history.preview.10mb",
+      "iterations" : 5,
+      "maxRSSBytes" : 494649344,
+      "medianMillis" : 129.320583,
+      "mode" : "background",
+      "p95Millis" : 130.111417,
+      "verdict" : "background+loading"
+    },
+    {
+      "budgetMillis" : 100,
+      "id" : "editor.keystroke.10mb",
+      "iterations" : 20,
+      "maxRSSBytes" : 494682112,
+      "medianMillis" : 0.110375,
+      "mode" : "mainThread",
+      "p95Millis" : 0.11075,
+      "verdict" : "pass"
+    },
+    {
+      "budgetMillis" : 100,
+      "id" : "editor.keystroke.long-line",
+      "iterations" : 20,
+      "maxRSSBytes" : 494682112,
+      "medianMillis" : 0.106333,
+      "mode" : "mainThread",
+      "p95Millis" : 0.110916,
+      "verdict" : "pass"
+    },
+    {
+      "budgetMillis" : 100,
+      "id" : "editor.keystroke.1mb-japanese",
+      "iterations" : 20,
+      "maxRSSBytes" : 494682112,
+      "medianMillis" : 0.721625,
+      "mode" : "mainThread",
+      "p95Millis" : 0.747708,
+      "verdict" : "pass"
+    },
+    {
+      "budgetMillis" : 100,
+      "id" : "editor.find.literal.10mb",
+      "iterations" : 5,
+      "maxRSSBytes" : 494682112,
+      "medianMillis" : 32.176542,
+      "mode" : "mainThread",
+      "p95Millis" : 32.730792,
+      "verdict" : "pass"
+    },
+    {
+      "budgetMillis" : 100,
+      "id" : "editor.find.regex.10mb",
+      "iterations" : 5,
+      "maxRSSBytes" : 525549568,
+      "medianMillis" : 55.872333,
+      "mode" : "mainThread",
+      "p95Millis" : 56.381291,
+      "verdict" : "pass"
+    },
+    {
+      "budgetMillis" : 100,
+      "id" : "editor.find.literal.long-line",
+      "iterations" : 5,
+      "maxRSSBytes" : 525549568,
+      "medianMillis" : 2.308333,
+      "mode" : "mainThread",
+      "p95Millis" : 2.380208,
+      "verdict" : "pass"
+    },
+    {
+      "affordance" : "highlights",
+      "id" : "syntax.reset.4mb-json",
+      "iterations" : 3,
+      "maxRSSBytes" : 709820416,
+      "medianMillis" : 179.271834,
+      "mode" : "background",
+      "p95Millis" : 184.287167,
+      "verdict" : "background+loading"
+    },
+    {
+      "affordance" : "highlights",
+      "id" : "syntax.update.4mb-json",
+      "iterations" : 20,
+      "maxRSSBytes" : 709820416,
+      "medianMillis" : 4.293416,
+      "mode" : "background",
+      "p95Millis" : 4.452708,
+      "verdict" : "background"
+    },
+    {
+      "budgetMillis" : 100,
+      "id" : "workspace.restore",
+      "iterations" : 20,
+      "maxRSSBytes" : 709820416,
+      "medianMillis" : 0.04925,
+      "mode" : "mainThread",
+      "p95Millis" : 0.076917,
+      "verdict" : "pass"
+    },
+    {
+      "affordance" : "persistenceQueue",
+      "id" : "workspace.save",
+      "iterations" : 20,
+      "maxRSSBytes" : 709820416,
+      "medianMillis" : 0.155167,
+      "mode" : "background",
+      "p95Millis" : 0.205708,
+      "verdict" : "background"
+    },
+    {
+      "budgetMillis" : 100,
+      "id" : "state.snapshot.20k",
+      "iterations" : 20,
+      "maxRSSBytes" : 709820416,
+      "medianMillis" : 0.00025,
+      "mode" : "mainThread",
+      "p95Millis" : 0.000291,
+      "verdict" : "pass"
+    },
+    {
+      "budgetMillis" : 100,
+      "id" : "project.switch.cached",
+      "iterations" : 20,
+      "maxRSSBytes" : 709820416,
+      "medianMillis" : 21.750459,
+      "mode" : "mainThread",
+      "p95Millis" : 22.633458,
+      "verdict" : "pass"
+    }
+  ],
+  "recordedAt" : "2026-09-23T06:43:18Z"
+}

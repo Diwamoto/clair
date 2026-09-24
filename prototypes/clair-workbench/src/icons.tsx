@@ -303,6 +303,26 @@ export const IconQuickOpen = stroke(
   { strokeLinejoin: 'round' },
 );
 
+// From the ContextMenu artboard: the pane outline with the new divider drawn
+// where the split goes.
+export const IconSplitRight = stroke(
+  <>
+    <rect x="2.2" y="3.2" width="11.6" height="9.6" rx="1.5" />
+    <path d="M8 3.2v9.6" />
+  </>,
+  1.3,
+  { strokeLinejoin: 'round' },
+);
+
+export const IconSplitDown = stroke(
+  <>
+    <rect x="2.2" y="3.2" width="11.6" height="9.6" rx="1.5" />
+    <path d="M2.2 8h11.6" />
+  </>,
+  1.3,
+  { strokeLinejoin: 'round' },
+);
+
 export const IconGrip = ({ color = 'currentColor' }: { color?: string }) => (
   <svg width="8" height="14" viewBox="0 0 8 14" fill={color}>
     <circle cx="2" cy="2" r="1.2" />

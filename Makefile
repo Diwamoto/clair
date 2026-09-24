@@ -1,77 +1,58 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-.PHONY: help doctor workspace-check build-editor-web build-stable build-dev build-mobile-simulator run-stable run-dev watch-dev
-.PHONY: test test-rust test-swift test-mobile lint lint-rust lint-swift analyze
-.PHONY: smoke smoke-bundles artifact-check ci clean-artifacts
+.PHONY: help doctor dev dev-daemon-restart dev-ios build-mobile-simulator lint-swift lint ci
+.PHONY: build mobile-build test test-integration check foundation
+.PHONY: perf perf-budget perf-startup
 
 help: ## Show the supported development commands.
 	@awk 'BEGIN {FS = ":.*## "; printf "Clair development commands:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-doctor: ## Check full Xcode, Swift format, Rust, rustfmt, and Clippy.
-	@./scripts/doctor.sh all
+doctor: ## Check full Xcode and Swift format.
+	@./scripts/doctor.sh
 
-workspace-check: ## Validate committed Xcode metadata and channel configuration.
-	@./scripts/check-workspace.sh
+dev: ## Build and launch the Clair macOS app (Ctrl-C to stop). Sessions share one daemon.
+	@./scripts/run-dev.sh
 
-build-editor-web: ## Build and embed the local CodeMirror editor bundle.
-	@./scripts/build-editor-web.sh
+dev-daemon-restart: ## Rebuild and restart the shared dev daemon; running `make dev` sessions bring it back.
+	@swift build --package-path packages/ClairApps --product ClairDaemon
+	@swift build --package-path packages/ClairApps --product clair
+	@CLAIR_CHANNEL=dev packages/ClairApps/.build/arm64-apple-macosx/debug/clair daemon stop || true
 
-build-stable: ## Build the unsigned Clair Stable app.
-	@./scripts/xcode.sh build "Clair Stable" stable
+dev-ios: ## Build and launch Clair Mobile in an iOS Simulator.
+	@./scripts/run-mobile-simulator.sh
 
-build-dev: ## Build the unsigned Clair Dev app.
-	@./scripts/xcode.sh build "Clair Dev" dev
-
-build-mobile-simulator: ## Build the unsigned Clair Mobile app for iOS Simulator.
+build-mobile-simulator: ## Build the Clair Mobile app for iOS Simulator.
 	@./scripts/build-mobile-simulator.sh
 
-run-stable: build-stable ## Build and launch a new Clair Stable process.
-	@./scripts/run-app.sh stable
+build: ## Build every Clair core, macOS, mobile, and daemon target.
+	@./scripts/foundation.sh build
 
-run-dev: ## Watch native sources and hot-restart Clair Dev after changes.
-	@./scripts/watch-dev.sh
+mobile-build: ## Cross-build the Clair mobile app for the iOS Simulator SDK.
+	@./scripts/foundation.sh mobile-build
 
-watch-dev: run-dev ## Backward-compatible alias for run-dev.
+test: ## Run the fast Clair core and application unit tests.
+	@./scripts/foundation.sh test
 
-test-rust: ## Run all Rust workspace unit tests.
-	@./scripts/doctor.sh rust
-	@cargo test --workspace --locked
+test-integration: ## Run the slow real-subprocess/PTY/daemon Clair integration tests.
+	@./scripts/foundation.sh test-integration
 
-test-swift: ## Run Swift unit tests through the Clair Dev host app.
-	@./scripts/xcode.sh test "Clair Dev" tests
+check: ## Validate the Clair package graph and v1 dependency boundary.
+	@./scripts/foundation.sh check
 
-test-mobile: ## Run the cross-platform mobile protocol package tests.
-	@swift test --package-path packages/ClairMobileKit
+foundation: check build test test-integration ## Run the complete Clair foundation lane.
 
-test: test-rust test-swift test-mobile ## Run Rust, desktop Swift, and mobile protocol tests.
+perf-budget: ## Measure every operation against the 100 ms budget (BUDGET-OP-100).
+	@./scripts/benchmarks/run-budget.sh
 
-lint-rust: ## Check Rust formatting and run Clippy with warnings denied.
-	@./scripts/doctor.sh rust
-	@cargo fmt --all -- --check
-	@cargo clippy --workspace --all-targets --locked -- -D warnings
+perf-startup: ## Measure bundled Release startup against half a Dock bounce.
+	@./scripts/benchmarks/run-startup.sh
+
+perf: perf-budget perf-startup ## Run the full Clair v2 performance budget gate.
 
 lint-swift: ## Check Swift formatting.
 	@swift format lint --recursive --parallel --strict apple
 
-analyze: ## Run Xcode static analysis for the shared Dev source graph.
-	@./scripts/xcode.sh analyze "Clair Dev" analyze
+lint: lint-swift ## Run all formatting and static checks.
 
-lint: lint-rust lint-swift analyze workspace-check ## Run all formatting and static checks.
-
-smoke-bundles: build-stable build-dev ## Validate app metadata, binaries, and Rust linkage.
-	@./scripts/smoke-bundles.sh
-
-artifact-check: ## Confirm generated and local outputs are ignored.
-	@./scripts/check-ignored-artifacts.sh
-
-smoke: test smoke-bundles artifact-check ## Run the complete unsigned local smoke path.
-
-ci: lint smoke build-mobile-simulator ## Run the same complete checks used by GitHub Actions.
-
-clean-artifacts: ## Remove only disposable repository build outputs.
-	@./scripts/clean-artifacts.sh
-
-.PHONY: benchmark-diff
-benchmark-diff: ## Measure the large diff explicitly, outside the normal test run.
-	@CLAIR_RUN_BENCHMARKS=1 TEST_RUNNER_CLAIR_RUN_BENCHMARKS=1 ./scripts/xcode.sh test "Clair Dev" tests -only-testing:ClairTests/ProjectEditorDiffModelTests/testLargeDiffBenchmark
+ci: lint foundation build-mobile-simulator ## Run the checks GitHub Actions runs.

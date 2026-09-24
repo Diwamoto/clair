@@ -17,19 +17,17 @@ export const color = {
   // CHROME INK — chrome's own ladder. Its strongest step stays under the
   // code's own contrast against the pane (6.6:1) so the frame never speaks
   // louder than the thing being read; textPrimary is content ink only.
-  chromeInk: '#b6bcb6',
-  chromeInkMuted: '#8a908b',
+  chromeInk: '#b7bac1',
 
   // TEXT
-  textPrimary: '#f1f3ef',
-  textSecondary: '#c9cec8',
-  textTertiary: '#9ba19b',
-  textQuaternary: '#707871',
+  textPrimary: '#f1f2f6',
+  textSecondary: '#caccd2',
+  textTertiary: '#9b9fa6',
+  textQuaternary: '#81858d',
 
-  // Further inks the artboards use for the quietest labels and rules.
-  textMuted: '#55605a',
-  lineNumber: '#4b5561',
-  divider: '#3d454e',
+  // Rules and gutters. There is no text ink below textQuaternary.
+  lineNumber: '#5f636d',
+  divider: '#494d56',
 
   // MEANING — only diff and debug are allowed to carry colour.
   success: '#8acb94',
@@ -61,17 +59,18 @@ export const color = {
   zoom: '#28c840',
 } as const;
 
-// Hairlines and washes, exactly as they appear on the artboards.
+// Hairlines and washes. Structural rules are black (One Dark grooves);
+// strong/stronger/ring stay light so focus and emphasis remain visible.
 export const line = {
-  hairline: 'rgba(242,244,238,0.11)',
-  hairlineSoft: 'rgba(242,244,238,0.08)',
-  hairlineFaint: 'rgba(242,244,238,0.055)',
-  chrome: 'rgba(242,244,238,0.1)',
-  chromeSoft: 'rgba(242,244,238,0.09)',
-  strong: 'rgba(242,244,238,0.19)',
-  stronger: 'rgba(242,244,238,0.28)',
-  ring: 'rgba(242,244,238,0.32)',
-  paneDivider: 'rgba(242,244,238,0.15)',
+  hairline: 'rgba(0,0,0,0.4)',
+  hairlineSoft: 'rgba(0,0,0,0.32)',
+  hairlineFaint: 'rgba(0,0,0,0.24)',
+  chrome: 'rgba(0,0,0,0.36)',
+  chromeSoft: 'rgba(0,0,0,0.32)',
+  strong: 'rgba(241,242,246,0.19)',
+  stronger: 'rgba(241,242,246,0.28)',
+  ring: 'rgba(241,242,246,0.32)',
+  paneDivider: 'rgba(0,0,0,0.5)',
 } as const;
 
 // TAB GROUP COLOURS — the one other place colour is allowed, alongside diff
@@ -102,32 +101,28 @@ export function withAlpha(swatch: string, alpha: number): string {
 }
 
 export const wash = {
-  faint: 'rgba(242,244,238,0.03)',
-  soft: 'rgba(242,244,238,0.04)',
-  medium: 'rgba(242,244,238,0.06)',
-  raised: 'rgba(242,244,238,0.075)',
+  faint: 'rgba(241,242,246,0.03)',
+  soft: 'rgba(241,242,246,0.04)',
+  medium: 'rgba(241,242,246,0.06)',
+  raised: 'rgba(241,242,246,0.075)',
   selected: 'rgba(255,255,255,0.08)',
-  strong: 'rgba(242,244,238,0.09)',
-  strongest: 'rgba(242,244,238,0.12)',
+  strong: 'rgba(241,242,246,0.09)',
+  strongest: 'rgba(241,242,246,0.12)',
 } as const;
 
-// TYPE SCALE — 4 steps.
-export const type = {
-  title: { fontSize: 13, fontWeight: 600 },
-  chromeStrong: { fontSize: 11, fontWeight: 600 },
-  chrome: { fontSize: 11, fontWeight: 400 },
-  micro: { fontSize: 9, fontWeight: 500 },
-} as const;
+// TYPE SCALE — 4 steps, the macOS text styles. Strength comes from weight
+// (400 / 600 only) and ink, never from size. Nothing under 11px.
+export const fs = { caption: 11, secondary: 12, body: 13, title: 15, display: { pairingCode: 17, h1: 20, screenTitle: 24 } } as const;
+export const lineHeight = { caption: '16px', secondary: '18px', body: '20px', title: '22px' } as const;
 
-// RADIUS — 3 steps.
-export const radius = { control: 4, card: 6, overlay: 10 } as const;
+// RADIUS — 3 steps plus pill. `device` is the phone frame in the viewer only.
+export const radius = { control: 4, card: 6, overlay: 10, pill: 999, device: 44 } as const;
 
-// SPACING — 7 steps.
-export const space = [2, 4, 6, 8, 12, 16, 24] as const;
+// SPACING — 6 steps. 2 is only for an icon-to-label hairline gap.
+export const space = [2, 4, 8, 12, 16, 24] as const;
 
 // CHROME BUDGET — the vertical px before code. titlebar 48 + status bar 26.
 export const chrome = { titlebar: 48, sidebarStrip: 34, statusBar: 26 } as const;
 
-export const sans =
-  "-apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'SF Pro Text', system-ui, sans-serif";
-export const mono = '"SF Mono", ui-monospace, "JetBrains Mono", Menlo, monospace';
+export const sans = "-apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', sans-serif";
+export const mono = "'SF Mono', ui-monospace, Menlo, 'Hiragino Sans', monospace";

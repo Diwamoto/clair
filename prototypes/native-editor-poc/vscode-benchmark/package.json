@@ -1,1 +1,0 @@
-{"name":"clair-editor-benchmark","version":"0.0.1","engines":{"vscode":"^1.100.0"},"main":"./extension.js","activationEvents":["onStartupFinished"],"publisher":"local-poc"}
