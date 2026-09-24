@@ -513,7 +513,7 @@ import ClairEditorCore
           position.line == seg.textLine.index, seg.owns(position.column.value)
         else { continue }
         context.setFillColor(caretColor.cgColor)
-        context.fill(CGRect(x: textInset + seg.x(position.column.value), y: seg.top, width: 1.5, height: lineHeight))
+        context.fill(CGRect(x: textInset + seg.x(position.column.value), y: seg.top, width: 2.25, height: lineHeight))
       }
     }
 
