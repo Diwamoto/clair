@@ -96,6 +96,17 @@ final class WorkbenchCommandTests: XCTestCase {
     XCTAssertEqual(r.execute("pane.swap", ["idA": .int(s.tree.focused), "idB": .int(2)], state: &s).failure?.code, .preconditionFailed)
   }
 
+  func testClosingTheLastFileLeavesOnlyOneEmptyEditor() throws {
+    var s = WorkbenchState()  // editor 1 | terminals, one open file
+    try r.execute("pane.splitRight", state: &s).get()
+    XCTAssertEqual(s.tree.leaves.map(\.kind), [.editor, .editor, .terminal, .terminal])
+    try r.execute("tab.close", state: &s).get()
+    XCTAssertEqual(s.tree.leaves.map(\.kind), [.editor, .terminal, .terminal])
+    s.tree.focus(1)
+    try r.execute("pane.splitDown", state: &s).get()  // no file: splitting the empty editor adds a terminal
+    XCTAssertEqual(s.tree.leaves.filter { $0.kind == .editor }.count, 1)
+  }
+
   func testOpeningFileRepairsLegacyTerminalOnlyLayout() {
     var s = WorkbenchState()
     s.tree = PaneTree(single: .terminal)

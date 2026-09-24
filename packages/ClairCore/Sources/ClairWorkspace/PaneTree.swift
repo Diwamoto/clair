@@ -107,6 +107,12 @@ public struct PaneTree: Sendable, Equatable, Codable {
     if maximized == target { maximized = nil }
   }
 
+  /// Editors all show the shared active tab, so with no file they are identical empty panes:
+  /// keep only the leftmost one.
+  public mutating func closeExtraEditors() {
+    for extra in leaves.filter({ $0.kind == .editor }).dropFirst() { close(extra.id) }
+  }
+
   /// Closing the anchored editor replaces its pane, keeping the left edge available for files.
   public mutating func replaceFocusedEditor() {
     guard leaves.first?.id == focused, leaves.first?.kind == .editor else { return }

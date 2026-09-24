@@ -272,10 +272,10 @@ extension CommandRegistry {
 
   private static let core: [Command] = [
     cmd("pane.splitRight", "ペインを右に分割", .additive, shortcut: "⌘D") { s, _ in
-      s.tree.splitFocused(.horizontal); return .pane(s.tree.focused)
+      s.tree.splitFocused(.horizontal, kind: s.active == nil ? .terminal : nil); return .pane(s.tree.focused)
     },
     cmd("pane.splitDown", "ペインを下に分割", .additive, shortcut: "⌘⇧D") { s, _ in
-      s.tree.splitFocused(.vertical); return .pane(s.tree.focused)
+      s.tree.splitFocused(.vertical, kind: s.active == nil ? .terminal : nil); return .pane(s.tree.focused)
     },
     cmd("terminal.show", "ターミナルを開く", .additive, shortcut: "⌘J") { s, _ in
       s.panesClosed = false
@@ -448,6 +448,7 @@ extension CommandRegistry {
       let idx = s.tabs.firstIndex(of: p)!
       s.tabs.remove(at: idx); s.dirty.remove(p)
       if s.active == p { s.active = s.tabs.isEmpty ? nil : s.tabs[max(idx - 1, 0)] }
+      if s.active == nil { s.tree.closeExtraEditors() }  // at most one empty editor
       return .ok
     },
     cmd("file.save", "保存", .write, shortcut: "⌘S",

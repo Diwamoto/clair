@@ -380,7 +380,7 @@ import Observation
     public func performFromUI(_ id: String, _ input: CommandInput = [:]) {
       if id == "pane.close", state.panesClosed { _ = run("pane.open", ["kind": .string("editor")]); return }
       if id == "pane.close", state.tree.leaves.first(where: { $0.id == state.tree.focused })?.kind == .editor {
-        if state.active != nil { _ = run("tab.close") }
+        _ = run(state.active != nil ? "tab.close" : "pane.close")
         return
       }
       guard id == "file.save" else { _ = run(id, input); return }
