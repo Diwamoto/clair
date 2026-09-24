@@ -194,7 +194,8 @@ let package = Package(
         "ClairTerminal",
         "ClairTransport",
         "ClairWorkspace",
-      ]
+      ],
+      resources: [.process("Resources")]
     ),
     .target(
       name: "ClairEditorFixtures",

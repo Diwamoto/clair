@@ -17,7 +17,8 @@ import SwiftUI
     Task.detached(priority: .utility) { ClairDaemonLauncher.ensureRunning() }
     // Handle ⌘W before either the system Close menu or the terminal view consumes it.
     NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-      if event.charactersIgnoringModifiers == "w", event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command {
+      let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
+      if event.charactersIgnoringModifiers?.lowercased() == "w", modifiers == .command {
         guard (event.window ?? NSApp.keyWindow)?.title != "Pair a device" else { return event }
         NotificationCenter.default.post(name: Notification.Name("ClairCloseFocusedPaneShortcut"), object: nil)
         return nil
