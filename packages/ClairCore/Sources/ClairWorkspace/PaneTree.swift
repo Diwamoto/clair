@@ -71,20 +71,19 @@ public struct PaneTree: Sendable, Equatable, Codable {
     }
   }
 
-  /// Splits the focused pane; the new pane is a terminal and takes focus.
-  /// The editor is a singleton ("ファイルを選択してください。" must never be duplicated).
-  public mutating func splitFocused(_ axis: Axis) {
-    focused = split(focused, axis)
+  /// Splits the focused pane; the new pane copies its kind (or takes `kind`) and takes focus.
+  public mutating func splitFocused(_ axis: Axis, kind newKind: PaneKind? = nil) {
+    focused = split(focused, axis, kind: newKind)
   }
 
   /// V16: splits `target` without moving focus (an agent fanning out must not steal the user's pane). Returns the new id.
   @discardableResult
-  public mutating func split(_ target: Int, _ axis: Axis) -> Int {
+  public mutating func split(_ target: Int, _ axis: Axis, kind newKind: PaneKind? = nil) -> Int {
     let new = nextID
     nextID += 1
     root = Self.map(root) { n in
-      guard case .leaf(let id, _) = n, id == target else { return nil }
-      return .split(axis: axis, ratio: 0.5, first: n, second: .leaf(id: new, kind: .terminal))
+      guard case .leaf(let id, let kind) = n, id == target else { return nil }
+      return .split(axis: axis, ratio: 0.5, first: n, second: .leaf(id: new, kind: newKind ?? kind))
     }
     maximized = nil
     return new
@@ -134,7 +133,7 @@ public struct PaneTree: Sendable, Equatable, Codable {
   /// False for a decoded tree that could crash or mislead the UI (restore degrades to the default layout).
   public var isValid: Bool {
     let ids = leaves.map(\.id)
-    return leaves.first?.kind == .editor && leaves.filter { $0.kind == .editor }.count == 1 && Set(ids).count == ids.count && ids.contains(focused) && (maximized.map(ids.contains) ?? true)
+    return leaves.first?.kind == .editor && Set(ids).count == ids.count && ids.contains(focused) && (maximized.map(ids.contains) ?? true)
       && nextID > (ids.max() ?? 0)
   }
 
