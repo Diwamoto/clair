@@ -876,7 +876,8 @@ import Observation
       }.buttonStyle(.hoverWash).help(help)
     }
 
-    /// The chip toggles the group's tab strip (GUI-local; it never changes the active Project).
+    /// An inactive group's chip switches to that Project (editor, terminals and sidebar follow `st.project`);
+    /// the active group's chip toggles its tab strip (GUI-local).
     private func projectGroup(_ p: WorkbenchProject, color: Color) -> some View {
       let active = st.project == p.name
       let tabs = active ? st.tabs : (st.layouts[p.name]?.tabs ?? [])
@@ -884,7 +885,10 @@ import Observation
       let dirty = active ? st.dirty : (st.layouts[p.name]?.dirty ?? [])
       let folded = collapsedGroups.contains(p.name)
       return HStack(spacing: 0) {
-        Button { if folded { collapsedGroups.remove(p.name) } else { collapsedGroups.insert(p.name) } } label: {
+        Button {
+          if !active { collapsedGroups.remove(p.name); store.run("project.switch", ["name": .string(p.name)]) }
+          else if folded { collapsedGroups.remove(p.name) } else { collapsedGroups.insert(p.name) }
+        } label: {
           // The chip carries its group colour as its own fill/border (mock
           // review feedback: a small dot beside the label read as an
           // afterthought), not a separate dot — active groups get the
@@ -900,7 +904,7 @@ import Observation
             }
           }
         }
-        .buttonStyle(.hoverWash).help("\(p.name) タブグループを\(folded ? "展開" : "折りたたむ")")
+        .buttonStyle(.hoverWash).help(active ? "\(p.name) タブグループを\(folded ? "展開" : "折りたたむ")" : "\(p.name) に切り替え")
         .background(NoWindowDrag())
         .contextMenu {
           let muted = st.notices.mutedProjects.contains(p.name)
