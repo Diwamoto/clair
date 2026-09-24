@@ -1,3 +1,10 @@
+import Foundation
+
+// V16: the `clair-agents` skill, shipped inside the app so Settings can install it for agents outside this repo.
+// Kept byte-identical to `.agents/skills/clair-agents/SKILL.md` by `ClairAgentSkillTests`.
+public enum ClairAgentSkill {
+  public static let name = "clair-agents"
+  public static let markdown = #"""
 ---
 name: clair-agents
 description: Fan work out to parallel child agents in split Clair terminal panes and collect their results with the `clair` CLI. Use when you run inside a Clair terminal (`CLAIR_TERMINAL_KEY` is set) and a task splits into independent parts worth running in parallel — optionally each on its own Git branch/worktree — then gather the results and close the panes before continuing the main flow.
@@ -43,3 +50,23 @@ clair agent.close key="<key>"
 
 Closing your own finished child needs no approval. Worktree branches stay; merge or remove them
 through the normal Git flow (the user can adopt them from Clair's Git panel).
+
+"""#
+
+  /// Skill roots of the agents Clair launches: Claude Code reads `~/.claude/skills`, Codex/OpenCode the shared `~/.agents/skills`.
+  // ponytail: fixed pair; add a root when a profile's agent reads skills elsewhere.
+  public static func targets(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> [URL] {
+    [".claude/skills", ".agents/skills"].map { home.appending(path: $0).appending(path: name).appending(path: "SKILL.md") }
+  }
+
+  public static func isInstalled(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> Bool {
+    targets(home: home).allSatisfy { (try? String(contentsOf: $0, encoding: .utf8)) == markdown }
+  }
+
+  public static func install(home: URL = FileManager.default.homeDirectoryForCurrentUser) throws {
+    for url in targets(home: home) {
+      try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try markdown.write(to: url, atomically: true, encoding: .utf8)
+    }
+  }
+}

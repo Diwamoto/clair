@@ -693,6 +693,7 @@ import Observation
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var store: ClairWorkbenchStore
     @State private var draggingPane: Int?
+    @State private var integrationNotes: [String: String] = [:]  // V16: last install result per row
     private var st: WorkbenchState { store.state }
     @State private var query = ""
     @State private var selection = 0
@@ -1645,6 +1646,7 @@ import Observation
               choiceRow("既定のAgent", "defaultAgent", note: "⌃⌘N で追加するときの初期選択。titlebarのタブは個別に選べます。")
               choiceRow("承認ポリシー", "approvalPolicy", note: "ターミナル・Agent会話での変更提案を、どこまで自動で通すか。")
             }
+            integrationCard
           case "エディタ":
             SettingsCard(title: "編集") {
               switchRow("保存時に整形", "formatOnSave", note: "⌘S のタイミングでフォーマッタを実行します。")
@@ -1677,6 +1679,40 @@ import Observation
       }
       .animation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration), value: st.section)
       .background(C.canvas)
+    }
+
+    /// V16: lets agents in Clair terminals drive Clair (`clair agent.launch` …) and know how (the clair-agents skill).
+    private var integrationCard: some View {
+      SettingsCard(title: "連携") {
+        SettingsRow(
+          title: "clair コマンドをインストール",
+          note: integrationNotes["command"] ?? (ClairDaemonLauncher.isCommandInstalled
+            ? "インストール済み(\(ClairDaemonLauncher.commandLink.path))。"
+            : "\(ClairDaemonLauncher.commandLink.path) にリンクし、ターミナルやAgentからClairを操作できるようにします。")
+        ) {
+          Button(ClairDaemonLauncher.isCommandInstalled ? "再インストール" : "インストール") {
+            Task.detached {
+              let note: String
+              do { try ClairDaemonLauncher.installCommand(); note = "インストールしました(\(ClairDaemonLauncher.commandLink.path))。" } catch {
+                note = error.localizedDescription
+              }
+              await MainActor.run { integrationNotes["command"] = note }
+            }
+          }
+        }
+        SettingsRow(
+          title: "Agent skill をインストール",
+          note: integrationNotes["skill"] ?? (ClairAgentSkill.isInstalled()
+            ? "インストール済み(~/.claude/skills, ~/.agents/skills)。"
+            : "clair-agents skill を ~/.claude/skills と ~/.agents/skills に置き、Agentが子Agentを並列起動できるようにします。")
+        ) {
+          Button(ClairAgentSkill.isInstalled() ? "再インストール" : "インストール") {
+            do { try ClairAgentSkill.install(); integrationNotes["skill"] = "インストールしました。" } catch {
+              integrationNotes["skill"] = "インストールできません: \(error.localizedDescription)"
+            }
+          }
+        }
+      }
     }
 
     @ViewBuilder private var updateSection: some View {
