@@ -27,6 +27,7 @@
 		B00000000000000000000030 /* Clair Mobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Clair Mobile.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		B00000000000000000000031 /* ClairMobileTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ClairMobileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B00000000000000000000032 /* ClairMobileUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ClairMobileUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B00000000000000000000026 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Signing.xcconfig; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -63,6 +64,7 @@
 				B00000000000000000000004 /* ClairMobileApp */,
 				B00000000000000000000005 /* ClairMobileTests */,
 				B00000000000000000000006 /* ClairMobileUITests */,
+				B00000000000000000000026 /* Signing.xcconfig */,
 				B00000000000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -280,6 +282,7 @@
 /* Begin XCBuildConfiguration section */
 		B00000000000000000000090 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = B00000000000000000000026 /* Signing.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_MODULES = YES;
@@ -289,6 +292,7 @@
 		};
 		B00000000000000000000091 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = B00000000000000000000026 /* Signing.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_MODULES = YES;
@@ -302,7 +306,6 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 3UY66R4X2N;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "$(SRCROOT)/apple/ClairMobileApp/Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -323,7 +326,6 @@
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 3UY66R4X2N;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "$(SRCROOT)/apple/ClairMobileApp/Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;

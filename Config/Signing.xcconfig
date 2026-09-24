@@ -1,0 +1,5 @@
+// Code-signing settings for ClairMobile.xcodeproj.
+// Put your own Apple Team ID in Config/Signing.local.xcconfig (git-ignored):
+//   DEVELOPMENT_TEAM = ABCDE12345
+DEVELOPMENT_TEAM =
+#include? "Signing.local.xcconfig"

@@ -36,3 +36,6 @@ __pycache__/
 /packages/ClairCore/Vendor/ghostty/
 /.cache/ghostty/
 /ClairMobile.xcodeproj/project.xcworkspace/
+
+# Per-developer signing (Apple Team ID); see Config/Signing.xcconfig.
+/Config/Signing.local.xcconfig

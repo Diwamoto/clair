@@ -3,23 +3,6 @@
 This file is the source of truth for notices that must accompany distributed
 Clair binaries.
 
-## Rust standard library
-
-Clair's Rust static library is built with the Rust standard library. Rust is
-available under the Apache License 2.0 or the MIT License, at the user's option.
-
-- Project: https://github.com/rust-lang/rust
-- License: https://github.com/rust-lang/rust/blob/master/COPYRIGHT
-
-## libc Rust crate
-
-The local PTY host uses the `libc` Rust crate version `0.2.186` for the macOS
-`forkpty`, `ioctl`, signal, and `waitpid` ABI calls. The crate is available
-under the Apache License 2.0 or the MIT License, at the user's option.
-
-- Project: https://crates.io/crates/libc
-- License: https://github.com/rust-lang/libc/blob/main/LICENSE-APACHE
-
 ## libghostty / GhosttyKit
 
 Clair's terminal engine (`ClairGhosttyABI`/`ClairGhostty`) links the
@@ -43,27 +26,44 @@ part of its own build; this repository does not re-vendor or redistribute
 their source and defers to upstream Ghostty's own license inventory for
 that transitive dependency set.
 
+## Swift packages
+
+Resolved by SwiftPM from `packages/ClairCore/Package.swift`; not vendored.
+
+| Package | License |
+| --- | --- |
+| [tree-sitter](https://github.com/tree-sitter/tree-sitter) | MIT |
+| [SwiftTreeSitter](https://github.com/ChimeHQ/SwiftTreeSitter) | BSD-3-Clause |
+| [LanguageServerProtocol](https://github.com/ChimeHQ/LanguageServerProtocol) | BSD-3-Clause |
+| [JSONRPC](https://github.com/ChimeHQ/JSONRPC) | BSD-3-Clause |
+
+## Vendored tree-sitter grammars
+
+Generated `parser.c`/`scanner.c` sources are vendored under
+`packages/ClairCore/Sources/ClairEditorLanguage<Name>/`. Each directory carries
+the upstream `LICENSE` and a `VENDOR.md` recording the source commit.
+
+| Directory | Upstream | License |
+| --- | --- | --- |
+| `ClairEditorLanguageGo` | [tree-sitter-go](https://github.com/tree-sitter/tree-sitter-go) | MIT |
+| `ClairEditorLanguageJSON`, `ClairEditorLanguageFixtures` | [tree-sitter-json](https://github.com/tree-sitter/tree-sitter-json) | MIT |
+| `ClairEditorLanguageJava` | [tree-sitter-java](https://github.com/tree-sitter/tree-sitter-java) | MIT |
+| `ClairEditorLanguageJavaScript` | [tree-sitter-javascript](https://github.com/tree-sitter/tree-sitter-javascript) | MIT |
+| `ClairEditorLanguageMarkdown` | [tree-sitter-markdown](https://github.com/tree-sitter-grammars/tree-sitter-markdown) | MIT |
+| `ClairEditorLanguagePHP` | [tree-sitter-php](https://github.com/tree-sitter/tree-sitter-php) | MIT |
+| `ClairEditorLanguagePython` | [tree-sitter-python](https://github.com/tree-sitter/tree-sitter-python) | MIT |
+| `ClairEditorLanguageRuby` | [tree-sitter-ruby](https://github.com/tree-sitter/tree-sitter-ruby) | MIT |
+| `ClairEditorLanguageRust` | [tree-sitter-rust](https://github.com/tree-sitter/tree-sitter-rust) | MIT |
+| `ClairEditorLanguageShell` | [tree-sitter-bash](https://github.com/tree-sitter/tree-sitter-bash) | MIT |
+| `ClairEditorLanguageSwift` | [tree-sitter-swift](https://github.com/alex-pinkus/tree-sitter-swift) | MIT |
+| `ClairEditorLanguageTerraform` | [tree-sitter-hcl](https://github.com/tree-sitter-grammars/tree-sitter-hcl) | Apache-2.0 |
+| `ClairEditorLanguageTypeScript` | [tree-sitter-typescript](https://github.com/tree-sitter/tree-sitter-typescript) | MIT |
+
 ## Repository dependency policy
 
-The PTY host dependency is resolved through Cargo and is not vendored into this
-repository. Apple SDK frameworks and developer toolchains are build prerequisites
-and are not redistributed from this repository.
+Apple SDK frameworks and developer toolchains are build prerequisites and are
+not redistributed from this repository.
 
 Any dependency that is linked, embedded, copied, or redistributed must update
 this file in the same change. Generated notice artifacts belong under
 `.build/generated/` and remain untracked; this file remains tracked.
-
-## Native editor PoC (not cleared for distribution)
-
-The native editor PoC has a fixed SwiftPM graph, a binary grammar container,
-grammar query resources, Unicode/ICU-derived code, and custom symbol assets.
-The complete audit and draft notice inventory are tracked in
-[`docs/issues/native-editor/evidence/license-audit.md`](docs/issues/native-editor/evidence/license-audit.md)
-and [`docs/issues/native-editor/evidence/THIRD_PARTY_NOTICES.md`](docs/issues/native-editor/evidence/THIRD_PARTY_NOTICES.md).
-
-This inventory is not distribution approval. CodeEditLanguages and
-CodeEditSymbols have no root LICENSE/NOTICE at the audited revisions, the
-37 grammar licenses are not yet mapped to the binary framework, and the
-SF Symbols-derived assets lack per-asset provenance. The PoC must remain
-unshipped until those gates are resolved. The known MIT, BSD-3-Clause,
-Apache-2.0, and Unicode/ICU notice candidates are recorded in the audit.
