@@ -1,12 +1,11 @@
 import ClairEditorCore
-import CryptoKit
 import Foundation
 #if os(macOS)
   import CoreServices
 #endif
 
 // V05: Quick Open ranking, project-wide search/replace (E04 core), file watcher with agent
-// live reload (principle 8: disk wins, unsaved buffer is discarded) and per-file local history.
+// live reload (principle 8: disk wins, unsaved buffer is discarded).
 // ponytail: search reads files serially (cancellable per file) and skips >1 MB / non-UTF-8; parallelise if 10k-file search feels slow.
 
 public enum QuickOpen {
@@ -63,15 +62,14 @@ public enum ProjectSearch {
     return hits
   }
 
-  /// Rewrites matching files (each snapshotted into `history` first) and returns replaced-match count.
+  /// Rewrites matching files and returns replaced-match count.
   @discardableResult
-  public static func replace(root: String, files: [WorkbenchFile], _ pattern: SearchPattern, with r: String, history: LocalHistory? = nil) throws -> Int {
+  public static func replace(root: String, files: [WorkbenchFile], _ pattern: SearchPattern, with r: String) throws -> Int {
     var n = 0
     for f in files {
       guard let buf = load(root, f.path) else { continue }
       let reps = try TextSearch.preview(pattern, replacingWith: r, in: buf.snapshot)
       guard !reps.isEmpty else { continue }
-      try history?.record(root: root, path: f.path)
       let m = EditorTransactionManager(buffer: buf, selection: TextSelectionSet(cursor: UTF8Offset(0)))
       let out = try m.apply(replacements: reps).string()
       try out.write(toFile: root + "/" + f.path, atomically: true, encoding: .utf8)
@@ -132,45 +130,3 @@ public final class FileWatcher: @unchecked Sendable {
   deinit { if let s = stream { FSEventStreamStop(s); FSEventStreamInvalidate(s); FSEventStreamRelease(s) } }
 }
 #endif
-
-/// Per-file snapshots under `dir` (Clair's data dir), never inside the Project.
-public struct LocalHistory: Sendable {
-  public let dir: URL
-  public let keep: Int
-  public init(dir: URL, keep: Int = 50) { self.dir = dir; self.keep = keep }
-
-  private func folder(_ root: String, _ path: String) -> URL {
-    let h = SHA256.hash(data: Data((root + "\0" + path).utf8)).prefix(16).map { String(format: "%02x", $0) }.joined()
-    return dir.appendingPathComponent(h, isDirectory: true)
-  }
-
-  public func record(root: String, path: String) throws {
-    guard let d = FileManager.default.contents(atPath: root + "/" + path) else { return }
-    let f = folder(root, path)
-    try FileManager.default.createDirectory(at: f, withIntermediateDirectories: true)
-    try d.write(to: f.appendingPathComponent(String(format: "%020.6f", Date().timeIntervalSince1970)))
-    for old in try versions(root: root, path: path).dropFirst(keep) { try? FileManager.default.removeItem(at: old) }
-  }
-
-  /// Newest first.
-  public func versions(root: String, path: String) throws -> [URL] {
-    let f = folder(root, path)
-    guard FileManager.default.fileExists(atPath: f.path) else { return [] }
-    return try FileManager.default.contentsOfDirectory(at: f, includingPropertiesForKeys: nil).sorted { $0.lastPathComponent > $1.lastPathComponent }
-  }
-
-  /// Line diff of what a restore would change: "-" lines leave the file, "+" lines come back.
-  public func preview(_ version: URL, root: String, path: String) -> [String] {
-    func lines(_ d: Data?) -> [String] { d.flatMap { String(data: $0, encoding: .utf8) }?.components(separatedBy: "\n") ?? [] }
-    let cur = lines(FileManager.default.contents(atPath: root + "/" + path)), old = lines(try? Data(contentsOf: version))
-    let d = old.difference(from: cur)
-    return d.removals.compactMap { c -> String? in if case .remove(_, let l, _) = c { "- \(l)" } else { nil } }
-      + d.insertions.compactMap { c -> String? in if case .insert(_, let l, _) = c { "+ \(l)" } else { nil } }
-  }
-
-  /// Restores a version; the current content is snapshotted first so a restore is itself undoable.
-  public func restore(_ version: URL, root: String, path: String) throws {
-    try record(root: root, path: path)
-    try Data(contentsOf: version).write(to: URL(fileURLWithPath: root + "/" + path), options: .atomic)
-  }
-}

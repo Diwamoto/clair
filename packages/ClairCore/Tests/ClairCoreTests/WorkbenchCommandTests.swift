@@ -37,6 +37,37 @@ final class WorkbenchCommandTests: XCTestCase {
     XCTAssertEqual(state.section, "使用状況")
   }
 
+  func testTerminalShortcutOpensOnlyOneAndSplitShortcutsKeepTheirDirections() throws {
+    var state = WorkbenchState()
+    state.tree = PaneTree(single: .editor)
+    state.panesClosed = true
+
+    XCTAssertEqual(r.commands.first { $0.id == "terminal.show" }?.shortcut, "⌘J")
+    XCTAssertEqual(r.commands.first { $0.id == "pane.splitRight" }?.shortcut, "⌘D")
+    XCTAssertEqual(r.commands.first { $0.id == "pane.splitDown" }?.shortcut, "⌘⇧D")
+    XCTAssertNil(r.commands.first { $0.id == "debug.open" }?.shortcut)
+
+    _ = try r.execute("terminal.show", state: &state).get()
+    XCTAssertFalse(state.panesClosed)
+    XCTAssertEqual(state.tree.leaves.map(\.kind), [.editor, .terminal])
+    let terminal = state.tree.focused
+    state.tree.focus(state.tree.leaves[0].id)
+    state.tree.toggleMaximize()
+    _ = try r.execute("terminal.show", state: &state).get()
+    XCTAssertEqual(state.tree.leaves.map(\.kind), [.editor, .terminal])
+    XCTAssertEqual(state.tree.focused, terminal)
+    XCTAssertNil(state.tree.maximized)
+
+    _ = try r.execute("pane.splitRight", state: &state).get()
+    _ = try r.execute("pane.splitDown", state: &state).get()
+    XCTAssertEqual(state.tree.leaves.map(\.kind), [.editor, .terminal, .terminal, .terminal])
+    guard case .split(.horizontal, _, _, let right) = state.tree.root,
+      case .split(.horizontal, _, _, let lower) = right,
+      case .split(.vertical, _, _, .leaf(let focused, .terminal)) = lower
+    else { return XCTFail("right and down splits must keep their directions") }
+    XCTAssertEqual(state.tree.focused, focused)
+  }
+
   func testSchemaValidation() {
     var s = WorkbenchState()
     let bad: [(String, CommandInput)] = [
@@ -96,6 +127,16 @@ final class WorkbenchCommandTests: XCTestCase {
     for d in r.commands {
       if let risk = r.preflight(d.id, [:], s).success { XCTAssertGreaterThanOrEqual(risk, d.risk, d.id) }
     }
+  }
+
+  func testTabMove() {
+    var s = WorkbenchState()
+    s.tabs = ["a", "b", "c"]
+    r.execute("tab.move", ["path": .string("a"), "target": .string("c")], state: &s)
+    XCTAssertEqual(s.tabs, ["b", "c", "a"])
+    r.execute("tab.move", ["path": .string("a"), "target": .string("b")], state: &s)
+    XCTAssertEqual(s.tabs, ["a", "b", "c"])
+    XCTAssertEqual(r.execute("tab.move", ["path": .string("x"), "target": .string("b")], state: &s).failure?.code, .preconditionFailed)
   }
 
   func testLastPaneAndTabPreconditions() {

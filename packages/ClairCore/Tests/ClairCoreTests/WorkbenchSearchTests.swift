@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ClairWorkspace
 
-/// V05: quick open, project search/replace, live reload, local history.
+/// V05: quick open, project search/replace, live reload.
 final class WorkbenchSearchTests: XCTestCase {
   func tmp() throws -> String {
     let d = URL.temporaryDirectory.appending(path: "clair-v05-\(UUID().uuidString)").resolvingSymlinksInPath()
@@ -18,22 +18,15 @@ final class WorkbenchSearchTests: XCTestCase {
     XCTAssertEqual(QuickOpen.rank("", f).count, 3)
   }
 
-  func testFindAndReplaceWithHistory() throws {
+  func testFindAndReplace() throws {
     let root = try tmp()
     try "foo\nbar foo\n".write(toFile: root + "/a.txt", atomically: true, encoding: .utf8)
     try Data([0xff, 0xfe, 0x00]).write(to: URL(fileURLWithPath: root + "/bin.dat"))
     let files = WorkbenchFiles.scan(root)
     let hits = try ProjectSearch.find(root: root, files: files, .literal("foo"))
     XCTAssertEqual(hits, [SearchHit(path: "a.txt", line: 1, text: "foo"), SearchHit(path: "a.txt", line: 2, text: "bar foo")])
-    let h = LocalHistory(dir: URL(fileURLWithPath: try tmp()))
-    XCTAssertEqual(try ProjectSearch.replace(root: root, files: files, .literal("foo"), with: "baz", history: h), 2)
+    XCTAssertEqual(try ProjectSearch.replace(root: root, files: files, .literal("foo"), with: "baz"), 2)
     XCTAssertEqual(try String(contentsOfFile: root + "/a.txt", encoding: .utf8), "baz\nbar baz\n")
-    let v = try h.versions(root: root, path: "a.txt")
-    XCTAssertEqual(v.count, 1)
-    XCTAssertEqual(h.preview(v[0], root: root, path: "a.txt"), ["- baz", "- bar baz", "+ foo", "+ bar foo"])
-    try h.restore(v[0], root: root, path: "a.txt")
-    XCTAssertEqual(try String(contentsOfFile: root + "/a.txt", encoding: .utf8), "foo\nbar foo\n")
-    XCTAssertEqual(try h.versions(root: root, path: "a.txt").count, 2)  // restore is undoable
   }
 
   func testSearchSurfacesBadRegexAndStopsWhenCancelled() async throws {

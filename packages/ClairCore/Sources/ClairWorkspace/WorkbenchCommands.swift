@@ -48,6 +48,8 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var dirty: Set<String> = []
   public var collapsed: Set<String> = []
   public var launches: [Int: AgentLaunch] = [:]
+  /// CLI agents started by hand in Clair terminals. Refreshed from live process facts, never saved.
+  public var detectedLaunches: [String: [Int: AgentLaunch]] = [:]
   public var notices = NotificationLog()
   public var settingsOpen = false
   /// Transient UI navigation request. The sidebar selection itself belongs to the app shell.
@@ -267,11 +269,21 @@ extension CommandRegistry {
   public static let workbench = CommandRegistry(core + [shortcutSet(core.map(\.descriptor))])
 
   private static let core: [Command] = [
-    cmd("pane.splitRight", "ペインを右に分割", .additive, shortcut: "⌃⌘D") { s, _ in
+    cmd("pane.splitRight", "ペインを右に分割", .additive, shortcut: "⌘D") { s, _ in
       s.tree.splitFocused(.horizontal); return .pane(s.tree.focused)
     },
-    cmd("pane.splitDown", "ペインを下に分割", .additive, shortcut: "⌃⌘⇧D") { s, _ in
+    cmd("pane.splitDown", "ペインを下に分割", .additive, shortcut: "⌘⇧D") { s, _ in
       s.tree.splitFocused(.vertical); return .pane(s.tree.focused)
+    },
+    cmd("terminal.show", "ターミナルを開く", .additive, shortcut: "⌘J") { s, _ in
+      s.panesClosed = false
+      if let terminal = s.tree.leaves.first(where: { $0.kind == .terminal }) {
+        if s.tree.maximized != nil, s.tree.maximized != terminal.id { s.tree.toggleMaximize() }
+        s.tree.focus(terminal.id)
+      } else {
+        s.tree.splitFocused(.horizontal, kind: .terminal)
+      }
+      return .pane(s.tree.focused)
     },
     cmd("pane.focusNext", "ペインのフォーカスを右へ", .read, shortcut: "⌃⌘→") { s, _ in s.tree.focusNext(); return .ok },
     cmd("pane.focus", "ペインにフォーカス", .read, params: [CommandParam("id", .int)],
@@ -364,6 +376,14 @@ extension CommandRegistry {
         preflight: { s, i throws(CommandError) in
           try require(s.tabs.contains(i["path"]!.string!), "no tab \(i["path"]!)"); return .read
         }) { s, i in s.active = i["path"]!.string!; return .ok },
+    // Drag-reorder: moves `path` into `target`'s slot.
+    cmd("tab.move", "タブを移動", .read, params: [CommandParam("path", .string), CommandParam("target", .string)],
+        preflight: { s, i throws(CommandError) in
+          try require(s.tabs.contains(i["path"]!.string!) && s.tabs.contains(i["target"]!.string!), "no tab"); return .read
+        }) { s, i in
+      let from = s.tabs.firstIndex(of: i["path"]!.string!)!, to = s.tabs.firstIndex(of: i["target"]!.string!)!
+      s.tabs.insert(s.tabs.remove(at: from), at: to); return .ok
+    },
     // Omitted `path` means the active tab. A dirty tab discards its buffer → destructive.
     cmd("tab.close", "タブを閉じる", .write, params: [CommandParam("path", .string, required: false)],
         preflight: { s, i throws(CommandError) in
@@ -490,7 +510,7 @@ extension CommandRegistry {
     },
     // V13: all debugger controls share the typed command boundary. The GUI owns
     // the live adapter; these commands validate targets before it performs I/O.
-    cmd("debug.open", "実行とデバッグ", .read, ai: false, shortcut: "⌘⇧D") { s, _ in
+    cmd("debug.open", "実行とデバッグ", .read, ai: false) { s, _ in
       s.debugNavigationGeneration += 1; return .ok
     },
     cmd("debug.launch", "Go をデバッグ起動", .external, ai: false,
