@@ -4,7 +4,7 @@
 
 > エディタ、ターミナル、AIエージェント、Gitを、Project単位のmacOSネイティブワークスペースにまとめるIDE。
 
-Clairは、cceditの後継として(cceditは2026-09-21に廃止、復元はarchive tagから)開発している個人用のmacOSネイティブIDEです。
+Clairは、個人で開発しているmacOSネイティブIDEです。
 VS Codeのような編集・検索・Gitの統合体験と、Ghosttyのような使い慣れたターミナル操作を、
 別々のアプリを行き来せずに一つのProject workspaceで扱えるようにします。
 
@@ -80,15 +80,16 @@ hosted agentは対象にしません。Goのlanguage intelligence、debugger、D
 - [現在のworkspace architecture](docs/architecture/development-workspace.md)
 - [ローカル検証手順](docs/runbooks/clair-verification.md)
 
-### リポジトリ内の開発フロー
+### 開発の進め方
 
-実装の目的・要件・設計・検証手順は、必要に応じて`docs/projects/`のproject bundleへ残します。
-Project bundleを使う作業では、次のproject-local Codex skillを利用できます。
+開発は[タスク一覧](docs/clair-tasks.md)をキューとして、AIエージェント用skill `/clair-task`
+(`.agents/skills/clair-task/`)で一件ずつ進めています。仕様は[`docs/clair-spec.md`](docs/clair-spec.md)を正本とし、
+各タスクの結果・計測・残課題はタスク一覧の行に記録して、[カンバン](docs/clair-kanban.html)を再生成します。
 
-- `$issue-to-project-docs <GitHub issue>` — issueから実装可能なproject文書を作成する
-- `$project-implementer <project code>` — 文書化済みprojectを実装・検証する
-- `$clair-issue-executor P01`または`$clair-issue-executor next` — PoC queueの一項目を実装する
-- `$clair-session-commit` — 完了したsliceを分離・検証してcommitする
+## コントリビューション
+
+個人プロジェクトですが、バグ報告やバグ修正のPull Requestは歓迎です。
+大きな機能追加は、先にIssueで相談してもらえると助かります。
 
 ## セキュリティ
 

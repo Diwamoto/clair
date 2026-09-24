@@ -4,7 +4,7 @@
 
 [日本語](README.md)
 
-Clair is a personal, native macOS IDE developed as the successor to ccedit (ccedit was retired on 2026-09-21; it can be restored from its archive tag).
+Clair is a native macOS IDE developed as a personal project.
 It combines a VS Code–style integrated editing, search, and Git experience with the familiar terminal feel of Ghostty,
 so you can work in a single project workspace instead of switching between separate apps.
 
@@ -87,6 +87,18 @@ Most project documentation is written in Japanese.
 - [Docs guide](docs/README.md)
 - [Current workspace architecture](docs/architecture/development-workspace.md)
 - [Local verification runbook](docs/runbooks/clair-verification.md)
+
+### How development works
+
+Development runs off the [task queue](docs/clair-tasks.md), one task at a time, through the `/clair-task`
+agent skill (`.agents/skills/clair-task/`). [`docs/clair-spec.md`](docs/clair-spec.md) is the source of truth;
+each task's results, measurements, and remaining work are recorded in its queue row, and the
+[kanban](docs/clair-kanban.html) is regenerated from it.
+
+## Contributing
+
+This is a personal project, but bug reports and bug-fix pull requests are very welcome.
+For larger features, please open an issue to discuss first.
 
 ## Security
 

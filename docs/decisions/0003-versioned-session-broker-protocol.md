@@ -111,5 +111,5 @@ Session brokerを唯一の正本にすれば、desktopとmobileのoutput順序�
 - Project: [p0020-mobile-agent-remote-control](../projects/p0020-mobile-agent-remote-control/README.md)
 - Investigation: [Protocol landscape](../investigations/p0020-protocol-landscape/README.md)
 - Issue: [#6](https://github.com/Diwamoto/clair/issues/6)、[#20](https://github.com/Diwamoto/clair/issues/20)
-- [ccedit V1 protocol](https://github.com/Diwamoto/ccedit/blob/80eef4d30f66c4520445872bed73e95c594e2695/src-tauri/ptyhost/src/protocol.rs)
-- [ccedit V1 manager](https://github.com/Diwamoto/ccedit/blob/80eef4d30f66c4520445872bed73e95c594e2695/src-tauri/ptyhost/src/manager.rs)
+- ccedit V1 protocol
+- ccedit V1 manager

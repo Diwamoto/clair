@@ -54,14 +54,14 @@ ccedit V1からはdetached PTY ownershipとrestart reattachの考え方を再利
 
 | Area | Observed fact | Remote implication |
 |---|---|---|
-| Framing | [`protocol.rs`](https://github.com/Diwamoto/ccedit/blob/80eef4d30f66c4520445872bed73e95c594e2695/src-tauri/ptyhost/src/protocol.rs)はu32 big-endian length + JSON。PTY data/inputはbase64。Decoderは宣言長をそのままallocateする | Binary hot path、hard frame bound、version negotiationが必要 |
+| Framing | `protocol.rs`はu32 big-endian length + JSON。PTY data/inputはbase64。Decoderは宣言長をそのままallocateする | Binary hot path、hard frame bound、version negotiationが必要 |
 | Commands | Spawn/Write/Resize/Kill/List/Attach/AttachAll/Detach/DetachAll | Local lifecycleのoperation vocabularyはprior artになるが、auth/lease/cursorがない |
-| Subscriber | [`manager.rs`](https://github.com/Diwamoto/ccedit/blob/80eef4d30f66c4520445872bed73e95c594e2695/src-tauri/ptyhost/src/manager.rs)は全sessionで1つのshared event sinkを差し替える | Desktop + multiple mobile subscriberへ拡張できない |
+| Subscriber | `manager.rs`は全sessionで1つのshared event sinkを差し替える | Desktop + multiple mobile subscriberへ拡張できない |
 | Replay | 256 KiB raw byte ringをattach時に1回のData eventとして送る。Sequence、ack、gap、safe parser checkpointなし | Arbitrary tail replayはterminal parser stateを保証できず、cursor/snapshot contractが必要 |
 | Geometry | Attachがrows/colsを受けて実PTYをresizeする | Mobile attachがdesktop layoutを壊すためgeometry ownershipを分離する |
-| Lifecycle | [`proxy.rs`](https://github.com/Diwamoto/ccedit/blob/80eef4d30f66c4520445872bed73e95c594e2695/src-tauri/src/pty/proxy.rs)はdetached sidecarへUDSで再接続し、app quitでPTYをkillしない | Detached ownershipとlocal recoveryは再利用価値が高い |
+| Lifecycle | `proxy.rs`はdetached sidecarへUDSで再接続し、app quitでPTYをkillしない | Detached ownershipとlocal recoveryは再利用価値が高い |
 | Frontend bridge | PTY eventをTauri eventへ再emitし、xterm.jsへ渡す | Clairではlibghostty/AppKitへbinary streamを直接渡す境界へ変わる |
-| Shell metadata | [`shell_integration.rs`](https://github.com/Diwamoto/ccedit/blob/80eef4d30f66c4520445872bed73e95c594e2695/src-tauri/ptyhost/src/shell_integration.rs)はOSC 633でcwdとcommand lineをemitする | Raw bytesはE2EE対象。Command lineをlog/relay metadataへ抽出しない |
+| Shell metadata | `shell_integration.rs`はOSC 633でcwdとcommand lineをemitする | Raw bytesはE2EE対象。Command lineをlog/relay metadataへ抽出しない |
 
 ### Clair native rewriteとの差
 
