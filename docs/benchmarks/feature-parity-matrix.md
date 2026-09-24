@@ -21,7 +21,7 @@
 | Project | Git の有無を問わない local folder を Project として開き、1 process で複数 Project を切り替える | not-verified — V1 の repository-centric flow は precedent のみ | must-have | #9 / #28 |
 | Workspace | editor/terminal/diff の mixed tab・pane、任意 split、focus/move/close/equalize と Project ごとの安全な復元 | not-verified — V1 の pane/layout behavior は未計測 | must-have | #9 / #34 / #35 |
 | Navigation | large file tree、Quick Open、全文検索・置換、watcher 更新、file history/settings surface | not-verified — V1 の file tree/search behavior は未計測 | must-have | #10 |
-| Editor | native document model、open/edit/save/undo、live reload/local history、Unicode/IME、large file、diff/merge seam | not-verified — CodeMirror 6 implementation は context のみ | must-have | #11 / #12 / #13 |
+| Editor | native document model、open/edit/save/undo、live reload、Unicode/IME、large file、diff/merge seam | not-verified — CodeMirror 6 implementation は context のみ | must-have | #11 / #12 / #13 |
 | Terminal | Ghostty-class native surface、raw shell input、resize、scrollback、selection、OSC 52/633、IME/CJK/wide glyph | not-verified — xterm.js + PTY implementation は context のみ | must-have | #5 / #6 |
 | Session | Project 切替・window close・app/update restart をまたぐ PTY/session lifecycle と reattach | not-verified — detached ptyhost behavior は未計測 | must-have | #6 / #18 |
 | Agent/worktree | Claude Code/Codex/OpenCode を Project root または任意 managed worktree で raw terminal として複数起動 | not-verified — V1 agent profile behavior は未計測 | must-have | #15 / #22 |

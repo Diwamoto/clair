@@ -63,7 +63,7 @@ terminal をそのまま使えることを保証し、その周囲に Project ow
    deterministic preflight で判断する。
 8. **User control と回復可能性を保つ**。agent が disk 上の file を変更した場合は
    その内容を正本とし、同じ file の未保存 buffer は破棄して live reload する。
-   上書き前の内容は local file history から復元できる。terminal transcript は
+   terminal transcript は
    session 終了後に保存しない。Claude Code、Codex、OpenCode が自身の local storage
    に保存したチャット履歴は Clair が読み取り専用で表示できる。Clair はその本文を
    複製・永続化しない。Clair の状態は Mac 内の専用 storage に保存し、
@@ -348,7 +348,7 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
 - editor / terminal / diff を同じ tab group へ置ける任意 split
 - pane の focus、移動、close、最大化、幅/高さ/全体均等
 - file tree、search、Git の sidebar と、pane へ開く補助 view
-- Quick Open、全文検索・置換、file watcher、file 単位の local history と復元
+- Quick Open、全文検索・置換、file watcher
 - diff、stage/unstage、commit、branch/worktree の作成・切替
 - managed worktree は repository 外の Clair 管理領域へ置く
 - branch review は base に対する全差分を、commit 済みと未 commit/untracked に
@@ -370,7 +370,8 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
 - `clair mcp serve` の stdio adapter で AI 向け command を公開する
 - command risk は固定 metadata と runtime preflight で判定し、必要な承認を GUI に
   表示する。AI の自己申告 risk を authorization に使わない
-- Project badge、Clair 内 notification history、macOS notification を提供する
+- Clair の terminal で起動した agent の bell / 終了だけを記録し、Clair が前面にないとき macOS notification を送る。通常の terminal は通知しない
+- 通知一覧の画面は設けない。記録は session 状態と Project badge に使う
 - Project / terminal 単位で notification を mute できる
 
 ## 10. Mobile

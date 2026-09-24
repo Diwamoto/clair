@@ -20,7 +20,7 @@ dogfood cutover (developing Clair in Clair) and UI integration and polish are on
 | Area | What Clair does |
 | --- | --- |
 | Project workspace | Opens any local folder as a project, whether or not it is a Git repository, and switches between projects. Keeps each project's file tree, tabs, and pane layout. |
-| Native editor | Multi-file editing, Unicode/IME input, save, undo/redo, picking up external changes, and restoring local history. Also Quick Open, full-text search, and replace. |
+| Native editor | Multi-file editing, Unicode/IME input, save, undo/redo, and picking up external changes. Also Quick Open, full-text search, and replace. |
 | Terminal / agent | Runs a shell in a native macOS terminal with CJK/IME, resize, scrollback, and selection. Launches multiple Claude Code, Codex, and OpenCode sessions in the project root or in managed worktrees. |
 | Mobile agent control | An early vertical slice that lets you inspect registered agents on your own Mac and send raw input from an iPhone/iPad, targeting private networks and private TestFlight. |
 | Git / review | `status`, `diff`, `stage/unstage`, `commit`, and `branch switch` per project. Optionally creates managed worktrees and carries a whole branch through review and adoption. |
