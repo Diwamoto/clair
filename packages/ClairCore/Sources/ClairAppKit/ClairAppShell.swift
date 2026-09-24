@@ -1055,15 +1055,32 @@ import Observation
       searchTask = Task {
         // ponytail: 250 ms debounce for typing; the cancel above is what keeps stale results out.
         do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
-        let worker = Task.detached(priority: .userInitiated) { Result { try ProjectSearch.find(root: root, files: files, pattern) } }
-        let result = await withTaskCancellationHandler(operation: { await worker.value }, onCancel: { worker.cancel() })
+        // Stream per-file hits so the first matches show while the rest of the Project is still scanned.
+        let (batches, sink) = AsyncStream.makeStream(of: [SearchHit].self)
+        let worker = Task.detached(priority: .userInitiated) {
+          // ponytail: flush every 100 ms so a hit-heavy query doesn't re-render once per file.
+          var pending: [SearchHit] = [], last = ContinuousClock.now
+          defer { if !pending.isEmpty { sink.yield(pending) }; sink.finish() }
+          return Result {
+            try ProjectSearch.find(root: root, files: files, pattern) {
+              pending += $0
+              if last.duration(to: .now) > .milliseconds(100) { sink.yield(pending); pending = []; last = .now }
+            }
+          }
+        }
+        hits = []; searchSelection = 0
+        await withTaskCancellationHandler(operation: {
+          for await batch in batches where generation == searchGeneration {
+            hits += batch
+            searchMessage = "検索中… \(hits.count) 件"
+          }
+        }, onCancel: { worker.cancel() })
+        let result = await worker.value
         guard !Task.isCancelled, generation == searchGeneration else { return }
         searching = false
         switch result {
-        case .success(let found):
-          hits = found
-          searchSelection = min(searchSelection, max(found.count - 1, 0))
-          searchMessage = found.isEmpty ? "一致なし" : "\(found.count) 件 / \(Set(found.map(\.path)).count) ファイル"
+        case .success:
+          searchMessage = hits.isEmpty ? "一致なし" : "\(hits.count) 件 / \(Set(hits.map(\.path)).count) ファイル"
         case .failure(let error) where error is CancellationError:
           break
         case .failure(let error):

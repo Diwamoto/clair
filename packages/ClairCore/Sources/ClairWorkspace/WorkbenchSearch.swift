@@ -45,21 +45,30 @@ public enum ProjectSearch {
 
   public static func find(root: String, files: [WorkbenchFile], _ pattern: SearchPattern) throws -> [SearchHit] {
     var hits: [SearchHit] = []
+    try find(root: root, files: files, pattern) { hits += $0 }
+    return hits
+  }
+
+  /// Streams each file's hits as soon as that file is scanned, so the UI can show early results.
+  public static func find(root: String, files: [WorkbenchFile], _ pattern: SearchPattern, each: ([SearchHit]) -> Void) throws {
     for f in files {
       try Task.checkCancellation()
       guard let buf = load(root, f.path) else { continue }
       let ms: [SearchMatch]
       do { ms = try TextSearch.find(pattern, in: buf.snapshot) } catch SearchError.invalidRegex { throw SearchError.invalidRegex } catch { continue }
-      let text = buf.snapshot.string()
+      guard !ms.isEmpty else { continue }
+      let bytes = Array(buf.snapshot.string().utf8)
+      // Walk forward once: matches are in order, so line counting stays linear per file.
+      var line = 1, lineStart = 0, pos = 0
+      var out: [SearchHit] = []
       for m in ms {
-        let start = text.utf8.index(text.utf8.startIndex, offsetBy: m.range.lowerBound.value)
-        let line = text.utf8[..<start].reduce(1) { $1 == 10 ? $0 + 1 : $0 }
-        let ls = text[..<start].lastIndex(of: "\n").map { text.index(after: $0) } ?? text.startIndex
-        let le = text[start...].firstIndex(of: "\n") ?? text.endIndex
-        hits.append(SearchHit(path: f.path, line: line, text: String(text[ls..<le])))
+        let at = min(m.range.lowerBound.value, bytes.count)
+        while pos < at { if bytes[pos] == 10 { line += 1; lineStart = pos + 1 }; pos += 1 }
+        let end = bytes[at...].firstIndex(of: 10) ?? bytes.count
+        out.append(SearchHit(path: f.path, line: line, text: String(decoding: bytes[lineStart..<end], as: UTF8.self)))
       }
+      each(out)
     }
-    return hits
   }
 
   /// Rewrites matching files and returns replaced-match count.
