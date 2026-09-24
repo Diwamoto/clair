@@ -1,5 +1,10 @@
 import Foundation
 
+public enum WorkbenchTab: Sendable, Equatable {
+  case file(String)
+  case terminal(Int)
+}
+
 // V04: Project model, real file tree, and layout persistence for the Mac workbench.
 // A Project is any local folder (Git optional). Per-Project layout/tabs are kept
 // while switching and restored across launches; anything unrestorable degrades
@@ -86,6 +91,39 @@ extension WorkbenchState {
     tree.ensureEditorAtLeft()
     if !tabs.contains(path) { tabs.append(path) }
     active = path; settingsOpen = false; palette = nil
+  }
+
+  /// Titlebar order and selection are shared by shortcuts and native chrome.
+  /// Editor panes show the active file; they are not extra titlebar tabs.
+  public var titlebarTabs: [WorkbenchTab] {
+    tabs.map(WorkbenchTab.file) + tree.leaves.filter { $0.kind == .terminal }.map { .terminal($0.id) }
+  }
+
+  public var selectedTitlebarTab: WorkbenchTab? {
+    guard let pane = tree.leaves.first(where: { $0.id == tree.focused }) else { return nil }
+    switch pane.kind {
+    case .editor: return active.flatMap { tabs.contains($0) ? .file($0) : nil }
+    case .terminal: return .terminal(pane.id)
+    }
+  }
+
+  mutating func selectTab(_ tab: WorkbenchTab) {
+    switch tab {
+    case .file(let path):
+      guard tabs.contains(path), let editor = tree.leaves.first(where: { $0.kind == .editor }) else { return }
+      active = path
+      tree.focus(editor.id)
+    case .terminal(let id):
+      guard tree.leaves.contains(where: { $0.id == id && $0.kind == .terminal }) else { return }
+      tree.focus(id)
+    }
+  }
+
+  mutating func cycleTab(_ direction: Int) {
+    let all = titlebarTabs
+    guard !all.isEmpty else { return }
+    let current = selectedTitlebarTab.flatMap { all.firstIndex(of: $0) } ?? 0
+    selectTab(all[(current + direction + all.count) % all.count])
   }
 
   /// Stashes the current Project's layout and loads the target's layout. The GUI can skip the

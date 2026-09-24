@@ -8,6 +8,8 @@ final class PaneTreeTests: XCTestCase {
     XCTAssertEqual(t.leaves.map(\.kind), [.editor, .terminal, .terminal])
     t.focusNext(); XCTAssertEqual(t.focused, 2)
     t.focusNext(); t.focusNext(); XCTAssertEqual(t.focused, 1)  // wraps
+    t.focusPrevious(); XCTAssertEqual(t.focused, 3)  // reverse wraps through terminal
+    t.focusPrevious(); t.focusPrevious(); XCTAssertEqual(t.focused, 1)  // includes editor
   }
 
   func testSplitCopiesKindAndFocusesNew() {

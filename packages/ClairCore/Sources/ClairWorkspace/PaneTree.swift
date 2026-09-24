@@ -160,6 +160,14 @@ public struct PaneTree: Sendable, Equatable, Codable {
     if maximized != nil { maximized = focused }
   }
 
+  /// Cycles focus through leaves in reverse appearance order (`⌃⌘←`).
+  public mutating func focusPrevious() {
+    let all = leaves
+    guard let i = all.firstIndex(where: { $0.id == focused }) else { return }
+    focused = all[(i + all.count - 1) % all.count].id
+    if maximized != nil { maximized = focused }
+  }
+
   public mutating func focus(_ id: Int) {
     if leaves.contains(where: { $0.id == id }) { focused = id }
   }

@@ -287,7 +287,8 @@ extension CommandRegistry {
       }
       return .pane(s.tree.focused)
     },
-    cmd("pane.focusNext", "ペインのフォーカスを右へ", .read, shortcut: "⌃⌘→") { s, _ in s.tree.focusNext(); return .ok },
+    cmd("pane.focusNext", "ペインのフォーカスを右へ", .read) { s, _ in s.tree.focusNext(); return .ok },
+    cmd("pane.focusPrevious", "ペインのフォーカスを左へ", .read) { s, _ in s.tree.focusPrevious(); return .ok },
     cmd("pane.focus", "ペインにフォーカス", .read, params: [CommandParam("id", .int)],
         preflight: { s, i throws(CommandError) in
           try require(s.tree.leaves.contains { $0.id == i["id"]?.int }, "no pane \(i["id"]!)"); return .read
@@ -393,6 +394,7 @@ extension CommandRegistry {
         l.launches[id] = launch
         return id
       }
+      if home.project.name == s.project { s.panesClosed = false }
       return home.pane == nil ? .pane(pane) : .text(WorkbenchState.terminalKey(home.project.path, pane))
     },
     // V16: fan-in. `key` is the `root#pane` terminal key agent.launch returned.
@@ -428,7 +430,12 @@ extension CommandRegistry {
     cmd("tab.activate", "タブを切り替え", .read, params: [CommandParam("path", .string)],
         preflight: { s, i throws(CommandError) in
           try require(s.tabs.contains(i["path"]!.string!), "no tab \(i["path"]!)"); return .read
-        }) { s, i in s.active = i["path"]!.string!; return .ok },
+        }) { s, i in
+      s.selectTab(.file(i["path"]!.string!))
+      return .ok
+    },
+    cmd("tab.next", "次のタブ", .read, shortcut: "⌃⌘→") { s, _ in s.cycleTab(1); return .ok },
+    cmd("tab.previous", "前のタブ", .read, shortcut: "⌃⌘←") { s, _ in s.cycleTab(-1); return .ok },
     // Drag-reorder: moves `path` into `target`'s slot.
     cmd("tab.move", "タブを移動", .read, params: [CommandParam("path", .string), CommandParam("target", .string)],
         preflight: { s, i throws(CommandError) in

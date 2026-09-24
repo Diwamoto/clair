@@ -881,13 +881,18 @@ import Observation
     private func projectGroup(_ p: WorkbenchProject, color: Color) -> some View {
       let active = st.project == p.name
       let tabs = active ? st.tabs : (st.layouts[p.name]?.tabs ?? [])
-      let current = active ? st.active : st.layouts[p.name]?.active
+      let selectedTab = active ? st.selectedTitlebarTab : nil
       let dirty = active ? st.dirty : (st.layouts[p.name]?.dirty ?? [])
       let folded = collapsedGroups.contains(p.name)
       return HStack(spacing: 0) {
         Button {
           if !active { collapsedGroups.remove(p.name); store.run("project.switch", ["name": .string(p.name)]) }
-          else if folded { collapsedGroups.remove(p.name) } else { collapsedGroups.insert(p.name) }
+          else {
+            // Folding sucks the tabs back into the chip; unfolding pours them out of it.
+            withAnimation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.86)) {
+              if folded { collapsedGroups.remove(p.name) } else { collapsedGroups.insert(p.name) }
+            }
+          }
         } label: {
           // The chip carries its group colour as its own fill/border (mock
           // review feedback: a small dot beside the label read as an
@@ -916,11 +921,38 @@ import Observation
           HStack(spacing: 4) {
             ForEach(Array(tabs.enumerated()), id: \.element) { i, path in
               if i > 0 { Rectangle().fill(L.chromeSoft).frame(width: 1, height: 18) }
-              fileTab(path, projectActive: active, project: p.name, selected: path == current && active, dirty: dirty.contains(path))
+              fileTab(path, projectActive: active, project: p.name,
+                selected: selectedTab == .file(path),
+                dirty: dirty.contains(path))
+            }
+            // Terminal panes ride along as tabs; the title follows the shell's OSC title.
+            ForEach(Array((active ? st.tree : st.layouts[p.name]?.tree ?? PaneTree()).leaves.filter { $0.kind == .terminal }.enumerated()), id: \.element.id) { i, leaf in
+              if i > 0 || !tabs.isEmpty { Rectangle().fill(L.chromeSoft).frame(width: 1, height: 18) }
+              let title = terminalTabTitle(p.name, leaf.id)
+              let agent = st.agentSessions.first { $0.project == p.name && $0.pane == leaf.id && !$0.status.isExited }
+              FileTabButton(
+                path: "\(leaf.id)", name: title, selected: selectedTab == .terminal(leaf.id), dirty: false,
+                onActivate: {
+                  if !active { store.run("project.switch", ["name": .string(p.name)]) }
+                  store.run("pane.focus", ["id": .int(leaf.id)])
+                },
+                onClose: {
+                  if !active { store.run("project.switch", ["name": .string(p.name)]) }
+                  store.run("pane.focus", ["id": .int(leaf.id)]); store.run("pane.close")
+                }, icon: "terminal", providerIcon: agent?.title)
+              .help(title)
             }
           }.padding(.leading, 4)
+          .transition(reduceMotion ? .opacity : .scale(scale: 0.05, anchor: .leading).combined(with: .opacity))
         }
       }
+    }
+
+    /// The shell's OSC title; an agent whose title is just its folder name (Codex) shows its profile name instead.
+    private func terminalTabTitle(_ project: String, _ pane: Int) -> String {
+      let osc = st.paneTitles[NotificationLog.paneKey(project, pane)].flatMap { $0.isEmpty ? nil : $0 }
+      guard let agent = st.agentSessions.first(where: { $0.project == project && $0.pane == pane }) else { return osc ?? "ターミナル" }
+      return osc.flatMap { $0 == (agent.cwd as NSString).lastPathComponent ? nil : $0 } ?? agent.title
     }
 
     private func fileTab(_ path: String, projectActive: Bool, project: String, selected: Bool, dirty: Bool) -> some View {
@@ -1813,24 +1845,7 @@ import Observation
     /// Vendor logos are fetched from each vendor's own site favicon at runtime rather than
     /// redistributed in this repository; offline or on failure the provider's initial stands in.
     @ViewBuilder private func quotaProviderIcon(_ provider: String, size: CGFloat = 15) -> some View {
-      let domain: String? = switch provider {
-      case "Codex": "chatgpt.com"
-      case "Claude Code": "claude.ai"
-      case "OpenCode": "opencode.ai"
-      default: nil
-      }
-      if let domain {
-        AsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(domain)&sz=64")) { phase in
-          if let image = phase.image {
-            image.resizable().scaledToFit()
-          } else {
-            Text(provider.prefix(1)).font(.system(size: size * 0.7, weight: .semibold))
-              .foregroundStyle(C.textTertiary)
-          }
-        }
-        .frame(width: size, height: size)
-        .accessibilityHidden(true)
-      }
+      ProviderBrandIcon(provider: provider, size: size)
     }
 
     private var quotaMeter: some View {
@@ -2223,6 +2238,46 @@ import Observation
     }
   }
 
+  /// Shared by the status quota and terminal tabs, with the same offline fallback.
+  private struct ProviderBrandIcon: View {
+    let provider: String
+    let size: CGFloat
+    // Claude's installed app ships a transparent menu-bar symbol. Read it once;
+    // the web favicon below remains the fallback on other Macs.
+    private static let claudeSymbol: NSImage? = {
+      guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.anthropic.claudefordesktop"),
+        let image = NSImage(contentsOf: app.appending(path: "Contents/Resources/TrayIconTemplate@3x.png"))
+      else { return nil }
+      image.isTemplate = true
+      return image
+    }()
+
+    var body: some View {
+      let domain: String? = switch provider {
+      case "Codex": "chatgpt.com"
+      case "Claude Code": "claude.ai"
+      case "OpenCode": "opencode.ai"
+      default: nil
+      }
+      if provider == "Claude Code", let claudeSymbol = Self.claudeSymbol {
+        Image(nsImage: claudeSymbol).renderingMode(.template).resizable().scaledToFit()
+          .foregroundStyle(Color(red: 217.0 / 255, green: 119.0 / 255, blue: 87.0 / 255))
+          .frame(width: size, height: size).accessibilityHidden(true)
+      } else if let domain {
+        AsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(domain)&sz=64")) { phase in
+          if let image = phase.image {
+            image.resizable().scaledToFit()
+          } else {
+            Text(provider.prefix(1)).font(.system(size: size * 0.7, weight: .semibold))
+              .foregroundStyle(C.textTertiary)
+          }
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+      }
+    }
+  }
+
   private struct FileTabButton: View {
     let path: String
     let name: String
@@ -2230,6 +2285,8 @@ import Observation
     let dirty: Bool
     let onActivate: () -> Void
     let onClose: () -> Void
+    var icon: String?
+    var providerIcon: String?
     var onMove: (@MainActor @Sendable (String) -> Void)?
 
     @State private var isHovered = false
@@ -2239,7 +2296,7 @@ import Observation
     var body: some View {
       let tint = selected ? C.chromeInk : C.textTertiary
       HStack(spacing: 4) {
-        Image(systemName: path.hasSuffix(".md") ? "text.alignleft" : "doc.text").font(.system(size: 11)).foregroundStyle(tint)
+        tabIcon(tint: tint)
         Text(name).font(.system(size: 11, weight: selected ? .semibold : .regular)).foregroundStyle(tint).lineLimit(1).truncationMode(.tail)
         Spacer(minLength: 0)
         if dirty { Circle().fill(selected ? C.textTertiary : C.textQuaternary).frame(width: 6, height: 6) }
@@ -2252,14 +2309,14 @@ import Observation
         .allowsHitTesting(selected || isHovered)
       }
       .padding(.horizontal, 8).frame(width: 200, height: 38)
-      .background((selected || isHovered) ? W.selected : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
+      .background(selected ? W.selected : isHovered ? W.soft : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
       .background(NoWindowDrag())
       .contentShape(Rectangle())
       // Same feel as the pane header drag: a card-shaped ghost of the tab and a ring on the drop target.
       .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(isDropTarget ? L.ring : .clear, lineWidth: 1))
       .onDrag({ NSItemProvider(object: NSString(string: path)) }, preview: {
         HStack(spacing: 4) {
-          Image(systemName: path.hasSuffix(".md") ? "text.alignleft" : "doc.text").font(.system(size: 11))
+          tabIcon(tint: C.chromeInk)
           Text(name).font(.system(size: 11, weight: .semibold)).lineLimit(1)
         }
         .foregroundStyle(C.chromeInk).padding(.horizontal, 10).frame(height: 30)
@@ -2279,6 +2336,15 @@ import Observation
       .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: isHovered)  // short fade, no flicker
       .onTapGesture(perform: onActivate)
       .help(path)
+    }
+
+    @ViewBuilder private func tabIcon(tint: Color) -> some View {
+      if let providerIcon {
+        ProviderBrandIcon(provider: providerIcon, size: 13)
+      } else {
+        Image(systemName: icon ?? (path.hasSuffix(".md") ? "text.alignleft" : "doc.text"))
+          .font(.system(size: 11)).foregroundStyle(tint)
+      }
     }
   }
 

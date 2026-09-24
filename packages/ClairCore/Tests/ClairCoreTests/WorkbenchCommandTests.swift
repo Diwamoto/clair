@@ -31,6 +31,38 @@ final class WorkbenchCommandTests: XCTestCase {
     XCTAssertNil(state.palette)
   }
 
+  func testTabShortcutsCycleFilesAndTerminalsInTitlebarOrder() throws {
+    var state = WorkbenchState()
+    state.tabs = ["first.swift", "second.swift"]
+    state.active = "first.swift"
+    XCTAssertEqual(state.titlebarTabs, [.file("first.swift"), .file("second.swift"), .terminal(2), .terminal(3)])
+    XCTAssertEqual(state.selectedTitlebarTab, .file("first.swift"))
+    XCTAssertEqual(r.commands.first { $0.id == "tab.next" }?.shortcut, "⌃⌘→")
+    XCTAssertEqual(r.commands.first { $0.id == "tab.previous" }?.shortcut, "⌃⌘←")
+    _ = try r.execute("tab.next", state: &state).get()
+    XCTAssertEqual(state.active, "second.swift")
+    XCTAssertEqual(state.tree.focused, 1)
+    XCTAssertEqual(state.selectedTitlebarTab, .file("second.swift"))
+    _ = try r.execute("tab.next", state: &state).get()
+    XCTAssertEqual(state.tree.focused, 2)
+    XCTAssertEqual(state.selectedTitlebarTab, .terminal(2))
+    _ = try r.execute("tab.activate", ["path": .string("first.swift")], state: &state).get()
+    XCTAssertEqual(state.tree.focused, 1)
+    XCTAssertEqual(state.selectedTitlebarTab, .file("first.swift"))
+    _ = try r.execute("tab.next", state: &state).get()
+    _ = try r.execute("tab.next", state: &state).get()
+    XCTAssertEqual(state.tree.focused, 2)
+    _ = try r.execute("tab.previous", state: &state).get()
+    XCTAssertEqual(state.active, "second.swift")
+    XCTAssertEqual(state.tree.focused, 1)
+    _ = try r.execute("tab.previous", state: &state).get()
+    XCTAssertEqual(state.active, "first.swift")
+    _ = try r.execute("tab.previous", state: &state).get()
+    XCTAssertEqual(state.tree.focused, 3)
+    _ = try r.execute("tab.next", state: &state).get()
+    XCTAssertEqual(state.tree.focused, 1)
+  }
+
   func testUsageSectionIsReachableThroughSettingsCommand() throws {
     var state = WorkbenchState()
     _ = try r.execute("settings.open", ["section": .string("使用状況")], state: &state).get()

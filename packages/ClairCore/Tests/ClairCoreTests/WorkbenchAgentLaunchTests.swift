@@ -24,7 +24,9 @@ final class WorkbenchAgentLaunchTests: XCTestCase {
 
   func testMultipleLaunchesGetOwnPanesInProjectRootAndCloseDropsThem() throws {
     var (s, root) = try opened()
+    s.panesClosed = true
     let a = try r.execute("agent.launch", ["profile": .string("claude")], confirmed: true, state: &s).get()
+    XCTAssertFalse(s.panesClosed)
     let b = try r.execute("agent.launch", ["profile": .string("codex")], confirmed: true, state: &s).get()
     guard case .pane(let ida) = a, case .pane(let idb) = b else { return XCTFail() }
     XCTAssertNotEqual(ida, idb)
