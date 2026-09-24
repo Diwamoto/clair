@@ -92,15 +92,17 @@ static void clair_ghostty_write_clipboard_cb(
 }
 
 // V08: the only actions read are RING_BELL, DESKTOP_NOTIFICATION and
-// SHOW_CHILD_EXITED, and only their facts (a bell count, the exit code) are kept, in a per-app record that
-// Swift drains after `tick()` (`clair_ghostty_app_take_events`). No payload
-// other than `child_exited.exit_code` is decoded; every action is still
+// SHOW_CHILD_EXITED; notification title/body and exit code are kept in a per-app
+// record that Swift drains after `tick()` (`clair_ghostty_app_take_events`). Every action is still
 // reported "not handled" so libghostty's default behavior is unchanged.
 typedef struct {
   uint32_t bells;
   int64_t exit_code;  // -1 = the child has not exited
   bool title_changed;
   char title[256];  // the window title, shown in the Mac sidebar the way Ghostty shows it in its tab
+  bool notification_changed;
+  char notification_title[512];
+  char notification_body[4096];
 } clair_ghostty_app_events_record;
 
 static bool clair_ghostty_action_cb(
@@ -108,11 +110,15 @@ static bool clair_ghostty_action_cb(
   (void)target;
   clair_ghostty_app_events_record *rec = ghostty_app_userdata(app);
   if (!rec) return false;
-  // Agents (Claude Code, Codex) ask for attention with OSC 9/777 rather than BEL.
-  // It counts as a bell: its title/body are agent text (may quote code), so they
-  // are never decoded and cannot reach a macOS banner or a future mobile push.
-  if (action.tag == GHOSTTY_ACTION_RING_BELL || action.tag == GHOSTTY_ACTION_DESKTOP_NOTIFICATION)
+  if (action.tag == GHOSTTY_ACTION_RING_BELL)
     rec->bells++;
+  else if (action.tag == GHOSTTY_ACTION_DESKTOP_NOTIFICATION) {
+    rec->bells++;
+    rec->notification_changed = true;
+    const ghostty_action_desktop_notification_s n = action.action.desktop_notification;
+    snprintf(rec->notification_title, sizeof(rec->notification_title), "%s", n.title ? n.title : "");
+    snprintf(rec->notification_body, sizeof(rec->notification_body), "%s", n.body ? n.body : "");
+  }
   else if (action.tag == GHOSTTY_ACTION_SET_TITLE) {
     const char *t = action.action.set_title.title;
     snprintf(rec->title, sizeof(rec->title), "%s", t ? t : "");
@@ -147,7 +153,12 @@ void clair_ghostty_app_take_events(clair_ghostty_app_t app, clair_ghostty_app_ev
   out->exit_code = rec ? rec->exit_code : -1;
   out->title_changed = rec && rec->title_changed;
   if (rec) memcpy(out->title, rec->title, sizeof(out->title));
-  if (rec) { rec->bells = 0; rec->title_changed = false; }  // bells/title drained; the exit code is sticky
+  out->notification_changed = rec && rec->notification_changed;
+  if (rec) {
+    memcpy(out->notification_title, rec->notification_title, sizeof(out->notification_title));
+    memcpy(out->notification_body, rec->notification_body, sizeof(out->notification_body));
+    rec->bells = 0; rec->title_changed = false; rec->notification_changed = false;
+  }
 }
 
 void clair_ghostty_app_free(clair_ghostty_app_t app) {

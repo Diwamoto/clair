@@ -586,23 +586,25 @@ import Observation
     }
 
     /// Only facts from an agent running in a Clair terminal can produce a macOS notification.
-    public func facts(pane: Int, bells: Int, exit: Int?) {
+    public func facts(pane: Int, bells: Int, exit: Int?, notification: (title: String, body: String)?) {
       guard let agent = state.agentLaunch(in: state.project, pane: pane) else { return }
+      let agentName = AgentProfile.named(agent.profile)?.title ?? agent.profile
+      let oscTitle = state.paneTitles[NotificationLog.paneKey(state.project, pane)]
+      let sessionTitle = oscTitle.flatMap { $0.isEmpty || $0 == (agent.cwd as NSString).lastPathComponent ? nil : $0 } ?? "\(agentName) · ターミナル \(pane)"
       // Only this GUI writes facts (no command records them), so an agent cannot fabricate notifications.
       var fresh: WorkbenchNotice?
-      if bells > 0 { fresh = state.notices.record(project: state.project, pane: pane, kind: .bell) ?? fresh }
-      if let exit { fresh = state.notices.record(project: state.project, pane: pane, kind: .exited, exitCode: exit) ?? fresh }
+      if bells > 0 { fresh = state.notices.record(project: state.project, pane: pane, kind: .bell, sourceTitle: notification?.title, sourceBody: notification?.body, sessionTitle: sessionTitle) ?? fresh }
+      if let exit { fresh = state.notices.record(project: state.project, pane: pane, kind: .exited, exitCode: exit, sessionTitle: sessionTitle) ?? fresh }
       refreshSleepAssertion()
       guard let n = fresh, !NSApp.isActive,
         Bundle.main.bundleURL.pathExtension == "app",
         Bundle.main.bundleIdentifier != nil  // UNUserNotificationCenter traps outside an app bundle (swift run / XCTest)
       else { return }
-      let body = [AgentProfile.named(agent.profile)?.title ?? agent.profile, n.title].joined(separator: ": ")
       let c = UNUserNotificationCenter.current()
       c.requestAuthorization(options: [.alert]) { granted, _ in
         guard granted else { return }
         let m = UNMutableNotificationContent()
-        m.title = n.project; m.body = body
+        m.title = n.sessionTitle ?? agentName; m.subtitle = "\(n.project) · \(agentName) · ターミナル \(n.pane) · \(n.title)"; m.body = n.sourceBody ?? ""
         c.add(UNNotificationRequest(identifier: "clair-\(n.id)", content: m, trigger: nil))
       }
     }
@@ -903,8 +905,10 @@ import Observation
             .background(color.opacity(active ? 0.22 : 0.1), in: RoundedRectangle(cornerRadius: Radius.card))
             .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(color.opacity(active ? 0.55 : 0.28)))
           .overlay(alignment: .topTrailing) {
-            if st.notices.unread(p.name) > 0 {
-              Text("\(st.notices.unread(p.name))").font(.system(size: 9, weight: .bold)).foregroundStyle(C.textPrimary)
+            // Only agents waiting for input badge the chip; plain bells / exits stay in the notification popover.
+            let waiting = st.agentSessions.filter { $0.project == p.name && $0.status == .attention }.count
+            if waiting > 0 {
+              Text("\(waiting)").font(.system(size: 9, weight: .bold)).foregroundStyle(C.textPrimary)
                 .padding(.horizontal, 4).background(color, in: Capsule()).offset(x: 2, y: -4)
             }
           }
@@ -1672,7 +1676,7 @@ import Observation
         PaneView(
           node: st.tree.maximized.flatMap { id in st.tree.leaves.first { $0.id == id }.map { .leaf(id: $0.id, kind: $0.kind) } } ?? st.tree.root,
           focused: st.tree.focused, launches: st.launches, project: store.activeRoot ?? st.project, onFocus: { store.run("pane.focus", ["id": .int($0)]) },
-          onFacts: { store.facts(pane: $0, bells: $1, exit: $2) },
+          onFacts: { store.facts(pane: $0, bells: $1, exit: $2, notification: $3) },
           onTitle: { store.title(pane: $0, $1) },
           onRatio: { store.run("pane.setRatio", ["id": .int($0), "ratio": .double($1)]) },
           editor: EditorPane(buffers: store.buffers, root: store.activeRoot, path: st.active,
@@ -1968,9 +1972,10 @@ import Observation
                     HStack(spacing: 8) {
                       Circle().fill(n.read ? Color.clear : C.attention).frame(width: 6, height: 6)
                       VStack(alignment: .leading, spacing: 2) {
-                        Text(st.agentLaunch(in: n.project, pane: n.pane).map { AgentProfile.named($0.profile)?.title ?? $0.profile } ?? "ターミナル \(n.pane)")
+                        Text(n.sessionTitle ?? "ターミナル \(n.pane)")
                           .foregroundStyle(C.textPrimary)
-                        Text("\(n.project) · \(n.title)").foregroundStyle(n.kind == .exited && n.exitCode != 0 ? C.attention : C.textTertiary)
+                        Text("\(n.project) · ターミナル \(n.pane) · \(n.title)").foregroundStyle(n.kind == .exited && n.exitCode != 0 ? C.attention : C.textTertiary)
+                        if let body = n.sourceBody, !body.isEmpty { Text(body).foregroundStyle(C.textSecondary).fixedSize(horizontal: false, vertical: true) }
                       }
                       Spacer(minLength: 8)
                       Text(n.at.formatted(date: .omitted, time: .shortened)).foregroundStyle(C.textQuaternary)
@@ -2511,7 +2516,7 @@ import Observation
     let launches: [Int: AgentLaunch]
     let project: String
     let onFocus: (Int) -> Void
-    let onFacts: (Int, Int, Int?) -> Void
+    let onFacts: (Int, Int, Int?, (title: String, body: String)?) -> Void
     let onTitle: (Int, String) -> Void
     let onRatio: (Int, Double) -> Void
     let editor: EditorPane
@@ -2551,8 +2556,8 @@ import Observation
           }
           ZStack {
             C.surface
-            if kind == .terminal { ClairGhosttySurface(launch: launches[id].map { ($0.command, $0.cwd) } ?? (project.hasPrefix("/") ? ("", project) : nil), pane: id, sessionKey: ClairWorkbenchStore.terminalKey(root: project, pane: id), focused: id == focused, onFocus: { if id != focused { onFocus(id) } }, onFacts: { onFacts(id, $0, $1) }, onTitle: { onTitle(id, $0) }) }  // one surface per terminal leaf, attached to the daemon shell keyed by project#pane
-            else { editor }
+            if kind == .terminal { ClairGhosttySurface(launch: launches[id].map { ($0.command, $0.cwd) } ?? (project.hasPrefix("/") ? ("", project) : nil), pane: id, sessionKey: ClairWorkbenchStore.terminalKey(root: project, pane: id), focused: id == focused, onFocus: { if id != focused { onFocus(id) } }, onFacts: { onFacts(id, $0, $1, $2) }, onTitle: { onTitle(id, $0) }) }  // one surface per terminal leaf, attached to the daemon shell keyed by project#pane
+            else { editor.inPane(focused: id == focused, onFocus: { if id != focused { onFocus(id) } }) }
             if let from = dragging, from != id {
               PaneDropZones { edge in
                 run("pane.move", ["id": .int(from), "target": .int(id), "edge": .string(edge.rawValue)])

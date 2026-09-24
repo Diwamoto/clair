@@ -21,6 +21,14 @@ final class WorkbenchNotificationTests: XCTestCase {
     XCTAssertEqual(log.items.count, NotificationLog.cap)
   }
 
+  func testSourceNotificationTextIsKeptInHistory() {
+    var log = NotificationLog()
+    let notice = log.record(project: "p", pane: 1, kind: .bell, sourceTitle: "承認待ち", sourceBody: "コマンドの実行を確認してください", sessionTitle: "設定画面の修正")
+    XCTAssertEqual(notice?.title, "承認待ち")
+    XCTAssertEqual(log.items.first?.sourceBody, "コマンドの実行を確認してください")
+    XCTAssertEqual(log.items.first?.sessionTitle, "設定画面の修正")
+  }
+
   func testMuteCommandsAndAIBoundary() throws {
     var s = WorkbenchState()
     s.projects = [WorkbenchProject(name: "p", path: "/tmp")]; s.project = "p"

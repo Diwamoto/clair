@@ -164,7 +164,7 @@ final class ClairGhosttyTests: XCTestCase {
     }
 
     /// Agents ask for attention with OSC 9 / OSC 777 instead of BEL; both must
-    /// reach the V08 fact path as a bell (and nothing of their text).
+    /// reach the V08 event path with their notification text.
     func testAgentDesktopNotificationRequestCountsAsBell() throws {
       try XCTSkipUnless(isVendoredEnvironment)
       let runtime = GhosttyRuntime()
@@ -182,12 +182,16 @@ final class ClairGhosttyTests: XCTestCase {
         ) { surface in
           try surface.setSize(widthPixels: 640, heightPixels: 400)
           var bells = 0
+          var latestBody: String?
           for _ in 0..<120 where bells < 2 {
             try app.tick()
             Thread.sleep(forTimeInterval: 0.05)
-            bells += app.takeEvents().bells
+            let events = app.takeEvents()
+            bells += events.bells
+            latestBody = events.notification?.body ?? latestBody
           }
           XCTAssertEqual(bells, 2)
+          XCTAssertEqual(latestBody, "wait")
         }
       }
     }

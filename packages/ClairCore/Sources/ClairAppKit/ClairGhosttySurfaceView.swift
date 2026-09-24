@@ -298,7 +298,7 @@ import Foundation
     }
 
     /// V08: facts only — bells since the last poll and, once, the child's exit code.
-    public var onFacts: ((_ bells: Int, _ exitCode: Int?) -> Void)?
+    public var onFacts: ((_ bells: Int, _ exitCode: Int?, _ notification: (title: String, body: String)?) -> Void)?
     /// The terminal's window title (OSC 0/2), e.g. what Claude Code is working on.
     public var onTitle: ((String) -> Void)?
     private var exitReported = false
@@ -332,8 +332,8 @@ import Foundation
       let e = ghosttyApp.takeEvents()
       let exit = exitReported ? nil : e.exitCode
       if exit != nil { exitReported = true }
-      if e.bells > 0 || exit != nil { onFacts?(e.bells, exit) }
       if let title = e.title { onTitle?(title) }
+      if e.bells > 0 || exit != nil { onFacts?(e.bells, exit, e.notification) }
       if redraw { needsDisplay = true }
     }
 
@@ -782,7 +782,7 @@ import Foundation
   /// SwiftUI host for `ClairGhosttySurfaceView`.
   public struct ClairGhosttySurface: NSViewRepresentable {
     let launch: (command: String, cwd: String)?
-    let onFacts: ((Int, Int?) -> Void)?
+    let onFacts: ((Int, Int?, (title: String, body: String)?) -> Void)?
     let onTitle: ((String) -> Void)?
     let pane: Int?
     /// `sessionKey` names the daemon-owned shell this surface attaches to (same key = same session).
@@ -791,7 +791,7 @@ import Foundation
     let onFocus: (() -> Void)?
     public init(
       launch: (command: String, cwd: String)? = nil, pane: Int? = nil, sessionKey: String, focused: Bool = false,
-      onFocus: (() -> Void)? = nil, onFacts: ((Int, Int?) -> Void)? = nil, onTitle: ((String) -> Void)? = nil
+      onFocus: (() -> Void)? = nil, onFacts: ((Int, Int?, (title: String, body: String)?) -> Void)? = nil, onTitle: ((String) -> Void)? = nil
     ) {
       self.launch = launch; self.pane = pane; self.sessionKey = sessionKey; self.onFacts = onFacts; self.onTitle = onTitle
       self.focused = focused; self.onFocus = onFocus

@@ -371,7 +371,7 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
 - Clair の terminal 内の agent は CLI/MCP で子 agent を起動(prompt・worktree 指定)、状態確認、完了待ち、出力回収、pane の close ができる。子 agent 起動と worktree 作成は AI に公開するが `external` risk として GUI 承認を必須にする。terminal 内から来た CLI 呼び出しも AI 経由として同じ gate を通す
 - command risk は固定 metadata と runtime preflight で判定し、必要な承認を GUI に
   表示する。AI の自己申告 risk を authorization に使わない
-- Clair の terminal で起動した agent の bell / 終了だけを記録し、Clair が前面にないとき macOS notification を送る。通常の terminal は通知しない
+- Clair の terminal で起動した agent の bell / 通知要求 / 終了を記録し、Clair が前面にないとき macOS notification を送る。通知要求の title / body と、terminal が報告する session title は Mac 上の通知と履歴に表示する。通常の terminal は通知しない
 - 通知一覧は status bar 右端の通知ボタンの popover だけに置く(独立画面は設けない)。行から対象 terminal へ移動し既読にする。記録は session 状態と Project badge にも使う
 - Project / terminal 単位で notification を mute できる
 
