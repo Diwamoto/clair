@@ -16,6 +16,7 @@ final class WorkbenchNotificationTests: XCTestCase {
     log.mutedProjects.insert("b")
     XCTAssertNil(log.record(project: "b", pane: 9, kind: .bell))
     log.markRead(project: "a"); XCTAssertEqual(log.unread("a"), 0); XCTAssertEqual(log.unread("b"), 1)
+    log.markRead(project: "b", pane: 3); XCTAssertEqual(log.unread("b"), 0)
     for _ in 0..<300 { log.record(project: "a", pane: 1, kind: .bell) }
     XCTAssertEqual(log.items.count, NotificationLog.cap)
   }
@@ -47,5 +48,15 @@ final class AgentSessionTests: XCTestCase {
     XCTAssertEqual(s.agentSessions.map(\.status), [.running, .attention, .exited(0)])
     s.notices.markRead(project: "p")
     XCTAssertEqual(s.agentSessions[1].status, .running)
+  }
+
+  func testOnlyClairAgentPanesQualifyForNotifications() {
+    var s = WorkbenchState()
+    s.project = "p"
+    s.launches = [1: AgentLaunch(profile: "codex", cwd: "/p")]
+    s.detectedLaunches["p"] = [2: AgentLaunch(profile: "claude", cwd: "/p")]
+    XCTAssertEqual(s.agentLaunch(in: "p", pane: 1)?.profile, "codex")
+    XCTAssertEqual(s.agentLaunch(in: "p", pane: 2)?.profile, "claude")
+    XCTAssertNil(s.agentLaunch(in: "p", pane: 3))
   }
 }

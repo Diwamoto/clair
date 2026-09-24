@@ -44,5 +44,9 @@ public struct NotificationLog: Sendable, Codable, Equatable {
     for i in items.indices where project == nil || items[i].project == project { items[i].read = true }
   }
 
+  public mutating func markRead(project: String, pane: Int) {
+    for i in items.indices where items[i].project == project && items[i].pane == pane { items[i].read = true }
+  }
+
   public mutating func clear() { items = [] }
 }
