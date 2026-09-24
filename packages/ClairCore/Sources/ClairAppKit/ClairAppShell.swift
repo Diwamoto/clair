@@ -1908,12 +1908,13 @@ import Observation
               }.frame(minHeight: 18)
             }.buttonStyle(.hoverWash).disabled(gitOperation != nil).help(sync.map { "\(branch ?? "") の同期: pull \($0.behind) 件 / push \($0.ahead) 件\nクリックで Pull → Push" } ?? "同期 (Pull → Push)")
             if let gitOperation { ProgressView().controlSize(.small).help("\(gitOperation)中") }
-            if let gitMessage, gitOperation == nil {
+            // Failures only: a success toast is noise here (owner, 2026-09-24); the Git panel still shows it.
+            if let gitMessage, gitFailed, gitOperation == nil {
               HStack(spacing: 4) {
-                Image(systemName: gitFailed ? "exclamationmark.triangle" : "checkmark")
+                Image(systemName: "exclamationmark.triangle")
                 Text(gitMessage).lineLimit(1).truncationMode(.tail)
               }
-              .foregroundStyle(gitFailed ? C.attention : C.textQuaternary)
+              .foregroundStyle(C.attention)
               .frame(maxWidth: 260, alignment: .leading)
               .help(gitMessage)
             }
