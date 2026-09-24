@@ -368,6 +368,7 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   file を開く。該当 Project がなければ新規 Project として開く
 - 起動中 Clair を操作する CLI を提供する
 - `clair mcp serve` の stdio adapter で AI 向け command を公開する
+- Clair の terminal 内の agent は CLI/MCP で子 agent を起動(prompt・worktree 指定)、状態確認、完了待ち、出力回収、pane の close ができる。子 agent 起動と worktree 作成は AI に公開するが `external` risk として GUI 承認を必須にする。terminal 内から来た CLI 呼び出しも AI 経由として同じ gate を通す
 - command risk は固定 metadata と runtime preflight で判定し、必要な承認を GUI に
   表示する。AI の自己申告 risk を authorization に使わない
 - Clair の terminal で起動した agent の bell / 終了だけを記録し、Clair が前面にないとき macOS notification を送る。通常の terminal は通知しない
