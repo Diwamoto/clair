@@ -129,7 +129,8 @@ let package = Package(
     .target(name: "ClairPushRelay", dependencies: ["ClairPush"]),
     .target(
       name: "ClairWorkspace",
-      dependencies: ["ClairShared", "ClairEditorCore"]
+      dependencies: ["ClairShared", "ClairEditorCore"],
+      linkerSettings: [.linkedLibrary("sqlite3")]
     ),
     .target(
       name: "ClairAgent",

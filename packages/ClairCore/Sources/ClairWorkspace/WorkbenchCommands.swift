@@ -15,7 +15,7 @@ public struct WorkbenchFile: Sendable, Codable, Equatable {
 public struct WorkbenchState: Sendable, Codable, Equatable {
   public enum Palette: String, Sendable, Codable { case commands, files, search, symbols, references }
 
-  public static let sections = ["一般", "AIプロバイダー", "エディタ", "ターミナル", "モバイル", "アップデート"]
+  public static let sections = ["一般", "AIプロバイダー", "使用状況", "エディタ", "ターミナル", "モバイル", "アップデート"]
   public static let toggleKeys = ["restoreLayout", "confirmClose", "showQuota", "preventSleepOnBattery", "formatOnSave", "showWhitespace", "softWrap", "terminalApprovals"]
   /// Closed-set settings (the mock's segmented controls). The first option is the default.
   public static let choiceOptions: [String: [String]] = [

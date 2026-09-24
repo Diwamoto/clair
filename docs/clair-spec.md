@@ -64,7 +64,9 @@ terminal をそのまま使えることを保証し、その周囲に Project ow
 8. **User control と回復可能性を保つ**。agent が disk 上の file を変更した場合は
    その内容を正本とし、同じ file の未保存 buffer は破棄して live reload する。
    上書き前の内容は local file history から復元できる。terminal transcript は
-   session 終了後に保存しない。Clair の状態は Mac 内の専用 storage に保存し、
+   session 終了後に保存しない。Claude Code、Codex、OpenCode が自身の local storage
+   に保存したチャット履歴は Clair が読み取り専用で表示できる。Clair はその本文を
+   複製・永続化しない。Clair の状態は Mac 内の専用 storage に保存し、
    repository を自動的に汚さない。
 9. **Personal、native、macOS-only を選ぶ**。single user、自所有 device、macOS に
    最適化する。Windows/Linux、team collaboration、account system、hosted agent、
@@ -338,6 +340,11 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
 - Git の有無を問わず local folder を Project として開き、複数 Project を 1
   process で切り替える
 - Project ごとに workspace、terminal、agent、notification、local settings を保持
+- Agents 一覧は現在の agent terminal への移動と、3 provider の local chat history
+  の閲覧を統合する。履歴行には provider が分かるラベルとアイコンを付ける
+- 設定の「使用状況」はユーザーが送信した依頼・追記を 1 件として日別に集計し、
+  今日の件数と日別 activity calendar を示す。使用費用は取得可能な token/model
+  情報から推定し、実際の請求額と区別して表示する。欠損分をゼロ扱いしない
 - editor / terminal / diff を同じ tab group へ置ける任意 split
 - pane の focus、移動、close、最大化、幅/高さ/全体均等
 - file tree、search、Git の sidebar と、pane へ開く補助 view

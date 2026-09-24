@@ -1097,7 +1097,7 @@ import Observation
     }
 
     private var sections: some View {
-      ForEach(["一般", "AIプロバイダー", "エディタ", "ターミナル", "モバイル", "アップデート"], id: \.self) { s in
+      ForEach(["一般", "AIプロバイダー", "使用状況", "エディタ", "ターミナル", "モバイル", "アップデート"], id: \.self) { s in
         row(s, depth: 0, selected: st.section == s) { store.run("settings.open", ["section": .string(s)]) }
       }
     }
@@ -1523,6 +1523,8 @@ import Observation
           Text(Self.sectionNotes[st.section] ?? "\(st.section) の設定です。").font(.system(size: 12)).foregroundStyle(C.textTertiary)
             .padding(.bottom, 12)
           switch st.section {
+          case "使用状況":
+            AgentUsageView()
           case "一般":
             SettingsCard(title: "ワークスペース") {
               switchRow("前回のレイアウトを復元", "restoreLayout", note: "Projectごとのファイル、ターミナル、分割位置を再開します。")

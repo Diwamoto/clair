@@ -777,6 +777,9 @@
     let sessions: [AgentSession]
     let current: String
     let open: (AgentSession) -> Void
+    @State private var histories: [AgentHistory] = []
+    @State private var selectedHistory: AgentHistory?
+    @State private var historyLoading = true
 
     private func label(_ s: AgentSession) -> (String, Color) {
       switch s.status {
@@ -789,6 +792,13 @@
     var body: some View {
       Text("エージェント").font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textTertiary)
         .padding(.horizontal, 20).frame(height: 26)
+        .task {
+          histories = await AgentHistoryStore.shared.all()
+          historyLoading = false
+        }
+        .sheet(item: $selectedHistory) { history in
+          AgentHistoryTranscript(history: history)
+        }
       if sessions.isEmpty {
         Text("起動中のエージェントはありません").font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textSecondary)
           .frame(maxWidth: .infinity).padding(16)
@@ -808,6 +818,59 @@
           .padding(.horizontal, 20).padding(.vertical, 4).contentShape(Rectangle())
         }.buttonStyle(.hoverWash)
       }
+      HStack {
+        Text("過去のチャット").font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textTertiary)
+        Spacer()
+        Button { Task { historyLoading = true; histories = await AgentHistoryStore.shared.refresh(); historyLoading = false } } label: {
+          Image(systemName: "arrow.clockwise")
+        }.buttonStyle(.plain).help("履歴を更新")
+      }.padding(.horizontal, 20).padding(.top, 14)
+      if historyLoading {
+        ProgressView().controlSize(.small).padding(16)
+      } else if histories.isEmpty {
+        Text("履歴はありません").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary).padding(16)
+      }
+      ForEach(histories) { history in
+        Button { selectedHistory = history } label: {
+          HStack(alignment: .top, spacing: 8) {
+            Image(systemName: history.provider == .claude ? "sparkles" : history.provider == .codex ? "chevron.left.forwardslash.chevron.right" : "square.stack.3d.up")
+              .frame(width: 14).foregroundStyle(C.textTertiary)
+            VStack(alignment: .leading, spacing: 2) {
+              Text(history.title).lineLimit(2).foregroundStyle(C.textPrimary)
+              Text("\(history.provider.rawValue) · \(history.date.formatted(date: .abbreviated, time: .shortened))")
+                .font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary)
+            }
+            Spacer(minLength: 0)
+          }.padding(.horizontal, 20).padding(.vertical, 6).contentShape(Rectangle())
+        }.buttonStyle(.hoverWash)
+      }
+    }
+  }
+
+  private struct AgentHistoryTranscript: View {
+    let history: AgentHistory
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+      VStack(spacing: 0) {
+        HStack {
+          Text(history.provider.rawValue).font(.headline)
+          Spacer()
+          Button("閉じる") { dismiss() }
+        }.padding(20)
+        Divider()
+        ScrollView {
+          LazyVStack(alignment: .leading, spacing: 18) {
+            ForEach(history.messages) { message in
+              VStack(alignment: .leading, spacing: 5) {
+                Text(message.role == "user" ? "あなた" : history.provider.rawValue)
+                  .font(.caption).foregroundStyle(.secondary)
+                Text(message.text).textSelection(.enabled)
+              }.frame(maxWidth: .infinity, alignment: .leading)
+            }
+          }.padding(24)
+        }
+      }.frame(minWidth: 680, minHeight: 520)
     }
   }
 

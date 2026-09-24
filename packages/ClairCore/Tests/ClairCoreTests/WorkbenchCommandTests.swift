@@ -31,6 +31,12 @@ final class WorkbenchCommandTests: XCTestCase {
     XCTAssertNil(state.palette)
   }
 
+  func testUsageSectionIsReachableThroughSettingsCommand() throws {
+    var state = WorkbenchState()
+    _ = try r.execute("settings.open", ["section": .string("使用状況")], state: &state).get()
+    XCTAssertEqual(state.section, "使用状況")
+  }
+
   func testSchemaValidation() {
     var s = WorkbenchState()
     let bad: [(String, CommandInput)] = [
