@@ -18,7 +18,7 @@ usage() {
 Usage: run-budget.sh [--regenerate] [--out FILE]
 
   --regenerate  discard the cached adversarial corpus and rebuild it
-  --out FILE    JSON report path (default docs/benchmarks/results/<date>-<host>/budget.json)
+  --out FILE    JSON report path (default docs/benchmarks/results/<date>-<hw.model>/budget.json)
 USAGE
 }
 
@@ -37,7 +37,7 @@ if ((regenerate)); then
 fi
 
 if [[ -z "$out_file" ]]; then
-  out_file="$repo_root/docs/benchmarks/results/$(date -u +%Y-%m-%d)-$(hostname -s)/budget.json"
+  out_file="$repo_root/docs/benchmarks/results/$(date -u +%Y-%m-%d)-$(sysctl -n hw.model)/budget.json"
 fi
 
 printf 'budget: running the operation budget suite (release)...\n'

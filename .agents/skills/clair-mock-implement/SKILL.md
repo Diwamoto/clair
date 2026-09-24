@@ -21,7 +21,7 @@ commands, and raw tool/test output in their original form.
 
 ## Fixed context
 
-- Reference mock: `/Users/daiki/Projects/clair/prototypes/clair-interaction-lab`
+- Reference mock: `prototypes/clair-interaction-lab`
   (`app/page.tsx`, `app/mock-data.ts`, `app/globals.css`). It mirrors the
   Clair UI Design canvas; treat it as ground truth for exact copy,
   spacing, color, and interaction states.

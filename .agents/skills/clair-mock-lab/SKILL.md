@@ -20,7 +20,7 @@ Work on the established interactive prototype rather than starting a new mock.
 
 ## Fixed context
 
-- Source: `/Users/daiki/Projects/clair/prototypes/clair-interaction-lab`
+- Source: `prototypes/clair-interaction-lab`
 - Live private URL: `https://clair-interaction-lab.daiki-work-0118.chatgpt.site`
 - Sites project ID: `appgprj_6a8efdff717481919f80ceb9d8d62176`
 - The prototype is tracked as ordinary source under the parent Clair repository. Commit mock changes from the parent repository; do not recreate a nested `.git` directory.

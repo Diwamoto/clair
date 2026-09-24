@@ -109,6 +109,6 @@ affordance が UI 層に存在しないと落ち、さらに p95 が 100 ms を�
 `.background(affordance:)` へ移すことで解消する。
 
 最新 run:
-[2026-09-22 / Mac mini M4](results/2026-09-22-iwamotodaikinoMac-mini/README.md)。
+[2026-09-22 / Mac mini M4](results/2026-09-22-Mac16,10/README.md)。
 起動は合格 (p95 195.18 ms / 予算 300 ms)。UI から到達できる 35 操作は合格し、
 未実装の構文ハイライト 2 操作だけが affordance 未接続として意図的に赤く残っている。

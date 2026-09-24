@@ -37,7 +37,7 @@ file paths, component names, commands, and raw tool output as they are.
   radius, 7-step spacing, latency budget, chrome budget). `Tokens` is the
   one artboard that defines rules rather than a screen; read it before
   deciding anything the other artboards do not literally draw.
-- **Workbench mock**: `/Users/daiki/Projects/clair/prototypes/clair-workbench`
+- **Workbench mock**: `prototypes/clair-workbench`
   — Vite + React + TypeScript, a real implementation with state, not an
   embedded copy of the artboards. Published privately as an Artifact so it
   can be opened from a phone; `README.md` there records the current URL,

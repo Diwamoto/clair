@@ -32,7 +32,7 @@ only run from Claude Code (Codex has no access to Claude Design canvases).
   (single titlebar, no separate activity-bar column or pane headers,
   sidebar activity icons folded into a 34px top strip); treat that
   merged direction as settled, not still under debate.
-- Mock: `/Users/daiki/Projects/clair/prototypes/clair-interaction-lab`
+- Mock: `prototypes/clair-interaction-lab`
   (`app/page.tsx`, `app/mock-data.ts`, `app/globals.css`,
   `app/SourceSearchPanel.tsx`). It is tracked as ordinary source in the
   parent Clair repository; commit the synced mock from the parent repository.

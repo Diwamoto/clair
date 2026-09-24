@@ -14,9 +14,9 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/ProjectEditorWebBridgeTests.swift:7](/Users/daiki/Projects/clair/apple/ClairTests/ProjectEditorWebBridgeTests.swift:7) — `testChangeUsesUTF16PreEditRangesAndAdvancesOnce`
-- [apple/ClairTests/ProjectEditorWebBridgeTests.swift:31](/Users/daiki/Projects/clair/apple/ClairTests/ProjectEditorWebBridgeTests.swift:31) — `testStaleChangeDoesNotMutateAndCanBeResynchronized`
-- [apple/ClairTests/ProjectEditorWebBridgeTests.swift:64](/Users/daiki/Projects/clair/apple/ClairTests/ProjectEditorWebBridgeTests.swift:64) — `testSelectionOnlyChangeDoesNotAdvanceRevisionOrCaptureSnapshot`
+- [apple/ClairTests/ProjectEditorWebBridgeTests.swift:7](apple/ClairTests/ProjectEditorWebBridgeTests.swift:7) — `testChangeUsesUTF16PreEditRangesAndAdvancesOnce`
+- [apple/ClairTests/ProjectEditorWebBridgeTests.swift:31](apple/ClairTests/ProjectEditorWebBridgeTests.swift:31) — `testStaleChangeDoesNotMutateAndCanBeResynchronized`
+- [apple/ClairTests/ProjectEditorWebBridgeTests.swift:64](apple/ClairTests/ProjectEditorWebBridgeTests.swift:64) — `testSelectionOnlyChangeDoesNotAdvanceRevisionOrCaptureSnapshot`
 
 根拠：ProjectEditorWebBridgeModel の参照は定義とこの3テストだけ。製品の ProjectEditorTab.applyEditorChange は documentModel.apply(change.transaction()) を直接呼ぶ。テスト用の並行実装を検証している。
 
@@ -30,7 +30,7 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/ProjectEditorDocumentTests.swift:139](/Users/daiki/Projects/clair/apple/ClairTests/ProjectEditorDocumentTests.swift:139) — `testSnapshotReasonsAreExplicitBoundaries`
+- [apple/ClairTests/ProjectEditorDocumentTests.swift:139](apple/ClairTests/ProjectEditorDocumentTests.swift:139) — `testSnapshotReasonsAreExplicitBoundaries`
 
 根拠：自分で .initialLoad/.save/.diff を渡し、返却reasonとカウンター3を確認するだけ。実際の保存・diff境界から呼ばれたかは検証していない。
 
@@ -44,7 +44,7 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/ClairUpdateTests.swift:153](/Users/daiki/Projects/clair/apple/ClairTests/ClairUpdateTests.swift:153) — `testUpdateHelperContainsBoundedWaitAndRollbackPath`
+- [apple/ClairTests/ClairUpdateTests.swift:153](apple/ClairTests/ClairUpdateTests.swift:153) — `testUpdateHelperContainsBoundedWaitAndRollbackPath`
 
 根拠：old_moved=0、wait_count、mv の断片を contains で探すだけ。到達不能コードやコメントに残っていても成功する。
 
@@ -58,7 +58,7 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/AgentWorkflowTests.swift:7](/Users/daiki/Projects/clair/apple/ClairTests/AgentWorkflowTests.swift:7) — `testFixedProfilesExposeStableIdentityAndLaunchDetails`
+- [apple/ClairTests/AgentWorkflowTests.swift:7](apple/ClairTests/AgentWorkflowTests.swift:7) — `testFixedProfilesExposeStableIdentityAndLaunchDetails`
 
 根拠：allの順序、表示名、実行名、空arguments、候補モデル配列、スラッシュコマンドを定義どおり再掲している。
 
@@ -72,7 +72,7 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/TerminalTests.swift:9](/Users/daiki/Projects/clair/apple/ClairTests/TerminalTests.swift:9) — `testTerminalTextViewInitializesAndAcceptsTranscript`
+- [apple/ClairTests/TerminalTests.swift:9](apple/ClairTests/TerminalTests.swift:9) — `testTerminalTextViewInitializesAndAcceptsTranscript`
 
 根拠：stringへ代入した値を読み戻し、isEditable/isSelectableの定数を確認するだけ。
 
@@ -86,7 +86,7 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/ProjectNavigationTests.swift:219](/Users/daiki/Projects/clair/apple/ClairTests/ProjectNavigationTests.swift:219) — `testDebugDestinationIsIncludedInNavigationStrip`
+- [apple/ClairTests/ProjectNavigationTests.swift:219](apple/ClairTests/ProjectNavigationTests.swift:219) — `testDebugDestinationIsIncludedInNavigationStrip`
 
 根拠：WorkspaceActivity.navigationCases の値と debug.navigationEntry を再掲。実際のナビゲーションUIを操作していない。
 
@@ -100,9 +100,9 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [crates/clair-ptyhost/src/main.rs:384](/Users/daiki/Projects/clair/crates/clair-ptyhost/src/main.rs:384) — `spawn_options_have_a_safe_terminal_default`
-- [crates/clair-ptyhost/src/main.rs:379](/Users/daiki/Projects/clair/crates/clair-ptyhost/src/main.rs:379) — `smoke_response_is_versioned_and_stable`
-- [crates/clair-core/src/lib.rs:32](/Users/daiki/Projects/clair/crates/clair-core/src/lib.rs:32) — `rust_and_c_abi_smoke_values_match`
+- [crates/clair-ptyhost/src/main.rs:384](crates/clair-ptyhost/src/main.rs:384) — `spawn_options_have_a_safe_terminal_default`
+- [crates/clair-ptyhost/src/main.rs:379](crates/clair-ptyhost/src/main.rs:379) — `smoke_response_is_versioned_and_stable`
+- [crates/clair-core/src/lib.rs:32](crates/clair-core/src/lib.rs:32) — `rust_and_c_abi_smoke_values_match`
 
 根拠：SpawnOptionsの値を同じDEFAULT定数と比較し、smokeは定数返却関数を確認する。Rust内からextern C関数を呼んでもSwiftとのリンクを試していない。
 
@@ -116,7 +116,7 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/ClairRuntimeProfileTests.swift:35](/Users/daiki/Projects/clair/apple/ClairTests/ClairRuntimeProfileTests.swift:35) — `testPreferencesDomainsDoNotShareValues`
+- [apple/ClairTests/ClairRuntimeProfileTests.swift:35](apple/ClairTests/ClairRuntimeProfileTests.swift:35) — `testPreferencesDomainsDoNotShareValues`
 
 根拠：Clairの設定サービスを通さず、UserDefaults(suiteName:) と standard に書き込む。独自ロジックはホストbundle ID一致だけ。
 
@@ -130,7 +130,7 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/ClairRuntimeProfileTests.swift:58](/Users/daiki/Projects/clair/apple/ClairTests/ClairRuntimeProfileTests.swift:58) — `testApplicationSupportDirectoryCanBeCreated`
+- [apple/ClairTests/ClairRuntimeProfileTests.swift:58](apple/ClairTests/ClairRuntimeProfileTests.swift:58) — `testApplicationSupportDirectoryCanBeCreated`
 
 根拠：BootstrapState.ensureApplicationSupportDirectory は createDirectory を直接呼ぶだけ。同じ確認が SwiftRustSmoke.validateApplicationSupportCreation にもある。
 
@@ -144,7 +144,7 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/AgentActivityTests.swift:188](/Users/daiki/Projects/clair/apple/ClairTests/AgentActivityTests.swift:188) — `testLoadingOversizedHistoryIsNormalizedToBound`
+- [apple/ClairTests/AgentActivityTests.swift:188](apple/ClairTests/AgentActivityTests.swift:188) — `testLoadingOversizedHistoryIsNormalizedToBound`
 
 根拠：store.save(snapshot) がすでに normalized(maximumActivityCount:) を実行するので、loadするファイルには2件しかない。通常append上限テストと同じ保存上限を繰り返している。
 
@@ -158,8 +158,8 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/ProjectEditorSuggestionTests.swift:7](/Users/daiki/Projects/clair/apple/ClairTests/ProjectEditorSuggestionTests.swift:7) — `testFakeProviderCreatesArbitraryInsertionDeletionAndReplacementEdits`
-- [apple/ClairTests/ProjectEditorSuggestionTests.swift:136](/Users/daiki/Projects/clair/apple/ClairTests/ProjectEditorSuggestionTests.swift:136) — `testProposalPreservesTrailingNewlineAndUnicodeInFullApplication`
+- [apple/ClairTests/ProjectEditorSuggestionTests.swift:7](apple/ClairTests/ProjectEditorSuggestionTests.swift:7) — `testFakeProviderCreatesArbitraryInsertionDeletionAndReplacementEdits`
+- [apple/ClairTests/ProjectEditorSuggestionTests.swift:136](apple/ClairTests/ProjectEditorSuggestionTests.swift:136) — `testProposalPreservesTrailingNewlineAndUnicodeInFullApplication`
 
 根拠：FakeSuggestionProviderはmakeProposalを呼ぶだけで製品呼び出しがない。ただし最初のテストは実makeProposalの挿入・削除・置換を通るため、単なるモック自己検証とは言い切れない。
 
@@ -173,7 +173,7 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/ProjectEditorSuggestionTests.swift:83](/Users/daiki/Projects/clair/apple/ClairTests/ProjectEditorSuggestionTests.swift:83) — `testRejectDoesNotMutateAndPartialLineSelectionReturnsUIError`
+- [apple/ClairTests/ProjectEditorSuggestionTests.swift:83](apple/ClairTests/ProjectEditorSuggestionTests.swift:83) — `testRejectDoesNotMutateAndPartialLineSelectionReturnsUIError`
 
 根拠：applier.reject(proposal) は .rejected を返すだけで document を受け取らない。無関係なdocument.contentが変わらない確認は空振り。
 
@@ -187,7 +187,7 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/ProjectEditorSuggestionTests.swift:107](/Users/daiki/Projects/clair/apple/ClairTests/ProjectEditorSuggestionTests.swift:107) — `testOldProposalIsRejectedAfterManualExternalAndUndoRevisionChanges`
+- [apple/ClairTests/ProjectEditorSuggestionTests.swift:107](apple/ClairTests/ProjectEditorSuggestionTests.swift:107) — `testOldProposalIsRejectedAfterManualExternalAndUndoRevisionChanges`
 
 根拠：approveは変更原因を参照せずrevisionを比較する。manual/externalはともに異なる本文・進んだrevisionを用意して同じ拒否へ入る。
 
@@ -201,10 +201,10 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/TerminalTests.swift:223](/Users/daiki/Projects/clair/apple/ClairTests/TerminalTests.swift:223) — `testTerminalTabPersistsStableSessionID`
-- [apple/ClairTests/TerminalTests.swift:233](/Users/daiki/Projects/clair/apple/ClairTests/TerminalTests.swift:233) — `testAgentTerminalTabPersistsProfileMetadata`
-- [apple/ClairTests/ManagedWorktreeTests.swift:235](/Users/daiki/Projects/clair/apple/ClairTests/ManagedWorktreeTests.swift:235) — `testManagedTerminalRootAndWorktreeIdentityRoundTrip`
-- [apple/ClairTests/AgentWorkflowTests.swift:101](/Users/daiki/Projects/clair/apple/ClairTests/AgentWorkflowTests.swift:101) — `testAgentSessionLifecycleRoundTripsThroughCodable`
+- [apple/ClairTests/TerminalTests.swift:223](apple/ClairTests/TerminalTests.swift:223) — `testTerminalTabPersistsStableSessionID`
+- [apple/ClairTests/TerminalTests.swift:233](apple/ClairTests/TerminalTests.swift:233) — `testAgentTerminalTabPersistsProfileMetadata`
+- [apple/ClairTests/ManagedWorktreeTests.swift:235](apple/ClairTests/ManagedWorktreeTests.swift:235) — `testManagedTerminalRootAndWorktreeIdentityRoundTrip`
+- [apple/ClairTests/AgentWorkflowTests.swift:101](apple/ClairTests/AgentWorkflowTests.swift:101) — `testAgentSessionLifecycleRoundTripsThroughCodable`
 
 根拠：ProjectPaneTabとAgentSessionを複数ファイルでencode→decode。Managedのsurface復元にはdecodedTabではなく元のtabを渡しており、保存と復元の接続も弱い。
 
@@ -218,8 +218,8 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/NativeEditorTests.swift:38](/Users/daiki/Projects/clair/apple/ClairTests/NativeEditorTests.swift:38) — `testEditorSavesOnlyAfterExplicitSaveAndUndoRestoresCleanState`
-- [apple/ClairTests/NativeEditorTests.swift:61](/Users/daiki/Projects/clair/apple/ClairTests/NativeEditorTests.swift:61) — `testEditorPreservesUnicodeEmojiAndCombiningTextAsUTF8`
+- [apple/ClairTests/NativeEditorTests.swift:38](apple/ClairTests/NativeEditorTests.swift:38) — `testEditorSavesOnlyAfterExplicitSaveAndUndoRestoresCleanState`
+- [apple/ClairTests/NativeEditorTests.swift:61](apple/ClairTests/NativeEditorTests.swift:61) — `testEditorPreservesUnicodeEmojiAndCombiningTextAsUTF8`
 
 根拠：どちらもreplaceContent→saveの同じ経路。Unicodeバイト比較を通常保存ケースに入れれば別の空ファイルsetupは不要。
 
@@ -233,7 +233,7 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/NativeEditorTests.swift:148](/Users/daiki/Projects/clair/apple/ClairTests/NativeEditorTests.swift:148) — `testSyntaxHighlighterAppliesOneDarkColorsToTextStorage`
+- [apple/ClairTests/NativeEditorTests.swift:148](apple/ClairTests/NativeEditorTests.swift:148) — `testSyntaxHighlighterAppliesOneDarkColorsToTextStorage`
 
 根拠：One Darkの3色をnsRGBの数値で再掲し、製品とテストの両方にデザイントークンがある。
 
@@ -247,10 +247,10 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/NativeEditorTests.swift:269](/Users/daiki/Projects/clair/apple/ClairTests/NativeEditorTests.swift:269) — `testWatcherReloadsAnExternalRewriteWhenTheTabIsClean`
-- [apple/ClairTests/NativeEditorTests.swift:286](/Users/daiki/Projects/clair/apple/ClairTests/NativeEditorTests.swift:286) — `testWatcherDoesNotClobberUnsavedEditsOnExternalRewrite`
-- [apple/ClairTests/NativeEditorTests.swift:188](/Users/daiki/Projects/clair/apple/ClairTests/NativeEditorTests.swift:188) — `testExternalRewriteWinsWhenTheTabHasNoUnsavedEdits`
-- [apple/ClairTests/NativeEditorTests.swift:200](/Users/daiki/Projects/clair/apple/ClairTests/NativeEditorTests.swift:200) — `testExternalRewriteDoesNotClobberUnsavedEdits`
+- [apple/ClairTests/NativeEditorTests.swift:269](apple/ClairTests/NativeEditorTests.swift:269) — `testWatcherReloadsAnExternalRewriteWhenTheTabIsClean`
+- [apple/ClairTests/NativeEditorTests.swift:286](apple/ClairTests/NativeEditorTests.swift:286) — `testWatcherDoesNotClobberUnsavedEditsOnExternalRewrite`
+- [apple/ClairTests/NativeEditorTests.swift:188](apple/ClairTests/NativeEditorTests.swift:188) — `testExternalRewriteWinsWhenTheTabHasNoUnsavedEdits`
+- [apple/ClairTests/NativeEditorTests.swift:200](apple/ClairTests/NativeEditorTests.swift:200) — `testExternalRewriteDoesNotClobberUnsavedEdits`
 
 根拠：clean/dirtyの同期テストと非同期テストが重なる。ただし同期refreshだけではwatcher接続を保証できない。
 
@@ -264,10 +264,10 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/NativeEditorTests.swift:351](/Users/daiki/Projects/clair/apple/ClairTests/NativeEditorTests.swift:351) — `testMissingFileOpensEmptyEditableTab`
-- [apple/ClairTests/NativeEditorTests.swift:366](/Users/daiki/Projects/clair/apple/ClairTests/NativeEditorTests.swift:366) — `testWatcherLoadsFileCreatedAfterOpeningMissingTab`
-- [apple/ClairTests/NativeEditorTests.swift:234](/Users/daiki/Projects/clair/apple/ClairTests/NativeEditorTests.swift:234) — `testExternalDeletionRetainsTheTabAndItsBufferContent`
-- [apple/ClairTests/NativeEditorTests.swift:307](/Users/daiki/Projects/clair/apple/ClairTests/NativeEditorTests.swift:307) — `testWatcherKeepsWatchingAfterExternalDeletionAndRecreation`
+- [apple/ClairTests/NativeEditorTests.swift:351](apple/ClairTests/NativeEditorTests.swift:351) — `testMissingFileOpensEmptyEditableTab`
+- [apple/ClairTests/NativeEditorTests.swift:366](apple/ClairTests/NativeEditorTests.swift:366) — `testWatcherLoadsFileCreatedAfterOpeningMissingTab`
+- [apple/ClairTests/NativeEditorTests.swift:234](apple/ClairTests/NativeEditorTests.swift:234) — `testExternalDeletionRetainsTheTabAndItsBufferContent`
+- [apple/ClairTests/NativeEditorTests.swift:307](apple/ClairTests/NativeEditorTests.swift:307) — `testWatcherKeepsWatchingAfterExternalDeletionAndRecreation`
 
 根拠：同じ初期missing状態／削除後buffer保持を、同期とwatcherケースで別々にfixture化している。
 
@@ -281,8 +281,8 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/ProjectEditorDiffModelTests.swift:91](/Users/daiki/Projects/clair/apple/ClairTests/ProjectEditorDiffModelTests.swift:91) — `testCoordinatorCanCancelAndReturnsCurrentRevisionResult`
-- [apple/ClairTests/ProjectEditorDiffModelTests.swift:122](/Users/daiki/Projects/clair/apple/ClairTests/ProjectEditorDiffModelTests.swift:122) — `testCoordinatorDiscardsAStaleCalculationAfterCancellation`
+- [apple/ClairTests/ProjectEditorDiffModelTests.swift:91](apple/ClairTests/ProjectEditorDiffModelTests.swift:91) — `testCoordinatorCanCancelAndReturnsCurrentRevisionResult`
+- [apple/ClairTests/ProjectEditorDiffModelTests.swift:122](apple/ClairTests/ProjectEditorDiffModelTests.swift:122) — `testCoordinatorDiscardsAStaleCalculationAfterCancellation`
 
 根拠：前者は仕事のない状態でcancelするだけ。後者は1ms sleepで「計算が開始済みかつ未完了」と仮定し、速い／遅い実行環境の両方で破綻し得る。
 
@@ -296,7 +296,7 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/ProjectEditorDiffModelTests.swift:103](/Users/daiki/Projects/clair/apple/ClairTests/ProjectEditorDiffModelTests.swift:103) — `testTenThousandLineDiffRunsInBackgroundWithTwoThousandReplacements`
+- [apple/ClairTests/ProjectEditorDiffModelTests.swift:103](apple/ClairTests/ProjectEditorDiffModelTests.swift:103) — `testTenThousandLineDiffRunsInBackgroundWithTwoThousandReplacements`
 
 根拠：async関数を呼びDateで10秒未満を測るだけで、メインスレッドを塞いでいないことは検証しない。共有CIの負荷が結果に混ざる。
 
@@ -310,8 +310,8 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/ProjectEditorWebBridgeTests.swift:83](/Users/daiki/Projects/clair/apple/ClairTests/ProjectEditorWebBridgeTests.swift:83) — `testWebEnvelopeRoundTripsWithoutFullContent`
-- [apple/ClairTests/ProjectEditorWebBridgeTests.swift:99](/Users/daiki/Projects/clair/apple/ClairTests/ProjectEditorWebBridgeTests.swift:99) — `testSelectionEnvelopeContainsNoDocumentOrRevisionFields`
+- [apple/ClairTests/ProjectEditorWebBridgeTests.swift:83](apple/ClairTests/ProjectEditorWebBridgeTests.swift:83) — `testWebEnvelopeRoundTripsWithoutFullContent`
+- [apple/ClairTests/ProjectEditorWebBridgeTests.swift:99](apple/ClairTests/ProjectEditorWebBridgeTests.swift:99) — `testSelectionEnvelopeContainsNoDocumentOrRevisionFields`
 
 根拠：自動合成Codable同士の往復はキー名を双方で変更しても通る。contains検索はJSONキーではなく値にも反応する。messageBodyからの実際の入口を通っていない。
 
@@ -325,9 +325,9 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/ProjectKernelTests.swift:444](/Users/daiki/Projects/clair/apple/ClairTests/ProjectKernelTests.swift:444) — `testProjectSwitchKeepsFileTreeSelectionAndTabsIsolated`
-- [apple/ClairTests/ProjectKernelTests.swift:531](/Users/daiki/Projects/clair/apple/ClairTests/ProjectKernelTests.swift:531) — `testThreeProjectPaneLayoutsRemainIsolatedAcrossRestart`
-- [apple/ClairTests/ProjectKernelTests.swift:579](/Users/daiki/Projects/clair/apple/ClairTests/ProjectKernelTests.swift:579) — `testWorkspaceActivitySelectionPersistsPerProjectAcrossRestart`
+- [apple/ClairTests/ProjectKernelTests.swift:444](apple/ClairTests/ProjectKernelTests.swift:444) — `testProjectSwitchKeepsFileTreeSelectionAndTabsIsolated`
+- [apple/ClairTests/ProjectKernelTests.swift:531](apple/ClairTests/ProjectKernelTests.swift:531) — `testThreeProjectPaneLayoutsRemainIsolatedAcrossRestart`
+- [apple/ClairTests/ProjectKernelTests.swift:579](apple/ClairTests/ProjectKernelTests.swift:579) — `testWorkspaceActivitySelectionPersistsPerProjectAcrossRestart`
 
 根拠：Projectを作って切替・復元するsetupが3本。3番目のProjectは同じID辞書の隔離確認を繰り返している。
 
@@ -341,9 +341,9 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/ProjectKernelTests.swift:150](/Users/daiki/Projects/clair/apple/ClairTests/ProjectKernelTests.swift:150) — `testCommandRegistryExposesTypedRiskAndAvailabilityPreflight`
-- [apple/ClairTests/CommandAdapterTests.swift:28](/Users/daiki/Projects/clair/apple/ClairTests/CommandAdapterTests.swift:28) — `testRegistryCoversAllTypedCommandsAndCodecPreservesID`
-- [apple/ClairTests/ProjectKernelTests.swift:210](/Users/daiki/Projects/clair/apple/ClairTests/ProjectKernelTests.swift:210) — `testHumanCommandSurfacePreservesUnavailableReasonAndDisplaysError`
+- [apple/ClairTests/ProjectKernelTests.swift:150](apple/ClairTests/ProjectKernelTests.swift:150) — `testCommandRegistryExposesTypedRiskAndAvailabilityPreflight`
+- [apple/ClairTests/CommandAdapterTests.swift:28](apple/ClairTests/CommandAdapterTests.swift:28) — `testRegistryCoversAllTypedCommandsAndCodecPreservesID`
+- [apple/ClairTests/ProjectKernelTests.swift:210](apple/ClairTests/ProjectKernelTests.swift:210) — `testHumanCommandSurfacePreservesUnavailableReasonAndDisplaysError`
 
 根拠：Set(registry.descriptors.map(id)) == Set(allCases)が2か所。missing Projectのpreflightもsurfaceの不可用テストと重複。
 
@@ -357,7 +357,7 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/ProjectKernelTests.swift:174](/Users/daiki/Projects/clair/apple/ClairTests/ProjectKernelTests.swift:174) — `testHumanCommandSurfacesDispatchTheSameCommandID`
+- [apple/ClairTests/ProjectKernelTests.swift:174](apple/ClairTests/ProjectKernelTests.swift:174) — `testHumanCommandSurfacesDispatchTheSameCommandID`
 
 根拠：同じsurface.invokeに .commandWindow/.menu/.shortcut を渡すだけ。sourceは記録に使われ、実際のmenu/shortcutのハンドラーを操作しない。
 
@@ -371,7 +371,7 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/ProjectKernelTests.swift:8](/Users/daiki/Projects/clair/apple/ClairTests/ProjectKernelTests.swift:8) — `testOpensGitNonGitAndTemporaryFoldersInOneWorkspace`
+- [apple/ClairTests/ProjectKernelTests.swift:8](apple/ClairTests/ProjectKernelTests.swift:8) — `testOpensGitNonGitAndTemporaryFoldersInOneWorkspace`
 
 根拠：3つとも同じ一時ディレクトリ配下。Gitも.gitディレクトリを置くだけ。plainRootとtemporaryRootには名前以外の差がない。
 
@@ -385,8 +385,8 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/ProjectGitTests.swift:8](/Users/daiki/Projects/clair/apple/ClairTests/ProjectGitTests.swift:8) — `testStatusSeparatesStagedUnstagedAndUntrackedChanges`
-- [apple/ClairTests/ProjectGitTests.swift:33](/Users/daiki/Projects/clair/apple/ClairTests/ProjectGitTests.swift:33) — `testDiffStageUnstageAndCommitPreserveStagedBoundary`
+- [apple/ClairTests/ProjectGitTests.swift:8](apple/ClairTests/ProjectGitTests.swift:8) — `testStatusSeparatesStagedUnstagedAndUntrackedChanges`
+- [apple/ClairTests/ProjectGitTests.swift:33](apple/ClairTests/ProjectGitTests.swift:33) — `testDiffStageUnstageAndCommitPreserveStagedBoundary`
 
 根拠：同じbaseline repositoryでstatus→stageを繰り返す。ただし前者のstaged後に再編集して両側に同じpathが存在するケースは固有。
 
@@ -400,8 +400,8 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/ProjectGitTests.swift:387](/Users/daiki/Projects/clair/apple/ClairTests/ProjectGitTests.swift:387) — `testCleanupCancellationLeavesManagedWorktreeInPlace`
-- [apple/ClairTests/ManagedWorktreeTests.swift:84](/Users/daiki/Projects/clair/apple/ClairTests/ManagedWorktreeTests.swift:84) — `testCleanupRequiresCleanTargetNoActiveSessionAndExplicitConfirmation`
+- [apple/ClairTests/ProjectGitTests.swift:387](apple/ClairTests/ProjectGitTests.swift:387) — `testCleanupCancellationLeavesManagedWorktreeInPlace`
+- [apple/ClairTests/ManagedWorktreeTests.swift:84](apple/ClairTests/ManagedWorktreeTests.swift:84) — `testCleanupRequiresCleanTargetNoActiveSessionAndExplicitConfirmation`
 
 根拠：prepareCleanup後にconfirmCleanupを呼ばず存在を確認する。UIの取消処理は操作していない。同じprepareはManagedWorktreeTestsで何度も通る。
 
@@ -415,8 +415,8 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/AgentActivityTests.swift:38](/Users/daiki/Projects/clair/apple/ClairTests/AgentActivityTests.swift:38) — `testHistoryIsCodableAndCanBeQueriedByProjectAndSessionScope`
-- [apple/ClairTests/AgentActivityTests.swift:91](/Users/daiki/Projects/clair/apple/ClairTests/AgentActivityTests.swift:91) — `testStorePersistsVersionedSnapshotAtomicallyAndPreservesMuteState`
+- [apple/ClairTests/AgentActivityTests.swift:38](apple/ClairTests/AgentActivityTests.swift:38) — `testHistoryIsCodableAndCanBeQueriedByProjectAndSessionScope`
+- [apple/ClairTests/AgentActivityTests.swift:91](apple/ClairTests/AgentActivityTests.swift:91) — `testStorePersistsVersionedSnapshotAtomicallyAndPreservesMuteState`
 
 根拠：queryテストがJSON往復を済ませたrestoredに対してフィルタを確認。永続化はstoreテストが別にある。
 
@@ -430,10 +430,10 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/AgentWorkflowTests.swift:30](/Users/daiki/Projects/clair/apple/ClairTests/AgentWorkflowTests.swift:30) — `testProfilePassesSelectedModelAsQuotedLaunchArguments`
-- [apple/ClairTests/AgentWorkflowTests.swift:44](/Users/daiki/Projects/clair/apple/ClairTests/AgentWorkflowTests.swift:44) — `testProfileBuildsProjectRootShellCommandWithQuotedValues`
-- [apple/ClairTests/AgentWorkflowTests.swift:58](/Users/daiki/Projects/clair/apple/ClairTests/AgentWorkflowTests.swift:58) — `testShellCommandDoesNotExecuteCwdInjection`
-- [apple/ClairTests/AgentWorkflowTests.swift:88](/Users/daiki/Projects/clair/apple/ClairTests/AgentWorkflowTests.swift:88) — `testShellCommandQuotesArgumentsIndependently`
+- [apple/ClairTests/AgentWorkflowTests.swift:30](apple/ClairTests/AgentWorkflowTests.swift:30) — `testProfilePassesSelectedModelAsQuotedLaunchArguments`
+- [apple/ClairTests/AgentWorkflowTests.swift:44](apple/ClairTests/AgentWorkflowTests.swift:44) — `testProfileBuildsProjectRootShellCommandWithQuotedValues`
+- [apple/ClairTests/AgentWorkflowTests.swift:58](apple/ClairTests/AgentWorkflowTests.swift:58) — `testShellCommandDoesNotExecuteCwdInjection`
+- [apple/ClairTests/AgentWorkflowTests.swift:88](apple/ClairTests/AgentWorkflowTests.swift:88) — `testShellCommandQuotesArgumentsIndependently`
 
 根拠：3本がシェル生成文字列の完全一致。等価な引用方法への変更でも壊れる。実shellテストはcwdのsemicolonだけを検証。
 
@@ -447,7 +447,7 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/TerminalTests.swift:45](/Users/daiki/Projects/clair/apple/ClairTests/TerminalTests.swift:45) — `testTerminalGridKeepsScrollbackAndTerminalTextViewGrowsDocumentHeight`
+- [apple/ClairTests/TerminalTests.swift:45](apple/ClairTests/TerminalTests.swift:45) — `testTerminalGridKeepsScrollbackAndTerminalTextViewGrowsDocumentHeight`
 
 根拠：inset*2 + displayedRows*cellSizeという実装の式を期待値として再掲。
 
@@ -461,9 +461,9 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:609](/Users/daiki/Projects/clair/packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:609) — `mobileHostAppliesInputInArrivalOrderAndDoesNotResizeFromViewport`
-- [packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:104](/Users/daiki/Projects/clair/packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:104) — `inputSequencerUsesArrivalOrderAndMakesDuplicatesIdempotent`
-- [packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:910](/Users/daiki/Projects/clair/packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:910) — `mobileHostDeliversFreshAcceptedOperationsToTheApplicationBridge`
+- [packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:609](packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:609) — `mobileHostAppliesInputInArrivalOrderAndDoesNotResizeFromViewport`
+- [packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:104](packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:104) — `inputSequencerUsesArrivalOrderAndMakesDuplicatesIdempotent`
+- [packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:910](packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:910) — `mobileHostDeliversFreshAcceptedOperationsToTheApplicationBridge`
 
 根拠：pure sequencer、host返値、host handler配送で重複を確認。host順序テスト末尾のreadOnlySequencerはhostを迂回し、既存権限拒否テストとも重複する。viewport/resizeはそもそも操作していない。
 
@@ -477,9 +477,9 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:186](/Users/daiki/Projects/clair/packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:186) — `agentControlContractExposesFactualStateAndCapabilities`
-- [packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:874](/Users/daiki/Projects/clair/packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:874) — `mobileRequestFactoryProjectsSharedControlMethods`
-- [packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:895](/Users/daiki/Projects/clair/packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:895) — `mobileRequestFactoryEncodesAgentInput`
+- [packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:186](packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:186) — `agentControlContractExposesFactualStateAndCapabilities`
+- [packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:874](packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:874) — `mobileRequestFactoryProjectsSharedControlMethods`
+- [packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:895](packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:895) — `mobileRequestFactoryEncodesAgentInput`
 
 根拠：agent descriptorの入力state/model/capabilitiesの読み戻し、method定数、factoryのJSON往復が中心。実際のmethod routingや権限処理まで届かない。
 
@@ -493,8 +493,8 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:824](/Users/daiki/Projects/clair/packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:824) — `mobilePairingLinkDeepLinkRoundTripsIdentityAndTransport`
-- [packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:852](/Users/daiki/Projects/clair/packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:852) — `mobileAttentionPayloadContainsOnlyOpaqueWakeMetadata`
+- [packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:824](packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:824) — `mobilePairingLinkDeepLinkRoundTripsIdentityAndTransport`
+- [packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:852](packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:852) — `mobileAttentionPayloadContainsOnlyOpaqueWakeMetadata`
 
 根拠：pairing linkにdevice_token/private_keyを入力していない。notificationにもprompt/cwd/terminal/secretを入力していない。JSON文字列にその単語がないことは漏洩経路を検証しない。
 
@@ -508,7 +508,7 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:731](/Users/daiki/Projects/clair/packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:731) — `mobileClientKeepsViewportLocalAndRecoversFromStreamGaps`
+- [packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:731](packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:731) — `mobileClientKeepsViewportLocalAndRecoversFromStreamGaps`
 
 根拠：setLocalViewport後に同じ値を読み戻すだけで、送信処理やremote resizeがないことは検証しない。残りのcursor/gap/scrollbackは実アルゴリズム。
 
@@ -522,8 +522,8 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:682](/Users/daiki/Projects/clair/packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:682) — `mobileRPCConnectionRequiresAuthenticationBeforeProjectAccess`
-- [packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:998](/Users/daiki/Projects/clair/packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:998) — `mobileListenerAndClientCompleteLoopbackAuthentication`
+- [packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:682](packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:682) — `mobileRPCConnectionRequiresAuthenticationBeforeProjectAccess`
+- [packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:998](packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:998) — `mobileListenerAndClientCompleteLoopbackAuthentication`
 
 根拠：RPC認証前拒否テストは拒否確認後にpair/auth正常系を最後まで行う。同じ正常系は実listener/clientのloopbackで通る。
 
@@ -537,10 +537,10 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [crates/clair-ptyhost/tests/live_shell.rs:119](/Users/daiki/Projects/clair/crates/clair-ptyhost/tests/live_shell.rs:119) — `shell_command_round_trips_raw_output_and_resize`
-- [crates/clair-ptyhost/tests/live_shell.rs:139](/Users/daiki/Projects/clair/crates/clair-ptyhost/tests/live_shell.rs:139) — `shell_receives_clair_terminal_environment`
-- [crates/clair-ptyhost/tests/live_shell.rs:162](/Users/daiki/Projects/clair/crates/clair-ptyhost/tests/live_shell.rs:162) — `shell_does_not_inherit_stale_host_environment`
-- [crates/clair-ptyhost/tests/live_shell.rs:221](/Users/daiki/Projects/clair/crates/clair-ptyhost/tests/live_shell.rs:221) — `shell_preserves_cjk_and_osc_bytes`
+- [crates/clair-ptyhost/tests/live_shell.rs:119](crates/clair-ptyhost/tests/live_shell.rs:119) — `shell_command_round_trips_raw_output_and_resize`
+- [crates/clair-ptyhost/tests/live_shell.rs:139](crates/clair-ptyhost/tests/live_shell.rs:139) — `shell_receives_clair_terminal_environment`
+- [crates/clair-ptyhost/tests/live_shell.rs:162](crates/clair-ptyhost/tests/live_shell.rs:162) — `shell_does_not_inherit_stale_host_environment`
+- [crates/clair-ptyhost/tests/live_shell.rs:221](crates/clair-ptyhost/tests/live_shell.rs:221) — `shell_preserves_cjk_and_osc_bytes`
 
 根拠：4本とも新しい/bin/shとptyhostを起動。出力/resize/CJK/OSCは1セッションで確認でき、正常environmentと汚染environmentも同じ起動で検証できる。
 
@@ -554,7 +554,7 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [crates/clair-ptyhost/tests/live_shell.rs:241](/Users/daiki/Projects/clair/crates/clair-ptyhost/tests/live_shell.rs:241) — `terminal_flood_completes_without_host_crash`
+- [crates/clair-ptyhost/tests/live_shell.rs:241](crates/clair-ptyhost/tests/live_shell.rs:241) — `terminal_flood_completes_without_host_crash`
 
 根拠：100行出して末尾marker2つを探すだけ。全行配送・queue上限・メモリ・実行時間を確認しない。
 
@@ -568,8 +568,8 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [.agents/skills/clair-issue-executor/scripts/test_item_lease.py:136](/Users/daiki/Projects/clair/.agents/skills/clair-issue-executor/scripts/test_item_lease.py:136) — `test_independent_items_can_be_leased_in_parallel`
-- [.agents/skills/clair-issue-executor/scripts/test_item_lease.py:84](/Users/daiki/Projects/clair/.agents/skills/clair-issue-executor/scripts/test_item_lease.py:84) — `test_one_worktree_and_one_item_are_exclusive`
+- [.agents/skills/clair-issue-executor/scripts/test_item_lease.py:136](.agents/skills/clair-issue-executor/scripts/test_item_lease.py:136) — `test_independent_items_can_be_leased_in_parallel`
+- [.agents/skills/clair-issue-executor/scripts/test_item_lease.py:84](.agents/skills/clair-issue-executor/scripts/test_item_lease.py:84) — `test_one_worktree_and_one_item_are_exclusive`
 
 根拠：exclusiveテストがすでにmainのP01とlinked worktreeのP02を同時保持する。parallelテストもsubprocessを逐次実行し、同時競合を起こしていない。
 
@@ -583,10 +583,10 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 対象：
 
-- [apple/ClairTests/ProjectEditorDiffModelTests.swift:91](/Users/daiki/Projects/clair/apple/ClairTests/ProjectEditorDiffModelTests.swift:91) — `testCoordinatorCanCancelAndReturnsCurrentRevisionResult`
-- [apple/ClairTests/ProjectEditorDiffModelTests.swift:48](/Users/daiki/Projects/clair/apple/ClairTests/ProjectEditorDiffModelTests.swift:48) — `testStableIDsUseTheDocumentPairAndBothRevisions`
-- [apple/ClairTests/ProjectEditorSuggestionTests.swift:31](/Users/daiki/Projects/clair/apple/ClairTests/ProjectEditorSuggestionTests.swift:31) — `testLineApprovalAppliesAtomicallyAndOneUndoRestoresExactUnicodeBytes`
-- [apple/ClairTests/ProjectKernelTests.swift:242](/Users/daiki/Projects/clair/apple/ClairTests/ProjectKernelTests.swift:242) — `testConfigurableShortcutRejectsInvalidAndConflictingMappings`
+- [apple/ClairTests/ProjectEditorDiffModelTests.swift:91](apple/ClairTests/ProjectEditorDiffModelTests.swift:91) — `testCoordinatorCanCancelAndReturnsCurrentRevisionResult`
+- [apple/ClairTests/ProjectEditorDiffModelTests.swift:48](apple/ClairTests/ProjectEditorDiffModelTests.swift:48) — `testStableIDsUseTheDocumentPairAndBothRevisions`
+- [apple/ClairTests/ProjectEditorSuggestionTests.swift:31](apple/ClairTests/ProjectEditorSuggestionTests.swift:31) — `testLineApprovalAppliesAtomicallyAndOneUndoRestoresExactUnicodeBytes`
+- [apple/ClairTests/ProjectKernelTests.swift:242](apple/ClairTests/ProjectKernelTests.swift:242) — `testConfigurableShortcutRejectsInvalidAndConflictingMappings`
 
 根拠：diff stable-IDテストのhunkID非nilは別テストと重なる。line approvalのremaining edit ID変化は、残proposalが正しく適用できることより弱い。shortcutのreserved2件は同じ集合判定。
 
@@ -598,7 +598,7 @@ Dは現テストをそのまま削除できる候補、Mはassert移植・統合
 
 ## S01 — 手書きの別経路app-linkビルドを削除
 
-対象：[scripts/smoke-app-link.sh](/Users/daiki/Projects/clair/scripts/smoke-app-link.sh:1)、[Makefileのsmoke-app-link](/Users/daiki/Projects/clair/Makefile:68)。
+対象：[scripts/smoke-app-link.sh](scripts/smoke-app-link.sh:1)、[Makefileのsmoke-app-link](Makefile:68)。
 
 Stable/Devをswiftcでソース列挙して2回リンクするが、実際のXcode targetとは別のビルドグラフ。make ciでは実アプリ両channelのビルドとbundleのRust symbol確認も行う。手書きリストは現行のMobileControl／WebBridge／Debug等のソースグラフに追随しておらず、独立の保守対象になっている。
 
@@ -606,7 +606,7 @@ Stable/Devをswiftcでソース列挙して2回リンクするが、実際のXco
 
 ## S02 — 独立Swift/Rust smokeをdesktop XCTestに集約
 
-対象：[scripts/smoke-swift-rust.sh](/Users/daiki/Projects/clair/scripts/smoke-swift-rust.sh:1)、[apple/Smoke/SwiftRustSmoke.swift](/Users/daiki/Projects/clair/apple/Smoke/SwiftRustSmoke.swift:1)、[ClairRuntimeProfileTests.testRustCoreSmokeCall](/Users/daiki/Projects/clair/apple/ClairTests/ClairRuntimeProfileTests.swift:82)。
+対象：[scripts/smoke-swift-rust.sh](scripts/smoke-swift-rust.sh:1)、[apple/Smoke/SwiftRustSmoke.swift](apple/Smoke/SwiftRustSmoke.swift:1)、[ClairRuntimeProfileTests.testRustCoreSmokeCall](apple/ClairTests/ClairRuntimeProfileTests.swift:82)。
 
 現在はSwift実行体をStable/Dev用に別々にコンパイルし、profileの定数、ディレクトリ作成、同じFFI返値を検証する。FFI実呼び出しはdesktop XCTestでも行われ、実Stable/Dev bundleのsymbolもsmoke-bundlesが見る。
 
@@ -614,7 +614,7 @@ Stable/Devをswiftcでソース列挙して2回リンクするが、実際のXco
 
 ## S03 — workspace検査の重複と文字列判定を縮小
 
-対象：[scripts/check-workspace.sh](/Users/daiki/Projects/clair/scripts/check-workspace.sh:6)、[scripts/validate-xcode-project.rb](/Users/daiki/Projects/clair/scripts/validate-xcode-project.rb:15)。
+対象：[scripts/check-workspace.sh](scripts/check-workspace.sh:6)、[scripts/validate-xcode-project.rb](scripts/validate-xcode-project.rb:15)。
 
 project.pbxprojのplutil -lintは直後のRuby内plutil -convert jsonと重複するため削除候補。xcconfig内PRODUCT_BUNDLE_IDENTIFIERのgrep2本は実bundleの完全一致検査へ集約できる。特にStableのgrepはDev IDも部分一致し得る。失うのはテキストの置き場所・書式の確認で、最終的なbundle ID不良はsmoke-bundlesで捕捉する。
 
@@ -622,7 +622,7 @@ project.pbxprojのplutil -lintは直後のRuby内plutil -convert jsonと重複�
 
 ## P01 — PoCのexpectedFailureを通常判定から診断へ移す
 
-対象：[Checks.swift](/Users/daiki/Projects/clair/prototypes/native-editor-poc/Sources/NativeEditorPoC/Checks.swift:107) の `upstream multicursor single undo`、`composition updates do not enter undo history`。
+対象：[Checks.swift](prototypes/native-editor-poc/Sources/NativeEditorPoC/Checks.swift:107) の `upstream multicursor single undo`、`composition updates do not enter undo history`。
 
 expectedFailure=trueは失敗しても終了コードに影響しない。unexpected passも検出しないため、元から回帰ゲートではない。上流ライブラリの制約記録としてのみ診断モードに移す。初回multicursorのinsert/redo確認も、adapter有効のinsert→undo→redoにまとめられる。
 
@@ -630,7 +630,7 @@ expectedFailure=trueは失敗しても終了コードに影響しない。unexpe
 
 ## P02 — PoCのsynthetic IME正常系を後半のUndo/Redoケースに統合
 
-対象：[Checks.swift:142](/Users/daiki/Projects/clair/prototypes/native-editor-poc/Sources/NativeEditorPoC/Checks.swift:142) の `synthetic marked text` / `synthetic composition commit`、[同:181](/Users/daiki/Projects/clair/prototypes/native-editor-poc/Sources/NativeEditorPoC/Checks.swift:181) のcomposition一連。
+対象：[Checks.swift:142](prototypes/native-editor-poc/Sources/NativeEditorPoC/Checks.swift:142) の `synthetic marked text` / `synthetic composition commit`、[同:181](prototypes/native-editor-poc/Sources/NativeEditorPoC/Checks.swift:181) のcomposition一連。
 
 前半はmarked text→commitの短い正常系で、後半は同じ操作に更新・Undo・Redoを加えている。ただし前半は明示markedRange、後半はNSNotFoundのreplacementRangeという差がある。単純削除ではこのrange分岐を失う。
 
@@ -638,7 +638,7 @@ expectedFailure=trueは失敗しても終了コードに影響しない。unexpe
 
 ## P03 — PoCのハイライト色数・asset存在チェックを実際のtoken確認へ統合
 
-対象：[Checks.swift:225](/Users/daiki/Projects/clair/prototypes/native-editor-poc/Sources/NativeEditorPoC/Checks.swift:225) の `Swift multiple highlight colors`、`query asset <name>`、`highlight colors <name>`。
+対象：[Checks.swift:225](prototypes/native-editor-poc/Sources/NativeEditorPoC/Checks.swift:225) の `Swift multiple highlight colors`、`query asset <name>`、`highlight colors <name>`。
 
 後半の言語ごとのtoken probeが具体的なcomment/string/number等の色を検証するので、前半の色数>2と各言語の色数>2は同じ描画結果の粗い再確認。色数は誤った色でも増え、asset存在だけでは実際に読み込まれたか分からない。
 
@@ -646,7 +646,7 @@ expectedFailure=trueは失敗しても終了コードに影響しない。unexpe
 
 ## P04 — PoCの代替TextKit2診断を通常self-testから削除
 
-対象：[Checks.swift:335](/Users/daiki/Projects/clair/prototypes/native-editor-poc/Sources/NativeEditorPoC/Checks.swift:335)、[TextKitProbe.swift](/Users/daiki/Projects/clair/prototypes/native-editor-poc/Sources/NativeEditorPoC/TextKitProbe.swift:7)。
+対象：[Checks.swift:335](prototypes/native-editor-poc/Sources/NativeEditorPoC/Checks.swift:335)、[TextKitProbe.swift](prototypes/native-editor-poc/Sources/NativeEditorPoC/TextKitProbe.swift:7)。
 
 製品で使わない別エディタを作り、基本挿入・undo・Tree-sitterの色付けを検査してresultsへ入れるだけ。これらの辞書にはpassキーがなく、全体の失敗判定にも参加しない。
 
@@ -654,7 +654,7 @@ expectedFailure=trueは失敗しても終了コードに影響しない。unexpe
 
 ## P05 — PoCの巨大fixtureを責務ごとに縮小・分離
 
-対象：[Checks.swift:204](/Users/daiki/Projects/clair/prototypes/native-editor-poc/Sources/NativeEditorPoC/Checks.swift:204) のdiff表示、[同:315](/Users/daiki/Projects/clair/prototypes/native-editor-poc/Sources/NativeEditorPoC/Checks.swift:315) のpolicy境界と5,000,000 emoji。
+対象：[Checks.swift:204](prototypes/native-editor-poc/Sources/NativeEditorPoC/Checks.swift:204) のdiff表示、[同:315](prototypes/native-editor-poc/Sources/NativeEditorPoC/Checks.swift:315) のpolicy境界と5,000,000 emoji。
 
 `diff view virtualizes visible cells...` はgeneratedCellCount>0と選択IDを確認するだけで、全行生成しても通る。`mode and width changes retain rows`にも10,000行は不要。機能確認は小さなfixtureにし、仮想化は必要なら可視範囲に対するセル生成の上限を性能チェックで検証する。失うのは大きなtableを作ってスクロールした際のクラッシュ検出で、明示benchmarkに残す。
 
@@ -662,16 +662,16 @@ UTF-8とUTF-16の独立集計確認に5,000,000 emojiは不要。短い絵文字
 
 ## A01 — その他のassert単位の削除候補
 
-- [ProjectNavigationTests:249](/Users/daiki/Projects/clair/apple/ClairTests/ProjectNavigationTests.swift:249)：DAP decoderの`buffer.isEmpty`を削除。返された2 payloadの一致を残す。内部bufferを保持する等価な実装を許す。削除で失う未消費残留の保証が必要なら、次のappendの出力を確認すべき。
-- [ProjectEditorDocumentTests:120](/Users/daiki/Projects/clair/apple/ClairTests/ProjectEditorDocumentTests.swift:120)：selectionテストのinitialSnapshot.revisionとsnapshotCaptureCountを削除。revision不変、selection値、同じselectionで通知が増えない保証は残す。カウンターは本当の割り当てコストを測っていない。
-- [ProjectKernelTests:79](/Users/daiki/Projects/clair/apple/ClairTests/ProjectKernelTests.swift:79)：permissionケースの期待errorの丸写しに依存しすぎず、注入した失敗後のProject集合とactive IDが保持されるassertを中心にする。モック自身が投げる型の確認は減らせるが、モックを使うだけでこのテスト全体は削らない。
-- [ProjectGitTests:95](/Users/daiki/Projects/clair/apple/ClairTests/ProjectGitTests.swift:95)：branch-switchエラーテスト内の削除status確認はrename/deleteテストと重複。dirtyをrestoreするsetupは残し、余分なremove→status→deleted確認を削れる。Git外部コマンドの起動も減る。
-- [ProjectEditorDiffModelTests:27](/Users/daiki/Projects/clair/apple/ClairTests/ProjectEditorDiffModelTests.swift:27)：`replacedが存在` と `replaced件数>=2` の前者は後者に包含されるので削除。source再構成の確認は独自diffアルゴリズムを検証しており残す。
-- [session_broker.rs:350](/Users/daiki/Projects/clair/crates/clair-ptyhost/tests/session_broker.rs:350)：`read_output_until(marker)`成功後に同じmarkerが含まれるassertをfirst/second双方で削除。helper自身がmarkerを見つけるまで成功を返さない。旧出力が再送されない否定assertは別保証として残す。
-- [AgentActivityTests:184](/Users/daiki/Projects/clair/apple/ClairTests/AgentActivityTests.swift:184)：activitiesが`[second, third]`と等しい直後のcount==2を削除。
-- [TerminalTests:78](/Users/daiki/Projects/clair/apple/ClairTests/TerminalTests.swift:78)：frames==[input,resize]の直後の同じpayload一致は削れる。ただしdimensionsのdecode確認は別変換なので残す。
-- [MobileControlProtocolTests:204](/Users/daiki/Projects/clair/packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:204)：decoded==agentの直後の同じstate/model/capabilities確認は包含される。M22の独立fixtureに置き換えれば一括解消できる。
-- [ProjectEditorCommentAnchorTests:99](/Users/daiki/Projects/clair/apple/ClairTests/ProjectEditorCommentAnchorTests.swift:99) と [同:125](/Users/daiki/Projects/clair/apple/ClairTests/ProjectEditorCommentAnchorTests.swift:125)：明示的にapply/undoを呼んだ直後のoperation enum転記確認は削減候補。実際のrange移動、orphan化、Undo/Redo復元は残す。
+- [ProjectNavigationTests:249](apple/ClairTests/ProjectNavigationTests.swift:249)：DAP decoderの`buffer.isEmpty`を削除。返された2 payloadの一致を残す。内部bufferを保持する等価な実装を許す。削除で失う未消費残留の保証が必要なら、次のappendの出力を確認すべき。
+- [ProjectEditorDocumentTests:120](apple/ClairTests/ProjectEditorDocumentTests.swift:120)：selectionテストのinitialSnapshot.revisionとsnapshotCaptureCountを削除。revision不変、selection値、同じselectionで通知が増えない保証は残す。カウンターは本当の割り当てコストを測っていない。
+- [ProjectKernelTests:79](apple/ClairTests/ProjectKernelTests.swift:79)：permissionケースの期待errorの丸写しに依存しすぎず、注入した失敗後のProject集合とactive IDが保持されるassertを中心にする。モック自身が投げる型の確認は減らせるが、モックを使うだけでこのテスト全体は削らない。
+- [ProjectGitTests:95](apple/ClairTests/ProjectGitTests.swift:95)：branch-switchエラーテスト内の削除status確認はrename/deleteテストと重複。dirtyをrestoreするsetupは残し、余分なremove→status→deleted確認を削れる。Git外部コマンドの起動も減る。
+- [ProjectEditorDiffModelTests:27](apple/ClairTests/ProjectEditorDiffModelTests.swift:27)：`replacedが存在` と `replaced件数>=2` の前者は後者に包含されるので削除。source再構成の確認は独自diffアルゴリズムを検証しており残す。
+- [session_broker.rs:350](crates/clair-ptyhost/tests/session_broker.rs:350)：`read_output_until(marker)`成功後に同じmarkerが含まれるassertをfirst/second双方で削除。helper自身がmarkerを見つけるまで成功を返さない。旧出力が再送されない否定assertは別保証として残す。
+- [AgentActivityTests:184](apple/ClairTests/AgentActivityTests.swift:184)：activitiesが`[second, third]`と等しい直後のcount==2を削除。
+- [TerminalTests:78](apple/ClairTests/TerminalTests.swift:78)：frames==[input,resize]の直後の同じpayload一致は削れる。ただしdimensionsのdecode確認は別変換なので残す。
+- [MobileControlProtocolTests:204](packages/ClairMobileKit/Tests/ClairMobileKitTests/MobileControlProtocolTests.swift:204)：decoded==agentの直後の同じstate/model/capabilities確認は包含される。M22の独立fixtureに置き換えれば一括解消できる。
+- [ProjectEditorCommentAnchorTests:99](apple/ClairTests/ProjectEditorCommentAnchorTests.swift:99) と [同:125](apple/ClairTests/ProjectEditorCommentAnchorTests.swift:125)：明示的にapply/undoを呼んだ直後のoperation enum転記確認は削減候補。実際のrange移動、orphan化、Undo/Redo復元は残す。
 
 これらの時間効果は通常小さい。主な利益は実装変更への結合と読解負担の削減で、件数削減のためだけに優先しない。
 

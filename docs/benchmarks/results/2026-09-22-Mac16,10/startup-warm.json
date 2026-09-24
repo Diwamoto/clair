@@ -6,7 +6,7 @@
   "build_configuration": "release",
   "bundled": true,
   "recorded_at": "2026-09-22T06:33:19Z",
-  "host": "iwamotodaikinoMac-mini.local",
+  "host": "Mac16,10",
   "commit": "34e3232dff970a7200a8153eaefbefe0026f4b73",
   "median_ms": 192.98,
   "p95_ms": 195.18,

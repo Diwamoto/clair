@@ -441,7 +441,7 @@ struct PerformanceBudgetTests {
       contract: "clair-v2-performance-budget", budgetMillis: budgetMillis,
       corpusLayoutVersion: BudgetCorpus.layoutVersion,
       recordedAt: ISO8601DateFormatter().string(from: Date()),
-      host: ProcessInfo.processInfo.hostName, buildConfiguration: configuration,
+      host: hardwareModel(), buildConfiguration: configuration,
       measurements: measurements)
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -450,4 +450,13 @@ struct PerformanceBudgetTests {
       at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     try encoder.encode(report).write(to: url, options: .atomic)
   }
+}
+
+/// `hw.model` (e.g. `Mac16,10`) instead of the host name, so committed reports carry no personal machine name.
+private func hardwareModel() -> String {
+  var size = 0
+  sysctlbyname("hw.model", nil, &size, nil, 0)
+  var model = [CChar](repeating: 0, count: size)
+  sysctlbyname("hw.model", &model, &size, nil, 0)
+  return String(cString: model)
 }

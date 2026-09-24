@@ -3,7 +3,7 @@
   "buildConfiguration" : "release",
   "contract" : "clair-v2-performance-budget",
   "corpusLayoutVersion" : 1,
-  "host" : "iwamotodaikinomac-mini.local",
+  "host" : "Mac16,10",
   "measurements" : [
     {
       "affordance" : "scanning",

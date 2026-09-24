@@ -1,5 +1,7 @@
 # Clair
 
+[English version here](README_en.md)
+
 > エディタ、ターミナル、AIエージェント、Gitを、Project単位のmacOSネイティブワークスペースにまとめるIDE。
 
 Clairは、cceditの後継として(cceditは2026-09-21に廃止、復元はarchive tagから)開発している個人用のmacOSネイティブIDEです。
@@ -87,3 +89,11 @@ Project bundleを使う作業では、次のproject-local Codex skillを利用�
 - `$project-implementer <project code>` — 文書化済みprojectを実装・検証する
 - `$clair-issue-executor P01`または`$clair-issue-executor next` — PoC queueの一項目を実装する
 - `$clair-session-commit` — 完了したsliceを分離・検証してcommitする
+
+## セキュリティ
+
+脆弱性の報告方法は[SECURITY.md](SECURITY.md)を参照してください。
+
+## ライセンス
+
+[MIT](LICENSE)。第三者コンポーネントは[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)に記載しています。

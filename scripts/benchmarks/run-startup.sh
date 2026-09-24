@@ -143,7 +143,7 @@ if [[ -n "$out_file" ]]; then
     printf '  "unit": "ms",\n  "budget_ms": %s,\n' "$budget"
     printf '  "build_configuration": "release",\n  "bundled": true,\n'
     printf '  "recorded_at": "%s",\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    printf '  "host": "%s",\n  "commit": "%s",\n' "$(hostname)" "$(git -C "$repo_root" rev-parse HEAD)"
+    printf '  "host": "%s",\n  "commit": "%s",\n' "$(sysctl -n hw.model)" "$(git -C "$repo_root" rev-parse HEAD)"
     printf '  "median_ms": %s,\n  "p95_ms": %s,\n  "max_ms": %s,\n' "$median" "$p95" "$max"
     printf '  "samples_ms": [%s],\n' "$(IFS=,; echo "${samples[*]}")"
     printf '  "verdict": "%s"\n}\n' "$verdict"
