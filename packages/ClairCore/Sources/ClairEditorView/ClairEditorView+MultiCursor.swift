@@ -111,7 +111,69 @@ import ClairEditorCore
 
     // MARK: - ⌘D
 
+    /// Esc leaves one caret at the last vertically added cursor (or the
+    /// final selection's head when cursors came from another gesture).
+    @discardableResult
+    func exitMultiCursor(for event: NSEvent) -> Bool {
+      guard event.keyCode == 53,
+        event.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty,
+        selection.selections.count > 1,
+        let last = selection.selections.last
+      else { return false }
+      let head = verticalCursorGoal.flatMap { goal in
+        selection.selections.first(where: { $0.head == goal.lastTarget })?.head
+      } ?? last.head
+      verticalCursorGoal = nil
+      applySelection(TextSelectionSet(cursor: head))
+      return true
+    }
+
+    /// ⌘⌥↑/↓ grows the cursor set from its top/bottom edge. The new caret
+    /// keeps the source column where possible and clamps at a shorter line.
+    @discardableResult
+    func addVerticalCursor(for event: NSEvent) -> Bool {
+      guard event.modifierFlags.intersection([.command, .option, .control, .shift]) == [.command, .option]
+      else { return false }
+      let delta: Int
+      switch event.keyCode {
+      case 126: delta = -1  // Up arrow
+      case 125: delta = 1   // Down arrow
+      default: return false
+      }
+      guard let source = delta < 0 ? selection.selections.first : selection.selections.last,
+        let position = try? snapshot.position(at: source.head, columnUnit: UTF16Unit.self)
+      else { return true }
+      let goalColumn: Int
+      if let goal = verticalCursorGoal, goal.direction == delta,
+        goal.lastTarget == source.head
+      {
+        goalColumn = goal.column
+      } else {
+        goalColumn = position.column.value
+      }
+      let targetLine = position.line.value + delta
+      guard (0..<snapshot.lineCount).contains(targetLine),
+        let line = try? snapshot.line(at: TextLineIndex(targetLine)),
+        let start = try? snapshot.convert(line.contentRange.lowerBound, to: UTF16Unit.self),
+        let end = try? snapshot.convert(line.contentRange.upperBound, to: UTF16Unit.self),
+        let target = try? snapshot.offset(
+          at: TextLinePosition(
+            line: line.index,
+            column: UTF16Offset(min(goalColumn, end.value - start.value))),
+          rounding: .down),
+        let updated = try? TextSelectionSet(
+          selection.selections + [TextSelection(cursor: target)])
+      else { return true }
+      verticalCursorGoal = (delta, goalColumn, target)
+      applySelection(updated)
+      scrollToVisible(NSRect(x: 0, y: rowTop(targetLine), width: 1, height: lineHeight))
+      return true
+    }
+
     public override func performKeyEquivalent(with event: NSEvent) -> Bool {
+      if window?.firstResponder === self, composition == nil,
+        addVerticalCursor(for: event)
+      { return true }
       guard window?.firstResponder === self,
         event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
         event.charactersIgnoringModifiers == "d"

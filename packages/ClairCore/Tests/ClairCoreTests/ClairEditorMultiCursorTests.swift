@@ -47,6 +47,78 @@
       view.selection.selections.map { $0.range.lowerBound.value...$0.range.upperBound.value }
     }
 
+    private func arrow(_ view: ClairEditorView, up: Bool) throws {
+      let event = try XCTUnwrap(NSEvent.keyEvent(
+        with: .keyDown, location: .zero,
+        modifierFlags: [.command, .option, .function, .numericPad],
+        timestamp: 0, windowNumber: 0, context: nil,
+        characters: up ? "\u{F700}" : "\u{F701}",
+        charactersIgnoringModifiers: up ? "\u{F700}" : "\u{F701}",
+        isARepeat: false, keyCode: up ? 126 : 125))
+      view.keyDown(with: event)
+    }
+
+    private func escape(_ view: ClairEditorView) throws {
+      let event = try XCTUnwrap(NSEvent.keyEvent(
+        with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+        windowNumber: 0, context: nil, characters: "\u{1b}",
+        charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53))
+      view.keyDown(with: event)
+    }
+
+    func testEscapeCollapsesMultipleCursorsAfterCompletionGetsFirstChance() throws {
+      let view = try makeView("one\ntwo\nthree")
+      try arrow(view, up: false)
+      try arrow(view, up: false)
+      XCTAssertEqual(ranges(view), [0...0, 4...4, 8...8])
+
+      var completionOpen = true
+      view.keyInterceptor = { event in
+        guard event.keyCode == 53, completionOpen else { return false }
+        completionOpen = false
+        return true
+      }
+      try escape(view)
+      XCTAssertEqual(ranges(view), [0...0, 4...4, 8...8])
+      try escape(view)
+      XCTAssertEqual(ranges(view), [8...8])
+    }
+
+    func testCommandOptionArrowsGrowCursorsAcrossRaggedLines() throws {
+      let view = try makeView("abcd\na\nabcd")
+      view.selection = TextSelectionSet(cursor: UTF8Offset(3))
+      try arrow(view, up: false)
+      XCTAssertEqual(ranges(view), [3...3, 6...6])
+      try arrow(view, up: false)
+      XCTAssertEqual(ranges(view), [3...3, 6...6, 10...10])
+      try arrow(view, up: false) // document edge: no extra caret
+      XCTAssertEqual(ranges(view), [3...3, 6...6, 10...10])
+      try arrow(view, up: true) // top edge: no extra caret
+      XCTAssertEqual(ranges(view), [3...3, 6...6, 10...10])
+
+      view.selection = TextSelectionSet(cursor: UTF8Offset(8))
+      try arrow(view, up: true)
+      try arrow(view, up: true)
+      XCTAssertEqual(ranges(view), [1...1, 6...6, 8...8])
+    }
+
+    func testCommandOptionArrowKeyEquivalentReachesFocusedEditor() throws {
+      let view = try makeView("one\ntwo")
+      let window = NSWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 400, height: 200),
+        styleMask: .borderless, backing: .buffered, defer: false)
+      window.contentView = view
+      XCTAssertTrue(window.makeFirstResponder(view))
+      let event = try XCTUnwrap(NSEvent.keyEvent(
+        with: .keyDown, location: .zero,
+        modifierFlags: [.command, .option, .function, .numericPad],
+        timestamp: 0, windowNumber: window.windowNumber, context: nil,
+        characters: "\u{F701}", charactersIgnoringModifiers: "\u{F701}",
+        isARepeat: false, keyCode: 125))
+      XCTAssertTrue(view.performKeyEquivalent(with: event))
+      XCTAssertEqual(ranges(view), [0...0, 4...4])
+    }
+
     func testDoubleClickSelectsWordAndTripleClickSelectsLine() throws {
       let view = try makeView("foo bar_baz qux\nnext")
       let inWord = NSPoint(x: try x(view, line: 0, column: 6) + 1, y: y(view, line: 0))

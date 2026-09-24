@@ -66,7 +66,7 @@ public final class SyntaxHighlighter {
   /// the result, `parser`'s own state is left exactly as it was before.
   public func reset(to snapshot: TextSnapshot) throws -> [EditorHighlightSpan] {
     let tree = try parser.reset(to: snapshot)
-    foldRanges = Self.folds(tree: tree)
+    foldRanges = Self.folds(tree: tree, languageID: languageID)
     return Self.spans(tree: tree, query: query)
   }
 
@@ -81,18 +81,19 @@ public final class SyntaxHighlighter {
     edits: [TextEdit], oldSnapshot: TextSnapshot, newSnapshot: TextSnapshot
   ) throws -> [EditorHighlightSpan] {
     let tree = try parser.update(edits: edits, oldSnapshot: oldSnapshot, newSnapshot: newSnapshot)
-    foldRanges = Self.folds(tree: tree)
+    foldRanges = Self.folds(tree: tree, languageID: languageID)
     return Self.spans(tree: tree, query: query)
   }
 
   /// Walks every named node once (same order of cost as the highlight query pass).
-  static func folds(tree: Tree) -> [TextUTF8Range] {
+  static func folds(tree: Tree, languageID: EditorLanguageID) -> [TextUTF8Range] {
     guard let root = tree.rootNode else { return [] }
     var widest: [UInt32: (start: UInt32, end: UInt32)] = [:]
     // `node.parent` walks from the root in tree-sitter, so the root is excluded by position instead.
     func visit(_ node: Node, root: Bool) {
       let rows = node.pointRange
-      if !root, node.isNamed, rows.upperBound.row > rows.lowerBound.row {
+      let foldable = node.nodeType.map { Self.isFoldable($0, languageID: languageID) } ?? false
+      if !root, node.isNamed, foldable, rows.upperBound.row > rows.lowerBound.row {
         let bytes = node.byteRange
         let row = rows.lowerBound.row
         if widest[row].map({ bytes.upperBound > $0.end }) ?? true {
@@ -104,6 +105,50 @@ public final class SyntaxHighlighter {
     visit(root, root: true)
     return widest.values.sorted { $0.start < $1.start }
       .map { TextUTF8Range(UTF8Offset(Int($0.start)), UTF8Offset(Int($0.end))) }
+  }
+
+  /// Only structural containers earn a gutter marker. A multiline expression,
+  /// argument list, string, or comment is not a useful fold by itself.
+  private static func isFoldable(_ type: String, languageID: EditorLanguageID) -> Bool {
+    switch languageID {
+    case .markdown: return ["section", "fenced_code_block"].contains(type)
+    case .swift:
+      return ["class_declaration", "struct_declaration", "enum_declaration", "protocol_declaration",
+              "extension_declaration", "function_declaration", "init_declaration", "deinit_declaration",
+              "if_statement", "for_statement", "while_statement", "switch_statement", "do_statement",
+              "guard_statement", "lambda_literal"].contains(type)
+    case .python:
+      return ["class_definition", "function_definition", "if_statement", "for_statement",
+              "while_statement", "try_statement", "with_statement", "match_statement"].contains(type)
+    case .ruby:
+      return ["class", "module", "method", "singleton_method", "if", "unless", "case",
+              "case_match", "while", "until", "for", "do_block", "begin_block", "lambda"].contains(type)
+    case .go:
+      return ["function_declaration", "method_declaration", "type_declaration", "if_statement",
+              "for_statement", "expression_switch_statement", "type_switch_statement", "select_statement"].contains(type)
+    case .javascript, .typescript:
+      return ["class_declaration", "function_declaration", "generator_function_declaration",
+              "method_definition", "arrow_function", "function_expression", "if_statement",
+              "for_statement", "for_in_statement", "while_statement", "do_statement",
+              "switch_statement", "try_statement", "interface_declaration", "enum_declaration"].contains(type)
+    case .json: return ["object", "array"].contains(type)
+    case .rust:
+      return ["function_item", "struct_item", "enum_item", "impl_item", "trait_item", "mod_item",
+              "if_expression", "for_expression", "while_expression", "loop_expression", "match_expression"].contains(type)
+    case .shell:
+      return ["function_definition", "if_statement", "for_statement", "while_statement",
+              "case_statement", "c_style_for_statement"].contains(type)
+    case .java:
+      return ["class_declaration", "interface_declaration", "enum_declaration", "record_declaration",
+              "method_declaration", "constructor_declaration", "if_statement", "for_statement",
+              "enhanced_for_statement", "while_statement", "do_statement", "switch_expression",
+              "switch_statement", "try_statement"].contains(type)
+    case .php:
+      return ["class_declaration", "interface_declaration", "enum_declaration", "function_definition",
+              "method_declaration", "namespace_definition", "if_statement", "for_statement",
+              "foreach_statement", "while_statement", "do_statement", "switch_statement", "try_statement"].contains(type)
+    case .terraform: return ["block", "object", "for_object_expr", "for_tuple_expr"].contains(type)
+    }
   }
 
   private static func spans(tree: Tree, query: Query?) -> [EditorHighlightSpan] {
