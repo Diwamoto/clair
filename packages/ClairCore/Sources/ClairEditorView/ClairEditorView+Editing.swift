@@ -17,6 +17,9 @@ import ClairEditorCore
   extension ClairEditorView {
     public override func keyDown(with event: NSEvent) {
       if composition == nil, keyInterceptor?(event) == true { return }
+      if composition == nil, exitMultiCursor(for: event) { return }
+      if composition == nil, addVerticalCursor(for: event) { return }
+      verticalCursorGoal = nil
       interpretKeyEvents([event])
     }
 

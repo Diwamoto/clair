@@ -53,6 +53,20 @@
       XCTAssertTrue(loaded)
     }
 
+    func testCommandWClosesActiveFileAndSelectsAnother() throws {
+      let path = try root(["a.txt": Data("a".utf8), "b.txt": Data("b".utf8)])
+      let store = ClairWorkbenchStore(persistAt: nil)
+      _ = try store.run("project.open", ["path": .string(path)]).get()
+      _ = try store.run("file.open", ["path": .string(path + "/a.txt")]).get()
+      _ = try store.run("file.open", ["path": .string(path + "/b.txt")]).get()
+      let editorID = store.state.tree.leaves.first!.id
+      store.performFromUI("pane.close")
+      XCTAssertEqual(store.state.active, "a.txt")
+      XCTAssertEqual(store.state.tabs, ["a.txt"])
+      XCTAssertEqual(store.state.tree.leaves.first?.id, editorID)
+      XCTAssertEqual(store.state.tree.leaves.first?.kind, .editor)
+    }
+
     func testEditSaveAndDiskDrop() throws {
       let r = try root(["a.txt": Data("hi".utf8)])
       let b = EditorBuffers()

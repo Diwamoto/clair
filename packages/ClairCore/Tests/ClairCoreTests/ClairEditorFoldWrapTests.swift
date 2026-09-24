@@ -177,5 +177,72 @@
       XCTAssertTrue(highlighter.foldRanges.contains { $0.lowerBound == header && $0.upperBound.value == go.utf8.count - 1 })
       XCTAssertFalse(highlighter.foldRanges.contains { $0.lowerBound.value == 0 })  // the root is not a fold
     }
+
+    func testMarkdownFoldsSectionsAndCodeBlocksButNotListItems() throws {
+      let markdown = """
+        # Decision
+        - First item
+          continued text
+        - Second item
+          continued text
+
+        ```swift
+        let value = 1
+        ```
+
+        ## Next section
+        More text
+        """
+      let highlighter = try SyntaxHighlighter(languageID: .markdown)
+      _ = try highlighter.reset(to: try TextBuffer(markdown).snapshot)
+      let startLines = highlighter.foldRanges.map { range in
+        markdown.utf8.prefix(range.lowerBound.value).filter { $0 == 10 }.count
+      }
+      XCTAssertTrue(startLines.contains(0))
+      XCTAssertTrue(startLines.contains(6))
+      XCTAssertFalse(startLines.contains(1))
+      XCTAssertFalse(startLines.contains(3))
+    }
+
+    func testCodeFoldsDeclarationsButNotMultilineValues() throws {
+      let examples: [(EditorLanguageID, String)] = [
+        (.swift, "func run() {\n  let values = [\n    1,\n    2\n  ]\n}\n"),
+        (.python, "def run():\n    values = [\n        1,\n        2,\n    ]\n"),
+        (.ruby, "def run\n  values = [\n    1,\n    2\n  ]\nend\n"),
+      ]
+      for (language, source) in examples {
+        let highlighter = try SyntaxHighlighter(languageID: language)
+        _ = try highlighter.reset(to: try TextBuffer(source).snapshot)
+        let startLines = highlighter.foldRanges.map { range in
+          source.utf8.prefix(range.lowerBound.value).filter { $0 == 10 }.count
+        }
+        XCTAssertTrue(startLines.contains(0), "\(language)")
+        XCTAssertFalse(startLines.contains(1), "\(language)")
+      }
+    }
+
+    func testEveryOtherLanguageKeepsStructuralFolds() throws {
+      let examples: [(EditorLanguageID, String, Int?)] = [
+        (.go, "package main\nfunc run() {\n  values := []int{\n    1,\n    2,\n  }\n}\n", 2),
+        (.javascript, "function run() {\n  const values = [\n    1,\n    2\n  ];\n}\n", 1),
+        (.typescript, "function run(): void {\n  const values = [\n    1,\n    2\n  ];\n}\n", 1),
+        (.json, "{\n  \"values\": [\n    1,\n    2\n  ]\n}\n", nil),
+        (.rust, "fn run() {\n  let values = [\n    1,\n    2\n  ];\n}\n", 1),
+        (.shell, "run() {\n  values=(\n    one\n    two\n  )\n}\n", 1),
+        (.java, "class Example {\n  int[] values = {\n    1,\n    2\n  };\n}\n", 1),
+        (.php, "<?php\nfunction run() {\n  $values = [\n    1,\n    2\n  ];\n}\n", 2),
+        (.terraform, "resource \"test\" \"example\" {\n  tags = {\n    one = \"1\"\n    two = \"2\"\n  }\n}\n", nil),
+      ]
+      for (language, source, valueLine) in examples {
+        let highlighter = try SyntaxHighlighter(languageID: language)
+        _ = try highlighter.reset(to: try TextBuffer(source).snapshot)
+        let startLines = highlighter.foldRanges.map { range in
+          source.utf8.prefix(range.lowerBound.value).filter { $0 == 10 }.count
+        }
+        let declarationLine = language == .go || language == .php ? 1 : 0
+        XCTAssertTrue(startLines.contains(declarationLine), "\(language)")
+        if let valueLine { XCTAssertFalse(startLines.contains(valueLine), "\(language)") }
+      }
+    }
   }
 #endif

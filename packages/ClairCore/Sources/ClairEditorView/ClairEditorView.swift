@@ -129,6 +129,7 @@ import ClairEditorCore
     var dragFixedSelections: [TextSelection] = []
     /// Where a ⌥-drag block selection started (`ClairEditorView+MultiCursor.swift`).
     var blockAnchor: NSPoint?
+    var verticalCursorGoal: (direction: Int, column: Int, lastTarget: UTF8Offset)?
     /// The live IME composition, if any (`ClairEditorView+TextInput.swift`).
     /// A view-local overlay only — see `EditorComposition`'s doc comment.
     var composition: EditorComposition?
@@ -271,6 +272,7 @@ import ClairEditorCore
     private var pendingSelectionDrag: (downPoint: NSPoint, offset: UTF8Offset)?
 
     public override func mouseDown(with event: NSEvent) {
+      verticalCursorGoal = nil
       window?.makeFirstResponder(self)
       // A click anywhere unmarks an in-progress IME composition, matching
       // system text views: the click is the user abandoning the candidate
@@ -500,7 +502,7 @@ import ClairEditorCore
       let width = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
       context.saveGState()
       context.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
-      context.textPosition = CGPoint(x: gutterWidth - 18 - width, y: top + baselineShift + ascent)
+      context.textPosition = CGPoint(x: gutterWidth - 20 - width, y: top + baselineShift + ascent)
       CTLineDraw(line, context)
       context.restoreGState()
     }
