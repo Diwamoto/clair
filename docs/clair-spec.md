@@ -371,7 +371,7 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
 - command risk は固定 metadata と runtime preflight で判定し、必要な承認を GUI に
   表示する。AI の自己申告 risk を authorization に使わない
 - Clair の terminal で起動した agent の bell / 終了だけを記録し、Clair が前面にないとき macOS notification を送る。通常の terminal は通知しない
-- 通知一覧の画面は設けない。記録は session 状態と Project badge に使う
+- 通知一覧は status bar 右端の通知ボタンの popover だけに置く(独立画面は設けない)。行から対象 terminal へ移動し既読にする。記録は session 状態と Project badge にも使う
 - Project / terminal 単位で notification を mute できる
 
 ## 10. Mobile

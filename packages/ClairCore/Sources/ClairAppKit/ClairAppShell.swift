@@ -683,6 +683,7 @@ import Observation
     @State private var debugPID = ""
     @State private var quota: [ProviderQuota] = []
     @State private var quotaHovered = false
+    @State private var noticesOpen = false
     @State private var collapsedGroups: Set<String> = []
     @State private var rootFolded = false
     @State private var changes: [GitChange] = []
@@ -1815,6 +1816,61 @@ import Observation
       }
     }
 
+    /// V08 history: every recorded fact across Projects, newest first. A row jumps to its terminal (marks it read).
+    private var noticeButton: some View {
+      let unread = st.notices.unread()
+      return Button { noticesOpen.toggle() } label: {
+        HStack(spacing: 3) {
+          Image(systemName: unread > 0 ? "bell.badge" : "bell").font(.system(size: 11))
+          if unread > 0 { Text("\(unread)").foregroundStyle(C.attention) }
+        }.frame(minHeight: 18)
+      }
+      .buttonStyle(.hoverWash).help("通知").accessibilityLabel(unread > 0 ? "通知 未読 \(unread) 件" : "通知")
+      .popover(isPresented: $noticesOpen, arrowEdge: .top) {
+        VStack(alignment: .leading, spacing: 0) {
+          HStack {
+            Text("通知").font(.system(size: 13, weight: .semibold))
+            Spacer()
+            Button("すべて既読") { store.run("notice.markRead", [:]) }.disabled(unread == 0)
+            Button("消去") { store.run("notice.clear", [:]) }.disabled(st.notices.items.isEmpty)
+          }
+          .buttonStyle(.borderless).padding(10)
+          Divider()
+          if st.notices.items.isEmpty {
+            Text("通知はありません").foregroundStyle(C.textQuaternary).padding(12)
+          } else {
+            ScrollView {
+              LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(st.notices.items) { n in
+                  Button {
+                    if n.project != st.project { store.run("project.switch", ["name": .string(n.project)]) }
+                    store.run("pane.focus", ["id": .int(n.pane)])
+                    noticesOpen = false
+                  } label: {
+                    HStack(spacing: 8) {
+                      Circle().fill(n.read ? Color.clear : C.attention).frame(width: 6, height: 6)
+                      VStack(alignment: .leading, spacing: 2) {
+                        Text(st.agentLaunch(in: n.project, pane: n.pane).map { AgentProfile.named($0.profile)?.title ?? $0.profile } ?? "ターミナル \(n.pane)")
+                          .foregroundStyle(C.textPrimary)
+                        Text("\(n.project) · \(n.title)").foregroundStyle(n.kind == .exited && n.exitCode != 0 ? C.attention : C.textTertiary)
+                      }
+                      Spacer(minLength: 8)
+                      Text(n.at.formatted(date: .omitted, time: .shortened)).foregroundStyle(C.textQuaternary)
+                    }
+                    .padding(.horizontal, 10).padding(.vertical, 6).contentShape(Rectangle())
+                  }
+                  .buttonStyle(.hoverWash)
+                }
+              }
+            }
+            .frame(maxHeight: 360)
+          }
+        }
+        .font(Typography.font(Typography.chrome)).monospacedDigit()
+        .frame(width: 320)
+      }
+    }
+
     private var statusBar: some View {
       let agents = st.agentSessions.filter { $0.project == st.project && !$0.status.isExited }
       let waiting = agents.filter { $0.status == .attention }.count
@@ -1875,6 +1931,7 @@ import Observation
             Text("\(agents.count) セッション" + (waiting > 0 ? " · 入力待ち \(waiting)" : ""))
           }
         }.buttonStyle(.hoverWash)
+        noticeButton
       }
       .font(Typography.font(Typography.chrome)).monospacedDigit().foregroundStyle(C.textTertiary)
       .padding(.horizontal, 12).frame(height: ChromeBudget.statusBar)

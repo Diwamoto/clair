@@ -139,7 +139,7 @@ ccedit(旧 Clair v1)を製品・資料ともに廃止した。これに伴い:
 | `V02` | `done` | `D4` | `V01`, `H01` | user-scoped Unix socket IPC(0600/0700、peer uid 検証)と `clair` CLI 基盤。 |
 | `V04` | `done` | `D4` | `V01`, `H02` | Project model と workspace 永続化。Git の有無を問わない folder、実 file tree、layout 復元。 |
 | `V07` | `done` | `D4` | `V01`, `V04`, `T03` | agent launch profile を raw terminal で複数起動。worktree cwd 対応。 |
-| `V08` | `done` | `D3` | `V04`, `V07` | Project badge、通知 history、macOS banner、Project/terminal 単位 mute。事実 signal のみ。 **追補(2026-09-24)**: Claude Code/Codex は Ghostty 上で BEL ではなく OSC 9/777 で通知を要求するため banner が出ていなかった。`GHOSTTY_ACTION_DESKTOP_NOTIFICATION` を bell と同じ事実として数える(title/body は agent 由来で code を含み得るので decode しない — mobile push payload にも text の経路が無いまま、`INV` の「通知に機密を載せない」を維持)。表示文言は「ベル」→「通知」。実 surface で OSC 9 と 777 が各 1 件数えられる統合 test を追加し、C 側を外す mutation で fail を確認。**残**: 実アプリで Claude Code 実行中の banner 目視、mobile 転送は `N08` の APNs 経路で `WorkbenchNotice.kind` だけを送る。 |
+| `V08` | `done` | `D3` | `V04`, `V07` | Project badge、通知 history、macOS banner、Project/terminal 単位 mute。事実 signal のみ。 **追補(2026-09-24)**: Claude Code/Codex は Ghostty 上で BEL ではなく OSC 9/777 で通知を要求するため banner が出ていなかった。`GHOSTTY_ACTION_DESKTOP_NOTIFICATION` を bell と同じ事実として数える(title/body は agent 由来で code を含み得るので decode しない — mobile push payload にも text の経路が無いまま、`INV` の「通知に機密を載せない」を維持)。表示文言は「ベル」→「通知」。実 surface で OSC 9 と 777 が各 1 件数えられる統合 test を追加し、C 側を外す mutation で fail を確認。**残**: 実アプリで Claude Code 実行中の banner 目視、mobile 転送は `N08` の APNs 経路で `WorkbenchNotice.kind` だけを送る。 **追補(2026-09-24, 2, owner判断)**: status bar 右端に通知ボタン(未読数 badge)を追加し、popover で全 Project の通知履歴を新しい順に表示。行クリックで対象 Project/terminal へ移動し既読(`pane.focus` 経路)、「すべて既読」「消去」付き。仕様 §9 の「通知一覧の画面は設けない」を popover のみ許可に改訂。検証は `swift build` のみ、**残**: 実アプリ目視。 |
 
 ## 統計
 
