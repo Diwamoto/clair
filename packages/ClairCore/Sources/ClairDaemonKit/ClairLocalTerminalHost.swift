@@ -121,8 +121,11 @@
         if let existing = byKey[key], existing.process.isRunning, existing.cwd == cwd,
           existing.command == command
         {
+          let attachment = opened(existing, fromCurrentOutput: true)
           try? existing.process.resizeAndRedraw(size)
-          return opened(existing)
+          // Old VT bytes were drawn at a different width. Replaying them into a new
+          // surface corrupts wrapped prompts; the resize above repaints live content.
+          return attachment
         }
         // Shells that exited on their own were only kept so their last output could be read.
         // ponytail: a client still draining a just-exited shell can lose its tail here.
@@ -171,11 +174,11 @@
       }
     }
 
-    private func opened(_ entry: Entry) -> ClairDaemonTerminalResponse {
+    private func opened(_ entry: Entry, fromCurrentOutput: Bool = false) -> ClairDaemonTerminalResponse {
       let state = entry.process.terminalJournal.snapshot()
       return .opened(
         sessionID: entry.sessionID.rawValue, epoch: state.epoch.value,
-        retainedStart: state.retainedStart)
+        retainedStart: fromCurrentOutput ? state.endOffset : state.retainedStart)
     }
 
     private func read(id: String, epoch: UInt64?, offset: UInt64?, wait: Int)

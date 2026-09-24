@@ -56,7 +56,7 @@ import Testing
       await daemon.stop()
     }
 
-    @Test func t09ShellOutlivesDetachAndReattachReplaysFromTheSameSession() async throws {
+    @Test func t09ShellOutlivesDetachAndReattachStartsAtCurrentOutput() async throws {
       try await withDaemon { daemon in
         let first = try daemon.attach(key: "pane-1")
         #expect(try daemon.read(first, until: "READY"))
@@ -65,7 +65,10 @@ import Testing
         // Dropping the attachment is a detach; the shell must keep running in the daemon.
         let second = try daemon.attach(key: "pane-1")
         #expect(second.sessionID == first.sessionID)
-        #expect(try daemon.read(second, until: "<one>"))
+        // Old output was rendered at the previous surface width and must not be replayed.
+        var replay = Data()
+        _ = try second.pump(waitMilliseconds: 0) { replay.append($0) }
+        #expect(!replay.contains(Data("<one>".utf8)))
         try second.send(Data("two\n".utf8))
         #expect(try daemon.read(second, until: "<two>"))
       }
@@ -77,7 +80,7 @@ import Testing
         command: "trap 'printf WINCH' WINCH; printf READY; while :; do sleep 0.05; done")
       let first = try daemon.attach(key: "pane-1")
       #expect(try daemon.read(first, until: "READY"))
-      // Same size as before: only an explicit SIGWINCH makes claude/vim redraw over the replay.
+      // Same size as before: an explicit SIGWINCH makes claude/vim draw on the new surface.
       let second = try daemon.attach(key: "pane-1")
       #expect(try daemon.read(second, until: "WINCH"))
       await daemon.stop()
