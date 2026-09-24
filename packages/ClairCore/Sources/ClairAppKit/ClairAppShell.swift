@@ -122,11 +122,14 @@ import Observation
       }
       let store = self
       let server = WorkbenchIPCServer { req in
-        if req.via == .mcp {
+        var req = req
+        // V16: `parent` is whoever called, never what the client claims.
+        if req.command.hasPrefix("agent.") { req.input["parent"] = req.caller.map(CommandArg.string) }
+        if req.via == .mcp || req.caller != nil {
           return MCPGate.handle(
             req, registry: CommandRegistry.workbench,
             snapshot: { DispatchQueue.main.sync { MainActor.assumeIsolated { store.state } } },
-            approve: { store.requestMCPApproval($0, $1, $2) },
+            approve: { store.approve($0, $1, $2, caller: req.caller) },
             run: { recheck, confirmed in
               DispatchQueue.main.sync {
                 MainActor.assumeIsolated {
@@ -236,7 +239,9 @@ import Observation
           lastError = e; return .failure(e)
         }
       }
-      let closing = id == "pane.close" ? Self.terminalKey(root: activeRoot ?? state.project, pane: state.tree.focused) : nil
+      let closing =
+        id == "pane.close" ? Self.terminalKey(root: activeRoot ?? state.project, pane: state.tree.focused)
+        : { () -> String? in if id == "agent.close", case .string(let key)? = input["key"] { key } else { nil } }()
       let r: Result<CommandResult, CommandError>
       if id == "project.open", input.count == 1, case .string(let raw)? = input["path"],
         let path = WorkbenchProject.normalized(raw)
@@ -273,7 +278,7 @@ import Observation
           }
         }
         if let closing { ClairDaemonLauncher.closeSession(key: closing) }  // T09: closing a pane ends its shell; closing a window does not
-        if id == "agent.launch" || id == "pane.close"
+        if id == "agent.launch" || id == "pane.close" || id == "agent.close"
           || (id == "settings.set" && input["key"] == .string("preventSleepOnBattery"))
         { refreshSleepAssertion() }
         watchProject()
@@ -600,6 +605,20 @@ import Observation
     public private(set) var mcpApprovalDeadline = Date()
     private var mcpDecision: DispatchSemaphore?
     private var mcpApproved = false
+
+    /// V16: approving an agent.launch from a terminal lets that same terminal fan out more agents for 10 minutes,
+    /// so "3 parallel children" is one card, not three.
+    // ponytail: the card does not say so yet; show the grant on the card when U07 reworks approval UI.
+    private var fanOutGrants: [String: Date] = [:]
+    nonisolated func approve(_ id: String, _ input: CommandInput, _ risk: CommandRisk, caller: String?) -> Bool {
+      let fanOut = id == "agent.launch" ? caller : nil
+      if let fanOut, DispatchQueue.main.sync(execute: { MainActor.assumeIsolated { fanOutGrants[fanOut].map { $0 > Date() } ?? false } }) {
+        return true
+      }
+      let ok = requestMCPApproval(id, input, risk)
+      if ok, let fanOut { DispatchQueue.main.sync { MainActor.assumeIsolated { fanOutGrants[fanOut] = Date().addingTimeInterval(600) } } }
+      return ok
+    }
 
     nonisolated func requestMCPApproval(_ id: String, _ input: CommandInput, _ risk: CommandRisk, timeout: TimeInterval = 60) -> Bool {
       let sem = DispatchSemaphore(value: 0)

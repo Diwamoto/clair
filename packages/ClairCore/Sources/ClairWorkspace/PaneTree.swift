@@ -73,15 +73,28 @@ public struct PaneTree: Sendable, Equatable, Codable {
 
   /// Splits the focused pane; the new pane copies its kind (or takes `kind`) and takes focus.
   public mutating func splitFocused(_ axis: Axis, kind newKind: PaneKind? = nil) {
+    focused = split(focused, axis, kind: newKind)
+  }
+
+  /// V16: splits `target` without moving focus (an agent fanning out must not steal the user's pane). Returns the new id.
+  @discardableResult
+  public mutating func split(_ target: Int, _ axis: Axis, kind newKind: PaneKind? = nil) -> Int {
     let new = nextID
     nextID += 1
-    let target = focused
     root = Self.map(root) { n in
       guard case .leaf(let id, let kind) = n, id == target else { return nil }
       return .split(axis: axis, ratio: 0.5, first: n, second: .leaf(id: new, kind: newKind ?? kind))
     }
-    focused = new
     maximized = nil
+    return new
+  }
+
+  /// V16: closes `id` wherever it is; focus moves only if it was on `id`. The last pane cannot be closed.
+  public mutating func close(_ id: Int) {
+    let saved = focused
+    focused = id
+    closeFocused()
+    if saved != id, leaves.contains(where: { $0.id == saved }) { focused = saved }
   }
 
   /// Closes the focused pane; the last pane cannot be closed.

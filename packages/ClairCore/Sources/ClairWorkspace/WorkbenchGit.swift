@@ -35,6 +35,15 @@ public struct GitReview: Sendable, Codable, Equatable {
 }
 
 public enum WorkbenchGit {
+  /// A Clair-managed worktree of `origin` on a new `branch`, outside the repository (worktree.create, agent.launch).
+  static func createWorktree(_ origin: WorkbenchProject, branch b: String) -> Result<WorkbenchProject, CommandError> {
+    let dir = worktreeBase.appending(path: origin.name).appending(path: b.replacingOccurrences(of: "/", with: "-"))
+    try? FileManager.default.createDirectory(at: dir.deletingLastPathComponent(), withIntermediateDirectories: true)
+    let r = run(origin.path, ["worktree", "add", "-b", b, dir.path], merge: true)
+    guard r.ok, let path = WorkbenchProject.normalized(dir.path) else { return .failure(CommandError(.preconditionFailed, r.out)) }
+    return .success(WorkbenchProject(name: "\(origin.name) · \(b)", path: path, origin: origin.path, branch: b))
+  }
+
   /// Managed worktrees root. Tests point this at a temp dir.
   nonisolated(unsafe) public static var worktreeBase = FileManager.default
     .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appending(path: "Clair/worktrees")
@@ -281,14 +290,10 @@ extension CommandRegistry {
             guard !WorkbenchGit.branchExists(root, b) else { throw CommandError(.preconditionFailed, "branch \(b) exists") }
             return .write
           }) { s, i in
-        let b = i["branch"]!.string!, origin = s.current!
-        let dir = WorkbenchGit.worktreeBase.appending(path: origin.name).appending(path: b.replacingOccurrences(of: "/", with: "-"))
-        try? FileManager.default.createDirectory(at: dir.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let r = WorkbenchGit.run(origin.path, ["worktree", "add", "-b", b, dir.path], merge: true)
-        guard r.ok, let path = WorkbenchProject.normalized(dir.path) else { return .text(r.out) }
-        let p = WorkbenchProject(name: "\(origin.name) · \(b)", path: path, origin: origin.path, branch: b)
-        s.projects.append(p); s.switchProject(to: p)
-        return .ok
+        switch WorkbenchGit.createWorktree(s.current!, branch: i["branch"]!.string!) {
+        case .success(let p): s.projects.append(p); s.switchProject(to: p); return .ok
+        case .failure(let e): return .text(e.message)
+        }
       },
       // Adoption: the worktree must be clean (everything committed); merge commit into origin's checked-out branch.
       cmd("worktree.adopt", "worktree をマージ", .write, ai: false,

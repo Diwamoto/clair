@@ -11,11 +11,13 @@ public struct AgentProfile: Sendable, Equatable {
   public let title: String
   /// Run by the terminal's login shell, so PATH/aliases match the user's own terminal.
   public let command: String
+  /// V16: non-interactive form that takes the prompt as its last argument and exits when done.
+  public let batch: String
 
   public static let all = [
-    AgentProfile(id: "claude", title: "Claude Code", command: "claude"),
-    AgentProfile(id: "codex", title: "Codex", command: "codex"),
-    AgentProfile(id: "opencode", title: "OpenCode", command: "opencode"),
+    AgentProfile(id: "claude", title: "Claude Code", command: "claude", batch: "claude -p"),
+    AgentProfile(id: "codex", title: "Codex", command: "codex", batch: "codex exec"),
+    AgentProfile(id: "opencode", title: "OpenCode", command: "opencode", batch: "opencode run"),
   ]
 
   public static func named(_ id: String) -> AgentProfile? { all.first { $0.id == id } }
@@ -24,8 +26,48 @@ public struct AgentProfile: Sendable, Equatable {
 public struct AgentLaunch: Sendable, Codable, Equatable {
   public let profile: String
   public let cwd: String
-  public init(profile: String, cwd: String) { self.profile = profile; self.cwd = cwd }
-  public var command: String { AgentProfile.named(profile)?.command ?? "" }
+  /// V16: a delegated task. With a prompt the agent runs in batch mode and its output/exit land in `AgentRun` files.
+  public var prompt: String?
+  /// V16: terminal key (`root#pane`) of the agent that launched this one.
+  public var parent: String?
+  public var run: String?
+  public init(profile: String, cwd: String, prompt: String? = nil, parent: String? = nil) {
+    self.profile = profile; self.cwd = cwd; self.prompt = prompt; self.parent = parent
+    run = prompt == nil ? nil : UUID().uuidString.lowercased()
+  }
+  public var command: String {
+    guard let p = AgentProfile.named(profile) else { return "" }
+    guard let prompt, let run else { return p.command }
+    // `script` keeps a TTY for the agent while recording it, and exits with the agent's status.
+    // Wrapped in /bin/sh so the user's login shell (zsh, fish, …) only sees one quoted argument.
+    let r = AgentRun(id: run), q = AgentRun.quote
+    let inner = "mkdir -p \(q(AgentRun.directory.path)); script -q \(q(r.log.path)) \(p.batch) \(q(prompt)); echo $? > \(q(r.exit.path))"
+    return "/bin/sh -c \(q(inner))"
+  }
+}
+
+/// V16: the recorded output and exit status of one delegated (prompted) agent run.
+public struct AgentRun: Sendable {
+  public let id: String
+  public static var directory: URL { ClairChannel.current.dataURL.appending(path: "agents") }
+  var log: URL { Self.directory.appending(path: "\(id).log") }
+  var exit: URL { Self.directory.appending(path: "\(id).exit") }
+
+  /// nil while running.
+  public var exitCode: Int? {
+    (try? String(contentsOf: exit, encoding: .utf8)).flatMap { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+  }
+
+  /// Last `lines` lines of what the agent printed, with terminal control sequences (and `script`'s `^D` echo at EOF) removed.
+  // ponytail: reads the whole log; fine for agent transcripts, seek from the end if logs reach MBs.
+  public func output(lines: Int) -> String {
+    let raw = (try? String(contentsOf: log, encoding: .utf8)) ?? ""
+    let plain = raw.replacingOccurrences(of: #"\^D\x08\x08|\x1B\[[0-9;?]*[ -/]*[@-~]|\x1B\][^\x07]*\x07|[\x00-\x08\x0B-\x1F\x7F]"#, with: "", options: .regularExpression)
+    return plain.split(separator: "\n", omittingEmptySubsequences: false).suffix(lines).joined(separator: "\n")
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  static func quote(_ s: String) -> String { "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'" }
 }
 
 /// U06: one row of the session list, derived from facts only (launch + bell/exit notices).
@@ -43,6 +85,47 @@ public struct AgentSession: Sendable, Equatable, Identifiable {
 }
 
 extension WorkbenchState {
+  /// Same key the GUI uses for the daemon shell behind a terminal pane (`ClairWorkbenchStore.terminalKey`).
+  public static func terminalKey(_ root: String, _ pane: Int) -> String { "\(root)#\(pane)" }
+
+  /// V16: the open Project and terminal pane behind `root#pane`, in any Project (not just the shown one).
+  func terminal(_ key: String) -> (project: String, pane: Int)? {
+    guard let i = key.lastIndex(of: "#"), let pane = Int(key[key.index(after: i)...]),
+      let p = projects.first(where: { $0.path == String(key[..<i]) })
+    else { return nil }
+    let tree = p.name == project ? tree : layouts[p.name]?.tree
+    return tree?.leaves.contains { $0.id == pane && $0.kind == .terminal } == true ? (p.name, pane) : nil
+  }
+
+  mutating func withLayout<R>(_ name: String, _ body: (inout ProjectLayout) -> R) -> R {
+    if name == project { return body(&layout) }
+    var l = layouts[name] ?? ProjectLayout()
+    defer { layouts[name] = l }
+    return body(&l)
+  }
+
+  /// Where agent.launch opens: next to the calling terminal, else the focused pane of the shown Project.
+  func launchHome(_ parent: String?) throws(CommandError) -> (project: WorkbenchProject, pane: Int?) {
+    if let parent {
+      guard let t = terminal(parent), let p = projects.first(where: { $0.name == t.project }) else {
+        throw CommandError(.preconditionFailed, "calling terminal \(parent) is not open in Clair")
+      }
+      return (p, t.pane)
+    }
+    guard let p = projects.first(where: { $0.name == project }) else { throw CommandError(.preconditionFailed, "no active project") }
+    return (p, nil)
+  }
+
+  /// A prompted agent launched by agent.launch, still open.
+  func delegated(_ key: String) throws(CommandError) -> AgentLaunch {
+    guard let t = terminal(key), let l = withLayoutCopy(t.project).launches[t.pane], l.run != nil else {
+      throw CommandError(.preconditionFailed, "\(key) is not a delegated agent")
+    }
+    return l
+  }
+
+  private func withLayoutCopy(_ name: String) -> ProjectLayout { name == project ? layout : layouts[name] ?? ProjectLayout() }
+
   /// An agent started in a Clair terminal, either through a launch profile or detected in its shell.
   public func agentLaunch(in project: String, pane: Int) -> AgentLaunch? {
     let known = project == self.project ? launches[pane] : layouts[project]?.launches[pane]
