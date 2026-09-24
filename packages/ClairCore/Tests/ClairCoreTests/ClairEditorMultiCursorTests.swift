@@ -19,7 +19,7 @@
     /// The x of the caret boundary before UTF-16 `column` on `line`, from the view's own CoreText layout.
     private func x(_ view: ClairEditorView, line: Int, column: Int) throws -> CGFloat {
       let (_, ct) = try view.renderer.line(
-        at: TextLineIndex(line), in: view.snapshot, highlights: [], colorOverrides: [:])
+        at: TextLineIndex(line), in: view.snapshot, highlights: view.highlightIndex, colorOverrides: [:])
       return view.textInset + CTLineGetOffsetForStringIndex(ct, column, nil)
     }
 

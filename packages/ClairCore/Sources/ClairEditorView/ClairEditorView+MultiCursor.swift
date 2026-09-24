@@ -90,14 +90,18 @@ import ClairEditorCore
     func offset(line index: Int, x: CGFloat, rounding: TextBoundaryRounding) -> UTF8Offset? {
       guard
         let (textLine, ctLine) = try? renderer.line(
-          at: TextLineIndex(index), in: snapshot, highlights: highlights,
+          at: TextLineIndex(index), in: snapshot, highlights: highlightIndex,
           colorOverrides: tokenColors),
         let start = try? snapshot.convert(textLine.contentRange.lowerBound, to: UTF16Unit.self),
         let end = try? snapshot.convert(textLine.contentRange.upperBound, to: UTF16Unit.self)
       else { return nil }
       let localX = x - textInset
       var column = CTLineGetStringIndexForPosition(ctLine, CGPoint(x: localX, y: 0))
-      guard column != kCFNotFound else { return nil }
+      if column == kCFNotFound {
+        let range = CTLineGetStringRange(ctLine)
+        let endOffset = CTLineGetOffsetForStringIndex(ctLine, range.length, nil)
+        column = localX >= endOffset ? range.length : 0
+      }
       let edge = CTLineGetOffsetForStringIndex(ctLine, column, nil)
       // The nearest boundary may sit on the wrong side of x; step one unit
       // and let grapheme rounding carry it out to the cluster's edge.

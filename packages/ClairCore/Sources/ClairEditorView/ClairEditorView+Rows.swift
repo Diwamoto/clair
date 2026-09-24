@@ -56,7 +56,7 @@ import ClairEditorCore
     func segments(_ line: Int) -> [EditorRowSegment] {
       guard
         let (textLine, ctLine) = try? renderer.line(
-          at: TextLineIndex(line), in: snapshot, highlights: highlights, colorOverrides: tokenColors)
+          at: TextLineIndex(line), in: snapshot, highlights: highlightIndex, colorOverrides: tokenColors)
       else { return [] }
       let starts = rowStarts(textLine)
       let length = CTLineGetStringRange(ctLine).length

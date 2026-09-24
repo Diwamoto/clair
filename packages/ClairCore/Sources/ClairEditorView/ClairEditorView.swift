@@ -26,13 +26,19 @@ import ClairEditorCore
     }
     public var highlights: [EditorHighlightSpan] = [] {
       didSet {
+        highlightIndex = EditorSpanIndex(highlights, range: \.range)
         renderer.invalidateAll()
         needsDisplay = true
       }
     }
     public var diagnostics: [EditorDiagnosticSpan] = [] {
-      didSet { needsDisplay = true }
+      didSet {
+        diagnosticIndex = EditorSpanIndex(diagnostics, range: \.range)
+        needsDisplay = true
+      }
     }
+    var highlightIndex = EditorSpanIndex<EditorHighlightSpan>([], range: \.range)
+    var diagnosticIndex = EditorSpanIndex<EditorDiagnosticSpan>([], range: \.range)
     public var tokenColors: [EditorTokenKind: NSColor] = [:] {
       didSet {
         renderer.invalidateAll()
@@ -518,7 +524,7 @@ import ClairEditorCore
     }
 
     private func drawDiagnostics(_ seg: EditorRowSegment, context: CGContext) {
-      for diagnostic in diagnostics {
+      for diagnostic in diagnosticIndex.overlapping(seg.textLine.contentRange) {
         guard let local = clip(diagnostic.range, to: seg) else { continue }
         drawSquiggle(
           from: textInset + seg.x(local.lowerBound), to: textInset + seg.x(local.upperBound),

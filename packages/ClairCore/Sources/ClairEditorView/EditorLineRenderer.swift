@@ -78,7 +78,7 @@ final class EditorLineRenderer {
 
   func line(
     at index: TextLineIndex, in snapshot: TextSnapshot,
-    highlights: [EditorHighlightSpan], colorOverrides: [EditorTokenKind: PlatformColor]
+    highlights: EditorSpanIndex<EditorHighlightSpan>, colorOverrides: [EditorTokenKind: PlatformColor]
   ) throws -> (line: TextLine, ctLine: CTLine) {
     let textLine = try snapshot.line(at: index)
     if let cached = cache[textLine.id] {
@@ -92,12 +92,12 @@ final class EditorLineRenderer {
 
   private func build(
     _ textLine: TextLine, in snapshot: TextSnapshot,
-    highlights: [EditorHighlightSpan], colorOverrides: [EditorTokenKind: PlatformColor]
+    highlights: EditorSpanIndex<EditorHighlightSpan>, colorOverrides: [EditorTokenKind: PlatformColor]
   ) throws -> CTLine {
     let text = try snapshot.text(in: textLine.contentRange)
     let attributed = NSMutableAttributedString(
       string: text, attributes: [.font: font, .foregroundColor: baseColor])
-    for span in highlights {
+    for span in highlights.overlapping(textLine.contentRange) {
       guard let local = try localUTF16Range(of: span.range, clippedTo: textLine, in: snapshot)
       else { continue }
       let color = colorOverrides[span.kind] ?? span.kind.defaultColor

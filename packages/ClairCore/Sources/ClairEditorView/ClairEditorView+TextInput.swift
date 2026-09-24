@@ -170,7 +170,7 @@ import ClairEditorCore
         built = try? renderer.composedLine(at: line.index, in: snapshot, composition: composition)
       } else {
         built = try? renderer.line(
-          at: line.index, in: snapshot, highlights: highlights, colorOverrides: tokenColors)
+          at: line.index, in: snapshot, highlights: highlightIndex, colorOverrides: tokenColors)
       }
       guard let (textLine, ctLine) = built,
         let lineStartUTF16 = try? snapshot.convert(

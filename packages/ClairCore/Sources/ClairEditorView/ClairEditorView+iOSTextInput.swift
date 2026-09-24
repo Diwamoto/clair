@@ -223,7 +223,7 @@ import ClairEditorCore
         return try? renderer.composedLine(at: index, in: snapshot, composition: composition)
       }
       return try? renderer.line(
-        at: index, in: snapshot, highlights: highlights, colorOverrides: tokenColors)
+        at: index, in: snapshot, highlights: highlightIndex, colorOverrides: tokenColors)
     }
 
     private func rect(forComposedRange range: TextUTF8Range) -> CGRect {

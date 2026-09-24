@@ -34,13 +34,19 @@ import ClairEditorCore
     public internal(set) var selection: TextSelectionSet
     public var highlights: [EditorHighlightSpan] = [] {
       didSet {
+        highlightIndex = EditorSpanIndex(highlights, range: \.range)
         renderer.invalidateAll()
         setNeedsDisplay()
       }
     }
     public var diagnostics: [EditorDiagnosticSpan] = [] {
-      didSet { setNeedsDisplay() }
+      didSet {
+        diagnosticIndex = EditorSpanIndex(diagnostics, range: \.range)
+        setNeedsDisplay()
+      }
     }
+    var highlightIndex = EditorSpanIndex<EditorHighlightSpan>([], range: \.range)
+    var diagnosticIndex = EditorSpanIndex<EditorDiagnosticSpan>([], range: \.range)
     public var tokenColors: [EditorTokenKind: PlatformColor] = [:] {
       didSet {
         renderer.invalidateAll()
@@ -254,7 +260,7 @@ import ClairEditorCore
     private func drawDiagnostics(
       for textLine: TextLine, ctLine: CTLine, top: CGFloat, context: CGContext
     ) {
-      for diagnostic in diagnostics {
+      for diagnostic in diagnosticIndex.overlapping(textLine.contentRange) {
         guard
           let local = try? localUTF16Range(of: diagnostic.range, clippedTo: textLine, in: snapshot)
         else { continue }
