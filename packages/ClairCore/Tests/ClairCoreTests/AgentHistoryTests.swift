@@ -17,6 +17,32 @@ final class AgentHistoryTests: XCTestCase {
     XCTAssertEqual(item.estimatedUSD ?? 0, 0.004145, accuracy: 0.000001)
   }
 
+  func testGroupsByRelativeDayThenProject() throws {
+    let home = URL.temporaryDirectory.appending(path: "clair-history-group-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: home) }
+    let dir = home.appending(path: ".claude/projects/p")
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    try #"{"type":"user","timestamp":"2026-09-24T02:00:00Z","sessionId":"s","uuid":"u","cwd":"/w/clair","message":{"content":"hi"}}"#
+      .write(to: dir.appending(path: "s.jsonl"), atomically: true, encoding: .utf8)
+    let read = try XCTUnwrap(AgentHistoryReader.load(home: home).first)
+    XCTAssertEqual(read.project, "/w/clair")
+
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "UTC")!
+    let now = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-09-24T12:00:00Z"))
+    func item(_ id: String, _ daysAgo: Double, _ project: String?) -> AgentHistory {
+      AgentHistory(id: id, provider: .claude, title: id, date: now - daysAgo * 86_400, messages: [], estimatedUSD: 1, project: project)
+    }
+    let sections = AgentHistorySection.group(
+      [item("a", 0, "/w/clair"), item("b", 0.1, "/x/clair"), item("c", 0, "/w/ccedit"), item("d", 1, nil), item("e", 5, "/w/clair"), item("f", 30, "/w/clair")],
+      now: now, calendar: calendar)
+    XCTAssertEqual(sections.map(\.label), ["今日", "昨日", "先週", "それ以前"])
+    XCTAssertEqual(sections[0].groups.map(\.project).sorted(), ["ccedit", "clair"])
+    XCTAssertEqual(sections[0].groups.first { $0.project == "clair" }?.histories.map(\.id), ["a", "b"])
+    XCTAssertEqual(sections[0].groups.first { $0.project == "clair" }?.estimatedUSD, 2)
+    XCTAssertEqual(sections[1].groups.map(\.project), ["不明"])
+  }
+
   func testLiveHistoriesWhenRequested() {
     guard ProcessInfo.processInfo.environment["CLAIR_LIVE_HISTORY"] == "1" else { return }
     let histories = AgentHistoryReader.load()

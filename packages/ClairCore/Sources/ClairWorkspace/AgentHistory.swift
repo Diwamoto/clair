@@ -21,8 +21,41 @@ public struct AgentHistory: Sendable, Identifiable {
   public let messages: [Message]
   /// Provider-reported or token-priced API-equivalent cost, when available. It is not a bill.
   public let estimatedUSD: Double?
+  /// Working directory the provider recorded, when available.
+  public var project: String? = nil
 
   public var promptCount: Int { messages.filter { $0.role == "user" }.count }
+}
+
+/// ccedit-style grouping: relative-day sections, then one group per project inside each.
+public struct AgentHistorySection: Sendable, Identifiable {
+  public struct Group: Sendable, Identifiable {
+    public let id: String
+    public let project: String
+    public let histories: [AgentHistory]
+    public var estimatedUSD: Double { histories.compactMap(\.estimatedUSD).reduce(0, +) }
+  }
+
+  public let label: String
+  public let groups: [Group]
+  public var id: String { label }
+
+  public static func group(_ histories: [AgentHistory], now: Date = .now, calendar: Calendar = .current) -> [AgentHistorySection] {
+    let labels = ["今日", "昨日", "先週", "それ以前"]
+    let today = calendar.startOfDay(for: now)
+    func label(_ date: Date) -> String {
+      let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: today).day ?? .max
+      return days <= 0 ? labels[0] : days == 1 ? labels[1] : days <= 7 ? labels[2] : labels[3]
+    }
+    let byLabel = Dictionary(grouping: histories.sorted { $0.date > $1.date }) { label($0.date) }
+    return labels.compactMap { label in
+      guard let items = byLabel[label] else { return nil }
+      let byProject = Dictionary(grouping: items) { $0.project.map { URL(filePath: $0).lastPathComponent } ?? "不明" }
+      let groups = byProject.map { Group(id: "\(label)::\($0.key)", project: $0.key, histories: $0.value) }
+        .sorted { $0.histories[0].date > $1.histories[0].date }
+      return AgentHistorySection(label: label, groups: groups)
+    }
+  }
 }
 
 public struct AgentUsageDay: Sendable, Identifiable {
@@ -88,6 +121,7 @@ public enum AgentHistoryReader {
       var claudeMessageCosts: [String: Double] = [:]
       var claudeUnknownModel = false
       var sessionID = file.deletingPathExtension().lastPathComponent
+      var cwd: String?
       var seen: Set<String> = []
       var claudeMessageIndex: [String: Int] = [:]
       let fractionalDate = ISO8601DateFormatter()
@@ -105,7 +139,7 @@ public enum AgentHistoryReader {
         let timestamp = row["timestamp"] as? String ?? ""
         let date = fractionalDate.date(from: timestamp) ?? plainDate.date(from: timestamp) ?? .distantPast
         if provider == .codex {
-          if type == "session_meta", let id = payload["id"] as? String { sessionID = id }
+          if type == "session_meta", let id = payload["id"] as? String { sessionID = id; cwd = payload["cwd"] as? String ?? cwd }
           if type == "turn_context" { codexModel = payload["model"] as? String ?? codexModel }
           if type == "token_usage_record" { codexUsage = payload["thread_token_usage"] as? [String: Any] ?? codexUsage }
           guard type == "response_item", let role = payload["role"] as? String,
@@ -120,6 +154,7 @@ public enum AgentHistoryReader {
           if type == "cost-state" { cost = row["totalCostUSD"] as? Double; return }
           guard type == "user" || type == "assistant", row["isSidechain"] as? Bool != true else { return }
           if let id = row["sessionId"] as? String { sessionID = id }
+          cwd = cwd ?? row["cwd"] as? String
           let message = row["message"] as? [String: Any] ?? [:]
           if type == "assistant", let usage = message["usage"] as? [String: Any] {
             if let estimated = claudeEstimatedCost(model: message["model"] as? String ?? "", usage: usage) {
@@ -156,7 +191,7 @@ public enum AgentHistoryReader {
       let title = messages.first(where: { $0.role == "user" })?.text.prefix(100) ?? "チャット"
       histories.append(.init(id: "\(provider.rawValue):\(sessionID)", provider: provider,
                              title: String(title), date: messages.last?.date ?? .distantPast,
-                             messages: messages, estimatedUSD: cost))
+                             messages: messages, estimatedUSD: cost, project: cwd))
     }
     return histories
   }
@@ -226,7 +261,7 @@ public enum AgentHistoryReader {
     defer { sqlite3_close(db) }
     let sql = """
       SELECT s.id, s.title, s.time_updated, s.cost, m.id, m.time_created,
-             json_extract(m.data, '$.role'), group_concat(json_extract(p.data, '$.text'), char(10))
+             json_extract(m.data, '$.role'), group_concat(json_extract(p.data, '$.text'), char(10)), s.directory
       FROM session s JOIN message m ON m.session_id = s.id
       JOIN part p ON p.message_id = m.id
       WHERE json_extract(p.data, '$.type') = 'text'
@@ -236,7 +271,7 @@ public enum AgentHistoryReader {
     var statement: OpaquePointer?
     guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK, let statement else { return [] }
     defer { sqlite3_finalize(statement) }
-    var sessions: [String: (String, Date, Double, [AgentHistory.Message])] = [:]
+    var sessions: [String: (String, Date, Double, [AgentHistory.Message], String?)] = [:]
     while sqlite3_step(statement) == SQLITE_ROW {
       guard let sid = sqlite3_column_text(statement, 0), let mid = sqlite3_column_text(statement, 4),
             let role = sqlite3_column_text(statement, 6), let body = sqlite3_column_text(statement, 7) else { continue }
@@ -248,12 +283,13 @@ public enum AgentHistoryReader {
       let cost = sqlite3_column_double(statement, 3)
       let created = Date(timeIntervalSince1970: Double(sqlite3_column_int64(statement, 5)) / 1000)
       let message = AgentHistory.Message(id: String(cString: mid), role: String(cString: role), text: text, date: created)
-      if sessions[id] == nil { sessions[id] = (title, updated, cost, []) }
+      let directory = sqlite3_column_text(statement, 8).map { String(cString: $0) }
+      if sessions[id] == nil { sessions[id] = (title, updated, cost, [], directory) }
       sessions[id]!.3.append(message)
     }
     return sessions.map { id, item in
       AgentHistory(id: "OpenCode:\(id)", provider: .opencode, title: item.0,
-                   date: item.1, messages: item.3, estimatedUSD: item.2)
+                   date: item.1, messages: item.3, estimatedUSD: item.2, project: item.4)
     }
   }
 }
