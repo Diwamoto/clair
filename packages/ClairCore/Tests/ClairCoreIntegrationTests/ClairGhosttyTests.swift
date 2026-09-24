@@ -163,6 +163,35 @@ final class ClairGhosttyTests: XCTestCase {
       }
     }
 
+    /// Agents ask for attention with OSC 9 / OSC 777 instead of BEL; both must
+    /// reach the V08 fact path as a bell (and nothing of their text).
+    func testAgentDesktopNotificationRequestCountsAsBell() throws {
+      try XCTSkipUnless(isVendoredEnvironment)
+      let runtime = GhosttyRuntime()
+      try runtime.activate()
+      let view = NSView(frame: NSRect(x: 0, y: 0, width: 640, height: 400))
+      view.wantsLayer = true
+      try runtime.withApp { app in
+        try app.withSurface(
+          GhosttySurfaceConfig(
+            platform: .macOS(Unmanaged.passUnretained(view).toOpaque()),
+            workingDirectory: NSTemporaryDirectory(),
+            command: "/bin/sh",
+            initialInput: "printf '\\033]9;done\\007'; sleep 1.5; printf '\\033]777;notify;Claude;wait\\007'\n"
+          )
+        ) { surface in
+          try surface.setSize(widthPixels: 640, heightPixels: 400)
+          var bells = 0
+          for _ in 0..<120 where bells < 2 {
+            try app.tick()
+            Thread.sleep(forTimeInterval: 0.05)
+            bells += app.takeEvents().bells
+          }
+          XCTAssertEqual(bells, 2)
+        }
+      }
+    }
+
     /// T03's acceptance smoke test: the retained-lifetime handles
     /// (`GhosttyRuntime.retainApp` / `GhosttyAppHandle.retainSurface`) this
     /// task added specifically because `withApp`/`withSurface`'s closure

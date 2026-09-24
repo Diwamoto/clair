@@ -1,6 +1,6 @@
 import Foundation
 
-// V08: Project badges, notification history and mute. Only facts enter (bell, exit code);
+// V08: Project badges, notification history and mute. Only facts enter (bell / OSC 9·777 request, exit code);
 // terminal bytes and secrets have no path into this model by construction (no text field).
 // ponytail: history lives in memory only (cap 200), not workspace.json; persist if restore-after-quit matters.
 
@@ -15,7 +15,7 @@ public struct WorkbenchNotice: Sendable, Codable, Equatable, Identifiable {
   public var read: Bool
 
   /// Fixed wording from the fact alone.
-  public var title: String { kind == .bell ? "ベル" : exitCode == 0 ? "正常終了" : "異常終了 (exit \(exitCode ?? -1))" }
+  public var title: String { kind == .bell ? "通知" : exitCode == 0 ? "正常終了" : "異常終了 (exit \(exitCode ?? -1))" }
 }
 
 public struct NotificationLog: Sendable, Codable, Equatable {

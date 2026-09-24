@@ -90,8 +90,8 @@ static void clair_ghostty_write_clipboard_cb(
   (void)confirmed;
 }
 
-// V08: the only two actions read are RING_BELL and SHOW_CHILD_EXITED, and only
-// their facts (a bell count, the exit code) are kept, in a per-app record that
+// V08: the only actions read are RING_BELL, DESKTOP_NOTIFICATION and
+// SHOW_CHILD_EXITED, and only their facts (a bell count, the exit code) are kept, in a per-app record that
 // Swift drains after `tick()` (`clair_ghostty_app_take_events`). No payload
 // other than `child_exited.exit_code` is decoded; every action is still
 // reported "not handled" so libghostty's default behavior is unchanged.
@@ -105,7 +105,11 @@ static bool clair_ghostty_action_cb(
   (void)target;
   clair_ghostty_app_events_record *rec = ghostty_app_userdata(app);
   if (!rec) return false;
-  if (action.tag == GHOSTTY_ACTION_RING_BELL) rec->bells++;
+  // Agents (Claude Code, Codex) ask for attention with OSC 9/777 rather than BEL.
+  // It counts as a bell: its title/body are agent text (may quote code), so they
+  // are never decoded and cannot reach a macOS banner or a future mobile push.
+  if (action.tag == GHOSTTY_ACTION_RING_BELL || action.tag == GHOSTTY_ACTION_DESKTOP_NOTIFICATION)
+    rec->bells++;
   else if (action.tag == GHOSTTY_ACTION_SHOW_CHILD_EXITED)
     rec->exit_code = (int64_t)action.action.child_exited.exit_code;
   return false;
