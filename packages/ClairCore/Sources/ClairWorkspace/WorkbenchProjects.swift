@@ -56,13 +56,15 @@ public struct ProjectLayout: Sendable, Codable, Equatable {
   public var collapsed: Set<String> = []
   /// V07: live agent terminals by pane id. Never persisted — restore must not silently respawn agents.
   public var launches: [Int: AgentLaunch] = [:]
+  /// Every pane closed in this Project only; not persisted (restore reopens the layout).
+  public var panesClosed = false
   private enum CodingKeys: String, CodingKey { case tree, tabs, active, dirty, collapsed }
 }
 
 extension WorkbenchState {
   var layout: ProjectLayout {
-    get { ProjectLayout(tree: tree, tabs: tabs, active: active, dirty: dirty, collapsed: collapsed, launches: launches) }
-    set { tree = newValue.tree; tabs = newValue.tabs; active = newValue.active; dirty = newValue.dirty; collapsed = newValue.collapsed; launches = newValue.launches }
+    get { ProjectLayout(tree: tree, tabs: tabs, active: active, dirty: dirty, collapsed: collapsed, launches: launches, panesClosed: panesClosed) }
+    set { tree = newValue.tree; tabs = newValue.tabs; active = newValue.active; dirty = newValue.dirty; collapsed = newValue.collapsed; launches = newValue.launches; panesClosed = newValue.panesClosed }
   }
 
   /// The open Project with the deepest root containing `file` (a nested Project wins over its parent).

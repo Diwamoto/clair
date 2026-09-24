@@ -59,8 +59,13 @@ final class WorkbenchProjectTests: XCTestCase {
     let aTree = s.tree
     open(try folder("b", ["two.txt"]), &s)
     XCTAssertEqual(s.tree, PaneTree()); XCTAssertEqual(s.tabs, [])
+    s.panesClosed = true  // closing every pane in b must not blank a
     r.execute("project.switch", ["name": .string("a")], state: &s)
     XCTAssertEqual(s.tree, aTree); XCTAssertEqual(s.tabs, ["one.txt"]); XCTAssertEqual(s.active, "one.txt")
+    XCTAssertFalse(s.panesClosed)
+    r.execute("project.switch", ["name": .string("b")], state: &s)
+    XCTAssertTrue(s.panesClosed)
+    r.execute("project.switch", ["name": .string("a")], state: &s)
     XCTAssertEqual(r.execute("project.switch", ["name": .string("zzz")], state: &s).failure?.code, .preconditionFailed)
   }
 
