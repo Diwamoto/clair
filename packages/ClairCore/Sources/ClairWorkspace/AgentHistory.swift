@@ -103,17 +103,22 @@ public struct AgentUsageSummary: Sendable {
 
 public enum AgentHistoryReader {
   /// Reads provider-owned files on a background task. Provider failures are isolated.
-  public static func load(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> [AgentHistory] {
-    var result = readJSONL(root: home.appending(path: ".codex/sessions"), provider: .codex)
-    result += readJSONL(root: home.appending(path: ".claude/projects"), provider: .claude)
-    result += readOpenCode(home.appending(path: ".local/share/opencode/opencode.db"))
+  /// `period` filters by last-modified time before any file is parsed, so an unopened archive costs nothing.
+  public static func load(home: URL = FileManager.default.homeDirectoryForCurrentUser, period: DateInterval? = nil) -> [AgentHistory] {
+    var result = readJSONL(root: home.appending(path: ".codex/sessions"), provider: .codex, period: period)
+    result += readJSONL(root: home.appending(path: ".claude/projects"), provider: .claude, period: period)
+    result += readOpenCode(home.appending(path: ".local/share/opencode/opencode.db"), period: period)
     return result.sorted { $0.date > $1.date }
   }
 
-  private static func readJSONL(root: URL, provider: AgentHistory.Provider) -> [AgentHistory] {
-    guard let files = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey]) else { return [] }
+  private static func readJSONL(root: URL, provider: AgentHistory.Provider, period: DateInterval?) -> [AgentHistory] {
+    guard let files = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey, .contentModificationDateKey]) else { return [] }
     var histories: [AgentHistory] = []
     for case let file as URL in files where file.pathExtension == "jsonl" {
+      if let period {
+        let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+        guard modified >= period.start, modified < period.end else { continue }
+      }
       var messages: [AgentHistory.Message] = []
       var cost: Double?
       var codexModel: String?
@@ -252,7 +257,7 @@ public enum AgentHistoryReader {
     if !pending.isEmpty { visit(pending) }
   }
 
-  private static func readOpenCode(_ database: URL) -> [AgentHistory] {
+  private static func readOpenCode(_ database: URL, period: DateInterval?) -> [AgentHistory] {
     var db: OpaquePointer?
     guard sqlite3_open_v2(database.path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let db else {
       if db != nil { sqlite3_close(db) }
@@ -265,6 +270,8 @@ public enum AgentHistoryReader {
       FROM session s JOIN message m ON m.session_id = s.id
       JOIN part p ON p.message_id = m.id
       WHERE json_extract(p.data, '$.type') = 'text'
+        AND s.time_updated >= \(Int64((period?.start ?? .distantPast).timeIntervalSince1970 * 1000))
+        AND s.time_updated < \(Int64((period?.end ?? .distantFuture).timeIntervalSince1970 * 1000))
       GROUP BY m.id
       ORDER BY s.time_updated DESC, m.time_created, p.id
       """
@@ -294,27 +301,43 @@ public enum AgentHistoryReader {
   }
 }
 
-/// Shares the expensive provider scan between Agents and Usage. Reloads after five minutes.
+/// Shares the expensive provider scan between Agents and Usage. Chats untouched for 30 days are an
+/// archive that is only read when asked for. Each part reloads after five minutes.
 public actor AgentHistoryStore {
+  public enum Part: Sendable { case recent, archive }
   public static let shared = AgentHistoryStore()
-  private var cached: [AgentHistory]?
-  private var loadedAt: Date = .distantPast
-  private var loading: Task<[AgentHistory], Never>?
+  private var cached: [Part: (at: Date, items: [AgentHistory])] = [:]
+  private var loading: [Part: Task<[AgentHistory], Never>] = [:]
 
-  public func all() async -> [AgentHistory] {
-    if let cached, Date().timeIntervalSince(loadedAt) < 300 { return cached }
-    if let loading { return await loading.value }
-    let task = Task.detached(priority: .utility) { AgentHistoryReader.load() }
-    loading = task
+  public static func period(_ part: Part, now: Date = .now) -> DateInterval {
+    let cutoff = now.addingTimeInterval(-30 * 86_400)
+    return part == .recent ? DateInterval(start: cutoff, end: .distantFuture) : DateInterval(start: .distantPast, end: cutoff)
+  }
+
+  public func load(_ part: Part) async -> [AgentHistory] {
+    if let hit = cached[part], Date().timeIntervalSince(hit.at) < 300 { return hit.items }
+    if let task = loading[part] { return await task.value }
+    let period = Self.period(part)
+    let task = Task.detached(priority: .utility) { AgentHistoryReader.load(period: period) }
+    loading[part] = task
     let result = await task.value
-    cached = result
-    loadedAt = .now
-    loading = nil
+    cached[part] = (.now, result)
+    loading[part] = nil
     return result
   }
 
+  public func refresh(_ part: Part) async -> [AgentHistory] {
+    cached[part] = nil
+    return await load(part)
+  }
+
+  /// Everything, for usage totals.
+  public func all() async -> [AgentHistory] {
+    (await load(.recent) + load(.archive)).sorted { $0.date > $1.date }
+  }
+
   public func refresh() async -> [AgentHistory] {
-    cached = nil
+    cached.removeAll()
     return await all()
   }
 }

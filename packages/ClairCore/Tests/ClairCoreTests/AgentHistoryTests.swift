@@ -43,6 +43,21 @@ final class AgentHistoryTests: XCTestCase {
     XCTAssertEqual(sections[1].groups.map(\.project), ["不明"])
   }
 
+  func testArchiveIsSplitByModifiedTimeBeforeParsing() throws {
+    let home = URL.temporaryDirectory.appending(path: "clair-history-archive-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: home) }
+    let dir = home.appending(path: ".claude/projects/p")
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    for (name, age) in [("new", 1.0), ("old", 40.0)] {
+      let file = dir.appending(path: "\(name).jsonl")
+      try #"{"type":"user","timestamp":"2026-09-24T02:00:00Z","sessionId":"\#(name)","uuid":"\#(name)","message":{"content":"hi"}}"#
+        .write(to: file, atomically: true, encoding: .utf8)
+      try FileManager.default.setAttributes([.modificationDate: Date() - age * 86_400], ofItemAtPath: file.path)
+    }
+    XCTAssertEqual(AgentHistoryReader.load(home: home, period: AgentHistoryStore.period(.recent)).map(\.id), ["Claude Code:new"])
+    XCTAssertEqual(AgentHistoryReader.load(home: home, period: AgentHistoryStore.period(.archive)).map(\.id), ["Claude Code:old"])
+  }
+
   func testLiveHistoriesWhenRequested() {
     guard ProcessInfo.processInfo.environment["CLAIR_LIVE_HISTORY"] == "1" else { return }
     let histories = AgentHistoryReader.load()
