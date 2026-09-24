@@ -10,10 +10,10 @@ final class PaneTreeTests: XCTestCase {
     t.focusNext(); t.focusNext(); XCTAssertEqual(t.focused, 1)  // wraps
   }
 
-  func testSplitCopiesKindAndFocusesNew() {
+  func testSplittingTheEditorAddsATerminal() {
     var t = PaneTree()
     t.splitFocused(.vertical)
-    XCTAssertEqual(t.leaves.map(\.kind), [.editor, .editor, .terminal, .terminal])
+    XCTAssertEqual(t.leaves.map(\.kind), [.editor, .terminal, .terminal, .terminal])
     XCTAssertEqual(t.focused, 4)
   }
 

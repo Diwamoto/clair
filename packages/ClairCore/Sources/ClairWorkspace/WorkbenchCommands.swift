@@ -283,7 +283,7 @@ extension CommandRegistry {
         if s.tree.maximized != nil, s.tree.maximized != terminal.id { s.tree.toggleMaximize() }
         s.tree.focus(terminal.id)
       } else {
-        s.tree.splitFocused(.horizontal, kind: .terminal)
+        s.tree.splitFocused(.horizontal)
       }
       return .pane(s.tree.focused)
     },
@@ -353,7 +353,7 @@ extension CommandRegistry {
     },
     cmd("pane.open", "ペインを開く", .additive, params: [CommandParam("kind", .string, allowed: ["editor", "terminal"])]) { s, i in
       s.tree = PaneTree(single: .editor)
-      if i["kind"]!.string! == "terminal" { s.tree.splitFocused(.horizontal, kind: .terminal) }
+      if i["kind"]!.string! == "terminal" { s.tree.splitFocused(.horizontal) }
       s.panesClosed = false
       return .pane(s.tree.focused)
     },
@@ -389,7 +389,7 @@ extension CommandRegistry {
         parent: i["parent"]?.string)
       let axis: PaneTree.Axis = i["direction"]?.string == "down" ? .vertical : .horizontal
       let pane = s.withLayout(home.project.name) { l in
-        let id = home.pane.map { l.tree.split($0, axis, kind: .terminal) } ?? { l.tree.splitFocused(.vertical, kind: .terminal); return l.tree.focused }()
+        let id = home.pane.map { l.tree.split($0, axis) } ?? { l.tree.splitFocused(.vertical); return l.tree.focused }()
         l.launches[id] = launch
         return id
       }
