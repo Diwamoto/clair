@@ -1715,18 +1715,26 @@ import Observation
       return C.danger
     }
 
+    /// Vendor logos are fetched from each vendor's own site favicon at runtime rather than
+    /// redistributed in this repository; offline or on failure the provider's initial stands in.
     @ViewBuilder private func quotaProviderIcon(_ provider: String, size: CGFloat = 15) -> some View {
-      let asset: (String, String)? = switch provider {
-      case "Codex": ("VendorCodex", "svg")
-      case "Claude Code": ("VendorClaude", "png")
-      case "OpenCode": ("VendorOpenCode", "svg")
+      let domain: String? = switch provider {
+      case "Codex": "chatgpt.com"
+      case "Claude Code": "claude.ai"
+      case "OpenCode": "opencode.ai"
       default: nil
       }
-      if let asset,
-         let url = Bundle.module.url(forResource: asset.0, withExtension: asset.1),
-         let icon = NSImage(contentsOf: url) {
-        Image(nsImage: icon).resizable().scaledToFit().frame(width: size, height: size)
-          .accessibilityHidden(true)
+      if let domain {
+        AsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(domain)&sz=64")) { phase in
+          if let image = phase.image {
+            image.resizable().scaledToFit()
+          } else {
+            Text(provider.prefix(1)).font(.system(size: size * 0.7, weight: .semibold))
+              .foregroundStyle(C.textTertiary)
+          }
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
       }
     }
 
