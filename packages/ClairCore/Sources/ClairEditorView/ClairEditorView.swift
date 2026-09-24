@@ -22,7 +22,7 @@ import ClairEditorCore
     // (separate files, same module) update selection locally the same way
     // this file's mouse handling always has.
     public internal(set) var selection: TextSelectionSet {
-      didSet { openFoldsAroundSelection(); smearCaret(from: oldValue) }
+      didSet { openFoldsAroundSelection() }
     }
     public var highlights: [EditorHighlightSpan] = [] {
       didSet {
@@ -123,8 +123,6 @@ import ClairEditorCore
     /// Vertical centring of a glyph row inside a taller `lineHeight`.
     private let baselineShift: CGFloat
     private var knownContentWidth: CGFloat = 0
-    /// The fading "liquid" trail the primary caret leaves when it moves.
-    private let caretTrail = CALayer()
     var dragAnchor: UTF8Offset?
     var dragFixedSelections: [TextSelection] = []
     /// Where a ⌥-drag block selection started (`ClairEditorView+MultiCursor.swift`).
@@ -359,37 +357,6 @@ import ClairEditorCore
     public override func resignFirstResponder() -> Bool {
       needsDisplay = true
       return super.resignFirstResponder()
-    }
-
-    /// Stretches a ghost over the old and new caret rects, then collapses it
-    /// into the new one while fading — the caret itself (drawn in `draw`) is
-    /// already at its destination, so this is decoration only.
-    private func smearCaret(from old: TextSelectionSet) {
-      guard window?.firstResponder === self, let layer,
-        let from = old.selections.last.flatMap({ $0.isEmpty ? caretRect(for: $0.head) : nil }),
-        let to = selection.selections.last.flatMap({ $0.isEmpty ? caretRect(for: $0.head) : nil }),
-        from.origin != to.origin
-      else { return }
-      if caretTrail.superlayer == nil { layer.addSublayer(caretTrail) }
-      let end = to.insetBy(dx: -0.25, dy: 0)
-      CATransaction.begin()
-      CATransaction.setDisableActions(true)
-      caretTrail.backgroundColor = caretColor.cgColor
-      caretTrail.cornerRadius = 1
-      caretTrail.frame = end
-      caretTrail.opacity = 0
-      CATransaction.commit()
-      // A caret-sized ghost slides old → new and fades; no union box, so a
-      // jump never flashes a selection-like rectangle.
-      let group = CAAnimationGroup()
-      let position = CABasicAnimation(keyPath: "position")
-      position.fromValue = CGPoint(x: from.midX, y: from.midY)
-      let fade = CABasicAnimation(keyPath: "opacity")
-      fade.fromValue = 0.5
-      group.animations = [position, fade]
-      group.duration = 0.09
-      group.timingFunction = CAMediaTimingFunction(name: .easeOut)
-      caretTrail.add(group, forKey: "smear")
     }
 
     // MARK: - Drawing
