@@ -379,16 +379,16 @@ import ClairEditorCore
       caretTrail.frame = end
       caretTrail.opacity = 0
       CATransaction.commit()
+      // A caret-sized ghost slides old → new and fades; no union box, so a
+      // jump never flashes a selection-like rectangle.
       let group = CAAnimationGroup()
-      let bounds = CABasicAnimation(keyPath: "bounds.size")
-      bounds.fromValue = from.union(to).size
       let position = CABasicAnimation(keyPath: "position")
-      position.fromValue = CGPoint(x: from.union(to).midX, y: from.union(to).midY)
+      position.fromValue = CGPoint(x: from.midX, y: from.midY)
       let fade = CABasicAnimation(keyPath: "opacity")
-      fade.fromValue = 0.45
-      group.animations = [bounds, position, fade]
-      group.duration = 0.16
-      group.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.3, 1)
+      fade.fromValue = 0.5
+      group.animations = [position, fade]
+      group.duration = 0.09
+      group.timingFunction = CAMediaTimingFunction(name: .easeOut)
       caretTrail.add(group, forKey: "smear")
     }
 
