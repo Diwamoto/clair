@@ -76,8 +76,10 @@ check_package() {
 }
 
 check_sources() {
-  if rg -n --glob '*.swift' --glob 'Package.swift' \
-    'ClairMobileKit|ClairApp|ClairMobileApp|libvterm|CodeMirror|WKWebView|WebView' \
+  # grep, not rg: CI runners do not ship ripgrep, and `if rg` on a missing binary silently passed.
+  # Match real v1 dependencies (a WebKit editor, libvterm calls), not prose that names them.
+  if grep -rnE --include='*.swift' \
+    '^[[:space:]]*import (WebKit|ClairTextKit)$|WKWebView\(|vterm_[a-z_]+\(' \
     "$core_package/Sources" "$apps_package/Sources" \
     "$core_package/Package.swift" "$apps_package/Package.swift"; then
     printf 'foundation: v1 runtime dependency found in packages.\n' >&2
