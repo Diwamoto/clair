@@ -19,6 +19,9 @@ public enum Typography {
   public static let chromeStrong = TypeSpec(size: 11, weight: .semibold, numericWeight: 600)
   public static let chrome = TypeSpec(size: 11, weight: .regular, numericWeight: 400)
   public static let micro = TypeSpec(size: 9, weight: .medium, numericWeight: 500)
+  public static let sidebarStrong = TypeSpec(size: 12, weight: .semibold, numericWeight: 600)
+  public static let sidebar = TypeSpec(size: 12, weight: .regular, numericWeight: 400)
+  public static let sidebarMicro = TypeSpec(size: 10, weight: .medium, numericWeight: 500)
 
   /// The two font families the canvas defines. The mock's CSS stacks
   /// (`-apple-system, ..., 'SF Pro Text', system-ui, sans-serif` and

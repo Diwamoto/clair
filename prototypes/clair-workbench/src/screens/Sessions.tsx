@@ -227,7 +227,7 @@ export function AgentsPanel() {
         borderRadius: radius.control,
         background: selected ? color.surfaceActive : undefined,
         color: selected ? color.chromeInk : color.textTertiary,
-        fontSize: fs.caption,
+        fontSize: fs.secondary,
       }}
     >
       <span
@@ -240,12 +240,12 @@ export function AgentsPanel() {
         }}
       />
       <span style={{ flex: 1 }}>{label}</span>
-      <span style={{ fontSize: fs.caption, color: color.textTertiary }}>{count}</span>
+      <span style={{ fontSize: fs.secondary, color: color.textTertiary }}>{count}</span>
     </div>
   );
 
   const heading = (text: string) => (
-    <div style={{ padding: '8px 16px 4px', fontSize: fs.caption, color: color.textTertiary }}>{text}</div>
+    <div style={{ padding: '8px 16px 4px', fontSize: fs.secondary, color: color.textTertiary }}>{text}</div>
   );
 
   return (

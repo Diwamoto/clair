@@ -17,7 +17,7 @@ function StageButton({ staged, onClick, title }: { staged: boolean; onClick: () 
         e.stopPropagation();
         onClick();
       }}
-      style={{ width: 18, height: 18, fontSize: fs.secondary, fontWeight: 600, color: color.textTertiary, flexShrink: 0 }}
+      style={{ width: 18, height: 18, fontSize: fs.body, fontWeight: 600, color: color.textTertiary, flexShrink: 0 }}
     >
       {staged ? '−' : '+'}
     </button>
@@ -56,7 +56,7 @@ function FileRow({
         height: 26,
         padding: '0 8px',
         borderRadius: radius.control,
-        fontSize: fs.caption,
+        fontSize: fs.secondary,
         color: selected ? color.textPrimary : color.textSecondary,
         background: selected ? color.surfaceActive : undefined,
         cursor: 'pointer',
@@ -65,18 +65,18 @@ function FileRow({
       <IconClaude size={12} color={untracked ? color.success : color.textTertiary} />
       <span style={{ flex: 1, textAlign: 'left', color: untracked ? color.success : undefined }}>{file.name}</span>
       {untracked ? (
-        <span className="tnum" style={{ fontSize: fs.caption, color: color.textQuaternary }}>
+        <span className="tnum" style={{ fontSize: fs.secondary, color: color.textQuaternary }}>
           未追跡
         </span>
       ) : (
         <>
           {file.added ? (
-            <span className="tnum" style={{ fontSize: fs.caption, color: color.success }}>
+            <span className="tnum" style={{ fontSize: fs.secondary, color: color.success }}>
               +{file.added}
             </span>
           ) : null}
           {file.removed ? (
-            <span className="tnum" style={{ fontSize: fs.caption, color: color.danger }}>
+            <span className="tnum" style={{ fontSize: fs.secondary, color: color.danger }}>
               −{file.removed}
             </span>
           ) : null}
@@ -102,7 +102,7 @@ function SectionHeading({
 }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: space[1], height: 26, padding: '0 12px 0 20px' }}>
-      <span style={{ fontSize: fs.caption, fontWeight: 600, color: color.textTertiary, flex: 1 }}>
+      <span style={{ fontSize: fs.secondary, fontWeight: 600, color: color.textTertiary, flex: 1 }}>
         {label} <span style={{ color: color.textQuaternary, fontWeight: 400 }}>{count}</span>
       </span>
       {count ? (
@@ -110,7 +110,7 @@ function SectionHeading({
           className="act"
           title={bulkTitle}
           onClick={onBulk}
-          style={{ width: 18, height: 18, fontSize: fs.secondary, fontWeight: 600, color: color.textQuaternary, flexShrink: 0 }}
+          style={{ width: 18, height: 18, fontSize: fs.body, fontWeight: 600, color: color.textQuaternary, flexShrink: 0 }}
         >
           {bulkGlyph}
         </button>
@@ -135,8 +135,8 @@ function NoChanges() {
       }}
     >
       <IconShieldCheck size={24} color={color.divider} />
-      <span style={{ fontSize: fs.secondary, fontWeight: 600, color: color.textSecondary }}>変更はありません</span>
-      <span style={{ fontSize: fs.caption, color: color.textQuaternary, textAlign: 'center', maxWidth: 220, lineHeight: '15px' }}>
+      <span style={{ fontSize: fs.body, fontWeight: 600, color: color.textSecondary }}>変更はありません</span>
+      <span style={{ fontSize: fs.secondary, color: color.textQuaternary, textAlign: 'center', maxWidth: 220, lineHeight: '15px' }}>
         working tree はきれいです。
       </span>
     </div>
@@ -188,7 +188,7 @@ export function ReviewPanel() {
           borderBottom: `1px solid ${line.hairline}`,
         }}
       >
-        <span style={{ fontSize: fs.body, fontWeight: 600 }}>変更を確認</span>
+        <span style={{ fontSize: fs.title, fontWeight: 600 }}>変更を確認</span>
         <div style={{ flex: 1 }} />
         <button className="act" style={{ width: 20, height: 20 }} title="更新">
           <IconRefresh size={13} color={color.textQuaternary} />
@@ -207,7 +207,7 @@ export function ReviewPanel() {
             borderRadius: radius.control,
             background: color.chrome,
             color: color.textPrimary,
-            fontSize: fs.caption,
+            fontSize: fs.secondary,
             padding: '4px 8px',
             outline: 'none',
           }}
@@ -223,7 +223,7 @@ export function ReviewPanel() {
             height: 26,
             padding: '0 8px',
             borderRadius: radius.control,
-            fontSize: fs.caption,
+            fontSize: fs.secondary,
           }}
         >
           コミット

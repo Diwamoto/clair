@@ -1018,6 +1018,7 @@ import Observation
         Spacer(minLength: 0)
       }
       .frame(width: 242)
+      .font(Typography.font(Typography.sidebar))
       .background(C.chrome)
     }
 
@@ -1046,17 +1047,17 @@ import Observation
 
     private var settingsPanel: some View {
       VStack(alignment: .leading, spacing: 12) {
-        Text("設定を検索").font(.system(size: 11)).foregroundStyle(C.textQuaternary)
+        Text("設定を検索").font(.system(size: 12)).foregroundStyle(C.textQuaternary)
           .padding(.horizontal, 8).frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
           .background(C.chrome, in: RoundedRectangle(cornerRadius: Radius.control))
           .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.hairline))
-        Text("ワークスペース").font(.system(size: 11, weight: .semibold)).foregroundStyle(C.textTertiary).padding(.horizontal, 8)
+        Text("ワークスペース").font(.system(size: 12, weight: .semibold)).foregroundStyle(C.textTertiary).padding(.horizontal, 8)
         VStack(alignment: .leading, spacing: 0) {
           ForEach(["一般", "AIプロバイダー", "使用状況", "エディタ", "ターミナル", "モバイル", "アップデート"], id: \.self) { section in
             let selected = st.section == section
             Button { store.run("settings.open", ["section": .string(section)]) } label: {
               Text(section)
-                .font(.system(size: 11, weight: selected ? .semibold : .regular))
+                .font(.system(size: 12, weight: selected ? .semibold : .regular))
                 .foregroundStyle(selected ? C.textPrimary : C.textSecondary)
                 .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
                 .padding(.horizontal, 8)
@@ -1158,9 +1159,8 @@ import Observation
             closeSearch(); store.run("tab.open", ["path": .string($0.path)])
             store.buffers.reveal($0.path, line: $0.line)
           })
-          .frame(width: 620).background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.overlay))
+          .frame(width: 560).background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.overlay))
           .overlay(RoundedRectangle(cornerRadius: Radius.overlay).stroke(L.strong))
-          .shadow(color: .black.opacity(0.62), radius: 24, y: 18)
           .transition(.scale(scale: 0.97).combined(with: .opacity))
       }
     }
@@ -1258,14 +1258,14 @@ import Observation
       return LazyVStack(alignment: .leading, spacing: 0) {
         // Only the first scan blanks the tree; a rescan (every watcher event) swaps rows in place.
         if store.scanning && st.files.isEmpty {
-          Text("Loading...").font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+          Text("Loading...").font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
             .padding(.horizontal, 16).frame(height: 28)
         } else {
           // Project root: uppercase, branch glyph, no chevron — it reads as a
           // section label, not one more row in the same list as its children.
           // Folds the whole tree (GUI-local); click-to-collapse is unchanged.
           treeRow(depth: 0, selected: false, action: { rootFolded.toggle() }) {
-            Text(st.project).font(.system(size: 11, weight: .semibold)).textCase(.uppercase).foregroundStyle(C.textPrimary)
+            Text(st.project).font(.system(size: 12, weight: .semibold)).textCase(.uppercase).foregroundStyle(C.textPrimary)
             Spacer(minLength: 0)
           }
           if !rootFolded {
@@ -1275,16 +1275,18 @@ import Observation
                 let badge = st.dirty.contains(f.path) ? "M" : f.status
                 treeRow(depth: r.depth, selected: on, action: { store.run("tab.open", ["path": .string(f.path)]) }) {
                   Image(systemName: f.path.hasSuffix(".md") ? "text.alignleft" : "doc.text").font(.system(size: 10)).foregroundStyle(on ? C.textSecondary : C.textTertiary).frame(width: 12)
-                  Text(r.label).font(.system(size: 11, weight: on ? .semibold : .regular)).foregroundStyle(on ? C.textPrimary : C.textSecondary).lineLimit(1)
+                  Text(r.label).font(.system(size: 12, weight: on ? .semibold : .regular)).foregroundStyle(on ? C.textPrimary : C.textSecondary).lineLimit(1)
                   Spacer(minLength: 0)
-                  if let b = badge { Text(b).font(.system(size: 11, weight: .semibold)).foregroundStyle(b == "A" || b == "?" ? C.success : C.attention) }
+                  if let b = badge { Text(b).font(.system(size: 12, weight: .semibold)).foregroundStyle(b == "A" || b == "?" ? C.success : C.attention) }
                 }
                 .contextMenu { fileMenu(f.path, tab: false) }
               } else {
                 let open = !st.collapsed.contains(r.id)
                 treeRow(depth: r.depth, selected: false, action: { store.run("explorer.toggle", ["path": .string(r.id)]) }) {
                   chevron(open: open)
-                  Text(r.label).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary).lineLimit(1)
+                  Image(systemName: open ? "folder" : "folder.fill")
+                    .font(.system(size: 10)).foregroundStyle(C.textTertiary).frame(width: 12)
+                  Text(r.label).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textSecondary).lineLimit(1)
                   Spacer(minLength: 0)
                 }
                 .contextMenu {
@@ -1341,9 +1343,9 @@ import Observation
 
     private func row(_ title: String, depth: Int, selected: Bool, badge: Character? = nil, _ action: @escaping () -> Void) -> some View {
       treeRow(depth: depth, selected: selected, action: action) {
-        Text(title).font(Typography.font(Typography.chrome)).foregroundStyle(selected ? C.textPrimary : C.textSecondary)
+        Text(title).font(Typography.font(Typography.sidebar)).foregroundStyle(selected ? C.textPrimary : C.textSecondary)
         Spacer(minLength: 0)
-        if let b = badge { Text(String(b)).font(Typography.font(Typography.micro)).foregroundStyle(C.textTertiary) }
+        if let b = badge { Text(String(b)).font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textTertiary) }
       }
     }
 
@@ -1352,11 +1354,11 @@ import Observation
         .rotationEffect(.degrees(open ? 90 : 0)).frame(width: 10)
     }
 
-    /// Explorer row: an inset, rounded 28px tab with 12px indent per level.
+    /// Explorer row: an inset, rounded 24px tab with 12px indent per level.
     private func treeRow<Content: View>(depth: Int, selected: Bool, action: @escaping () -> Void, @ViewBuilder _ content: () -> Content) -> some View {
       Button(action: action) {
-        HStack(spacing: 4, content: content)
-          .padding(.leading, 8 + CGFloat(depth) * 12).padding(.trailing, 8).frame(height: 28)
+        HStack(spacing: 10, content: content)
+          .padding(.leading, 8 + CGFloat(depth) * 12).padding(.trailing, 8).frame(height: 24)
           .frame(maxWidth: .infinity, alignment: .leading)
           .background(selected ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
           .contentShape(Rectangle())
@@ -1405,12 +1407,12 @@ import Observation
 
     private var debugPanel: some View {
       VStack(alignment: .leading, spacing: 0) {
-        Text("実行とデバッグ").font(.system(size: 11, weight: .semibold)).foregroundStyle(C.textTertiary)
+        Text("実行とデバッグ").font(.system(size: 12, weight: .semibold)).foregroundStyle(C.textTertiary)
           .padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 8)
         HStack(spacing: 4) {
           Button { startDebugFromUI() } label: {
             Image(systemName: "play.fill")
-              .font(.system(size: 11))
+              .font(.system(size: 12))
               .foregroundStyle(C.debugBlueText)
               .frame(width: 28, height: 28)
               .background(C.debugBlue.opacity(0.16), in: RoundedRectangle(cornerRadius: Radius.control))
@@ -1428,7 +1430,7 @@ import Observation
               Spacer(minLength: 0)
               Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
             }
-            .font(.system(size: 11))
+            .font(.system(size: 12))
             .foregroundStyle(C.textSecondary)
             .padding(.horizontal, 8)
             .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
@@ -1441,7 +1443,7 @@ import Observation
         if debugMode == "attach" {
           TextField("プロセス ID (PID)", text: $debugPID)
             .textFieldStyle(.plain)
-            .font(.system(size: 11, design: .monospaced))
+            .font(.system(size: 12, design: .monospaced))
             .foregroundStyle(C.textPrimary)
             .padding(.horizontal, 8).frame(height: 28)
             .background(C.canvas, in: RoundedRectangle(cornerRadius: Radius.control))
@@ -1449,7 +1451,7 @@ import Observation
             .padding(.horizontal, 12).padding(.top, 6)
         }
         Text(debugSetupMessage)
-          .font(.system(size: 11)).foregroundStyle(C.textTertiary)
+          .font(.system(size: 12)).foregroundStyle(C.textTertiary)
           .padding(.horizontal, 12).padding(.top, 8).fixedSize(horizontal: false, vertical: true)
         debugSection("ブレークポイント")
         if let session = store.debugSession, !session.breakpoints.isEmpty {
@@ -1459,7 +1461,7 @@ import Observation
               Button { _ = store.run("debug.breakpoint", ["path": .string(path), "line": .int(line)]) } label: {
                 Label("\(URL(fileURLWithPath: path).lastPathComponent):\(status?.line ?? line)",
                   systemImage: status?.verified == true ? "circle.fill" : "circle.dotted")
-                  .font(.system(size: 11)).foregroundStyle(status?.verified == false ? C.attention : C.textSecondary)
+                  .font(.system(size: 12)).foregroundStyle(status?.verified == false ? C.attention : C.textSecondary)
                   .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
               }.buttonStyle(.hoverWash).help(status?.message ?? (status == nil ? "未検証" : "検証済み"))
                 .padding(.horizontal, 12)
@@ -1467,14 +1469,14 @@ import Observation
           }
         } else { debugEmpty("設定されていません") }
         Button { toggleBreakpointAtCaret() } label: { Label("現在の行に追加", systemImage: "plus") }
-          .buttonStyle(.hoverWash).font(.system(size: 11)).padding(.horizontal, 12).padding(.top, 6)
+          .buttonStyle(.hoverWash).font(.system(size: 12)).padding(.horizontal, 12).padding(.top, 6)
           .disabled(st.active == nil)
         debugSection("スレッドとコールスタック")
         if let session = store.debugSession, !session.threads.isEmpty {
           ForEach(session.threads) { thread in
             Button { _ = store.run("debug.selectThread", ["id": .int(thread.id)]) } label: {
               Label(thread.name, systemImage: session.selectedThread == thread.id ? "checkmark.circle.fill" : "circle.grid.2x2")
-                .font(.system(size: 11)).foregroundStyle(session.selectedThread == thread.id ? C.textPrimary : C.textTertiary)
+                .font(.system(size: 12)).foregroundStyle(session.selectedThread == thread.id ? C.textPrimary : C.textTertiary)
             }.buttonStyle(.hoverWash).padding(.horizontal, 12).frame(minHeight: 28)
           }
         }
@@ -1485,7 +1487,7 @@ import Observation
                 Text(frame.name).foregroundStyle(C.textPrimary).lineLimit(1)
                 Text(frame.path.map { "\(URL(fileURLWithPath: $0).lastPathComponent):\(frame.line)" } ?? "場所不明")
                   .foregroundStyle(C.textQuaternary)
-              }.font(.system(size: 11)).frame(maxWidth: .infinity, alignment: .leading)
+              }.font(.system(size: 12)).frame(maxWidth: .infinity, alignment: .leading)
             }.buttonStyle(.hoverWash).padding(.horizontal, 12).frame(minHeight: 34)
               .background(session.selectedFrame == frame.id ? C.debugBlue.opacity(0.08) : Color.clear)
               .overlay(alignment: .leading) {
@@ -1505,14 +1507,14 @@ import Observation
                   Text(variable.value).foregroundStyle(C.textQuaternary).lineLimit(2)
                 }
                 Spacer(minLength: 0)
-              }.font(.system(size: 11)).padding(.leading, 12 + CGFloat(variable.depth * 12)).padding(.trailing, 12).padding(.vertical, 4)
+              }.font(.system(size: 12)).padding(.leading, 12 + CGFloat(variable.depth * 12)).padding(.trailing, 12).padding(.vertical, 4)
             }.buttonStyle(.hoverWash).disabled(variable.reference == 0)
           }
         } else { debugEmpty("停止すると表示されます") }
         debugSection("デバッグコンソール")
         if let session = store.debugSession, !session.console.isEmpty {
           ForEach(Array(session.console.enumerated()), id: \.offset) { _, line in
-            Text(line).font(.system(size: 11, design: .monospaced))
+            Text(line).font(.system(size: 12, design: .monospaced))
               .foregroundStyle(C.textTertiary)
               .frame(maxWidth: .infinity, alignment: .leading)
               .padding(.horizontal, 12).padding(.vertical, 2)
@@ -1523,11 +1525,11 @@ import Observation
     }
 
     private func debugSection(_ title: String) -> some View {
-      Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(C.textTertiary)
+      Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(C.textTertiary)
         .padding(.horizontal, 12).padding(.top, 16).padding(.bottom, 5)
     }
     private func debugEmpty(_ text: String) -> some View {
-      Text(text).font(.system(size: 11)).foregroundStyle(C.textQuaternary).padding(.horizontal, 12)
+      Text(text).font(.system(size: 12)).foregroundStyle(C.textQuaternary).padding(.horizontal, 12)
     }
 
     private var debugSetupMessage: String {
@@ -2157,7 +2159,6 @@ import Observation
         }
         .frame(width: 560).background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.overlay))
         .overlay(RoundedRectangle(cornerRadius: Radius.overlay).stroke(L.strong))
-        .shadow(color: .black.opacity(0.62), radius: 24, y: 18)
         .transition(.scale(scale: 0.97).combined(with: .opacity))
       }
     }

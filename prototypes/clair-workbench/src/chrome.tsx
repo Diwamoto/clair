@@ -686,7 +686,7 @@ export function SourceControlModeTabs() {
               padding: '0 12px',
               background: on ? color.surfaceActive : undefined,
               color: on ? color.textPrimary : color.textSecondary,
-              fontSize: fs.caption,
+              fontSize: fs.secondary,
               fontWeight: on ? 600 : 400,
             }}
           >
@@ -1023,6 +1023,7 @@ export function AppShell({
             backgroundColor: color.chrome,
             borderRight: `1px solid ${line.chrome}`,
             minHeight: 0,
+            fontSize: fs.secondary,
           }}
         >
           <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>{panel}</div>

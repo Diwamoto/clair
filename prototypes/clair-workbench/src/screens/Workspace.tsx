@@ -3,7 +3,7 @@ import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { targetRing, useContextMenu } from '../contextMenu';
 import { files, tree } from '../data';
 import { HighlightedLine } from '../highlight';
-import { IconBranchSmall, IconChevron, IconCloseThin, IconEllipsis } from '../icons';
+import { IconBranchSmall, IconChevron, IconCloseThin, IconEllipsis, IconFolder } from '../icons';
 import { copyText, editorMenu, fileMenu, folderMenu, readClipboard, streamMenu } from '../menus';
 import { useWorkbench, type PaneNode } from '../store';
 import { FileIcon } from '../chrome';
@@ -40,8 +40,8 @@ export function ExplorerPanel() {
           const row = (selected: boolean): React.CSSProperties => ({
             display: 'flex',
             alignItems: 'center',
-            gap: space[1],
-            height: 26,
+            gap: 10,
+            height: 24,
             width: 'calc(100% - 16px)',
             margin: '0 8px',
             padding: `0 8px 0 ${8 + node.depth * INDENT}px`,
@@ -70,7 +70,7 @@ export function ExplorerPanel() {
                 style={{ ...row(false), color: color.textPrimary }}
               >
                 <IconBranchSmall size={10} />
-                <span style={{ fontSize: fs.caption, fontWeight: 600, marginLeft: space[0], textTransform: 'uppercase' }}>
+                <span style={{ fontSize: fs.secondary, fontWeight: 600, textTransform: 'uppercase' }}>
                   {node.name}
                 </span>
               </button>
@@ -88,7 +88,8 @@ export function ExplorerPanel() {
                 style={{ ...row(false), color: color.textSecondary }}
               >
                 {chevron(open)}
-                <span style={{ fontSize: fs.caption, marginLeft: space[0] }}>{node.name}</span>
+                <IconFolder size={12} color={color.textTertiary} />
+                <span style={{ fontSize: fs.secondary }}>{node.name}</span>
               </button>
             );
           }
@@ -106,11 +107,11 @@ export function ExplorerPanel() {
               style={{ ...row(selected), color: selected ? color.textPrimary : color.textSecondary }}
             >
               <FileIcon kind={file?.kind ?? 'swift'} tint={selected ? color.textSecondary : color.textTertiary} />
-              <span style={{ fontSize: fs.caption, flex: 1, fontWeight: selected ? 600 : 400 }}>{node.name}</span>
+              <span style={{ fontSize: fs.secondary, flex: 1, fontWeight: selected ? 600 : 400 }}>{node.name}</span>
               {status ? (
                 <span
                   style={{
-                    fontSize: fs.caption,
+                    fontSize: fs.secondary,
                     fontWeight: 600,
                     color: status === 'A' ? color.success : color.attention,
                   }}

@@ -187,12 +187,12 @@ export function SettingsPanel() {
               background: color.chrome,
               border: `1px solid ${line.hairline}`,
               color: color.textSecondary,
-              fontSize: fs.caption,
+              fontSize: fs.secondary,
               outline: 'none',
             }}
           />
           <nav>
-            <div style={{ margin: '4px 8px', color: color.textTertiary, fontSize: fs.caption, fontWeight: 600 }}>
+            <div style={{ margin: '4px 8px', color: color.textTertiary, fontSize: fs.secondary, fontWeight: 600 }}>
               ワークスペース
             </div>
             {sections.map((s) => {
@@ -212,7 +212,7 @@ export function SettingsPanel() {
                     borderRadius: radius.control,
                     background: on ? color.surfaceActive : undefined,
                     color: on ? color.textPrimary : color.textSecondary,
-                    fontSize: fs.caption,
+                    fontSize: fs.secondary,
                     fontWeight: on ? 600 : 400,
                   }}
                 >

@@ -92,7 +92,7 @@ function DebugToolbar() {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ padding: '12px 12px 4px', fontSize: fs.caption, fontWeight: 600, color: color.textTertiary }}>
+    <div style={{ padding: '12px 12px 4px', fontSize: fs.secondary, fontWeight: 600, color: color.textTertiary }}>
       {children}
     </div>
   );
@@ -181,7 +181,7 @@ export function DebugPanel() {
 
   return (
     <div className="scroll" style={{ position: 'absolute', inset: 0 }}>
-          <div style={{ padding: '12px 12px 4px', fontSize: fs.caption, fontWeight: 600, color: color.textTertiary }}>
+          <div style={{ padding: '12px 12px 4px', fontSize: fs.secondary, fontWeight: 600, color: color.textTertiary }}>
             ブレークポイント
           </div>
           {wb.breakpoints.length ? (
@@ -205,13 +205,13 @@ export function DebugPanel() {
                   }}
                 >
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: color.danger, flexShrink: 0 }} />
-                  <span className="cl" style={{ fontSize: fs.caption }}>
+                  <span className="cl" style={{ fontSize: fs.secondary }}>
                     ClairApp.swift:{bp}
                   </span>
                 </button>
               ))
           ) : (
-            <div style={{ padding: '0 12px', color: color.textQuaternary, fontSize: fs.caption }}>設定されていません</div>
+            <div style={{ padding: '0 12px', color: color.textQuaternary, fontSize: fs.secondary }}>設定されていません</div>
           )}
 
           <SectionLabel>コールスタック</SectionLabel>
@@ -235,8 +235,8 @@ export function DebugPanel() {
                   background: top ? 'rgba(91,136,247,0.08)' : undefined,
                 }}
               >
-                <span style={{ fontSize: fs.caption, color: top ? color.textPrimary : color.textTertiary }}>{name}</span>
-                <small className="cl" style={{ color: color.textQuaternary, fontSize: fs.caption }}>
+                <span style={{ fontSize: fs.secondary, color: top ? color.textPrimary : color.textTertiary }}>{name}</span>
+                <small className="cl" style={{ color: color.textQuaternary, fontSize: fs.secondary }}>
                   {where}
                 </small>
               </div>
@@ -252,10 +252,10 @@ export function DebugPanel() {
             ] as const
           ).map(([name, value]) => (
             <div key={name} style={{ padding: '4px 12px' }}>
-              <div className="cl" style={{ color: color.codeFunc, fontSize: fs.caption }}>
+              <div className="cl" style={{ color: color.codeFunc, fontSize: fs.secondary }}>
                 {name}
               </div>
-              <small className="cl" style={{ color: color.textQuaternary, fontSize: fs.caption }}>
+              <small className="cl" style={{ color: color.textQuaternary, fontSize: fs.secondary }}>
                 {value}
               </small>
             </div>
@@ -377,7 +377,7 @@ export function DebugAgentBadge() {
 export function DebugAgentPanel() {
   return (
     <div className="scroll" style={{ position: 'absolute', inset: 0 }}>
-      <div style={{ padding: '12px 12px 4px', fontSize: fs.caption, fontWeight: 600, color: color.textTertiary }}>
+      <div style={{ padding: '12px 12px 4px', fontSize: fs.secondary, fontWeight: 600, color: color.textTertiary }}>
         ブレークポイント
       </div>
       <div
@@ -393,10 +393,10 @@ export function DebugAgentPanel() {
         }}
       >
         <span style={{ width: 8, height: 8, borderRadius: '50%', background: color.danger, flexShrink: 0 }} />
-        <span className="cl" style={{ fontSize: fs.caption }}>
+        <span className="cl" style={{ fontSize: fs.secondary }}>
           main.go:40
         </span>
-        <span style={{ marginLeft: 'auto', fontSize: fs.caption, color: color.textQuaternary }}>agent</span>
+        <span style={{ marginLeft: 'auto', fontSize: fs.secondary, color: color.textQuaternary }}>agent</span>
       </div>
 
       <SectionLabel>コールスタック</SectionLabel>
@@ -419,8 +419,8 @@ export function DebugAgentPanel() {
             background: top ? 'rgba(91,136,247,0.08)' : undefined,
           }}
         >
-          <span style={{ fontSize: fs.caption, color: top ? color.textPrimary : color.textTertiary }}>{name}</span>
-          <small className="cl" style={{ color: color.textQuaternary, fontSize: fs.caption }}>
+          <span style={{ fontSize: fs.secondary, color: top ? color.textPrimary : color.textTertiary }}>{name}</span>
+          <small className="cl" style={{ color: color.textQuaternary, fontSize: fs.secondary }}>
             {where}
           </small>
         </div>
@@ -428,10 +428,10 @@ export function DebugAgentPanel() {
 
       <SectionLabel>変数</SectionLabel>
       <div style={{ padding: '4px 12px', background: 'rgba(226,123,131,0.09)' }}>
-        <div className="cl" style={{ color: color.danger, fontSize: fs.caption }}>
+        <div className="cl" style={{ color: color.danger, fontSize: fs.secondary }}>
           user
         </div>
-        <small className="cl" style={{ color: color.danger, fontSize: fs.caption }}>
+        <small className="cl" style={{ color: color.danger, fontSize: fs.secondary }}>
           *User · nil
         </small>
       </div>
@@ -442,10 +442,10 @@ export function DebugAgentPanel() {
         ] as const
       ).map(([name, value]) => (
         <div key={name} style={{ padding: '4px 12px' }}>
-          <div className="cl" style={{ color: color.codeFunc, fontSize: fs.caption }}>
+          <div className="cl" style={{ color: color.codeFunc, fontSize: fs.secondary }}>
             {name}
           </div>
-          <small className="cl" style={{ color: color.textQuaternary, fontSize: fs.caption }}>
+          <small className="cl" style={{ color: color.textQuaternary, fontSize: fs.secondary }}>
             {value}
           </small>
         </div>
