@@ -20,9 +20,12 @@ public enum MCPGate {
     guard let d = registry.commands.first(where: { $0.id == req.command }) else {
       return .failure(CommandError(.unknownCommand, req.command))
     }
-    guard d.aiAvailable else { return .failure(CommandError(.notAvailableToAI, "\(req.command) is not available to AI")) }
+    // V16: a CLI call from inside a Clair terminal may be an agent or the user. Non-AI commands are not
+    // refused there (the user's own `clair open` keeps working) but always need approval in the GUI.
+    let terminal = req.via == nil && req.caller != nil
+    guard d.aiAvailable || terminal else { return .failure(CommandError(.notAvailableToAI, "\(req.command) is not available to AI")) }
     let seen = snapshot()
-    switch registry.preflight(req.command, req.input, seen) {
+    switch registry.preflight(req.command, req.input, seen).map({ d.aiAvailable ? $0 : max($0, .write) }) {
     case .failure(let e): return .failure(e)
     case .success(let risk) where risk < .write:
       return run({ _ in nil }, false)

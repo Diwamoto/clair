@@ -223,4 +223,19 @@ final class WorkbenchGitTests: XCTestCase {
     XCTAssertEqual(changes.first { $0.path == "a.txt" }.map { [$0.staged, $0.unstaged] }, [false, true])
     XCTAssertEqual(changes.first { $0.path == "new.txt" }?.untracked, true)
   }
+
+  // V16: a child agent can get its own managed worktree without switching the shown Project.
+  func testAgentLaunchInNewWorktreeKeepsProject() throws {
+    var (s, root) = try repo()
+    let shown = s.project
+    guard case .text(let key) = try r.execute(
+      "agent.launch", ["profile": .string("claude"), "branch": .string("agent/a"), "parent": .string(root + "#2")],
+      confirmed: true, state: &s
+    ).get() else { return XCTFail() }
+    XCTAssertEqual(s.project, shown)
+    let wt = try XCTUnwrap(s.projects.first { $0.branch == "agent/a" })
+    XCTAssertEqual(wt.origin, root)
+    XCTAssertEqual(s.launches[Int(key.split(separator: "#").last!)!]?.cwd, wt.path)
+    XCTAssertEqual(r.execute("agent.launch", ["profile": .string("claude"), "branch": .string("agent/a"), "parent": .string(root + "#2")], confirmed: true, state: &s).failure?.code, .preconditionFailed)
+  }
 }

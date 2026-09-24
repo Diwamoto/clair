@@ -137,6 +137,7 @@
         for (name, value) in environment where Self.forwardedEnvironment.contains(name) {
           env[name] = value
         }
+        env["CLAIR_TERMINAL_KEY"] = key  // V16: lets `clair` inside this shell say which pane it runs in
         spec = ClairLocalShellSpec(
           executableURL: spec.executableURL,
           arguments: command.map { ["-l", "-c", $0] } ?? spec.arguments,

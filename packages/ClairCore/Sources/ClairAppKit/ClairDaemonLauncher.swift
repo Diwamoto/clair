@@ -72,6 +72,41 @@ import Foundation
       try? client.shutdown()
     }
 
+    /// V16: settings' "install the `clair` command" — a symlink on PATH to the bundled CLI, like VS Code's `code`.
+    public static let commandLink = URL(fileURLWithPath: "/usr/local/bin/clair")
+
+    public static var isCommandInstalled: Bool {
+      guard let clair = binary("clair") else { return false }
+      return (try? FileManager.default.destinationOfSymbolicLink(atPath: commandLink.path)) == clair.path
+    }
+
+    /// Links without privileges when `/usr/local/bin` is writable, else asks for an administrator password.
+    /// Never replaces a real file someone else put there.
+    public static func installCommand() throws {
+      guard let clair = binary("clair") else { throw InstallError("clair 実行ファイルがアプリ内に見つかりません。") }
+      let fm = FileManager.default
+      if (try? fm.attributesOfItem(atPath: commandLink.path)[.type] as? FileAttributeType) == .typeRegular {
+        throw InstallError("\(commandLink.path) に別のファイルがあります。削除してから再試行してください。")
+      }
+      if (try? fm.removeItem(at: commandLink)) != nil || !fm.fileExists(atPath: commandLink.path),
+        (try? fm.createSymbolicLink(at: commandLink, withDestinationURL: clair)) != nil
+      { return }
+      let shell = "mkdir -p /usr/local/bin && ln -sfn \(shellQuote(clair.path)) \(shellQuote(commandLink.path))"
+      let apple = "do shell script \"" + shell.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+        + "\" with administrator privileges"
+      let p = Process()
+      p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+      p.arguments = ["-e", apple]
+      p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
+      try p.run(); p.waitUntilExit()
+      guard p.terminationStatus == 0, isCommandInstalled else { throw InstallError("インストールを中止しました。") }
+    }
+
+    public struct InstallError: LocalizedError {
+      public let errorDescription: String?
+      init(_ message: String) { errorDescription = message }
+    }
+
     static func shellQuote(_ s: String) -> String {
       "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }

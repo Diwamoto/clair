@@ -23,11 +23,29 @@ final class WorkbenchMCPTests: XCTestCase {
   }
 
   func testAIUnavailableCommandRejectedWithoutPrompt() {
-    for id in ["agent.launch", "project.open", "settings.set", "palette.commands"] {
+    for id in ["worktree.create", "project.open", "settings.set", "palette.commands"] {
       let g = gate(id, ["path": .string("/"), "profile": .string("claude"), "key": .string("showQuota"), "value": .bool(true)])
       XCTAssertEqual(try? g.0.get(), nil); XCTAssertEqual(g.asked + g.ran, 0, id)
       if case .failure(let e) = g.0 { XCTAssertEqual(e.code, .notAvailableToAI, id) }
     }
+  }
+
+  // V16: a CLI call from inside a Clair terminal is gated like MCP, but non-AI commands ask instead of refusing.
+  func testTerminalCallerIsGatedAndNonAICommandsNeedApproval() {
+    func call(_ id: String, _ input: CommandInput, approve: Bool) -> (Result<CommandResult, CommandError>, Int, Int) {
+      var asked = 0, ran = 0
+      let r = MCPGate.handle(
+        WorkbenchIPCRequest(command: id, input: input, caller: "/p#2"), registry: reg, snapshot: { WorkbenchState() },
+        approve: { _, _, _ in asked += 1; return approve }, run: { _, _ in ran += 1; return .success(.ok) })
+      return (r, asked, ran)
+    }
+    let s = WorkbenchState()
+    let open = call("tab.open", ["path": .string(s.files[0].path)], approve: false)  // AI, read: no card
+    XCTAssertEqual(open.1, 0); XCTAssertEqual(open.2, 1)
+    let set = call("settings.set", ["key": .string("showQuota"), "value": .bool(true)], approve: false)  // non-AI: card, denied
+    XCTAssertEqual(set.1, 1); XCTAssertEqual(set.2, 0)
+    if case .failure(let e) = set.0 { XCTAssertEqual(e.code, .denied) } else { XCTFail() }
+    XCTAssertEqual(call("settings.set", ["key": .string("showQuota"), "value": .bool(true)], approve: true).2, 1)
   }
 
   func testWriteAndDestructiveNeedApprovalAndDenialBlocks() {
@@ -50,8 +68,8 @@ final class WorkbenchMCPTests: XCTestCase {
   func testAdapterListsOnlyAIAvailableAndIgnoresClaimedRisk() throws {
     var seen: WorkbenchIPCRequest?
     let list = try XCTUnwrap(MCPServer.respond(to: #"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#, call: { _ in WorkbenchIPCReply() }))
-    XCTAssertTrue(list.contains("state.snapshot")); XCTAssertFalse(list.contains("agent.launch")); XCTAssertFalse(list.contains("settings.set"))
-    let denied = MCPServer.respond(to: #"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"agent.launch","arguments":{"profile":"claude","risk":"read"}}}"#, call: { seen = $0; return WorkbenchIPCReply() })
+    XCTAssertTrue(list.contains("state.snapshot")); XCTAssertTrue(list.contains("agent.launch")); XCTAssertFalse(list.contains("settings.set"))
+    let denied = MCPServer.respond(to: #"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"settings.set","arguments":{"key":"showQuota","value":true,"risk":"read"}}}"#, call: { seen = $0; return WorkbenchIPCReply() })
     XCTAssertNil(seen); XCTAssertTrue(try XCTUnwrap(denied).contains("unknown tool"))
     _ = MCPServer.respond(to: #"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"pane.focus","arguments":{"id":1}}}"#, call: { seen = $0; return WorkbenchIPCReply() })
     XCTAssertEqual(seen?.via, .mcp)

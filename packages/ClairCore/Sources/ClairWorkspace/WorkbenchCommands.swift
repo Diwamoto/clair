@@ -357,16 +357,67 @@ extension CommandRegistry {
       s.panesClosed = false
       return .pane(s.tree.focused)
     },
-    // External: spawns a user-configured executable. ai: false — an agent must not start agents (V07/ADR-0002).
-    cmd("agent.launch", "エージェントを起動", .external, ai: false,
-        params: [CommandParam("profile", .string, allowed: AgentProfile.all.map(\.id))], palette: false,
-        preflight: { s, _ throws(CommandError) in
-          try require(s.projects.contains { $0.name == s.project }, "no active project"); return .external
+    // External: spawns a user-configured executable, so every launch is approved in the GUI (MCPGate).
+    // V16: AI-available (owner decision 2026-09-24, spec §9): an agent in a Clair terminal fans out
+    // children next to its own pane (`parent`, injected by the GUI from the caller's terminal, never trusted
+    // from the client), optionally in a new Clair-managed worktree (`branch`), with a delegated `prompt`.
+    // The client still cannot choose cwd or command: cwd is the Project root or the worktree Clair creates.
+    cmd("agent.launch", "エージェントを起動", .external,
+        params: [
+          CommandParam("profile", .string, allowed: AgentProfile.all.map(\.id)),
+          CommandParam("prompt", .string, required: false), CommandParam("branch", .string, required: false),
+          CommandParam("direction", .string, required: false, allowed: ["right", "down"]),
+          CommandParam("parent", .string, required: false),
+        ], palette: false,
+        preflight: { s, i throws(CommandError) in
+          let home = try s.launchHome(i["parent"]?.string)
+          if let b = i["branch"]?.string {
+            try require(FileManager.default.fileExists(atPath: home.project.path + "/.git"), "not a Git project")
+            try require(WorkbenchGit.validBranch(b), "invalid branch name")
+            try require(!WorkbenchGit.branchExists(home.project.path, b), "branch \(b) exists")
+          }
+          return .external
         }) { s, i in
-      s.tree.splitFocused(.vertical, kind: .terminal)
-      let root = s.projects.first { $0.name == s.project }!.path
-      s.launches[s.tree.focused] = AgentLaunch(profile: i["profile"]!.string!, cwd: root)
-      return .pane(s.tree.focused)
+      let home = try! s.launchHome(i["parent"]?.string)
+      var cwd = home.project.path
+      if let b = i["branch"]?.string {
+        guard case .success(let wt) = WorkbenchGit.createWorktree(home.project, branch: b) else { return .text("worktree add failed") }
+        s.projects.append(wt); cwd = wt.path
+      }
+      let launch = AgentLaunch(
+        profile: i["profile"]!.string!, cwd: cwd, prompt: i["prompt"]?.string.flatMap { $0.isEmpty ? nil : $0 },
+        parent: i["parent"]?.string)
+      let axis: PaneTree.Axis = i["direction"]?.string == "down" ? .vertical : .horizontal
+      let pane = s.withLayout(home.project.name) { l in
+        let id = home.pane.map { l.tree.split($0, axis, kind: .terminal) } ?? { l.tree.splitFocused(.vertical, kind: .terminal); return l.tree.focused }()
+        l.launches[id] = launch
+        return id
+      }
+      return home.pane == nil ? .pane(pane) : .text(WorkbenchState.terminalKey(home.project.path, pane))
+    },
+    // V16: fan-in. `key` is the `root#pane` terminal key agent.launch returned.
+    cmd("agent.status", "エージェントの状態", .read, params: [CommandParam("key", .string)], palette: false,
+        preflight: { s, i throws(CommandError) in _ = try s.delegated(i["key"]!.string!); return .read }) { s, i in
+      let l = try! s.delegated(i["key"]!.string!)
+      return .text(AgentRun(id: l.run!).exitCode.map { "exited \($0)" } ?? "running")
+    },
+    cmd("agent.output", "エージェントの出力", .read,
+        params: [CommandParam("key", .string), CommandParam("lines", .int, required: false)], palette: false,
+        preflight: { s, i throws(CommandError) in _ = try s.delegated(i["key"]!.string!); return .read }) { s, i in
+      let l = try! s.delegated(i["key"]!.string!)
+      return .text(AgentRun(id: l.run!).output(lines: max(1, i["lines"]?.int ?? 200)))
+    },
+    // Closing your own finished child is housekeeping; anything else ends someone's session and needs approval.
+    cmd("agent.close", "エージェントのペインを閉じる", .read,
+        params: [CommandParam("key", .string), CommandParam("parent", .string, required: false)], palette: false,
+        preflight: { s, i throws(CommandError) in
+          let l = try s.delegated(i["key"]!.string!)
+          let own = l.parent != nil && l.parent == i["parent"]?.string && AgentRun(id: l.run!).exitCode != nil
+          return own ? .read : .write
+        }) { s, i in
+      let t = s.terminal(i["key"]!.string!)!
+      s.withLayout(t.project) { l in l.tree.close(t.pane); l.launches[t.pane] = nil }
+      return .ok
     },
     cmd("tab.open", "ファイルを開く", .read, params: [CommandParam("path", .string)],
         preflight: { s, i throws(CommandError) in

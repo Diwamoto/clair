@@ -14,9 +14,9 @@ final class WorkbenchAgentLaunchTests: XCTestCase {
     return (s, dir.path)
   }
 
-  func testLaunchNeedsConfirmationAndIsNotAIAvailable() throws {
+  func testLaunchNeedsConfirmationAndIsAIAvailableForV16() throws {
     var (s, _) = try opened()
-    XCTAssertEqual(r.commands.first { $0.id == "agent.launch" }?.aiAvailable, false)
+    XCTAssertEqual(r.commands.first { $0.id == "agent.launch" }?.aiAvailable, true)
     XCTAssertEqual(r.execute("agent.launch", ["profile": .string("claude")], state: &s).failure?.code, .confirmationRequired)
     XCTAssertTrue(s.launches.isEmpty)
     XCTAssertEqual(r.execute("agent.launch", ["profile": .string("rm")], confirmed: true, state: &s).failure?.code, .invalidInput)
@@ -70,5 +70,75 @@ final class WorkbenchAgentLaunchTests: XCTestCase {
   func testSwapWithUnknownPaneFails() throws {
     var (s, _) = try opened()
     XCTAssertEqual(r.execute("pane.swap", ["idA": .int(1), "idB": .int(99)], state: &s).failure?.code, .preconditionFailed)
+  }
+
+  // V16: an agent in pane 2 fans out three children next to itself; focus and the other panes stay put.
+  func testFanOutNextToParentWithoutStealingFocus() throws {
+    var (s, root) = try opened()
+    try r.execute("pane.focus", ["id": .int(3)], state: &s).get()
+    let parent = WorkbenchState.terminalKey(root, 2)
+    var keys: [String] = []
+    for n in 1...3 {
+      guard case .text(let key) = try r.execute(
+        "agent.launch", ["profile": .string("claude"), "prompt": .string("task \(n) it's"), "parent": .string(parent)],
+        confirmed: true, state: &s
+      ).get() else { return XCTFail() }
+      keys.append(key)
+    }
+    XCTAssertEqual(Set(keys).count, 3)
+    XCTAssertEqual(s.tree.focused, 3)
+    let l = try s.delegated(keys[0])
+    XCTAssertEqual(l.parent, parent); XCTAssertEqual(l.cwd, root)
+    XCTAssertTrue(l.command.hasPrefix("/bin/sh -c '"))
+    XCTAssertTrue(l.command.contains("claude -p"))
+    // unknown parent terminal: refused before anything opens
+    XCTAssertEqual(r.execute("agent.launch", ["profile": .string("claude"), "parent": .string(root + "#99")], confirmed: true, state: &s).failure?.code, .preconditionFailed)
+    // status/output only for delegated agents
+    XCTAssertEqual(r.execute("agent.status", ["key": .string(parent)], state: &s).failure?.code, .preconditionFailed)
+  }
+
+  // The recorded run: the generated command really records output and the exit status through `script`.
+  func testDelegatedRunRecordsOutputAndExit() throws {
+    var (s, root) = try opened()
+    let bin = URL(fileURLWithPath: root).appending(path: "bin")
+    try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+    try "#!/bin/sh\necho \"did: $2\"\nexit 3\n".write(to: bin.appending(path: "claude"), atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: bin.appending(path: "claude").path)
+    guard case .text(let key) = try r.execute(
+      "agent.launch", ["profile": .string("claude"), "prompt": .string("say 'hi'"), "parent": .string(WorkbenchState.terminalKey(root, 2))],
+      confirmed: true, state: &s
+    ).get() else { return XCTFail() }
+    let l = try s.delegated(key)
+    defer { for ext in ["log", "exit"] { try? FileManager.default.removeItem(at: AgentRun.directory.appending(path: "\(l.run!).\(ext)")) } }
+    XCTAssertEqual(try r.execute("agent.status", ["key": .string(key)], state: &s).get(), .text("running"))
+    let p = Process()
+    p.executableURL = URL(fileURLWithPath: "/bin/zsh")
+    p.arguments = ["-c", l.command]
+    p.environment = ["PATH": bin.path + ":/usr/bin:/bin"]
+    p.standardInput = FileHandle.nullDevice; p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
+    try p.run(); p.waitUntilExit()
+    XCTAssertEqual(try r.execute("agent.status", ["key": .string(key)], state: &s).get(), .text("exited 3"))
+    XCTAssertEqual(try r.execute("agent.output", ["key": .string(key)], state: &s).get(), .text("did: say 'hi'"))
+  }
+
+  // Closing your own finished child is free; a running one or someone else's needs approval.
+  func testCloseRiskAndPlacement() throws {
+    var (s, root) = try opened()
+    let parent = WorkbenchState.terminalKey(root, 2)
+    guard case .text(let key) = try r.execute(
+      "agent.launch", ["profile": .string("codex"), "prompt": .string("x"), "parent": .string(parent)], confirmed: true, state: &s
+    ).get() else { return XCTFail() }
+    XCTAssertEqual(try r.preflight("agent.close", ["key": .string(key), "parent": .string(parent)], s).get(), .write)  // still running
+    let l = try s.delegated(key)
+    try FileManager.default.createDirectory(at: AgentRun.directory, withIntermediateDirectories: true)
+    let exit = AgentRun.directory.appending(path: "\(l.run!).exit")
+    try "0\n".write(to: exit, atomically: true, encoding: .utf8)
+    defer { try? FileManager.default.removeItem(at: exit) }
+    XCTAssertEqual(try r.preflight("agent.close", ["key": .string(key), "parent": .string(parent)], s).get(), .read)
+    XCTAssertEqual(try r.preflight("agent.close", ["key": .string(key), "parent": .string(root + "#3")], s).get(), .write)
+    let focused = s.tree.focused
+    try r.execute("agent.close", ["key": .string(key), "parent": .string(parent)], state: &s).get()
+    XCTAssertEqual(s.tree.focused, focused)
+    XCTAssertNil(s.terminal(key))
   }
 }

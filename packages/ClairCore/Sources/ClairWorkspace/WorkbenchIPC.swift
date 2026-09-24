@@ -14,7 +14,13 @@ public struct WorkbenchIPCRequest: Codable, Equatable, Sendable {
   /// `mcp` = an AI agent's call through `clair mcp serve`; the GUI applies `MCPGate` (V03).
   public var via: Via?
   public enum Via: String, Codable, Sendable { case mcp }
-  public init(command: String, input: CommandInput = [:], via: Via? = nil) { self.command = command; self.input = input; self.via = via }
+  /// V16: `root#pane` of the Clair terminal the CLI runs in (`CLAIR_TERMINAL_KEY`). Such calls go through
+  /// `MCPGate`, and the GUI passes it to agent.* as `parent`. Advisory: a process can unset its environment,
+  /// so this routes well-behaved agents to approval; it is not an authentication boundary.
+  public var caller: String?
+  public init(command: String, input: CommandInput = [:], via: Via? = nil, caller: String? = nil) {
+    self.command = command; self.input = input; self.via = via; self.caller = caller
+  }
 }
 
 public struct WorkbenchIPCReply: Codable, Equatable, Sendable {
@@ -188,7 +194,7 @@ public enum WorkbenchCLI {
       let path = parts.joined(separator: ":")
       var input: CommandInput = ["path": .string(path.hasPrefix("/") ? path : URL(fileURLWithPath: path, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath)).path)]
       if let line = numbers.first { input["line"] = .int(line) }
-      return WorkbenchIPCRequest(command: "file.open", input: input)
+      return WorkbenchIPCRequest(command: "file.open", input: input, caller: caller)
     }
     var input = CommandInput()
     for a in args.dropFirst() {
@@ -196,6 +202,8 @@ public enum WorkbenchCLI {
       let (k, v) = (String(a[..<eq]), String(a[a.index(after: eq)...]))
       input[k] = v == "true" ? .bool(true) : v == "false" ? .bool(false) : Int(v).map(CommandArg.int) ?? Double(v).map(CommandArg.double) ?? .string(v)
     }
-    return WorkbenchIPCRequest(command: first, input: input)
+    return WorkbenchIPCRequest(command: first, input: input, caller: caller)
   }
+
+  static var caller: String? { ProcessInfo.processInfo.environment["CLAIR_TERMINAL_KEY"].flatMap { $0.isEmpty ? nil : $0 } }
 }

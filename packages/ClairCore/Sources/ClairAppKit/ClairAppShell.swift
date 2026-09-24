@@ -125,11 +125,14 @@ import Observation
       }
       let store = self
       let server = WorkbenchIPCServer { req in
-        if req.via == .mcp {
+        var req = req
+        // V16: `parent` is whoever called, never what the client claims.
+        if req.command.hasPrefix("agent.") { req.input["parent"] = req.caller.map(CommandArg.string) }
+        if req.via == .mcp || req.caller != nil {
           return MCPGate.handle(
             req, registry: CommandRegistry.workbench,
             snapshot: { DispatchQueue.main.sync { MainActor.assumeIsolated { store.state } } },
-            approve: { store.requestMCPApproval($0, $1, $2) },
+            approve: { store.approve($0, $1, $2, caller: req.caller) },
             run: { recheck, confirmed in
               DispatchQueue.main.sync {
                 MainActor.assumeIsolated {
@@ -239,7 +242,9 @@ import Observation
           lastError = e; return .failure(e)
         }
       }
-      let closing = id == "pane.close" ? Self.terminalKey(root: activeRoot ?? state.project, pane: state.tree.focused) : nil
+      let closing =
+        id == "pane.close" ? Self.terminalKey(root: activeRoot ?? state.project, pane: state.tree.focused)
+        : { () -> String? in if id == "agent.close", case .string(let key)? = input["key"] { key } else { nil } }()
       let r: Result<CommandResult, CommandError>
       if id == "project.open", input.count == 1, case .string(let raw)? = input["path"],
         let path = WorkbenchProject.normalized(raw)
@@ -276,7 +281,7 @@ import Observation
           }
         }
         if let closing { ClairDaemonLauncher.closeSession(key: closing) }  // T09: closing a pane ends its shell; closing a window does not
-        if id == "agent.launch" || id == "pane.close"
+        if id == "agent.launch" || id == "pane.close" || id == "agent.close"
           || (id == "settings.set" && input["key"] == .string("preventSleepOnBattery"))
         { refreshSleepAssertion() }
         watchProject()
@@ -609,6 +614,20 @@ import Observation
     private var mcpDecision: DispatchSemaphore?
     private var mcpApproved = false
 
+    /// V16: approving an agent.launch from a terminal lets that same terminal fan out more agents for 10 minutes,
+    /// so "3 parallel children" is one card, not three.
+    // ponytail: the card does not say so yet; show the grant on the card when U07 reworks approval UI.
+    private var fanOutGrants: [String: Date] = [:]
+    nonisolated func approve(_ id: String, _ input: CommandInput, _ risk: CommandRisk, caller: String?) -> Bool {
+      let fanOut = id == "agent.launch" ? caller : nil
+      if let fanOut, DispatchQueue.main.sync(execute: { MainActor.assumeIsolated { fanOutGrants[fanOut].map { $0 > Date() } ?? false } }) {
+        return true
+      }
+      let ok = requestMCPApproval(id, input, risk)
+      if ok, let fanOut { DispatchQueue.main.sync { MainActor.assumeIsolated { fanOutGrants[fanOut] = Date().addingTimeInterval(600) } } }
+      return ok
+    }
+
     nonisolated func requestMCPApproval(_ id: String, _ input: CommandInput, _ risk: CommandRisk, timeout: TimeInterval = 60) -> Bool {
       let sem = DispatchSemaphore(value: 0)
       DispatchQueue.main.sync {
@@ -682,6 +701,7 @@ import Observation
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var store: ClairWorkbenchStore
     @State private var draggingPane: Int?
+    @State private var integrationNotes: [String: String] = [:]  // V16: last install result per row
     private var st: WorkbenchState { store.state }
     @State private var query = ""
     @State private var selection = 0
@@ -1642,6 +1662,7 @@ import Observation
               choiceRow("既定のAgent", "defaultAgent", note: "⌃⌘N で追加するときの初期選択。titlebarのタブは個別に選べます。")
               choiceRow("承認ポリシー", "approvalPolicy", note: "ターミナル・Agent会話での変更提案を、どこまで自動で通すか。")
             }
+            integrationCard
           case "エディタ":
             SettingsCard(title: "編集") {
               switchRow("保存時に整形", "formatOnSave", note: "⌘S のタイミングでフォーマッタを実行します。")
@@ -1674,6 +1695,40 @@ import Observation
       }
       .animation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration), value: st.section)
       .background(C.canvas)
+    }
+
+    /// V16: lets agents in Clair terminals drive Clair (`clair agent.launch` …) and know how (the clair-agents skill).
+    private var integrationCard: some View {
+      SettingsCard(title: "連携") {
+        SettingsRow(
+          title: "clair コマンドをインストール",
+          note: integrationNotes["command"] ?? (ClairDaemonLauncher.isCommandInstalled
+            ? "インストール済み(\(ClairDaemonLauncher.commandLink.path))。"
+            : "\(ClairDaemonLauncher.commandLink.path) にリンクし、ターミナルやAgentからClairを操作できるようにします。")
+        ) {
+          Button(ClairDaemonLauncher.isCommandInstalled ? "再インストール" : "インストール") {
+            Task.detached {
+              let note: String
+              do { try ClairDaemonLauncher.installCommand(); note = "インストールしました(\(ClairDaemonLauncher.commandLink.path))。" } catch {
+                note = error.localizedDescription
+              }
+              await MainActor.run { integrationNotes["command"] = note }
+            }
+          }
+        }
+        SettingsRow(
+          title: "Agent skill をインストール",
+          note: integrationNotes["skill"] ?? (ClairAgentSkill.isInstalled()
+            ? "インストール済み(~/.claude/skills, ~/.agents/skills)。"
+            : "clair-agents skill を ~/.claude/skills と ~/.agents/skills に置き、Agentが子Agentを並列起動できるようにします。")
+        ) {
+          Button(ClairAgentSkill.isInstalled() ? "再インストール" : "インストール") {
+            do { try ClairAgentSkill.install(); integrationNotes["skill"] = "インストールしました。" } catch {
+              integrationNotes["skill"] = "インストールできません: \(error.localizedDescription)"
+            }
+          }
+        }
+      }
     }
 
     @ViewBuilder private var updateSection: some View {
