@@ -516,6 +516,8 @@ extension CommandRegistry {
     cmd("palette.commands", "コマンドパレット", .read, ai: false, shortcut: "⌘K", palette: false) { s, _ in s.palette = .commands; return .ok },
     cmd("palette.files", "ファイルへ移動", .read, ai: false, shortcut: "⌘P", palette: false) { s, _ in s.palette = .files; return .ok },
     cmd("palette.search", "Project を検索", .read, ai: false, shortcut: "⌘⇧F", palette: false) { s, _ in s.palette = .search; return .ok },
+    // ponytail: ⌘F opens the same search panel; a per-file find bar replaces this when the editor grows one.
+    cmd("palette.find", "検索", .read, ai: false, shortcut: "⌘F", palette: false) { s, _ in s.palette = .search; return .ok },
     cmd("palette.close", "パレットを閉じる", .read, ai: false, palette: false) { s, _ in s.palette = nil; return .ok },
     // E12: language-server navigation. The registry only validates and opens the palette; the GUI asks the
     // server for the active file's caret (the answer is async and belongs to the editor, not to this state).

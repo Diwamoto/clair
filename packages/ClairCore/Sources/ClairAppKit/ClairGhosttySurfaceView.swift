@@ -350,7 +350,7 @@ import Foundation
         interpretKeyEvents([event])
         interpretingKey = false
         do {
-          if let text = committedText, !text.isEmpty {
+          if let text = committedText, !text.isEmpty, !event.modifierFlags.contains(.command) {
             var key = Self.ghosttyKeyEvent(event, action: action)
             if wasComposing {
               key = GhosttyKeyEvent(
@@ -413,7 +413,9 @@ import Foundation
       }
       return GhosttyKeyEvent(
         action: action, mods: mods, consumedMods: consumedMods, keyCode: UInt32(event.keyCode),
-        text: ghosttyCharacters(event).flatMap(keyEventText), unshiftedCodepoint: unshiftedCodepoint)
+        // A ⌘ chord no menu claimed is not typing: ⌘F must never write "f" into the shell.
+        text: event.modifierFlags.contains(.command) ? nil : ghosttyCharacters(event).flatMap(keyEventText),
+        unshiftedCodepoint: unshiftedCodepoint)
     }
 
     /// Upstream `String.keyEventText`: control-character text (e.g. Shift+Tab's U+0019) must not
