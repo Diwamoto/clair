@@ -384,6 +384,20 @@
       XCTAssertEqual(h.view.selection.selections, [TextSelection(cursor: UTF8Offset(4))])
     }
 
+    func testCommandArrowSelectorsJumpToLineAndDocumentEdges() throws {
+      let h = try harness("ab\ncd\nef")
+      h.select(TextSelectionSet(cursor: UTF8Offset(4)))
+      h.view.doCommand(by: #selector(NSResponder.moveToRightEndOfLine(_:)))
+      XCTAssertEqual(h.view.selection.selections, [TextSelection(cursor: UTF8Offset(5))])
+      h.view.doCommand(by: #selector(NSResponder.moveToLeftEndOfLine(_:)))
+      XCTAssertEqual(h.view.selection.selections, [TextSelection(cursor: UTF8Offset(3))])
+      h.view.doCommand(by: #selector(NSResponder.moveToEndOfDocument(_:)))
+      XCTAssertEqual(h.view.selection.selections, [TextSelection(cursor: UTF8Offset(8))])
+      h.view.doCommand(by: #selector(NSResponder.moveToBeginningOfDocumentAndModifySelection(_:)))
+      XCTAssertEqual(
+        h.view.selection.selections, [TextSelection(anchor: UTF8Offset(8), head: UTF8Offset(0))])
+    }
+
     func testInsertNewlineAndInsertTabCommitLiteralCharacters() throws {
       let h = try harness("ab")
       h.select(TextSelectionSet(cursor: UTF8Offset(1)))

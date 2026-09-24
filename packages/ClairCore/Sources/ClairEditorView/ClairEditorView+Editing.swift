@@ -49,14 +49,28 @@ import ClairEditorCore
         moveVertical(lineDelta: -1, extend: true)
       case #selector(NSResponder.moveDownAndModifySelection(_:)):
         moveVertical(lineDelta: 1, extend: true)
-      case #selector(NSResponder.moveToBeginningOfLine(_:)):
+      // ⌘←/⌘→ arrive as moveToLeft/RightEndOfLine, Ctrl-A/E as moveToBeginning/EndOfLine.
+      case #selector(NSResponder.moveToBeginningOfLine(_:)),
+        #selector(NSResponder.moveToLeftEndOfLine(_:)):
         moveToLineBoundary(end: false, extend: false)
-      case #selector(NSResponder.moveToEndOfLine(_:)):
+      case #selector(NSResponder.moveToEndOfLine(_:)),
+        #selector(NSResponder.moveToRightEndOfLine(_:)):
         moveToLineBoundary(end: true, extend: false)
-      case #selector(NSResponder.moveToBeginningOfLineAndModifySelection(_:)):
+      case #selector(NSResponder.moveToBeginningOfLineAndModifySelection(_:)),
+        #selector(NSResponder.moveToLeftEndOfLineAndModifySelection(_:)):
         moveToLineBoundary(end: false, extend: true)
-      case #selector(NSResponder.moveToEndOfLineAndModifySelection(_:)):
+      case #selector(NSResponder.moveToEndOfLineAndModifySelection(_:)),
+        #selector(NSResponder.moveToRightEndOfLineAndModifySelection(_:)):
         moveToLineBoundary(end: true, extend: true)
+      // ⌘↑/⌘↓.
+      case #selector(NSResponder.moveToBeginningOfDocument(_:)):
+        moveToDocumentBoundary(end: false, extend: false)
+      case #selector(NSResponder.moveToEndOfDocument(_:)):
+        moveToDocumentBoundary(end: true, extend: false)
+      case #selector(NSResponder.moveToBeginningOfDocumentAndModifySelection(_:)):
+        moveToDocumentBoundary(end: false, extend: true)
+      case #selector(NSResponder.moveToEndOfDocumentAndModifySelection(_:)):
+        moveToDocumentBoundary(end: true, extend: true)
       default:
         break
       }
@@ -187,6 +201,15 @@ import ClairEditorCore
           ? TextSelection(anchor: cursor.anchor, head: newHead) : TextSelection(cursor: newHead)
       }
       guard let updated = try? mapSelections(transform) else { return }
+      applyLocalSelection(updated)
+    }
+
+    /// Collapses multi-cursor into one selection, like other editors do on ⌘↑/⌘↓.
+    private func moveToDocumentBoundary(end: Bool, extend: Bool) {
+      guard let cursor = end ? selection.selections.last : selection.selections.first else { return }
+      let head = end ? UTF8Offset(snapshot.utf8Count) : UTF8Offset(0)
+      let target = extend ? TextSelection(anchor: cursor.anchor, head: head) : TextSelection(cursor: head)
+      guard let updated = try? TextSelectionSet([target]) else { return }
       applyLocalSelection(updated)
     }
 
