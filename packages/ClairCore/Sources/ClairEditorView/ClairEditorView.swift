@@ -22,7 +22,7 @@ import ClairEditorCore
     // (separate files, same module) update selection locally the same way
     // this file's mouse handling always has.
     public internal(set) var selection: TextSelectionSet {
-      didSet { openFoldsAroundSelection() }
+      didSet { openFoldsAroundSelection(); smearCaret(from: oldValue) }
     }
     public var highlights: [EditorHighlightSpan] = [] {
       didSet {
@@ -123,8 +123,8 @@ import ClairEditorCore
     /// Vertical centring of a glyph row inside a taller `lineHeight`.
     private let baselineShift: CGFloat
     private var knownContentWidth: CGFloat = 0
-    private var caretVisible = true
-    private var caretTimer: Timer?
+    /// The fading "liquid" trail the primary caret leaves when it moves.
+    private let caretTrail = CALayer()
     var dragAnchor: UTF8Offset?
     var dragFixedSelections: [TextSelection] = []
     /// Where a ⌥-drag block selection started (`ClairEditorView+MultiCursor.swift`).
@@ -160,11 +160,7 @@ import ClairEditorCore
       fatalError("ClairEditorView does not support coder-based restoration")
     }
 
-    // `NSView` subclasses are implicitly `@MainActor`, and a plain `deinit`
-    // runs `nonisolated` regardless, so it cannot touch `caretTimer` (same
-    // reasoning as `ClairGhosttySurfaceView`'s `isolated deinit`).
     isolated deinit {
-      caretTimer?.invalidate()
       NotificationCenter.default.removeObserver(self)
     }
 
@@ -351,34 +347,49 @@ import ClairEditorCore
       let active = TextSelection(anchor: anchor, head: head)
       guard let updated = try? TextSelectionSet(dragFixedSelections + [active]) else { return }
       selection = updated
-      caretVisible = true
       needsDisplay = true
       onSelectionChange?(selection)
     }
 
     public override func becomeFirstResponder() -> Bool {
-      caretVisible = true
-      startCaretBlink()
       needsDisplay = true
       return super.becomeFirstResponder()
     }
 
     public override func resignFirstResponder() -> Bool {
-      caretTimer?.invalidate()
-      caretTimer = nil
       needsDisplay = true
       return super.resignFirstResponder()
     }
 
-    private func startCaretBlink() {
-      caretTimer?.invalidate()
-      caretTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-        MainActor.assumeIsolated {
-          guard let self else { return }
-          self.caretVisible.toggle()
-          self.needsDisplay = true
-        }
-      }
+    /// Stretches a ghost over the old and new caret rects, then collapses it
+    /// into the new one while fading — the caret itself (drawn in `draw`) is
+    /// already at its destination, so this is decoration only.
+    private func smearCaret(from old: TextSelectionSet) {
+      guard window?.firstResponder === self, let layer,
+        let from = old.selections.last.flatMap({ $0.isEmpty ? caretRect(for: $0.head) : nil }),
+        let to = selection.selections.last.flatMap({ $0.isEmpty ? caretRect(for: $0.head) : nil }),
+        from.origin != to.origin
+      else { return }
+      if caretTrail.superlayer == nil { layer.addSublayer(caretTrail) }
+      let end = to.insetBy(dx: -0.25, dy: 0)
+      CATransaction.begin()
+      CATransaction.setDisableActions(true)
+      caretTrail.backgroundColor = caretColor.cgColor
+      caretTrail.cornerRadius = 1
+      caretTrail.frame = end
+      caretTrail.opacity = 0
+      CATransaction.commit()
+      let group = CAAnimationGroup()
+      let bounds = CABasicAnimation(keyPath: "bounds.size")
+      bounds.fromValue = from.union(to).size
+      let position = CABasicAnimation(keyPath: "position")
+      position.fromValue = CGPoint(x: from.union(to).midX, y: from.union(to).midY)
+      let fade = CABasicAnimation(keyPath: "opacity")
+      fade.fromValue = 0.45
+      group.animations = [bounds, position, fade]
+      group.duration = 0.16
+      group.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.3, 1)
+      caretTrail.add(group, forKey: "smear")
     }
 
     // MARK: - Drawing
@@ -527,7 +538,7 @@ import ClairEditorCore
     }
 
     private func drawCarets(_ seg: EditorRowSegment, context: CGContext) {
-      guard caretVisible, window?.firstResponder === self else { return }
+      guard window?.firstResponder === self else { return }
       for cursor in selection.selections where cursor.isEmpty {
         guard
           let position = try? snapshot.position(
