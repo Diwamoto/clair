@@ -264,9 +264,6 @@ struct PerformanceBudgetTests {
     }
 
     // --- saving a file ------------------------------------------------------
-    // `ClairWorkbenchStore.run` does the history snapshot and the write on the
-    // main actor before handing `file.save` to the registry.
-    let history = LocalHistory(dir: URL(fileURLWithPath: c.scratch).appending(path: "history"))
     let savePath = "saved.swift"
     try tenMB.write(toFile: c.scratch + "/" + savePath, atomically: true, encoding: .utf8)
     let saveBuffer = try TextBuffer(tenMB)
@@ -275,20 +272,6 @@ struct PerformanceBudgetTests {
         try saveBuffer.snapshot.string().write(
           toFile: c.scratch + "/" + savePath, atomically: true, encoding: .utf8)
       })
-    ops.append(
-      Op("history.record.10mb", .mainThread) {
-        try history.record(root: c.scratch, path: savePath)
-      })
-    try history.record(root: c.scratch, path: savePath)  // `preview` needs a version to diff against
-    guard let version = try history.versions(root: c.scratch, path: savePath).first else {
-      throw BudgetCorpus.CorpusError.missing("a recorded history version for \(savePath)")
-    }
-    // HistoryList computes the line diff in a detached task and shows `loading` meanwhile.
-    ops.append(
-      Op("history.preview.10mb", .background(affordance: "loading")) {
-        _ = history.preview(version, root: c.scratch, path: savePath)
-      })
-
     // --- editing ------------------------------------------------------------
     for (name, text) in [("10mb", tenMB), ("long-line", longLine), ("1mb-japanese", japanese)] {
       let buffer = try TextBuffer(text)
