@@ -212,6 +212,21 @@ final class WorkbenchGitTests: XCTestCase {
     XCTAssertTrue(WorkbenchGit.diff(root, "new.txt", staged: false, untracked: true).contains("+n"))
   }
 
+  func testFullContextDiffIncludesUnchangedBeginningAndEnd() throws {
+    let (_, root) = try repo()
+    let original = (1...30).map { "line \($0)" }
+    try original.joined(separator: "\n").write(toFile: root + "/a.txt", atomically: true, encoding: .utf8)
+    sh(root, "add", "a.txt"); sh(root, "commit", "-m", "expand")
+    var edited = original
+    edited[14] = "changed line 15"
+    try edited.joined(separator: "\n").write(toFile: root + "/a.txt", atomically: true, encoding: .utf8)
+    XCTAssertFalse(WorkbenchGit.diff(root, "a.txt", staged: false).contains(" line 1\n"))
+    let full = WorkbenchGit.diff(root, "a.txt", staged: false, fullContext: true)
+    XCTAssertTrue(full.contains(" line 1\n"))
+    XCTAssertTrue(full.contains("+changed line 15\n"))
+    XCTAssertTrue(full.contains(" line 30"))
+  }
+
   func testBatchStageAndUnstagePreservesPorcelainColumns() throws {
     let (_, root) = try repo()
     try "b".write(toFile: root + "/a.txt", atomically: true, encoding: .utf8)

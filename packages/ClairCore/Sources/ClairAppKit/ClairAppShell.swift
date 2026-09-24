@@ -433,9 +433,16 @@ import Observation
     }
 
     private func saveActiveFile() async {
-      guard let path = state.active, let root = activeRoot,
-        case .ready(let manager)? = buffers.peek(path)
-      else { _ = run("file.save"); return }
+      guard let path = state.active else { _ = run("file.save"); return }
+      _ = await saveFile(path)
+    }
+
+    /// Save the file shown in a diff editor, which may differ from the active tab.
+    func saveFile(_ path: String) async -> Bool {
+      guard let root = activeRoot, case .ready(let manager)? = buffers.peek(path) else {
+        lastError = CommandError(.preconditionFailed, "保存できません: ファイルを開けません。")
+        return false
+      }
       let project = state.project
       let snapshot = manager.buffer.snapshot
       let result = await Task.detached(priority: .userInitiated) {
@@ -451,8 +458,10 @@ import Observation
           else { state.layouts[project]?.dirty.remove(path) }
         }
         lastError = nil; persistState()
+        return true
       case .failure(let error):
         lastError = CommandError(.preconditionFailed, "保存できません: \(error.localizedDescription)")
+        return false
       }
     }
 
@@ -724,6 +733,8 @@ import Observation
     @State private var gitOperation: String?
     @State private var gitMessage: String?
     @State private var gitFailed = false
+    @State private var reviewProvider = "claude"
+    @State private var reviewError: String?
     @State private var diff: DiffTarget?
     @State private var chat: AgentHistory?
     @State private var loadedDiff: LoadedDiff?
@@ -798,7 +809,6 @@ import Observation
       }
       .onChange(of: st.project) {
         diff = nil; loadedDiff = nil; gitMessage = nil; gitFailed = false
-        if !st.isRepo && sidebarMode == "shield" { sidebarMode = "folder" }
         rebuildExplorer(); reloadChanges()
       }
       .onChange(of: st.files) { rebuildExplorer(); reloadChanges() }
@@ -1001,8 +1011,7 @@ import Observation
     }
 
     private func activityBarButton(_ icon: String) -> some View {
-      let ready = icon != "shield" || st.isRepo
-      return ActivityBarButton(icon: icon, on: sidebarMode == icon && !st.settingsOpen, enabled: ready) {
+      return ActivityBarButton(icon: icon, on: sidebarMode == icon && !st.settingsOpen, enabled: true) {
         sidebarMode = icon
         if icon != "terminal" { chat = nil }
         if icon == "folder" { diff = nil }
@@ -1174,23 +1183,91 @@ import Observation
     }
 
     private var changesList: some View {
-      ChangesList(
-        changes: changes, selected: diff, onSelect: { diff = $0 },
-        onToggle: { change, stage in
-          runGit(
-            [(stage ? "git.stage" : "git.unstage", ["path": .string(change.path)])],
-            label: stage ? "ステージ" : "ステージ解除")
-        },
-        onBulk: { rows, stage in
-          runGit(
-            rows.map { (stage ? "git.stage" : "git.unstage", ["path": .string($0.path)]) },
-            label: stage ? "一括ステージ" : "一括ステージ解除")
-        },
-        onCommit: { message in
-          runGit([("git.commit", ["message": .string(message)])], label: "コミット")
-        },
-        busy: gitOperation != nil,
-        operationMessage: gitOperation.map { "\($0)中…" } ?? gitMessage)
+      VStack(alignment: .leading, spacing: 0) {
+        reviewActions
+        if st.isRepo { ChangesList(
+          changes: changes, selected: diff, onSelect: { diff = $0 },
+          onToggle: { change, stage in
+            runGit(
+              [(stage ? "git.stage" : "git.unstage", ["path": .string(change.path)])],
+              label: stage ? "ステージ" : "ステージ解除")
+          },
+          onBulk: { rows, stage in
+            runGit(
+              rows.map { (stage ? "git.stage" : "git.unstage", ["path": .string($0.path)]) },
+              label: stage ? "一括ステージ" : "一括ステージ解除")
+          },
+          onCommit: { message in
+            runGit([("git.commit", ["message": .string(message)])], label: "コミット")
+          },
+          busy: gitOperation != nil,
+          operationMessage: gitOperation.map { "\($0)中…" } ?? gitMessage)
+        }
+      }
+    }
+
+    private var reviewFile: String? {
+      let path = diff?.path ?? st.active
+      return path.flatMap { candidate in st.files.contains(where: { $0.path == candidate }) ? candidate : nil }
+    }
+
+    private var reviewActions: some View {
+      VStack(alignment: .leading, spacing: 8) {
+        HStack {
+          Text("AI レビュー").font(Typography.font(Typography.sidebarStrong)).foregroundStyle(C.textPrimary)
+          Spacer()
+          Menu {
+            ForEach(AgentProfile.all, id: \.id) { profile in
+              Button(profile.title) { reviewProvider = profile.id }
+            }
+          } label: {
+            Text(AgentProfile.named(reviewProvider)?.title ?? "Agent")
+              .font(Typography.font(Typography.sidebar)).foregroundStyle(C.textSecondary)
+          }
+          .accessibilityLabel("レビュープロバイダー")
+        }
+        Button("このファイルをレビュー") {
+          if let reviewFile { startReview(.file(reviewFile)) }
+        }
+          .disabled(reviewFile == nil || reviewFile.map { st.dirty.contains($0) } == true)
+        if let reviewFile {
+          Text(reviewFile).font(Typography.font(Typography.sidebarMicro))
+            .foregroundStyle(C.textQuaternary).lineLimit(1).truncationMode(.middle)
+        }
+        Button("この Project をレビュー") { startReview(.project) }
+          .disabled(store.activeRoot == nil || !st.dirty.isEmpty)
+        if reviewFile.map({ st.dirty.contains($0) }) == true || !st.dirty.isEmpty {
+          Text("未保存の編集を保存するとレビューできます。")
+            .font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textTertiary)
+        }
+        if let reviewError {
+          Text(reviewError).font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.attention)
+        }
+      }
+      .buttonStyle(.hoverWash)
+      .padding(12)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .overlay(alignment: .bottom) { Rectangle().fill(L.hairline).frame(height: 1) }
+    }
+
+    private func startReview(_ target: AgentReviewRequest.Target) {
+      guard store.activeRoot != nil, AgentProfile.named(reviewProvider) != nil else { return }
+      switch target {
+      case .file(let path):
+        guard st.files.contains(where: { $0.path == path }), !st.dirty.contains(path) else { return }
+      case .project:
+        guard st.dirty.isEmpty else { return }
+      }
+      let input: CommandInput = ["profile": .string(reviewProvider), "prompt": .string(AgentReviewRequest.prompt(for: target))]
+      // The labelled button is the user's approval for launching this external tool.
+      switch store.run("agent.launch", input, confirmed: true) {
+      case .success(.pane(let pane)):
+        reviewError = nil; diff = nil; sidebarMode = "terminal"
+        store.run("pane.focus", ["id": .int(pane)])
+      case .success:
+        reviewError = nil; diff = nil; sidebarMode = "terminal"
+      case .failure(let error): reviewError = error.message
+      }
     }
 
     private func runGit(
@@ -1617,12 +1694,12 @@ import Observation
       let fileLines: [String]?
     }
 
-    private func loadDiff() {
-      diffTask?.cancel(); loadedDiff = nil
+    private func loadDiff(clear: Bool = true) {
+      diffTask?.cancel(); if clear { loadedDiff = nil }
       guard let target = diff, let root = store.activeRoot else { return }
       diffTask = Task {
         async let rendered = Task.detached(priority: .userInitiated) {
-          DiffView.model(WorkbenchGit.diff(root, target.path, staged: target.staged, untracked: target.untracked))
+          DiffView.model(WorkbenchGit.diff(root, target.path, staged: target.staged, untracked: target.untracked, fullContext: true))
         }.value
         async let lines = Task.detached(priority: .utility) {
           (try? String(contentsOfFile: root + "/" + target.path, encoding: .utf8))?
@@ -1669,7 +1746,17 @@ import Observation
                 if let a = st.agentSessions.first(where: { $0.project == st.project && !$0.status.isExited }) { store.run("pane.focus", ["id": .int(a.pane)]); diff = nil }
               }
             },
-            onClose: { diff = nil })
+            onClose: { diff = nil },
+            editor: d.staged ? nil : EditorPane(
+              buffers: store.buffers, root: root, path: d.path, focused: true,
+              softWrap: st.toggles["softWrap"] == true,
+              onEdit: { store.edited($0) },
+              onCaret: { store.buffers.setCaret($0, $1, in: $2) }),
+            onSave: d.staged ? nil : {
+              Task { if await store.saveFile(d.path) { loadDiff(clear: false) } }
+            },
+            isDirty: st.dirty.contains(d.path))
+          .id(d)
         } else if diff != nil {
           ProgressView("差分を読み込み中…").frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if st.panesClosed {

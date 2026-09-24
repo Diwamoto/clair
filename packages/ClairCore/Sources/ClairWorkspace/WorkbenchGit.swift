@@ -356,8 +356,10 @@ extension WorkbenchGit {
   }
 
   /// Unified diff of one file: staged (index vs HEAD) or worktree (vs index). Untracked files diff against /dev/null.
-  public static func diff(_ root: String, _ path: String, staged: Bool, untracked: Bool = false) -> String {
-    let args = untracked ? ["diff", "--no-index", "--", "/dev/null", path] : ["diff"] + (staged ? ["--cached"] : []) + ["--", path]
+  public static func diff(_ root: String, _ path: String, staged: Bool, untracked: Bool = false, fullContext: Bool = false) -> String {
+    let context = fullContext ? ["--unified=1000000"] : []
+    let args = untracked ? ["diff", "--no-index"] + context + ["--", "/dev/null", path]
+      : ["diff"] + (staged ? ["--cached"] : []) + context + ["--", path]
     // `--no-index` exits 1 when files differ, so read the output whatever the status.
     return run(root, args, merge: false).out
   }

@@ -53,6 +53,23 @@
       XCTAssertTrue(loaded)
     }
 
+    func testDiffSaveTargetsSelectedFileInsteadOfActiveTab() async throws {
+      let path = try root(["a.txt": Data("active".utf8), "b.txt": Data("change".utf8)])
+      defer { try? FileManager.default.removeItem(atPath: path) }
+      let store = ClairWorkbenchStore(persistAt: nil)
+      store.state.openProject(WorkbenchProject(name: "fixture", path: path))
+      store.state.openTab("a.txt")
+      guard case .ready(let manager) = store.buffers.load("b.txt", root: path) else { return XCTFail("load") }
+      _ = try manager.apply([TextEdit(range: TextUTF8Range(UTF8Offset(6), UTF8Offset(6)), replacement: "d")])
+      store.edited("b.txt")
+
+      let saved = await store.saveFile("b.txt")
+      XCTAssertTrue(saved)
+      XCTAssertEqual(try String(contentsOfFile: path + "/a.txt", encoding: .utf8), "active")
+      XCTAssertEqual(try String(contentsOfFile: path + "/b.txt", encoding: .utf8), "changed")
+      XCTAssertFalse(store.state.dirty.contains("b.txt"))
+    }
+
     func testCommandWClosesActiveFileAndSelectsAnother() throws {
       let path = try root(["a.txt": Data("a".utf8), "b.txt": Data("b".utf8)])
       let store = ClairWorkbenchStore(persistAt: nil)

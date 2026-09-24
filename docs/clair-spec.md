@@ -290,6 +290,15 @@ minimap、VS Code extension 互換、独自 plugin runtime は対象外。
 
 ## 6. AI review
 
+Mac の「変更を確認」には、現在のファイルをレビューする操作と Project 全体を
+レビューする操作を置く。利用者が Claude Code / Codex / OpenCode を選び、
+明示的に開始したときだけ、その Project の root で agent を起動する。
+ファイル対象は選択中の差分ファイル、なければ開いているファイルとする。
+依頼には対象、読み取り専用のレビューであること、問題箇所のファイル・行・理由を
+報告することを含める。結果は起動した terminal に表示する。未保存の editor
+buffer が対象に含まれる場合は保存を促し、ディスクと異なる内容を黙って渡さない。
+この操作は既存の agent launch と同じ Project / session / 承認境界を通る。
+
 review コメントは行番号や画面上の吹き出しとして保存しない。anchor は最低限
 次を持つ。
 
