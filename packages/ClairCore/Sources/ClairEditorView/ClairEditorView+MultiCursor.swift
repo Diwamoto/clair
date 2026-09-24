@@ -175,6 +175,15 @@ import ClairEditorCore
     }
 
     public override func performKeyEquivalent(with event: NSEvent) -> Bool {
+      if window?.firstResponder === self, composition == nil, performEditorShortcut(event) { return true }
+      let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+      if window?.firstResponder === self, composition == nil,
+        modifiers == .command || modifiers == [.command, .shift],
+        event.charactersIgnoringModifiers?.lowercased() == "z"
+      {
+        if event.modifierFlags.contains(.shift) { redo(nil) } else { undo(nil) }
+        return true
+      }
       if window?.firstResponder === self, composition == nil,
         addVerticalCursor(for: event)
       { return true }

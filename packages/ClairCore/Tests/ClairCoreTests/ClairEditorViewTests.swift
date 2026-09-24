@@ -117,6 +117,32 @@
       XCTAssertEqual(position.line.value, 1)
     }
 
+    func testHitTestPastEndOfLineSnapsToLineEnd() throws {
+      let text = "hello world\nsecond line"
+      let view = try makeView(text)
+      try renderOffscreen(view)
+
+      guard let offset = view.hitTestOffset(at: NSPoint(x: 1000, y: 5)) else {
+        return XCTFail("expected a hit-test offset")
+      }
+      let position = try snapshot(text).position(at: offset, columnUnit: UTF8Unit.self)
+      XCTAssertEqual(position.line.value, 0)
+      XCTAssertEqual(position.column.value, 11)
+    }
+
+    func testHitTestEmptyLinePlacesCaretOnThatLine() throws {
+      let text = "hello\n\nworld"
+      let view = try makeView(text)
+      try renderOffscreen(view)
+
+      guard let offset = view.hitTestOffset(at: NSPoint(x: 100, y: view.lineHeight + 5)) else {
+        return XCTFail("expected a hit-test offset")
+      }
+      let position = try snapshot(text).position(at: offset, columnUnit: UTF8Unit.self)
+      XCTAssertEqual(position.line.value, 1)
+      XCTAssertEqual(position.column.value, 0)
+    }
+
     func testMouseDownSetsCursorSelectionAtHitOffset() throws {
       let text = "abcdef"
       let view = try makeView(text)
@@ -199,6 +225,18 @@
       }
       view.onSelectionChange = { [weak manager] selection in
         manager?.setSelection(selection)
+      }
+      view.onUndo = { [weak view, weak manager] in
+        guard let view, let manager else { return }
+        let old = manager.buffer.snapshot
+        guard let new = try? manager.undo() else { return }
+        view.applyEdits(manager.lastCommittedEdits, oldSnapshot: old, newSnapshot: new, selection: manager.selection)
+      }
+      view.onRedo = { [weak view, weak manager] in
+        guard let view, let manager else { return }
+        let old = manager.buffer.snapshot
+        guard let new = try? manager.redo() else { return }
+        view.applyEdits(manager.lastCommittedEdits, oldSnapshot: old, newSnapshot: new, selection: manager.selection)
       }
     }
 
@@ -398,6 +436,55 @@
         h.view.selection.selections, [TextSelection(anchor: UTF8Offset(8), head: UTF8Offset(0))])
     }
 
+    func testKeyboardNavigationScrollsCaretIntoView() throws {
+      let h = try harness((0..<100).map { "line \($0)" }.joined(separator: "\n"))
+      let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 200, height: 80))
+      scroll.hasVerticalScroller = true
+      scroll.documentView = h.view
+      h.view.setFrameSize(NSSize(width: 200, height: CGFloat(100) * h.view.lineHeight))
+      let window = NSWindow(
+        contentRect: scroll.frame, styleMask: .borderless, backing: .buffered, defer: false)
+      window.contentView = scroll
+      XCTAssertTrue(window.makeFirstResponder(h.view))
+
+      h.view.doCommand(by: #selector(NSResponder.moveToEndOfDocument(_:)))
+      let endCaret = try XCTUnwrap(h.view.caretRect(for: h.view.selection.selections[0].head))
+      XCTAssertTrue(h.view.visibleRect.intersects(endCaret))
+
+      h.view.doCommand(by: #selector(NSResponder.moveToBeginningOfDocumentAndModifySelection(_:)))
+      let startCaret = try XCTUnwrap(h.view.caretRect(for: h.view.selection.selections[0].head))
+      XCTAssertTrue(h.view.visibleRect.intersects(startCaret))
+    }
+
+    func testTypingAtOffscreenCaretScrollsItIntoView() throws {
+      let source = (0..<100).map { "line \($0)" }.joined(separator: "\n")
+      let h = try harness(source)
+      let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 200, height: 80))
+      scroll.hasVerticalScroller = true
+      scroll.documentView = h.view
+      h.view.setFrameSize(NSSize(width: 200, height: CGFloat(100) * h.view.lineHeight))
+      let window = NSWindow(
+        contentRect: scroll.frame, styleMask: .borderless, backing: .buffered, defer: false)
+      window.contentView = scroll
+      XCTAssertTrue(window.makeFirstResponder(h.view))
+
+      h.select(TextSelectionSet(cursor: UTF8Offset(source.utf8.count)))
+      XCTAssertFalse(h.view.visibleRect.intersects(try XCTUnwrap(h.view.caretRect(for: h.view.selection.selections[0].head))))
+      h.view.insertText("!", replacementRange: NSRange(location: NSNotFound, length: 0))
+      let caret = try XCTUnwrap(h.view.caretRect(for: h.view.selection.selections[0].head))
+      XCTAssertTrue(h.view.visibleRect.intersects(caret))
+      XCTAssertEqual(h.manager.buffer.snapshot.string().last, "!")
+    }
+
+    func testShiftUpDownExtendsSelectionByLine() throws {
+      let h = try harness("ab\ncd\nef")
+      h.select(TextSelectionSet(cursor: UTF8Offset(4)))
+      h.view.doCommand(by: #selector(NSResponder.moveUpAndModifySelection(_:)))
+      XCTAssertEqual(h.view.selection.selections, [TextSelection(anchor: UTF8Offset(4), head: UTF8Offset(1))])
+      h.view.doCommand(by: #selector(NSResponder.moveDownAndModifySelection(_:)))
+      XCTAssertEqual(h.view.selection.selections, [TextSelection(cursor: UTF8Offset(4))])
+    }
+
     func testInsertNewlineAndInsertTabCommitLiteralCharacters() throws {
       let h = try harness("ab")
       h.select(TextSelectionSet(cursor: UTF8Offset(1)))
@@ -405,6 +492,96 @@
       XCTAssertEqual(h.manager.buffer.snapshot.string(), "a\nb")
       h.view.doCommand(by: #selector(NSResponder.insertTab(_:)))
       XCTAssertEqual(h.manager.buffer.snapshot.string(), "a\n\tb")
+    }
+
+    func testUndoRedoActionsRestoreTextAndSelection() throws {
+      let h = try harness("ab")
+      h.select(TextSelectionSet(cursor: UTF8Offset(1)))
+      h.view.insertText("X", replacementRange: NSRange(location: NSNotFound, length: 0))
+      XCTAssertEqual(h.manager.buffer.snapshot.string(), "aXb")
+
+      h.view.undo(nil)
+      XCTAssertEqual(h.manager.buffer.snapshot.string(), "ab")
+      XCTAssertEqual(h.view.selection.selections, [TextSelection(cursor: UTF8Offset(1))])
+
+      h.view.redo(nil)
+      XCTAssertEqual(h.manager.buffer.snapshot.string(), "aXb")
+      XCTAssertEqual(h.view.selection.selections, h.manager.selection.selections)
+    }
+
+    func testCommandZKeyEquivalentsReachFocusedEditor() throws {
+      let h = try harness("ab")
+      let window = NSWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 400, height: 200),
+        styleMask: .borderless, backing: .buffered, defer: false)
+      window.contentView = h.view
+      XCTAssertTrue(window.makeFirstResponder(h.view))
+      h.view.insertText("X", replacementRange: NSRange(location: NSNotFound, length: 0))
+
+      func pressZ(_ modifiers: NSEvent.ModifierFlags) throws {
+        let event = try XCTUnwrap(NSEvent.keyEvent(
+          with: .keyDown, location: .zero, modifierFlags: modifiers,
+          timestamp: 0, windowNumber: window.windowNumber, context: nil,
+          characters: "z", charactersIgnoringModifiers: "z", isARepeat: false, keyCode: 6))
+        XCTAssertTrue(h.view.performKeyEquivalent(with: event))
+      }
+      try pressZ(.command)
+      XCTAssertEqual(h.manager.buffer.snapshot.string(), "ab")
+      try pressZ([.command, .shift])
+      XCTAssertEqual(h.manager.buffer.snapshot.string(), "Xab")
+    }
+
+    func testWordNavigationAndDeletionUseWordBoundaries() throws {
+      let h = try harness("foo, bar baz")
+      h.view.doCommand(by: #selector(NSResponder.moveWordRight(_:)))
+      XCTAssertEqual(h.view.selection.selections[0].head.value, 3)
+      h.view.doCommand(by: #selector(NSResponder.moveWordRight(_:)))
+      XCTAssertEqual(h.view.selection.selections[0].head.value, 5)
+      h.view.doCommand(by: #selector(NSResponder.moveWordRightAndModifySelection(_:)))
+      XCTAssertEqual(h.view.selection.selections, [TextSelection(anchor: UTF8Offset(5), head: UTF8Offset(9))])
+      h.view.doCommand(by: #selector(NSResponder.deleteWordBackward(_:)))
+      XCTAssertEqual(h.manager.buffer.snapshot.string(), "foo, baz")
+    }
+
+    func testWordNavigationKeepsDecomposedGraphemeTogether() throws {
+      let h = try harness("e\u{301}clair next")
+      h.view.doCommand(by: #selector(NSResponder.moveWordRight(_:)))
+      XCTAssertEqual(h.view.selection.selections[0].head.value, "e\u{301}clair ".utf8.count)
+    }
+
+    func testLineShortcutsDeleteDuplicateAndIndent() throws {
+      let h = try harness("one\ntwo\nthree")
+      h.select(TextSelectionSet(cursor: UTF8Offset(5)))
+      func shortcut(_ key: String, _ modifiers: NSEvent.ModifierFlags) throws {
+        let event = try XCTUnwrap(NSEvent.keyEvent(
+          with: .keyDown, location: .zero, modifierFlags: modifiers,
+          timestamp: 0, windowNumber: 0, context: nil,
+          characters: key, charactersIgnoringModifiers: key,
+          isARepeat: false, keyCode: key == "↓" ? 125 : 0))
+        XCTAssertTrue(h.view.performEditorShortcut(event))
+      }
+      try shortcut("k", [.command, .shift])
+      XCTAssertEqual(h.manager.buffer.snapshot.string(), "one\nthree")
+      h.select(TextSelectionSet(cursor: UTF8Offset(5)))
+      try shortcut("]", .command)
+      XCTAssertEqual(h.manager.buffer.snapshot.string(), "one\n\tthree")
+      try shortcut("[", .command)
+      XCTAssertEqual(h.manager.buffer.snapshot.string(), "one\nthree")
+      try shortcut("↓", [.option, .shift])
+      XCTAssertEqual(h.manager.buffer.snapshot.string(), "one\nthree\nthree")
+    }
+
+    func testDeleteSelectedLinesExcludesNextLineAtSelectionBoundary() throws {
+      let h = try harness("one\ntwo\nthree")
+      h.select(try TextSelectionSet([
+        TextSelection(anchor: UTF8Offset(0), head: UTF8Offset(4))
+      ]))
+      let event = try XCTUnwrap(NSEvent.keyEvent(
+        with: .keyDown, location: .zero, modifierFlags: [.command, .shift],
+        timestamp: 0, windowNumber: 0, context: nil,
+        characters: "k", charactersIgnoringModifiers: "k", isARepeat: false, keyCode: 40))
+      XCTAssertTrue(h.view.performEditorShortcut(event))
+      XCTAssertEqual(h.manager.buffer.snapshot.string(), "two\nthree")
     }
 
     // MARK: Clipboard

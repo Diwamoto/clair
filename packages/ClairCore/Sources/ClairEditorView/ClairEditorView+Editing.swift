@@ -11,9 +11,8 @@ import ClairEditorCore
   /// and deletion operate on extended grapheme clusters, not UTF-16 code
   /// units or scalars (`INV-COORD-004`).
   ///
-  /// ponytail: word-jump (`moveWordLeft:`), page motion, and a persistent
-  /// vertical goal-column through ragged lines are UX niceties this task's
-  /// acceptance criteria do not require — add if the product asks for them.
+  /// ponytail: page motion and a persistent vertical goal-column through
+  /// ragged lines remain for a later navigation pass.
   extension ClairEditorView {
     public override func keyDown(with event: NSEvent) {
       if composition == nil, keyInterceptor?(event) == true { return }
@@ -33,6 +32,10 @@ import ClairEditorCore
         deleteAtEachCursor(direction: -1)
       case #selector(NSResponder.deleteForward(_:)):
         deleteAtEachCursor(direction: 1)
+      case #selector(NSResponder.deleteWordBackward(_:)):
+        deleteWord(direction: -1)
+      case #selector(NSResponder.deleteWordForward(_:)):
+        deleteWord(direction: 1)
       case #selector(NSResponder.moveLeft(_:)):
         moveCaret(direction: -1, extend: false)
       case #selector(NSResponder.moveRight(_:)):
@@ -41,6 +44,14 @@ import ClairEditorCore
         moveCaret(direction: -1, extend: true)
       case #selector(NSResponder.moveRightAndModifySelection(_:)):
         moveCaret(direction: 1, extend: true)
+      case #selector(NSResponder.moveWordLeft(_:)):
+        moveWord(direction: -1, extend: false)
+      case #selector(NSResponder.moveWordRight(_:)):
+        moveWord(direction: 1, extend: false)
+      case #selector(NSResponder.moveWordLeftAndModifySelection(_:)):
+        moveWord(direction: -1, extend: true)
+      case #selector(NSResponder.moveWordRightAndModifySelection(_:)):
+        moveWord(direction: 1, extend: true)
       case #selector(NSResponder.moveUp(_:)):
         moveVertical(lineDelta: -1, extend: false)
       case #selector(NSResponder.moveDown(_:)):
@@ -91,10 +102,19 @@ import ClairEditorCore
     // ordinary responder-chain action methods, the same way a menu item's
     // Cut/Copy/Paste target them by selector.
     @objc public func copy(_ sender: Any?) {
-      writeSelectionToPasteboard()
+      if selection.selections.allSatisfy(\.isEmpty) {
+        _ = writeLinesToPasteboard()
+      } else {
+        writeSelectionToPasteboard()
+      }
     }
 
     @objc public func cut(_ sender: Any?) {
+      if selection.selections.allSatisfy(\.isEmpty) {
+        guard writeLinesToPasteboard() else { return }
+        deleteSelectedLines()
+        return
+      }
       guard writeSelectionToPasteboard() else { return }
       let edits = selection.selections.filter { !$0.isEmpty }.map {
         TextEdit(range: $0.range, replacement: "")
@@ -106,6 +126,139 @@ import ClairEditorCore
     @objc public func paste(_ sender: Any?) {
       guard let text = pasteboard.string(forType: .string) else { return }
       onCommitEdits?(selection.edits(replacingEachWith: text))
+    }
+
+    @objc public func undo(_ sender: Any?) {
+      guard composition == nil else { return }
+      onUndo?()
+    }
+
+    @objc public func redo(_ sender: Any?) {
+      guard composition == nil else { return }
+      onRedo?()
+    }
+
+    func performEditorShortcut(_ event: NSEvent) -> Bool {
+      let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+      let key = event.charactersIgnoringModifiers?.lowercased()
+      switch (modifiers, key) {
+      case (.command, "l"):
+        selectCurrentLines()
+      case ([.command, .shift], "k"):
+        deleteSelectedLines()
+      case (.command, "]"):
+        changeIndent(outdent: false)
+      case (.command, "["):
+        changeIndent(outdent: true)
+      default:
+        if modifiers == [.option, .shift], event.keyCode == 125 {
+          duplicateSelectedLines()
+        } else { return false }
+      }
+      return true
+    }
+
+    private func selectedLineGroups() throws -> [ClosedRange<Int>] {
+      var lines = Set<Int>()
+      for cursor in selection.selections {
+        let first = try snapshot.position(at: cursor.range.lowerBound, columnUnit: UTF8Unit.self).line.value
+        var last = try snapshot.position(at: cursor.range.upperBound, columnUnit: UTF8Unit.self).line.value
+        if !cursor.isEmpty, last > first,
+          cursor.range.upperBound == (try snapshot.line(at: TextLineIndex(last))).contentRange.lowerBound
+        { last -= 1 }
+        for line in first...last { lines.insert(line) }
+      }
+      var groups: [ClosedRange<Int>] = []
+      for line in lines.sorted() {
+        if let last = groups.last, line == last.upperBound + 1 {
+          groups[groups.count - 1] = last.lowerBound...line
+        } else { groups.append(line...line) }
+      }
+      return groups
+    }
+
+    private func lineRange(_ lines: ClosedRange<Int>, includingTerminator: Bool) throws -> TextUTF8Range {
+      let first = try snapshot.line(at: TextLineIndex(lines.lowerBound))
+      let last = try snapshot.line(at: TextLineIndex(lines.upperBound))
+      return TextUTF8Range(
+        first.contentRange.lowerBound,
+        includingTerminator ? last.terminatorRange.upperBound : last.contentRange.upperBound)
+    }
+
+    private func deletionRange(_ lines: ClosedRange<Int>) throws -> TextUTF8Range {
+      let range = try lineRange(lines, includingTerminator: true)
+      if lines.upperBound < snapshot.lineCount - 1 || lines.lowerBound == 0 { return range }
+      let preceding = try snapshot.line(at: TextLineIndex(lines.lowerBound - 1))
+      return TextUTF8Range(preceding.terminatorRange.lowerBound, range.upperBound)
+    }
+
+    private func writeLinesToPasteboard() -> Bool {
+      guard let groups = try? selectedLineGroups() else { return false }
+      let text = groups.compactMap { group -> String? in
+        guard let range = try? lineRange(group, includingTerminator: true),
+          let content = try? snapshot.text(in: range) else { return nil }
+        return range.upperBound.value == snapshot.utf8Count &&
+          !(content.hasSuffix("\n") || content.hasSuffix("\r")) ? content + "\n" : content
+      }.joined()
+      guard !text.isEmpty else { return false }
+      pasteboard.clearContents()
+      return pasteboard.setString(text, forType: .string)
+    }
+
+    private func selectCurrentLines() {
+      guard let groups = try? selectedLineGroups(),
+        let updated = try? TextSelectionSet(groups.map { group in
+          let range = try lineRange(group, includingTerminator: true)
+          return TextSelection(anchor: range.lowerBound, head: range.upperBound)
+        }) else { return }
+      applyLocalSelection(updated)
+    }
+
+    private func deleteSelectedLines() {
+      guard let groups = try? selectedLineGroups(),
+        let edits = try? groups.map({ TextEdit(range: try deletionRange($0), replacement: "") }),
+        !edits.isEmpty else { return }
+      onCommitEdits?(edits)
+    }
+
+    private func duplicateSelectedLines() {
+      guard let groups = try? selectedLineGroups() else { return }
+      let edits = groups.compactMap { group -> TextEdit? in
+        guard let range = try? lineRange(group, includingTerminator: true),
+          let text = try? snapshot.text(in: range) else { return nil }
+        let replacement = range.upperBound.value == snapshot.utf8Count &&
+          !(text.hasSuffix("\n") || text.hasSuffix("\r")) ? "\n" + text : text
+        return TextEdit(range: TextUTF8Range(range.upperBound, range.upperBound), replacement: replacement)
+      }
+      if !edits.isEmpty { onCommitEdits?(edits) }
+    }
+
+    private func changeIndent(outdent: Bool) {
+      guard let groups = try? selectedLineGroups() else { return }
+      var edits: [TextEdit] = []
+      for group in groups {
+        for index in group {
+          guard let line = try? snapshot.line(at: TextLineIndex(index)) else { continue }
+          let start = line.contentRange.lowerBound
+          if outdent {
+            var count = 0
+            while count < 4, start.value + count < line.contentRange.upperBound.value {
+              let lower = UTF8Offset(start.value + count)
+              let upper = UTF8Offset(lower.value + 1)
+              guard let character = try? snapshot.text(in: TextUTF8Range(lower, upper)) else { break }
+              if character == "\t" { count = 1; break }
+              guard character == " " else { break }
+              count += 1
+            }
+            if count > 0 {
+              edits.append(TextEdit(range: TextUTF8Range(start, UTF8Offset(start.value + count)), replacement: ""))
+            }
+          } else {
+            edits.append(TextEdit(range: TextUTF8Range(start, start), replacement: "\t"))
+          }
+        }
+      }
+      if !edits.isEmpty { onCommitEdits?(edits) }
     }
 
     /// Writes every non-empty selection's text, joined by newlines, as the
@@ -147,6 +300,7 @@ import ClairEditorCore
       selection = updated
       needsDisplay = true
       onSelectionChange?(selection)
+      ensureCaretVisible()
     }
 
     private func moveCaret(direction: Int, extend: Bool) {
@@ -164,6 +318,65 @@ import ClairEditorCore
       }
       guard let updated = try? mapSelections(transform) else { return }
       applyLocalSelection(updated)
+    }
+
+    private func wordKind(at offset: UTF8Offset) throws -> Int {
+      let next = try offsetByGrapheme(offset, delta: 1)
+      let text = try snapshot.text(in: TextUTF8Range(offset, next))
+      if text.unicodeScalars.allSatisfy({ CharacterSet.whitespacesAndNewlines.contains($0) }) { return 0 }
+      if text == "_" || text.unicodeScalars.allSatisfy({ scalar in
+        CharacterSet.alphanumerics.contains(scalar) ||
+          scalar.properties.generalCategory == .nonspacingMark ||
+          scalar.properties.generalCategory == .spacingMark
+      }) { return 1 }
+      return 2
+    }
+
+    private func wordBoundary(from offset: UTF8Offset, direction: Int) throws -> UTF8Offset {
+      var cursor = offset
+      if direction > 0 {
+        guard cursor.value < snapshot.utf8Count else { return cursor }
+        let kind = try wordKind(at: cursor)
+        while cursor.value < snapshot.utf8Count, try wordKind(at: cursor) == kind {
+          cursor = try offsetByGrapheme(cursor, delta: 1)
+        }
+        while cursor.value < snapshot.utf8Count, try wordKind(at: cursor) == 0 {
+          cursor = try offsetByGrapheme(cursor, delta: 1)
+        }
+      } else {
+        guard cursor.value > 0 else { return cursor }
+        cursor = try offsetByGrapheme(cursor, delta: -1)
+        while cursor.value > 0, try wordKind(at: cursor) == 0 {
+          cursor = try offsetByGrapheme(cursor, delta: -1)
+        }
+        let kind = try wordKind(at: cursor)
+        while cursor.value > 0 {
+          let previous = try offsetByGrapheme(cursor, delta: -1)
+          guard try wordKind(at: previous) == kind else { break }
+          cursor = previous
+        }
+      }
+      return cursor
+    }
+
+    private func moveWord(direction: Int, extend: Bool) {
+      guard let updated = try? mapSelections({ cursor in
+        let head = try wordBoundary(from: cursor.head, direction: direction)
+        return extend ? TextSelection(anchor: cursor.anchor, head: head) : TextSelection(cursor: head)
+      }) else { return }
+      applyLocalSelection(updated)
+    }
+
+    private func deleteWord(direction: Int) {
+      let edits: [TextEdit] = selection.selections.compactMap { cursor in
+        if !cursor.isEmpty { return TextEdit(range: cursor.range, replacement: "") }
+        guard let boundary = try? wordBoundary(from: cursor.head, direction: direction),
+          boundary != cursor.head else { return nil }
+        let range = direction < 0
+          ? TextUTF8Range(boundary, cursor.head) : TextUTF8Range(cursor.head, boundary)
+        return TextEdit(range: range, replacement: "")
+      }
+      if !edits.isEmpty { onCommitEdits?(edits) }
     }
 
     private func moveVertical(lineDelta: Int, extend: Bool) {

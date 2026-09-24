@@ -190,8 +190,12 @@ import ClairEditorCore
         atY: point.y, lineHeight: lineHeight, lineCount: snapshot.lineCount)
       guard let (textLine, ctLine) = renderedLine(at: TextLineIndex(index)) else { return nil }
       let localX = point.x - textInset
-      let charIndex = CTLineGetStringIndexForPosition(ctLine, CGPoint(x: localX, y: 0))
-      guard charIndex != kCFNotFound else { return nil }
+      var charIndex = CTLineGetStringIndexForPosition(ctLine, CGPoint(x: localX, y: 0))
+      if charIndex == kCFNotFound {
+        let range = CTLineGetStringRange(ctLine)
+        let endOffset = CTLineGetOffsetForStringIndex(ctLine, range.length, nil)
+        charIndex = localX >= endOffset ? range.length : 0
+      }
       let column = bufferLocalColumn(forRenderedLocalUTF16: charIndex, on: textLine)
       let position = TextLinePosition<UTF16Unit>(line: textLine.index, column: UTF16Offset(column))
       return try? snapshot.offset(at: position, rounding: .down)

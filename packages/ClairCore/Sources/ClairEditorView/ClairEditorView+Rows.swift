@@ -70,13 +70,19 @@ import ClairEditorCore
     }
 
     /// The document offset under `point` (rows, folds and wraps included).
+    /// A click past the end of a line snaps to the line end so that the
+    /// empty trailing area is still selectable.
     func rowHitTest(_ point: NSPoint) -> UTF8Offset? {
       guard snapshot.lineCount > 0 else { return nil }
       let (line, sub) = rowMap.line(atRow: Int((max(point.y, 0) / lineHeight).rounded(.down)))
       let segs = segments(line)
       guard let seg = segs.isEmpty ? nil : segs[min(sub, segs.count - 1)] else { return nil }
-      var index = CTLineGetStringIndexForPosition(seg.ctLine, CGPoint(x: point.x - textInset + seg.shift, y: 0))
-      guard index != kCFNotFound else { return nil }
+      let lineX = point.x - textInset + seg.shift
+      var index = CTLineGetStringIndexForPosition(seg.ctLine, CGPoint(x: lineX, y: 0))
+      if index == kCFNotFound {
+        let endOffset = CTLineGetOffsetForStringIndex(seg.ctLine, seg.end, nil)
+        index = lineX >= endOffset ? seg.end : seg.start
+      }
       index = min(max(index, seg.start), seg.end)
       return try? snapshot.offset(
         at: TextLinePosition<UTF16Unit>(line: seg.textLine.index, column: UTF16Offset(index)), rounding: .down)

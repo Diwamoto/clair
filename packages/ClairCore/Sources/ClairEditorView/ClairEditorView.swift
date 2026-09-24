@@ -74,11 +74,15 @@ import ClairEditorCore
     /// responsible for reconciling this back into its
     /// `EditorTransactionManager`; this view does not own that state.
     public var onSelectionChange: ((TextSelectionSet) -> Void)?
+    public var onFocus: (() -> Void)?
     /// Called with one transaction's worth of edits — typing, an IME
     /// commit, cut, paste, or a text drop — for the owner to apply through
     /// its `EditorTransactionManager` (one call is one undo unit) and
     /// reflect back via `applyEdits`. See `ClairEditorView+Editing.swift`.
     public var onCommitEdits: (([TextEdit]) -> Void)?
+    /// The host owns the transaction history and reflects Undo/Redo back through `applyEdits`.
+    public var onUndo: (() -> Void)?
+    public var onRedo: (() -> Void)?
     /// E12: sees every key before text input does (not while an IME
     /// composition is live); returning true swallows it. The completion list
     /// uses this for ↑↓/Return/Tab/Esc.
@@ -194,6 +198,7 @@ import ClairEditorCore
       knownContentWidth = 0
       syncFrameSize()
       needsDisplay = true
+      ensureCaretVisible()
     }
 
     /// Applies one already-committed `EditorTransactionManager` edit,
@@ -214,9 +219,30 @@ import ClairEditorCore
       self.selection = selection
       syncFrameSize()
       needsDisplay = true
+      ensureCaretVisible()
     }
 
     // MARK: - Layout / scrolling
+
+    /// Keep the active insertion point in the clip viewport after navigation
+    /// and committed edits. `scrollToVisible` alone can leave an offscreen
+    /// caret behind when the document view has just changed size.
+    func ensureCaretVisible() {
+      guard let scroll = enclosingScrollView, let head = selection.selections.last?.head,
+        let caret = caretRect(for: head) else { return }
+      let clip = scroll.contentView
+      let visible = clip.documentVisibleRect
+      guard visible.width > 0, visible.height > 0 else { return }
+      var origin = visible.origin
+      if caret.minY < visible.minY { origin.y = caret.minY }
+      else if caret.maxY > visible.maxY { origin.y = caret.maxY - visible.height }
+      if caret.minX < visible.minX { origin.x = max(0, caret.minX - 8) }
+      else if caret.maxX > visible.maxX { origin.x = caret.maxX - visible.width + 8 }
+      guard origin != visible.origin else { return }
+      let proposed = NSRect(origin: origin, size: clip.bounds.size)
+      clip.scroll(to: clip.constrainBoundsRect(proposed).origin)
+      scroll.reflectScrolledClipView(clip)
+    }
 
     /// Moves the caret to the start of `line` (0-based, clamped), scrolls it into view and takes focus.
     public func reveal(line: Int) {
@@ -357,7 +383,9 @@ import ClairEditorCore
 
     public override func becomeFirstResponder() -> Bool {
       needsDisplay = true
-      return super.becomeFirstResponder()
+      let focused = super.becomeFirstResponder()
+      if focused { onFocus?() }
+      return focused
     }
 
     public override func resignFirstResponder() -> Bool {

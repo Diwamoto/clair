@@ -345,6 +345,8 @@
     let buffers: EditorBuffers
     let root: String?
     let path: String?
+    var focused = false
+    var onFocus: (() -> Void)? = nil
     var softWrap = false
     var debugLine: Int? = nil
     var debugBreakpoints: Set<Int> = []
@@ -366,7 +368,8 @@
             breadcrumb(path)
             ZStack(alignment: .topTrailing) {
               EditorSurface(
-                manager: m, buffers: buffers, root: root, path: path, softWrap: softWrap,
+                manager: m, buffers: buffers, root: root, path: path, softWrap: softWrap, focused: focused,
+                onFocus: onFocus,
                 blame: selectedBlame(path, manager: m),
                 debugLine: debugLine, debugBreakpoints: debugBreakpoints, onToggleDebugBreakpoint: onToggleDebugBreakpoint,
                 onCaret: { onCaret(path, $0, m.buffer.snapshot) },
@@ -387,6 +390,13 @@
       } else {
         note("ファイルを選択してください。")
       }
+    }
+
+    func inPane(focused: Bool, onFocus: @escaping () -> Void) -> EditorPane {
+      var pane = self
+      pane.focused = focused
+      pane.onFocus = onFocus
+      return pane
     }
 
     private func selectedBlame(_ path: String, manager: EditorTransactionManager) -> (line: Int, text: String)? {
@@ -460,6 +470,8 @@
     let root: String
     let path: String
     let softWrap: Bool
+    let focused: Bool
+    let onFocus: (() -> Void)?
     let blame: (line: Int, text: String)?
     let debugLine: Int?
     let debugBreakpoints: Set<Int>
@@ -471,6 +483,7 @@
     final class Coordinator {
       var nonce = 0
       var completion: CompletionController?
+      var wasFocused = false
     }
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -493,6 +506,7 @@
       view.debugLineColor = NSColor(C.debugBlue).withAlphaComponent(0.14)
       view.debugBreakpointColor = NSColor(C.danger)
       view.onToggleBreakpoint = onToggleDebugBreakpoint
+      view.onFocus = onFocus
       let completion = CompletionController(language: buffers.language, path: root + "/" + path, root: root)
       completion.view = view
       context.coordinator.completion = completion
@@ -514,6 +528,23 @@
           $0.apply(to: view)
         }
       }
+      let replay: (Bool) -> Void = { [weak view, manager, onEdit, onCaret, buffers, path, root, weak completion] redo in
+        guard let view else { return }
+        let old = manager.buffer.snapshot
+        guard let new = try? (redo ? manager.redo() : manager.undo()) else { return }
+        let edits = manager.lastCommittedEdits
+        view.applyEdits(edits, oldSnapshot: old, newSnapshot: new, selection: manager.selection)
+        buffers.dropBlame(path)
+        onEdit()
+        onCaret(manager.selection)
+        buffers.language.change(root + "/" + path, root: root, edits: edits, old: old, new: new)
+        completion?.didEdit(edits)
+        buffers.updateHighlights(path, edits: edits, oldSnapshot: old, newSnapshot: new) { [weak view] in
+          $0.apply(to: view)
+        }
+      }
+      view.onUndo = { replay(false) }
+      view.onRedo = { replay(true) }
       view.onSelectionChange = { [weak manager, onCaret, weak completion] in
         manager?.setSelection($0); onCaret($0); completion?.didMoveCaret()
       }
@@ -526,11 +557,25 @@
       scroll.hasHorizontalScroller = !softWrap
       buffers.attachFolds(path, view: view)
       buffers.attachLanguage(path, root: root, snapshot: manager.buffer.snapshot, view: view)
+      context.coordinator.wasFocused = focused
+      if focused { DispatchQueue.main.async { [weak view] in
+        guard let view, let window = view.window else { return }
+        window.makeFirstResponder(view)
+      } }
       return scroll
     }
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
+      let becameFocused = focused && !context.coordinator.wasFocused
+      context.coordinator.wasFocused = focused
+      if becameFocused, let view = scroll.documentView as? ClairEditorView {
+        DispatchQueue.main.async { [weak view] in
+          guard let view, let window = view.window else { return }
+          window.makeFirstResponder(view)
+        }
+      }
       if let view = scroll.documentView as? ClairEditorView {
+        view.onFocus = onFocus
         view.blameAnnotation = blame
         view.debugStoppedLine = debugLine
         view.debugBreakpoints = debugBreakpoints

@@ -114,6 +114,30 @@
       XCTAssertEqual(position.line.value, 1)
     }
 
+    func testHitTestPastEndOfLineSnapsToLineEnd() throws {
+      let h = try harness("hello world\nsecond line")
+      try renderOffscreen(h.view)
+
+      guard let offset = h.view.hitTestOffset(at: CGPoint(x: 1000, y: 5)) else {
+        return XCTFail("expected a hit-test offset")
+      }
+      let position = try h.manager.buffer.snapshot.position(at: offset, columnUnit: UTF8Unit.self)
+      XCTAssertEqual(position.line.value, 0)
+      XCTAssertEqual(position.column.value, 11)
+    }
+
+    func testHitTestEmptyLinePlacesCaretOnThatLine() throws {
+      let h = try harness("hello\n\nworld")
+      try renderOffscreen(h.view)
+
+      guard let offset = h.view.hitTestOffset(at: CGPoint(x: 100, y: h.view.lineHeight + 5)) else {
+        return XCTFail("expected a hit-test offset")
+      }
+      let position = try h.manager.buffer.snapshot.position(at: offset, columnUnit: UTF8Unit.self)
+      XCTAssertEqual(position.line.value, 1)
+      XCTAssertEqual(position.column.value, 0)
+    }
+
     /// Regression for a D5 review finding: `hitTestOffset` used to call
     /// `renderer.line(at:...)` directly — the plain, cached, committed-
     /// buffer `CTLine` — even while an IME composition was live on the
