@@ -1,8 +1,7 @@
 import CryptoKit
 import Foundation
 
-// V09: ADR-0008 Stable/Dev identity and ADR-0009 GitHub Release + Ed25519 signed update. The private source
-// repo publishes through the public Diwamoto/clair-releases mirror (scripts/release.sh).
+// V09: ADR-0008 Stable/Dev identity and ADR-0009 GitHub Release + Ed25519 signed update (scripts/release.sh).
 // Ported from the v1 updater (apple/ClairApp/ClairUpdate.swift) with the same manifest and signed
 // payload, so scripts/generate-update-manifest.swift and the release workflow stay valid.
 // Apply only works from an installed `/Applications/<Name>.app`; a SwiftPM binary reports `.notInstalled`.
@@ -115,7 +114,7 @@ public struct ClairUpdate: Equatable, Sendable {
 }
 
 public struct ClairUpdateConfiguration: Sendable {
-  public static let manifestURL = URL(string: "https://github.com/Diwamoto/clair-releases/releases/latest/download/latest.json")!
+  public static let manifestURL = URL(string: "https://github.com/Diwamoto/clair/releases/latest/download/latest.json")!
 
   public let channel: ClairChannel
   public let publicKeyBase64: String?

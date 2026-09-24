@@ -6,7 +6,7 @@ import XCTest
 /// V09: ADR-0009 manifest trust and rollback; ADR-0008 channel identity.
 final class WorkbenchUpdateTests: XCTestCase {
   let sk = Curve25519.Signing.PrivateKey()
-  let url = URL(string: "https://github.com/Diwamoto/clair-releases/releases/download/v2.0.0/Clair-2.0.0-macos-arm64.zip")!
+  let url = URL(string: "https://github.com/Diwamoto/clair/releases/download/v2.0.0/Clair-2.0.0-macos-arm64.zip")!
   let goodHash = String(repeating: "ab", count: 32)
 
   func manifest(channel: ClairChannel = .stable, version: String = "2.0.0", arch: String = "arm64", url: URL? = nil, hash: String? = nil,

@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# Builds the Stable Clair.app, signs its update manifest and publishes both to the public
-# Diwamoto/clair-releases GitHub Release that installed apps poll (ADR-0009, docs/runbooks/release.md).
+# Builds the Stable Clair.app, signs its update manifest and publishes both to the Diwamoto/clair
+# GitHub Release that installed apps poll (ADR-0009, docs/runbooks/release.md).
 # CI-agnostic: .github/workflows/release.yml runs it on a push that changes VERSION, but any
 # macOS arm64 host with the inputs below can run it too.
 #
 #   CLAIR_UPDATE_PRIVATE_KEY  Ed25519 signing key (base64); must match Config/update-public-key
-#   GH_TOKEN                  token that can create releases on Diwamoto/clair-releases
+#   GH_TOKEN                  token that can push tags and create releases on Diwamoto/clair
 #
 # `--dry-run` builds, smoke-launches, packages and signs into .build/release without tagging or publishing.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
-mirror="Diwamoto/clair-releases"
+repo="Diwamoto/clair"
 publish=1
 [[ "${1:-}" == "--dry-run" ]] && publish=0
 
@@ -21,8 +21,8 @@ die() { printf 'release: %s\n' "$*" >&2; exit 1; }
 version="$(tr -d '[:space:]' <VERSION)"
 [[ "$version" =~ ^[0-9]+(\.[0-9]+){0,3}$ ]] || die "VERSION must be <major>[.<minor>[.<patch>[.<rev>]]], got '$version'"
 tag="v$version"
-if ((publish)) && gh release view "$tag" --repo "$mirror" >/dev/null 2>&1; then
-  printf 'release: %s is already published on %s; bump VERSION to release again\n' "$tag" "$mirror"
+if ((publish)) && gh release view "$tag" --repo "$repo" >/dev/null 2>&1; then
+  printf 'release: %s is already published on %s; bump VERSION to release again\n' "$tag" "$repo"
   exit 0
 fi
 [[ -n "${CLAIR_UPDATE_PRIVATE_KEY:-}" ]] || die "CLAIR_UPDATE_PRIVATE_KEY is not set"
@@ -85,7 +85,7 @@ xcrun swift scripts/generate-update-manifest.swift \
   --public-key "$public_key" \
   --output "$out/latest.json" \
   --notes "Clair ${version}" \
-  --artifact arm64 "https://github.com/${mirror}/releases/download/${tag}/${asset}" "$out/$asset"
+  --artifact arm64 "https://github.com/${repo}/releases/download/${tag}/${asset}" "$out/$asset"
 printf 'release: packaged %s and latest.json in %s\n' "$asset" "$out"
 ((publish)) || exit 0
 
@@ -94,10 +94,9 @@ if ! git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
   git tag "$tag" "$commit"
   git push origin "refs/tags/$tag"
 fi
-# The source repo is private, so the public notes carry no commit log.
 gh release create "$tag" "$out/$asset" "$out/latest.json" \
-  --repo "$mirror" \
+  --repo "$repo" \
+  --generate-notes \
   --title "Clair ${version}" \
-  --notes "Clair ${version} (macOS arm64). Built from ${commit:0:12}." \
   --latest
-printf 'release: published https://github.com/%s/releases/tag/%s\n' "$mirror" "$tag"
+printf 'release: published https://github.com/%s/releases/tag/%s\n' "$repo" "$tag"
