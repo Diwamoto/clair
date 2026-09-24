@@ -409,7 +409,14 @@ import Foundation
       }
       return GhosttyKeyEvent(
         action: action, mods: mods, consumedMods: consumedMods, keyCode: UInt32(event.keyCode),
-        text: ghosttyCharacters(event), unshiftedCodepoint: unshiftedCodepoint)
+        text: ghosttyCharacters(event).flatMap(keyEventText), unshiftedCodepoint: unshiftedCodepoint)
+    }
+
+    /// Upstream `String.keyEventText`: control-character text (e.g. Shift+Tab's U+0019) must not
+    /// reach libghostty, or it is written raw instead of encoded from `keyCode`/`mods` (`ESC [ Z`).
+    nonisolated static func keyEventText(_ text: String) -> String? {
+      guard let first = text.unicodeScalars.first, first.value >= 0x20, first.value != 0x7F else { return nil }
+      return text
     }
 
     nonisolated private static func ghosttyCharacters(_ event: NSEvent) -> String? {

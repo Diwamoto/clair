@@ -9,6 +9,17 @@ import Testing
 
   @Suite
   struct ClairGhosttySurfaceMetricsTests {
+    @Test func shiftTabSendsNoControlTextSoGhosttyEncodesBacktab() throws {
+      let event = try #require(
+        NSEvent.keyEvent(
+          with: .keyDown, location: .zero, modifierFlags: .shift, timestamp: 0, windowNumber: 0,
+          context: nil, characters: "\u{19}", charactersIgnoringModifiers: "\t", isARepeat: false, keyCode: 48))
+      let key = ClairGhosttySurfaceView.ghosttyKeyEvent(event, action: .press)
+      #expect(key.text == nil)
+      #expect(key.mods.contains(.shift))
+      #expect(ClairGhosttySurfaceView.keyEventText("a") == "a")
+    }
+
     @Test func t03CellMetricsScaleWithContentScale() {
       let font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
       let scale1 = ClairGhosttyCellMetrics.measuring(font: font, contentScale: 1)
