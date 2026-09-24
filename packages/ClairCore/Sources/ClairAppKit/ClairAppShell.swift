@@ -68,6 +68,33 @@ import Observation
     private var sleepAssertion: IOPMAssertionID = 0
     private var persistenceTask: Task<Void, Never>?
 
+    /// Map manually started CLI processes back to the terminal panes Clair already owns.
+    func refreshDetectedAgents() async {
+      var candidates: [String: (project: String, pane: Int, cwd: String)] = [:]
+      for project in state.projects {
+        let tree = project.name == state.project ? state.tree : state.layouts[project.name]?.tree
+        let launches = project.name == state.project ? state.launches : state.layouts[project.name]?.launches
+        guard let tree else { continue }
+        for leaf in tree.leaves where leaf.kind == .terminal && launches?[leaf.id] == nil {
+          candidates[Self.terminalKey(root: project.path, pane: leaf.id)] = (project.name, leaf.id, project.path)
+        }
+      }
+      let keys = Array(candidates.keys)
+      let found = await Task.detached(priority: .utility) {
+        ClairCLIProcessScanner.profiles(keys: keys)
+      }.value
+      guard !Task.isCancelled else { return }
+      var detected: [String: [Int: AgentLaunch]] = [:]
+      for (key, profile) in found {
+        guard let candidate = candidates[key] else { continue }
+        detected[candidate.project, default: [:]][candidate.pane] = AgentLaunch(profile: profile, cwd: candidate.cwd)
+      }
+      if state.detectedLaunches != detected {
+        state.detectedLaunches = detected
+        refreshSleepAssertion()
+      }
+    }
+
     /// V02: serves this store to `clair` CLI. Only the first window's store wins the socket.
     // ponytail: multi-window shares one socket owner; route by window when V04 adds per-Project windows.
     private var ipc: WorkbenchIPCServer?
@@ -203,7 +230,6 @@ import Observation
       // `file.save` from any caller (⌘S, CLI, MCP) writes the buffer first; a failed write keeps the dirty marker.
       if id == "file.save", let p = state.active, let root = activeRoot, buffers.isOpen(p) {
         do {
-          try? Self.history.record(root: root, path: p)  // pre-save content; best effort, never blocks a save
           try buffers.save(p, root: root)
         } catch {
           let e = CommandError(.preconditionFailed, "保存できません: \(error.localizedDescription)")
@@ -228,6 +254,9 @@ import Observation
       case .failure(let e): lastError = e
       case .success:
         lastError = nil
+        if id == "pane.focus", case .int(let pane)? = input["id"] {
+          state.notices.markRead(project: state.project, pane: pane)
+        }
         if id == "file.open", case .int(let line)? = input["line"], let p = state.active {
           let column: Int = if case .int(let c)? = input["column"] { c } else { 0 }
           buffers.reveal(p, line: line, column: column)
@@ -342,6 +371,10 @@ import Observation
     /// UI acknowledges the shortcut immediately and completes the durable write off-main.
     public func performFromUI(_ id: String, _ input: CommandInput = [:]) {
       if id == "pane.close", state.panesClosed { _ = run("pane.open", ["kind": .string("editor")]); return }
+      if id == "pane.close", state.tree.leaves.first(where: { $0.id == state.tree.focused })?.kind == .editor {
+        if state.active != nil { _ = run("tab.close") }
+        return
+      }
       guard id == "file.save" else { _ = run(id, input); return }
       Task { await saveActiveFile() }
     }
@@ -397,10 +430,8 @@ import Observation
       else { _ = run("file.save"); return }
       let project = state.project
       let snapshot = manager.buffer.snapshot
-      let history = Self.history
       let result = await Task.detached(priority: .userInitiated) {
         Result<Void, Error> {
-          try? history.record(root: root, path: path)
           try snapshot.string().write(toFile: root + "/" + path, atomically: true, encoding: .utf8)
         }
       }.value
@@ -424,10 +455,6 @@ import Observation
     var activeRoot: String? { state.projects.first { $0.name == state.project }?.path }
 
     /// U05: called by the editor surface on every committed edit.
-    static let history = LocalHistory(dir: URL.applicationSupportDirectory.appending(path: "Clair/history"))
-
-    func dropDirty(_ path: String) { state.dirty.remove(path) }
-
     func edited(_ path: String) { state.dirty.insert(path) }  // the GUI owns dirty; never persisted (principle 8)
 
     /// Workspace commands must never synchronously encode and replace the persistence file on the
@@ -545,8 +572,9 @@ import Observation
       }
     }
 
-    /// V08: a terminal fact becomes a history entry (and a macOS banner unless muted or the app is frontmost).
+    /// Only facts from an agent running in a Clair terminal can produce a macOS notification.
     public func facts(pane: Int, bells: Int, exit: Int?) {
+      guard let agent = state.agentLaunch(in: state.project, pane: pane) else { return }
       // Only this GUI writes facts (no command records them), so an agent cannot fabricate notifications.
       var fresh: WorkbenchNotice?
       if bells > 0 { fresh = state.notices.record(project: state.project, pane: pane, kind: .bell) ?? fresh }
@@ -556,7 +584,7 @@ import Observation
         Bundle.main.bundleURL.pathExtension == "app",
         Bundle.main.bundleIdentifier != nil  // UNUserNotificationCenter traps outside an app bundle (swift run / XCTest)
       else { return }
-      let body = state.launches[n.pane].flatMap { AgentProfile.named($0.profile)?.title }.map { "\($0): \(n.title)" } ?? n.title
+      let body = [AgentProfile.named(agent.profile)?.title ?? agent.profile, n.title].joined(separator: ": ")
       let c = UNUserNotificationCenter.current()
       c.requestAuthorization(options: [.alert]) { granted, _ in
         guard granted else { return }
@@ -620,7 +648,7 @@ import Observation
       CommandMenu("Clair") {
         let state = store?.state ?? WorkbenchState()
         ForEach(CommandRegistry.workbench.commands.filter { state.shortcut(for: $0) != nil }, id: \.id) { d in
-          Button(d.title) { store?.performFromUI(d.id) }
+          Button(d.id == "pane.close" ? "タブまたはペインを閉じる" : d.title) { store?.performFromUI(d.id) }
             .keyboardShortcut(Self.shortcut(state.shortcut(for: d)!))
             .disabled(store == nil)
         }
@@ -644,7 +672,6 @@ import Observation
   /// contents other than the terminal are placeholders owned by U05/U06.
   public struct ClairAppShell: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.controlActiveState) private var controlActiveState
     @State private var store: ClairWorkbenchStore
     @State private var draggingPane: Int?
     private var st: WorkbenchState { store.state }
@@ -706,7 +733,7 @@ import Observation
           HStack(spacing: 0) {
             activityBar
             sidebar
-            Rectangle().fill(L.hairline).frame(width: 1)
+            Rectangle().fill(C.surfaceActive).frame(width: 1)
             main
           }
         }
@@ -736,8 +763,14 @@ import Observation
       .onChange(of: st.collapsed) { rebuildVisibleExplorer() }
       .onChange(of: diff) { loadDiff() }
       .onAppear { rebuildExplorer(); reloadChanges() }
+      .task {
+        while !Task.isCancelled {
+          await store.refreshDetectedAgents()
+          try? await Task.sleep(for: .seconds(2))
+        }
+      }
       .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ClairCloseFocusedPaneShortcut"))) { _ in
-        if controlActiveState == .key { store.performFromUI("pane.close") }
+        store.performFromUI("pane.close")
       }
       .focusedSceneValue(\.clairWorkbench, store)
       .confirmationDialog(
@@ -793,7 +826,7 @@ import Observation
       .frame(height: ChromeBudget.titlebar)
       .background(TitlebarArea())
       .background(C.chrome)
-      .overlay(alignment: .bottom) { Rectangle().fill(L.hairline).frame(height: 1) }
+      .overlay(alignment: .bottom) { Rectangle().fill(C.surfaceActive).frame(height: 1) }
     }
 
     private func titlebarAction(_ icon: String, _ help: String, on: Bool, _ action: @escaping () -> Void) -> some View {
@@ -828,6 +861,7 @@ import Observation
           }
         }
         .buttonStyle(.hoverWash).help("\(p.name) タブグループを\(folded ? "展開" : "折りたたむ")")
+        .background(NoWindowDrag())
         .contextMenu {
           let muted = st.notices.mutedProjects.contains(p.name)
           Button(muted ? "通知のミュートを解除" : "通知をミュート") {
@@ -855,6 +889,16 @@ import Observation
         onClose: { store.run("tab.close", ["path": .string(path)]) }
       )
       .contextMenu { if projectActive { fileMenu(path, tab: true) } }
+      // Reorder within the active group only; other groups' tabs live in saved layouts.
+      .onDrag { NSItemProvider(object: NSString(string: path)) }
+      .onDrop(of: [.text], isTargeted: nil) { providers in
+        guard projectActive, let provider = providers.first else { return false }
+        provider.loadObject(ofClass: NSString.self) { object, _ in
+          guard let from = (object as? NSString).map({ $0 as String }) else { return }
+          Task { @MainActor in store.run("tab.move", ["path": .string(from), "target": .string(path)]) }
+        }
+        return true
+      }
     }
 
     private func openFolder() {
@@ -872,7 +916,7 @@ import Observation
     /// pair, and icons are bigger now that they own a whole column.
     private var activityBar: some View {
       VStack(spacing: 2) {
-        ForEach(["folder", "clock.arrow.circlepath", "shield", "terminal", "bell", "ladybug"], id: \.self) { icon in
+        ForEach(["folder", "shield", "terminal", "ladybug"], id: \.self) { icon in
           activityBarButton(icon)
         }
         Spacer(minLength: 0)
@@ -881,12 +925,12 @@ import Observation
       .padding(.vertical, 8)
       .frame(width: ChromeBudget.activityBarWidth).frame(maxHeight: .infinity)
       .background(C.chrome)
-      .overlay(alignment: .trailing) { Rectangle().fill(L.chromeSoft).frame(width: 1) }
+      .overlay(alignment: .trailing) { Rectangle().fill(C.surfaceActive).frame(width: 1) }
     }
 
     private func activityBarButton(_ icon: String) -> some View {
       let ready = icon != "shield" || st.isRepo
-      return ActivityBarButton(icon: icon, on: sidebarMode == icon && !st.settingsOpen, enabled: ready, badge: icon == "bell" && st.notices.unread() > 0) {
+      return ActivityBarButton(icon: icon, on: sidebarMode == icon && !st.settingsOpen, enabled: ready) {
         sidebarMode = icon
         if icon == "folder" { diff = nil }
         if icon == "shield" { reloadChanges() }
@@ -897,11 +941,11 @@ import Observation
     private var sidebar: some View {
       VStack(spacing: 0) {
         // Lazy: a Project can list thousands of files, and an eager tree makes accessibility traversal (and layout) block the main thread.
-        ScrollView { LazyVStack(alignment: .leading, spacing: 0) { sidebarMode == "clock.arrow.circlepath" ? AnyView(historyPanel) : sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "bell" ? AnyView(noticeList) : sidebarMode == "terminal" ? AnyView(sessionList) : sidebarMode == "ladybug" ? AnyView(debugPanel) : AnyView(explorer) }.clairScroller() }
+        ScrollView { LazyVStack(alignment: .leading, spacing: 0) { sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "terminal" ? AnyView(sessionList) : sidebarMode == "ladybug" ? AnyView(debugPanel) : AnyView(explorer) }.clairScroller() }
         Spacer(minLength: 0)
       }
       .frame(width: 242)
-      .background(C.chromeRaised)
+      .background(C.chrome)
     }
 
     /// Settings takes over the whole window — its own header (with the one
@@ -934,7 +978,20 @@ import Observation
           .background(C.chrome, in: RoundedRectangle(cornerRadius: Radius.control))
           .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.hairline))
         Text("ワークスペース").font(.system(size: 11, weight: .semibold)).foregroundStyle(C.textTertiary).padding(.horizontal, 8)
-        VStack(alignment: .leading, spacing: 0) { sections }
+        VStack(alignment: .leading, spacing: 0) {
+          ForEach(["一般", "AIプロバイダー", "使用状況", "エディタ", "ターミナル", "モバイル", "アップデート"], id: \.self) { section in
+            let selected = st.section == section
+            Button { store.run("settings.open", ["section": .string(section)]) } label: {
+              Text(section)
+                .font(.system(size: 11, weight: selected ? .semibold : .regular))
+                .foregroundStyle(selected ? C.textPrimary : C.textSecondary)
+                .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
+                .padding(.horizontal, 8)
+                .background(selected ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
+            }
+            .buttonStyle(.hoverWash)
+          }
+        }
         Spacer(minLength: 0)
       }
       .padding(.horizontal, 8).padding(.vertical, 16)
@@ -981,13 +1038,13 @@ import Observation
 
     private func runReplace() {
       guard !replacing, let root = store.activeRoot, !hits.isEmpty else { return }
-      let (history, files, pattern, r) = (ClairWorkbenchStore.history, st.files, searchPattern, replaceText)
+      let (files, pattern, r) = (st.files, searchPattern, replaceText)
       searchTask?.cancel(); searching = false; replacing = true; searchMessage = "置換中…"
       replaceTask = Task {
-        let result = await Task.detached(priority: .userInitiated) { Result { try ProjectSearch.replace(root: root, files: files, pattern, with: r, history: history) } }.value
+        let result = await Task.detached(priority: .userInitiated) { Result { try ProjectSearch.replace(root: root, files: files, pattern, with: r) } }.value
         replacing = false
         switch result {
-        case .success(let n): hits = []; searchMessage = "\(n) 件を置換しました（履歴に退避済み）"; runSearch()
+        case .success(let n): hits = []; searchMessage = "\(n) 件を置換しました"; runSearch()
         case .failure(let error): searchMessage = "置換できません: \(error)"
         }
       }
@@ -1016,27 +1073,11 @@ import Observation
       }
     }
 
-    private var historyPanel: some View {
-      return HistoryList(
-        root: store.activeRoot, path: st.active, history: ClairWorkbenchStore.history,
-        restored: {
-          guard let p = st.active else { return }
-          store.buffers.drop([p]); store.dropDirty(p)  // reload from disk; the pre-restore content is itself a new version
-        })
-    }
-
     private var sessionList: some View {
       SessionList(sessions: st.agentSessions, current: st.project) { s in
         if s.project != st.project { store.run("project.switch", ["name": .string(s.project)]) }
         store.run("pane.focus", ["id": .int(s.pane)])
       }
-    }
-
-    private var noticeList: some View {
-      NoticeList(
-        log: st.notices, current: st.project,
-        agentTitle: { n in st.project == n.project ? st.launches[n.pane].flatMap { AgentProfile.named($0.profile)?.title } : nil },
-        run: { store.run($0, $1) })
     }
 
     private var changesList: some View {
@@ -1272,19 +1313,46 @@ import Observation
       VStack(alignment: .leading, spacing: 0) {
         Text("実行とデバッグ").font(.system(size: 11, weight: .semibold)).foregroundStyle(C.textTertiary)
           .padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 8)
-        HStack(spacing: 6) {
-          Picker("構成", selection: $debugMode) {
-            Text("Go: 現在のファイル").tag("debug")
-            Text("Go: 現在の package をテスト").tag("test")
-            Text("プロセスに attach").tag("attach")
+        HStack(spacing: 4) {
+          Button { startDebugFromUI() } label: {
+            Image(systemName: "play.fill")
+              .font(.system(size: 11))
+              .foregroundStyle(C.debugBlueText)
+              .frame(width: 28, height: 28)
+              .background(C.debugBlue.opacity(0.16), in: RoundedRectangle(cornerRadius: Radius.control))
           }
-          .labelsHidden().controlSize(.small)
-          Button { startDebugFromUI() } label: { Image(systemName: "play.fill").foregroundStyle(C.debugBlue) }
-            .buttonStyle(.hoverWash).help("デバッグを開始")
-            .disabled(debugMode == "attach" ? (Int(debugPID) ?? 0) <= 0 : !(st.active?.hasSuffix(".go") ?? false))
+          .buttonStyle(.hoverWash).help("デバッグを開始")
+          .disabled(debugMode == "attach" ? (Int(debugPID) ?? 0) <= 0 : !(st.active?.hasSuffix(".go") ?? false))
+          Menu {
+            Button("Go: 現在のファイル") { debugMode = "debug" }
+            Button("Go: 現在の package をテスト") { debugMode = "test" }
+            Button("プロセスに attach") { debugMode = "attach" }
+          } label: {
+            HStack(spacing: 6) {
+              Text(debugMode == "test" ? "Go: package テスト" : debugMode == "attach" ? "プロセスに attach" : "Go: 現在のファイル")
+                .lineLimit(1)
+              Spacer(minLength: 0)
+              Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
+            }
+            .font(.system(size: 11))
+            .foregroundStyle(C.textSecondary)
+            .padding(.horizontal, 8)
+            .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
+            .background(C.surfaceHover, in: RoundedRectangle(cornerRadius: Radius.control))
+            .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.strong))
+          }
+          .menuStyle(.borderlessButton)
+          .accessibilityLabel("デバッグ構成")
         }.padding(.horizontal, 12)
         if debugMode == "attach" {
-          TextField("PID", text: $debugPID).textFieldStyle(.roundedBorder).padding(.horizontal, 12).padding(.top, 6)
+          TextField("プロセス ID (PID)", text: $debugPID)
+            .textFieldStyle(.plain)
+            .font(.system(size: 11, design: .monospaced))
+            .foregroundStyle(C.textPrimary)
+            .padding(.horizontal, 8).frame(height: 28)
+            .background(C.canvas, in: RoundedRectangle(cornerRadius: Radius.control))
+            .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.strong))
+            .padding(.horizontal, 12).padding(.top, 6)
         }
         Text(debugSetupMessage)
           .font(.system(size: 11)).foregroundStyle(C.textTertiary)
@@ -1298,8 +1366,9 @@ import Observation
                 Label("\(URL(fileURLWithPath: path).lastPathComponent):\(status?.line ?? line)",
                   systemImage: status?.verified == true ? "circle.fill" : "circle.dotted")
                   .font(.system(size: 11)).foregroundStyle(status?.verified == false ? C.attention : C.textSecondary)
+                  .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
               }.buttonStyle(.hoverWash).help(status?.message ?? (status == nil ? "未検証" : "検証済み"))
-                .padding(.horizontal, 12).padding(.vertical, 3)
+                .padding(.horizontal, 12)
             }
           }
         } else { debugEmpty("設定されていません") }
@@ -1312,7 +1381,7 @@ import Observation
             Button { _ = store.run("debug.selectThread", ["id": .int(thread.id)]) } label: {
               Label(thread.name, systemImage: session.selectedThread == thread.id ? "checkmark.circle.fill" : "circle.grid.2x2")
                 .font(.system(size: 11)).foregroundStyle(session.selectedThread == thread.id ? C.textPrimary : C.textTertiary)
-            }.buttonStyle(.hoverWash).padding(.horizontal, 12).padding(.vertical, 3)
+            }.buttonStyle(.hoverWash).padding(.horizontal, 12).frame(minHeight: 28)
           }
         }
         if let session = store.debugSession, !session.frames.isEmpty {
@@ -1323,8 +1392,11 @@ import Observation
                 Text(frame.path.map { "\(URL(fileURLWithPath: $0).lastPathComponent):\(frame.line)" } ?? "場所不明")
                   .foregroundStyle(C.textQuaternary)
               }.font(.system(size: 11)).frame(maxWidth: .infinity, alignment: .leading)
-            }.buttonStyle(.hoverWash).padding(.horizontal, 12).padding(.vertical, 4)
-              .background(session.selectedFrame == frame.id ? C.chromeRaised : Color.clear)
+            }.buttonStyle(.hoverWash).padding(.horizontal, 12).frame(minHeight: 34)
+              .background(session.selectedFrame == frame.id ? C.debugBlue.opacity(0.08) : Color.clear)
+              .overlay(alignment: .leading) {
+                if session.selectedFrame == frame.id { C.debugBlue.frame(width: 2) }
+              }
           }
         } else { debugEmpty("停止すると表示されます") }
         debugSection("変数")
@@ -1343,6 +1415,16 @@ import Observation
             }.buttonStyle(.hoverWash).disabled(variable.reference == 0)
           }
         } else { debugEmpty("停止すると表示されます") }
+        debugSection("デバッグコンソール")
+        if let session = store.debugSession, !session.console.isEmpty {
+          ForEach(Array(session.console.enumerated()), id: \.offset) { _, line in
+            Text(line).font(.system(size: 11, design: .monospaced))
+              .foregroundStyle(C.textTertiary)
+              .frame(maxWidth: .infinity, alignment: .leading)
+              .padding(.horizontal, 12).padding(.vertical, 2)
+              .textSelection(.enabled)
+          }
+        } else { debugEmpty("出力はありません") }
       }.frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -1388,50 +1470,43 @@ import Observation
       _ = store.run("file.open", ["path": .string(path), "line": .int(frame.line)])
     }
 
-    private var debugMain: some View {
-      VStack(spacing: 0) {
-        HStack(spacing: 4) {
+    private var debugControlsVisible: Bool {
+      guard let phase = store.debugSession?.phase else { return false }
+      switch phase {
+      case .starting, .configuring, .running, .stopped: return true
+      case .idle, .ended, .failed: return false
+      }
+    }
+
+    private var debugToolbar: some View {
+        HStack(spacing: 2) {
+          Image(systemName: "line.3.horizontal")
+            .font(.system(size: 10)).foregroundStyle(C.textQuaternary)
+            .frame(width: 14, height: 20)
+          Rectangle().fill(L.strong).frame(width: 1, height: 18).padding(.horizontal, 4)
           debugAction("play.fill", "続行", "debug.continue", enabled: store.debugSession?.phase == .stopped)
           debugAction("pause.fill", "一時停止", "debug.pause", enabled: store.debugSession?.phase == .running)
           debugAction("arrow.turn.down.right", "ステップオーバー", "debug.stepOver", enabled: store.debugSession?.phase == .stopped)
           debugAction("arrow.down.right", "ステップイン", "debug.stepInto", enabled: store.debugSession?.phase == .stopped)
           debugAction("arrow.up.right", "ステップアウト", "debug.stepOut", enabled: store.debugSession?.phase == .stopped)
-          Rectangle().fill(L.hairline).frame(width: 1, height: 18).padding(.horizontal, 4)
+          Rectangle().fill(L.strong).frame(width: 1, height: 18).padding(.horizontal, 4)
           debugAction("arrow.clockwise", "再起動", "debug.restart", enabled: store.debugSession != nil)
           debugAction("stop.fill", "終了", "debug.stop", enabled: store.debugSession != nil)
-          Spacer(minLength: 0)
-          Text(debugSetupMessage).font(.system(size: 11)).foregroundStyle(C.textTertiary).lineLimit(1)
-        }.padding(.horizontal, 12).frame(height: 42).background(C.chromeRaised)
-        EditorPane(buffers: store.buffers, root: store.activeRoot, path: st.active,
-          softWrap: st.toggles["softWrap"] == true,
-          debugLine: store.debugSession?.frames.first(where: { $0.id == store.debugSession?.selectedFrame }).flatMap { $0.path == store.activeRoot.map { $0 + "/" + (st.active ?? "") } ? $0.line : nil },
-          debugBreakpoints: Set(store.debugSession?.breakpointStatus[(store.activeRoot ?? "") + "/" + (st.active ?? "")]?.values
-            .filter(\.verified).map(\.line) ?? []),
-          onToggleDebugBreakpoint: { line in
-            guard let root = store.activeRoot, let path = st.active else { return }
-            _ = store.run("debug.breakpoint", ["path": .string(root + "/" + path), "line": .int(line)])
-          },
-          onEdit: { store.edited($0) }, onCaret: { store.buffers.setCaret($0, $1, in: $2) })
-        Rectangle().fill(L.paneDivider).frame(height: 1)
-        VStack(alignment: .leading, spacing: 0) {
-          Text("デバッグコンソール").font(.system(size: 11, weight: .semibold)).foregroundStyle(C.textQuaternary)
-            .padding(.horizontal, 12).frame(height: 26)
-          Rectangle().fill(L.hairline).frame(height: 1)
-          ScrollView {
-            LazyVStack(alignment: .leading, spacing: 2) {
-              ForEach(Array((store.debugSession?.console ?? []).enumerated()), id: \.offset) { _, line in
-                Text(line).font(.system(size: 11, design: .monospaced)).foregroundStyle(C.textTertiary)
-              }
-            }.padding(8).frame(maxWidth: .infinity, alignment: .leading)
-          }
-        }.frame(height: 160).background(C.canvas)
-      }
+        }
+        .padding(.horizontal, 4).frame(height: 34)
+        .background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.card))
+        .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(L.strong))
+        .shadow(color: .black.opacity(0.4), radius: 10, y: 8)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("デバッグ操作")
     }
 
     private func debugAction(_ symbol: String, _ title: String, _ command: String, enabled: Bool) -> some View {
       Button { _ = store.run(command, confirmed: command == "debug.restart") } label: {
-        Image(systemName: symbol).font(.system(size: 12)).foregroundStyle(command == "debug.stop" ? C.danger : C.textSecondary)
+        Image(systemName: symbol).font(.system(size: 12)).foregroundStyle(command == "debug.stop" ? C.danger : command == "debug.continue" ? C.debugBlueText : C.textSecondary)
           .frame(width: 28, height: 28)
+          .background(command == "debug.continue" && enabled ? C.debugBlue.opacity(0.16) : Color.clear,
+            in: RoundedRectangle(cornerRadius: Radius.control))
       }.buttonStyle(.hoverWash).help(title).disabled(!enabled)
     }
 
@@ -1466,8 +1541,7 @@ import Observation
 
     private var main: some View {
       VStack(spacing: 0) {
-        if sidebarMode == "ladybug" { debugMain }
-        else if let d = diff, let root = store.activeRoot, let loaded = loadedDiff,
+        if let d = diff, let root = store.activeRoot, let loaded = loadedDiff,
           loaded.target == d, loaded.root == root
         {
           let fileLines = loaded.fileLines
@@ -1508,9 +1582,23 @@ import Observation
           focused: st.tree.focused, launches: st.launches, project: store.activeRoot ?? st.project, onFocus: { store.run("pane.focus", ["id": .int($0)]) },
           onFacts: { store.facts(pane: $0, bells: $1, exit: $2) },
           onRatio: { store.run("pane.setRatio", ["id": .int($0), "ratio": .double($1)]) },
-          editor: EditorPane(buffers: store.buffers, root: store.activeRoot, path: st.active, softWrap: st.toggles["softWrap"] == true, onEdit: { store.edited($0) }, onCaret: { store.buffers.setCaret($0, $1, in: $2) }),
+          editor: EditorPane(buffers: store.buffers, root: store.activeRoot, path: st.active,
+            softWrap: st.toggles["softWrap"] == true,
+            debugLine: store.debugSession?.frames.first(where: { $0.id == store.debugSession?.selectedFrame }).flatMap {
+              $0.path == store.activeRoot.map { $0 + "/" + (st.active ?? "") } ? $0.line : nil
+            },
+            debugBreakpoints: Set(store.debugSession?.breakpointStatus[(store.activeRoot ?? "") + "/" + (st.active ?? "")]?.values
+              .filter(\.verified).map(\.line) ?? []),
+            onToggleDebugBreakpoint: { line in
+              guard let root = store.activeRoot, let path = st.active else { return }
+              _ = store.run("debug.breakpoint", ["path": .string(root + "/" + path), "line": .int(line)])
+            },
+            onEdit: { store.edited($0) }, onCaret: { store.buffers.setCaret($0, $1, in: $2) }),
           run: { _ = store.run($0, $1) }, dragging: $draggingPane)
         }
+      }
+      .overlay(alignment: .top) {
+        if debugControlsVisible { debugToolbar.padding(.top, 12) }
       }
     }
 
@@ -1518,10 +1606,10 @@ import Observation
 
     private var settingsMain: some View {
       ScrollView {
-        VStack(alignment: .leading, spacing: 12) {
-          Text(st.section).font(.system(size: 26, weight: .semibold)).foregroundStyle(C.textPrimary)
+        VStack(alignment: .leading, spacing: 8) {
+          Text(st.section).font(.system(size: 20, weight: .semibold)).foregroundStyle(C.textPrimary)
           Text(Self.sectionNotes[st.section] ?? "\(st.section) の設定です。").font(.system(size: 12)).foregroundStyle(C.textTertiary)
-            .padding(.bottom, 12)
+            .padding(.bottom, 16)
           switch st.section {
           case "使用状況":
             AgentUsageView()
@@ -1621,9 +1709,24 @@ import Observation
     /// Mock `AppStatusBar`: branch, ahead/behind, change count, caret, then the session count on the right. 26px, sans, `textTertiary`.
     /// Mock `QuotaMeter` (H11): the tightest window across providers; the tooltip lists every provider, unread ones included.
     private func quotaTint(_ usedPercent: Double) -> Color {
-      if usedPercent <= 50 { return C.success }
+      if usedPercent <= 50 || usedPercent >= 100 { return C.success }
       if usedPercent <= 90 { return C.attention }
       return C.danger
+    }
+
+    @ViewBuilder private func quotaProviderIcon(_ provider: String, size: CGFloat = 15) -> some View {
+      let asset: (String, String)? = switch provider {
+      case "Codex": ("VendorCodex", "svg")
+      case "Claude Code": ("VendorClaude", "png")
+      case "OpenCode": ("VendorOpenCode", "svg")
+      default: nil
+      }
+      if let asset,
+         let url = Bundle.module.url(forResource: asset.0, withExtension: asset.1),
+         let icon = NSImage(contentsOf: url) {
+        Image(nsImage: icon).resizable().scaledToFit().frame(width: size, height: size)
+          .accessibilityHidden(true)
+      }
     }
 
     private var quotaMeter: some View {
@@ -1633,6 +1736,7 @@ import Observation
       return HStack(spacing: 6) {
         if let top {
           let tint = stale ? C.textQuaternary : quotaTint(top.window.usedPercent)
+          quotaProviderIcon(top.provider)
           Text("\(top.provider) \(top.window.label)").foregroundStyle(C.textQuaternary)
           Capsule().fill(L.strong).frame(width: 34, height: 4)
             .overlay(alignment: .leading) { Capsule().fill(tint).frame(width: 34 * top.window.usedPercent / 100) }
@@ -1651,7 +1755,8 @@ import Observation
           ForEach(quota, id: \.provider) { provider in
             VStack(alignment: .leading, spacing: 7) {
               HStack {
-                Text(provider.provider).fontWeight(.semibold)
+                quotaProviderIcon(provider.provider, size: 20)
+                Text(provider.provider).font(.system(size: 14, weight: .semibold))
                 Spacer()
                 if case .ok = provider.state {
                   Text(provider.isStale(now: now) ? "古い値 · \(provider.fetchedAt.formatted(date: .omitted, time: .shortened)) 取得" : "\(provider.fetchedAt.formatted(date: .omitted, time: .shortened)) 取得")
@@ -1901,6 +2006,13 @@ import Observation
     func updateNSView(_ nsView: Area, context: Context) {}
   }
 
+  /// Sits behind titlebar tabs/group chips so a press there drags the item, not the window (`TitlebarArea` underneath would).
+  private struct NoWindowDrag: NSViewRepresentable {
+    final class Blocker: NSView { override var mouseDownCanMoveWindow: Bool { false } }
+    func makeNSView(context: Context) -> Blocker { Blocker() }
+    func updateNSView(_ nsView: Blocker, context: Context) {}
+  }
+
   /// A titlebar file tab. Selected and hover used to be two different
   /// treatments — a `surfaceActive`-filled background plus a 1.5px bottom
   /// rule for selected, a bare `.canvas` fill with nothing for hover — and
@@ -1911,22 +2023,45 @@ import Observation
     let icon: String
     let on: Bool
     let enabled: Bool
-    let badge: Bool
     let action: () -> Void
     @State private var hovered = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
       Button(action: action) {
-        Image(systemName: icon).font(.system(size: 16)).foregroundStyle(on ? C.chromeInk : C.chromeInkMuted)
+        Group {
+          if icon == "shield" {
+            GitBranchGlyph().stroke(style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
+              .frame(width: 16, height: 16)
+          } else {
+            Image(systemName: icon).font(.system(size: 16))
+          }
+        }
+          .foregroundStyle(on ? C.chromeInk : C.chromeInkMuted)
           .frame(width: 36, height: 36)
           .background(on || (hovered && enabled) ? W.selected : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
-          .overlay(alignment: .topTrailing) { if badge { Circle().fill(C.attention).frame(width: 6, height: 6).offset(x: -4, y: 4) } }
           .opacity(enabled ? 1 : 0.35)
       }
       .buttonStyle(.plain).disabled(!enabled).help(enabled ? "" : "準備中")
       .onHover { hovered = $0 }
       .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: hovered)
+    }
+  }
+
+  /// Git branch glyph: two nodes and the curved branch joining the stem.
+  private struct GitBranchGlyph: Shape {
+    func path(in rect: CGRect) -> Path {
+      let s = min(rect.width, rect.height) / 24
+      var p = Path()
+      p.move(to: CGPoint(x: 6 * s, y: 3 * s))
+      p.addLine(to: CGPoint(x: 6 * s, y: 15 * s))
+      p.move(to: CGPoint(x: 9 * s, y: 18 * s))
+      p.addArc(center: CGPoint(x: 6 * s, y: 18 * s), radius: 3 * s, startAngle: .degrees(0), endAngle: .degrees(360), clockwise: false)
+      p.move(to: CGPoint(x: 18 * s, y: 9 * s))
+      p.addCurve(to: CGPoint(x: 9 * s, y: 18 * s), control1: CGPoint(x: 18 * s, y: 14 * s), control2: CGPoint(x: 14 * s, y: 18 * s))
+      p.move(to: CGPoint(x: 21 * s, y: 6 * s))
+      p.addArc(center: CGPoint(x: 18 * s, y: 6 * s), radius: 3 * s, startAngle: .degrees(0), endAngle: .degrees(360), clockwise: false)
+      return p
     }
   }
 
@@ -1958,6 +2093,7 @@ import Observation
       }
       .padding(.horizontal, 8).frame(width: 200, height: 38)
       .background((selected || isHovered) ? W.selected : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
+      .background(NoWindowDrag())
       .contentShape(Rectangle())
       .onHover { isHovered = $0 }
       .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: isHovered)  // short fade, no flicker

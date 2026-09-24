@@ -20,17 +20,17 @@ final class ColorTokenTests: XCTestCase {
     ("surfaceHover", DesignTokens.Color.surfaceHover, "#2e333c"),
     ("surfaceActive", DesignTokens.Color.surfaceActive, "#383d47"),
     // Chrome ink
-    ("chromeInk", DesignTokens.Color.chromeInk, "#b6bcb6"),
-    ("chromeInkMuted", DesignTokens.Color.chromeInkMuted, "#8a908b"),
+    ("chromeInk", DesignTokens.Color.chromeInk, "#b7bac1"),
+    ("chromeInkMuted", DesignTokens.Color.chromeInkMuted, "#81858d"),
     // Text
-    ("textPrimary", DesignTokens.Color.textPrimary, "#f1f3ef"),
-    ("textSecondary", DesignTokens.Color.textSecondary, "#c9cec8"),
-    ("textTertiary", DesignTokens.Color.textTertiary, "#9ba19b"),
-    ("textQuaternary", DesignTokens.Color.textQuaternary, "#707871"),
-    ("textMuted", DesignTokens.Color.textMuted, "#55605a"),
+    ("textPrimary", DesignTokens.Color.textPrimary, "#f1f2f6"),
+    ("textSecondary", DesignTokens.Color.textSecondary, "#caccd2"),
+    ("textTertiary", DesignTokens.Color.textTertiary, "#9b9fa6"),
+    ("textQuaternary", DesignTokens.Color.textQuaternary, "#81858d"),
+    ("textMuted", DesignTokens.Color.textMuted, "#81858d"),
     // Line/rule
-    ("lineNumber", DesignTokens.Color.lineNumber, "#4b5561"),
-    ("divider", DesignTokens.Color.divider, "#3d454e"),
+    ("lineNumber", DesignTokens.Color.lineNumber, "#5f636d"),
+    ("divider", DesignTokens.Color.divider, "#494d56"),
     // Meaning
     ("success", DesignTokens.Color.success, "#8acb94"),
     ("attention", DesignTokens.Color.attention, "#e5c07b"),

@@ -16,19 +16,19 @@ extension DesignTokens {
     public static let surfaceActive = SwiftUI.Color(hex: "#383d47")
 
     // CHROME INK
-    public static let chromeInk = SwiftUI.Color(hex: "#b6bcb6")
-    public static let chromeInkMuted = SwiftUI.Color(hex: "#8a908b")
+    public static let chromeInk = SwiftUI.Color(hex: "#b7bac1")
+    public static let chromeInkMuted = SwiftUI.Color(hex: "#81858d")
 
     // TEXT
-    public static let textPrimary = SwiftUI.Color(hex: "#f1f3ef")
-    public static let textSecondary = SwiftUI.Color(hex: "#c9cec8")
-    public static let textTertiary = SwiftUI.Color(hex: "#9ba19b")
-    public static let textQuaternary = SwiftUI.Color(hex: "#707871")
-    public static let textMuted = SwiftUI.Color(hex: "#55605a")
+    public static let textPrimary = SwiftUI.Color(hex: "#f1f2f6")
+    public static let textSecondary = SwiftUI.Color(hex: "#caccd2")
+    public static let textTertiary = SwiftUI.Color(hex: "#9b9fa6")
+    public static let textQuaternary = SwiftUI.Color(hex: "#81858d")
+    public static let textMuted = SwiftUI.Color(hex: "#81858d")
 
     // LINE / RULE
-    public static let lineNumber = SwiftUI.Color(hex: "#4b5561")
-    public static let divider = SwiftUI.Color(hex: "#3d454e")
+    public static let lineNumber = SwiftUI.Color(hex: "#5f636d")
+    public static let divider = SwiftUI.Color(hex: "#494d56")
 
     // MEANING — diff/debug only (checklist §5).
     public static let success = SwiftUI.Color(hex: "#8acb94")

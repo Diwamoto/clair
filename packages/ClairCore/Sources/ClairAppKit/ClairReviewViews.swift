@@ -234,7 +234,7 @@
       if !rows.isEmpty {
         HStack(spacing: 4) {
           Text(title).font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textTertiary)
-          Text("\(rows.count)").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary)
+          Text("\(rows.count) ファイル").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary)
           Spacer()
           let stage = title != "ステージ済み"
           Button { onBulk(rows, stage) } label: {
@@ -244,18 +244,21 @@
         ForEach(rows, id: \.path) { c in
           let t = target(c), on = selected == t
           HStack(spacing: 4) {
+            Text(c.untracked ? "U" : c.index == "A" || c.worktree == "A" ? "A" : c.index == "D" || c.worktree == "D" ? "D" : "M")
+              .font(Typography.font(Typography.micro)).foregroundStyle(c.untracked ? C.attention : C.textSecondary)
+              .frame(width: 16)
             Text(c.path.split(separator: "/").last.map(String.init) ?? c.path)
               .font(Typography.font(Typography.chrome)).lineLimit(1)
-              .foregroundStyle(c.untracked ? C.success : on ? C.textPrimary : C.textSecondary)
+              .foregroundStyle(on ? C.textPrimary : C.textSecondary)
             Spacer()
-            if c.untracked { Text("未追跡").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary) }
             Button { onToggle(c, !t.staged) } label: {
               Text(t.staged ? "−" : "+").font(Typography.font(Typography.title)).foregroundStyle(C.textTertiary).frame(width: 18, height: 18)
             }.buttonStyle(.hoverWash).disabled(busy).help(t.staged ? "ステージを取り消す" : "ステージに追加")
           }
-          .padding(.horizontal, 8).frame(height: 26)
+          .padding(.horizontal, 8).frame(height: 30)
           .background(on ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
-          .padding(.horizontal, 8).contentShape(Rectangle()).onTapGesture { onSelect(t) }
+          .padding(.leading, 20).padding(.trailing, 8).contentShape(Rectangle()).onTapGesture { onSelect(t) }
+          .help(c.path)
         }
       }
     }
@@ -284,6 +287,7 @@
     @State private var applyError: String?
     @State private var hunk = -1
     @State private var sent = false
+    @State private var compact = true
     /// A diff this long is cut with a notice instead of laying out every row.
     nonisolated static let maxLines = 5000
 
@@ -345,12 +349,16 @@
       VStack(spacing: 0) {
         HStack {
           Text(target.path).font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textPrimary)
-          Text(target.staged ? "ステージ済み" : target.untracked ? "未追跡" : "変更").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary)
+          Text(target.staged ? "HEAD → index" : target.untracked ? "未追跡ファイル" : "index → 作業ツリー")
+            .font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary)
           if added + removed > 0 {
             Text("+\(added)").font(Typography.font(Typography.chrome)).foregroundStyle(C.success)
             Text("−\(removed)").font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
           }
           Spacer()
+          Button(compact ? "全文脈" : "変更箇所") { compact.toggle() }
+            .font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary).buttonStyle(.hoverWash)
+            .help(compact ? "差分の前後の行も表示" : "変更箇所に絞る")
           if !hunks.isEmpty {
             Text("\(max(hunk, 0) + 1)/\(hunks.count)").font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary)
             ForEach([-1, 1], id: \.self) { d in
@@ -382,11 +390,13 @@
                 ForEach(looseSuggestions) { suggestion($0) }
               }
               ForEach(Array(rows.enumerated()), id: \.offset) { i, r in
-                line(r).id(i)
-                if let n = r.newLine {
-                  ForEach(threads[n] ?? []) { thread($0) }
-                  ForEach(suggestionsByLine[n] ?? []) { suggestion($0) }
-                  if composing == n { composer(n, text: String(r.text.dropFirst())) }
+                if !compact || r.text.hasPrefix("@@") || r.text.hasPrefix("+") || r.text.hasPrefix("-") || r.text.hasPrefix("\\") || threads[r.newLine ?? -1] != nil || suggestionsByLine[r.newLine ?? -1] != nil {
+                  line(r).id(i)
+                  if let n = r.newLine {
+                    ForEach(threads[n] ?? []) { thread($0) }
+                    ForEach(suggestionsByLine[n] ?? []) { suggestion($0) }
+                    if composing == n { composer(n, text: String(r.text.dropFirst())) }
+                  }
                 }
               }
               if rows.count == Self.maxLines {
@@ -534,7 +544,7 @@
   }
 
   /// U06: notification history (facts only — bell / exit). Rows are read state + source + fixed wording.
-  /// V05: project-wide find/replace. Enter searches; replace-all snapshots each file to local history first.
+  /// V05: project-wide find/replace. Enter searches and replace all matches.
   struct SearchPanel: View {
     @Binding var query: String
     @Binding var replacement: String
@@ -665,114 +675,6 @@
     }
   }
 
-  /// V05: local history of the active file, newest first. Restoring snapshots the current content first.
-  struct HistoryList: View {
-    let root: String?
-    let path: String?
-    let history: LocalHistory
-    let restored: () -> Void
-    @State private var versions: [URL] = []
-    @State private var selected: URL?
-    @State private var preview: [String]?
-    @State private var loading = false
-    @State private var message: String?
-
-    private var key: String { (root ?? "") + "\0" + (path ?? "") }
-
-    private func label(_ version: URL) -> String {
-      Double(version.lastPathComponent).map {
-        Date(timeIntervalSince1970: $0).formatted(date: .abbreviated, time: .standard)
-      } ?? version.lastPathComponent
-    }
-
-    var body: some View {
-      Group {
-        if path == nil || (!loading && versions.isEmpty) {
-          Text(path == nil ? "ファイルを選択してください。" : "履歴はありません（保存・一括置換の直前に自動退避されます）。")
-            .font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).padding(12)
-        }
-        if loading && versions.isEmpty {
-          HStack(spacing: 6) {
-            ProgressView().controlSize(.small)
-            Text("履歴を読み込み中…").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary)
-          }.padding(12)
-        }
-        if let message {
-          Text(message).font(Typography.font(Typography.chrome)).foregroundStyle(C.attention).padding(.horizontal, 12)
-        }
-        ForEach(versions, id: \.self) { version in
-          Button { select(version) } label: {
-            HStack {
-              Text(label(version)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textPrimary)
-              Spacer()
-              Image(systemName: selected == version ? "chevron.down" : "chevron.right")
-                .font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary)
-            }
-            .padding(.horizontal, 20).padding(.vertical, 4).contentShape(Rectangle())
-          }.buttonStyle(.hoverWash)
-          if selected == version {
-            if let preview {
-              VStack(alignment: .leading, spacing: 2) {
-                Text(preview.isEmpty ? "現在の内容と同一です。" : "復元で \(preview.filter { $0.hasPrefix("-") }.count) 行が消え、\(preview.filter { $0.hasPrefix("+") }.count) 行が戻ります")
-                  .font(Typography.font(Typography.micro)).foregroundStyle(C.textTertiary)
-                ForEach(Array(preview.prefix(40).enumerated()), id: \.offset) { _, line in
-                  Text(line).font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(line.hasPrefix("+") ? C.textPrimary : C.textQuaternary).lineLimit(1)
-                }
-                if preview.count > 40 {
-                  Text("… 他 \(preview.count - 40) 行").font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary)
-                }
-                Button("この版に復元") { restore(version) }.disabled(preview.isEmpty || loading).padding(.top, 4)
-              }
-              .padding(.horizontal, 28).padding(.bottom, 6)
-            } else {
-              HStack(spacing: 6) {
-                ProgressView().controlSize(.small)
-                Text("比較中…").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary)
-              }.padding(.horizontal, 28).padding(.bottom, 6)
-            }
-          }
-        }
-      }
-      .task(id: key) { await loadVersions() }
-    }
-
-    private func loadVersions() async {
-      selected = nil; preview = nil; message = nil
-      guard let root, let path else { versions = []; return }
-      loading = true
-      let loaded = await Task.detached(priority: .utility) { try? history.versions(root: root, path: path) }.value
-      guard self.root == root, self.path == path, !Task.isCancelled else { return }
-      versions = loaded ?? []; loading = false
-    }
-
-    private func select(_ version: URL) {
-      guard selected != version, let root, let path else { selected = nil; preview = nil; return }
-      selected = version; preview = nil; message = nil; loading = true
-      Task {
-        let loaded = await Task.detached(priority: .userInitiated) { history.preview(version, root: root, path: path) }.value
-        guard selected == version, self.root == root, self.path == path else { return }
-        preview = loaded; loading = false
-      }
-    }
-
-    private func restore(_ version: URL) {
-      guard let root, let path else { return }
-      loading = true; message = nil
-      Task {
-        let result = await Task.detached(priority: .userInitiated) {
-          Result { try history.restore(version, root: root, path: path) }
-        }.value
-        guard self.root == root, self.path == path else { return }
-        loading = false
-        switch result {
-        case .success: selected = nil; preview = nil; restored(); await loadVersions()
-        case .failure(let error): message = "復元できません: \(error.localizedDescription)"
-        }
-      }
-    }
-  }
-
   struct SessionList: View {
     let sessions: [AgentSession]
     let current: String
@@ -780,6 +682,7 @@
     @State private var histories: [AgentHistory] = []
     @State private var selectedHistory: AgentHistory?
     @State private var historyLoading = true
+    @State private var collapsedGroups: Set<String> = []
 
     private func label(_ s: AgentSession) -> (String, Color) {
       switch s.status {
@@ -830,7 +733,31 @@
       } else if histories.isEmpty {
         Text("履歴はありません").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary).padding(16)
       }
-      ForEach(histories) { history in
+      // ponytail: regrouped on every render; cache in @State if history counts make this visible.
+      ForEach(AgentHistorySection.group(histories)) { section in
+        Text(section.label).font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary)
+          .padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 3)
+        ForEach(section.groups) { group in
+          let collapsed = collapsedGroups.contains(group.id)
+          Button {
+            if collapsed { collapsedGroups.remove(group.id) } else { collapsedGroups.insert(group.id) }
+          } label: {
+            HStack(spacing: 6) {
+              Image(systemName: collapsed ? "chevron.right" : "chevron.down").frame(width: 14)
+              Text(group.project).font(Typography.font(Typography.chromeStrong)).lineLimit(1)
+              Spacer(minLength: 0)
+              Text("\(group.estimatedUSD.formatted(.currency(code: "USD"))) · \(group.histories.count) 件")
+                .font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary)
+            }.foregroundStyle(C.textSecondary).padding(.horizontal, 20).padding(.vertical, 4).contentShape(Rectangle())
+          }.buttonStyle(.hoverWash)
+          if !collapsed {
+            ForEach(group.histories) { history in historyRow(history) }
+          }
+        }
+      }
+    }
+
+    private func historyRow(_ history: AgentHistory) -> some View {
         Button { selectedHistory = history } label: {
           HStack(alignment: .top, spacing: 8) {
             Image(systemName: history.provider == .claude ? "sparkles" : history.provider == .codex ? "chevron.left.forwardslash.chevron.right" : "square.stack.3d.up")
@@ -841,9 +768,8 @@
                 .font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary)
             }
             Spacer(minLength: 0)
-          }.padding(.horizontal, 20).padding(.vertical, 6).contentShape(Rectangle())
+          }.padding(.leading, 34).padding(.trailing, 20).padding(.vertical, 6).contentShape(Rectangle())
         }.buttonStyle(.hoverWash)
-      }
     }
   }
 
@@ -874,50 +800,4 @@
     }
   }
 
-  struct NoticeList: View {
-    let log: NotificationLog
-    /// `notice.mutePane` addresses panes of the active Project only.
-    let current: String
-    let agentTitle: (WorkbenchNotice) -> String?
-    let run: (String, CommandInput) -> Void
-
-    var body: some View {
-      HStack(spacing: 12) {
-        Text("通知").font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textTertiary)
-        Spacer()
-        Button("すべて既読") { run("notice.markRead", [:]) }.disabled(log.unread() == 0)
-        Button("消去") { run("notice.clear", [:]) }.disabled(log.items.isEmpty)
-      }
-      .buttonStyle(.hoverWash).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
-      .padding(.horizontal, 20).frame(height: 26)
-      if log.items.isEmpty {
-        Text("通知はありません").font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textSecondary)
-          .frame(maxWidth: .infinity).padding(16)
-      }
-      ForEach(log.items) { n in
-        let key = NotificationLog.paneKey(n.project, n.pane)
-        HStack(alignment: .top, spacing: 8) {
-          Circle().fill(n.read ? .clear : dot(n)).frame(width: 6, height: 6).padding(.top, 6)
-          VStack(alignment: .leading, spacing: 2) {
-            Text([agentTitle(n), n.title].compactMap { $0 }.joined(separator: " · "))
-              .font(Typography.font(Typography.chromeStrong)).foregroundStyle(n.read ? C.textTertiary : C.textPrimary)
-            Text("\(n.project) · \(n.at.formatted(.relative(presentation: .named)))")
-              .font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary)
-          }
-          Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 20).padding(.vertical, 4).contentShape(Rectangle())
-        .contextMenu {
-          if n.project == current {
-            let muted = log.mutedPanes.contains(key)
-            Button(muted ? "このターミナルのミュートを解除" : "このターミナルをミュート") {
-              run("notice.mutePane", ["id": .int(n.pane), "muted": .bool(!muted)])
-            }
-          }
-        }
-      }
-    }
-
-    private func dot(_ n: WorkbenchNotice) -> Color { n.kind == .exited && n.exitCode != 0 ? C.danger : n.kind == .exited ? C.success : C.attention }
-  }
 #endif

@@ -11,7 +11,7 @@
     @ViewBuilder var content: Content
     var body: some View {
       VStack(alignment: .leading, spacing: 16) {
-        Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(C.textPrimary)
+        Text(title).font(Typography.font(Typography.title)).foregroundStyle(C.textPrimary)
         VStack(spacing: 0) { content }
       }
       .padding(.horizontal, 22).padding(.vertical, 20)
@@ -30,7 +30,7 @@
           Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(C.textPrimary)
           if let note { Text(note).font(.system(size: 11)).foregroundStyle(C.textTertiary).fixedSize(horizontal: false, vertical: true) }
         }
-        Spacer(minLength: 12)
+        Spacer(minLength: 0)
         control
       }
       .frame(minHeight: 52).padding(.vertical, 12)
