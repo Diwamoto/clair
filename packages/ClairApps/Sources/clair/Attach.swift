@@ -83,6 +83,24 @@ func runAttach(_ args: [String]) -> Int32 {
   winch.setEventHandler { let s = windowSize(); try? attach.resize(rows: s.rows, columns: s.columns) }
   winch.resume()
 
+  // Replayed history still holds the queries apps sent the old surface (OSC 4/10/11 colors, DA,
+  // XTVERSION…). The new surface answers them into our stdin, and forwarding those answers would
+  // type them into the shell. So flush the backlog first and discard whatever the surface replied.
+  // ponytail: a 2 s cap on replay and a 100 ms settle; a surface slower than that still leaks replies.
+  let replayDeadline = Date().addingTimeInterval(2)
+  var open = true
+  do {
+    var replayed = true
+    while open, replayed, Date() < replayDeadline {
+      replayed = false
+      open = try attach.pump(waitMilliseconds: 0) { replayed = true; try writeAll(STDOUT_FILENO, $0) }
+    }
+  } catch { return fail("lost the daemon: \(error)") }
+  if isTTY {
+    Thread.sleep(forTimeInterval: 0.1)
+    tcflush(STDIN_FILENO, TCIFLUSH)
+  }
+
   let stdinReader = Thread {
     var buffer = [UInt8](repeating: 0, count: 4096)
     while true {
@@ -102,7 +120,7 @@ func runAttach(_ args: [String]) -> Int32 {
   stdinReader.start()
 
   do {
-    while try attach.pump({ try writeAll(STDOUT_FILENO, $0) }) {}
+    while open, try attach.pump({ try writeAll(STDOUT_FILENO, $0) }) {}
   } catch { return fail("lost the daemon: \(error)") }
   return 0
 }
