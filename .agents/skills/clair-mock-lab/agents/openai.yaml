@@ -1,4 +1,0 @@
-interface:
-  display_name: "Clair Mock Lab"
-  short_description: "Iterate and publish the Clair interaction mock"
-  default_prompt: "Use $clair-mock-lab to update the Clair interaction mock from my feedback."

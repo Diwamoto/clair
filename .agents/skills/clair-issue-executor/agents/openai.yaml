@@ -1,4 +1,0 @@
-interface:
-  display_name: "Clair Local Issue Executor"
-  short_description: "Implement and commit one parallel-safe PoC item"
-  default_prompt: "$clair-issue-executorを明示的なlocal item IDで使い、このserial checkoutまたはisolated worktreeで実装・検証・queue整合・local commitまで行ってください。pushや次itemの開始はせず、ユーザー向けの進捗と結果はすべて日本語で報告してください。"

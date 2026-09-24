@@ -1,9 +1,7 @@
 # Clair Workbench — 動くモック
 
 Clair UI の Design canvas を **実際に動く React 実装** に落としたモック。
-`prototypes/clair-interaction-lab` がキャンバスの静止画（artboard の HTML を
-そのまま埋め込んで文字一致でクリックを付けたもの）なのに対し、こちらは
-状態を持った本物のコンポーネントとして組み直してある。IDE として触った
+状態を持った本物のコンポーネントとして組み直してあり、IDE として触った
 ときの操作感を確認するのが目的。
 
 このモック自身も Artifact として公開されている
@@ -29,7 +27,7 @@ artboard が定義しているトークン（`surfaceHover` / `surfaceActive` /
 EMPTY STATE コンポーネント）だけで作っている。新しい見た目は足していない。
 
 キャンバス側が間違っている・足りないと分かったら、**モックで直さずキャンバスを
-直す**。手順は `.claude/skills/clair-design-sync`。
+直す**。手順は `.claude/skills/clair-workbench-sync`。
 
 ## アプリの外枠
 
