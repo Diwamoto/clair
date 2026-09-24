@@ -101,6 +101,7 @@ func runAttach(_ args: [String]) -> Int32 {
     tcflush(STDIN_FILENO, TCIFLUSH)
   }
 
+  let savedTermios = original
   let stdinReader = Thread {
     var buffer = [UInt8](repeating: 0, count: 4096)
     while true {
@@ -114,7 +115,10 @@ func runAttach(_ args: [String]) -> Int32 {
       } catch { break }
     }
     // Surface closed (or the daemon went away): leave the shell where it is and stop.
-    if isTTY { tcsetattr(STDIN_FILENO, TCSANOW, &original) }
+    if isTTY {
+      var restored = savedTermios
+      tcsetattr(STDIN_FILENO, TCSANOW, &restored)
+    }
     exit(0)
   }
   stdinReader.start()
