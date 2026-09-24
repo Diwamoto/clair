@@ -968,7 +968,6 @@ function AppStatusBar({ context, trailing }: { context?: ReactNode; trailing?: R
       <span className="tnum" style={{ color: color.textQuaternary }}>
         {onBranch ? 'worktree' : '↓0 ↑2'}
       </span>
-      <span>{6 + wb.dirtyCount} 変更</span>
       {context}
       <div style={{ flex: 1 }} />
       {wb.toggles.showQuota ? <QuotaMeter /> : null}

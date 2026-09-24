@@ -1706,8 +1706,8 @@ import Observation
       }
     }
 
-    /// U06/U05: facts only — branch, change/dirty counts, agent state. Ln/Col waits on an editor caret callback.
-    /// Mock `AppStatusBar`: branch, ahead/behind, change count, caret, then the session count on the right. 26px, sans, `textTertiary`.
+    /// U06/U05: facts only — branch, dirty count, agent state. The changed-file count lives in the Git panel, not here (owner, 2026-09-24).
+    /// Mock `AppStatusBar`: branch, ahead/behind, caret, then the session count on the right. 26px, sans, `textTertiary`.
     /// Mock `QuotaMeter` (H11): the tightest window across providers; the tooltip lists every provider, unread ones included.
     private func quotaTint(_ usedPercent: Double) -> Color {
       if usedPercent <= 50 || usedPercent >= 100 { return C.success }
@@ -1918,7 +1918,6 @@ import Observation
               .help(gitMessage)
             }
           }
-          if !changes.isEmpty { Text("\(changes.count) 変更") }
           if !st.dirty.isEmpty { Text("未保存 \(st.dirty.count)").foregroundStyle(C.attention) }
           if let caret { Text("Ln \(caret.line), Col \(caret.col)") }
           languageStatus
