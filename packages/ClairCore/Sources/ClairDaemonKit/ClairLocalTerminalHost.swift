@@ -17,6 +17,8 @@
     case resize(sessionID: String, rows: UInt16, columns: UInt16)
     /// The user closed the pane: end that shell. (Detaching is just dropping the attachment.)
     case close(key: String)
+    /// Shell PID for a GUI-owned pane; the GUI uses it to identify CLI children.
+    case processID(key: String)
   }
 
   public enum ClairDaemonTerminalResponse: Codable, Equatable, Sendable {
@@ -28,6 +30,7 @@
     case gap(availableOffset: UInt64)
     case accepted
     case rejected
+    case processID(Int32?)
   }
 
   /// Owns every shell the Mac GUI shows. A shell is a `ClairTerminalProcess` installed in the
@@ -81,6 +84,12 @@
         }
         discard(entry)
         return .accepted
+      case .processID(let key):
+        let pid = lock.withLock { () -> Int32? in
+          guard let process = byKey[key]?.process, process.isRunning else { return nil }
+          return process.processID
+        }
+        return .processID(pid.flatMap { $0 > 0 ? $0 : nil })
       }
     }
 

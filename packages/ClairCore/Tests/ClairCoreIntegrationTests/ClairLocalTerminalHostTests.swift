@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import ClairAgent
+@testable import ClairAppKit
 @testable import ClairDaemonKit
 @testable import ClairPush
 @testable import ClairShared
@@ -16,6 +17,44 @@ import Testing
   struct ClairLocalTerminalHostTests {
     private static let echoLoop =
       "stty raw -echo; printf READY; while IFS= read -r line; do if [ \"$line\" = SIZE ]; then stty size; else printf '<%s>' \"$line\"; fi; done"
+
+    @Test func terminalProcessIDIsAvailableOnlyWhileItsShellRuns() async throws {
+      try await withDaemon { daemon in
+        _ = try daemon.attach(key: "agent-pane")
+        let response = try daemon.client.terminal(.processID(key: "agent-pane"))
+        guard case .processID(let pid) = response else { Issue.record("missing process ID response"); return }
+        #expect((pid ?? 0) > 0)
+        #expect(try daemon.client.terminal(.processID(key: "other-pane")) == .processID(nil))
+        #expect(try daemon.client.terminal(.close(key: "agent-pane")) == .accepted)
+        #expect(try daemon.client.terminal(.processID(key: "agent-pane")) == .processID(nil))
+      }
+    }
+
+    @Test func manuallyStartedCLIIsMatchedToItsTerminal() async throws {
+      let directory = URL.temporaryDirectory.appending(path: "clair-cli-detect-\(UUID().uuidString)")
+      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+      defer { try? FileManager.default.removeItem(at: directory) }
+      let executable = directory.appending(path: "codex")
+      try FileManager.default.copyItem(at: URL(fileURLWithPath: "/bin/sleep"), to: executable)
+      let daemon = try LocalDaemon(command: "\(executable.path) 10")
+      do {
+        _ = try daemon.attach(key: "agent-pane")
+        guard case .processID(let shellPID) = try daemon.client.terminal(.processID(key: "agent-pane")),
+          let shellPID
+        else { Issue.record("missing shell PID"); await daemon.stop(); return }
+        var found: String?
+        for _ in 0..<50 {
+          found = ClairCLIProcessScanner.profiles(shells: ["agent-pane": shellPID])["agent-pane"]
+          if found != nil { break }
+          try await Task.sleep(for: .milliseconds(50))
+        }
+        #expect(found == "codex")
+      } catch {
+        await daemon.stop()
+        throw error
+      }
+      await daemon.stop()
+    }
 
     @Test func t09ShellOutlivesDetachAndReattachReplaysFromTheSameSession() async throws {
       try await withDaemon { daemon in

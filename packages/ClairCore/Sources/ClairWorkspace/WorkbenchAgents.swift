@@ -24,6 +24,7 @@ public struct AgentProfile: Sendable, Equatable {
 public struct AgentLaunch: Sendable, Codable, Equatable {
   public let profile: String
   public let cwd: String
+  public init(profile: String, cwd: String) { self.profile = profile; self.cwd = cwd }
   public var command: String { AgentProfile.named(profile)?.command ?? "" }
 }
 
@@ -42,15 +43,28 @@ public struct AgentSession: Sendable, Equatable, Identifiable {
 }
 
 extension WorkbenchState {
+  /// An agent started in a Clair terminal, either through a launch profile or detected in its shell.
+  public func agentLaunch(in project: String, pane: Int) -> AgentLaunch? {
+    let known = project == self.project ? launches[pane] : layouts[project]?.launches[pane]
+    return known ?? detectedLaunches[project]?[pane]
+  }
+
   /// Every agent terminal across Projects; exit wins over bell, an unread bell means it wants you.
   public var agentSessions: [AgentSession] {
     var all = layouts.mapValues(\.launches)
     all[project] = launches
+    for (project, detected) in detectedLaunches {
+      for (pane, launch) in detected where all[project]?[pane] == nil {
+        all[project, default: [:]][pane] = launch
+      }
+    }
     return all.sorted { $0.key < $1.key }.flatMap { p, ls in
       ls.sorted { $0.key < $1.key }.map { pane, l in
         let mine = notices.items.filter { $0.project == p && $0.pane == pane }  // newest first
+        let discovered = detectedLaunches[p]?[pane] != nil && (p == project ? launches[pane] : layouts[p]?.launches[pane]) == nil
         let status: AgentSession.Status =
-          mine.first { $0.kind == .exited }.map { .exited($0.exitCode) } ?? (mine.contains { $0.kind == .bell && !$0.read } ? .attention : .running)
+          (discovered ? nil : mine.first { $0.kind == .exited }.map { .exited($0.exitCode) })
+            ?? (mine.contains { $0.kind == .bell && !$0.read } ? .attention : .running)
         return AgentSession(project: p, pane: pane, title: AgentProfile.named(l.profile)?.title ?? l.profile, cwd: l.cwd, status: status)
       }
     }
@@ -60,8 +74,17 @@ extension WorkbenchState {
   public var runningAgents: Int {
     var all = layouts.mapValues(\.launches)
     all[project] = launches
+    for (project, detected) in detectedLaunches {
+      for (pane, launch) in detected where all[project]?[pane] == nil {
+        all[project, default: [:]][pane] = launch
+      }
+    }
     return all.reduce(0) { n, e in
-      n + e.value.keys.filter { pane in !notices.items.contains { $0.project == e.key && $0.pane == pane && $0.kind == .exited } }.count
+      n + e.value.keys.filter { pane in
+        let discovered = detectedLaunches[e.key]?[pane] != nil
+          && (e.key == project ? launches[pane] : layouts[e.key]?.launches[pane]) == nil
+        return discovered || !notices.items.contains { $0.project == e.key && $0.pane == pane && $0.kind == .exited }
+      }.count
     }
   }
 
