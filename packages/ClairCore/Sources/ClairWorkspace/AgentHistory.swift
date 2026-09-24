@@ -104,7 +104,7 @@ public struct AgentUsageSummary: Sendable {
 public enum AgentHistoryReader {
   /// Reads provider-owned files on a background task. Provider failures are isolated.
   /// `period` filters by last-modified time before any file is parsed, so an unopened archive costs nothing.
-  public static func load(home: URL = FileManager.default.homeDirectoryForCurrentUser, period: DateInterval? = nil) -> [AgentHistory] {
+  public static func load(home: URL = .homeDirectory, period: DateInterval? = nil) -> [AgentHistory] {
     var result = readJSONL(root: home.appending(path: ".codex/sessions"), provider: .codex, period: period)
     result += readJSONL(root: home.appending(path: ".claude/projects"), provider: .claude, period: period)
     result += readOpenCode(home.appending(path: ".local/share/opencode/opencode.db"), period: period)

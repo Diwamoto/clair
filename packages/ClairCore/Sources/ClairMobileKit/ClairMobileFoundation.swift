@@ -71,13 +71,27 @@ public enum ClairMobileDestination: String, CaseIterable, Hashable, Identifiable
   public var title: String {
     switch self {
     case .overview:
-      "Overview"
+      "概要"
     case .sessions:
-      "Sessions"
+      "セッション"
     case .activity:
-      "Activity"
+      "アクティビティ"
     case .settings:
-      "Settings"
+      "設定"
+    }
+  }
+
+  /// SF Symbol for the tab bar, matching the MobileHome tab icons.
+  public var systemImage: String {
+    switch self {
+    case .overview:
+      "square.grid.2x2"
+    case .sessions:
+      "terminal"
+    case .activity:
+      "bell"
+    case .settings:
+      "gearshape"
     }
   }
 }

@@ -61,21 +61,41 @@ struct ClairMobileRootView: View {
   @State private var terminalSessions: [ClairRemoteTerminalSession] = []
   @State private var terminalSessionsError: String?
 
+  // The MobileHome contract: four tabs, terminal as a push over them (never a
+  // fifth tab). TabView keeps this hierarchy in both compact and regular size
+  // classes and respects the safe area on its own.
+  // ponytail: no `.sidebarAdaptable` on iPad; needs iOS 18 and would change the
+  // hierarchy the canvas draws. Revisit when the canvas has a regular artboard.
   var body: some View {
-    NavigationStack {
-      List {
-        hostSection
+    TabView(
+      selection: Binding(
+        get: { store.state.destination },
+        set: { store.send(.selectDestination($0)) }
+      )
+    ) {
+      tab(.overview) {
+        attentionSection
         destinationBrowserSection
+      }
+      tab(.sessions) {
         terminalSessionsSection
         conversationSection
         diffReviewSection
+      }
+      tab(.activity) {
+        attentionSection
         reconnectSection
+        Section {
+          Text("通知はどのsessionが呼んでいるかだけを運ぶ。terminalの内容・prompt・cwdは含めない。")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        }
+      }
+      tab(.settings) {
+        hostSection
         connectionSection
-        navigationSection
-        surfaceSection
         buildSection
       }
-      .navigationTitle("Clair Mobile")
     }
     .onAppear {
       store.send(.sceneBecameActive)
@@ -702,34 +722,35 @@ struct ClairMobileRootView: View {
     }
   }
 
-  private var navigationSection: some View {
-    Section("Navigation") {
-      ForEach(ClairMobileDestination.allCases) { destination in
-        Button {
-          store.send(.selectDestination(destination))
-        } label: {
-          HStack {
-            Text(destination.title)
-            Spacer()
-            if store.state.destination == destination {
-              Image(systemName: "checkmark")
-                .accessibilityHidden(true)
-            }
-          }
-        }
-      }
+  private func tab(
+    _ destination: ClairMobileDestination, @ViewBuilder content: () -> some View
+  ) -> some View {
+    NavigationStack {
+      List { content() }
+        .navigationTitle(destination.title)
     }
+    .tabItem { Label(destination.title, systemImage: destination.systemImage) }
+    .tag(destination)
+    .accessibilityIdentifier("tab-\(destination.rawValue)")
   }
 
-  private var surfaceSection: some View {
-    Section("Current surface") {
-      HStack {
-        Text("Destination")
-        Spacer()
-        Text(store.state.destination.title)
-          .accessibilityIdentifier("current-destination")
+  /// 要対応: approvals the selected session is waiting on. Answering happens in
+  /// the セッション tab, where the conversation is.
+  private var attentionSection: some View {
+    Section("要対応 — \(conversationSnapshot.pendingApprovals.count)件") {
+      if conversationSnapshot.pendingApprovals.isEmpty {
+        Text("返すものはありません")
+          .font(.footnote)
+          .foregroundStyle(.secondary)
       }
-      LabeledContent("Lifecycle", value: store.state.lifecycle.rawValue)
+      ForEach(conversationSnapshot.pendingApprovals) { approval in
+        Button {
+          store.send(.selectDestination(.sessions))
+        } label: {
+          LabeledContent("Approval requested", value: approval.kind.rawValue.capitalized)
+        }
+        .accessibilityIdentifier("attention-\(approval.requestID)")
+      }
     }
   }
 
@@ -1041,6 +1062,8 @@ struct ClairMobileRootView: View {
       }
       .navigationTitle(target.scope.sessionID?.description ?? "terminal")
       .navigationBarTitleDisplayMode(.inline)
+      // A push screen: the back bar replaces the tab bar.
+      .toolbar(.hidden, for: .tabBar)
       .task {
         guard terminal == nil, let surfaces = await composition.composedSurfaces() else {
           failure = "Not connected to a host."
