@@ -1095,6 +1095,8 @@ import Observation
     private var searchOverlay: some View {
       ZStack {
         Color(red: 8 / 255, green: 10 / 255, blue: 12 / 255).opacity(0.68).onTapGesture(perform: closeSearch)
+        // Esc closes even when focus stayed in the terminal/editor (a key equivalent runs before keyDown).
+        Button("", action: closeSearch).keyboardShortcut(.cancelAction).opacity(0).frame(width: 0, height: 0)
         SearchPanel(
           query: $searchQuery, replacement: $replaceText, regex: $searchRegex, caseSensitive: $searchCase,
           selection: $searchSelection, hits: hits, message: searchMessage, searching: searching, replacing: replacing,
@@ -2048,6 +2050,8 @@ import Observation
       let list = items(p)
       return ZStack {
         Color(red: 8 / 255, green: 10 / 255, blue: 12 / 255).opacity(0.68).onTapGesture { store.run("palette.close") }
+        // Esc closes even when focus stayed in the terminal/editor (a key equivalent runs before keyDown).
+        Button("") { store.run("palette.close") }.keyboardShortcut(.cancelAction).opacity(0).frame(width: 0, height: 0)
         VStack(spacing: 0) {
           HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").font(.system(size: 14)).foregroundStyle(C.textQuaternary)
