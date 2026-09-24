@@ -559,14 +559,20 @@
     let replaceAll: () -> Void
     let close: () -> Void
     let open: (SearchHit) -> Void
+    @State private var replaceMode = false
 
     var body: some View {
       VStack(alignment: .leading, spacing: 0) {
         HStack(spacing: 8) {
-          Image(systemName: "magnifyingglass").font(.system(size: 14)).foregroundStyle(C.textTertiary)
-          Text("検索").font(.system(size: 12, weight: .semibold)).foregroundStyle(C.textPrimary)
+          Image(systemName: replaceMode ? "arrow.2.squarepath" : "magnifyingglass").font(.system(size: 14)).foregroundStyle(C.textTertiary)
+          Text(replaceMode ? "置換" : "検索").font(.system(size: 12, weight: .semibold)).foregroundStyle(C.textPrimary)
           Text("Project内のファイルを横断").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary)
           Spacer(minLength: 0)
+          Button { replaceMode.toggle() } label: {
+            Text(replaceMode ? "検索のみ ⌥⌘F" : "置換 ⌥⌘F").font(Typography.font(Typography.micro)).padding(.horizontal, 6).frame(height: 24)
+          }
+          .buttonStyle(.hoverWash).foregroundStyle(C.textTertiary).keyboardShortcut("f", modifiers: [.command, .option])
+          .help("検索と置換を切り替え")
           Button(action: close) { Image(systemName: "xmark").font(.system(size: 11, weight: .semibold)).frame(width: 24, height: 24) }
             .buttonStyle(.hoverWash).foregroundStyle(C.textTertiary).help("検索を閉じる")
         }
@@ -590,22 +596,22 @@
         .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.hairline)).padding(12)
 
         HStack(spacing: 6) {
-          HStack(spacing: 8) {
+          if replaceMode { HStack(spacing: 8) {
             Image(systemName: "arrow.2.squarepath").font(.system(size: 12)).foregroundStyle(C.textQuaternary)
             TextField("置換", text: $replacement).textFieldStyle(.plain).font(.system(size: 12)).foregroundStyle(C.textPrimary)
           }
           .padding(.horizontal, 8).frame(height: 30)
           .background(C.chrome, in: RoundedRectangle(cornerRadius: Radius.control))
-          .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.hairline))
+          .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.hairline)) } else { Spacer(minLength: 0) }
           chip(".*", on: $regex, help: "正規表現")
           chip("Aa", on: $caseSensitive, help: "大文字小文字を区別")
           let canReplace = !hits.isEmpty && !replacing && !searching
-          Button(action: replaceAll) {
+          if replaceMode { Button(action: replaceAll) {
             Text(replacing ? "置換中…" : "すべて置換").font(.system(size: 11, weight: .semibold))
               .foregroundStyle(canReplace ? C.canvas : C.textQuaternary)
               .padding(.horizontal, 12).frame(height: 30)
               .background(canReplace ? C.textSecondary : W.medium, in: RoundedRectangle(cornerRadius: Radius.control))
-          }.buttonStyle(.hoverWash).disabled(!canReplace)
+          }.buttonStyle(.hoverWash).disabled(!canReplace) }
         }
         .padding(.horizontal, 12).padding(.bottom, 8).disabled(replacing)
         .onChange(of: regex) { selection = 0; search() }
@@ -679,10 +685,12 @@
     let sessions: [AgentSession]
     let current: String
     let open: (AgentSession) -> Void
+    let openHistory: (AgentHistory) -> Void
     @State private var histories: [AgentHistory] = []
-    @State private var selectedHistory: AgentHistory?
     @State private var historyLoading = true
     @State private var collapsedGroups: Set<String> = []
+    @State private var archive: [AgentHistory]?
+    @State private var archiveOpen = false
 
     private func label(_ s: AgentSession) -> (String, Color) {
       switch s.status {
@@ -696,11 +704,8 @@
       Text("エージェント").font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textTertiary)
         .padding(.horizontal, 20).frame(height: 26)
         .task {
-          histories = await AgentHistoryStore.shared.all()
+          histories = await AgentHistoryStore.shared.load(.recent)
           historyLoading = false
-        }
-        .sheet(item: $selectedHistory) { history in
-          AgentHistoryTranscript(history: history)
         }
       if sessions.isEmpty {
         Text("起動中のエージェントはありません").font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textSecondary)
@@ -713,6 +718,9 @@
             Circle().fill(color).frame(width: 6, height: 6).padding(.top, 6)
             VStack(alignment: .leading, spacing: 2) {
               Text(s.title).font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textPrimary)
+              if let activity = s.activity {
+                Text(activity).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary).lineLimit(1)
+              }
               Text("\(text) · \(s.project == current ? "" : s.project + " · ")\(s.cwd.split(separator: "/").last.map(String.init) ?? s.cwd)")
                 .font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary).lineLimit(1)
             }
@@ -724,20 +732,51 @@
       HStack {
         Text("過去のチャット").font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textTertiary)
         Spacer()
-        Button { Task { historyLoading = true; histories = await AgentHistoryStore.shared.refresh(); historyLoading = false } } label: {
+        Button { Task { historyLoading = true; histories = await AgentHistoryStore.shared.refresh(.recent); archive = nil; archiveOpen = false; historyLoading = false } } label: {
           Image(systemName: "arrow.clockwise")
         }.buttonStyle(.plain).help("履歴を更新")
       }.padding(.horizontal, 20).padding(.top, 14)
       if historyLoading {
-        ProgressView().controlSize(.small).padding(16)
+        Text("Loading...").font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+          .padding(.horizontal, 20).frame(height: 28)
       } else if histories.isEmpty {
         Text("履歴はありません").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary).padding(16)
       }
       // ponytail: regrouped on every render; cache in @State if history counts make this visible.
-      ForEach(AgentHistorySection.group(histories)) { section in
+      historySections(AgentHistorySection.group(histories))
+      Button {
+        archiveOpen.toggle()
+        if archiveOpen, archive == nil { Task { archive = await AgentHistoryStore.shared.load(.archive) } }
+      } label: {
+        HStack(spacing: 6) {
+          Image(systemName: archiveOpen ? "chevron.down" : "chevron.right").frame(width: 14)
+          Text("アーカイブ（1ヶ月以上前）").font(Typography.font(Typography.chromeStrong))
+          Spacer(minLength: 0)
+        }.foregroundStyle(C.textTertiary).padding(.horizontal, 20).padding(.top, 14).padding(.bottom, 4).contentShape(Rectangle())
+      }.buttonStyle(.hoverWash)
+      if archiveOpen {
+        if let archive {
+          if archive.isEmpty {
+            Text("アーカイブはありません").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary).padding(16)
+          }
+          // Archive is older than every relative-day bucket, so its one section is labelled by project only.
+          ForEach(AgentHistorySection.group(archive).flatMap(\.groups)) { group in historyGroup(group) }
+        } else {
+          Text("Loading...").font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+          .padding(.horizontal, 20).frame(height: 28)
+        }
+      }
+    }
+
+    @ViewBuilder private func historySections(_ sections: [AgentHistorySection]) -> some View {
+      ForEach(sections) { section in
         Text(section.label).font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary)
           .padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 3)
-        ForEach(section.groups) { group in
+        ForEach(section.groups) { group in historyGroup(group) }
+      }
+    }
+
+    @ViewBuilder private func historyGroup(_ group: AgentHistorySection.Group) -> some View {
           let collapsed = collapsedGroups.contains(group.id)
           Button {
             if collapsed { collapsedGroups.remove(group.id) } else { collapsedGroups.insert(group.id) }
@@ -753,12 +792,10 @@
           if !collapsed {
             ForEach(group.histories) { history in historyRow(history) }
           }
-        }
-      }
     }
 
     private func historyRow(_ history: AgentHistory) -> some View {
-        Button { selectedHistory = history } label: {
+        Button { openHistory(history) } label: {
           HStack(alignment: .top, spacing: 8) {
             Image(systemName: history.provider == .claude ? "sparkles" : history.provider == .codex ? "chevron.left.forwardslash.chevron.right" : "square.stack.3d.up")
               .frame(width: 14).foregroundStyle(C.textTertiary)
@@ -773,30 +810,63 @@
     }
   }
 
-  private struct AgentHistoryTranscript: View {
+  /// ccedit-style chat panel in the main area: user turns are right-aligned bubbles,
+  /// consecutive assistant turns share one label, and very long turns start collapsed.
+  struct AgentChatView: View {
     let history: AgentHistory
-    @Environment(\.dismiss) private var dismiss
+    let onClose: () -> Void
 
     var body: some View {
       VStack(spacing: 0) {
-        HStack {
-          Text(history.provider.rawValue).font(.headline)
-          Spacer()
-          Button("閉じる") { dismiss() }
-        }.padding(20)
-        Divider()
+        HStack(spacing: 8) {
+          Text(history.title).font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textPrimary).lineLimit(1)
+          Text("\(history.provider.rawValue) · \(history.date.formatted(date: .abbreviated, time: .shortened))")
+            .font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary).lineLimit(1)
+          Spacer(minLength: 0)
+          Button(action: onClose) { Image(systemName: "xmark").foregroundStyle(C.chromeInk) }.buttonStyle(.hoverWash).help("閉じる")
+        }.padding(.horizontal, 12).frame(height: 32).background(C.chromeRaised)
         ScrollView {
-          LazyVStack(alignment: .leading, spacing: 18) {
-            ForEach(history.messages) { message in
-              VStack(alignment: .leading, spacing: 5) {
-                Text(message.role == "user" ? "あなた" : history.provider.rawValue)
-                  .font(.caption).foregroundStyle(.secondary)
-                Text(message.text).textSelection(.enabled)
-              }.frame(maxWidth: .infinity, alignment: .leading)
+          LazyVStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(history.messages.enumerated()), id: \.element.id) { index, message in
+              let previous = index > 0 ? history.messages[index - 1].role : nil
+              Bubble(message: message, provider: history.provider.rawValue, showLabel: message.role != "user" && previous != message.role)
+                .padding(.top, previous == nil ? 0 : previous == message.role ? 5 : 16)
             }
-          }.padding(24)
+          }.padding(16).padding(.bottom, 16)
+        }.clairScroller()
+      }.frame(maxWidth: .infinity, maxHeight: .infinity).background(C.canvas)
+    }
+
+    private struct Bubble: View {
+      let message: AgentHistory.Message
+      let provider: String
+      let showLabel: Bool
+      @State private var expanded = false
+
+      var body: some View {
+        let long = message.text.count > 1500
+        let text = long && !expanded ? String(message.text.prefix(1500)) + "…" : message.text
+        let body = Text((try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(text))
+          .font(Typography.font(Typography.chrome)).foregroundStyle(C.textPrimary).textSelection(.enabled)
+        let more = Button(expanded ? "折りたたむ" : "続きを表示") { expanded.toggle() }
+          .buttonStyle(.plain).font(Typography.font(Typography.micro)).foregroundStyle(C.textTertiary)
+        if message.role == "user" {
+          HStack {
+            Spacer(minLength: 80)
+            VStack(alignment: .trailing, spacing: 4) {
+              body.padding(.horizontal, 12).padding(.vertical, 8)
+                .background(C.surfaceActive, in: RoundedRectangle(cornerRadius: 12))
+              if long { more }
+            }
+          }
+        } else {
+          VStack(alignment: .leading, spacing: 4) {
+            if showLabel { Text(provider).font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary) }
+            body
+            if long { more }
+          }.frame(maxWidth: .infinity, alignment: .leading).padding(.trailing, 40)
         }
-      }.frame(minWidth: 680, minHeight: 520)
+      }
     }
   }
 

@@ -215,14 +215,16 @@ public final class GhosttyAppHandle {
 
   /// V08: facts seen since the last call — bell count (drained) and the child's exit code
   /// (nil until it exits, then sticky). Terminal bytes never cross this boundary.
-  public func takeEvents() -> (bells: Int, exitCode: Int?) {
+  /// `title` is the new OSC 0/2 window title, nil when unchanged.
+  public func takeEvents() -> (bells: Int, exitCode: Int?, title: String?) {
     #if CLAIR_GHOSTTY_VENDORED
-      guard isValid else { return (0, nil) }
+      guard isValid else { return (0, nil, nil) }
       var e = clair_ghostty_app_events_s()
       clair_ghostty_app_take_events(raw, &e)
-      return (Int(e.bells), e.exit_code < 0 ? nil : Int(e.exit_code))
+      let title = e.title_changed ? withUnsafeBytes(of: e.title) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) } : nil
+      return (Int(e.bells), e.exit_code < 0 ? nil : Int(e.exit_code), title)
     #else
-      return (0, nil)
+      return (0, nil, nil)
     #endif
   }
 

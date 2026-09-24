@@ -193,8 +193,10 @@
         do {
           if let frame = try journal.read(from: start, maximumBytes: 16_384) {
             let next = frame.nextCursor.offset
+            // A re-attach that starts past dropped history first restores the window title.
+            let title = start.offset == state.retainedStart && start.offset > 0 ? journal.titleSequence : nil
             return .output(
-              bytes: frame.bytes, epoch: state.epoch.value, nextOffset: next,
+              bytes: (title ?? Data()) + frame.bytes, epoch: state.epoch.value, nextOffset: next,
               isClosed: state.isClosed && next == state.endOffset)
           }
         } catch ClairTerminalError.gap(let available) {

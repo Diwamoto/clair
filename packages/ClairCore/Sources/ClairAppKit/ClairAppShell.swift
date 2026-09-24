@@ -26,10 +26,13 @@ import Observation
       @Environment(\.accessibilityReduceMotion) private var reduceMotion
       var body: some View {
         configuration.label
-          .overlay((hovered && enabled) || configuration.isPressed ? DesignTokens.Wash.selected : .clear, in: RoundedRectangle(cornerRadius: radius))
+          // Pressed is a deeper wash plus a slight sink, so a click reads distinctly from a hover.
+          .overlay(configuration.isPressed ? DesignTokens.Wash.strongest : (hovered && enabled) ? DesignTokens.Wash.selected : .clear, in: RoundedRectangle(cornerRadius: radius))
+          .scaleEffect(configuration.isPressed && !reduceMotion ? 0.92 : 1)
           .contentShape(Rectangle())
           .onHover { hovered = $0 }
           .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: hovered)
+          .animation(reduceMotion ? nil : .easeOut(duration: 0.08), value: configuration.isPressed)
       }
     }
   }
@@ -572,6 +575,11 @@ import Observation
       }
     }
 
+    public func title(pane: Int, _ title: String) {
+      let key = NotificationLog.paneKey(state.project, pane)
+      if state.paneTitles[key] != title { state.paneTitles[key] = title }
+    }
+
     /// Only facts from an agent running in a Clair terminal can produce a macOS notification.
     public func facts(pane: Int, bells: Int, exit: Int?) {
       guard let agent = state.agentLaunch(in: state.project, pane: pane) else { return }
@@ -695,6 +703,7 @@ import Observation
     @State private var gitMessage: String?
     @State private var gitFailed = false
     @State private var diff: DiffTarget?
+    @State private var chat: AgentHistory?
     @State private var loadedDiff: LoadedDiff?
     @State private var diffTask: Task<Void, Never>?
     @State private var explorerRows: [ExplorerRow] = []
@@ -722,22 +731,32 @@ import Observation
 
     public var body: some View {
       VStack(spacing: 0) {
-        if st.settingsOpen {
-          settingsHeader
-          HStack(spacing: 0) {
-            settingsPanel
-            Rectangle().fill(L.hairline).frame(width: 1)
-            settingsMain
-          }
-        } else {
-          titlebar
-          HStack(spacing: 0) {
-            activityBar
-            sidebar
-            Rectangle().fill(C.surfaceActive).frame(width: 1)
-            main
+        // Mock `sheet` motion: settings comes over the top (scale 1.04 → 1 + fade).
+        ZStack {
+          if st.settingsOpen {
+            VStack(spacing: 0) {
+              settingsHeader
+              HStack(spacing: 0) {
+                settingsPanel
+                Rectangle().fill(L.hairline).frame(width: 1)
+                settingsMain
+              }
+            }
+            .transition(.opacity.combined(with: .scale(scale: 1.04)))
+          } else {
+            VStack(spacing: 0) {
+              titlebar
+              HStack(spacing: 0) {
+                activityBar
+                sidebar
+                Rectangle().fill(C.surfaceActive).frame(width: 1)
+                main
+              }
+            }
+            .transition(.opacity)
           }
         }
+        .animation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration), value: st.settingsOpen)
         statusBar
       }
       .background(C.canvas)
@@ -850,7 +869,7 @@ import Observation
           // review feedback: a small dot beside the label read as an
           // afterthought), not a separate dot — active groups get the
           // stronger alpha pair, matching the titlebar's active tab group.
-          Text(p.name).font(.system(size: 12, weight: .semibold)).foregroundStyle(active ? C.textPrimary : C.textSecondary).lineLimit(1)
+          Text(p.name).font(.system(size: 12, weight: .semibold)).foregroundStyle(active ? C.textPrimary : C.textSecondary).lineLimit(1).fixedSize()
             .padding(.horizontal, 10).frame(height: 26)
             .background(color.opacity(active ? 0.22 : 0.1), in: RoundedRectangle(cornerRadius: Radius.card))
             .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(color.opacity(active ? 0.55 : 0.28)))
@@ -887,19 +906,11 @@ import Observation
           if !projectActive { store.run("project.switch", ["name": .string(project)]) }
           store.run("tab.activate", ["path": .string(path)])
         },
-        onClose: { store.run("tab.close", ["path": .string(path)]) }
+        onClose: { store.run("tab.close", ["path": .string(path)]) },
+        // Reorder within the active group only; other groups' tabs live in saved layouts.
+        onMove: projectActive ? { from in store.run("tab.move", ["path": .string(from), "target": .string(path)]) } : nil
       )
       .contextMenu { if projectActive { fileMenu(path, tab: true) } }
-      // Reorder within the active group only; other groups' tabs live in saved layouts.
-      .onDrag { NSItemProvider(object: NSString(string: path)) }
-      .onDrop(of: [.text], isTargeted: nil) { providers in
-        guard projectActive, let provider = providers.first else { return false }
-        provider.loadObject(ofClass: NSString.self) { object, _ in
-          guard let from = (object as? NSString).map({ $0 as String }) else { return }
-          Task { @MainActor in store.run("tab.move", ["path": .string(from), "target": .string(path)]) }
-        }
-        return true
-      }
     }
 
     private func openFolder() {
@@ -933,6 +944,7 @@ import Observation
       let ready = icon != "shield" || st.isRepo
       return ActivityBarButton(icon: icon, on: sidebarMode == icon && !st.settingsOpen, enabled: ready) {
         sidebarMode = icon
+        if icon != "terminal" { chat = nil }
         if icon == "folder" { diff = nil }
         if icon == "shield" { reloadChanges() }
         if icon == "ladybug" { store.run("debug.open") }
@@ -1057,7 +1069,7 @@ import Observation
     }
 
     private var searchOverlay: some View {
-      ZStack(alignment: .top) {
+      ZStack {
         Color(red: 8 / 255, green: 10 / 255, blue: 12 / 255).opacity(0.68).onTapGesture(perform: closeSearch)
         SearchPanel(
           query: $searchQuery, replacement: $replaceText, regex: $searchRegex, caseSensitive: $searchCase,
@@ -1069,8 +1081,8 @@ import Observation
           })
           .frame(width: 620).background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.overlay))
           .overlay(RoundedRectangle(cornerRadius: Radius.overlay).stroke(L.strong))
-          .shadow(color: .black.opacity(0.62), radius: 24, y: 18).padding(.top, 44)
-          .transition(.scale(scale: 0.97, anchor: .top).combined(with: .opacity))
+          .shadow(color: .black.opacity(0.62), radius: 24, y: 18)
+          .transition(.scale(scale: 0.97).combined(with: .opacity))
       }
     }
 
@@ -1078,7 +1090,8 @@ import Observation
       SessionList(sessions: st.agentSessions, current: st.project) { s in
         if s.project != st.project { store.run("project.switch", ["name": .string(s.project)]) }
         store.run("pane.focus", ["id": .int(s.pane)])
-      }
+        chat = nil
+      } openHistory: { chat = $0 }
     }
 
     private var changesList: some View {
@@ -1543,7 +1556,9 @@ import Observation
 
     private var main: some View {
       VStack(spacing: 0) {
-        if let d = diff, let root = store.activeRoot, let loaded = loadedDiff,
+        if let chat {
+          AgentChatView(history: chat) { self.chat = nil }.id(chat.id)
+        } else if let d = diff, let root = store.activeRoot, let loaded = loadedDiff,
           loaded.target == d, loaded.root == root
         {
           let fileLines = loaded.fileLines
@@ -1583,6 +1598,7 @@ import Observation
           node: st.tree.maximized.flatMap { id in st.tree.leaves.first { $0.id == id }.map { .leaf(id: $0.id, kind: $0.kind) } } ?? st.tree.root,
           focused: st.tree.focused, launches: st.launches, project: store.activeRoot ?? st.project, onFocus: { store.run("pane.focus", ["id": .int($0)]) },
           onFacts: { store.facts(pane: $0, bells: $1, exit: $2) },
+          onTitle: { store.title(pane: $0, $1) },
           onRatio: { store.run("pane.setRatio", ["id": .int($0), "ratio": .double($1)]) },
           editor: EditorPane(buffers: store.buffers, root: store.activeRoot, path: st.active,
             softWrap: st.toggles["softWrap"] == true,
@@ -1711,7 +1727,7 @@ import Observation
     /// Mock `AppStatusBar`: branch, ahead/behind, caret, then the session count on the right. 26px, sans, `textTertiary`.
     /// Mock `QuotaMeter` (H11): the tightest window across providers; the tooltip lists every provider, unread ones included.
     private func quotaTint(_ usedPercent: Double) -> Color {
-      if usedPercent <= 50 || usedPercent >= 100 { return C.success }
+      if usedPercent <= 50 { return C.success }
       if usedPercent <= 90 { return C.attention }
       return C.danger
     }
@@ -1749,7 +1765,7 @@ import Observation
           quotaProviderIcon(top.provider)
           Text("\(top.provider) \(top.window.label)").foregroundStyle(C.textQuaternary)
           Capsule().fill(L.strong).frame(width: 34, height: 4)
-            .overlay(alignment: .leading) { Capsule().fill(tint).frame(width: 34 * top.window.usedPercent / 100) }
+            .overlay(alignment: .leading) { Capsule().fill(tint).frame(width: 34 * min(max(1 - top.window.usedPercent / 100, 0), 1)) }
           Text("残り\(top.window.remainingPercent)%").fontWeight(.semibold).foregroundStyle(tint)
         } else {
           Text(quota.isEmpty ? "利用枠を取得中…" : "利用枠 —").foregroundStyle(C.textQuaternary)
@@ -1787,7 +1803,7 @@ import Observation
                       Capsule().fill(L.strong)
                         .overlay(alignment: .leading) {
                           Capsule().fill(provider.isStale(now: now) ? C.textQuaternary : quotaTint(window.usedPercent))
-                            .frame(width: geometry.size.width * min(max(window.usedPercent / 100, 0), 1))
+                            .frame(width: geometry.size.width * min(max(1 - window.usedPercent / 100, 0), 1))
                         }
                     }
                     .frame(height: 4)
@@ -1971,7 +1987,7 @@ import Observation
 
     private func paletteView(_ p: WorkbenchState.Palette) -> some View {
       let list = items(p)
-      return ZStack(alignment: .top) {
+      return ZStack {
         Color(red: 8 / 255, green: 10 / 255, blue: 12 / 255).opacity(0.68).onTapGesture { store.run("palette.close") }
         VStack(spacing: 0) {
           HStack(spacing: 8) {
@@ -2020,6 +2036,7 @@ import Observation
                 .padding(.horizontal, 8).frame(height: 32)
                 .background(on ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
                 .contentShape(Rectangle())
+                .onHover { if $0 { selection = i } }
                 .onTapGesture { selection = i; run(list) }
               }
             }.padding(.horizontal, 8).padding(.bottom, 8)
@@ -2041,8 +2058,7 @@ import Observation
         .frame(width: 560).background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.overlay))
         .overlay(RoundedRectangle(cornerRadius: Radius.overlay).stroke(L.strong))
         .shadow(color: .black.opacity(0.62), radius: 24, y: 18)
-        .padding(.top, 44)
-        .transition(.scale(scale: 0.97, anchor: .top).combined(with: .opacity))
+        .transition(.scale(scale: 0.97).combined(with: .opacity))
       }
     }
 
@@ -2090,8 +2106,6 @@ import Observation
     let on: Bool
     let enabled: Bool
     let action: () -> Void
-    @State private var hovered = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
       Button(action: action) {
@@ -2105,12 +2119,10 @@ import Observation
         }
           .foregroundStyle(on ? C.chromeInk : C.chromeInkMuted)
           .frame(width: 36, height: 36)
-          .background(on || (hovered && enabled) ? W.selected : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
+          .background(on ? W.selected : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
           .opacity(enabled ? 1 : 0.35)
       }
-      .buttonStyle(.plain).disabled(!enabled).help(enabled ? "" : "準備中")
-      .onHover { hovered = $0 }
-      .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: hovered)
+      .buttonStyle(.hoverWash).disabled(!enabled).help(enabled ? "" : "準備中")
     }
   }
 
@@ -2138,8 +2150,10 @@ import Observation
     let dirty: Bool
     let onActivate: () -> Void
     let onClose: () -> Void
+    var onMove: (@MainActor @Sendable (String) -> Void)?
 
     @State private var isHovered = false
+    @State private var isDropTarget = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -2161,6 +2175,26 @@ import Observation
       .background((selected || isHovered) ? W.selected : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
       .background(NoWindowDrag())
       .contentShape(Rectangle())
+      // Same feel as the pane header drag: a card-shaped ghost of the tab and a ring on the drop target.
+      .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(isDropTarget ? L.ring : .clear, lineWidth: 1))
+      .onDrag({ NSItemProvider(object: NSString(string: path)) }, preview: {
+        HStack(spacing: 4) {
+          Image(systemName: path.hasSuffix(".md") ? "text.alignleft" : "doc.text").font(.system(size: 11))
+          Text(name).font(.system(size: 11, weight: .semibold)).lineLimit(1)
+        }
+        .foregroundStyle(C.chromeInk).padding(.horizontal, 10).frame(height: 30)
+        .background(C.surface, in: RoundedRectangle(cornerRadius: Radius.card))
+        .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(L.ring, lineWidth: 1))
+        .opacity(0.9)
+      })
+      .onDrop(of: [.text], isTargeted: $isDropTarget) { providers in
+        guard let onMove, let provider = providers.first else { return false }
+        provider.loadObject(ofClass: NSString.self) { object, _ in
+          guard let from = (object as? NSString).map({ $0 as String }) else { return }
+          Task { @MainActor in onMove(from) }
+        }
+        return true
+      }
       .onHover { isHovered = $0 }
       .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: isHovered)  // short fade, no flicker
       .onTapGesture(perform: onActivate)
@@ -2332,11 +2366,14 @@ import Observation
     let project: String
     let onFocus: (Int) -> Void
     let onFacts: (Int, Int, Int?) -> Void
+    let onTitle: (Int, String) -> Void
     let onRatio: (Int, Double) -> Void
     let editor: EditorPane
     let run: (String, CommandInput) -> Void
     /// Pane whose header handle is being dragged; other panes show edge drop zones meanwhile.
     @Binding var dragging: Int?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var shown = false
 
     /// The pane just before a divider names it (`PaneTree.setRatio`).
     private func lastLeaf(_ n: PaneTree.Node) -> Int {
@@ -2349,10 +2386,10 @@ import Observation
     @ViewBuilder
     private func parts(_ axis: PaneTree.Axis, _ total: CGFloat, _ a: PaneTree.Node, _ b: PaneTree.Node, ratio: Double) -> some View {
       let h = axis == .horizontal
-      PaneView(node: a, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onRatio: onRatio, editor: editor, run: run, dragging: $dragging)
+      PaneView(node: a, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onTitle: onTitle, onRatio: onRatio, editor: editor, run: run, dragging: $dragging)
         .frame(width: h ? total * ratio : nil, height: h ? nil : total * ratio)
       Rectangle().fill(L.paneDivider).frame(width: h ? 1 : nil, height: h ? nil : 1)
-      PaneView(node: b, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onRatio: onRatio, editor: editor, run: run, dragging: $dragging)
+      PaneView(node: b, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onTitle: onTitle, onRatio: onRatio, editor: editor, run: run, dragging: $dragging)
     }
 
     var body: some View {
@@ -2368,7 +2405,7 @@ import Observation
           }
           ZStack {
             C.surface
-            if kind == .terminal { ClairGhosttySurface(launch: launches[id].map { ($0.command, $0.cwd) } ?? (project.hasPrefix("/") ? ("", project) : nil), pane: id, sessionKey: ClairWorkbenchStore.terminalKey(root: project, pane: id), focused: id == focused, onFocus: { if id != focused { onFocus(id) } }, onFacts: { onFacts(id, $0, $1) }) }  // one surface per terminal leaf, attached to the daemon shell keyed by project#pane
+            if kind == .terminal { ClairGhosttySurface(launch: launches[id].map { ($0.command, $0.cwd) } ?? (project.hasPrefix("/") ? ("", project) : nil), pane: id, sessionKey: ClairWorkbenchStore.terminalKey(root: project, pane: id), focused: id == focused, onFocus: { if id != focused { onFocus(id) } }, onFacts: { onFacts(id, $0, $1) }, onTitle: { onTitle(id, $0) }) }  // one surface per terminal leaf, attached to the daemon shell keyed by project#pane
             else { editor }
             if let from = dragging, from != id {
               PaneDropZones { edge in
@@ -2380,6 +2417,10 @@ import Observation
         }
         // Keep the editor fully legible even when another pane is focused.
         .opacity(kind == .editor || id == focused ? 1 : 0.75)
+        // A split focuses the new pane, so the focused leaf fades in when it appears.
+        // ponytail: the tree re-renders on split, so this keys off focus, not "is new".
+        .opacity(shown || id != focused || reduceMotion ? 1 : 0)
+        .onAppear { withAnimation(.easeOut(duration: Motion.screenDuration)) { shown = true } }
         .onTapGesture { onFocus(id) }
         // ponytail: the libghostty NSView may consume right-clicks, so terminal panes might not show this; copy/paste/clear items wait on U06 surface commands.
         .contextMenu {

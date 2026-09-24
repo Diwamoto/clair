@@ -505,6 +505,8 @@ void clair_ghostty_app_tick(clair_ghostty_app_t app);
 typedef struct {
   uint32_t bells;
   int64_t exit_code;
+  bool title_changed;  // drained on read; `title` is the latest OSC 0/2 window title
+  char title[256];
 } clair_ghostty_app_events_s;
 void clair_ghostty_app_take_events(clair_ghostty_app_t app, clair_ghostty_app_events_s *out);
 clair_ghostty_surface_config_s clair_ghostty_surface_config_new(void);

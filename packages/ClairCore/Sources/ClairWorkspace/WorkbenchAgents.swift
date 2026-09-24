@@ -40,6 +40,8 @@ public struct AgentSession: Sendable, Equatable, Identifiable {
   public let title: String
   public let cwd: String
   public let status: Status
+  /// The terminal's window title (what the agent says it is doing), if it set one.
+  public var activity: String? = nil
 }
 
 extension WorkbenchState {
@@ -65,7 +67,8 @@ extension WorkbenchState {
         let status: AgentSession.Status =
           (discovered ? nil : mine.first { $0.kind == .exited }.map { .exited($0.exitCode) })
             ?? (mine.contains { $0.kind == .bell && !$0.read } ? .attention : .running)
-        return AgentSession(project: p, pane: pane, title: AgentProfile.named(l.profile)?.title ?? l.profile, cwd: l.cwd, status: status)
+        return AgentSession(project: p, pane: pane, title: AgentProfile.named(l.profile)?.title ?? l.profile, cwd: l.cwd, status: status,
+          activity: paneTitles[NotificationLog.paneKey(p, pane)].flatMap { $0.isEmpty ? nil : $0 })
       }
     }
   }

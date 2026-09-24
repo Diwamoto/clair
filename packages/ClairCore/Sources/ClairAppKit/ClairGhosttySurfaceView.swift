@@ -235,6 +235,7 @@ import Foundation
       selection-background = #383d47
       minimum-contrast = 3
       window-padding-x = 8
+      font-codepoint-map = U+3000-U+30FF,U+3400-U+4DBF,U+4E00-U+9FFF,U+F900-U+FAFF,U+FF00-U+FFEF=BIZ UDGothic
       palette = 0=#3f4451
       palette = 1=#e27b83
       palette = 2=#98c379
@@ -298,6 +299,8 @@ import Foundation
 
     /// V08: facts only — bells since the last poll and, once, the child's exit code.
     public var onFacts: ((_ bells: Int, _ exitCode: Int?) -> Void)?
+    /// The terminal's window title (OSC 0/2), e.g. what Claude Code is working on.
+    public var onTitle: ((String) -> Void)?
     private var exitReported = false
     private var ghosttyFocused: Bool?
 
@@ -330,6 +333,7 @@ import Foundation
       let exit = exitReported ? nil : e.exitCode
       if exit != nil { exitReported = true }
       if e.bells > 0 || exit != nil { onFacts?(e.bells, exit) }
+      if let title = e.title { onTitle?(title) }
       if redraw { needsDisplay = true }
     }
 
@@ -777,6 +781,7 @@ import Foundation
   public struct ClairGhosttySurface: NSViewRepresentable {
     let launch: (command: String, cwd: String)?
     let onFacts: ((Int, Int?) -> Void)?
+    let onTitle: ((String) -> Void)?
     let pane: Int?
     /// `sessionKey` names the daemon-owned shell this surface attaches to (same key = same session).
     let sessionKey: String
@@ -784,9 +789,9 @@ import Foundation
     let onFocus: (() -> Void)?
     public init(
       launch: (command: String, cwd: String)? = nil, pane: Int? = nil, sessionKey: String, focused: Bool = false,
-      onFocus: (() -> Void)? = nil, onFacts: ((Int, Int?) -> Void)? = nil
+      onFocus: (() -> Void)? = nil, onFacts: ((Int, Int?) -> Void)? = nil, onTitle: ((String) -> Void)? = nil
     ) {
-      self.launch = launch; self.pane = pane; self.sessionKey = sessionKey; self.onFacts = onFacts
+      self.launch = launch; self.pane = pane; self.sessionKey = sessionKey; self.onFacts = onFacts; self.onTitle = onTitle
       self.focused = focused; self.onFocus = onFocus
     }
 
@@ -797,6 +802,7 @@ import Foundation
         key: sessionKey, cwd: cwd, command: launch.map(\.command).flatMap { $0.isEmpty ? nil : $0 })
       let v = ClairGhosttySurfaceView(launch: (attach, cwd))
       v.onFacts = onFacts
+      v.onTitle = onTitle
       v.onFocus = onFocus
       v.wantsFocus = focused
       if let pane { ClairGhosttySurfaceView.register(v, pane: pane) }
@@ -805,6 +811,7 @@ import Foundation
 
     public func updateNSView(_ nsView: ClairGhosttySurfaceView, context: Context) {
       nsView.onFacts = onFacts
+      nsView.onTitle = onTitle
       nsView.onFocus = onFocus
       nsView.wantsFocus = focused
     }

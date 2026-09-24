@@ -50,6 +50,8 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var launches: [Int: AgentLaunch] = [:]
   /// CLI agents started by hand in Clair terminals. Refreshed from live process facts, never saved.
   public var detectedLaunches: [String: [Int: AgentLaunch]] = [:]
+  /// Latest OSC 0/2 window title per `NotificationLog.paneKey`, as Ghostty shows in its tab. Transient.
+  public var paneTitles: [String: String] = [:]
   public var notices = NotificationLog()
   public var settingsOpen = false
   /// Transient UI navigation request. The sidebar selection itself belongs to the app shell.

@@ -1,6 +1,7 @@
 #include "include/clair_ghostty_abi.h"
 
 #if defined(CLAIR_GHOSTTY_VENDORED)
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -98,6 +99,8 @@ static void clair_ghostty_write_clipboard_cb(
 typedef struct {
   uint32_t bells;
   int64_t exit_code;  // -1 = the child has not exited
+  bool title_changed;
+  char title[256];  // the window title, shown in the Mac sidebar the way Ghostty shows it in its tab
 } clair_ghostty_app_events_record;
 
 static bool clair_ghostty_action_cb(
@@ -110,7 +113,11 @@ static bool clair_ghostty_action_cb(
   // are never decoded and cannot reach a macOS banner or a future mobile push.
   if (action.tag == GHOSTTY_ACTION_RING_BELL || action.tag == GHOSTTY_ACTION_DESKTOP_NOTIFICATION)
     rec->bells++;
-  else if (action.tag == GHOSTTY_ACTION_SHOW_CHILD_EXITED)
+  else if (action.tag == GHOSTTY_ACTION_SET_TITLE) {
+    const char *t = action.action.set_title.title;
+    snprintf(rec->title, sizeof(rec->title), "%s", t ? t : "");
+    rec->title_changed = true;
+  } else if (action.tag == GHOSTTY_ACTION_SHOW_CHILD_EXITED)
     rec->exit_code = (int64_t)action.action.child_exited.exit_code;
   return false;
 }
@@ -138,7 +145,9 @@ void clair_ghostty_app_take_events(clair_ghostty_app_t app, clair_ghostty_app_ev
   clair_ghostty_app_events_record *rec = ghostty_app_userdata((ghostty_app_t)app);
   out->bells = rec ? rec->bells : 0;
   out->exit_code = rec ? rec->exit_code : -1;
-  if (rec) rec->bells = 0;  // bells are drained; the exit code is sticky
+  out->title_changed = rec && rec->title_changed;
+  if (rec) memcpy(out->title, rec->title, sizeof(out->title));
+  if (rec) { rec->bells = 0; rec->title_changed = false; }  // bells/title drained; the exit code is sticky
 }
 
 void clair_ghostty_app_free(clair_ghostty_app_t app) {

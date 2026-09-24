@@ -349,3 +349,11 @@ private struct T02BoundaryFixture: Sendable {
     return (client, try await client.reconnect(to: authority.presentation(), using: authority))
   }
 }
+
+@Test func journalKeepsWindowTitlePastDroppedHistory() throws {
+  let journal = try ClairTerminalJournal(capacity: 8)
+  try journal.append(Data("a\u{1B}]0;old\u{07}b\u{1B}]2;fixing tests\u{1B}\\".utf8))
+  try journal.append(Data(repeating: 0x41, count: 64))  // title scrolls out of the journal
+  #expect(journal.titleSequence == Data("\u{1B}]2;fixing tests\u{07}".utf8))
+  #expect(ClairTerminalJournal.lastTitle(in: Data("\u{1B}[0m\u{1B}]9;x\u{07}".utf8)) == nil)
+}

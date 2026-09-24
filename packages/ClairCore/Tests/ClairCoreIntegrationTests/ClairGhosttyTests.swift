@@ -192,6 +192,34 @@ final class ClairGhosttyTests: XCTestCase {
       }
     }
 
+    /// OSC 2 window titles (Claude Code's "what I'm doing") reach the sidebar.
+    func testWindowTitleReachesEvents() throws {
+      try XCTSkipUnless(isVendoredEnvironment)
+      let runtime = GhosttyRuntime()
+      try runtime.activate()
+      let view = NSView(frame: NSRect(x: 0, y: 0, width: 640, height: 400))
+      view.wantsLayer = true
+      try runtime.withApp { app in
+        try app.withSurface(
+          GhosttySurfaceConfig(
+            platform: .macOS(Unmanaged.passUnretained(view).toOpaque()),
+            workingDirectory: NSTemporaryDirectory(),
+            command: "/bin/sh",
+            initialInput: "printf '\\033]2;fixing tests\\007'; sleep 2\n"
+          )
+        ) { surface in
+          try surface.setSize(widthPixels: 640, heightPixels: 400)
+          var title: String?
+          for _ in 0..<120 where title != "fixing tests" {
+            try app.tick()
+            Thread.sleep(forTimeInterval: 0.05)
+            title = app.takeEvents().title ?? title
+          }
+          XCTAssertEqual(title, "fixing tests")
+        }
+      }
+    }
+
     /// T03's acceptance smoke test: the retained-lifetime handles
     /// (`GhosttyRuntime.retainApp` / `GhosttyAppHandle.retainSurface`) this
     /// task added specifically because `withApp`/`withSurface`'s closure

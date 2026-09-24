@@ -115,6 +115,30 @@ public final class ClairTerminalJournal: @unchecked Sendable {
   private var closed = false
   private var uncertain = false
   private var failed = false
+  private var windowTitle: Data?
+
+  /// The last OSC 0/2 window title written, kept so a re-attach after it scrolled out of the
+  /// bounded journal still shows it (agents only re-send their title when it changes).
+  public var titleSequence: Data? {
+    lock.withLock { windowTitle.map { Data([0x1B, 0x5D, 0x32, 0x3B]) + $0 + Data([0x07]) } }
+  }
+
+  // ponytail: a title split across two PTY reads is missed until the next one; buffer the tail if that shows.
+  static func lastTitle(in data: Data) -> Data? {
+    var found: Data?
+    var i = data.startIndex
+    while let esc = data[i...].firstIndex(of: 0x1B) {
+      let head = esc + 4
+      guard head <= data.endIndex else { break }
+      i = esc + 1
+      guard data[esc + 1] == 0x5D, [0x30, 0x32].contains(data[esc + 2]), data[esc + 3] == 0x3B,
+        let end = data[head...].firstIndex(where: { $0 == 0x07 || $0 == 0x1B })
+      else { continue }
+      found = Data(data[head..<end].prefix(1024))
+      i = end
+    }
+    return found
+  }
 
   public init(capacity: Int, epoch: SessionEpoch? = nil) throws {
     guard (1...16_777_216).contains(capacity) else { throw ClairTerminalError.invalidLimits }
@@ -132,6 +156,7 @@ public final class ClairTerminalJournal: @unchecked Sendable {
         throw ClairTerminalError.invalidFrame
       }
       endOffset += UInt64(data.count)
+      if let title = Self.lastTitle(in: data) { windowTitle = title }
       let excess = max(0, bytes.count + data.count - capacity)
       if excess >= bytes.count {
         bytes = Data(data.suffix(capacity))
