@@ -135,12 +135,14 @@ public enum WorkbenchFiles {
     let keys: [URLResourceKey] = [.isRegularFileKey, .isSymbolicLinkKey]
     guard let e = FileManager.default.enumerator(at: base, includingPropertiesForKeys: keys, options: [.skipsPackageDescendants])
     else { return [] }
+    // The enumerator yields realpath(3) paths (`/private/var/…`), which `resolvingSymlinksInPath` strips to `/var/…`.
+    let prefix = (realpath(base.path, nil).map { p in defer { free(p) }; return String(cString: p) } ?? base.path).count + 1
     var paths: [String] = []
     for case let u as URL in e {
       if skipped.contains(u.lastPathComponent) { e.skipDescendants(); continue }
       let v = try? u.resourceValues(forKeys: Set(keys))
       guard v?.isRegularFile == true, v?.isSymbolicLink != true else { continue }
-      paths.append(String(u.resolvingSymlinksInPath().path.dropFirst(base.path.count + 1)))  // files only, so this never follows a link
+      paths.append(String(u.path.dropFirst(prefix)))  // `base` is resolved and the enumerator never follows links, so no per-file realpath
       if paths.count >= limit { break }
     }
     let status = gitStatus(root)

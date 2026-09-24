@@ -1164,7 +1164,8 @@ import Observation
     /// Folders derived from the file paths; click toggles, files open a tab.
     private var explorer: some View {
       return LazyVStack(alignment: .leading, spacing: 0) {
-        if store.scanning {
+        // Only the first scan blanks the tree; a rescan (every watcher event) swaps rows in place.
+        if store.scanning && st.files.isEmpty {
           Text("Loading...").font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
             .padding(.horizontal, 16).frame(height: 28)
         } else {
