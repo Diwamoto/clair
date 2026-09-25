@@ -47,10 +47,17 @@ fork からの pull request には secret が渡らないので、release は ma
 
 ## 初回インストール
 
-zip を展開して `Clair.app` を `/Applications` に置く。Developer ID 署名と notarization をしていないので、
-初回起動は Gatekeeper に止められる。システム設定 → プライバシーとセキュリティ →「このまま開く」を押すか、
-`xattr -dr com.apple.quarantine /Applications/Clair.app` を実行する。アプリ内の更新でダウンロードした版には
-quarantine が付かないので、この操作は初回だけで済む。
+`scripts/install.sh` を使う。最新 Release の `latest.json` から arm64 の zip を取り、sha256 を確かめて
+`/Applications/Clair.app` に置き、起動する。curl で取った zip には quarantine が付かないので Gatekeeper に止められない
+(Developer ID 署名と notarization は未導入)。
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Diwamoto/clair/master/scripts/install.sh | sh
+```
+
+再実行すると最新版で入れ直す(起動中の Clair は終了させる)。2 回目以降の更新はアプリ内の updater が行い、
+こちらは Ed25519 署名まで検証する。install.sh は TLS 越しの manifest の sha256 だけを信頼する。
+ブラウザで zip を落とした場合は quarantine が付くので、`xattr -dr com.apple.quarantine /Applications/Clair.app` が要る。
 
 ## 停止条件
 

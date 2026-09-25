@@ -1,108 +1,120 @@
+<div align="center">
+
+<img src="packages/ClairApps/Sources/ClairMacApp/Resources/AppIcon.png" width="128" alt="Clair">
+
 # Clair
 
-> An IDE that brings the editor, terminal, AI agents, and Git together in a native macOS workspace, organized per project.
+**Editor, terminal, AI agents, and Git in one native macOS workspace per project.**
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Platform: macOS 14+](https://img.shields.io/badge/platform-macOS%2014%2B-lightgrey.svg)
+![Swift](https://img.shields.io/badge/Swift-6-orange.svg)
+[![Release](https://img.shields.io/github/v/release/Diwamoto/clair)](https://github.com/Diwamoto/clair/releases/latest)
 
 [日本語](README.md)
 
-Clair is a native macOS IDE developed as a personal project.
-It combines a VS Code–style integrated editing, search, and Git experience with the familiar terminal feel of Ghostty,
-so you can work in a single project workspace instead of switching between separate apps.
+</div>
 
-The core design is a single Clair process that opens multiple projects and switches the file tree, editor, terminal,
-agents, Git state, and pane layout per project. AI agents are not confined to a dedicated chat UI:
-Claude Code, Codex, OpenCode, and others run as ordinary terminals.
+<!-- screenshot: docs/images/workspace.png — overview: editor + terminal with an agent running (hero) -->
 
-Clair is currently in its PoC / integration phase. The main local development features are implemented, while the final
-dogfood cutover (developing Clair in Clair) and UI integration and polish are ongoing.
+Clair is a native macOS IDE that brings the daily back-and-forth between editor, terminal, and AI agents
+into **one project workspace**. It pairs a VS Code–style integrated editing, search, and Git experience
+with Ghostty's terminal, built in Swift with no Electron and no WebView.
 
-## What it does
+AI agents are not locked into a chat UI. Claude Code, Codex, and OpenCode run as **ordinary terminals** that you
+can tile, switch between, and keep an eye on from your iPhone.
 
-| Area | What Clair does |
-| --- | --- |
-| Project workspace | Opens any local folder as a project, whether or not it is a Git repository, and switches between projects. Keeps each project's file tree, tabs, and pane layout. |
-| Native editor | Multi-file editing, Unicode/IME input, save, undo/redo, and picking up external changes. Also Quick Open, full-text search, and replace. |
-| Terminal / agent | Runs a shell in a native macOS terminal with CJK/IME, resize, scrollback, and selection. Launches multiple Claude Code, Codex, and OpenCode sessions in the project root or in managed worktrees. |
-| Mobile agent control | An early vertical slice that lets you inspect registered agents on your own Mac and send raw input from an iPhone/iPad, targeting private networks and private TestFlight. |
-| Git / review | `status`, `diff`, `stage/unstage`, `commit`, and `branch switch` per project. Optionally creates managed worktrees and carries a whole branch through review and adoption. |
-| Command automation | The Command Window, menus, keyboard shortcuts, a local CLI, and stdio MCP all run the same typed commands. Clair decides each operation's risk and availability. |
-| Lifecycle | Stable and Dev builds run side by side with separate bundles and data directories. Running local terminal sessions survive window close and update restarts and can be reattached. |
+> [!NOTE]
+> Clair is a personal project under active development. It covers day-to-day development; UI polish is ongoing.
 
-## Running locally
+## Install
 
-### Requirements
-
-- macOS 14.0 or later
-- Full Xcode 16 or later (the Xcode app must be selected, not just the Command Line Tools)
+On an Apple Silicon Mac, paste one line into a terminal:
 
 ```sh
-make doctor
+curl -fsSL https://raw.githubusercontent.com/Diwamoto/clair/master/scripts/install.sh | sh
 ```
 
-### Launch
+It fetches the latest release, checks its checksum, puts it at `/Applications/Clair.app`, and opens it.
+After that, updates show up inside the app and apply with one click (signature-verified; open terminals survive the restart).
+
+## Features
+
+### ⚡ A fast native editor
+
+<!-- screenshot: docs/images/editor.png — syntax highlight, diagnostics, completion popup -->
+
+- A rope-based buffer that opens and edits 10 MiB files instantly
+- Japanese IME, emoji, multi-cursor, block selection, folding, soft wrap
+- tree-sitter syntax highlighting (Go, TypeScript/JavaScript, Python, Rust, Swift, Ruby, PHP, Java, Terraform, Shell, JSON, Markdown)
+- Language servers: diagnostics, completion, ⌘-click / F12 go to definition, references, symbols, ⌃- to go back
+- Live Markdown preview (⌘⇧V) and inline git blame
+
+### 🖥️ Ghostty's terminal
+
+<!-- screenshot: docs/images/terminal.png — split panes with several agents running -->
+
+- GPU-rendered terminal powered by [libghostty](https://github.com/ghostty-org/ghostty)
+- Split, move, and maximize panes freely; put editor, terminal, preview, and commit graph side by side
+- Shells live in a background daemon, so sessions survive closing the window and restarting for an update
+
+### 🤖 AI agents, still terminals
+
+- Launch Claude Code / Codex / OpenCode side by side in the project root or a dedicated worktree
+- Agent completions and notification requests become macOS notifications and per-project badges
+- One-click "review this file" / "review this project" requests
+- Browse agent chat history per provider and see daily usage
+
+### 🌿 Git and worktrees
+
+<!-- screenshot: docs/images/git.png — changes list, diff, commit graph -->
+
+- Changes list, stage / unstage, commit, pull / push, branch switching
+- Line-level review comments, and apply or reject an agent's suggested fixes
+- A commit graph to follow branches and merges, straight from a commit to its diff
+- Create managed worktrees for parallel branches and adopt them with a merge commit
+
+### 🔌 Every action is a command
+
+- Menus, the ⌘K command palette, shortcuts, the `clair` CLI, and MCP all run the same typed commands
+- Assign a shortcut to any command
+- When an agent drives Clair, risky operations still need approval in the GUI
+
+### 📱 Watch agents from your iPhone (experimental)
+
+- See the output of agents on your own Mac from an iPhone / iPad and send input back
+- Pair with a QR code shown on the Mac
+
+## Build from source
+
+Requirements: macOS 14 or later, Xcode 16 or later (full Xcode, not just the Command Line Tools)
 
 ```sh
-make dev       # Build and launch the macOS app (rebuilds and restarts on Swift changes; Ctrl-C to stop)
-make dev-ios   # Launch in the iOS Simulator
+make doctor    # check the environment
+make dev       # build and launch Clair Dev (rebuilds on Swift changes)
+make test      # unit tests
 ```
 
-After launch, choose a local folder with **Open Folder** in the Projects sidebar.
-
-To sign the iOS app for a device, put your Apple Team ID in `Config/Signing.local.xcconfig` (git-ignored):
-
-```text
-DEVELOPMENT_TEAM = ABCDE12345
-```
-
-## Common development commands
-
-| Command | What it does |
-| --- | --- |
-| `make test` | Run the fast core/app unit tests |
-| `make test-integration` | Run the slow real-subprocess/PTY/daemon tests |
-| `make foundation` | Verify the package graph, build everything, and run all tests |
-| `make lint` | Check Swift formatting |
-| `make ci` | Run `lint`, `foundation`, and the iOS Simulator build |
-
-Detailed manual checks, output locations, and recovery steps are in the [local verification runbook](docs/runbooks/clair-verification.md) (Japanese).
-
-## Repository layout
-
-```text
-apple/       iOS app (ClairMobile) and its tests
-packages/    Swift packages (ClairCore, ClairApps)
-scripts/     Helper scripts for build, run, and test
-docs/        Spec, tasks, architecture, decisions, runbooks
-```
-
-Clair's M1 is focused on personal use and targets the macOS desktop plus early mobile control from your own iPhone/iPad.
-Windows/Linux frontends, team collaboration, VS Code extension compatibility, a third-party plugin marketplace, and
-hosted agents are out of scope. Go language intelligence, a debugger, Dev Containers, and similar features are on the later roadmap.
+Dev builds use a separate bundle and data directory from Stable, so they run next to an installed Clair.
+See `make help` for more commands and the [local verification runbook](docs/runbooks/clair-verification.md) for manual checks.
 
 ## Documentation
 
-Most project documentation is written in Japanese.
+- [Spec](docs/clair-spec.md) — what Clair is and is not
+- [Tasks](docs/clair-tasks.md) / [Kanban](docs/clair-kanban.html) — progress
+- [Release and update distribution](docs/runbooks/release.md)
+- [Docs index](docs/README.md)
 
-- [Spec (source of truth)](docs/clair-spec.md)
-- [Tasks](docs/clair-tasks.md) / [Kanban](docs/clair-kanban.html)
-- [Docs guide](docs/README.md)
-- [Current workspace architecture](docs/architecture/development-workspace.md)
-- [Local verification runbook](docs/runbooks/clair-verification.md)
+Development runs one task at a time from the task queue with the `/clair-task` agent skill (`.agents/skills/clair-task/`).
 
-### How development works
+## Out of scope
 
-Development runs off the [task queue](docs/clair-tasks.md), one task at a time, through the `/clair-task`
-agent skill (`.agents/skills/clair-task/`). [`docs/clair-spec.md`](docs/clair-spec.md) is the source of truth;
-each task's results, measurements, and remaining work are recorded in its queue row, and the
-[kanban](docs/clair-kanban.html) is regenerated from it.
+Windows / Linux builds, real-time team collaboration, VS Code extension compatibility, a plugin runtime, and hosted agents.
 
 ## Contributing
 
-This is a personal project, but bug reports and bug-fix pull requests are very welcome.
-For larger features, please open an issue to discuss first.
-
-## Security
-
-See [SECURITY.md](SECURITY.md) for how to report a vulnerability.
+Bug reports and bug-fix pull requests are welcome. For larger features, please open an issue first.
+To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 ## License
 
