@@ -738,6 +738,7 @@ import Observation
     @State private var branch: String?
     @State private var branches: [String] = []
     @State private var sync: (behind: Int, ahead: Int)?
+    @State private var menus = ClairMenuController()
     @State private var changesTask: Task<Void, Never>?
     @State private var gitOperation: String?
     @State private var gitMessage: String?
@@ -806,6 +807,7 @@ import Observation
         if st.palette == .search { searchOverlay }
         else if let p = st.palette { paletteView(p) }
       }
+      .clairMenuHost(menus)
       .animation(.easeOut(duration: 0.09), value: st.palette == nil)
       .onChange(of: st.palette) {
         query = ""; selection = 0
@@ -988,7 +990,7 @@ import Observation
         // Reorder within the active group only; other groups' tabs live in saved layouts.
         onMove: projectActive ? { from in store.run("tab.move", ["path": .string(from), "target": .string(path)]) } : nil
       )
-      .contextMenu { if projectActive { fileMenu(path, tab: true) } }
+      .clairContextMenu(menus) { projectActive ? fileMenu(path, tab: true) : ClairMenuSpec(entries: []) }
     }
 
     private func openFolder() {
@@ -1219,12 +1221,10 @@ import Observation
     }
 
     /// "〜をレビュー ›" submenu: one item per agent profile; picking one launches the review.
-    @ViewBuilder private func reviewMenu(_ title: String, _ target: AgentReviewRequest.Target, disabled: Bool) -> some View {
-      Menu(title) {
-        ForEach(AgentProfile.all, id: \.id) { profile in
-          Button(profile.title) { startReview(target, provider: profile.id) }
-        }
-      }.disabled(disabled)
+    private func reviewMenu(_ title: String, _ target: AgentReviewRequest.Target, disabled: Bool) -> ClairMenuEntry {
+      .item(title, disabled: disabled, submenu: AgentProfile.all.map { profile in
+        .item(profile.title) { startReview(target, provider: profile.id) }
+      })
     }
 
     private func startReview(_ target: AgentReviewRequest.Target, provider: String) {
@@ -1324,7 +1324,9 @@ import Observation
             Text(st.project).font(.system(size: 12, weight: .semibold)).textCase(.uppercase).foregroundStyle(C.textPrimary)
             Spacer(minLength: 0)
           }
-          .contextMenu { reviewMenu("この Project をレビュー", .project, disabled: !st.dirty.isEmpty) }
+          .clairContextMenu(menus) {
+            ClairMenuSpec(title: st.project, entries: [reviewMenu("この Project をレビュー", .project, disabled: !st.dirty.isEmpty)])
+          }
           if !rootFolded {
             ForEach(visibleExplorerRows) { r in
               if let f = r.file {
@@ -1336,7 +1338,7 @@ import Observation
                   Spacer(minLength: 0)
                   if let b = badge { Text(b).font(.system(size: 12, weight: .semibold)).foregroundStyle(b == "A" || b == "?" ? C.success : C.attention) }
                 }
-                .contextMenu { fileMenu(f.path, tab: false) }
+                .clairContextMenu(menus) { fileMenu(f.path, tab: false) }
               } else {
                 let open = !st.collapsed.contains(r.id)
                 treeRow(depth: r.depth, selected: false, action: { store.run("explorer.toggle", ["path": .string(r.id)]) }) {
@@ -1346,13 +1348,12 @@ import Observation
                   Text(r.label).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textSecondary).lineLimit(1)
                   Spacer(minLength: 0)
                 }
-                .contextMenu {
-                  Button(open ? "折りたたむ" : "開く") { store.run("explorer.toggle", ["path": .string(r.id)]) }
-                  reviewMenu("このフォルダをレビュー", .folder(r.id), disabled: st.dirty.contains(where: { $0.hasPrefix(r.id + "/") }))
-                  Divider()
-                  pathItems(r.id)
-                  Divider()
-                  fileOps(r.id, dir: true)
+                .clairContextMenu(menus) {
+                  ClairMenuSpec(title: r.label, sub: r.id, entries: [
+                    .item(open ? "折りたたむ" : "開く") { store.run("explorer.toggle", ["path": .string(r.id)]) },
+                    reviewMenu("このフォルダをレビュー", .folder(r.id), disabled: st.dirty.contains(where: { $0.hasPrefix(r.id + "/") })),
+                    .separator,
+                  ] + pathItems(r.id) + [.separator] + fileOps(r.id, dir: true))
                 }
               }
             }
@@ -1428,125 +1429,122 @@ import Observation
       }.buttonStyle(.hoverWash).padding(.horizontal, 8)
     }
 
-    // MARK: context menus (checklist §3.6). ponytail: native NSMenu, not the canvas's custom overlay;
+    // MARK: context menus (checklist §3.6), drawn by ClairContextMenu.swift.
 
-    @ViewBuilder private func fileMenu(_ path: String, tab: Bool) -> some View {
-      if tab {
-        Button("タブを閉じる") { store.run("tab.close", ["path": .string(path)]) }
-        Button("分割して開く") { store.run("tab.activate", ["path": .string(path)]); store.run("pane.splitRight") }
-      } else {
-        Button("開く") { store.run("tab.open", ["path": .string(path)]) }
-      }
+    private func fileMenu(_ path: String, tab: Bool) -> ClairMenuSpec {
+      var e: [ClairMenuEntry] = tab
+        ? [.item("タブを閉じる", shortcut: "⌘W") { store.run("tab.close", ["path": .string(path)]) },
+           .item("分割して開く") { store.run("tab.activate", ["path": .string(path)]); store.run("pane.splitRight") }]
+        : [.item("開く") { store.run("tab.open", ["path": .string(path)]) }]
       let change = changes.first { $0.path == path }
-      Button("変更を確認") {
+      e.append(.item("変更を確認", disabled: change == nil) {
         if let c = change { diff = DiffTarget(path: c.path, staged: c.staged && !c.unstaged, untracked: c.untracked) }
-      }.disabled(change == nil)
-      reviewMenu("このファイルをレビュー", .file(path), disabled: st.dirty.contains(path))
-      Divider()
-      agentItems(path)
-      pathItems(path)
-      if !tab { Divider(); fileOps(path, dir: false) }
+      })
+      e.append(reviewMenu("このファイルをレビュー", .file(path), disabled: st.dirty.contains(path)))
+      e.append(.separator)
+      e.append(agentItems(path))
+      e += pathItems(path)
+      if !tab { e += [.separator] + fileOps(path, dir: false) }
+      return ClairMenuSpec(title: (path as NSString).lastPathComponent, sub: path, entries: e)
     }
 
     /// VS Code-style explorer file operations. The FSEvents watcher rescans the tree afterwards.
-    @ViewBuilder private func fileOps(_ path: String, dir: Bool) -> some View {
+    private func fileOps(_ path: String, dir: Bool) -> [ClairMenuEntry] {
       let parent = dir ? path : (path as NSString).deletingLastPathComponent
-      Button("新しいファイル…") { createItem(in: parent, folder: false) }
-      Button("新しいフォルダー…") { createItem(in: parent, folder: true) }
-      Divider()
-      Button("名前を変更…") { renameItem(path) }
-      Button("削除") { trashItem(path, dir: dir) }
+      return [
+        .item("新しいファイル…") { createItem(in: parent, folder: false) },
+        .item("新しいフォルダー…") { createItem(in: parent, folder: true) },
+        .separator,
+        .item("名前を変更…") { renameItem(path) },
+        .item("削除", destructive: true) { trashItem(path, dir: dir) },
+      ]
     }
 
     private func absolute(_ path: String) -> URL? {
       store.activeRoot.map { URL(fileURLWithPath: ($0 as NSString).appendingPathComponent(path)) }
     }
 
-    /// Modal name prompt. Rejects empty names and path separators so an item cannot escape its folder.
-    private func promptName(_ title: String, initial: String) -> String? {
-      let alert = NSAlert()
-      alert.messageText = title
-      let field = NSTextField(string: initial)
-      field.frame = NSRect(x: 0, y: 0, width: 280, height: 24)
-      alert.accessoryView = field
-      alert.addButton(withTitle: "OK"); alert.addButton(withTitle: "キャンセル")
-      alert.window.initialFirstResponder = field
-      guard alert.runModal() == .alertFirstButtonReturn else { return nil }
-      let name = field.stringValue.trimmingCharacters(in: .whitespaces)
-      guard !name.isEmpty, name != ".", name != "..", !name.contains("/") else { return nil }
-      return name
+    /// Name prompt. Rejects empty names and path separators so an item cannot escape its folder.
+    private func promptName(_ title: String, initial: String, _ done: @escaping (String) -> Void) {
+      menus.ask(ClairDialog(title: title, initial: initial) { raw in
+        let name = raw.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty, name != ".", name != "..", !name.contains("/") else { return }
+        done(name)
+      })
     }
 
     private func fileError(_ error: Error) {
-      let alert = NSAlert(error: error); alert.runModal()
+      menus.ask(ClairDialog(title: "操作できませんでした", message: error.localizedDescription) { _ in })
     }
 
     private func createItem(in folder: String, folder isFolder: Bool) {
-      guard let name = promptName(isFolder ? "新しいフォルダー" : "新しいファイル", initial: ""),
-            let url = absolute((folder as NSString).appendingPathComponent(name)) else { return }
-      let rel = (folder as NSString).appendingPathComponent(name)
-      guard !FileManager.default.fileExists(atPath: url.path) else {
-        return fileError(CocoaError(.fileWriteFileExists, userInfo: [NSFilePathErrorKey: url.path]))
+      promptName(isFolder ? "新しいフォルダー" : "新しいファイル", initial: "") { name in
+        let rel = (folder as NSString).appendingPathComponent(name)
+        guard let url = absolute(rel) else { return }
+        guard !FileManager.default.fileExists(atPath: url.path) else {
+          return fileError(CocoaError(.fileWriteFileExists, userInfo: [NSFilePathErrorKey: url.path]))
+        }
+        do {
+          if isFolder { try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false) }
+          else { try Data().write(to: url, options: .withoutOverwriting) }
+        } catch { return fileError(error) }
+        store.refreshProjectFiles()
+        if !isFolder { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { store.run("tab.open", ["path": .string(rel)]) } }
       }
-      do {
-        if isFolder { try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false) }
-        else { try Data().write(to: url, options: .withoutOverwriting) }
-      } catch { return fileError(error) }
-      store.refreshProjectFiles()
-      if !isFolder { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { store.run("tab.open", ["path": .string(rel)]) } }
     }
 
     private func renameItem(_ path: String) {
       let old = (path as NSString).lastPathComponent
-      guard let name = promptName("名前を変更", initial: old), name != old,
-            let from = absolute(path) else { return }
-      let rel = ((path as NSString).deletingLastPathComponent as NSString).appendingPathComponent(name)
-      guard let to = absolute(rel) else { return }
-      do { try FileManager.default.moveItem(at: from, to: to) } catch { return fileError(error) }
-      // Tabs under the old path would point at nothing; close them (unsaved ones stay for the user).
-      for t in st.tabs where t == path || t.hasPrefix(path + "/") {
-        guard !st.dirty.contains(t) else { continue }
-        store.run("tab.close", ["path": .string(t)])
+      promptName("名前を変更", initial: old) { name in
+        let rel = ((path as NSString).deletingLastPathComponent as NSString).appendingPathComponent(name)
+        guard name != old, let from = absolute(path), let to = absolute(rel) else { return }
+        do { try FileManager.default.moveItem(at: from, to: to) } catch { return fileError(error) }
+        closeTabs(under: path)
+        store.refreshProjectFiles()
       }
-      store.refreshProjectFiles()
     }
 
     private func trashItem(_ path: String, dir: Bool) {
       guard let url = absolute(path) else { return }
-      let alert = NSAlert()
-      alert.messageText = "“\((path as NSString).lastPathComponent)” を削除しますか?"
-      alert.informativeText = dir ? "フォルダーとその中身をゴミ箱に移動します。" : "ゴミ箱に移動します。"
-      alert.addButton(withTitle: "ゴミ箱に移動"); alert.addButton(withTitle: "キャンセル")
-      guard alert.runModal() == .alertFirstButtonReturn else { return }
-      do { try FileManager.default.trashItem(at: url, resultingItemURL: nil) } catch { return fileError(error) }
+      menus.ask(ClairDialog(
+        title: "“\((path as NSString).lastPathComponent)” を削除しますか?",
+        message: dir ? "フォルダーとその中身をゴミ箱に移動します。" : "ゴミ箱に移動します。",
+        confirm: "ゴミ箱に移動", destructive: true
+      ) { _ in
+        do { try FileManager.default.trashItem(at: url, resultingItemURL: nil) } catch { return fileError(error) }
+        closeTabs(under: path)
+        store.refreshProjectFiles()
+      })
+    }
+
+    /// Tabs under a moved/trashed path would point at nothing; close them (unsaved ones stay for the user).
+    private func closeTabs(under path: String) {
       for t in st.tabs where (t == path || t.hasPrefix(path + "/")) && !st.dirty.contains(t) {
         store.run("tab.close", ["path": .string(t)])
       }
-      store.refreshProjectFiles()
     }
 
     /// "Agent に送る ›": types `@path ` into a running agent terminal of this Project. No Return; the user reviews and sends.
-    @ViewBuilder private func agentItems(_ path: String) -> some View {
+    private func agentItems(_ path: String) -> ClairMenuEntry {
       let agents = st.agentSessions.filter { $0.project == st.project && !$0.status.isExited }
-      Menu("Agent に送る") {
-        ForEach(agents) { a in
-          Button("\(a.title) · pane \(a.pane)") {
-            if ClairGhosttySurfaceView.send("@\(path) ", toPane: a.pane) { store.run("pane.focus", ["id": .int(a.pane)]) }
-          }
+      return .item("Agent に送る", disabled: agents.isEmpty, submenu: agents.map { a in
+        .item("\(a.title) · pane \(a.pane)") {
+          if ClairGhosttySurfaceView.send("@\(path) ", toPane: a.pane) { store.run("pane.focus", ["id": .int(a.pane)]) }
         }
-      }.disabled(agents.isEmpty)
+      })
     }
 
-    @ViewBuilder private func pathItems(_ path: String) -> some View {
+    private func pathItems(_ path: String) -> [ClairMenuEntry] {
       let full = store.activeRoot.map { ($0 as NSString).appendingPathComponent(path) }
-      Button("パスをコピー") {
-        NSPasteboard.general.clearContents(); NSPasteboard.general.setString(path, forType: .string)
-      }
-      Button("Finder で表示") { full.map { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: $0)]) } }.disabled(full == nil)
+      return [
+        .item("パスをコピー") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(path, forType: .string) },
+        .item("Finder で表示", disabled: full == nil) {
+          full.map { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: $0)]) }
+        },
+      ]
     }
 
     // MARK: V13 Debug (Workbench Debug screen, with VS Code style run configuration)
-
     private var debugPanel: some View {
       VStack(alignment: .leading, spacing: 0) {
         Text("実行とデバッグ").font(.system(size: 12, weight: .semibold)).foregroundStyle(C.textTertiary)
