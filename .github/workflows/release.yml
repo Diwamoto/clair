@@ -27,7 +27,7 @@ jobs:
       # libghostty is built from the pinned commit with zig + Metal; only a pin change rebuilds it.
       - name: Restore libghostty
         id: ghostty
-        uses: actions/cache@v6
+        uses: actions/cache/restore@v6
         with:
           path: packages/ClairCore/Vendor/ghostty
           key: ghostty-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Config/ghostty-pin.json', 'scripts/ghostty.sh') }}
@@ -37,6 +37,14 @@ jobs:
         run: |
           xcodebuild -downloadComponent MetalToolchain
           ./scripts/ghostty.sh vendor
+
+      # Saved right away: the implicit post-job save is skipped when a later step fails.
+      - name: Save libghostty
+        if: steps.ghostty.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: packages/ClairCore/Vendor/ghostty
+          key: ${{ steps.ghostty.outputs.cache-primary-key }}
 
       - name: Test
         run: make test
