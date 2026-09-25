@@ -290,7 +290,7 @@ macOS の `NSTextInputClient` は行ローカルの UTF-16 空間で答える(�
 
 - Markdown の live preview(editor と並べて表示、編集に追従)
 - 定義ジャンプの直接操作(⌘+click、F12、前後の位置へ戻る/進む)
-- AI inline 補完(ghost text、Tab で確定、Esc で却下)。LSP 補完とは別経路
+- AI inline 補完(ghost text、Tab で確定、Esc で却下)。LSP 補完とは別経路(2026-09-26 オーナー判断で保留: LSP 補完で足りる間は実装しない)
 
 minimap、VS Code extension 互換、独自 plugin runtime は対象外。
 
