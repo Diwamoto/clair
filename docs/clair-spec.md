@@ -286,6 +286,12 @@ macOS の `NSTextInputClient` は行ローカルの UTF-16 空間で答える(�
 - LSP による diagnostic、補完、定義ジャンプ、symbol 検索
 - layout / input / transaction の計測と回帰テスト
 
+品質 gate とは別に、日常作業に必要な editor 機能として次を持つ(2026-09-25 オーナー決定)。
+
+- Markdown の live preview(editor と並べて表示、編集に追従)
+- 定義ジャンプの直接操作(⌘+click、F12、前後の位置へ戻る/進む)
+- AI inline 補完(ghost text、Tab で確定、Esc で却下)。LSP 補完とは別経路
+
 minimap、VS Code extension 互換、独自 plugin runtime は対象外。
 
 ## 6. AI review
@@ -359,6 +365,7 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
 - file tree、search、Git の sidebar と、pane へ開く補助 view
 - Quick Open、全文検索・置換、file watcher
 - diff、stage/unstage、commit、branch/worktree の作成・切替
+- commit graph(branch/merge の履歴を graph で表示し、commit から diff へ移動)
 - managed worktree は repository 外の Clair 管理領域へ置く
 - branch review は base に対する全差分を、commit 済みと未 commit/untracked に
   分けて表示する
