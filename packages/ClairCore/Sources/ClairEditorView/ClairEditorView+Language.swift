@@ -21,8 +21,33 @@ import ClairEditorCore
     /// pointer moves is all a per-underline tooltip needs.
     public override func mouseMoved(with event: NSEvent) {
       super.mouseMoved(with: event)
-      let message = diagnosticMessage(at: convert(event.locationInWindow, from: nil))
+      let point = convert(event.locationInWindow, from: nil)
+      let message = diagnosticMessage(at: point)
       if toolTip != message { toolTip = message }
+      updateDefinitionHover(at: point, flags: event.modifierFlags)
+    }
+
+    public override func flagsChanged(with event: NSEvent) {
+      super.flagsChanged(with: event)
+      guard let window else { return }
+      updateDefinitionHover(at: convert(window.mouseLocationOutsideOfEventStream, from: nil), flags: event.modifierFlags)
+    }
+
+    /// E17: exactly ⌘ (or, with `command: false`, no modifier) among ⌘⌥⌃⇧.
+    func isCommandOnly(_ flags: NSEvent.ModifierFlags, command: Bool = true) -> Bool {
+      flags.intersection([.command, .option, .control, .shift]) == (command ? .command : [])
+    }
+
+    /// Reports the word under a ⌘-held pointer once per word; the link itself waits for the host.
+    private func updateDefinitionHover(at point: NSPoint, flags: NSEvent.ModifierFlags) {
+      guard onDefinitionHover != nil else { return }
+      var word: TextUTF8Range?
+      if isCommandOnly(flags), bounds.contains(point), let offset = hitTestOffset(at: point), let w = wordRange(at: offset),
+        w.lowerBound != w.upperBound { word = w }
+      guard word != definitionHover else { return }
+      definitionHover = word
+      definitionLink = nil
+      onDefinitionHover?(word)
     }
 
     /// Every diagnostic message whose range covers the point, one per line.

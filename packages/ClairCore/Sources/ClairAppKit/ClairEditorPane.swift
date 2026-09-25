@@ -358,6 +358,8 @@
     var debugLine: Int? = nil
     var debugBreakpoints: Set<Int> = []
     var onToggleDebugBreakpoint: ((Int) -> Void)? = nil
+    /// E17: ⌘-click on a definition link / F12. nil (the diff review editor) disables both.
+    var onDefinition: (() -> Void)? = nil
     let onEdit: (String) -> Void
     let onCaret: (String, TextSelectionSet, TextSnapshot) -> Void
 
@@ -379,6 +381,7 @@
                 onFocus: onFocus,
                 blame: selectedBlame(path, manager: m),
                 debugLine: debugLine, debugBreakpoints: debugBreakpoints, onToggleDebugBreakpoint: onToggleDebugBreakpoint,
+                onDefinition: onDefinition,
                 onCaret: { onCaret(path, $0, m.buffer.snapshot) },
                 reveal: buffers.reveal?.path == path ? buffers.reveal : nil, onEdit: { onEdit(path) }
               ).id("\(path)#\(buffers.revision(path))")
@@ -483,6 +486,7 @@
     let debugLine: Int?
     let debugBreakpoints: Set<Int>
     let onToggleDebugBreakpoint: ((Int) -> Void)?
+    let onDefinition: (() -> Void)?
     let onCaret: (TextSelectionSet) -> Void
     let reveal: (path: String, line: Int, column: Int, nonce: Int)?
     let onEdit: () -> Void
@@ -556,6 +560,18 @@
       view.onRedo = { replay(true) }
       view.onSelectionChange = { [weak manager, onCaret, weak completion] in
         manager?.setSelection($0); onCaret($0); completion?.didMoveCaret()
+      }
+      if let onDefinition {
+        view.onGoToDefinition = onDefinition
+        // E17: underline the ⌘-hovered word only once the server confirms it has a definition.
+        view.onDefinitionHover = { [weak view, buffers, path, root] word in
+          guard let word else { return }
+          Task { @MainActor in
+            let found = await buffers.language.definition(root + "/" + path, root: root, at: word.lowerBound)
+            guard let view, view.definitionHover == word, found?.isEmpty == false else { return }
+            view.definitionLink = word
+          }
+        }
       }
       view.onTopLineChange = { [buffers, path] in buffers.scrolled(path, to: $0) }
       scroll.documentView = view

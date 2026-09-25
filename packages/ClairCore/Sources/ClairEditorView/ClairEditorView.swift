@@ -37,6 +37,20 @@ import ClairEditorCore
         needsDisplay = true
       }
     }
+    /// E17: the word under a ⌘-hovering pointer (`onDefinitionHover` reports it) and, once the host has
+    /// confirmed a definition for exactly that word, the underlined link that ⌘-click follows.
+    public internal(set) var definitionHover: TextUTF8Range?
+    public var definitionLink: TextUTF8Range? {
+      didSet {
+        guard definitionLink != oldValue else { return }
+        (definitionLink == nil ? NSCursor.iBeam : NSCursor.pointingHand).set()
+        needsDisplay = true
+      }
+    }
+    public var definitionLinkColor: NSColor = .linkColor
+    public var onDefinitionHover: ((TextUTF8Range?) -> Void)?
+    /// ⌘-click on the link (after the caret moved there) and F12.
+    public var onGoToDefinition: (() -> Void)?
     var highlightIndex = EditorSpanIndex<EditorHighlightSpan>([], range: \.range)
     var diagnosticIndex = EditorSpanIndex<EditorDiagnosticSpan>([], range: \.range)
     public var tokenColors: [EditorTokenKind: NSColor] = [:] {
@@ -212,6 +226,8 @@ import ClairEditorCore
       if !diagnostics.isEmpty {
         diagnostics = diagnostics.map { $0.mapped(through: sorted) }
       }
+      definitionHover = nil
+      definitionLink = nil
       self.snapshot = newSnapshot
       updateWraps(sorted, old: oldSnapshot)
       mapFolds(through: sorted, old: oldSnapshot)
@@ -314,6 +330,13 @@ import ClairEditorCore
         if subrow == 0 { onToggleBreakpoint(line + 1); return }
       }
       if handleFoldClick(at: point) { return }
+      // E17: ⌘-click on a confirmed definition link jumps; anywhere else ⌘-click still adds a cursor.
+      if event.clickCount == 1, isCommandOnly(event.modifierFlags), let link = definitionLink,
+        let offset = hitTestOffset(at: point), link.lowerBound.value <= offset.value, offset.value <= link.upperBound.value {
+        applySelection(TextSelectionSet(cursor: offset))
+        onGoToDefinition?()
+        return
+      }
       if event.modifierFlags.contains(.option) {
         blockAnchor = point
         updateBlockSelection(to: point)
@@ -461,6 +484,10 @@ import ClairEditorCore
               context.fillEllipse(in: CGRect(x: 5, y: seg.top + (lineHeight - 8) / 2, width: 8, height: 8))
             }
             drawFoldMarker(index, top: seg.top, context: context)
+          }
+          if let link = definitionLink, let local = clip(link, to: seg) {
+            context.setFillColor(definitionLinkColor.cgColor)
+            context.fill(CGRect(x: textInset + seg.x(local.lowerBound), y: seg.top + lineHeight - 2, width: seg.x(local.upperBound) - seg.x(local.lowerBound), height: 1))
           }
           if !isComposingLine {
             drawDiagnostics(seg, context: context)

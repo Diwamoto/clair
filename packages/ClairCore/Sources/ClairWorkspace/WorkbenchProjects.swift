@@ -86,6 +86,16 @@ extension WorkbenchState {
     projects.append(added); switchProject(to: added, scanFiles: scanFiles)
   }
 
+  /// Opens an absolute, normalized file path in its owning Project. The requested file opens immediately;
+  /// the GUI fills the rest of a newly discovered Project in the background instead of blocking on a full walk.
+  mutating func openFile(_ file: String) {
+    let owner = owner(of: file) ?? WorkbenchProject.root(containing: file)
+    openProject(owner, scanFiles: false)
+    let rel = String(file.dropFirst(owner.path.count + 1))
+    if !files.contains(where: { $0.path == rel }) { files.append(WorkbenchFile(path: rel, status: nil)) }  // outside the scan (skipped dir / over the cap)
+    openTab(rel)
+  }
+
   mutating func openTab(_ path: String) {
     panesClosed = false
     tree.ensureEditorAtLeft()

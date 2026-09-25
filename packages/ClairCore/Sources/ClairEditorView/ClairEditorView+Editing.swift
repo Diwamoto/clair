@@ -16,6 +16,10 @@ import ClairEditorCore
   extension ClairEditorView {
     public override func keyDown(with event: NSEvent) {
       if composition == nil, keyInterceptor?(event) == true { return }
+      if composition == nil, event.keyCode == 111, isCommandOnly(event.modifierFlags, command: false), let onGoToDefinition {
+        onGoToDefinition()  // E17: F12 (kVK_F12)
+        return
+      }
       if composition == nil, exitMultiCursor(for: event) { return }
       if composition == nil, addVerticalCursor(for: event) { return }
       verticalCursorGoal = nil

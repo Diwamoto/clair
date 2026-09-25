@@ -241,7 +241,7 @@ import ClairEditorCore
           height: 7 * lineHeight))
     }
 
-    private func applySelection(_ updated: TextSelectionSet) {
+    func applySelection(_ updated: TextSelectionSet) {
       selection = updated
       needsDisplay = true
       onSelectionChange?(selection)

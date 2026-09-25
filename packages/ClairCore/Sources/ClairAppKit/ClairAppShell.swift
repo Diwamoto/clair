@@ -270,6 +270,9 @@ import Observation
           buffers.reveal(p, line: line, column: column)
         }
         if id == "editor.definition" || id == "editor.references" { navigate(references: id == "editor.references") }
+        if id == "editor.navigateBack" || id == "editor.navigateForward", let to = state.navigation.current, let p = state.active {
+          buffers.reveal(p, line: to.line, column: to.column)
+        }
         if id.hasPrefix("debug.") { runDebugCommand(id, input) }
         if let view = state.active.flatMap(buffers.view) {
           switch id {
@@ -338,6 +341,8 @@ import Observation
         let caret = m.selection.selections.last?.head
       else { return }
       let path = root + "/" + rel
+      let at = try? m.buffer.snapshot.position(at: caret, columnUnit: UTF16Unit.self, rounding: .down)
+      let from = EditorLocation(path: path, line: (at?.line.value ?? 0) + 1, column: at?.column.value ?? 0)
       guard EditorLanguageID.detect(path: rel)?.languageServer != nil else {
         languageNotice = "このファイルの言語サーバーはありません"
         return
@@ -355,11 +360,14 @@ import Observation
             ? "言語サーバーが応答しません" : (references ? "参照が見つかりません" : "定義が見つかりません")
           return
         }
-        if references {
+        // E17: several definitions are listed like references; the history records direct jumps only.
+        // ponytail: a definition picked from that list is not added to ⌃- history; record it in file.open if missed.
+        if references || found.count > 1 {
           languageItems = found.map { item($0, root: root) }
           run("palette.references")
         } else {
           let target = found[0]
+          state.navigation.jump(from: from, to: EditorLocation(path: target.path, line: target.line + 1, column: target.character))
           run("file.open", ["path": .string(target.path), "line": .int(target.line + 1), "column": .int(target.character)])
         }
       }
@@ -1779,6 +1787,7 @@ import Observation
               guard let root = store.activeRoot, let path = st.active else { return }
               _ = store.run("debug.breakpoint", ["path": .string(root + "/" + path), "line": .int(line)])
             },
+            onDefinition: { store.run("editor.definition") },
             onEdit: { store.edited($0) }, onCaret: { store.buffers.setCaret($0, $1, in: $2) }),
           run: { _ = store.run($0, $1) }, dragging: $draggingPane)
         }

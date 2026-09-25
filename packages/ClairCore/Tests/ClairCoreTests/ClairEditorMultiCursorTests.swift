@@ -186,5 +186,28 @@
       XCTAssertGreaterThan(size, 10 * 1024 * 1024, "written in whole lines, it overshoots 10 MiB")
       XCTAssertLessThanOrEqual(size, EditorBuffers.maxBytes)
     }
+
+    /// E17: ⌘-click follows a confirmed definition link; off the link it still adds a cursor. F12 asks too.
+    func testCommandClickFollowsDefinitionLinkElseAddsCursor() throws {
+      let view = try makeView("foo bar")
+      var asked = 0
+      view.onGoToDefinition = { asked += 1 }
+      view.definitionLink = TextUTF8Range(UTF8Offset(4), UTF8Offset(7))
+      try mouse(view, .leftMouseDown, NSPoint(x: try x(view, line: 0, column: 5), y: y(view, line: 0)), modifiers: .command)
+      try mouse(view, .leftMouseUp, NSPoint(x: try x(view, line: 0, column: 5), y: y(view, line: 0)), modifiers: .command)
+      XCTAssertEqual(asked, 1)
+      XCTAssertEqual(ranges(view), [5...5], "the caret moves to the clicked word before the lookup")
+
+      try mouse(view, .leftMouseDown, NSPoint(x: try x(view, line: 0, column: 1), y: y(view, line: 0)), modifiers: .command)
+      try mouse(view, .leftMouseUp, NSPoint(x: try x(view, line: 0, column: 1), y: y(view, line: 0)), modifiers: .command)
+      XCTAssertEqual(asked, 1)
+      XCTAssertEqual(ranges(view), [1...1, 5...5])
+
+      let f12 = try XCTUnwrap(NSEvent.keyEvent(
+        with: .keyDown, location: .zero, modifierFlags: [.function], timestamp: 0, windowNumber: 0, context: nil,
+        characters: "\u{F70F}", charactersIgnoringModifiers: "\u{F70F}", isARepeat: false, keyCode: 111))
+      view.keyDown(with: f12)
+      XCTAssertEqual(asked, 2)
+    }
   }
 #endif

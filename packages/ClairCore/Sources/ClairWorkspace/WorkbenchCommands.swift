@@ -59,6 +59,8 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var debugPhase = "idle"  // transient; refreshed by the GUI before a debugger command
   public var section = "一般"
   public var palette: Palette?
+  /// E17: definition-jump history for ⌃- / ⌃⇧-. Transient (not in `WorkspaceSnapshot`).
+  public var navigation = NavigationHistory()
   public var toggles = ["restoreLayout": true, "confirmClose": true, "showQuota": false, "preventSleepOnBattery": false, "formatOnSave": false, "showWhitespace": false, "softWrap": false, "terminalApprovals": true]
   public var choices = WorkbenchState.choiceOptions.mapValues { $0[0] }
   /// V11: user shortcut assignments over the registry defaults. An empty string unassigns a default.
@@ -486,14 +488,18 @@ extension CommandRegistry {
           try require(i["column"]?.int.map { $0 >= 0 } ?? true, "column must be 0 or more")
           return .additive
         }) { s, i in
-      let file = WorkbenchProject.normalizedFile(i["path"]!.string!)!
-      let owner = s.owner(of: file) ?? WorkbenchProject.root(containing: file)
-      // The requested file can be opened immediately; the GUI fills the rest of a newly discovered
-      // Project in the background instead of blocking this command on a full walk + `git status`.
-      s.openProject(owner, scanFiles: false)
-      let rel = String(file.dropFirst(owner.path.count + 1))
-      if !s.files.contains(where: { $0.path == rel }) { s.files.append(WorkbenchFile(path: rel, status: nil)) }  // outside the scan (skipped dir / over the cap)
-      s.openTab(rel)
+      s.openFile(WorkbenchProject.normalizedFile(i["path"]!.string!)!)
+      return .ok
+    },
+    // E17: the GUI reveals `navigation.current` after these succeed (the caret belongs to the editor).
+    cmd("editor.navigateBack", "前の位置に戻る", .read, ai: false, shortcut: "⌃-",
+        preflight: { s, _ throws(CommandError) in try require(s.navigation.canGoBack, "戻る位置がありません"); return .read }) { s, _ in
+      if let to = s.navigation.back(), let file = WorkbenchProject.normalizedFile(to.path) { s.openFile(file) }
+      return .ok
+    },
+    cmd("editor.navigateForward", "次の位置に進む", .read, ai: false, shortcut: "⌃⇧-",
+        preflight: { s, _ throws(CommandError) in try require(s.navigation.canGoForward, "進む位置がありません"); return .read }) { s, _ in
+      if let to = s.navigation.forward(), let file = WorkbenchProject.normalizedFile(to.path) { s.openFile(file) }
       return .ok
     },
     cmd("explorer.toggle", "フォルダを開閉", .read, params: [CommandParam("path", .string)]) { s, i in
@@ -661,4 +667,35 @@ extension CommandRegistry {
       return .ok
     }
   }
+}
+
+/// A place in a file: absolute path, 1-based line, 0-based UTF-16 column (the `file.open` inputs).
+public struct EditorLocation: Sendable, Codable, Equatable {
+  public let path: String
+  public let line: Int
+  public let column: Int
+  public init(path: String, line: Int, column: Int) { self.path = path; self.line = line; self.column = column }
+}
+
+/// E17: browser-style back/forward list. A jump drops the forward entries, records where it left from
+/// (the caret may have moved since the last visit) and where it landed.
+public struct NavigationHistory: Sendable, Codable, Equatable {
+  public private(set) var entries: [EditorLocation] = []
+  public private(set) var index = -1
+  static let limit = 50
+
+  public init() {}
+
+  public var current: EditorLocation? { entries.indices.contains(index) ? entries[index] : nil }
+  public var canGoBack: Bool { index > 0 }
+  public var canGoForward: Bool { index + 1 < entries.count }
+
+  public mutating func jump(from: EditorLocation, to: EditorLocation) {
+    entries = Array(entries.prefix(max(index, 0))) + [from, to]
+    if entries.count > Self.limit { entries.removeFirst(entries.count - Self.limit) }
+    index = entries.count - 1
+  }
+
+  public mutating func back() -> EditorLocation? { guard canGoBack else { return nil }; index -= 1; return current }
+  public mutating func forward() -> EditorLocation? { guard canGoForward else { return nil }; index += 1; return current }
 }
