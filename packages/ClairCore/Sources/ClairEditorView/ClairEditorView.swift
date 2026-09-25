@@ -266,8 +266,12 @@ import ClairEditorCore
       syncFrameSize()
     }
 
+    /// E15: the first visible document line (0-based) after each scroll, for a follower such as the Markdown preview.
+    public var onTopLineChange: ((Int) -> Void)?
+
     @objc private func handleClipViewBoundsChange() {
       syncFrameSize()
+      onTopLineChange?(rowMap.line(atRow: Int(visibleRect.minY / lineHeight)).line)
     }
 
     private func syncFrameSize() {

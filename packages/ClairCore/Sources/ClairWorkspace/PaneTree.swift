@@ -3,7 +3,8 @@ import Foundation
 /// Pane layout model for the Mac AppShell (checklist §3.1). Pure value type so
 /// split/close/maximize/equalize/focus rules are testable without any UI.
 public enum PaneKind: String, Sendable, Equatable, Codable {
-  case editor, terminal
+  /// E15: `preview` renders the active Markdown file beside the editor.
+  case editor, terminal, preview
 
   /// U06: the Agent panel is gone — an agent is a raw terminal session (ADR-0002), so a saved
   /// `agent` leaf restores as a terminal instead of failing the whole workspace restore.

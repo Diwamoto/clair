@@ -151,6 +151,13 @@
     /// few bytes past 10 MiB — keep real headroom rather than an exact 10 MiB edge.
     nonisolated static let maxBytes = 16 * 1024 * 1024
 
+    /// E15: bumped on every edit/undo so the Markdown preview re-renders the unsaved buffer.
+    private(set) var edits: [String: Int] = [:]
+    /// E15: first visible editor line (0-based) per file, for the preview's scroll sync.
+    private(set) var topLine: [String: Int] = [:]
+    func edited(_ path: String) { edits[path, default: 0] += 1 }
+    func scrolled(_ path: String, to line: Int) { if topLine[path] != line { topLine[path] = line } }
+
     func reveal(_ path: String, line: Int, column: Int = 0) { reveal = (path, line, column, (reveal?.nonce ?? 0) + 1) }
 
     func isOpen(_ path: String) -> Bool { if case .ready = loads[path] { true } else { false } }
@@ -517,6 +524,7 @@
         guard let new = try? manager.apply(edits) else { return }
         view.applyEdits(edits, oldSnapshot: old, newSnapshot: new, selection: manager.selection)
         buffers.dropBlame(path)
+        buffers.edited(path)
         onEdit()
         // E12: the server sees the same incremental edit, in order, then the list refilters.
         buffers.language.change(root + "/" + path, root: root, edits: edits, old: old, new: new)
@@ -535,6 +543,7 @@
         let edits = manager.lastCommittedEdits
         view.applyEdits(edits, oldSnapshot: old, newSnapshot: new, selection: manager.selection)
         buffers.dropBlame(path)
+        buffers.edited(path)
         onEdit()
         onCaret(manager.selection)
         buffers.language.change(root + "/" + path, root: root, edits: edits, old: old, new: new)
@@ -548,6 +557,7 @@
       view.onSelectionChange = { [weak manager, onCaret, weak completion] in
         manager?.setSelection($0); onCaret($0); completion?.didMoveCaret()
       }
+      view.onTopLineChange = { [buffers, path] in buffers.scrolled(path, to: $0) }
       scroll.documentView = view
       // E11: kick off this file's initial background highlight parse once,
       // when its `ClairEditorView` is first created.

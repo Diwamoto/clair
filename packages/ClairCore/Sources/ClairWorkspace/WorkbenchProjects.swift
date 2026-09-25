@@ -102,7 +102,7 @@ extension WorkbenchState {
   public var selectedTitlebarTab: WorkbenchTab? {
     guard let pane = tree.leaves.first(where: { $0.id == tree.focused }) else { return nil }
     switch pane.kind {
-    case .editor: return active.flatMap { tabs.contains($0) ? .file($0) : nil }
+    case .editor, .preview: return active.flatMap { tabs.contains($0) ? .file($0) : nil }
     case .terminal: return .terminal(pane.id)
     }
   }

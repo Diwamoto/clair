@@ -546,6 +546,19 @@ extension CommandRegistry {
         preflight: { s, _ throws(CommandError) in try require(s.active != nil, "ファイルが開かれていません"); return .read }) { _, _ in .ok },
     cmd("editor.definition", "定義へ移動", .read, ai: false, shortcut: "⌃⌘J",
         preflight: { s, _ throws(CommandError) in try require(s.active != nil, "ファイルが開かれていません"); return .read }) { _, _ in .ok },
+    // E15: one preview pane follows the active file; a second request just focuses it.
+    cmd("editor.markdownPreview", "Markdown プレビューを開く", .additive, ai: false, shortcut: "⌘⇧V",
+        preflight: { s, _ throws(CommandError) in
+          try require(s.active.map(MarkdownPreview.isMarkdown) == true, "Markdown ファイルが開かれていません"); return .additive
+        }) { s, _ in
+      s.panesClosed = false
+      if let preview = s.tree.leaves.first(where: { $0.kind == .preview }) {
+        if s.tree.maximized != nil { s.tree.toggleMaximize() }
+        return .pane(preview.id)
+      }
+      guard let editor = s.tree.leaves.first(where: { $0.kind == .editor }) else { return .ok }
+      return .pane(s.tree.split(editor.id, .horizontal, kind: .preview))
+    },
     cmd("editor.references", "参照を検索", .read, ai: false, shortcut: "⌃⌘R",
         preflight: { s, _ throws(CommandError) in try require(s.active != nil, "ファイルが開かれていません"); return .read }) { _, _ in .ok },
     // V08. Reading history is `state.snapshot`; mute changes what the user is told, so ai: false.
