@@ -33,7 +33,7 @@ AI エージェントは専用チャット UI に閉じ込めません。Claude 
 Apple Silicon の Mac で、ターミナルに 1 行貼るだけです。
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Diwamoto/clair/master/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/Diwamoto/clair/main/scripts/install.sh | sh
 ```
 
 最新の Release を取得してチェックサムを確かめ、`/Applications/Clair.app` に置いて起動します。

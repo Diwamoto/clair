@@ -32,7 +32,7 @@ can tile, switch between, and keep an eye on from your iPhone.
 On an Apple Silicon Mac, paste one line into a terminal:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Diwamoto/clair/master/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/Diwamoto/clair/main/scripts/install.sh | sh
 ```
 
 It fetches the latest release, checks its checksum, puts it at `/Applications/Clair.app`, and opens it.

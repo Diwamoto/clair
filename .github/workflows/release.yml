@@ -1,10 +1,10 @@
 name: Release
 
-# Publishes Clair to this repository's GitHub Releases when a push to master changes VERSION
+# Publishes Clair to this repository's GitHub Releases when a push to main changes VERSION
 # (docs/runbooks/release.md). The work lives in scripts/release.sh so any other CI can run it too.
 on:
   push:
-    branches: [master]
+    branches: [main]
     paths: [VERSION]
   workflow_dispatch:
 

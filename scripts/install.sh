@@ -1,6 +1,6 @@
 #!/bin/sh
 # Installs (or reinstalls) Clair Stable into /Applications from the latest GitHub Release:
-#   curl -fsSL https://raw.githubusercontent.com/Diwamoto/clair/master/scripts/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/Diwamoto/clair/main/scripts/install.sh | sh
 # curl leaves no quarantine attribute, so the unnotarized app opens without a Gatekeeper prompt.
 # Later versions arrive through the in-app updater (Ed25519-verified); this is only for the first install.
 # ponytail: trusts the TLS-served manifest's sha256 instead of verifying its Ed25519 signature;

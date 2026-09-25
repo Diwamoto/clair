@@ -8,7 +8,7 @@ Stable の `Clair.app` をこのリポジトリ(`Diwamoto/clair`、public)の Gi
 
 ## 仕組み
 
-- **トリガー**: `VERSION` を変更した commit が master に push されると `.github/workflows/release.yml` が走る。
+- **トリガー**: `VERSION` を変更した commit が main に push されると `.github/workflows/release.yml` が走る。
   `VERSION` が変わらない push では配布しない。再実行は Actions の `workflow_dispatch`。
 - **Runner**: GitHub hosted の `macos-26`(public repo なので無料)。libghostty(zig + Metal toolchain)は
   `actions/cache` に載せ、`Config/ghostty-pin.json` か `scripts/ghostty.sh` が変わったときだけ再ビルドする。
@@ -34,12 +34,12 @@ git add Config/update-public-key && git commit -m "build: add Stable update publ
 ```
 
 秘密鍵をなくすと、インストール済みのアプリは二度と更新を受け取れない。Keychain の項目は消さないこと。
-fork からの pull request には secret が渡らないので、release は master の push でしか動かない。
+fork からの pull request には secret が渡らないので、release は main の push でしか動かない。
 
 ## リリース手順
 
 1. `VERSION` を上げる(例: `0.1.0` → `0.2.0`)。
-2. その commit を master に push する。Release workflow が test → build → smoke → publish を行う。
+2. その commit を main に push する。Release workflow が test → build → smoke → publish を行う。
 3. <https://github.com/Diwamoto/clair/releases> に zip と `latest.json` が出ていることを確認する。
 
 手元で配布物だけ作るには `CLAIR_UPDATE_PRIVATE_KEY="$(security find-generic-password -s clair-update-signing -w)" scripts/release.sh --dry-run`
@@ -52,7 +52,7 @@ fork からの pull request には secret が渡らないので、release は ma
 (Developer ID 署名と notarization は未導入)。
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Diwamoto/clair/master/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/Diwamoto/clair/main/scripts/install.sh | sh
 ```
 
 再実行すると最新版で入れ直す(起動中の Clair は終了させる)。2 回目以降の更新はアプリ内の updater が行い、
