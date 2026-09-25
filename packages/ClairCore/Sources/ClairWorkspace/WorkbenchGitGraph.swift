@@ -76,9 +76,21 @@ public struct CommitGraph: Sendable {
       .compactMap { parse(Substring($0)) }
   }
 
-  /// `git show` of one commit (stat + patch). Blocking: call off the main actor.
-  public static func show(_ root: String, _ id: String) -> String {
-    guard id.allSatisfy(\.isHexDigit) else { return "" }
-    return WorkbenchGit.run(root, ["show", "--stat", "--patch", "--format=fuller", id]).out
+  /// One commit's patch against its first parent, split per file. Blocking: call off the main actor.
+  public static func files(_ root: String, _ id: String) -> [(path: String, patch: String)] {
+    guard id.allSatisfy(\.isHexDigit) else { return [] }
+    return split(WorkbenchGit.run(root, ["show", "--patch", "--format=", "-m", "--first-parent", id]).out)
+  }
+
+  /// Cuts a multi-file patch at each `diff --git a/X b/Y`; the path is the `b/` side.
+  static func split(_ patch: String) -> [(path: String, patch: String)] {
+    var out: [(path: String, patch: String)] = []
+    for l in patch.split(separator: "\n", omittingEmptySubsequences: false) {
+      if l.hasPrefix("diff --git "), let r = l.range(of: " b/", options: .backwards) {
+        out.append((String(l[r.upperBound...]), ""))
+      }
+      if !out.isEmpty { out[out.count - 1].patch += l + "\n" }
+    }
+    return out
   }
 }

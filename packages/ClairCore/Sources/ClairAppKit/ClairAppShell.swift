@@ -723,6 +723,7 @@ import Observation
     @State private var integrationNotes: [String: String] = [:]  // V16: last install result per row
     private var st: WorkbenchState { store.state }
     @State private var query = ""
+    @FocusState private var paletteFocused: Bool
     @State private var selection = 0
     // U05: sidebar mode + source-control view. GUI-local (no command); the stage buttons go through git.stage/unstage.
     @State private var sidebarMode = "folder"
@@ -1033,6 +1034,11 @@ import Observation
         // Lazy: a Project can list thousands of files, and an eager tree makes accessibility traversal (and layout) block the main thread.
         ScrollView { LazyVStack(alignment: .leading, spacing: 0) { sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "terminal" ? AnyView(sessionList) : sidebarMode == "ladybug" ? AnyView(debugPanel) : AnyView(explorer) }.clairScroller() }
         Spacer(minLength: 0)
+        if sidebarMode == "shield", st.isRepo {
+          Button("コミットグラフを開く") { store.run("git.graph") }
+            .buttonStyle(.hoverWash).frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12).padding(.vertical, 8)
+        }
       }
       .frame(width: 242)
       .font(Typography.font(Typography.sidebar))
@@ -1193,10 +1199,6 @@ import Observation
     private var changesList: some View {
       VStack(alignment: .leading, spacing: 0) {
         reviewActions
-        if st.isRepo {
-          Button("コミットグラフを開く") { store.run("git.graph") }
-            .buttonStyle(.hoverWash).padding(.horizontal, 12).padding(.vertical, 8)
-        }
         if st.isRepo { ChangesList(
           changes: changes, selected: diff, onSelect: { diff = $0 },
           onToggle: { change, stage in
@@ -2281,6 +2283,7 @@ import Observation
           HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").font(.system(size: 14)).foregroundStyle(C.textQuaternary)
             TextField("", text: $query)
+              .focused($paletteFocused).task(id: p) { await focusField { paletteFocused = true } }
               .textFieldStyle(.plain).font(.system(size: 13)).foregroundStyle(C.textPrimary)
               .onSubmit { run(list) }
               .onKeyPress(.downArrow) { selection = min(selection + 1, max(list.count - 1, 0)); return .handled }
@@ -2299,6 +2302,7 @@ import Observation
           .padding(.horizontal, 8).frame(height: 40)
           .background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.control))
           .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.hairline))
+          .contentShape(Rectangle()).onTapGesture { paletteFocused = true }
           .padding(12)
           ScrollView {
             LazyVStack(spacing: 0) {

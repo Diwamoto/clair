@@ -313,6 +313,10 @@
     let editor: EditorPane?
     let onSave: (() -> Void)?
     let isDirty: Bool
+    /// Overrides the working-tree side label (a commit's diff names its commit).
+    var label: String? = nil
+    /// A historical diff has nowhere to anchor review comments.
+    var commentable = true
     @State private var composing: Int?
     @State private var draft = ""
     @State private var suggesting = false
@@ -382,7 +386,7 @@
       VStack(spacing: 0) {
         HStack {
           Text(target.path).font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textPrimary)
-          Text(target.staged ? "HEAD → index" : target.untracked ? "未追跡ファイル" : "index → 作業ツリー")
+          Text(label ?? (target.staged ? "HEAD → index" : target.untracked ? "未追跡ファイル" : "index → 作業ツリー"))
             .font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary)
           if added + removed > 0 {
             Text("+\(added)").font(Typography.font(Typography.chrome)).foregroundStyle(C.success)
@@ -467,8 +471,8 @@
         .padding(.horizontal, 12).frame(maxWidth: .infinity, alignment: .leading).frame(height: 18)
         .background(l.hasPrefix("+") ? C.success.opacity(0.12) : l.hasPrefix("-") ? C.danger.opacity(0.12) : .clear)
         .contentShape(Rectangle())
-        .onTapGesture { if let n = r.newLine { composing = composing == n ? nil : n; draft = ""; suggesting = false } }
-        .help(r.newLine == nil ? "" : "クリックしてコメント")
+        .onTapGesture { if commentable, let n = r.newLine { composing = composing == n ? nil : n; draft = ""; suggesting = false } }
+        .help(!commentable || r.newLine == nil ? "" : "クリックしてコメント")
     }
 
     private func thread(_ t: ReviewThread, note: String? = nil) -> some View {
@@ -594,6 +598,14 @@
     }
   }
 
+  /// Focus a palette/search field on open. A terminal or editor NSView keeps first responder and
+  /// swallows SwiftUI focus, so resign it and let the field land in the window first.
+  @MainActor func focusField(_ focus: () -> Void) async {
+    NSApp.keyWindow?.makeFirstResponder(nil)
+    await Task.yield()
+    focus()
+  }
+
   /// U06: notification history (facts only — bell / exit). Rows are read state + source + fixed wording.
   /// V05: project-wide find/replace. Enter searches and replace all matches.
   struct SearchPanel: View {
@@ -618,7 +630,7 @@
         HStack(spacing: 8) {
           Image(systemName: "magnifyingglass").font(.system(size: 13)).foregroundStyle(C.textQuaternary)
           TextField("Projectを検索", text: $query)
-            .focused($queryFocused).task { queryFocused = true }  // task: runs after the field is in the window, unlike onAppear
+            .focused($queryFocused).task { await focusField { queryFocused = true } }
             .textFieldStyle(.plain).font(.system(size: 13)).foregroundStyle(C.textPrimary)
             .onSubmit(openSelected)
             .onKeyPress(.downArrow) { selection = min(selection + 1, max(displayedHits.count - 1, 0)); return .handled }
@@ -632,7 +644,9 @@
         }
         .padding(.horizontal, 8).frame(height: 40)
         .background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.control))
-        .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.hairline)).padding(12)
+        .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.hairline))
+        .contentShape(Rectangle()).onTapGesture { queryFocused = true }  // the whole bar focuses, not just the text's hit box
+        .padding(12)
         .onChange(of: regex) { selection = 0; search() }
         .onChange(of: caseSensitive) { selection = 0; search() }
 

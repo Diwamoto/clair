@@ -53,13 +53,19 @@ final class CommitGraphTests: XCTestCase {
     XCTAssertEqual(first.map(\.subject), ["two"])
     XCTAssertTrue(first[0].isHead)
     XCTAssertEqual(rest.map(\.subject), ["one"])
-    XCTAssertTrue(CommitGraph.show(root, first[0].id).contains("two"))
-    XCTAssertEqual(CommitGraph.show(root, "--output=/tmp/x"), "", "only a hex id reaches git")
+    XCTAssertTrue(CommitGraph.files(root, first[0].id).isEmpty, "an empty commit has no file diffs")
+    XCTAssertTrue(CommitGraph.files(root, "--output=/tmp/x").isEmpty, "only a hex id reaches git")
 
     let pane = try r.execute("git.graph", state: &s).get()
     XCTAssertEqual(s.tree.leaves.filter { $0.kind == .graph }.count, 1)
     XCTAssertEqual(pane, .pane(s.tree.focused))
     _ = try r.execute("git.graph", state: &s).get()
     XCTAssertEqual(s.tree.leaves.filter { $0.kind == .graph }.count, 1)
+  }
+
+  func testSplitsPatchPerFile() {
+    let f = CommitGraph.split("diff --git a/x b/x\n@@ -1 +1 @@\n-a\n+b\ndiff --git a/d/y z b/d/y z\n@@ -0,0 +1 @@\n+c\n")
+    XCTAssertEqual(f.map(\.path), ["x", "d/y z"])
+    XCTAssertTrue(f[0].patch.hasSuffix("+b\n"))
   }
 }

@@ -5,7 +5,7 @@
 
   private typealias C = DesignTokens.Color
 
-  /// V17: branch/merge history as a lane graph; the selected commit's `git show` opens below it.
+  /// V17: branch/merge history as a lane graph; the selected commit opens full-pane as a per-file diff.
   /// Pages of `pageSize` commits load off the main actor as the list scrolls to its end.
   struct CommitGraphPane: View {
     let root: String
@@ -13,7 +13,9 @@
     @State private var loading = false
     @State private var exhausted = false
     @State private var selected: String?
-    @State private var detail: [Substring] = []
+    @State private var files: [(path: String, model: DiffView.Model)] = []
+    @State private var file = 0
+    @State private var loadingFiles = false
 
     nonisolated static let pageSize = 400
     private static let laneWidth: CGFloat = 12
@@ -25,13 +27,10 @@
         Text("Git リポジトリではありません。").font(.system(size: 12)).foregroundStyle(C.textTertiary)
           .frame(maxWidth: .infinity, maxHeight: .infinity).background(C.canvas)
       } else {
-        VSplitView {
-          list.frame(minHeight: 120)
-          if selected != nil { detailView.frame(minHeight: 80) }
-        }
+        Group { if let selected { detailView(selected) } else { list } }
         .background(C.canvas)
         .task(id: root) {
-          graph = CommitGraph(); exhausted = false; selected = nil; detail = []
+          graph = CommitGraph(); exhausted = false; selected = nil; files = []
           await loadMore()
         }
       }
@@ -98,19 +97,41 @@
       }
     }
 
-    private var detailView: some View {
-      ScrollView([.vertical, .horizontal]) {
-        LazyVStack(alignment: .leading, spacing: 0) {
-          ForEach(Array(detail.enumerated()), id: \.offset) { _, l in
-            Text(l.isEmpty ? " " : String(l)).font(.system(size: 12, design: .monospaced)).lineLimit(1)
-              .foregroundStyle(l.hasPrefix("+") && !l.hasPrefix("+++") ? C.success
-                : l.hasPrefix("-") && !l.hasPrefix("---") ? C.danger
-                : l.hasPrefix("@@") ? C.debugBlueText : C.code)
+    private func detailView(_ id: String) -> some View {
+      let subject = graph.rows.first { $0.commit.id == id }?.commit.subject ?? ""
+      return HStack(spacing: 0) {
+        ScrollView {
+          LazyVStack(alignment: .leading, spacing: 0) {
+            Button { selected = nil } label: { Label("グラフに戻る", systemImage: "chevron.left") }
+              .buttonStyle(.hoverWash).font(.system(size: 12)).foregroundStyle(C.textSecondary).padding(8)
+            Text(subject).font(.system(size: 12, weight: .semibold)).foregroundStyle(C.textPrimary)
+              .lineLimit(3).padding(.horizontal, 10).padding(.bottom, 6)
+            ForEach(Array(files.enumerated()), id: \.offset) { i, f in
+              Text(f.path).font(.system(size: 12)).lineLimit(1).truncationMode(.head)
+                .foregroundStyle(i == file ? C.textPrimary : C.textSecondary)
+                .padding(.horizontal, 10).frame(maxWidth: .infinity, minHeight: 22, alignment: .leading)
+                .background(i == file ? C.surfaceActive : .clear)
+                .contentShape(Rectangle()).onTapGesture { file = i }
+                .help(f.path).accessibilityAddTraits(.isButton)
+            }
           }
         }
-        .padding(10).textSelection(.enabled)
+        .frame(width: 220).background(C.panel)
+        if files.indices.contains(file) {
+          let f = files[file]
+          DiffView(
+            target: DiffTarget(path: f.path, staged: false, untracked: false), model: f.model,
+            threads: [:], suggestions: [], onComment: { _, _, _ in }, onSuggest: { _, _ in },
+            onResolve: { _ in }, onApply: { _ in nil }, onReject: { _ in }, onSend: nil,
+            onClose: { selected = nil }, editor: nil, onSave: nil, isDirty: false,
+            label: String(id.prefix(8)), commentable: false)
+          .id(f.path)
+        } else if loadingFiles {
+          ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+          Text("差分はありません。").font(.system(size: 12)).foregroundStyle(C.textTertiary).frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
       }
-      .background(C.panel)
     }
 
     private func loadMore() async {
@@ -126,13 +147,14 @@
 
     private func open(_ id: String) {
       selected = id
-      detail = []
+      files = []; file = 0; loadingFiles = true
       let root = root
       Task {
-        let text = await Task.detached(priority: .userInitiated) { CommitGraph.show(root, id) }.value
+        let loaded = await Task.detached(priority: .userInitiated) {
+          CommitGraph.files(root, id).map { (path: $0.path, model: DiffView.model($0.patch)) }
+        }.value
         guard selected == id else { return }
-        // ponytail: capped like DiffView.maxLines; a huge commit shows its head only.
-        detail = Array(text.split(separator: "\n", omittingEmptySubsequences: false).prefix(DiffView.maxLines))
+        files = loaded; loadingFiles = false
       }
     }
   }
