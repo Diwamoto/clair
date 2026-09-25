@@ -742,7 +742,6 @@ import Observation
     @State private var gitOperation: String?
     @State private var gitMessage: String?
     @State private var gitFailed = false
-    @State private var reviewProvider = "claude"
     @State private var reviewError: String?
     @State private var diff: DiffTarget?
     @State private var chat: AgentHistory?
@@ -1055,7 +1054,7 @@ import Observation
     private var settingsHeader: some View {
       HStack(spacing: 0) {
         Color.clear.frame(width: 76 + 25)  // room for the native traffic lights (inset 5pt by AppDelegate)
-        Text("設定").font(.system(size: 13, weight: .semibold)).foregroundStyle(C.textPrimary)
+        Text("設定").font(.system(size: 19.5, weight: .semibold)).foregroundStyle(C.textPrimary)
         Spacer(minLength: 0)
         Button { store.run("settings.close") } label: {
           Image(systemName: "xmark").font(.system(size: 13, weight: .medium)).foregroundStyle(C.chromeInkMuted)
@@ -1070,19 +1069,19 @@ import Observation
 
     private var settingsPanel: some View {
       VStack(alignment: .leading, spacing: 12) {
-        Text("設定を検索").font(.system(size: 12)).foregroundStyle(C.textQuaternary)
-          .padding(.horizontal, 8).frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
+        Text("設定を検索").font(.system(size: 18)).foregroundStyle(C.textQuaternary)
+          .padding(.horizontal, 8).frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
           .background(C.chrome, in: RoundedRectangle(cornerRadius: Radius.control))
           .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.hairline))
-        Text("ワークスペース").font(.system(size: 12, weight: .semibold)).foregroundStyle(C.textTertiary).padding(.horizontal, 8)
+        Text("ワークスペース").font(.system(size: 18, weight: .semibold)).foregroundStyle(C.textTertiary).padding(.horizontal, 8)
         VStack(alignment: .leading, spacing: 0) {
           ForEach(["一般", "AIプロバイダー", "使用状況", "エディタ", "ターミナル", "モバイル", "アップデート"], id: \.self) { section in
             let selected = st.section == section
             Button { store.run("settings.open", ["section": .string(section)]) } label: {
               Text(section)
-                .font(.system(size: 12, weight: selected ? .semibold : .regular))
+                .font(.system(size: 18, weight: selected ? .semibold : .regular))
                 .foregroundStyle(selected ? C.textPrimary : C.textSecondary)
-                .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
                 .padding(.horizontal, 8)
                 .background(selected ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
             }
@@ -1092,7 +1091,7 @@ import Observation
         Spacer(minLength: 0)
       }
       .padding(.horizontal, 8).padding(.vertical, 16)
-      .frame(width: 220)
+      .frame(width: 260)
       .background(C.chrome)
       .overlay(alignment: .trailing) { Rectangle().fill(L.chrome).frame(width: 1) }
     }
@@ -1198,7 +1197,6 @@ import Observation
 
     private var changesList: some View {
       VStack(alignment: .leading, spacing: 0) {
-        reviewActions
         if st.isRepo { ChangesList(
           changes: changes, selected: diff, onSelect: { diff = $0 },
           onToggle: { change, stage in
@@ -1220,33 +1218,17 @@ import Observation
       }
     }
 
-    private var reviewActions: some View {
-      VStack(alignment: .leading, spacing: 8) {
-        HStack {
-          Text("AI レビュー").font(Typography.font(Typography.sidebarStrong)).foregroundStyle(C.textPrimary)
-          Spacer()
-          Menu {
-            ForEach(AgentProfile.all, id: \.id) { profile in
-              Button(profile.title) { reviewProvider = profile.id }
-            }
-          } label: {
-            Text(AgentProfile.named(reviewProvider)?.title ?? "Agent")
-              .font(Typography.font(Typography.sidebar)).foregroundStyle(C.textSecondary)
-          }
-          .accessibilityLabel("レビュープロバイダー")
+    /// "〜をレビュー ›" submenu: one item per agent profile; picking one launches the review.
+    @ViewBuilder private func reviewMenu(_ title: String, _ target: AgentReviewRequest.Target, disabled: Bool) -> some View {
+      Menu(title) {
+        ForEach(AgentProfile.all, id: \.id) { profile in
+          Button(profile.title) { startReview(target, provider: profile.id) }
         }
-        if let reviewError {
-          Text(reviewError).font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.attention)
-        }
-      }
-      .buttonStyle(.hoverWash)
-      .padding(12)
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .overlay(alignment: .bottom) { Rectangle().fill(L.hairline).frame(height: 1) }
+      }.disabled(disabled)
     }
 
-    private func startReview(_ target: AgentReviewRequest.Target) {
-      guard store.activeRoot != nil, AgentProfile.named(reviewProvider) != nil else { return }
+    private func startReview(_ target: AgentReviewRequest.Target, provider: String) {
+      guard store.activeRoot != nil, AgentProfile.named(provider) != nil else { return }
       switch target {
       case .file(let path):
         guard st.files.contains(where: { $0.path == path }), !st.dirty.contains(path) else { return }
@@ -1255,7 +1237,7 @@ import Observation
       case .project:
         guard st.dirty.isEmpty else { return }
       }
-      let input: CommandInput = ["profile": .string(reviewProvider), "prompt": .string(AgentReviewRequest.prompt(for: target))]
+      let input: CommandInput = ["profile": .string(provider), "prompt": .string(AgentReviewRequest.prompt(for: target))]
       // The labelled button is the user's approval for launching this external tool.
       switch store.run("agent.launch", input, confirmed: true) {
       case .success(.pane(let pane)):
@@ -1342,7 +1324,7 @@ import Observation
             Text(st.project).font(.system(size: 12, weight: .semibold)).textCase(.uppercase).foregroundStyle(C.textPrimary)
             Spacer(minLength: 0)
           }
-          .contextMenu { Button("この Project をレビュー") { startReview(.project) }.disabled(!st.dirty.isEmpty) }
+          .contextMenu { reviewMenu("この Project をレビュー", .project, disabled: !st.dirty.isEmpty) }
           if !rootFolded {
             ForEach(visibleExplorerRows) { r in
               if let f = r.file {
@@ -1366,8 +1348,7 @@ import Observation
                 }
                 .contextMenu {
                   Button(open ? "折りたたむ" : "開く") { store.run("explorer.toggle", ["path": .string(r.id)]) }
-                  Button("このフォルダをレビュー") { startReview(.folder(r.id)) }
-                    .disabled(st.dirty.contains(where: { $0.hasPrefix(r.id + "/") }))
+                  reviewMenu("このフォルダをレビュー", .folder(r.id), disabled: st.dirty.contains(where: { $0.hasPrefix(r.id + "/") }))
                   Divider()
                   pathItems(r.id)
                   Divider()
@@ -1378,6 +1359,9 @@ import Observation
           }
         }
       }.padding(.vertical, 4)
+      .alert("レビューを開始できませんでした", isPresented: Binding(get: { reviewError != nil }, set: { if !$0 { reviewError = nil } })) {
+        Button("OK") {}
+      } message: { Text(reviewError ?? "") }
     }
 
     private func rebuildExplorer() {
@@ -1457,7 +1441,7 @@ import Observation
       Button("変更を確認") {
         if let c = change { diff = DiffTarget(path: c.path, staged: c.staged && !c.unstaged, untracked: c.untracked) }
       }.disabled(change == nil)
-      Button("このファイルをレビュー") { startReview(.file(path)) }.disabled(st.dirty.contains(path))
+      reviewMenu("このファイルをレビュー", .file(path), disabled: st.dirty.contains(path))
       Divider()
       agentItems(path)
       pathItems(path)
@@ -1875,8 +1859,8 @@ import Observation
     private var settingsMain: some View {
       ScrollView {
         VStack(alignment: .leading, spacing: 8) {
-          Text(st.section).font(.system(size: 20, weight: .semibold)).foregroundStyle(C.textPrimary)
-          Text(Self.sectionNotes[st.section] ?? "\(st.section) の設定です。").font(.system(size: 12)).foregroundStyle(C.textTertiary)
+          Text(st.section).font(.system(size: 30, weight: .semibold)).foregroundStyle(C.textPrimary)
+          Text(Self.sectionNotes[st.section] ?? "\(st.section) の設定です。").font(.system(size: 18)).foregroundStyle(C.textTertiary)
             .padding(.bottom, 16)
           switch st.section {
           case "使用状況":
@@ -1919,7 +1903,8 @@ import Observation
             EmptyView()
           }
         }
-        .padding(.horizontal, 56).padding(.vertical, 40).frame(maxWidth: 720 + 112, alignment: .leading).frame(maxWidth: .infinity)
+        .font(.system(size: 18))
+        .padding(.horizontal, 40).padding(.vertical, 40).frame(maxWidth: 880, alignment: .leading).frame(maxWidth: .infinity, alignment: .leading)
         // Destination change: short cross-fade on the screen token; SwiftUI retargets it mid-flight (interruptible), and reduce motion swaps instantly.
         .id(st.section).transition(.opacity)
       }
@@ -1973,16 +1958,16 @@ import Observation
       SettingsCard(title: "バージョン") {
         SettingsRow(title: "現在のバージョン", note: "\(c.channel.displayName) \(c.currentVersion)") {
           if c.channel == .dev {
-            Text("Dev ビルドは更新フィードを持ちません。").font(.system(size: 11)).foregroundStyle(C.textMuted)
+            Text("Dev ビルドは更新フィードを持ちません。").font(.system(size: 16.5)).foregroundStyle(C.textMuted)
           } else {
             switch store.update {
-            case .idle: Text("最新の状態です。").font(.system(size: 11)).foregroundStyle(C.textTertiary)
-            case .checking: Text("確認中…").font(.system(size: 11)).foregroundStyle(C.textTertiary)
-            case .installing: Text("更新を適用しています。完了後に再起動します。").font(.system(size: 11)).foregroundStyle(C.textTertiary)
-            case .failed(let m): Text(m).font(.system(size: 11)).foregroundStyle(C.textTertiary)
+            case .idle: Text("最新の状態です。").font(.system(size: 16.5)).foregroundStyle(C.textTertiary)
+            case .checking: Text("確認中…").font(.system(size: 16.5)).foregroundStyle(C.textTertiary)
+            case .installing: Text("更新を適用しています。完了後に再起動します。").font(.system(size: 16.5)).foregroundStyle(C.textTertiary)
+            case .failed(let m): Text(m).font(.system(size: 16.5)).foregroundStyle(C.textTertiary)
             case .available(let u):
               HStack(spacing: 8) {
-                Text("\(u.version) が利用できます").font(.system(size: 11)).foregroundStyle(C.textSecondary)
+                Text("\(u.version) が利用できます").font(.system(size: 16.5)).foregroundStyle(C.textSecondary)
                 Button("適用して再起動") { Task { await store.installUpdate() } }
               }
             }
