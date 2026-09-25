@@ -468,6 +468,24 @@ extension CommandRegistry {
         preflight: { s, i throws(CommandError) in
           try require(s.projects.contains { $0.name == i["name"]!.string! }, "no project \(i["name"]!)"); return .read
         }) { s, i in s.switchProject(to: s.projects.first { $0.name == i["name"]!.string! }!, scanFiles: false); return .ok },
+    // Removes a Project from the workspace. Its terminals stay in the daemon, so reopening the same
+    // folder reattaches them by `project#pane`. ponytail: shells of a never-reopened Project live until `clair daemon stop`.
+    cmd("project.close", "プロジェクトを閉じる", .write, ai: false, params: [CommandParam("name", .string)],
+        preflight: { s, i throws(CommandError) in
+          let name = i["name"]!.string!
+          try require(s.projects.contains { $0.name == name }, "no project \(name)")
+          try require(s.projects.count > 1, "最後の Project は閉じられません")
+          let dirty = name == s.project ? s.dirty : s.layouts[name]?.dirty ?? []
+          try require(dirty.isEmpty, "\(name) に未保存の変更があります")
+          return .write
+        }) { s, i in
+      let name = i["name"]!.string!
+      if name == s.project { s.switchProject(to: s.projects.first { $0.name != name }!, scanFiles: false) }
+      s.projects.removeAll { $0.name == name }
+      s.layouts[name] = nil
+      s.filesCache[name] = nil
+      return .ok
+    },
     // ai: false — an agent must not widen the readable file system on its own.
     cmd("project.open", "フォルダをプロジェクトとして開く", .additive, ai: false, params: [CommandParam("path", .string)],
         preflight: { _, i throws(CommandError) in

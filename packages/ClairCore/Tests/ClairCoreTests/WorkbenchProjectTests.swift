@@ -259,3 +259,22 @@ final class WorkbenchProjectTests: XCTestCase {
     XCTAssertEqual(got.shortcuts, s.shortcuts)
   }
 }
+
+/// `project.close` removes a Project, moving off it first and never losing unsaved work.
+final class ProjectCloseTests: XCTestCase {
+  func testCloseSwitchesAwayAndGuardsUnsavedAndLast() throws {
+    let r = CommandRegistry.workbench
+    var s = WorkbenchState()
+    s.openProject(WorkbenchProject(name: "a", path: "/tmp/a"), scanFiles: false)
+    s.openProject(WorkbenchProject(name: "b", path: "/tmp/b"), scanFiles: false)
+    XCTAssertEqual(s.project, "b")
+    s.dirty = ["x.go"]
+    XCTAssertThrowsError(try r.execute("project.close", ["name": .string("b")], state: &s).get())
+    s.dirty = []
+    _ = try r.execute("project.close", ["name": .string("b")], state: &s).get()
+    XCTAssertEqual(s.projects.map(\.name), ["a"])
+    XCTAssertEqual(s.project, "a")
+    XCTAssertNil(s.layouts["b"])
+    XCTAssertThrowsError(try r.execute("project.close", ["name": .string("a")], state: &s).get())
+  }
+}
