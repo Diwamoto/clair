@@ -1220,11 +1220,6 @@ import Observation
       }
     }
 
-    private var reviewFile: String? {
-      let path = diff?.path ?? st.active
-      return path.flatMap { candidate in st.files.contains(where: { $0.path == candidate }) ? candidate : nil }
-    }
-
     private var reviewActions: some View {
       VStack(alignment: .leading, spacing: 8) {
         HStack {
@@ -1239,20 +1234,6 @@ import Observation
               .font(Typography.font(Typography.sidebar)).foregroundStyle(C.textSecondary)
           }
           .accessibilityLabel("レビュープロバイダー")
-        }
-        Button("このファイルをレビュー") {
-          if let reviewFile { startReview(.file(reviewFile)) }
-        }
-          .disabled(reviewFile == nil || reviewFile.map { st.dirty.contains($0) } == true)
-        if let reviewFile {
-          Text(reviewFile).font(Typography.font(Typography.sidebarMicro))
-            .foregroundStyle(C.textQuaternary).lineLimit(1).truncationMode(.middle)
-        }
-        Button("この Project をレビュー") { startReview(.project) }
-          .disabled(store.activeRoot == nil || !st.dirty.isEmpty)
-        if reviewFile.map({ st.dirty.contains($0) }) == true || !st.dirty.isEmpty {
-          Text("未保存の編集を保存するとレビューできます。")
-            .font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textTertiary)
         }
         if let reviewError {
           Text(reviewError).font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.attention)
