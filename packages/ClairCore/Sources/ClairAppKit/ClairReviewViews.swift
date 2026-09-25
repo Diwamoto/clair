@@ -864,8 +864,8 @@
     }
   }
 
-  /// ccedit-style chat panel in the main area: user turns are right-aligned bubbles,
-  /// consecutive assistant turns share one label, and very long turns start collapsed.
+  /// ccedit-style (LINE-like) chat: user turns are right-aligned blue bubbles, assistant turns are
+  /// left bubbles whose avatar shows once per run, opening at the latest message; and very long turns start collapsed.
   struct AgentChatView: View {
     let history: AgentHistory
     let onClose: () -> Void
@@ -887,7 +887,7 @@
                 .padding(.top, previous == nil ? 0 : previous == message.role ? 5 : 16)
             }
           }.padding(16).padding(.bottom, 16)
-        }.clairScroller()
+        }.defaultScrollAnchor(.bottom).clairScroller()
       }.frame(maxWidth: .infinity, maxHeight: .infinity).background(C.canvas)
     }
 
@@ -906,19 +906,28 @@
           .buttonStyle(.plain).font(Typography.font(Typography.micro)).foregroundStyle(C.textTertiary)
         if message.role == "user" {
           HStack {
-            Spacer(minLength: 80)
+            Spacer(minLength: 0)
             VStack(alignment: .trailing, spacing: 4) {
-              body.padding(.horizontal, 12).padding(.vertical, 8)
-                .background(C.surfaceActive, in: RoundedRectangle(cornerRadius: 12))
+              body.foregroundStyle(.white).padding(.horizontal, 14).padding(.vertical, 9)
+                .background(C.debugBlue, in: UnevenRoundedRectangle(topLeadingRadius: 16, bottomLeadingRadius: 16, bottomTrailingRadius: 16, topTrailingRadius: 5))
               if long { more }
-            }
+            }.containerRelativeFrame(.horizontal, alignment: .trailing) { width, _ in width * 0.72 }
           }
         } else {
-          VStack(alignment: .leading, spacing: 4) {
-            if showLabel { Text(provider).font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary) }
-            body
-            if long { more }
-          }.frame(maxWidth: .infinity, alignment: .leading).padding(.trailing, 40)
+          HStack(alignment: .top, spacing: 10) {
+            Group {
+              if showLabel {
+                Text(provider.prefix(1)).font(.system(size: 10, weight: .semibold)).foregroundStyle(.white)
+                  .frame(width: 28, height: 28).background(Circle().fill(Color(red: 0.85, green: 0.47, blue: 0.27)))
+              }
+            }.frame(width: 28).help(provider)
+            VStack(alignment: .leading, spacing: 4) {
+              body.padding(.horizontal, 14).padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(C.surfaceActive, in: UnevenRoundedRectangle(topLeadingRadius: 5, bottomLeadingRadius: 16, bottomTrailingRadius: 16, topTrailingRadius: 16))
+              if long { more }
+            }
+          }.padding(.trailing, 40)
         }
       }
     }
