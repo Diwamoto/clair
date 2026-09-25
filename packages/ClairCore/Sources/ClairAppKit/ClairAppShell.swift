@@ -1267,6 +1267,8 @@ import Observation
       switch target {
       case .file(let path):
         guard st.files.contains(where: { $0.path == path }), !st.dirty.contains(path) else { return }
+      case .folder(let path):
+        guard !st.dirty.contains(where: { $0.hasPrefix(path + "/") }) else { return }
       case .project:
         guard st.dirty.isEmpty else { return }
       }
@@ -1357,6 +1359,7 @@ import Observation
             Text(st.project).font(.system(size: 12, weight: .semibold)).textCase(.uppercase).foregroundStyle(C.textPrimary)
             Spacer(minLength: 0)
           }
+          .contextMenu { Button("この Project をレビュー") { startReview(.project) }.disabled(!st.dirty.isEmpty) }
           if !rootFolded {
             ForEach(visibleExplorerRows) { r in
               if let f = r.file {
@@ -1380,6 +1383,8 @@ import Observation
                 }
                 .contextMenu {
                   Button(open ? "折りたたむ" : "開く") { store.run("explorer.toggle", ["path": .string(r.id)]) }
+                  Button("このフォルダをレビュー") { startReview(.folder(r.id)) }
+                    .disabled(st.dirty.contains(where: { $0.hasPrefix(r.id + "/") }))
                   Divider()
                   pathItems(r.id)
                 }
@@ -1467,6 +1472,7 @@ import Observation
       Button("変更を確認") {
         if let c = change { diff = DiffTarget(path: c.path, staged: c.staged && !c.unstaged, untracked: c.untracked) }
       }.disabled(change == nil)
+      Button("このファイルをレビュー") { startReview(.file(path)) }.disabled(st.dirty.contains(path))
       Divider()
       agentItems(path)
       pathItems(path)

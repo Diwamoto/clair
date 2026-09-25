@@ -3,12 +3,14 @@
 public enum AgentReviewRequest {
   public enum Target: Equatable, Sendable {
     case file(String)
+    case folder(String)
     case project
   }
 
   public static func prompt(for target: Target) -> String {
     let scope: String = switch target {
     case .file(let path): "Project 内のファイル `\(path)` をレビューしてください。"
+    case .folder(let path): "Project 内のフォルダ `\(path)/` 配下をレビューしてください。"
     case .project: "この Project 全体をレビューしてください。変更中のファイルだけでなく、関連する実装も確認してください。"
     }
     return "\(scope)\nコードを変更せず、正しさ・データ損失・セキュリティ・回帰の問題を探してください。"
