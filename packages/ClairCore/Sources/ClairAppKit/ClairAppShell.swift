@@ -1387,6 +1387,8 @@ import Observation
                     .disabled(st.dirty.contains(where: { $0.hasPrefix(r.id + "/") }))
                   Divider()
                   pathItems(r.id)
+                  Divider()
+                  fileOps(r.id, dir: true)
                 }
               }
             }
@@ -1476,6 +1478,84 @@ import Observation
       Divider()
       agentItems(path)
       pathItems(path)
+      if !tab { Divider(); fileOps(path, dir: false) }
+    }
+
+    /// VS Code-style explorer file operations. The FSEvents watcher rescans the tree afterwards.
+    @ViewBuilder private func fileOps(_ path: String, dir: Bool) -> some View {
+      let parent = dir ? path : (path as NSString).deletingLastPathComponent
+      Button("新しいファイル…") { createItem(in: parent, folder: false) }
+      Button("新しいフォルダー…") { createItem(in: parent, folder: true) }
+      Divider()
+      Button("名前を変更…") { renameItem(path) }
+      Button("削除") { trashItem(path, dir: dir) }
+    }
+
+    private func absolute(_ path: String) -> URL? {
+      store.activeRoot.map { URL(fileURLWithPath: ($0 as NSString).appendingPathComponent(path)) }
+    }
+
+    /// Modal name prompt. Rejects empty names and path separators so an item cannot escape its folder.
+    private func promptName(_ title: String, initial: String) -> String? {
+      let alert = NSAlert()
+      alert.messageText = title
+      let field = NSTextField(string: initial)
+      field.frame = NSRect(x: 0, y: 0, width: 280, height: 24)
+      alert.accessoryView = field
+      alert.addButton(withTitle: "OK"); alert.addButton(withTitle: "キャンセル")
+      alert.window.initialFirstResponder = field
+      guard alert.runModal() == .alertFirstButtonReturn else { return nil }
+      let name = field.stringValue.trimmingCharacters(in: .whitespaces)
+      guard !name.isEmpty, name != ".", name != "..", !name.contains("/") else { return nil }
+      return name
+    }
+
+    private func fileError(_ error: Error) {
+      let alert = NSAlert(error: error); alert.runModal()
+    }
+
+    private func createItem(in folder: String, folder isFolder: Bool) {
+      guard let name = promptName(isFolder ? "新しいフォルダー" : "新しいファイル", initial: ""),
+            let url = absolute((folder as NSString).appendingPathComponent(name)) else { return }
+      let rel = (folder as NSString).appendingPathComponent(name)
+      guard !FileManager.default.fileExists(atPath: url.path) else {
+        return fileError(CocoaError(.fileWriteFileExists, userInfo: [NSFilePathErrorKey: url.path]))
+      }
+      do {
+        if isFolder { try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false) }
+        else { try Data().write(to: url, options: .withoutOverwriting) }
+      } catch { return fileError(error) }
+      store.refreshProjectFiles()
+      if !isFolder { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { store.run("tab.open", ["path": .string(rel)]) } }
+    }
+
+    private func renameItem(_ path: String) {
+      let old = (path as NSString).lastPathComponent
+      guard let name = promptName("名前を変更", initial: old), name != old,
+            let from = absolute(path) else { return }
+      let rel = ((path as NSString).deletingLastPathComponent as NSString).appendingPathComponent(name)
+      guard let to = absolute(rel) else { return }
+      do { try FileManager.default.moveItem(at: from, to: to) } catch { return fileError(error) }
+      // Tabs under the old path would point at nothing; close them (unsaved ones stay for the user).
+      for t in st.tabs where t == path || t.hasPrefix(path + "/") {
+        guard !st.dirty.contains(t) else { continue }
+        store.run("tab.close", ["path": .string(t)])
+      }
+      store.refreshProjectFiles()
+    }
+
+    private func trashItem(_ path: String, dir: Bool) {
+      guard let url = absolute(path) else { return }
+      let alert = NSAlert()
+      alert.messageText = "“\((path as NSString).lastPathComponent)” を削除しますか?"
+      alert.informativeText = dir ? "フォルダーとその中身をゴミ箱に移動します。" : "ゴミ箱に移動します。"
+      alert.addButton(withTitle: "ゴミ箱に移動"); alert.addButton(withTitle: "キャンセル")
+      guard alert.runModal() == .alertFirstButtonReturn else { return }
+      do { try FileManager.default.trashItem(at: url, resultingItemURL: nil) } catch { return fileError(error) }
+      for t in st.tabs where (t == path || t.hasPrefix(path + "/")) && !st.dirty.contains(t) {
+        store.run("tab.close", ["path": .string(t)])
+      }
+      store.refreshProjectFiles()
     }
 
     /// "Agent に送る ›": types `@path ` into a running agent terminal of this Project. No Return; the user reviews and sends.
