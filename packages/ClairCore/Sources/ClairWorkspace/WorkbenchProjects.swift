@@ -114,6 +114,7 @@ extension WorkbenchState {
     switch pane.kind {
     case .editor, .preview: return active.flatMap { tabs.contains($0) ? .file($0) : nil }
     case .terminal: return .terminal(pane.id)
+    case .graph: return nil
     }
   }
 

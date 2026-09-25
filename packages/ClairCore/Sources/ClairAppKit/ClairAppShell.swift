@@ -1193,6 +1193,10 @@ import Observation
     private var changesList: some View {
       VStack(alignment: .leading, spacing: 0) {
         reviewActions
+        if st.isRepo {
+          Button("コミットグラフを開く") { store.run("git.graph") }
+            .buttonStyle(.hoverWash).padding(.horizontal, 12).padding(.vertical, 8)
+        }
         if st.isRepo { ChangesList(
           changes: changes, selected: diff, onSelect: { diff = $0 },
           onToggle: { change, stage in
@@ -2646,7 +2650,7 @@ import Observation
         VStack(spacing: 0) {
           if kind != .editor {
             PaneHeaderView(
-              id: id, label: kind == .preview ? "プレビュー" : "ターミナル", focused: id == focused,
+              id: id, label: kind == .preview ? "プレビュー" : kind == .graph ? "コミットグラフ" : "ターミナル", focused: id == focused,
               onSwap: { run("pane.swap", ["idA": .int($0), "idB": .int($1)]) },
               onDragStart: { dragging = id }, onDragEnd: { dragging = nil },
               onClose: { run("pane.focus", ["id": .int(id)]); run("pane.close", [:]) })
@@ -2654,6 +2658,7 @@ import Observation
           ZStack {
             C.surface
             if kind == .terminal { ClairGhosttySurface(launch: launches[id].map { ($0.command, $0.cwd) } ?? (project.hasPrefix("/") ? ("", project) : nil), pane: id, sessionKey: ClairWorkbenchStore.terminalKey(root: project, pane: id), focused: id == focused, onFocus: { if id != focused { onFocus(id) } }, onFacts: { onFacts(id, $0, $1, $2) }, onTitle: { onTitle(id, $0) }) }  // one surface per terminal leaf, attached to the daemon shell keyed by project#pane
+            else if kind == .graph { CommitGraphPane(root: project) }
             else if kind == .preview { MarkdownPreviewPane(buffers: editor.buffers, root: editor.root, path: editor.path) }
             else { editor.inPane(focused: id == focused, onFocus: { if id != focused { onFocus(id) } }) }
             if let from = dragging, from != id {
