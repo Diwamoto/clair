@@ -61,12 +61,11 @@ test_packages() {
 }
 
 test_integration_packages() {
-  # --num-workers 1: these tests spawn and reap real OS processes/sockets.
-  # Swift Testing parallelizes across suites within one process by default
-  # regardless of --parallel, and concurrent real waitpid()/socket work from
-  # different suites races (observed as ~300s hangs and spurious transport
-  # errors) unless capped to one worker.
-  swift test --package-path "$core_package" --parallel --num-workers 1 \
+  # --no-parallel: these tests spawn and reap real OS processes/sockets and block their
+  # thread on them. Swift Testing otherwise runs suites concurrently on the cooperative
+  # pool (one thread per core); on a 3-core CI runner the blocked tests filled the pool and
+  # the async bridges they wait on never ran, hanging the job. --num-workers did not cap it.
+  swift test --package-path "$core_package" --no-parallel \
     --filter ClairCoreIntegrationTests
 }
 
