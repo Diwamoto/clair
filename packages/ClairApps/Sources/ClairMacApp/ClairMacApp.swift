@@ -15,6 +15,8 @@ import SwiftUI
     // Daemon health uses IPC and can wait on a stale socket. The first window never depends on it;
     // terminal attachment already waits for the daemon when a terminal is actually opened.
     Task.detached(priority: .utility) { ClairDaemonLauncher.ensureRunning() }
+    // Past chats scan every provider file; warm the shared store so the Agents pane opens instantly.
+    Task.detached(priority: .utility) { _ = await AgentHistoryStore.shared.load(.recent) }
     // Handle ⌘W before either the system Close menu or the terminal view consumes it.
     NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
       let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
