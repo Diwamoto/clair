@@ -7,6 +7,10 @@
   @testable import ClairDaemonKit
   @testable import ClairShared
 
+  // Serialized: each test blocks its thread in the synchronous `stop()`, whose shutdown and pairing
+  // bridges need a free cooperative thread. Run in parallel on a 3-core CI runner, the suite filled the
+  // whole pool and deadlocked.
+  @Suite(.serialized) struct ClairDaemonRuntimeTests {
   @Test
   func daemonLifecycleServesHealthAndVersionOverTheLocalControlChannel() throws {
     let (directory, configuration) = try makeDaemonConfiguration()
@@ -249,6 +253,8 @@
       return
     }
     #expect(failure.code == code)
+  }
+
   }
 
 #endif
