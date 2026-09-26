@@ -1,4 +1,4 @@
 interface:
-  display_name: "Clair Orchestrator"
-  short_description: "Delegate and integrate the Clair rewrite queue"
-  default_prompt: "Use $clair-task run to work the Clair task queue autonomously until a real user decision or external credential is required."
+  display_name: "Clair Task"
+  short_description: "Implement a requested Clair change by the project's guidelines"
+  default_prompt: "Use $clair-task to implement the change I describe, following Clair's spec and guidelines."

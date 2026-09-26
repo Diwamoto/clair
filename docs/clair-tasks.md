@@ -1,11 +1,14 @@
 # Clair 実行タスク一覧
 
-Status: active execution queue
+Status: **retired 2026-09-27 — frozen record, do not edit**
 Date: 2026-09-22
 
-仕様の正本は [`clair-spec.md`](clair-spec.md)。進捗の可視化は
-[`clair-kanban.html`](clair-kanban.html)。この表が実行順序の正本であり、
-`.agents/skills/clair-task/scripts/task_lease.py` が機械的に読む。
+ローカルのタスク queue は 2026-09-27 に運用を終了した。以後の作業はオーナーの都度の依頼
+または GitHub Issues で扱い、`clair-task` skill はその実装ガイドラインになった。この文書は
+各タスクの実行証跡と、ADR などからのリンク先として当時のまま残す。未完了のまま残った行
+(`V09`、`V13`、`U07`、`T07`、`N08`、`V10`)は、必要になれば issue として起こし直す。
+
+仕様の正本は [`clair-spec.md`](clair-spec.md)。
 
 ## 表の規約
 

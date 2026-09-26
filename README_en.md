@@ -101,11 +101,10 @@ See `make help` for more commands and the [local verification runbook](docs/runb
 ## Documentation
 
 - [Spec](docs/clair-spec.md) — what Clair is and is not
-- [Tasks](docs/clair-tasks.md) / [Kanban](docs/clair-kanban.html) — progress
 - [Release and update distribution](docs/runbooks/release.md)
 - [Docs index](docs/README.md)
 
-Development runs one task at a time from the task queue with the `/clair-task` agent skill (`.agents/skills/clair-task/`).
+Work is tracked in GitHub Issues and direct requests; the `/clair-task` agent skill (`.agents/skills/clair-task/`) holds the implementation guidelines.
 
 ## Out of scope
 

@@ -7,12 +7,10 @@ This file is read by AI agents working on the Clair repository.
 - **Spec**: [`docs/clair-spec.md`](docs/clair-spec.md) — the single spec. Product
   purpose, principles, architecture, editor/review/terminal/workspace contracts,
   invariants, definition of done. Nothing else overrides it.
-- **Tasks**: [`docs/clair-tasks.md`](docs/clair-tasks.md) — execution order and
-  remaining work. Parsed by
-  `.agents/skills/clair-task/scripts/task_lease.py`.
-- **Board**: [`docs/clair-kanban.html`](docs/clair-kanban.html) — generated from
-  the task table by `python3 scripts/clair-kanban.py`. Never hand-edit it;
-  regenerate after changing the queue.
+- **Work**: the owner asks for each change directly or through a GitHub issue.
+  Implement it with the `clair-task` skill, which holds the implementation
+  guidelines. There is no local task queue: `docs/clair-tasks.md` is a frozen
+  record (retired 2026-09-27) — do not edit it or recreate a queue or board.
 
 ccedit (Clair v1) was retired on 2026-09-21. Restore it from the archive tag if
 ever needed; do not reintroduce its code paths. `v2` is a migration-era word

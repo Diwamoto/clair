@@ -102,12 +102,11 @@ Dev ビルドは Stable と別の bundle・別のデータ領域で動くので�
 ## ドキュメント
 
 - [仕様](docs/clair-spec.md) — 何を作るか、何を作らないか
-- [タスク一覧](docs/clair-tasks.md) / [カンバン](docs/clair-kanban.html) — 進捗
 - [リリースと更新配信](docs/runbooks/release.md)
 - [ドキュメント案内](docs/README.md)
 
-開発はタスク一覧をキューにして、AI エージェント用の skill `/clair-task`
-(`.agents/skills/clair-task/`)で一件ずつ進めています。
+開発は GitHub Issues と都度の依頼で進め、実装は AI エージェント用の skill `/clair-task`
+(`.agents/skills/clair-task/`)のガイドラインに沿って行います。
 
 ## スコープ外
 

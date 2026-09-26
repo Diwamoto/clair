@@ -3,9 +3,8 @@
 Status: accepted — Clair の唯一の仕様正本
 Date: 2026-09-21
 
-この 1 ファイルが Clair の仕様の正本である。実行順序は
-[`clair-tasks.md`](clair-tasks.md)、進捗の可視化は
-[`clair-kanban.html`](clair-kanban.html)。
+この 1 ファイルが Clair の仕様の正本である。作業はオーナーの都度の依頼または
+GitHub Issues で扱う(旧 queue [`clair-tasks.md`](clair-tasks.md) は 2026-09-27 に凍結)。
 
 過去に分かれていた product vision / scope / principles、native rewrite plan、
 editor invariants、review invariants はこの文書に統合し、元ファイルは削除した。

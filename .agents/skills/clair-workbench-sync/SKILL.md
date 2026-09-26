@@ -1,6 +1,6 @@
 ---
 name: clair-workbench-sync
-description: Change Clair's UI in the workbench mock (prototypes/clair-workbench) and the Clair UI Design canvas together, in one pass. Use when the user gives UI feedback on the running mock — layout, chrome, navigation, motion, component behaviour — and the change is a design decision, not just a mock detail. Covers editing and republishing the canvas artifact itself. Native Swift work goes through the task queue (clair-task) instead.
+description: Change Clair's UI in the workbench mock (prototypes/clair-workbench) and the Clair UI Design canvas together, in one pass. Use when the user gives UI feedback on the running mock — layout, chrome, navigation, motion, component behaviour — and the change is a design decision, not just a mock detail. Covers editing and republishing the canvas artifact itself. Native Swift work goes through clair-task instead.
 ---
 
 # Clair Workbench Sync
@@ -42,7 +42,7 @@ file paths, component names, commands, and raw tool output as they are.
   embedded copy of the artboards. Published privately as an Artifact so it
   can be opened from a phone; `README.md` there records the current URL,
   the shell structure, and the motion model.
-- **Native work** goes through the task queue ([`clair-task`](../clair-task/SKILL.md)).
+- **Native work** goes through [`clair-task`](../clair-task/SKILL.md).
   This skill never edits `apple/` or `packages/`.
 - `scripts/canvas_edit.py` in this skill directory extracts and repacks the
   canvas artifact.
