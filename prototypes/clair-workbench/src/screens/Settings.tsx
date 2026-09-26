@@ -288,6 +288,11 @@ export function SettingsMain() {
                 <Card title="インターフェース">
                   <Row
                     first
+                    title="外観"
+                    note="エディタ、ターミナル、サイドバーの配色をまとめて切り替えます。"
+                    control={<Segmented value={wb.appearance} options={['ダーク', 'ライト', 'システム'] as const} onChange={wb.setAppearance} />}
+                  />
+                  <Row
                     last
                     title="ステータスバーの利用枠を表示"
                     control={<Switch on={wb.toggles.showQuota} onClick={() => wb.setToggle('showQuota')} />}

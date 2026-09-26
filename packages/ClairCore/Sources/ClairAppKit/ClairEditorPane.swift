@@ -509,7 +509,12 @@
         snapshot: manager.buffer.snapshot, selection: manager.selection,
         font: .monospacedSystemFont(ofSize: 12, weight: .regular), lineHeight: 19)
       view.background = NSColor(C.canvas); view.textColor = NSColor(C.code)
-      view.caretColor = NSColor(C.textPrimary).blended(withFraction: 0.9, of: NSColor(C.debugBlue)) ?? NSColor(C.textPrimary); view.selectionColor = NSColor(C.debugBlue).withAlphaComponent(0.3)
+      // Derived colours resolve per draw (NSColor(name:)), so they follow the colour scheme (E18).
+      func resolved(_ make: @escaping () -> NSColor) -> NSColor {
+        NSColor(name: nil) { a in var c = NSColor.clear; a.performAsCurrentDrawingAppearance { c = make().usingColorSpace(.sRGB) ?? make() }; return c }
+      }
+      view.caretColor = resolved { NSColor(C.textPrimary).blended(withFraction: 0.9, of: NSColor(C.debugBlue)) ?? NSColor(C.textPrimary) }
+      view.selectionColor = resolved { NSColor(C.debugBlue).withAlphaComponent(0.3) }
       view.gutterWidth = 54
       view.lineNumberColor = NSColor(C.lineNumber); view.currentLineNumberColor = NSColor(C.textTertiary)
       view.blameAnnotation = blame; view.blameColor = NSColor(C.textQuaternary)

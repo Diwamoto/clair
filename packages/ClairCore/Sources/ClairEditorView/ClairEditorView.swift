@@ -61,6 +61,13 @@ import ClairEditorCore
     }
     /// Appearance (the host maps its design tokens here; defaults are the system colours).
     public var background: NSColor = .textBackgroundColor { didSet { needsDisplay = true } }
+
+    /// E18: cached line layouts carry resolved colours; drop them so the new scheme repaints.
+    public override func viewDidChangeEffectiveAppearance() {
+      super.viewDidChangeEffectiveAppearance()
+      renderer.invalidateAll()
+      needsDisplay = true
+    }
     public var textColor: NSColor = .textColor {
       didSet { renderer.baseColor = textColor; renderer.invalidateAll(); needsDisplay = true }
     }

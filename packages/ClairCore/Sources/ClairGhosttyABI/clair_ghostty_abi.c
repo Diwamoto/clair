@@ -191,6 +191,11 @@ void clair_ghostty_surface_free(clair_ghostty_surface_t surface) {
   ghostty_surface_free((ghostty_surface_t)surface);
 }
 
+// The surface derives its own copy, so the caller may free `config` right after.
+void clair_ghostty_surface_update_config(clair_ghostty_surface_t surface, clair_ghostty_config_t config) {
+  ghostty_surface_update_config((ghostty_surface_t)surface, (ghostty_config_t)config);
+}
+
 void clair_ghostty_surface_set_size(
     clair_ghostty_surface_t surface, uint32_t width_px, uint32_t height_px) {
   ghostty_surface_set_size((ghostty_surface_t)surface, width_px, height_px);

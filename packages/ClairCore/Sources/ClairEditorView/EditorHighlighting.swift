@@ -13,27 +13,37 @@ import CoreGraphics
 public enum EditorTokenKind: Sendable, Hashable {
   case keyword, string, comment, number, type, function, tag, variable, plain
 
-  /// Atom One Dark, matching `ClairColor.Surface.code*` in the design
-  /// system. `ClairEditorView.tokenColors` lets a caller override any subset.
+  /// Atom One Dark / One Light by appearance, matching `DesignTokens.Color.code*`
+  /// in the design system (E18). `ClairEditorView.tokenColors` lets a caller override any subset.
   public var defaultColor: PlatformColor {
     switch self {
-    case .keyword: return .oneDark(0xc678dd)
-    case .string: return .oneDark(0x98c379)
-    case .comment: return .oneDark(0x5c6370)
-    case .number: return .oneDark(0xd19a66)
-    case .type: return .oneDark(0xe5c07b)
-    case .function: return .oneDark(0x61afef)
-    case .tag: return .oneDark(0xe06c75)
+    case .keyword: return .scheme(0xc678dd, 0xa626a4)
+    case .string: return .scheme(0x98c379, 0x3d8a3c)
+    case .comment: return .scheme(0x5c6370, 0x8e9099)
+    case .number: return .scheme(0xd19a66, 0x986801)
+    case .type: return .scheme(0xe5c07b, 0x986801)
+    case .function: return .scheme(0x61afef, 0x3a6ee0)
+    case .tag: return .scheme(0xe06c75, 0xc8323f)
     case .variable, .plain: return .editorLabel
     }
   }
 }
 
 extension PlatformColor {
-  fileprivate static func oneDark(_ rgb: Int) -> PlatformColor {
+  fileprivate static func rgb(_ rgb: Int) -> PlatformColor {
     PlatformColor(
       red: CGFloat((rgb >> 16) & 0xff) / 255, green: CGFloat((rgb >> 8) & 0xff) / 255,
       blue: CGFloat(rgb & 0xff) / 255, alpha: 1)
+  }
+
+  /// Resolves against the drawing appearance, so a scheme switch only needs a redraw.
+  fileprivate static func scheme(_ dark: Int, _ light: Int) -> PlatformColor {
+    let (d, l) = (rgb(dark), rgb(light))
+    #if os(macOS)
+      return PlatformColor(name: nil) { $0.bestMatch(from: [.aqua, .darkAqua]) == .aqua ? l : d }
+    #else
+      return PlatformColor { $0.userInterfaceStyle == .light ? l : d }
+    #endif
   }
 }
 

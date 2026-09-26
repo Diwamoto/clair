@@ -12,9 +12,13 @@ import UIKit
 /// independent of `Color(hex:)` in `ClairDesignSystem` — it exists so
 /// tests can verify what a token *actually resolves to at runtime*, not
 /// just that two copies of the same hex string are equal.
-func resolvedRGBA(_ color: Color) -> (r: Int, g: Int, b: Int, a: Double)? {
+func resolvedRGBA(_ color: Color, light: Bool = false) -> (r: Int, g: Int, b: Int, a: Double)? {
   #if canImport(AppKit)
-  let native = NSColor(color).usingColorSpace(.sRGB) ?? NSColor(color)
+  // Scheme-aware tokens resolve against the drawing appearance; dark is the checklist's scheme.
+  var native = NSColor(color)
+  NSAppearance(named: light ? .aqua : .darkAqua)!.performAsCurrentDrawingAppearance {
+    native = native.usingColorSpace(.sRGB) ?? native
+  }
   return (
     Int((native.redComponent * 255).rounded()),
     Int((native.greenComponent * 255).rounded()),
@@ -22,7 +26,7 @@ func resolvedRGBA(_ color: Color) -> (r: Int, g: Int, b: Int, a: Double)? {
     Double(native.alphaComponent)
   )
   #elseif canImport(UIKit)
-  let native = UIColor(color)
+  let native = UIColor(color).resolvedColor(with: UITraitCollection(userInterfaceStyle: light ? .light : .dark))
   var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
   guard native.getRed(&r, green: &g, blue: &b, alpha: &a) else { return nil }
   return (Int((r * 255).rounded()), Int((g * 255).rounded()), Int((b * 255).rounded()), Double(a))

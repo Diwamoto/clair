@@ -516,6 +516,7 @@ clair_ghostty_surface_config_s clair_ghostty_surface_config_new(void);
 clair_ghostty_surface_t clair_ghostty_surface_new(
     clair_ghostty_app_t app, const clair_ghostty_surface_config_s *config);
 void clair_ghostty_surface_free(clair_ghostty_surface_t surface);
+void clair_ghostty_surface_update_config(clair_ghostty_surface_t surface, clair_ghostty_config_t config);
 void clair_ghostty_surface_set_size(
     clair_ghostty_surface_t surface, uint32_t width_px, uint32_t height_px);
 clair_ghostty_surface_size_s clair_ghostty_surface_size(clair_ghostty_surface_t surface);

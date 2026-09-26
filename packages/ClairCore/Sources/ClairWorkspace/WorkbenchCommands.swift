@@ -24,6 +24,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
     "tabWidth": ["2", "4", "8"],
     "defaultShell": ["/bin/zsh", "/bin/bash"],
     "scrollback": ["1000", "5000", "10000"],
+    "appearance": ["ダーク", "ライト", "システム"],  // E18; mirrors ClairDesignSystem.ColorSchemeChoice
   ]
 
   // Sample tree only until a Project is opened (`project.open` replaces it with the real file system).

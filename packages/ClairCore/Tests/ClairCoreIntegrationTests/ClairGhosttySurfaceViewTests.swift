@@ -172,7 +172,9 @@ import Testing
     /// and renders its child (a bad key would only be a Ghostty diagnostic, so this guards finalize).
     @Test(.enabled(if: GhosttyRuntime.isVendored)) @MainActor
     func u06ThemedConfigStillRunsARealShell() throws {
-      let theme = try #require(ClairGhosttySurfaceView.themePath)
+      let theme = try #require(ClairGhosttySurfaceView.themePaths[false])
+      let lightTheme = try #require(ClairGhosttySurfaceView.themePaths[true])
+      #expect(try String(contentsOfFile: lightTheme, encoding: .utf8).contains("background = #fafafa"))
       #expect(try String(contentsOfFile: theme, encoding: .utf8).contains("palette = 4=#61afef"))
       let runtime = GhosttyRuntime()
       try runtime.activate()
@@ -196,6 +198,13 @@ import Testing
         seen = try surface.readText(.screen)?.contains(marker) ?? false
       }
       #expect(seen)
+      // E18: switching scheme re-applies the light theme to the live surface; the shell keeps running.
+      try runtime.withConfig { config in
+        #expect(try config.loadFileAndFinalize(lightTheme) == 0)
+        try surface.updateConfig(config)
+      }
+      try app.tick()
+      #expect(try surface.readText(.screen)?.contains(marker) ?? false)
     }
   }
 #endif

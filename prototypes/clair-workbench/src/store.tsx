@@ -19,7 +19,7 @@ import {
   type ChatMessage,
   type Session,
 } from './data';
-import type { GroupColorKey } from './tokens';
+import { applyScheme, type GroupColorKey } from './tokens';
 
 export type Screen =
   | 'workspace'
@@ -203,6 +203,9 @@ function useWorkbenchState() {
   const [defaultShell, setDefaultShell] = useState('/bin/zsh');
   const [scrollbackLines, setScrollbackLines] = useState(5000);
   const [updateChannel, setUpdateChannel] = useState<'Stable' | 'Dev'>('Stable');
+  const [appearance, setAppearance] = useState<'ダーク' | 'ライト' | 'システム'>('ダーク');
+  const systemLight = typeof matchMedia !== 'undefined' && matchMedia('(prefers-color-scheme: light)').matches;
+  applyScheme(appearance === 'ライト' || (appearance === 'システム' && systemLight) ? 'light' : 'dark');
 
   // 左下のブランチ名から切り替えられる、現在のブランチ。
   const branches = ['main', 'pane-split', 'docs-update'] as const;
@@ -663,6 +666,8 @@ function useWorkbenchState() {
     setScrollbackLines,
     updateChannel,
     setUpdateChannel,
+    appearance,
+    setAppearance,
     branches,
     currentBranch,
     setCurrentBranch,

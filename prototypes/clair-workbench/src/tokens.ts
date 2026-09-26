@@ -5,8 +5,8 @@
 export const color = {
   // SURFACE — two tiers. The pane (canvas/surface) is the darkest thing in
   // the window because it is what you read for hours; chrome sits one step
-  // above it so the frame reads as frame and never as content. Dark only —
-  // there is no light theme.
+  // above it so the frame reads as frame and never as content. These are the
+  // dark scheme; `applyScheme('light')` swaps in `light` below (spec §5.11).
   chrome: '#31363f',
   canvas: '#282c34',
   surface: '#282c34',
@@ -57,7 +57,7 @@ export const color = {
   close: '#ff5f57',
   minimize: '#febc2e',
   zoom: '#28c840',
-} as const;
+};
 
 // Hairlines and washes. Structural rules are black (One Dark grooves);
 // strong/stronger/ring stay light so focus and emphasis remain visible.
@@ -71,7 +71,7 @@ export const line = {
   stronger: 'rgba(241,242,246,0.28)',
   ring: 'rgba(241,242,246,0.32)',
   paneDivider: 'rgba(0,0,0,0.5)',
-} as const;
+};
 
 // TAB GROUP COLOURS — the one other place colour is allowed, alongside diff
 // and debug: identifying a project's tab group in the titlebar. Reuses the
@@ -108,7 +108,48 @@ export const wash = {
   selected: 'rgba(255,255,255,0.08)',
   strong: 'rgba(241,242,246,0.09)',
   strongest: 'rgba(241,242,246,0.12)',
-} as const;
+};
+
+// LIGHT SCHEME — One Light, the counterpart of the One Dark palette above.
+// Same roles; washes and strong rules darken instead of lighten. Body ink
+// (code, textSecondary) holds ≥ 4.5:1 on the canvas.
+const light = {
+  color: {
+    chrome: '#eaeaeb', canvas: '#fafafa', surface: '#fafafa', chromeRaised: '#dcdcde',
+    surfaceHover: '#f0f0f1', surfaceActive: '#e3e3e5',
+    chromeInk: '#4f525a',
+    textPrimary: '#1f2126', textSecondary: '#383a42', textTertiary: '#595c64', textQuaternary: '#6b6e76',
+    lineNumber: '#9d9fa6', divider: '#d0d1d4',
+    success: '#3d8a4a', attention: '#9a6700', danger: '#c8323f',
+    debugBlue: '#4078f2', debugBlueText: '#2f5fd0',
+    panel: '#f0f0f1', panelDeep: '#e6e6e7', overlayGround: '#d6d6d8',
+    code: '#383a42', codeBright: '#202227', codeComment: '#8e9099', codeKeyword: '#a626a4',
+    codeType: '#986801', codeFunc: '#3a6ee0', codeString: '#3d8a3c', codeNumber: '#986801',
+    close: '#ff5f57', minimize: '#febc2e', zoom: '#28c840',
+  },
+  line: {
+    hairline: 'rgba(0,0,0,0.14)', hairlineSoft: 'rgba(0,0,0,0.11)', hairlineFaint: 'rgba(0,0,0,0.08)',
+    chrome: 'rgba(0,0,0,0.12)', chromeSoft: 'rgba(0,0,0,0.1)',
+    strong: 'rgba(31,33,38,0.19)', stronger: 'rgba(31,33,38,0.28)', ring: 'rgba(31,33,38,0.32)',
+    paneDivider: 'rgba(0,0,0,0.16)',
+  },
+  wash: {
+    faint: 'rgba(31,33,38,0.03)', soft: 'rgba(31,33,38,0.04)', medium: 'rgba(31,33,38,0.06)',
+    raised: 'rgba(31,33,38,0.075)', selected: 'rgba(0,0,0,0.06)', strong: 'rgba(31,33,38,0.09)',
+    strongest: 'rgba(31,33,38,0.12)',
+  },
+} satisfies { color: typeof color; line: typeof line; wash: typeof wash };
+const dark = { color: { ...color }, line: { ...line }, wash: { ...wash } };
+
+// ponytail: swaps the shared token objects in place, so values captured at
+// import time (styles.css, module-level consts) stay dark. CSS variables if
+// the mock ever needs those to follow.
+export function applyScheme(scheme: 'dark' | 'light') {
+  const s = scheme === 'light' ? light : dark;
+  Object.assign(color, s.color);
+  Object.assign(line, s.line);
+  Object.assign(wash, s.wash);
+}
 
 // TYPE SCALE — 4 steps, the macOS text styles. Strength comes from weight
 // (400 / 600 only) and ink, never from size. Nothing under 11px.

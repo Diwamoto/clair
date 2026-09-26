@@ -203,9 +203,10 @@ import Foundation
       var app: GhosttyAppHandle?
       do {
         let newApp = try GhosttyRuntime.shared.retainApp { config in
-          if let theme = Self.themePath { try config.loadFileAndFinalize(theme) }
+          if let theme = Self.themePaths[isLight] { try config.loadFileAndFinalize(theme) }
         }
         app = newApp
+        appliedLight = isLight
         let config = GhosttySurfaceConfig(
           platform: .macOS(Unmanaged.passUnretained(self).toOpaque()),
           scaleFactor: Double(window?.backingScaleFactor ?? 1),
@@ -228,38 +229,47 @@ import Foundation
     /// U06: the mock's terminal is the editor's One Dark on the pane surface (`tokens.ts`: canvas, code,
     /// codeString/Type/Func/Keyword, danger, textPrimary), not Ghostty's xterm defaults whose dark
     /// blue/black vanish on #282c34. `minimum-contrast` keeps any app-chosen colour readable.
-    static let theme = """
-      background = #282c34
-      foreground = #abb2bf
-      cursor-color = #abb2bf
-      selection-background = #383d47
-      minimum-contrast = 3
-      window-padding-x = 8
-      font-codepoint-map = U+3000-U+30FF,U+3400-U+4DBF,U+4E00-U+9FFF,U+F900-U+FAFF,U+FF00-U+FFEF=BIZ UDGothic
-      palette = 0=#3f4451
-      palette = 1=#e27b83
-      palette = 2=#98c379
-      palette = 3=#e5c07b
-      palette = 4=#61afef
-      palette = 5=#c678dd
-      palette = 6=#56b6c2
-      palette = 7=#abb2bf
-      palette = 8=#5c6370
-      palette = 9=#e27b83
-      palette = 10=#98c379
-      palette = 11=#e5c07b
-      palette = 12=#61afef
-      palette = 13=#c678dd
-      palette = 14=#56b6c2
-      palette = 15=#f1f2f6
+    /// E18: the light scheme is the same roles in One Light (`Color+Tokens.swift` light values).
+    static func theme(light: Bool) -> String {
+      let (bg, fg, sel) = light ? ("#fafafa", "#383a42", "#e3e3e5") : ("#282c34", "#abb2bf", "#383d47")
+      let ansi = light
+        ? ["#383a42", "#c8323f", "#3d8a3c", "#986801", "#3a6ee0", "#a626a4", "#0184bc", "#a0a1a7",
+           "#696c77", "#c8323f", "#3d8a3c", "#986801", "#3a6ee0", "#a626a4", "#0184bc", "#fafafa"]
+        : ["#3f4451", "#e27b83", "#98c379", "#e5c07b", "#61afef", "#c678dd", "#56b6c2", "#abb2bf",
+           "#5c6370", "#e27b83", "#98c379", "#e5c07b", "#61afef", "#c678dd", "#56b6c2", "#f1f2f6"]
+      return """
+        background = \(bg)
+        foreground = \(fg)
+        cursor-color = \(fg)
+        selection-background = \(sel)
+        minimum-contrast = 3
+        window-padding-x = 8
+        font-codepoint-map = U+3000-U+30FF,U+3400-U+4DBF,U+4E00-U+9FFF,U+F900-U+FAFF,U+FF00-U+FFEF=BIZ UDGothic
 
-      """
+        """ + ansi.enumerated().map { "palette = \($0.offset)=\($0.element)\n" }.joined()
+    }
 
-    /// libghostty reads config from a file only; written once per process. nil (defaults) if the write fails.
-    static let themePath: String? = {
-      let url = FileManager.default.temporaryDirectory.appending(path: "clair-ghostty-theme-\(getpid())")
-      return (try? Data(theme.utf8).write(to: url, options: .atomic)) != nil ? url.path : nil
-    }()
+    /// libghostty reads config from a file only; written once per scheme per process. nil (defaults) if the write fails.
+    static let themePaths: [Bool: String] = Dictionary(uniqueKeysWithValues: [false, true].compactMap { light in
+      let url = FileManager.default.temporaryDirectory.appending(path: "clair-ghostty-theme-\(light ? "light" : "dark")-\(getpid())")
+      return (try? Data(theme(light: light).utf8).write(to: url, options: .atomic)) != nil ? (light, url.path) : nil
+    })
+
+    private var isLight: Bool { effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .aqua }
+    private var appliedLight: Bool?
+
+    /// E18: the app appearance changed (Settings → 外観, or the OS when following it) — repaint the live
+    /// terminal in the other scheme without restarting its shell.
+    public override func viewDidChangeEffectiveAppearance() {
+      super.viewDidChangeEffectiveAppearance()
+      guard let surface = ghosttySurface, appliedLight != isLight, let path = Self.themePaths[isLight] else { return }
+      appliedLight = isLight
+      try? GhosttyRuntime.shared.withConfig { config in
+        try config.loadFileAndFinalize(path)
+        try surface.updateConfig(config)
+      }
+      needsDisplay = true
+    }
 
     private func teardownGhosttySurface() {
       markedText = ""

@@ -522,6 +522,16 @@ public final class GhosttySurfaceHandle {
 
   // MARK: - Focus / DPI
 
+  /// Re-applies a finalized config (e.g. the other colour scheme's theme) to the live surface.
+  public func updateConfig(_ config: GhosttyConfigHandle) throws {
+    guard isValid else { throw GhosttyError.handleExpired }
+    try config.withValidHandle {
+      #if CLAIR_GHOSTTY_VENDORED
+        config.withRawConfig { clair_ghostty_surface_update_config(raw, $0) }
+      #endif
+    }
+  }
+
   public func setFocus(_ focused: Bool) throws {
     guard isValid else { throw GhosttyError.handleExpired }
     #if CLAIR_GHOSTTY_VENDORED

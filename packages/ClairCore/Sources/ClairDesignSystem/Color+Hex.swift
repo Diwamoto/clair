@@ -1,5 +1,11 @@
 import SwiftUI
 
+#if canImport(AppKit)
+  import AppKit
+#elseif canImport(UIKit)
+  import UIKit
+#endif
+
 /// `#RRGGBB` / `rgba(r, g, b, a)` construction shared by every color token
 /// file. This is the one place hex/rgb parsing happens; every token below
 /// goes through it instead of hand-rolling its own conversion.
@@ -31,5 +37,26 @@ extension Color {
     )
     let value = UInt32(digits, radix: 16)!
     return (Int((value >> 16) & 0xFF), Int((value >> 8) & 0xFF), Int(value & 0xFF))
+  }
+
+  /// A scheme-aware token: resolves to `dark` or `light` from the view's (or
+  /// drawing context's) appearance, so switching the app appearance repaints
+  /// every token without a restart (spec §5.11 colour scheme).
+  init(dark: SwiftUI.Color, light: SwiftUI.Color) {
+    #if canImport(AppKit)
+      let d = NSColor(dark), l = NSColor(light)
+      self.init(nsColor: NSColor(name: nil) { a in
+        a.bestMatch(from: [.aqua, .darkAqua]) == .aqua ? l : d
+      })
+    #elseif canImport(UIKit)
+      let d = UIColor(dark), l = UIColor(light)
+      self.init(uiColor: UIColor { $0.userInterfaceStyle == .light ? l : d })
+    #else
+      self = dark
+    #endif
+  }
+
+  init(hex dark: String, light: String) {
+    self.init(dark: Color(hex: dark), light: Color(hex: light))
   }
 }

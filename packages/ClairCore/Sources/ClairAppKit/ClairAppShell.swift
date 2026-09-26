@@ -810,6 +810,7 @@ import Observation
       }
       .clairMenuHost(menus)
       .animation(.easeOut(duration: 0.09), value: st.palette == nil)
+      .onChange(of: st.choices["appearance"], initial: true) { _, v in ColorSchemeChoice(setting: v).apply() }
       .onChange(of: st.palette) {
         query = ""; selection = 0
         if st.palette == .search { searchSelection = 0; runSearch() }
@@ -1873,7 +1874,10 @@ import Observation
               switchRow("前回のレイアウトを復元", "restoreLayout", note: "Projectごとのファイル、ターミナル、分割位置を再開します。")
               switchRow("閉じる前に確認", "confirmClose", note: "実行中のターミナルや未保存のエディタを閉じる前に確認します。")
             }
-            SettingsCard(title: "インターフェース") { switchRow("ステータスバーの利用枠を表示", "showQuota") }
+            SettingsCard(title: "インターフェース") {
+              choiceRow("外観", "appearance", note: "エディタ、ターミナル、サイドバーの配色をまとめて切り替えます。")
+              switchRow("ステータスバーの利用枠を表示", "showQuota")
+            }
           case "AIプロバイダー":
             SettingsCard(title: "Agent") {
               choiceRow("既定のAgent", "defaultAgent", note: "⌃⌘N で追加するときの初期選択。titlebarのタブは個別に選べます。")
