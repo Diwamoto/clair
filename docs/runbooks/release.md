@@ -8,8 +8,8 @@ Stable の `Clair.app` をこのリポジトリ(`Diwamoto/clair`、public)の Gi
 
 ## 仕組み
 
-- **トリガー**: `VERSION` を変更した commit が main に push されると `.github/workflows/release.yml` が走る。
-  `VERSION` が変わらない push では配布しない。再実行は Actions の `workflow_dispatch`。
+- **トリガー**: `v<version>` tag の push で `.github/workflows/release.yml` が走る。tag と `VERSION` が
+  食い違うと失敗する。main への通常の push では配布しない。再実行は同じ tag を選んで `workflow_dispatch`。
 - **Runner**: GitHub hosted の `macos-26`(public repo なので無料)。libghostty(zig + Metal toolchain)は
   `actions/cache` に載せ、`Config/ghostty-pin.json` か `scripts/ghostty.sh` が変わったときだけ再ビルドする。
 - **本体**: `scripts/release.sh`。CI には依存しないので、他の CI や手元の Mac からも同じ入力で実行できる。
@@ -17,7 +17,7 @@ Stable の `Clair.app` をこのリポジトリ(`Diwamoto/clair`、public)の Gi
      (3 つとも `Contents/MacOS`、SwiftPM の resource bundle は `.app` 直下)。
   2. 使い捨ての `HOME` で起動し、最初の frame まで到達することを確認する(bundle の欠落は起動時に crash するため)。
   3. `Clair-<version>-macos-arm64.zip` と、Ed25519 署名付きの `latest.json` を作る。
-  4. `v<version>` tag を push し、Release を作って `--latest` にする(notes は `CHANGELOG.md` の `## [<version>]` 節。無ければ失敗する)。
+  4. (tag が無ければ push し、)Release を作って `--latest` にする(notes は `CHANGELOG.md` の `## [<version>]` 節。無ければ失敗する)。
      既に Release がある version は何もせず終了する。
 - **クライアント**: `ClairUpdateConfiguration.manifestURL` は
   `https://github.com/Diwamoto/clair/releases/latest/download/latest.json` を見る。
@@ -34,14 +34,15 @@ git add Config/update-public-key && git commit -m "build: add Stable update publ
 ```
 
 秘密鍵をなくすと、インストール済みのアプリは二度と更新を受け取れない。Keychain の項目は消さないこと。
-fork からの pull request には secret が渡らないので、release は main の push でしか動かない。
+fork からの pull request には secret が渡らないので、release は tag の push でしか動かない。
 
 ## リリース手順
 
-通常は `clair-release` skill(`.agents/skills/clair-release/SKILL.md`)が 1〜2 をまとめて行う。
+通常は `clair-release` skill(`.agents/skills/clair-release/SKILL.md`)が 1〜3 をまとめて行う。
 
 1. `CHANGELOG.md` の `## [Unreleased]` を `## [<version>] - <date>` にし、`VERSION` を同じ値へ上げる(SemVer)。
-2. その commit を main に push する。Release workflow が test → build → smoke → publish を行う。
+2. その commit を main に push し、`git tag v<version> && git push origin v<version>` で tag を push する。
+   Release workflow が test → build → smoke → publish を行う。
 3. <https://github.com/Diwamoto/clair/releases> に zip と `latest.json` が出ていることを確認する。
 
 手元で配布物だけ作るには `CLAIR_UPDATE_PRIVATE_KEY="$(security find-generic-password -s clair-update-signing -w)" scripts/release.sh --dry-run`
@@ -67,7 +68,7 @@ curl -fsSL https://raw.githubusercontent.com/Diwamoto/clair/main/scripts/install
 - 起動スモークが最初の frame に届かない
 - Release に asset か `latest.json` が欠けている
 
-いずれの場合も `VERSION` を上げ直さずに原因を直し、`workflow_dispatch` で再実行する。途中で止まった Release は、
+いずれの場合も `VERSION` を上げ直さずに原因を直し、同じ tag を選んで `workflow_dispatch` で再実行する。途中で止まった Release は、
 Release と tag を消してから再実行する。
 
 ## 対象外と今後

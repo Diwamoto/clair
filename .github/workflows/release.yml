@@ -1,11 +1,11 @@
 name: Release
 
-# Publishes Clair to this repository's GitHub Releases when a push to main changes VERSION
+# Publishes Clair to this repository's GitHub Releases when a v<VERSION> tag is pushed
 # (docs/runbooks/release.md). The work lives in scripts/release.sh so any other CI can run it too.
+# Re-run a failed release with workflow_dispatch on the same tag.
 on:
   push:
-    branches: [main]
-    paths: [VERSION]
+    tags: ["v*"]
   workflow_dispatch:
 
 permissions:

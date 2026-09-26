@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds the Stable Clair.app, signs its update manifest and publishes both to the Diwamoto/clair
 # GitHub Release that installed apps poll (ADR-0009, docs/runbooks/release.md).
-# CI-agnostic: .github/workflows/release.yml runs it on a push that changes VERSION, but any
+# CI-agnostic: .github/workflows/release.yml runs it on a v* tag push, but any
 # macOS arm64 host with the inputs below can run it too.
 #
 #   CLAIR_UPDATE_PRIVATE_KEY  Ed25519 signing key (base64); must match Config/update-public-key
@@ -21,6 +21,9 @@ die() { printf 'release: %s\n' "$*" >&2; exit 1; }
 version="$(tr -d '[:space:]' <VERSION)"
 [[ "$version" =~ ^[0-9]+(\.[0-9]+){0,3}$ ]] || die "VERSION must be <major>[.<minor>[.<patch>[.<rev>]]], got '$version'"
 tag="v$version"
+# A tag-triggered run must build the commit whose VERSION matches the tag.
+[[ "${GITHUB_REF_TYPE:-}" != tag || "${GITHUB_REF_NAME:-}" == "$tag" ]] ||
+  die "tag ${GITHUB_REF_NAME:-} does not match VERSION ($tag)"
 if ((publish)) && gh release view "$tag" --repo "$repo" >/dev/null 2>&1; then
   printf 'release: %s is already published on %s; bump VERSION to release again\n' "$tag" "$repo"
   exit 0

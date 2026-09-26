@@ -1,6 +1,6 @@
 ---
 name: clair-release
-description: Cut a Clair release — collect every change since the previous release tag, write them into CHANGELOG.md (Keep a Changelog), bump VERSION (SemVer), commit, and on the owner's confirmation push to main so the Release workflow publishes the signed update. Use when the user asks to release Clair, cut/ship a version, bump the version, or write the changelog for a release. Not for ad hoc Clair work or task-queue work (use clair-task).
+description: Cut a Clair release — collect every change since the previous release tag, write them into CHANGELOG.md (Keep a Changelog), bump VERSION (SemVer), commit, and on the owner's confirmation push it and the v<version> tag so the Release workflow publishes the signed update. Use when the user asks to release Clair, cut/ship a version, bump the version, or write the changelog for a release. Not for ad hoc Clair work or task-queue work (use clair-task).
 ---
 
 # Clair release
@@ -8,10 +8,10 @@ description: Cut a Clair release — collect every change since the previous rel
 Clair ships the usual OSS way: `CHANGELOG.md` in
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format, SemVer in
 `VERSION`, a `v<version>` tag and a GitHub Release. Publishing is automatic
-once a commit that changes `VERSION` reaches `main`:
-`.github/workflows/release.yml` → `scripts/release.sh` runs `make test`,
-builds `Clair.app`, smoke-launches it, signs `latest.json`, tags
-`v<version>` and creates the Release with the CHANGELOG section as its notes.
+once the `v<version>` tag is pushed (a plain push to `main` publishes
+nothing): `.github/workflows/release.yml` → `scripts/release.sh` checks the
+tag matches `VERSION`, runs `make test`, builds `Clair.app`, smoke-launches
+it, signs `latest.json` and creates the Release with the CHANGELOG section as its notes.
 Installed apps pick it up within an hour. Details:
 [`docs/runbooks/release.md`](../../../docs/runbooks/release.md).
 
@@ -98,6 +98,8 @@ in English.
    they say yes:
    - push the commit to `main` (fast-forward; if `main` moved, rebase and
      re-check the range first). Do not force-push.
+   - tag that exact commit and push the tag, which is what publishes:
+     `git tag v<version> <commit> && git push origin v<version>`.
    - watch the run: `gh run watch "$(gh run list --workflow release.yml -L 1 --json databaseId -q '.[0].databaseId')"`.
    - confirm `gh release view v<version>` lists
      `Clair-<version>-macos-arm64.zip` and `latest.json`.
@@ -105,7 +107,7 @@ in English.
 ## When it fails
 
 If the workflow fails, fix the cause and re-run it through `workflow_dispatch`
-with the same version. Do not bump `VERSION` again, since that would leave a
+on the same tag. Do not bump `VERSION` again, since that would leave a
 gap in the changelog. If a Release was half-created, it must be deleted
 (`gh release delete v<version> --cleanup-tag`) before the re-run. Deleting a
 Release is a user gate as well. Stop conditions are listed in the runbook.
