@@ -2213,7 +2213,7 @@ import Observation
       .font(Typography.font(Typography.chrome)).monospacedDigit().foregroundStyle(C.textTertiary)
       .padding(.horizontal, 12).frame(height: ChromeBudget.statusBar)
       .background(C.chrome)
-      .overlay(alignment: .top) { Rectangle().fill(L.chrome).frame(height: 1) }
+      .overlay(alignment: .top) { Rectangle().fill(C.surfaceActive).frame(height: 1) }
       // Off the main actor, every 5 min while the toggle is on; turning it off cancels the loop.
       .task(id: st.toggles["showQuota"] == true) {
         guard st.toggles["showQuota"] == true else { quota = []; return }
