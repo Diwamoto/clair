@@ -278,3 +278,33 @@ final class ProjectCloseTests: XCTestCase {
     XCTAssertThrowsError(try r.execute("project.close", ["name": .string("a")], state: &s).get())
   }
 }
+
+/// Tab-group rename / colour / order survive switching Projects and a restore.
+final class ProjectGroupChromeTests: XCTestCase {
+  func testRenameColorMovePersist() throws {
+    let r = CommandRegistry.workbench
+    let tmp = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let a = tmp.appending(path: "a").path, b = tmp.appending(path: "b").path
+    try FileManager.default.createDirectory(atPath: a, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(atPath: b, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: tmp) }
+    var s = WorkbenchState()
+    s.openProject(WorkbenchProject(name: "a", path: WorkbenchProject.normalized(a)!), scanFiles: false)
+    s.openProject(WorkbenchProject(name: "b", path: WorkbenchProject.normalized(b)!), scanFiles: false)
+    _ = try r.execute("project.rename", ["name": .string("a"), "label": .string(" API ")], state: &s).get()
+    _ = try r.execute("project.setColor", ["name": .string("a"), "color": .string("purple")], state: &s).get()
+    XCTAssertThrowsError(try r.execute("project.setColor", ["name": .string("a"), "color": .string("pink")], state: &s).get())
+    _ = try r.execute("project.move", ["name": .string("b"), "offset": .int(-1)], state: &s).get()
+    XCTAssertThrowsError(try r.execute("project.move", ["name": .string("b"), "offset": .int(-1)], state: &s).get())
+    _ = try r.execute("project.switch", ["name": .string("a")], state: &s).get()
+    _ = try r.execute("project.switch", ["name": .string("b")], state: &s).get()
+    let url = tmp.appending(path: "ws.json")
+    try s.save(to: url)
+    let got = try XCTUnwrap(WorkbenchState.restore(from: url, scanFiles: false))
+    XCTAssertEqual(got.projects.map(\.name), ["b", "a"])
+    XCTAssertEqual(got.projects[1].displayName, "API")
+    XCTAssertEqual(got.projects[1].color, "purple")
+    _ = try r.execute("project.rename", ["name": .string("a"), "label": .string("")], state: &s).get()
+    XCTAssertEqual(s.projects[1].displayName, "a")
+  }
+}

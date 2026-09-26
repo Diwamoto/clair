@@ -530,6 +530,38 @@ extension CommandRegistry {
         shortcut: "⌘,") { s, i in
       s.settingsOpen = true; s.palette = nil
       if let sec = i["section"]?.string { s.section = sec }
+    // Tab-group chrome: shown name and colour, persisted with the Project. Empty label restores the folder name.
+    cmd("project.rename", "プロジェクト名を変更", .write, ai: false, params: [CommandParam("name", .string), CommandParam("label", .string)],
+        palette: false,
+        preflight: { s, i throws(CommandError) in
+          try require(s.projects.contains { $0.name == i["name"]!.string! }, "no project \(i["name"]!)"); return .write
+        }) { s, i in
+      let label = i["label"]!.string!.trimmingCharacters(in: .whitespacesAndNewlines)
+      let idx = s.projects.firstIndex { $0.name == i["name"]!.string! }!
+      s.projects[idx].label = label.isEmpty || label == s.projects[idx].name ? nil : label
+      return .ok
+    },
+    cmd("project.setColor", "タブグループの色を変更", .write, ai: false, params: [CommandParam("name", .string), CommandParam("color", .string)],
+        palette: false,
+        preflight: { s, i throws(CommandError) in
+          try require(s.projects.contains { $0.name == i["name"]!.string! }, "no project \(i["name"]!)")
+          try require(["blue", "green", "amber", "red", "purple", "gray"].contains(i["color"]!.string!), "unknown color \(i["color"]!)")
+          return .write
+        }) { s, i in
+      s.projects[s.projects.firstIndex { $0.name == i["name"]!.string! }!].color = i["color"]!.string!
+      return .ok
+    },
+    cmd("project.move", "タブグループを移動", .write, ai: false, params: [CommandParam("name", .string), CommandParam("offset", .int)],
+        palette: false,
+        preflight: { s, i throws(CommandError) in
+          let from = s.projects.firstIndex { $0.name == i["name"]!.string! }
+          try require(from != nil, "no project \(i["name"]!)")
+          try require(s.projects.indices.contains(from! + i["offset"]!.int!), "cannot move further"); return .write
+        }) { s, i in
+      let from = s.projects.firstIndex { $0.name == i["name"]!.string! }!
+      s.projects.swapAt(from, from + i["offset"]!.int!)
+      return .ok
+    },
       return .ok
     },
     cmd("settings.close", "設定を閉じる", .read) { s, _ in s.settingsOpen = false; return .ok },

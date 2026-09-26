@@ -24,6 +24,8 @@
   enum ClairMenuEntry {
     case item(ClairMenuItem)
     case separator
+    /// Mock `swatches` row: the tab-group colour picked in place.
+    case swatches(DesignTokens.GroupColor, (DesignTokens.GroupColor) -> Void)
 
     static func item(
       _ label: String, shortcut: String? = nil, disabled: Bool = false, destructive: Bool = false,
@@ -188,6 +190,7 @@
           switch entry {
           case .separator: rule
           case .item(let it): row(i, it)
+          case .swatches(let value, let pick): swatchRow(value, pick)
           }
         }
       }
@@ -200,6 +203,24 @@
     }
 
     private var rule: some View { Rectangle().fill(L.hairline).frame(height: 1).padding(.horizontal, 8).padding(.vertical, 4) }
+
+    // ponytail: mouse only; the mock's ←/→ swatch focus is not ported.
+    private func swatchRow(_ value: DesignTokens.GroupColor, _ pick: @escaping (DesignTokens.GroupColor) -> Void) -> some View {
+      let names: [DesignTokens.GroupColor: String] = [.blue: "青", .green: "緑", .amber: "黄", .red: "赤", .purple: "紫", .gray: "なし"]
+      return HStack(spacing: 4) {
+        ForEach(DesignTokens.GroupColor.allCases, id: \.self) { key in
+          Button { close(); pick(key) } label: {
+            RoundedRectangle(cornerRadius: Radius.control).fill(key.color).frame(width: 26, height: 18)
+              .padding(2)
+              .overlay(RoundedRectangle(cornerRadius: Radius.control + 2).stroke(value == key ? C.textSecondary : .clear, lineWidth: 1.5))
+          }
+          .buttonStyle(.plain).help(names[key] ?? key.rawValue)
+          .accessibilityLabel(names[key] ?? key.rawValue).accessibilityAddTraits(value == key ? .isSelected : [])
+        }
+      }
+      .padding(.horizontal, 6).frame(height: 32)
+      .onHover { if $0 { active = nil; sub = nil } }
+    }
 
     private func row(_ i: Int, _ it: ClairMenuItem) -> some View {
       let on = active == i && !it.disabled

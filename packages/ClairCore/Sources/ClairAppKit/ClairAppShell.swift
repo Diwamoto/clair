@@ -766,7 +766,8 @@ import Observation
     @State private var searchGeneration = 0
     @State private var searchTask: Task<Void, Never>?
     @State private var replaceTask: Task<Void, Never>?
-    private let projectColors = [C.debugBlue, C.success, C.attention]
+    /// A Project without a picked colour cycles these by position.
+    private let projectColors: [DesignTokens.GroupColor] = [.blue, .green, .amber]
 
     public init() { _store = State(initialValue: ClairWorkbenchStore()) }
     /// Snapshot tests inject a fixture store.
@@ -865,7 +866,7 @@ import Observation
             HStack(spacing: 4) {
               ForEach(Array(st.projects.enumerated()), id: \.element.name) { i, p in
                 if i > 0 { Rectangle().fill(Color(white: 0.95, opacity: 0.09)).frame(width: 1, height: 22).padding(.horizontal, 4) }
-                projectGroup(p, color: projectColors[i % projectColors.count])
+                projectGroup(p, colorKey: p.color.flatMap(DesignTokens.GroupColor.init(rawValue:)) ?? projectColors[i % projectColors.count])
               }
               Button(action: openFolder) { Image(systemName: "plus").font(.system(size: 13)).foregroundStyle(C.chromeInk).frame(width: 30, height: 30) }
                 .buttonStyle(.hoverWash).help("フォルダを開く")
@@ -905,7 +906,8 @@ import Observation
 
     /// An inactive group's chip switches to that Project (editor, terminals and sidebar follow `st.project`);
     /// the active group's chip toggles its tab strip (GUI-local).
-    private func projectGroup(_ p: WorkbenchProject, color: Color) -> some View {
+    private func projectGroup(_ p: WorkbenchProject, colorKey: DesignTokens.GroupColor) -> some View {
+      let color = colorKey.color
       let active = st.project == p.name
       let tabs = active ? st.tabs : (st.layouts[p.name]?.tabs ?? [])
       let selectedTab = active ? st.selectedTitlebarTab : nil
@@ -925,7 +927,7 @@ import Observation
           // review feedback: a small dot beside the label read as an
           // afterthought), not a separate dot — active groups get the
           // stronger alpha pair, matching the titlebar's active tab group.
-          Text(p.name).font(.system(size: 12, weight: .semibold)).foregroundStyle(active ? C.textPrimary : C.textSecondary).lineLimit(1).fixedSize()
+          Text(p.displayName).font(.system(size: 12, weight: .semibold)).foregroundStyle(active ? C.textPrimary : C.textSecondary).lineLimit(1).fixedSize()
             .padding(.horizontal, 10).frame(height: 26)
             .background(color.opacity(active ? 0.22 : 0.1), in: RoundedRectangle(cornerRadius: Radius.card))
             .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(color.opacity(active ? 0.55 : 0.28)))
@@ -938,14 +940,9 @@ import Observation
             }
           }
         }
-        .buttonStyle(.hoverWash).help(active ? "\(p.name) タブグループを\(folded ? "展開" : "折りたたむ")" : "\(p.name) に切り替え")
+        .buttonStyle(.hoverWash).help(active ? "\(p.displayName) タブグループを\(folded ? "展開" : "折りたたむ")" : "\(p.displayName) に切り替え")
         .background(NoWindowDrag())
-        .contextMenu {
-          let muted = st.notices.mutedProjects.contains(p.name)
-          Button(muted ? "通知のミュートを解除" : "通知をミュート") {
-            store.run("notice.muteProject", ["name": .string(p.name), "muted": .bool(!muted)])
-          }
-        }
+        .clairContextMenu(menus) { projectMenu(p, colorKey: colorKey, folded: folded) }
         if !folded {
           HStack(spacing: 4) {
             ForEach(Array(tabs.enumerated()), id: \.element) { i, path in
@@ -1037,6 +1034,38 @@ import Observation
 
     private var sidebar: some View {
       VStack(spacing: 0) {
+    /// Mock `projectMenu`: colour in place, switch/fold/rename, order, mute, close.
+    private func projectMenu(_ p: WorkbenchProject, colorKey: DesignTokens.GroupColor, folded: Bool) -> ClairMenuSpec {
+      let name = CommandArg.string(p.name)
+      let index = st.projects.firstIndex(of: p) ?? 0
+      let muted = st.notices.mutedProjects.contains(p.name)
+      return ClairMenuSpec(title: p.displayName, sub: p.path, entries: [
+        .swatches(colorKey) { store.run("project.setColor", ["name": name, "color": .string($0.rawValue)]) },
+        .separator,
+        .item("このProjectに切り替え", disabled: st.project == p.name) { store.run("project.switch", ["name": name]) },
+        .item(folded ? "グループを展開" : "グループを折りたたむ") {
+          if folded { collapsedGroups.remove(p.name) } else { collapsedGroups.insert(p.name) }
+        },
+        .item("Project名を変更…") {
+          menus.ask(ClairDialog(title: "Project名を変更", message: "空にするとフォルダ名に戻ります。", initial: p.displayName) {
+            store.run("project.rename", ["name": name, "label": .string($0)])
+          })
+        },
+        .separator,
+        .item("左へ移動", disabled: index == 0) { store.run("project.move", ["name": name, "offset": .int(-1)]) },
+        .item("右へ移動", disabled: index >= st.projects.count - 1) { store.run("project.move", ["name": name, "offset": .int(1)]) },
+        .separator,
+        .item(muted ? "通知のミュートを解除" : "通知をミュート") {
+          store.run("notice.muteProject", ["name": name, "muted": .bool(!muted)])
+        },
+        .item("Projectを閉じる", disabled: st.projects.count < 2, destructive: true) {
+          if case .failure(let e) = store.run("project.close", ["name": name]) {
+            menus.ask(ClairDialog(title: "閉じられませんでした", message: e.message) { _ in })
+          }
+        },
+      ])
+    }
+
         // Lazy: a Project can list thousands of files, and an eager tree makes accessibility traversal (and layout) block the main thread.
         ScrollView { LazyVStack(alignment: .leading, spacing: 0) { sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "terminal" ? AnyView(sessionList) : sidebarMode == "ladybug" ? AnyView(debugPanel) : AnyView(explorer) }.clairScroller() }
         Spacer(minLength: 0)

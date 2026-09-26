@@ -37,6 +37,12 @@ public struct WorkbenchProject: Sendable, Codable, Equatable {
     guard path.hasPrefix("/") else { return nil }
     let url = URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath()
     var isDir: ObjCBool = false
+  /// Titlebar tab group: display name and `GroupColor` key. `name` stays the identity key
+  /// (layouts, terminal reattach by `project#pane`), so a rename only changes what is shown.
+  public var label: String? = nil
+  public var color: String? = nil
+
+  public var displayName: String { label ?? name }
     return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) && !isDir.boolValue ? url.path : nil
   }
 
