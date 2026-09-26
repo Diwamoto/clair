@@ -156,6 +156,8 @@ public enum AgentHistoryReader {
         .map { Data($0.utf8) }
       eachLine(file) { data in
         guard relevant.contains(where: { data.range(of: $0) != nil }) else { return }
+        // Tool results ride on "user" rows, can be huge, and never carry prompt text.
+        if !full, data.range(of: Data(#""tool_use_id""#.utf8)) != nil { return }
         guard let row = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
         let type = row["type"] as? String ?? ""
         let payload = row["payload"] as? [String: Any] ?? [:]
@@ -165,8 +167,6 @@ public enum AgentHistoryReader {
           if type == "session_meta", let id = payload["id"] as? String { sessionID = id; cwd = payload["cwd"] as? String ?? cwd }
           if type == "turn_context" { codexModel = payload["model"] as? String ?? codexModel }
           if type == "token_usage_record" { codexUsage = payload["thread_token_usage"] as? [String: Any] ?? codexUsage }
-        // Tool results ride on "user" rows, can be huge, and never carry prompt text.
-        if !full, data.range(of: Data(#""tool_use_id""#.utf8)) != nil { return }
           guard type == "response_item", let role = payload["role"] as? String,
                 role == "user" || role == "assistant" else { return }
           let parts = payload["content"] as? [[String: Any]] ?? []
@@ -196,6 +196,7 @@ public enum AgentHistoryReader {
           else if let parts = content as? [[String: Any]] {
             text = parts.filter { ($0["type"] as? String) == "text" }.compactMap { $0["text"] as? String }.joined(separator: "\n")
           } else { text = "" }
+          if type == "user" { text = formatUserText(text) ?? "" }
           guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
           let id = row["uuid"] as? String ?? "\(file.path):\(messages.count)"
           let item = AgentHistory.Message(id: id, role: type, text: text, date: date)
@@ -205,7 +206,6 @@ public enum AgentHistoryReader {
             claudeMessageIndex[id] = messages.count
             messages.append(item)
           }
-          if type == "user" { text = formatUserText(text) ?? "" }
         }
       }
       guard !messages.isEmpty else { return nil }
@@ -306,6 +306,7 @@ public enum AgentHistoryReader {
         if newline - start <= 4 * 1024 * 1024 { visit(pending[start..<newline]) }
         start = newline + 1
       }
+      pending = Data(pending[start...])
       if pending.count > 4 * 1024 * 1024 { pending.removeAll(keepingCapacity: true) }
     }
     if !pending.isEmpty { visit(pending) }
@@ -315,7 +316,6 @@ public enum AgentHistoryReader {
     var db: OpaquePointer?
     guard sqlite3_open_v2(database.path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let db else {
       if db != nil { sqlite3_close(db) }
-      pending = Data(pending[start...])
       return []
     }
     defer { sqlite3_close(db) }
@@ -386,6 +386,10 @@ public actor AgentHistoryStore {
     return await load(part)
   }
 
+  public func transcript(_ history: AgentHistory) async -> [AgentHistory.Message] {
+    await Task.detached(priority: .userInitiated) { AgentHistoryReader.transcript(of: history) }.value
+  }
+
   /// Everything, for usage totals.
   public func all() async -> [AgentHistory] {
     (await load(.recent) + load(.archive)).sorted { $0.date > $1.date }
@@ -395,8 +399,4 @@ public actor AgentHistoryStore {
     cached.removeAll()
     return await all()
   }
-  public func transcript(_ history: AgentHistory) async -> [AgentHistory.Message] {
-    await Task.detached(priority: .userInitiated) { AgentHistoryReader.transcript(of: history) }.value
-  }
-
 }
