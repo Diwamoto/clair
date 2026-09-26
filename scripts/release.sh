@@ -27,6 +27,9 @@ if ((publish)) && gh release view "$tag" --repo "$repo" >/dev/null 2>&1; then
 fi
 [[ -n "${CLAIR_UPDATE_PRIVATE_KEY:-}" ]] || die "CLAIR_UPDATE_PRIVATE_KEY is not set"
 public_key="$(tr -d '[:space:]' <Config/update-public-key)"
+# Release notes are the CHANGELOG.md section for this version (Keep a Changelog; written by the clair-release skill).
+notes="$(awk -v h="## [$version]" 'index($0, "## [") == 1 { f = (index($0, h) == 1); next } f' CHANGELOG.md)"
+[[ -n "${notes//[[:space:]]/}" ]] || die "CHANGELOG.md has no '## [$version]' section"
 [[ -f packages/ClairCore/Vendor/ghostty/GhosttyKit.xcframework/Info.plist ]] ||
   die "libghostty is not vendored (run scripts/ghostty.sh vendor); a release without it has no terminal"
 
@@ -96,7 +99,7 @@ if ! git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
 fi
 gh release create "$tag" "$out/$asset" "$out/latest.json" \
   --repo "$repo" \
-  --generate-notes \
+  --notes "$notes" \
   --title "Clair ${version}" \
   --latest
 printf 'release: published https://github.com/%s/releases/tag/%s\n' "$repo" "$tag"

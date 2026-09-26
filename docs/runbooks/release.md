@@ -17,7 +17,7 @@ Stable の `Clair.app` をこのリポジトリ(`Diwamoto/clair`、public)の Gi
      (3 つとも `Contents/MacOS`、SwiftPM の resource bundle は `.app` 直下)。
   2. 使い捨ての `HOME` で起動し、最初の frame まで到達することを確認する(bundle の欠落は起動時に crash するため)。
   3. `Clair-<version>-macos-arm64.zip` と、Ed25519 署名付きの `latest.json` を作る。
-  4. `v<version>` tag を push し、Release を作って `--latest` にする(notes は GitHub の自動生成)。
+  4. `v<version>` tag を push し、Release を作って `--latest` にする(notes は `CHANGELOG.md` の `## [<version>]` 節。無ければ失敗する)。
      既に Release がある version は何もせず終了する。
 - **クライアント**: `ClairUpdateConfiguration.manifestURL` は
   `https://github.com/Diwamoto/clair/releases/latest/download/latest.json` を見る。
@@ -38,7 +38,9 @@ fork からの pull request には secret が渡らないので、release は ma
 
 ## リリース手順
 
-1. `VERSION` を上げる(例: `0.1.0` → `0.2.0`)。
+通常は `clair-release` skill(`.agents/skills/clair-release/SKILL.md`)が 1〜2 をまとめて行う。
+
+1. `CHANGELOG.md` の `## [Unreleased]` を `## [<version>] - <date>` にし、`VERSION` を同じ値へ上げる(SemVer)。
 2. その commit を main に push する。Release workflow が test → build → smoke → publish を行う。
 3. <https://github.com/Diwamoto/clair/releases> に zip と `latest.json` が出ていることを確認する。
 
