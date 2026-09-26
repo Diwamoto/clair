@@ -197,12 +197,18 @@
 
     private var commitBox: some View {
       VStack(alignment: .leading, spacing: 6) {
-        // Multi-line box, distinct from the button: Return commits, Option-Return inserts a newline.
+        // Multi-line box, distinct from the button: Return commits, Command- or Option-Return inserts a newline.
         TextField("コミットメッセージ", text: $message, axis: .vertical)
           .textFieldStyle(.plain).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textPrimary)
           .lineLimit(3...8)
           .padding(.horizontal, 8).padding(.vertical, 6)
           .background(C.surfaceActive, in: RoundedRectangle(cornerRadius: Radius.control))
+          // ponytail: Command-Return appends at the end, not at the caret; route through NSTextView if mid-text breaks matter.
+          .onKeyPress(.return, phases: .down) { press in
+            guard press.modifiers.contains(.command) else { return .ignored }
+            message += "\n"
+            return .handled
+          }
           .onSubmit(commit)
         Button(action: commit) {
           Label("コミット", systemImage: "checkmark").font(Typography.font(Typography.sidebarStrong))
