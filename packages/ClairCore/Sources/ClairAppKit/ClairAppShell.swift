@@ -1038,8 +1038,15 @@ import Observation
         ScrollView { LazyVStack(alignment: .leading, spacing: 0) { sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "terminal" ? AnyView(sessionList) : sidebarMode == "ladybug" ? AnyView(debugPanel) : AnyView(explorer) }.clairScroller() }
         Spacer(minLength: 0)
         if sidebarMode == "shield", st.isRepo {
-          Button("コミットグラフを開く") { store.run("git.graph") }
-            .buttonStyle(.hoverWash).frame(maxWidth: .infinity, alignment: .leading)
+          // Same filled control as the commit button, so it reads as a button and the whole box is the hit target.
+          Button { store.run("git.graph") } label: {
+            Label("コミットグラフを開く", systemImage: "point.3.connected.trianglepath.dotted")
+              .foregroundStyle(C.textPrimary)
+              .frame(maxWidth: .infinity).frame(height: 28)
+              .background(C.surfaceActive, in: RoundedRectangle(cornerRadius: Radius.control))
+              .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.strong))
+          }
+            .buttonStyle(.hoverWash)
             .padding(.horizontal, 12).padding(.vertical, 8)
         }
       }
@@ -1614,7 +1621,13 @@ import Observation
             }
           }
         } else { debugEmpty("設定されていません") }
-        Button { toggleBreakpointAtCaret() } label: { Label("現在の行に追加", systemImage: "plus") }
+        Button { toggleBreakpointAtCaret() } label: {
+          Label("現在の行に追加", systemImage: "plus")
+            .foregroundStyle(st.active == nil ? C.textQuaternary : C.textPrimary)
+            .frame(maxWidth: .infinity).frame(height: 28)
+            .background(C.surfaceActive, in: RoundedRectangle(cornerRadius: Radius.control))
+            .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.strong))
+        }
           .buttonStyle(.hoverWash).font(.system(size: 12)).padding(.horizontal, 12).padding(.top, 6)
           .disabled(st.active == nil)
         debugSection("スレッドとコールスタック")
