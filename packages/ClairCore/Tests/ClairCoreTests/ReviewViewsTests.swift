@@ -36,6 +36,14 @@
       XCTAssertLessThan(elapsed, 0.2, "20,000-file explorer model took \(elapsed)s")
     }
 
+    func testAddedFolderIsOneTopLevelRow() {
+      let files = ["main.go", "../../x/docs/a/b.md"].map { WorkbenchFile(path: $0, status: nil) }
+      let rows = ClairAppShell.explorerRows(for: files, roots: ["../../x/docs"])
+      XCTAssertEqual(rows.map(\.label), ["main.go", "docs", "a", "b.md"])
+      XCTAssertEqual(rows.map(\.depth), [1, 1, 2, 3])
+      XCTAssertEqual(rows[1].id, "../../x/docs")
+    }
+
     func testThreadAnchorsToLineAndResolves() throws {
       let snap = try TextBuffer("a\nbb\nccc").snapshot
       let s = ReviewStore(file: nil)

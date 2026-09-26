@@ -487,6 +487,76 @@ extension CommandRegistry {
       s.filesCache[name] = nil
       return .ok
     },
+    // Tab-group chrome: shown name and colour, persisted with the Project. Empty label restores the folder name.
+    cmd("project.rename", "プロジェクト名を変更", .write, ai: false, params: [CommandParam("name", .string), CommandParam("label", .string)],
+        palette: false,
+        preflight: { s, i throws(CommandError) in
+          try require(s.projects.contains { $0.name == i["name"]!.string! }, "no project \(i["name"]!)"); return .write
+        }) { s, i in
+      let label = i["label"]!.string!.trimmingCharacters(in: .whitespacesAndNewlines)
+      let idx = s.projects.firstIndex { $0.name == i["name"]!.string! }!
+      s.projects[idx].label = label.isEmpty || label == s.projects[idx].name ? nil : label
+      return .ok
+    },
+    cmd("project.setColor", "タブグループの色を変更", .write, ai: false, params: [CommandParam("name", .string), CommandParam("color", .string)],
+        palette: false,
+        preflight: { s, i throws(CommandError) in
+          try require(s.projects.contains { $0.name == i["name"]!.string! }, "no project \(i["name"]!)")
+          try require(["blue", "green", "amber", "red", "purple", "gray"].contains(i["color"]!.string!), "unknown color \(i["color"]!)")
+          return .write
+        }) { s, i in
+      s.projects[s.projects.firstIndex { $0.name == i["name"]!.string! }!].color = i["color"]!.string!
+      return .ok
+    },
+    // ai: false — like project.open, an agent must not widen the readable file system on its own.
+    cmd("project.addFolder", "プロジェクトにフォルダを追加", .additive, ai: false,
+        params: [CommandParam("name", .string), CommandParam("path", .string)], palette: false,
+        preflight: { s, i throws(CommandError) in
+          guard let p = s.projects.first(where: { $0.name == i["name"]!.string! }) else { throw CommandError(.preconditionFailed, "no project \(i["name"]!)") }
+          guard let path = WorkbenchProject.normalized(i["path"]!.string!) else { throw CommandError(.preconditionFailed, "not a directory \(i["path"]!)") }
+          // Nested either way would list the same files twice.
+          for other in [p.path] + (p.folders ?? []) {
+            try require(path != other && !path.hasPrefix(other + "/") && !other.hasPrefix(path + "/"), "\(path) は既にこの Project に含まれています")
+          }
+          return .additive
+        }) { s, i in
+      let idx = s.projects.firstIndex { $0.name == i["name"]!.string! }!
+      s.projects[idx].folders = (s.projects[idx].folders ?? []) + [WorkbenchProject.normalized(i["path"]!.string!)!]
+      s.filesCache[s.projects[idx].name] = nil
+      return .ok
+    },
+    cmd("project.removeFolder", "プロジェクトからフォルダを外す", .write, ai: false,
+        params: [CommandParam("name", .string), CommandParam("path", .string)], palette: false,
+        preflight: { s, i throws(CommandError) in
+          let p = s.projects.first { $0.name == i["name"]!.string! }
+          try require(p?.folders?.contains(i["path"]!.string!) == true, "not an added folder \(i["path"]!)")
+          let prefix = WorkbenchFiles.relative(i["path"]!.string!, from: p!.path) + "/"
+          let dirty = p!.name == s.project ? s.dirty : s.layouts[p!.name]?.dirty ?? []
+          try require(!dirty.contains { $0.hasPrefix(prefix) }, "未保存の変更があります")
+          return .write
+        }) { s, i in
+      let idx = s.projects.firstIndex { $0.name == i["name"]!.string! }!
+      let p = s.projects[idx], prefix = WorkbenchFiles.relative(i["path"]!.string!, from: p.path) + "/"
+      s.projects[idx].folders?.removeAll { $0 == i["path"]!.string! }
+      s.filesCache[p.name] = nil
+      if p.name == s.project {
+        s.files.removeAll { $0.path.hasPrefix(prefix) }
+        s.tabs.removeAll { $0.hasPrefix(prefix) }
+        if s.active.map({ $0.hasPrefix(prefix) }) == true { s.active = s.tabs.last }
+      }
+      return .ok
+    },
+    cmd("project.move", "タブグループを移動", .write, ai: false, params: [CommandParam("name", .string), CommandParam("offset", .int)],
+        palette: false,
+        preflight: { s, i throws(CommandError) in
+          let from = s.projects.firstIndex { $0.name == i["name"]!.string! }
+          try require(from != nil, "no project \(i["name"]!)")
+          try require(s.projects.indices.contains(from! + i["offset"]!.int!), "cannot move further"); return .write
+        }) { s, i in
+      let from = s.projects.firstIndex { $0.name == i["name"]!.string! }!
+      s.projects.swapAt(from, from + i["offset"]!.int!)
+      return .ok
+    },
     // ai: false — an agent must not widen the readable file system on its own.
     cmd("project.open", "フォルダをプロジェクトとして開く", .additive, ai: false, params: [CommandParam("path", .string)],
         preflight: { _, i throws(CommandError) in
@@ -530,38 +600,6 @@ extension CommandRegistry {
         shortcut: "⌘,") { s, i in
       s.settingsOpen = true; s.palette = nil
       if let sec = i["section"]?.string { s.section = sec }
-    // Tab-group chrome: shown name and colour, persisted with the Project. Empty label restores the folder name.
-    cmd("project.rename", "プロジェクト名を変更", .write, ai: false, params: [CommandParam("name", .string), CommandParam("label", .string)],
-        palette: false,
-        preflight: { s, i throws(CommandError) in
-          try require(s.projects.contains { $0.name == i["name"]!.string! }, "no project \(i["name"]!)"); return .write
-        }) { s, i in
-      let label = i["label"]!.string!.trimmingCharacters(in: .whitespacesAndNewlines)
-      let idx = s.projects.firstIndex { $0.name == i["name"]!.string! }!
-      s.projects[idx].label = label.isEmpty || label == s.projects[idx].name ? nil : label
-      return .ok
-    },
-    cmd("project.setColor", "タブグループの色を変更", .write, ai: false, params: [CommandParam("name", .string), CommandParam("color", .string)],
-        palette: false,
-        preflight: { s, i throws(CommandError) in
-          try require(s.projects.contains { $0.name == i["name"]!.string! }, "no project \(i["name"]!)")
-          try require(["blue", "green", "amber", "red", "purple", "gray"].contains(i["color"]!.string!), "unknown color \(i["color"]!)")
-          return .write
-        }) { s, i in
-      s.projects[s.projects.firstIndex { $0.name == i["name"]!.string! }!].color = i["color"]!.string!
-      return .ok
-    },
-    cmd("project.move", "タブグループを移動", .write, ai: false, params: [CommandParam("name", .string), CommandParam("offset", .int)],
-        palette: false,
-        preflight: { s, i throws(CommandError) in
-          let from = s.projects.firstIndex { $0.name == i["name"]!.string! }
-          try require(from != nil, "no project \(i["name"]!)")
-          try require(s.projects.indices.contains(from! + i["offset"]!.int!), "cannot move further"); return .write
-        }) { s, i in
-      let from = s.projects.firstIndex { $0.name == i["name"]!.string! }!
-      s.projects.swapAt(from, from + i["offset"]!.int!)
-      return .ok
-    },
       return .ok
     },
     cmd("settings.close", "設定を閉じる", .read) { s, _ in s.settingsOpen = false; return .ok },

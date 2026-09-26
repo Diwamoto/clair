@@ -569,8 +569,9 @@ import Observation
         return
       }
       scanning = true
+      let folders = state.projects.first { $0.path == root }?.folders ?? []
       DispatchQueue.global(qos: .utility).async { [weak self] in
-        let files = self?.scanFiles(root) ?? []
+        let files = (self?.scanFiles(root) ?? []) + WorkbenchFiles.scanFolders(folders, from: root)
         DispatchQueue.main.async {
           guard let self else { return }
           self.scanning = false
@@ -995,6 +996,59 @@ import Observation
       .clairContextMenu(menus) { projectActive ? fileMenu(path, tab: true) : ClairMenuSpec(entries: []) }
     }
 
+    /// Mock `projectMenu`: colour in place, switch/fold/rename, order, mute, close.
+    private func projectMenu(_ p: WorkbenchProject, colorKey: DesignTokens.GroupColor, folded: Bool) -> ClairMenuSpec {
+      let name = CommandArg.string(p.name)
+      let index = st.projects.firstIndex(of: p) ?? 0
+      let muted = st.notices.mutedProjects.contains(p.name)
+      return ClairMenuSpec(title: p.displayName, sub: p.path, entries: [
+        .swatches(colorKey) { store.run("project.setColor", ["name": name, "color": .string($0.rawValue)]) },
+        .separator,
+        .item("このProjectに切り替え", disabled: st.project == p.name) { store.run("project.switch", ["name": name]) },
+        .item(folded ? "グループを展開" : "グループを折りたたむ") {
+          if folded { collapsedGroups.remove(p.name) } else { collapsedGroups.insert(p.name) }
+        },
+        .item("フォルダを追加…") { addFolder(to: p.name) },
+        .item("Project名を変更…") {
+          menus.ask(ClairDialog(title: "Project名を変更", message: "空にするとフォルダ名に戻ります。", initial: p.displayName) {
+            store.run("project.rename", ["name": name, "label": .string($0)])
+          })
+        },
+        .separator,
+        .item("左へ移動", disabled: index == 0) { store.run("project.move", ["name": name, "offset": .int(-1)]) },
+        .item("右へ移動", disabled: index >= st.projects.count - 1) { store.run("project.move", ["name": name, "offset": .int(1)]) },
+        .separator,
+        .item(muted ? "通知のミュートを解除" : "通知をミュート") {
+          store.run("notice.muteProject", ["name": name, "muted": .bool(!muted)])
+        },
+        .item("Projectを閉じる", disabled: st.projects.count < 2, destructive: true) {
+          if case .failure(let e) = store.run("project.close", ["name": name]) {
+            menus.ask(ClairDialog(title: "閉じられませんでした", message: e.message) { _ in })
+          }
+        },
+      ])
+    }
+
+    private var currentProject: WorkbenchProject? { st.projects.first { $0.name == st.project } }
+
+    /// The absolute folder behind an explorer row that is an added folder's top row.
+    private func addedFolder(_ id: String) -> String? {
+      guard let p = currentProject, let i = p.folderPrefixes.firstIndex(of: id) else { return nil }
+      return p.folders?[i]
+    }
+
+    private func addFolder(to project: String) {
+      let panel = NSOpenPanel()
+      panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.allowsMultipleSelection = false
+      panel.prompt = "追加"
+      guard panel.runModal() == .OK, let url = panel.url else { return }
+      if case .failure(let e) = store.run("project.addFolder", ["name": .string(project), "path": .string(url.path)]) {
+        menus.ask(ClairDialog(title: "追加できませんでした", message: e.message) { _ in })
+      } else if project == st.project {
+        store.refreshProjectFiles()
+      }
+    }
+
     private func openFolder() {
       let panel = NSOpenPanel()
       panel.canChooseFiles = false; panel.canChooseDirectories = true
@@ -1034,38 +1088,6 @@ import Observation
 
     private var sidebar: some View {
       VStack(spacing: 0) {
-    /// Mock `projectMenu`: colour in place, switch/fold/rename, order, mute, close.
-    private func projectMenu(_ p: WorkbenchProject, colorKey: DesignTokens.GroupColor, folded: Bool) -> ClairMenuSpec {
-      let name = CommandArg.string(p.name)
-      let index = st.projects.firstIndex(of: p) ?? 0
-      let muted = st.notices.mutedProjects.contains(p.name)
-      return ClairMenuSpec(title: p.displayName, sub: p.path, entries: [
-        .swatches(colorKey) { store.run("project.setColor", ["name": name, "color": .string($0.rawValue)]) },
-        .separator,
-        .item("このProjectに切り替え", disabled: st.project == p.name) { store.run("project.switch", ["name": name]) },
-        .item(folded ? "グループを展開" : "グループを折りたたむ") {
-          if folded { collapsedGroups.remove(p.name) } else { collapsedGroups.insert(p.name) }
-        },
-        .item("Project名を変更…") {
-          menus.ask(ClairDialog(title: "Project名を変更", message: "空にするとフォルダ名に戻ります。", initial: p.displayName) {
-            store.run("project.rename", ["name": name, "label": .string($0)])
-          })
-        },
-        .separator,
-        .item("左へ移動", disabled: index == 0) { store.run("project.move", ["name": name, "offset": .int(-1)]) },
-        .item("右へ移動", disabled: index >= st.projects.count - 1) { store.run("project.move", ["name": name, "offset": .int(1)]) },
-        .separator,
-        .item(muted ? "通知のミュートを解除" : "通知をミュート") {
-          store.run("notice.muteProject", ["name": name, "muted": .bool(!muted)])
-        },
-        .item("Projectを閉じる", disabled: st.projects.count < 2, destructive: true) {
-          if case .failure(let e) = store.run("project.close", ["name": name]) {
-            menus.ask(ClairDialog(title: "閉じられませんでした", message: e.message) { _ in })
-          }
-        },
-      ])
-    }
-
         // Lazy: a Project can list thousands of files, and an eager tree makes accessibility traversal (and layout) block the main thread.
         ScrollView { LazyVStack(alignment: .leading, spacing: 0) { sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "terminal" ? AnyView(sessionList) : sidebarMode == "ladybug" ? AnyView(debugPanel) : AnyView(explorer) }.clairScroller() }
         Spacer(minLength: 0)
@@ -1394,11 +1416,23 @@ import Observation
                   Spacer(minLength: 0)
                 }
                 .clairContextMenu(menus) {
+                  if let folder = addedFolder(r.id) {
+                    ClairMenuSpec(title: r.label, sub: folder, entries: [
+                      .item(open ? "折りたたむ" : "開く") { store.run("explorer.toggle", ["path": .string(r.id)]) },
+                      .separator,
+                      .item("Project からフォルダを外す", destructive: true) {
+                        if case .failure(let e) = store.run("project.removeFolder", ["name": .string(st.project), "path": .string(folder)]) {
+                          menus.ask(ClairDialog(title: "外せませんでした", message: e.message) { _ in })
+                        }
+                      },
+                    ])
+                  } else {
                   ClairMenuSpec(title: r.label, sub: r.id, entries: [
                     .item(open ? "折りたたむ" : "開く") { store.run("explorer.toggle", ["path": .string(r.id)]) },
                     reviewMenu("このフォルダをレビュー", .folder(r.id), disabled: st.dirty.contains(where: { $0.hasPrefix(r.id + "/") })),
                     .separator,
                   ] + pathItems(r.id) + [.separator] + fileOps(r.id, dir: true))
+                  }
                 }
               }
             }
@@ -1412,9 +1446,9 @@ import Observation
 
     private func rebuildExplorer() {
       explorerTask?.cancel()
-      let files = st.files, project = st.project
+      let files = st.files, project = st.project, roots = currentProject?.folderPrefixes ?? []
       explorerTask = Task {
-        let rows = await Task.detached(priority: .utility) { Self.explorerRows(for: files) }.value
+        let rows = await Task.detached(priority: .utility) { Self.explorerRows(for: files, roots: roots) }.value
         guard !Task.isCancelled, st.project == project, st.files == files else { return }
         explorerRows = rows
         rebuildVisibleExplorer()
@@ -1431,18 +1465,21 @@ import Observation
       }
     }
 
-    nonisolated static func explorerRows(for files: [WorkbenchFile]) -> [ExplorerRow] {
+    /// `roots`: added folders' relative prefixes (`../docs`); each is one top-level row named after the folder.
+    nonisolated static func explorerRows(for files: [WorkbenchFile], roots: [String] = []) -> [ExplorerRow] {
       var out: [ExplorerRow] = []
       var seen = Set<String>()
       out.reserveCapacity(files.count * 2)
       for file in files {
         guard !Task.isCancelled else { return [] }
-        let parts = file.path.split(separator: "/").map(String.init)
+        let root = roots.first { file.path.hasPrefix($0 + "/") }
+        let parts = root.map { [$0] + file.path.dropFirst($0.count + 1).split(separator: "/").map(String.init) }
+          ?? file.path.split(separator: "/").map(String.init)
         guard let name = parts.last else { continue }
         if parts.count > 1 {
           for depth in 0..<(parts.count - 1) {
             let id = parts[0...depth].joined(separator: "/")
-            if seen.insert(id).inserted { out.append(ExplorerRow(id: id, label: parts[depth], depth: depth + 1, file: nil)) }
+            if seen.insert(id).inserted { out.append(ExplorerRow(id: id, label: (parts[depth] as NSString).lastPathComponent, depth: depth + 1, file: nil)) }
           }
         }
         out.append(ExplorerRow(id: file.path, label: name, depth: parts.count, file: file))

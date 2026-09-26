@@ -76,7 +76,7 @@ terminal をそのまま使えることを保証し、その周囲に Project ow
 
 ## 3. 用語
 
-- **Project**: Clair が開く local folder。Git repository でなくてよい。
+- **Project**: Clair が開く local folder(root)。Git repository でなくてよい。root の外の folder を追加でき、explorer には root の横に並ぶ([ADR-0017](decisions/0017-project-extra-folders.md))。
 - **Workspace**: Project に保存された pane/tab/sidebar の layout と表示 state。
 - **Pane**: editor / terminal / diff を混在できる tab group。任意に split できる。
 - **Agent terminal**: launch profile から起動した Claude Code / Codex / OpenCode
@@ -358,6 +358,10 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
 - Git の有無を問わず local folder を Project として開き、複数 Project を 1
   process で切り替える
 - Project ごとに workspace、terminal、agent、notification、local settings を保持
+- titlebar の Project chip を右クリックして、tab group の色、表示名、並び順、
+  folder の追加、Project を閉じる操作を行う。これらは Project に保存され、切り替えや
+  再起動でも残る。追加 folder の Git status、file 監視、terminal / agent の cwd は
+  root だけが対象になる
 - Agents 一覧は現在の agent terminal への移動と、3 provider の local chat history
   の閲覧を統合する。履歴行には provider が分かるラベルとアイコンを付ける
 - 設定の「使用状況」はユーザーが送信した依頼・追記を 1 件として日別に集計し、

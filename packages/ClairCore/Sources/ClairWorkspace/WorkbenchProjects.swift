@@ -16,6 +16,19 @@ public struct WorkbenchProject: Sendable, Codable, Equatable {
   /// Managed worktree only: the repository it was created from and its branch (V06).
   public var origin: String? = nil
   public var branch: String? = nil
+  /// Titlebar tab group: display name and `GroupColor` key. `name` stays the identity key
+  /// (layouts, terminal reattach by `project#pane`), so a rename only changes what is shown.
+  public var label: String? = nil
+  public var color: String? = nil
+  /// Extra folders (absolute) shown beside the root. Their files sit in `files` under their path
+  /// relative to the root (`../docs/…`), so every `root + "/" + rel` join resolves them unchanged.
+  /// Optional so workspaces saved before this field still decode.
+  public var folders: [String]? = nil
+
+  public var displayName: String { label ?? name }
+
+  /// Relative prefixes of `folders`, in order — the explorer's extra top-level rows.
+  public var folderPrefixes: [String] { (folders ?? []).map { WorkbenchFiles.relative($0, from: path) } }
 
   public init(name: String, path: String, origin: String? = nil, branch: String? = nil) {
     self.name = name
@@ -37,12 +50,6 @@ public struct WorkbenchProject: Sendable, Codable, Equatable {
     guard path.hasPrefix("/") else { return nil }
     let url = URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath()
     var isDir: ObjCBool = false
-  /// Titlebar tab group: display name and `GroupColor` key. `name` stays the identity key
-  /// (layouts, terminal reattach by `project#pane`), so a rename only changes what is shown.
-  public var label: String? = nil
-  public var color: String? = nil
-
-  public var displayName: String { label ?? name }
     return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) && !isDir.boolValue ? url.path : nil
   }
 
@@ -151,7 +158,7 @@ extension WorkbenchState {
     project = p.name
     // A revisited Project shows its last tree at once; the GUI rescans in the background (a scan walks the disk and runs `git status`).
     let cached = filesCache[p.name]
-    files = cached ?? (scanFiles ? WorkbenchFiles.scan(p.path) : [])
+    files = cached ?? (scanFiles ? WorkbenchFiles.scan(p.path, folders: p.folders ?? []) : [])
     var l = layouts[p.name] ?? ProjectLayout()
     // Nothing folded yet (a new Project, or a layout saved before folding was the default): fold every directory,
     // since an unfolded tree of a big repo is thousands of rows. ponytail: a tree the user fully unfolded is folded again on the next switch.
@@ -173,6 +180,27 @@ extension WorkbenchState {
 
 public enum WorkbenchFiles {
   static let skipped: Set<String> = [".git", "node_modules", ".build", "DerivedData", ".DS_Store", "target"]
+  /// `folder` relative to `root` (both normalized absolute), e.g. `../docs`.
+  static func relative(_ folder: String, from root: String) -> String {
+    let f = folder.split(separator: "/"), r = root.split(separator: "/")
+    var common = 0
+    while common < min(f.count, r.count), f[common] == r[common] { common += 1 }
+    return (Array(repeating: "..", count: r.count - common) + f[common...].map(String.init)).joined(separator: "/")
+  }
+
+  /// The root's files, then each extra folder's under its relative prefix (kept contiguous for the explorer).
+  /// ponytail: extra folders carry no Git status and are not watched; they refresh with the root's rescans.
+  public static func scan(_ root: String, folders: [String]) -> [WorkbenchFile] {
+    scan(root) + scanFolders(folders, from: root)
+  }
+
+  public static func scanFolders(_ folders: [String], from root: String) -> [WorkbenchFile] {
+    folders.flatMap { folder in
+      let prefix = relative(folder, from: root)
+      return scan(folder).map { WorkbenchFile(path: prefix + "/" + $0.path, status: nil) }
+    }
+  }
+
   /// Every directory that contains a file, as root-relative paths.
   static func directories(of files: [WorkbenchFile]) -> Set<String> {
     var out = Set<String>()
@@ -276,7 +304,9 @@ extension WorkbenchState {
     for (k, v) in snap.toggles where s.toggles[k] != nil { s.toggles[k] = v }
     for (k, v) in snap.choices ?? [:] where WorkbenchState.choiceOptions[k]?.contains(v) == true { s.choices[k] = v }
     for (id, key) in snap.shortcuts ?? [:] where key.isEmpty || WorkbenchState.canonicalShortcut(key) == key { s.shortcuts[id] = key }
-    s.projects = snap.projects.filter { WorkbenchProject.normalized($0.path) != nil }
+    s.projects = snap.projects.filter { WorkbenchProject.normalized($0.path) != nil }.map {
+      var p = $0; p.folders = p.folders?.filter { WorkbenchProject.normalized($0) != nil }; return p
+    }
     guard let current = s.projects.first(where: { $0.name == snap.project }) ?? s.projects.first else { return s }
     if s.toggles["restoreLayout"] == true {
       s.layouts = snap.layouts.mapValues { var l = $0; l.dirty = []; return l }

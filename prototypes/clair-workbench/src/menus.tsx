@@ -125,6 +125,8 @@ export function projectMenu(wb: Workbench, project: string): MenuSpec {
       separator,
       item('このProjectに切り替え', { disabled: active, run: () => wb.setActiveProject(project) }),
       item(collapsed ? 'グループを展開' : 'グループを折りたたむ', { run: () => wb.toggleProjectCollapsed(project) }),
+      // Native opens a folder picker and lists the folder beside the root (ADR-0017); the mock has no disk.
+      item('フォルダを追加…', { run: () => {} }),
       item('Project名を変更…', { run: () => wb.setRenamingProject(project) }),
       separator,
       item('左へ移動', { disabled: index <= 0, run: () => wb.moveProject(project, -1) }),

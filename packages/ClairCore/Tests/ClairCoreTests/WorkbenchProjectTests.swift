@@ -308,3 +308,35 @@ final class ProjectGroupChromeTests: XCTestCase {
     XCTAssertEqual(s.projects[1].displayName, "a")
   }
 }
+
+/// An added folder's files join the Project under their root-relative path, so `root + "/" + rel` reads them.
+final class ProjectFolderTests: XCTestCase {
+  func testAddScanRemoveRestore() throws {
+    XCTAssertEqual(WorkbenchFiles.relative("/w/docs", from: "/w/app"), "../docs")
+    XCTAssertEqual(WorkbenchFiles.relative("/x/y", from: "/w/app"), "../../x/y")
+    let r = CommandRegistry.workbench
+    let tmp = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: tmp) }
+    for d in ["app", "docs", "app/sub"] { try FileManager.default.createDirectory(at: tmp.appending(path: d), withIntermediateDirectories: true) }
+    try "a".write(to: tmp.appending(path: "app/main.go"), atomically: true, encoding: .utf8)
+    try "d".write(to: tmp.appending(path: "docs/readme.md"), atomically: true, encoding: .utf8)
+    let app = WorkbenchProject.normalized(tmp.appending(path: "app").path)!
+    let docs = WorkbenchProject.normalized(tmp.appending(path: "docs").path)!
+    var s = WorkbenchState()
+    s.openProject(WorkbenchProject(name: "app", path: app), scanFiles: false)
+    XCTAssertThrowsError(try r.execute("project.addFolder", ["name": .string("app"), "path": .string(app + "/sub")], state: &s).get())
+    _ = try r.execute("project.addFolder", ["name": .string("app"), "path": .string(docs)], state: &s).get()
+    XCTAssertThrowsError(try r.execute("project.addFolder", ["name": .string("app"), "path": .string(docs)], state: &s).get())
+    let files = WorkbenchFiles.scan(app, folders: s.projects[0].folders!).map(\.path)
+    XCTAssertEqual(files, ["main.go", "../docs/readme.md"])
+    XCTAssertEqual(try String(contentsOfFile: app + "/" + files[1], encoding: .utf8), "d")
+    s.files = files.map { WorkbenchFile(path: $0, status: nil) }
+    _ = try r.execute("tab.open", ["path": .string(files[1])], state: &s).get()
+    let url = tmp.appending(path: "ws.json")
+    try s.save(to: url)
+    XCTAssertEqual(WorkbenchState.restore(from: url, scanFiles: true)?.projects[0].folders, [docs])
+    _ = try r.execute("project.removeFolder", ["name": .string("app"), "path": .string(docs)], state: &s).get()
+    XCTAssertEqual(s.files.map(\.path), ["main.go"])
+    XCTAssertEqual(s.tabs, [])
+  }
+}

@@ -143,7 +143,7 @@ extension WorkbenchState {
   mutating func refreshStatus(reconcileOpenFiles: Bool = false) {
     guard let p = current else { return }
     if reconcileOpenFiles {
-      let scanned = WorkbenchFiles.scan(p.path)
+      let scanned = WorkbenchFiles.scan(p.path, folders: p.folders ?? [])
       files = scanned
       filesCache[project] = scanned
       let existing = Set(scanned.map(\.path))
