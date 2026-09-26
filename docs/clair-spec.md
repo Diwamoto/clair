@@ -292,6 +292,11 @@ macOS の `NSTextInputClient` は行ローカルの UTF-16 空間で答える(�
 - 定義ジャンプの直接操作(⌘+click、F12、前後の位置へ戻る/進む)
 - AI inline 補完(ghost text、Tab で確定、Esc で却下)。LSP 補完とは別経路(2026-09-26 オーナー判断で保留: LSP 補完で足りる間は実装しない)
 
+見た目の基本として次を持つ(2026-09-26 オーナー決定)。
+
+- カラースキーム: app chrome、editor の syntax 色、terminal の色を 1 つの scheme として切り替える。同梱の dark / light と、OS の外観への追従を持つ。scheme は Clair 同梱の定義だけで、VS Code テーマ互換や外部テーマの読み込みは約束しない
+- 言語ごとのファイルアイコン: file tree、editor tab、検索結果、quick open で拡張子・既知ファイル名から言語アイコンを出す。未知の種類は汎用アイコン
+
 minimap、VS Code extension 互換、独自 plugin runtime は対象外。
 
 ## 6. AI review
