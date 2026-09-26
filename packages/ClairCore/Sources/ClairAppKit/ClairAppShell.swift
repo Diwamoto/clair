@@ -1011,8 +1011,8 @@ import Observation
         ForEach(["folder", "shield", "terminal", "ladybug"], id: \.self) { icon in
           activityBarButton(icon)
         }
+        // ponytail: no overflow "…" menu — the Workbench shows it only when nav items overflow; four always fit here.
         Spacer(minLength: 0)
-        Image(systemName: "ellipsis").font(.system(size: 12)).foregroundStyle(C.chromeInkMuted).frame(width: 36, height: 32)
       }
       .padding(.vertical, 8)
       .frame(width: ChromeBudget.activityBarWidth).frame(maxHeight: .infinity)
