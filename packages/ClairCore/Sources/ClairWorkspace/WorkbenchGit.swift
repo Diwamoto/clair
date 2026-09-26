@@ -279,16 +279,16 @@ extension CommandRegistry {
         let r = WorkbenchGit.run(s.current!.path, ["branch", "-d", i["name"]!.string!], merge: true)  // -d: refuses unmerged
         return r.ok ? .ok : .text(r.out)
       },
-      // V17: one graph pane per Project layout; asking again focuses it.
+      // V17: one graph pane per Project layout, opened maximized so the graph and its diffs get the whole area; asking again focuses it.
       cmd("git.graph", "コミットグラフを開く", .additive, ai: false,
           preflight: { s, _ throws(CommandError) in _ = try repo(s); return .additive }) { s, _ in
         s.panesClosed = false
         if let graph = s.tree.leaves.first(where: { $0.kind == .graph }) {
-          if s.tree.maximized != nil { s.tree.toggleMaximize() }
           s.tree.focus(graph.id)
         } else {
           s.tree.splitFocused(.horizontal, kind: .graph)
         }
+        if s.tree.maximized != s.tree.focused { if s.tree.maximized != nil { s.tree.toggleMaximize() }; s.tree.toggleMaximize() }
         return .pane(s.tree.focused)
       },
       cmd("git.review", "ブランチ全体をレビュー", .read, params: [CommandParam("base", .string, required: false)],
