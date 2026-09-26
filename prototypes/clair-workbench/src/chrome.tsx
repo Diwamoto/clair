@@ -38,7 +38,7 @@ const kindLogo: Record<FileKind, string> = {
 
 export function FileIcon({ kind, tint }: { kind: FileKind; tint?: string }) {
   return (
-    <svg width={16} height={16} viewBox="0 0 24 24" fill={tint ?? 'currentColor'} aria-hidden>
+    <svg width={17} height={17} viewBox="0 0 24 24" fill={tint ?? 'currentColor'} aria-hidden>
       <path d={kindLogo[kind]} />
     </svg>
   );

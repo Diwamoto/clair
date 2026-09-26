@@ -12,7 +12,7 @@ public struct FileIcon: Equatable, Sendable {
   @ViewBuilder public func image(size: CGFloat, ink: SwiftUI.Color) -> some View {
     if let logo = SimpleIcons.paths[symbol] {
       // Logos fill their whole 24×24 box; SF Symbols at the same point size read larger.
-      let side = size * 1.6
+      let side = size * 1.4
       logo.applying(CGAffineTransform(scaleX: side / 24, y: side / 24)).fill(ink).frame(width: side, height: side)
     } else {
       Image(systemName: symbol).font(.system(size: size)).foregroundStyle(ink)
