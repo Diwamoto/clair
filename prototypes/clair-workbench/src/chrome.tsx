@@ -31,7 +31,11 @@ import { useWorkbench, type Screen } from './store';
 
 const byPath = new Map(files.map((f) => [f.path, f]));
 
-export function FileIcon({ kind, tint }: { kind: FileKind; tint: string }) {
+/** Per-language tint, mirroring native `FileIcon` (ClairDesignSystem): syntax palette colours. */
+const kindTint: Record<FileKind, string> = { swift: color.codeNumber, go: color.codeFunc, md: color.codeFunc, rust: color.codeNumber };
+
+export function FileIcon({ kind }: { kind: FileKind; tint?: string }) {
+  const tint = kindTint[kind];
   if (kind === 'md') return <IconMarkdown size={12} color={tint} />;
   if (kind === 'swift') return <IconClaude size={12} color={tint} />;
   return <IconDoc size={12} color={tint} />;

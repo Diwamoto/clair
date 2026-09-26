@@ -267,7 +267,7 @@
               treeRow(depth: d, selected: false, action: { if open { collapsed.insert(ids[d]) } else { collapsed.remove(ids[d]) } }) {
                 Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold)).foregroundStyle(C.textTertiary)
                   .rotationEffect(.degrees(open ? 90 : 0)).frame(width: 10)
-                Image(systemName: open ? "folder" : "folder.fill").font(.system(size: 10)).foregroundStyle(C.textTertiary).frame(width: 12)
+                FileIcon.folder(open: open).image(size: 10, ink: C.textTertiary).frame(width: 12)
                 Text(dirs[d]).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textSecondary).lineLimit(1)
                 Spacer(minLength: 0)
               }
@@ -277,7 +277,7 @@
             let t = target(c), on = selected == t, name = c.path.split(separator: "/").last.map(String.init) ?? c.path
             let badge = c.untracked ? "U" : c.index == "A" || c.worktree == "A" ? "A" : c.index == "D" || c.worktree == "D" ? "D" : "M"
             treeRow(depth: dirs.count, selected: on, action: { onSelect(t) }) {
-              Image(systemName: c.path.hasSuffix(".md") ? "text.alignleft" : "doc.text").font(.system(size: 10)).foregroundStyle(on ? C.textSecondary : C.textTertiary).frame(width: 12)
+              FileIcon.forPath(c.path).image(size: 10, ink: on ? C.textSecondary : C.textTertiary).frame(width: 12)
               Text(name).font(.system(size: 12, weight: on ? .semibold : .regular)).foregroundStyle(on ? C.textPrimary : C.textSecondary).lineLimit(1)
               Spacer(minLength: 0)
               if hovered == t {
@@ -679,7 +679,7 @@
           LazyVStack(alignment: .leading, spacing: 0) {
             ForEach(indexedGroups, id: \.path) { group in
               HStack(spacing: 6) {
-                Image(systemName: "doc.text").font(.system(size: 11)).foregroundStyle(C.textTertiary)
+                FileIcon.forPath(group.path).image(size: 11, ink: C.textTertiary)
                 Text(URL(fileURLWithPath: group.path).lastPathComponent).font(.system(size: 11, weight: .semibold)).foregroundStyle(C.textTertiary)
                 Spacer(minLength: 0)
                 Text(group.path.split(separator: "/").dropLast().joined(separator: "/"))

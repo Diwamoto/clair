@@ -1333,7 +1333,7 @@ import Observation
                 let on = st.active == f.path && !st.settingsOpen
                 let badge = st.dirty.contains(f.path) ? "M" : f.status
                 treeRow(depth: r.depth, selected: on, action: { store.run("tab.open", ["path": .string(f.path)]) }) {
-                  Image(systemName: f.path.hasSuffix(".md") ? "text.alignleft" : "doc.text").font(.system(size: 10)).foregroundStyle(on ? C.textSecondary : C.textTertiary).frame(width: 12)
+                  FileIcon.forPath(f.path).image(size: 10, ink: on ? C.textSecondary : C.textTertiary).frame(width: 12)
                   Text(r.label).font(.system(size: 12, weight: on ? .semibold : .regular)).foregroundStyle(on ? C.textPrimary : C.textSecondary).lineLimit(1)
                   Spacer(minLength: 0)
                   if let b = badge { Text(b).font(.system(size: 12, weight: .semibold)).foregroundStyle(b == "A" || b == "?" ? C.success : C.attention) }
@@ -1343,8 +1343,7 @@ import Observation
                 let open = !st.collapsed.contains(r.id)
                 treeRow(depth: r.depth, selected: false, action: { store.run("explorer.toggle", ["path": .string(r.id)]) }) {
                   chevron(open: open)
-                  Image(systemName: open ? "folder" : "folder.fill")
-                    .font(.system(size: 10)).foregroundStyle(C.textTertiary).frame(width: 12)
+                  FileIcon.folder(open: open).image(size: 10, ink: C.textTertiary).frame(width: 12)
                   Text(r.label).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textSecondary).lineLimit(1)
                   Spacer(minLength: 0)
                 }
@@ -2273,6 +2272,7 @@ import Observation
               ForEach(Array(list.enumerated()), id: \.offset) { i, it in
                 let on = i == selection
                 HStack(spacing: 8) {
+                  if p == .files { FileIcon.forPath(it.title).image(size: 11, ink: C.textTertiary).frame(width: 14) }
                   Text(p == .files ? name(it.title) : it.title).font(.system(size: 12)).lineLimit(1)
                     .foregroundStyle(on ? C.textPrimary : C.textSecondary)
                   Spacer(minLength: 0)
@@ -2502,8 +2502,11 @@ import Observation
       if let providerIcon {
         ProviderBrandIcon(provider: providerIcon, size: 13)
       } else {
-        Image(systemName: icon ?? (path.hasSuffix(".md") ? "text.alignleft" : "doc.text"))
-          .font(.system(size: 11)).foregroundStyle(tint)
+        if let icon {
+          Image(systemName: icon).font(.system(size: 11)).foregroundStyle(tint)
+        } else {
+          FileIcon.forPath(path).image(size: 11, ink: tint)
+        }
       }
     }
   }
