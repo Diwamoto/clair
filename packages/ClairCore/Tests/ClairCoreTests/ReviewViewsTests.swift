@@ -11,6 +11,7 @@
       let d = "diff --git a/f b/f\nindex 1..2\n--- a/f\n+++ b/f\n@@ -1,2 +5,3 @@\n ctx\n-old\n+new\n+more"
       let r = DiffView.rows(d)
       XCTAssertEqual(r.map(\.newLine), [nil, 5, nil, 6, 7])  // hunk header, ctx, removed, added, added
+      XCTAssertEqual(r.map(\.oldLine), [nil, 1, 2, nil, nil])
       XCTAssertEqual(DiffView.rows("Binary files a/x and b/x differ").map(\.newLine), [nil])
       XCTAssertTrue(DiffView.rows("").isEmpty)
       let st = DiffView.stats(r)

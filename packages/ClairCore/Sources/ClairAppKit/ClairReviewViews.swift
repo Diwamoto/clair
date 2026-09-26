@@ -336,7 +336,7 @@
     /// A diff this long is cut with a notice instead of laying out every row.
     nonisolated static let maxLines = 5000
 
-    struct Row: Sendable { let text: String; let newLine: Int? }
+    struct Row: Sendable { let text: String; let newLine: Int?; var oldLine: Int? = nil }
 
     /// Immutable, pre-parsed diff data. Construct this away from the main actor; a large diff must
     /// not be tokenised and counted again for every SwiftUI body evaluation.
@@ -358,21 +358,25 @@
         visibleLines: Set(parsed.compactMap(\.newLine)))
     }
 
-    /// Parses `@@ -a,b +c,d @@` for `c`, then numbers context and added lines from there.
+    /// Parses `@@ -a,b +c,d @@` for `a` and `c`, then numbers old (context/removed) and new (context/added) lines.
     nonisolated static func rows(_ text: String) -> [Row] {
       let all = text.split(separator: "\n", omittingEmptySubsequences: false)
       let body = all.drop { !$0.hasPrefix("@@") }
       if body.isEmpty { return all.filter { $0.hasPrefix("Binary") }.map { Row(text: String($0), newLine: nil) } }
-      var n = 0
+      var n = 0, o = 0
+      func start(_ l: Substring, _ sign: Character) -> Int {
+        l.split(separator: " ").first { $0.first == sign }.flatMap { Int($0.dropFirst().split(separator: ",")[0]) } ?? 1
+      }
       return body.prefix(maxLines).map { l in
         if l.hasPrefix("@@") {
-          n = l.split(separator: " ").first { $0.hasPrefix("+") }
-            .flatMap { Int($0.dropFirst().split(separator: ",")[0]) } ?? 1
+          n = start(l, "+"); o = start(l, "-")
           return Row(text: String(l), newLine: nil)
         }
-        if l.hasPrefix("-") || l.hasPrefix("\\") { return Row(text: String(l), newLine: nil) }
-        defer { n += 1 }
-        return Row(text: String(l), newLine: n)
+        if l.hasPrefix("\\") { return Row(text: String(l), newLine: nil) }
+        if l.hasPrefix("-") { defer { o += 1 }; return Row(text: String(l), newLine: nil, oldLine: o) }
+        if l.hasPrefix("+") { defer { n += 1 }; return Row(text: String(l), newLine: n) }
+        defer { n += 1; o += 1 }
+        return Row(text: String(l), newLine: n, oldLine: o)
       }
     }
 
@@ -393,12 +397,12 @@
       ScrollViewReader { proxy in
       VStack(spacing: 0) {
         HStack {
-          Text(target.path).font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textPrimary)
+          Text(target.path).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary)
           Text(label ?? (target.staged ? "HEAD → index" : target.untracked ? "未追跡ファイル" : "index → 作業ツリー"))
             .font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary)
           if added + removed > 0 {
             Text("+\(added)").font(Typography.font(Typography.chrome)).foregroundStyle(C.success)
-            Text("−\(removed)").font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+            Text("−\(removed)").font(Typography.font(Typography.chrome)).foregroundStyle(C.danger)
           }
           Spacer()
           if editor != nil {
@@ -434,7 +438,8 @@
             }.buttonStyle(.hoverWash).help("未解決コメントをプロンプトとしてコピーし、agent のターミナルへ移動")
           }
           Button(action: onClose) { Image(systemName: "xmark").foregroundStyle(C.chromeInk) }.buttonStyle(.hoverWash)
-        }.padding(.horizontal, 12).frame(height: 32).background(C.chromeRaised)
+        }.padding(.horizontal, 16).frame(height: 30).background(C.canvas)
+          .overlay(alignment: .bottom) { Rectangle().fill(L.hairline).frame(height: 1) }
         if editing, let editor {
           editor
         } else if model.text.isEmpty {
@@ -452,7 +457,7 @@
                 }
                 ForEach(Array(rows.enumerated()), id: \.offset) { i, r in
                   if !compact || r.text.hasPrefix("@@") || r.text.hasPrefix("+") || r.text.hasPrefix("-") || r.text.hasPrefix("\\") || threads[r.newLine ?? -1] != nil || suggestionsByLine[r.newLine ?? -1] != nil {
-                    line(r).id(i)
+                    line(r, width: viewport.size.width).id(i)
                     if let n = r.newLine {
                       ForEach(threads[n] ?? []) { thread($0) }
                       ForEach(suggestionsByLine[n] ?? []) { suggestion($0) }
@@ -468,17 +473,32 @@
             }
           }
         }
-      }.background(C.surface)
+      }.background(C.canvas)
       }
     }
 
-    private func line(_ r: Row) -> some View {
-      let l = r.text
-      return Text(l.isEmpty ? " " : String(l)).font(.system(size: 12, design: .monospaced))
-        .foregroundStyle(l.hasPrefix("@@") ? C.textQuaternary : C.code)
-        .padding(.horizontal, 12).frame(maxWidth: .infinity, alignment: .leading).frame(height: 18)
-        .background(l.hasPrefix("+") ? C.success.opacity(0.12) : l.hasPrefix("-") ? C.danger.opacity(0.12) : .clear)
-        .contentShape(Rectangle())
+    private func line(_ r: Row, width: CGFloat) -> some View {
+      // Mock Review diff: editor metrics (12px mono, 19px rows, canvas) with old/new 44px number gutters.
+      let l = r.text, sign = l.first.map(String.init) ?? " "
+      let added = sign == "+", removed = sign == "-", header = l.hasPrefix("@@")
+      let tint: Color = added ? C.success.opacity(0.10) : removed ? C.danger.opacity(0.10) : .clear
+      let mono = Font.system(size: 12, design: .monospaced)
+      func gutter(_ n: Int?) -> some View {
+        Text(n.map(String.init) ?? "").font(mono).foregroundStyle(C.lineNumber).padding(.trailing, 8).frame(width: 44, alignment: .trailing)
+      }
+      return HStack(spacing: 0) {
+        // The old gutter is tinted only for a removed line (mock DiffRow).
+        gutter(r.oldLine).frame(maxHeight: .infinity).background(removed ? .clear : C.canvas)
+        gutter(r.newLine)
+        Group {
+          if header { Text(l).foregroundStyle(C.textQuaternary) }
+          else { Text(sign).foregroundStyle(added ? C.success : removed ? C.danger : C.code) + Text(l.dropFirst()).foregroundStyle(C.code) }
+        }
+        .font(mono).padding(.horizontal, 12)
+      }
+      // Rows fill the viewport (the lazy stack proposes no width) and grow for long lines.
+      .frame(minWidth: width, alignment: .leading).frame(height: 19).background(tint)
+      .contentShape(Rectangle())
         .onTapGesture { if commentable, let n = r.newLine { composing = composing == n ? nil : n; draft = ""; suggesting = false } }
         .help(!commentable || r.newLine == nil ? "" : "クリックしてコメント")
     }
