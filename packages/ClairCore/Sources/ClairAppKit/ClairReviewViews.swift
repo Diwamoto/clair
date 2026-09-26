@@ -525,7 +525,7 @@
         gutter(r.newLine)
         Group {
           if header { Text(l).foregroundStyle(C.textQuaternary) }
-          else { Text(sign).foregroundStyle(added ? C.success : removed ? C.danger : C.code) + Text(l.dropFirst()).foregroundStyle(C.code) }
+          else { Text(l.dropFirst()).foregroundStyle(C.code) }  // the tint already marks +/−
         }
         .font(mono).padding(.horizontal, 12)
       }
@@ -560,7 +560,7 @@
         Text(number.map(String.init) ?? "").font(mono).foregroundStyle(C.lineNumber).padding(.trailing, 8).frame(width: 44, alignment: .trailing)
         Group {
           if l.hasPrefix("@@") { Text(l).foregroundStyle(C.textQuaternary) }
-          else { Text(sign).foregroundStyle(added ? C.success : removed ? C.danger : C.code) + Text(l.dropFirst()).foregroundStyle(C.code) }
+          else { Text(l.dropFirst()).foregroundStyle(C.code) }  // the tint already marks +/−
         }.font(mono).padding(.horizontal, 12)
       }
       .frame(width: width, alignment: .leading).frame(maxHeight: .infinity)
