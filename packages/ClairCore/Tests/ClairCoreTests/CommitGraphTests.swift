@@ -59,8 +59,10 @@ final class CommitGraphTests: XCTestCase {
     let pane = try r.execute("git.graph", state: &s).get()
     XCTAssertEqual(s.tree.leaves.filter { $0.kind == .graph }.count, 1)
     XCTAssertEqual(pane, .pane(s.tree.focused))
+    XCTAssertEqual(s.tree.maximized, s.tree.focused, "the graph opens over the whole pane area")
     _ = try r.execute("git.graph", state: &s).get()
     XCTAssertEqual(s.tree.leaves.filter { $0.kind == .graph }.count, 1)
+    XCTAssertEqual(s.tree.maximized, s.tree.focused)
   }
 
   func testSplitsPatchPerFile() {
