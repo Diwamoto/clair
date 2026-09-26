@@ -727,6 +727,7 @@ import Observation
     @State private var selection = 0
     // U05: sidebar mode + source-control view. GUI-local (no command); the stage buttons go through git.stage/unstage.
     @State private var sidebarMode = "folder"
+    @AppStorage("clair.sidebarWidth") private var sidebarWidth = 242.0
     @State private var debugMode = "debug"
     @State private var debugPID = ""
     @State private var quota: [ProviderQuota] = []
@@ -1041,9 +1042,14 @@ import Observation
             .padding(.horizontal, 12).padding(.vertical, 8)
         }
       }
-      .frame(width: 242)
+      .frame(width: sidebarWidth)
       .font(Typography.font(Typography.sidebar))
       .background(C.chrome)
+      // total 1 turns SplitHandle's ratio into a width in points.
+      .overlay(alignment: .trailing) {
+        SplitHandle(horizontal: true, ratio: sidebarWidth, total: 1) { sidebarWidth = min(max($0, 160), 600) }
+          .frame(width: 6).offset(x: 3)
+      }
     }
 
     /// Settings takes over the whole window — its own header (with the one
