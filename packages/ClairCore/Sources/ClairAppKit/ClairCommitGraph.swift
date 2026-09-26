@@ -19,7 +19,7 @@
 
     nonisolated static let pageSize = 400
     private static let laneWidth: CGFloat = 12
-    private static let rowHeight: CGFloat = 22
+    private static let rowHeight: CGFloat = 34
     private static let lanePalette: [Color] = [C.debugBlue, C.codeString, C.codeKeyword, C.codeType, C.codeFunc, C.codeNumber, C.danger]
 
     var body: some View {
@@ -52,26 +52,27 @@
     private func rowView(_ row: GraphRow) -> some View {
       let c = row.commit
       let on = c.id == selected
-      return HStack(spacing: 8) {
-        lanes(row).frame(width: CGFloat(row.width) * Self.laneWidth, height: Self.rowHeight)
-        Text(c.id.prefix(8)).font(.system(size: 11, design: .monospaced)).foregroundStyle(C.textQuaternary)
-        ForEach(c.refs, id: \.self) { ref in
-          Text(ref).font(.system(size: 10, weight: .semibold)).lineLimit(1)
-            .foregroundStyle(ref.hasPrefix("tag: ") ? C.codeType : C.textPrimary)
-            .padding(.horizontal, 5).padding(.vertical, 1)
-            .background(C.surfaceActive, in: RoundedRectangle(cornerRadius: 4))
+      return Button { open(c.id) } label: {
+        HStack(spacing: 10) {
+          lanes(row).frame(width: CGFloat(row.width) * Self.laneWidth, height: Self.rowHeight)
+          Text(c.id.prefix(8)).font(.system(size: 11, design: .monospaced)).foregroundStyle(C.textQuaternary)
+          ForEach(c.refs, id: \.self) { ref in
+            Text(ref).font(.system(size: 10, weight: .semibold)).lineLimit(1)
+              .foregroundStyle(ref.hasPrefix("tag: ") ? C.codeType : C.textPrimary)
+              .padding(.horizontal, 6).padding(.vertical, 2)
+              .background(C.surfaceActive, in: RoundedRectangle(cornerRadius: 4))
+          }
+          Text(c.subject).font(.system(size: 12, weight: c.isHead ? .semibold : .regular)).lineLimit(1)
+            .foregroundStyle(on ? C.textPrimary : C.textSecondary)
+          Spacer(minLength: 8)
+          Text("\(c.author) · \(c.date)").font(.system(size: 11)).lineLimit(1).foregroundStyle(C.textQuaternary)
         }
-        Text(c.subject).font(.system(size: 12, weight: c.isHead ? .semibold : .regular)).lineLimit(1)
-          .foregroundStyle(on ? C.textPrimary : C.textSecondary)
-        Spacer(minLength: 8)
-        Text("\(c.author) · \(c.date)").font(.system(size: 11)).lineLimit(1).foregroundStyle(C.textQuaternary)
+        .padding(.horizontal, 12).frame(maxWidth: .infinity, minHeight: Self.rowHeight, maxHeight: Self.rowHeight)
+        .background(on ? C.surfaceActive : .clear)
       }
-      .padding(.horizontal, 8).frame(height: Self.rowHeight)
-      .background(on ? C.surfaceActive : .clear)
-      .contentShape(Rectangle())
-      .onTapGesture { open(c.id) }
+      .help(c.subject)
+      .buttonStyle(HoverWashStyle(radius: 0))
       .accessibilityElement(children: .combine)
-      .accessibilityAddTraits(.isButton)
     }
 
     private func lanes(_ row: GraphRow) -> some View {
@@ -102,17 +103,21 @@
       return HStack(spacing: 0) {
         ScrollView {
           LazyVStack(alignment: .leading, spacing: 0) {
-            Button { selected = nil } label: { Label("グラフに戻る", systemImage: "chevron.left") }
-              .buttonStyle(.hoverWash).font(.system(size: 12)).foregroundStyle(C.textSecondary).padding(8)
+            Button { selected = nil } label: {
+              Label("グラフに戻る", systemImage: "chevron.left")
+                .padding(.horizontal, 12).frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+            }
+            .buttonStyle(HoverWashStyle(radius: 0)).font(.system(size: 12)).foregroundStyle(C.textSecondary)
             Text(subject).font(.system(size: 12, weight: .semibold)).foregroundStyle(C.textPrimary)
-              .lineLimit(3).padding(.horizontal, 10).padding(.bottom, 6)
+              .lineLimit(3).help(subject).padding(.horizontal, 12).padding(.top, 4).padding(.bottom, 10)
             ForEach(Array(files.enumerated()), id: \.offset) { i, f in
-              Text(f.path).font(.system(size: 12)).lineLimit(1).truncationMode(.head)
-                .foregroundStyle(i == file ? C.textPrimary : C.textSecondary)
-                .padding(.horizontal, 10).frame(maxWidth: .infinity, minHeight: 22, alignment: .leading)
-                .background(i == file ? C.surfaceActive : .clear)
-                .contentShape(Rectangle()).onTapGesture { file = i }
-                .help(f.path).accessibilityAddTraits(.isButton)
+              Button { file = i } label: {
+                Text(f.path).font(.system(size: 12)).lineLimit(1).truncationMode(.head)
+                  .foregroundStyle(i == file ? C.textPrimary : C.textSecondary)
+                  .padding(.horizontal, 12).frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
+                  .background(i == file ? C.surfaceActive : .clear)
+              }
+              .buttonStyle(HoverWashStyle(radius: 0)).help(f.path)
             }
           }
         }
