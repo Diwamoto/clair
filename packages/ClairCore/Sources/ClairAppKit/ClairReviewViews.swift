@@ -478,28 +478,19 @@
                   }
                   ForEach(looseSuggestions) { suggestion($0) }
                 }
-                let shown = { (r: Row) in !compact || r.text.hasPrefix("@@") || r.text.hasPrefix("+") || r.text.hasPrefix("-") || r.text.hasPrefix("\\") || threads[r.newLine ?? -1] != nil || suggestionsByLine[r.newLine ?? -1] != nil }
+                let shown: (Row) -> Bool = { r in
+                  let t = r.text, n = r.newLine ?? -1
+                  if !compact || t.hasPrefix("@@") || t.hasPrefix("+") || t.hasPrefix("-") || t.hasPrefix("\\") { return true }
+                  return threads[n] != nil || suggestionsByLine[n] != nil
+                }
                 let items: [Pair] = split ? Self.pairs(rows) : rows.enumerated().map { Pair(id: $0, left: $1, right: $1) }
                 // Both halves share one width so the divider lines up; long lines widen it (12px mono ≈ 7.3pt/char).
-                let half = split ? max(viewport.size.width / 2, 68 + 7.3 * CGFloat(rows.lazy.map(\.text.count).max() ?? 0)) : 0
+                let longest: Int = rows.lazy.map { $0.text.count }.max() ?? 0
+                let half: CGFloat = split ? max((viewport.size.width - 1) / 2, 68 + 7.3 * CGFloat(longest)) : 0
                 ForEach(items, id: \.id) { p in
                   let r = p.right ?? p.left!
                   if shown(p.left ?? r) || shown(r) {
-                    Group {
-                      if split {
-                        HStack(spacing: 0) {
-                          cell(p.left, number: p.left?.oldLine, width: half)
-                          Rectangle().fill(L.hairline).frame(width: 1)
-                          cell(p.right, number: p.right?.newLine, width: half)
-                        }.frame(height: 19)
-                      } else {
-                        line(r, width: viewport.size.width)
-                      }
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture { if commentable, let n = r.newLine { composing = composing == n ? nil : n; draft = ""; suggesting = false } }
-                    .help(!commentable || r.newLine == nil ? "" : "クリックしてコメント")
-                    .id(p.id)
+                    pairRow(p, half: half, width: viewport.size.width).id(p.id)
                     if let n = r.newLine {
                       ForEach(threads[n] ?? []) { thread($0) }
                       ForEach(suggestionsByLine[n] ?? []) { suggestion($0) }
@@ -540,6 +531,24 @@
       }
       // Rows fill the viewport (the lazy stack proposes no width) and grow for long lines.
       .frame(minWidth: width, alignment: .leading).frame(height: 19).background(tint)
+    }
+
+    @ViewBuilder private func pairRow(_ p: Pair, half: CGFloat, width: CGFloat) -> some View {
+      let r = p.right ?? p.left!
+      Group {
+        if split {
+          HStack(spacing: 0) {
+            cell(p.left, number: p.left?.oldLine, width: half)
+            Rectangle().fill(L.hairline).frame(width: 1)
+            cell(p.right, number: p.right?.newLine, width: half)
+          }.frame(height: 19)
+        } else {
+          line(r, width: width)
+        }
+      }
+      .contentShape(Rectangle())
+      .onTapGesture { if commentable, let n = r.newLine { composing = composing == n ? nil : n; draft = ""; suggesting = false } }
+      .help(!commentable || r.newLine == nil ? "" : "クリックしてコメント")
     }
 
     /// One side of the split view: its own number gutter, the line, and the line's tint; nil is the empty filler.
