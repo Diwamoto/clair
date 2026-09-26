@@ -193,13 +193,15 @@
       }.buttonStyle(.hoverWash).padding(.horizontal, 8)
     }
 
-    private var canCommit: Bool { !busy && changes.contains(where: \.staged) && !message.trimmingCharacters(in: .whitespaces).isEmpty }
+    private var canCommit: Bool { !busy && changes.contains(where: \.staged) && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     private var commitBox: some View {
       VStack(alignment: .leading, spacing: 6) {
-        TextField("コミットメッセージ", text: $message)
+        // Multi-line box, distinct from the button: Return commits, Option-Return inserts a newline.
+        TextField("コミットメッセージ", text: $message, axis: .vertical)
           .textFieldStyle(.plain).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textPrimary)
-          .padding(.horizontal, 8).frame(height: 26)
+          .lineLimit(3...8)
+          .padding(.horizontal, 8).padding(.vertical, 6)
           .background(C.surfaceActive, in: RoundedRectangle(cornerRadius: Radius.control))
           .onSubmit(commit)
         Button(action: commit) {
