@@ -775,7 +775,20 @@ import Observation
     public var body: some View {
       VStack(spacing: 0) {
         // Mock `sheet` motion: settings comes over the top (scale 1.04 → 1 + fade).
+        // Settings covers the workbench instead of replacing it: tearing the
+        // workbench down destroyed every terminal surface and its scrollback.
         ZStack {
+          VStack(spacing: 0) {
+            titlebar
+            HStack(spacing: 0) {
+              activityBar
+              sidebar
+              Rectangle().fill(C.surfaceActive).frame(width: 1)
+              main
+            }
+          }
+          .allowsHitTesting(!st.settingsOpen)
+          .accessibilityHidden(st.settingsOpen)
           if st.settingsOpen {
             VStack(spacing: 0) {
               settingsHeader
@@ -785,18 +798,8 @@ import Observation
                 settingsMain
               }
             }
+            .background(C.canvas)
             .transition(.opacity.combined(with: .scale(scale: 1.04)))
-          } else {
-            VStack(spacing: 0) {
-              titlebar
-              HStack(spacing: 0) {
-                activityBar
-                sidebar
-                Rectangle().fill(C.surfaceActive).frame(width: 1)
-                main
-              }
-            }
-            .transition(.opacity)
           }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration), value: st.settingsOpen)
@@ -1796,9 +1799,7 @@ import Observation
 
     private var main: some View {
       VStack(spacing: 0) {
-        if let chat {
-          AgentChatView(history: chat) { self.chat = nil }.id(chat.id)
-        } else if let d = diff, let root = store.activeRoot, let loaded = loadedDiff,
+        if let d = diff, let root = store.activeRoot, let loaded = loadedDiff,
           loaded.target == d, loaded.root == root
         {
           let fileLines = loaded.fileLines
@@ -1868,6 +1869,11 @@ import Observation
       }
       .overlay(alignment: .top) {
         if debugControlsVisible { debugToolbar.padding(.top, 12) }
+      }
+      // Chat history covers the panes instead of replacing them, so the
+      // terminal surfaces stay mounted and keep their scrollback.
+      .overlay {
+        if let chat { AgentChatView(history: chat) { self.chat = nil }.id(chat.id).background(C.canvas) }
       }
     }
 
