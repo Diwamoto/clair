@@ -23,6 +23,8 @@ public struct AgentHistory: Sendable, Identifiable {
   public let estimatedUSD: Double?
   /// Working directory the provider recorded, when available.
   public var project: String? = nil
+  /// Provider file to re-read for the full transcript; nil when `messages` is already complete.
+  public var source: URL? = nil
 
   public var promptCount: Int { messages.filter { $0.role == "user" }.count }
 }
@@ -104,21 +106,37 @@ public struct AgentUsageSummary: Sendable {
 public enum AgentHistoryReader {
   /// Reads provider-owned files on a background task. Provider failures are isolated.
   /// `period` filters by last-modified time before any file is parsed, so an unopened archive costs nothing.
-  public static func load(home: URL = .homeDirectory, period: DateInterval? = nil) -> [AgentHistory] {
-    var result = readJSONL(root: home.appending(path: ".codex/sessions"), provider: .codex, period: period)
-    result += readJSONL(root: home.appending(path: ".claude/projects"), provider: .claude, period: period)
+  /// List-only by default: `messages` then holds the user turns and the last message (tool results skipped unparsed), and
+  /// `transcript(of:)` reads one file in full when a chat is opened.
+  public static func load(home: URL = .homeDirectory, period: DateInterval? = nil, full: Bool = false) -> [AgentHistory] {
+    var result = readJSONL(root: home.appending(path: ".codex/sessions"), provider: .codex, period: period, full: full)
+    result += readJSONL(root: home.appending(path: ".claude/projects"), provider: .claude, period: period, full: full)
     result += readOpenCode(home.appending(path: ".local/share/opencode/opencode.db"), period: period)
     return result.sorted { $0.date > $1.date }
   }
 
-  private static func readJSONL(root: URL, provider: AgentHistory.Provider, period: DateInterval?) -> [AgentHistory] {
+  public static func transcript(of history: AgentHistory) -> [AgentHistory.Message] {
+    guard let file = history.source else { return history.messages }
+    return readFile(file, provider: history.provider, full: true)?.messages ?? history.messages
+  }
+
+  private static func readJSONL(root: URL, provider: AgentHistory.Provider, period: DateInterval?, full: Bool) -> [AgentHistory] {
     guard let files = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey, .contentModificationDateKey]) else { return [] }
-    var histories: [AgentHistory] = []
-    for case let file as URL in files where file.pathExtension == "jsonl" {
-      if let period {
-        let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
-        guard modified >= period.start, modified < period.end else { continue }
-      }
+    let paths = (files.allObjects as? [URL] ?? []).filter { file in
+      guard file.pathExtension == "jsonl" else { return false }
+      guard let period else { return true }
+      let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+      return modified >= period.start && modified < period.end
+    }
+    // Files are independent; parse them on every core.
+    let slots = UnsafeMutableBufferPointer<AgentHistory?>.allocate(capacity: paths.count)
+    slots.initialize(repeating: nil)
+    defer { slots.deinitialize(); slots.deallocate() }
+    DispatchQueue.concurrentPerform(iterations: paths.count) { slots[$0] = readFile(paths[$0], provider: provider, full: full) }
+    return slots.compactMap { $0 }
+  }
+
+  private static func readFile(_ file: URL, provider: AgentHistory.Provider, full: Bool) -> AgentHistory? {
       var messages: [AgentHistory.Message] = []
       var cost: Double?
       var codexModel: String?
@@ -147,6 +165,8 @@ public enum AgentHistoryReader {
           if type == "session_meta", let id = payload["id"] as? String { sessionID = id; cwd = payload["cwd"] as? String ?? cwd }
           if type == "turn_context" { codexModel = payload["model"] as? String ?? codexModel }
           if type == "token_usage_record" { codexUsage = payload["thread_token_usage"] as? [String: Any] ?? codexUsage }
+        // Tool results ride on "user" rows, can be huge, and never carry prompt text.
+        if !full, data.range(of: Data(#""tool_use_id""#.utf8)) != nil { return }
           guard type == "response_item", let role = payload["role"] as? String,
                 role == "user" || role == "assistant" else { return }
           let parts = payload["content"] as? [[String: Any]] ?? []
@@ -171,7 +191,7 @@ public enum AgentHistoryReader {
             }
           }
           let content = message["content"]
-          let text: String
+          var text: String
           if let value = content as? String { text = value }
           else if let parts = content as? [[String: Any]] {
             text = parts.filter { ($0["type"] as? String) == "text" }.compactMap { $0["text"] as? String }.joined(separator: "\n")
@@ -185,20 +205,53 @@ public enum AgentHistoryReader {
             claudeMessageIndex[id] = messages.count
             messages.append(item)
           }
+          if type == "user" { text = formatUserText(text) ?? "" }
         }
       }
-      guard !messages.isEmpty else { continue }
+      guard !messages.isEmpty else { return nil }
+      if !full, let last = messages.last {
+        // The list keeps user turns (title, prompt counts) and the last message (preview); bodies load on open.
+        messages = messages.filter { $0.role == "user" } + (last.role == "user" ? [] : [last])
+      }
       if provider == .codex, let model = codexModel, let usage = codexUsage {
         cost = codexEstimatedCost(model: model, usage: usage)
       } else if provider == .claude, cost == nil, !claudeMessageCosts.isEmpty, !claudeUnknownModel {
         cost = claudeMessageCosts.values.reduce(0, +)
       }
-      let title = messages.first(where: { $0.role == "user" })?.text.prefix(100) ?? "チャット"
-      histories.append(.init(id: "\(provider.rawValue):\(sessionID)", provider: provider,
-                             title: String(title), date: messages.last?.date ?? .distantPast,
-                             messages: messages, estimatedUSD: cost, project: cwd))
+      let title = messages.first { $0.role == "user" && !$0.text.hasPrefix("[Skill loaded") }?.text
+        .split(whereSeparator: \.isWhitespace).joined(separator: " ") ?? "チャット"
+      return AgentHistory(id: "\(provider.rawValue):\(sessionID)", provider: provider,
+                          title: String(title.prefix(100)), date: messages.last?.date ?? .distantPast,
+                          messages: messages, estimatedUSD: cost, project: cwd, source: full ? nil : file)
+  }
+
+  /// Port of ccedit's `format_command_text` + `is_clear_artifact`: Claude Code wraps slash commands,
+  /// skill bodies, and `!` shell turns in tags. Returns nil for `/clear` noise and caveat-only turns.
+  static func formatUserText(_ text: String) -> String? {
+    func tag(_ name: String) -> String? {
+      guard let open = text.range(of: "<\(name)>"), let close = text.range(of: "</\(name)>", range: open.upperBound..<text.endIndex) else { return nil }
+      return String(text[open.upperBound..<close.lowerBound]).replacing(/\x1b\[[0-9;]*[a-zA-Z]/, with: "").trimmingCharacters(in: .whitespacesAndNewlines)
     }
-    return histories
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    if trimmed.hasPrefix("Base directory for this skill:") {
+      let name = trimmed.firstMatch(of: /skills\/([^\/\s]+)/)?.1
+      return name.map { "[Skill loaded: \($0)]" } ?? "[Skill loaded]"
+    }
+    if let command = tag("bash-input") { return "```bash\n$ \(command)\n```" }
+    if trimmed.hasPrefix("<bash-stdout>") {
+      let output = [tag("bash-stdout"), tag("bash-stderr")].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n")
+      return output.isEmpty ? nil : "```\n\(output)\n```"
+    }
+    var parts: [String] = []
+    if let name = tag("command-name") {
+      if name == "/clear" { return nil }
+      parts.append([name, tag("command-args") ?? ""].filter { !$0.isEmpty }.joined(separator: " "))
+    }
+    if let output = tag("local-command-stdout"), !output.isEmpty { parts.append(output) }
+    let rest = trimmed.replacing(/<(local-command-caveat|local-command-stdout|command-name|command-message|command-args|system-reminder)>[\s\S]*?<\/\1>/, with: "")
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    if !rest.isEmpty { parts.append(rest) }
+    return parts.isEmpty ? nil : parts.joined(separator: "\n\n")
   }
 
   /// Standard, short-context API-equivalent rates per million tokens (2026-09-24).
@@ -246,11 +299,12 @@ public enum AgentHistoryReader {
     guard let handle = try? FileHandle(forReadingFrom: file) else { return }
     defer { try? handle.close() }
     var pending = Data()
-    while let chunk = try? handle.read(upToCount: 64 * 1024), !chunk.isEmpty {
+    while let chunk = try? handle.read(upToCount: 1024 * 1024), !chunk.isEmpty {
       pending.append(chunk)
-      while let newline = pending.firstIndex(of: 10) {
-        if newline <= 4 * 1024 * 1024 { visit(pending.prefix(upTo: newline)) }
-        pending.removeSubrange(...newline)
+      var start = pending.startIndex
+      while let newline = pending[start...].firstIndex(of: 10) {
+        if newline - start <= 4 * 1024 * 1024 { visit(pending[start..<newline]) }
+        start = newline + 1
       }
       if pending.count > 4 * 1024 * 1024 { pending.removeAll(keepingCapacity: true) }
     }
@@ -261,6 +315,7 @@ public enum AgentHistoryReader {
     var db: OpaquePointer?
     guard sqlite3_open_v2(database.path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let db else {
       if db != nil { sqlite3_close(db) }
+      pending = Data(pending[start...])
       return []
     }
     defer { sqlite3_close(db) }
@@ -340,4 +395,8 @@ public actor AgentHistoryStore {
     cached.removeAll()
     return await all()
   }
+  public func transcript(_ history: AgentHistory) async -> [AgentHistory.Message] {
+    await Task.detached(priority: .userInitiated) { AgentHistoryReader.transcript(of: history) }.value
+  }
+
 }

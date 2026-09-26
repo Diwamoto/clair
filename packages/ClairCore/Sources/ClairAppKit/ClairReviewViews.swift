@@ -332,6 +332,7 @@
     @State private var hunk = -1
     @State private var sent = false
     @State private var compact = false
+    @State private var split = false
     @State private var editing = false
     /// A diff this long is cut with a notice instead of laying out every row.
     nonisolated static let maxLines = 5000
@@ -380,6 +381,25 @@
       }
     }
 
+    /// Side-by-side pairing: a run of removed lines is zipped with the added run that follows it;
+    /// context and hunk headers sit on both sides. `id` is the first source row's index (hunk scroll targets).
+    struct Pair { let id: Int; let left: Row?; let right: Row? }
+    nonisolated static func pairs(_ rows: [Row]) -> [Pair] {
+      var out: [Pair] = [], i = 0
+      while i < rows.count {
+        let t = rows[i].text
+        guard t.hasPrefix("-") || t.hasPrefix("+") else { out.append(Pair(id: i, left: rows[i], right: rows[i])); i += 1; continue }
+        var del: [Int] = [], add: [Int] = []
+        while i < rows.count, rows[i].text.hasPrefix("-") { del.append(i); i += 1 }
+        while i < rows.count, rows[i].text.hasPrefix("+") { add.append(i); i += 1 }
+        for k in 0..<max(del.count, add.count) {
+          let l = k < del.count ? del[k] : nil, a = k < add.count ? add[k] : nil
+          out.append(Pair(id: l ?? a!, left: l.map { rows[$0] }, right: a.map { rows[$0] }))
+        }
+      }
+      return out
+    }
+
     /// Added / removed line counts (rows start at the first hunk, so `+++`/`---` file headers are excluded).
     nonisolated static func stats(_ rows: [Row]) -> (added: Int, removed: Int) {
       (rows.filter { $0.text.hasPrefix("+") }.count, rows.filter { $0.text.hasPrefix("-") }.count)
@@ -417,6 +437,9 @@
             }
           }
           if !editing {
+            Button(split ? "インライン" : "並べて表示") { split.toggle() }
+              .font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary).buttonStyle(.hoverWash)
+              .help(split ? "差分を 1 列で表示" : "変更前と変更後を左右に並べて表示")
             Button(compact ? "全文脈" : "変更箇所") { compact.toggle() }
               .font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary).buttonStyle(.hoverWash)
               .help(compact ? "ファイル全体を表示" : "変更箇所に絞る")
@@ -455,9 +478,28 @@
                   }
                   ForEach(looseSuggestions) { suggestion($0) }
                 }
-                ForEach(Array(rows.enumerated()), id: \.offset) { i, r in
-                  if !compact || r.text.hasPrefix("@@") || r.text.hasPrefix("+") || r.text.hasPrefix("-") || r.text.hasPrefix("\\") || threads[r.newLine ?? -1] != nil || suggestionsByLine[r.newLine ?? -1] != nil {
-                    line(r, width: viewport.size.width).id(i)
+                let shown = { (r: Row) in !compact || r.text.hasPrefix("@@") || r.text.hasPrefix("+") || r.text.hasPrefix("-") || r.text.hasPrefix("\\") || threads[r.newLine ?? -1] != nil || suggestionsByLine[r.newLine ?? -1] != nil }
+                let items: [Pair] = split ? Self.pairs(rows) : rows.enumerated().map { Pair(id: $0, left: $1, right: $1) }
+                // Both halves share one width so the divider lines up; long lines widen it (12px mono ≈ 7.3pt/char).
+                let half = split ? max(viewport.size.width / 2, 68 + 7.3 * CGFloat(rows.lazy.map(\.text.count).max() ?? 0)) : 0
+                ForEach(items, id: \.id) { p in
+                  let r = p.right ?? p.left!
+                  if shown(p.left ?? r) || shown(r) {
+                    Group {
+                      if split {
+                        HStack(spacing: 0) {
+                          cell(p.left, number: p.left?.oldLine, width: half)
+                          Rectangle().fill(L.hairline).frame(width: 1)
+                          cell(p.right, number: p.right?.newLine, width: half)
+                        }.frame(height: 19)
+                      } else {
+                        line(r, width: viewport.size.width)
+                      }
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture { if commentable, let n = r.newLine { composing = composing == n ? nil : n; draft = ""; suggesting = false } }
+                    .help(!commentable || r.newLine == nil ? "" : "クリックしてコメント")
+                    .id(p.id)
                     if let n = r.newLine {
                       ForEach(threads[n] ?? []) { thread($0) }
                       ForEach(suggestionsByLine[n] ?? []) { suggestion($0) }
@@ -498,9 +540,22 @@
       }
       // Rows fill the viewport (the lazy stack proposes no width) and grow for long lines.
       .frame(minWidth: width, alignment: .leading).frame(height: 19).background(tint)
-      .contentShape(Rectangle())
-        .onTapGesture { if commentable, let n = r.newLine { composing = composing == n ? nil : n; draft = ""; suggesting = false } }
-        .help(!commentable || r.newLine == nil ? "" : "クリックしてコメント")
+    }
+
+    /// One side of the split view: its own number gutter, the line, and the line's tint; nil is the empty filler.
+    private func cell(_ r: Row?, number: Int?, width: CGFloat) -> some View {
+      let l = r?.text ?? "", sign = l.first.map(String.init) ?? " "
+      let added = sign == "+", removed = sign == "-"
+      let mono = Font.system(size: 12, design: .monospaced)
+      return HStack(spacing: 0) {
+        Text(number.map(String.init) ?? "").font(mono).foregroundStyle(C.lineNumber).padding(.trailing, 8).frame(width: 44, alignment: .trailing)
+        Group {
+          if l.hasPrefix("@@") { Text(l).foregroundStyle(C.textQuaternary) }
+          else { Text(sign).foregroundStyle(added ? C.success : removed ? C.danger : C.code) + Text(l.dropFirst()).foregroundStyle(C.code) }
+        }.font(mono).padding(.horizontal, 12)
+      }
+      .frame(width: width, alignment: .leading).frame(maxHeight: .infinity)
+      .background(r == nil ? C.textQuaternary.opacity(0.06) : added ? C.success.opacity(0.10) : removed ? C.danger.opacity(0.10) : .clear)
     }
 
     private func thread(_ t: ReviewThread, note: String? = nil) -> some View {
@@ -967,6 +1022,7 @@
   struct AgentChatView: View {
     let history: AgentHistory
     let onClose: () -> Void
+    @State private var transcript: [AgentHistory.Message]?
 
     var body: some View {
       VStack(spacing: 0) {
@@ -987,19 +1043,35 @@
         }.padding(.horizontal, 14).padding(.vertical, 8).background(C.chromeRaised)
         ScrollView {
           LazyVStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(history.messages.enumerated()), id: \.element.id) { index, message in
-              let previous = index > 0 ? history.messages[index - 1] : nil
-              let next = index + 1 < history.messages.count ? history.messages[index + 1] : nil
+            let messages = transcript ?? []
+            if transcript == nil {
+              ProgressView().controlSize(.small).frame(maxWidth: .infinity).padding(24)
+            }
+            ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
+              let previous = index > 0 ? messages[index - 1] : nil
+              let next = index + 1 < messages.count ? messages[index + 1] : nil
               let newDay = previous.map { !Calendar.current.isDate($0.date, inSameDayAs: message.date) } ?? true
               if newDay { daySeparator(message.date).padding(.top, previous == nil ? 0 : 16).padding(.bottom, 12) }
+              if message.text.hasPrefix("[Skill loaded") {
+                systemPill(String(message.text.dropFirst().dropLast()).replacing("Skill loaded", with: "スキル読込"), icon: "wand.and.stars")
+                  .padding(.top, previous == nil || newDay ? 0 : 8)
+              } else {
               Bubble(message: message, provider: history.provider,
                      showLabel: message.role != "user" && (newDay || previous?.role != message.role),
                      showTime: next?.role != message.role)
                 .padding(.top, previous == nil || newDay ? 0 : previous?.role == message.role ? 5 : 16)
+              }
             }
           }.padding(16).padding(.bottom, 16)
         }.defaultScrollAnchor(.bottom).clairScroller()
       }.frame(maxWidth: .infinity, maxHeight: .infinity).background(C.canvas)
+        .task { transcript = await AgentHistoryStore.shared.transcript(history) }
+    }
+
+    private func systemPill(_ text: String, icon: String) -> some View {
+      Label(text, systemImage: icon).font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textTertiary)
+        .padding(.horizontal, 10).padding(.vertical, 3).background(C.surfaceActive.opacity(0.7), in: Capsule())
+        .frame(maxWidth: .infinity)
     }
 
     private func chip(_ text: String, tint: Color? = nil) -> some View {

@@ -17,6 +17,48 @@ final class AgentHistoryTests: XCTestCase {
     XCTAssertEqual(item.estimatedUSD ?? 0, 0.004145, accuracy: 0.000001)
   }
 
+  func testFormatsClaudeCommandTagsLikeCcedit() {
+    XCTAssertEqual(AgentHistoryReader.formatUserText("<command-message>clair-task</command-message>\n<command-name>/clair-task</command-name>\n<command-args>直して</command-args>"), "/clair-task 直して")
+    XCTAssertNil(AgentHistoryReader.formatUserText("<local-command-caveat>Caveat: ignore</local-command-caveat>"))
+    XCTAssertNil(AgentHistoryReader.formatUserText("<command-name>/clear</command-name><command-args></command-args>"))
+    XCTAssertEqual(AgentHistoryReader.formatUserText("Base directory for this skill: /u/.claude/skills/clair-task\n# Clair"), "[Skill loaded: clair-task]")
+    XCTAssertEqual(AgentHistoryReader.formatUserText("<bash-input>ls</bash-input>"), "```bash\n$ ls\n```")
+    XCTAssertEqual(AgentHistoryReader.formatUserText("<local-command-caveat>x</local-command-caveat>本題"), "本題")
+  }
+
+  func testListSkimMatchesFullParse() throws {
+    let home = URL.temporaryDirectory.appending(path: "clair-history-skim-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: home) }
+    let project = home.appending(path: ".claude/projects/p")
+    try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+    let rows = [
+      #"{"type":"user","timestamp":"2026-09-24T02:00:00Z","sessionId":"s","uuid":"c","message":{"content":"<local-command-caveat>x</local-command-caveat>"}}"#,
+      #"{"type":"user","timestamp":"2026-09-24T02:00:01Z","sessionId":"s","uuid":"u1","cwd":"/w/clair","message":{"content":"<command-name>/clair-task</command-name><command-args>go</command-args>"}}"#,
+      #"{"type":"assistant","timestamp":"2026-09-24T02:00:02Z","sessionId":"s","uuid":"a1","message":{"model":"claude-sonnet-5","id":"msg_1","content":[{"type":"tool_use","id":"toolu_1","input":{"q":"}{\""}}],"usage":{"input_tokens":1000,"output_tokens":200,"cache_read_input_tokens":100,"cache_creation":{"ephemeral_5m_input_tokens":50,"ephemeral_1h_input_tokens":0}}}}"#,
+      #"{"type":"user","timestamp":"2026-09-24T02:00:03Z","sessionId":"s","uuid":"t1","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"big"}]}}"#,
+      #"{"type":"assistant","timestamp":"2026-09-24T02:00:04Z","sessionId":"s","uuid":"a2","message":{"model":"claude-sonnet-5","id":"msg_1","content":[{"type":"text","text":"Done"}],"usage":{"input_tokens":1000,"output_tokens":200,"cache_read_input_tokens":100,"cache_creation":{"ephemeral_5m_input_tokens":50,"ephemeral_1h_input_tokens":0}}}}"#,
+    ]
+    try rows.joined(separator: "\n").write(to: project.appending(path: "s.jsonl"), atomically: true, encoding: .utf8)
+    let list = try XCTUnwrap(AgentHistoryReader.load(home: home).first)
+    let full = try XCTUnwrap(AgentHistoryReader.load(home: home, full: true).first)
+    XCTAssertEqual(list.title, "/clair-task go")
+    XCTAssertEqual(list.estimatedUSD, full.estimatedUSD)
+    XCTAssertEqual(list.promptCount, 1)
+    XCTAssertEqual(list.messages.last?.text, "Done")
+    XCTAssertEqual(list.date, full.date)
+    XCTAssertEqual(AgentHistoryReader.transcript(of: list).map(\.text), full.messages.map(\.text))
+  }
+
+  func testBenchRealHome() throws {
+    try XCTSkipUnless(ProcessInfo.processInfo.environment["CLAIR_HISTORY_BENCH"] != nil)
+    let period = AgentHistoryStore.period(.recent)
+    for full in [true, false] {
+      let start = Date()
+      let items = AgentHistoryReader.load(period: period, full: full)
+      print("BENCH full=\(full) \(items.count) items \(Date().timeIntervalSince(start))s cost=\(items.compactMap(\.estimatedUSD).reduce(0, +)) prompts=\(items.map(\.promptCount).reduce(0, +))")
+    }
+  }
+
   func testGroupsByRelativeDayThenProject() throws {
     let home = URL.temporaryDirectory.appending(path: "clair-history-group-\(UUID().uuidString)")
     defer { try? FileManager.default.removeItem(at: home) }
