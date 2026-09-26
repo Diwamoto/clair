@@ -859,6 +859,7 @@
           } label: {
             HStack(spacing: 6) {
               Image(systemName: collapsed ? "chevron.right" : "chevron.down").frame(width: 14)
+              RoundedRectangle(cornerRadius: 2).fill(projectTint(group.project)).frame(width: 8, height: 8)
               Text(group.project).font(Typography.font(Typography.sidebarStrong)).lineLimit(1)
               Spacer(minLength: 0)
               Text("\(group.estimatedUSD.formatted(.currency(code: "USD"))) · \(group.histories.count) 件")
@@ -870,19 +871,74 @@
           }
     }
 
+    /// LINE-style chat-list row: provider avatar, title + time, last-message preview + prompt count.
     private func historyRow(_ history: AgentHistory) -> some View {
         Button { openHistory(history) } label: {
-          HStack(alignment: .top, spacing: 8) {
-            Image(systemName: history.provider == .claude ? "sparkles" : history.provider == .codex ? "chevron.left.forwardslash.chevron.right" : "square.stack.3d.up")
-              .frame(width: 14).foregroundStyle(C.textTertiary)
-            VStack(alignment: .leading, spacing: 2) {
-              Text(history.title).lineLimit(2).foregroundStyle(C.textPrimary)
-              Text("\(history.provider.rawValue) · \(history.date.formatted(date: .abbreviated, time: .shortened))")
-                .font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textQuaternary)
+          HStack(alignment: .top, spacing: 10) {
+            ProviderAvatar(provider: history.provider, size: 30)
+            VStack(alignment: .leading, spacing: 3) {
+              HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(history.title).font(Typography.font(Typography.sidebarStrong)).foregroundStyle(C.textPrimary).lineLimit(1)
+                Spacer(minLength: 0)
+                Text(listTime(history.date)).font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textQuaternary)
+              }
+              HStack(alignment: .top, spacing: 6) {
+                Text(history.preview).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
+                  .lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+                if history.promptCount > 0 {
+                  Text("\(history.promptCount)").font(Typography.font(Typography.sidebarMicro)).monospacedDigit()
+                    .foregroundStyle(C.textSecondary).padding(.horizontal, 6).frame(minWidth: 18, minHeight: 16)
+                    .background(C.surfaceActive, in: Capsule()).help("送信した依頼 \(history.promptCount) 件")
+                }
+              }
             }
-            Spacer(minLength: 0)
-          }.padding(.leading, 34).padding(.trailing, 20).padding(.vertical, 6).contentShape(Rectangle())
-        }.buttonStyle(.hoverWash)
+          }.padding(.leading, 30).padding(.trailing, 16).padding(.vertical, 7).contentShape(Rectangle())
+        }.buttonStyle(.hoverWash).help("\(history.provider.rawValue) · \(history.date.formatted(date: .abbreviated, time: .shortened))")
+    }
+  }
+
+  /// Today → "14:32", yesterday → "昨日", within a week → weekday, older → "9/20" (LINE's chat-list clock).
+  func listTime(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> String {
+    if calendar.isDate(date, inSameDayAs: now) { return date.formatted(date: .omitted, time: .shortened) }
+    if calendar.isDateInYesterday(date) { return "昨日" }
+    let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: calendar.startOfDay(for: now)).day ?? .max
+    return days < 7 ? date.formatted(.dateTime.weekday(.abbreviated)) : date.formatted(.dateTime.month(.defaultDigits).day())
+  }
+
+  /// Stable per-project hue, like ccedit's projectHue.
+  func projectTint(_ name: String) -> Color {
+    let hash = name.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xffff }
+    return Color(hue: Double(hash % 360) / 360, saturation: 0.45, brightness: 0.75)
+  }
+
+  extension AgentHistory.Provider {
+    /// Brand tint used behind the provider avatar (ccedit: CL orange, CX violet, OC emerald).
+    var tint: Color {
+      switch self {
+      case .claude: Color(red: 0.85, green: 0.47, blue: 0.34)
+      case .codex: Color(red: 0.55, green: 0.45, blue: 0.95)
+      case .opencode: Color(red: 0.2, green: 0.72, blue: 0.5)
+      }
+    }
+  }
+
+  extension AgentHistory {
+    /// Last message, whitespace-collapsed, for the chat-list preview line.
+    var preview: String {
+      let text = messages.last { !$0.text.isEmpty }?.text ?? ""
+      return text.prefix(200).split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    }
+  }
+
+  struct ProviderAvatar: View {
+    let provider: AgentHistory.Provider
+    let size: CGFloat
+    var body: some View {
+      ProviderBrandIcon(provider: provider.rawValue, size: size * 0.55)
+        .frame(width: size, height: size)
+        .background(Circle().fill(provider.tint.opacity(0.18)))
+        .overlay(Circle().strokeBorder(provider.tint.opacity(0.45), lineWidth: 1))
+        .help(provider.rawValue)
     }
   }
 
@@ -894,29 +950,61 @@
 
     var body: some View {
       VStack(spacing: 0) {
-        HStack(spacing: 8) {
-          Text(history.title).font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textPrimary).lineLimit(1)
-          Text("\(history.provider.rawValue) · \(history.date.formatted(date: .abbreviated, time: .shortened))")
-            .font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary).lineLimit(1)
+        HStack(spacing: 10) {
+          ProviderAvatar(provider: history.provider, size: 28)
+          VStack(alignment: .leading, spacing: 4) {
+            Text(history.title).font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textPrimary).lineLimit(1)
+            HStack(spacing: 5) {
+              chip(history.provider.rawValue, tint: history.provider.tint)
+              if let project = history.project { chip(URL(filePath: project).lastPathComponent, tint: projectTint(URL(filePath: project).lastPathComponent)) }
+              chip("依頼 \(history.promptCount) 件")
+              if let usd = history.estimatedUSD { chip("推定 \(usd.formatted(.currency(code: "USD")))") }
+              chip(history.date.formatted(date: .abbreviated, time: .shortened))
+            }
+          }
           Spacer(minLength: 0)
           Button(action: onClose) { Image(systemName: "xmark").foregroundStyle(C.chromeInk) }.buttonStyle(.hoverWash).help("閉じる")
-        }.padding(.horizontal, 12).frame(height: 32).background(C.chromeRaised)
+        }.padding(.horizontal, 14).padding(.vertical, 8).background(C.chromeRaised)
         ScrollView {
           LazyVStack(alignment: .leading, spacing: 0) {
             ForEach(Array(history.messages.enumerated()), id: \.element.id) { index, message in
-              let previous = index > 0 ? history.messages[index - 1].role : nil
-              Bubble(message: message, provider: history.provider.rawValue, showLabel: message.role != "user" && previous != message.role)
-                .padding(.top, previous == nil ? 0 : previous == message.role ? 5 : 16)
+              let previous = index > 0 ? history.messages[index - 1] : nil
+              let next = index + 1 < history.messages.count ? history.messages[index + 1] : nil
+              let newDay = previous.map { !Calendar.current.isDate($0.date, inSameDayAs: message.date) } ?? true
+              if newDay { daySeparator(message.date).padding(.top, previous == nil ? 0 : 16).padding(.bottom, 12) }
+              Bubble(message: message, provider: history.provider,
+                     showLabel: message.role != "user" && (newDay || previous?.role != message.role),
+                     showTime: next?.role != message.role)
+                .padding(.top, previous == nil || newDay ? 0 : previous?.role == message.role ? 5 : 16)
             }
           }.padding(16).padding(.bottom, 16)
         }.defaultScrollAnchor(.bottom).clairScroller()
       }.frame(maxWidth: .infinity, maxHeight: .infinity).background(C.canvas)
     }
 
+    private func chip(_ text: String, tint: Color? = nil) -> some View {
+      HStack(spacing: 4) {
+        if let tint { Circle().fill(tint).frame(width: 6, height: 6) }
+        Text(text).lineLimit(1)
+      }.font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textTertiary)
+        .padding(.horizontal, 7).padding(.vertical, 2)
+        .background(C.canvas, in: RoundedRectangle(cornerRadius: 4))
+        .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(C.divider.opacity(0.6), lineWidth: 1))
+    }
+
+    /// LINE-style centred day pill between turns from different days.
+    private func daySeparator(_ date: Date) -> some View {
+      Text(date.formatted(.dateTime.month().day().weekday(.abbreviated)))
+        .font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textTertiary)
+        .padding(.horizontal, 10).padding(.vertical, 3).background(C.surfaceActive.opacity(0.7), in: Capsule())
+        .frame(maxWidth: .infinity)
+    }
+
     private struct Bubble: View {
       let message: AgentHistory.Message
-      let provider: String
+      let provider: AgentHistory.Provider
       let showLabel: Bool
+      let showTime: Bool
       @State private var expanded = false
 
       var body: some View {
@@ -926,28 +1014,27 @@
           .font(Typography.font(Typography.chrome)).foregroundStyle(C.textPrimary).textSelection(.enabled)
         let more = Button(expanded ? "折りたたむ" : "続きを表示") { expanded.toggle() }
           .buttonStyle(.plain).font(Typography.font(Typography.micro)).foregroundStyle(C.textTertiary)
+        let time = Text(message.date.formatted(date: .omitted, time: .shortened))
+          .font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary)
         if message.role == "user" {
           HStack {
             Spacer(minLength: 0)
             VStack(alignment: .trailing, spacing: 4) {
               body.foregroundStyle(.white).padding(.horizontal, 14).padding(.vertical, 9)
                 .background(C.debugBlue, in: UnevenRoundedRectangle(topLeadingRadius: 16, bottomLeadingRadius: 16, bottomTrailingRadius: 16, topTrailingRadius: 5))
-              if long { more }
+              if long || showTime { HStack(spacing: 8) { if long { more }; if showTime { time } } }
             }.containerRelativeFrame(.horizontal, alignment: .trailing) { width, _ in width * 0.72 }
           }
         } else {
           HStack(alignment: .top, spacing: 10) {
             Group {
-              if showLabel {
-                Text(provider.prefix(1)).font(.system(size: 10, weight: .semibold)).foregroundStyle(.white)
-                  .frame(width: 28, height: 28).background(Circle().fill(Color(red: 0.85, green: 0.47, blue: 0.27)))
-              }
-            }.frame(width: 28).help(provider)
+              if showLabel { ProviderAvatar(provider: provider, size: 28) }
+            }.frame(width: 28)
             VStack(alignment: .leading, spacing: 4) {
               body.padding(.horizontal, 14).padding(.vertical, 10)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(C.surfaceActive, in: UnevenRoundedRectangle(topLeadingRadius: 5, bottomLeadingRadius: 16, bottomTrailingRadius: 16, topTrailingRadius: 16))
-              if long { more }
+              if long || showTime { HStack(spacing: 8) { if showTime { time }; if long { more } } }
             }
           }.padding(.trailing, 40)
         }
