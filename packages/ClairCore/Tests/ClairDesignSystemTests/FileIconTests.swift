@@ -1,34 +1,41 @@
-import ClairDesignSystem
+@testable import ClairDesignSystem
 import XCTest
 
 final class FileIconTests: XCTestCase {
   private func symbol(_ path: String) -> String { FileIcon.forPath(path).symbol }
 
   func testExtensionsAreCaseInsensitiveAndUseTheLastPathComponent() {
-    XCTAssertEqual(symbol("cmd/main.go"), "g.circle")
+    XCTAssertEqual(symbol("cmd/main.go"), "go")
     XCTAssertEqual(symbol("App/View.SWIFT"), "swift")
-    XCTAssertEqual(symbol("src.v2/readme.md"), "text.alignleft")
+    XCTAssertEqual(symbol("src.v2/readme.md"), "markdown")
   }
 
   func testCompoundExtensionWinsOverItsTail() {
     XCTAssertEqual(FileIcon.forPath("types/index.d.ts"), FileIcon.forPath("x.d.ts"))
-    XCTAssertNotEqual(FileIcon.forPath("index.d.ts"), FileIcon.forPath("index.ts"))
-    XCTAssertEqual(symbol("index.ts"), "t.square")
+    XCTAssertEqual(symbol("a.test.tsx"), "typescript")
+    XCTAssertEqual(symbol("index.ts"), "typescript")
   }
 
   func testKnownFileNames() {
     XCTAssertEqual(symbol("Makefile"), "hammer")
-    XCTAssertEqual(symbol("docker/Dockerfile"), "shippingbox")
-    XCTAssertEqual(symbol("Dockerfile.dev"), "shippingbox")
-    XCTAssertEqual(symbol("go.mod"), "g.circle")
-    XCTAssertEqual(symbol("web/package.json"), "shippingbox")
-    XCTAssertEqual(symbol(".gitignore"), "gearshape")
+    XCTAssertEqual(symbol("docker/Dockerfile"), "docker")
+    XCTAssertEqual(symbol("Dockerfile.dev"), "docker")
+    XCTAssertEqual(symbol("go.mod"), "go")
+    XCTAssertEqual(symbol("web/package.json"), "npm")
+    XCTAssertEqual(symbol(".gitignore"), "git")
   }
 
   func testUnknownFallsBackToGeneric() {
     XCTAssertEqual(FileIcon.forPath("LICENSE"), .generic)
     XCTAssertEqual(FileIcon.forPath("a.tar.gz"), .generic)
     XCTAssertEqual(FileIcon.forPath(""), .generic)
+  }
+
+  func testEveryLogoInTheTableHasAPath() {
+    for p in ["a.go", "a.swift", "a.ts", "a.js", "a.py", "a.rs", "a.md", "a.json", "a.yml", "a.toml",
+              "a.html", "a.css", "a.sh", "Dockerfile", ".gitignore", "package.json"] {
+      XCTAssertFalse(SimpleIcons.paths[symbol(p)]?.isEmpty ?? true, p)
+    }
   }
 
   func testFolderIcons() {
