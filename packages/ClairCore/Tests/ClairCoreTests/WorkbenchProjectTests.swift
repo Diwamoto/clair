@@ -295,6 +295,7 @@ final class ProjectGroupChromeTests: XCTestCase {
     _ = try r.execute("project.setColor", ["name": .string("a"), "color": .string("purple")], state: &s).get()
     XCTAssertThrowsError(try r.execute("project.setColor", ["name": .string("a"), "color": .string("pink")], state: &s).get())
     XCTAssertThrowsError(try r.execute("project.setColor", ["name": .string("a"), "color": .string("#12345")], state: &s).get())
+    for _ in 0..<50 { XCTAssertNotNil(WorkbenchProject.randomColor().wholeMatch(of: /#[0-9a-f]{6}/)) }
     _ = try r.execute("project.setColor", ["name": .string("a"), "color": .string("#1a2B3c")], state: &s).get()
     _ = try r.execute("project.setColor", ["name": .string("a"), "color": .string("purple")], state: &s).get()
     _ = try r.execute("project.move", ["name": .string("b"), "offset": .int(-1)], state: &s).get()

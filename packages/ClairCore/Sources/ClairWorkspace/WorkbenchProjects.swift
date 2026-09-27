@@ -27,6 +27,14 @@ public struct WorkbenchProject: Sendable, Codable, Equatable {
 
   public var displayName: String { label ?? name }
 
+  /// A random hue at a fixed, chrome-friendly saturation/brightness, as `#rrggbb`.
+  public static func randomColor() -> String {
+    let h = Double.random(in: 0..<6), s = 0.55, v = 0.9, c = v * s, x = c * (1 - abs(h.truncatingRemainder(dividingBy: 2) - 1))
+    let (r, g, b): (Double, Double, Double) = [(c, x, 0), (x, c, 0), (0, c, x), (0, x, c), (x, 0, c), (c, 0, x)][Int(h)]
+    let hex = { (d: Double) in String(format: "%02x", Int(((d + v - c) * 255).rounded())) }
+    return "#" + hex(r) + hex(g) + hex(b)
+  }
+
   /// Relative prefixes of `folders`, in order — the explorer's extra top-level rows.
   public var folderPrefixes: [String] { (folders ?? []).map { WorkbenchFiles.relative($0, from: path) } }
 
@@ -95,7 +103,8 @@ extension WorkbenchState {
     if let open = projects.first(where: { $0.path == p.path }) { switchProject(to: open, scanFiles: scanFiles); return }
     var name = p.name, n = 2
     while projects.contains(where: { $0.name == name }) { name = "\(p.name) \(n)"; n += 1 }
-    let added = WorkbenchProject(name: name, path: p.path)
+    var added = WorkbenchProject(name: name, path: p.path)
+    added.color = WorkbenchProject.randomColor()
     projects.append(added); switchProject(to: added, scanFiles: scanFiles)
   }
 
