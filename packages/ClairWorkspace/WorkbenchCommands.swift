@@ -69,7 +69,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var palette: Palette?
   /// E17: definition-jump history for ⌃- / ⌃⇧-. Transient (not in `WorkspaceSnapshot`).
   public var navigation = NavigationHistory()
-  public var toggles = ["restoreLayout": true, "confirmClose": true, "showQuota": false, "preventSleepOnBattery": false, "formatOnSave": false, "showWhitespace": false, "softWrap": false, "terminalApprovals": true]
+  public var toggles = ["restoreLayout": true, "confirmClose": true, "showQuota": true, "preventSleepOnBattery": false, "formatOnSave": false, "showWhitespace": false, "softWrap": false, "terminalApprovals": true]
   public var choices = WorkbenchState.choiceOptions.mapValues { $0[0] }
   /// V11: user shortcut assignments over the registry defaults. An empty string unassigns a default.
   public var shortcuts: [String: String] = [:]
