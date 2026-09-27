@@ -867,7 +867,7 @@ import Observation
             HStack(spacing: 4) {
               ForEach(Array(st.projects.enumerated()), id: \.element.name) { i, p in
                 if i > 0 { Rectangle().fill(Color(white: 0.95, opacity: 0.09)).frame(width: 1, height: 22).padding(.horizontal, 4) }
-                projectGroup(p, colorKey: p.color.flatMap(DesignTokens.GroupColor.init(rawValue:)) ?? projectColors[i % projectColors.count])
+                projectGroup(p, colorKey: p.color.flatMap { DesignTokens.GroupColor.resolve($0) == nil ? nil : $0 } ?? projectColors[i % projectColors.count].rawValue)
               }
               Button(action: openFolder) { Image(systemName: "plus").font(.system(size: 13)).foregroundStyle(C.chromeInk).frame(width: 30, height: 30) }
                 .buttonStyle(.hoverWash).help("フォルダを開く")
@@ -907,8 +907,8 @@ import Observation
 
     /// An inactive group's chip switches to that Project (editor, terminals and sidebar follow `st.project`);
     /// the active group's chip toggles its tab strip (GUI-local).
-    private func projectGroup(_ p: WorkbenchProject, colorKey: DesignTokens.GroupColor) -> some View {
-      let color = colorKey.color
+    private func projectGroup(_ p: WorkbenchProject, colorKey: String) -> some View {
+      let color = DesignTokens.GroupColor.resolve(colorKey) ?? DesignTokens.GroupColor.gray.color
       let active = st.project == p.name
       let tabs = active ? st.tabs : (st.layouts[p.name]?.tabs ?? [])
       let selectedTab = active ? st.selectedTitlebarTab : nil
@@ -997,12 +997,12 @@ import Observation
     }
 
     /// Mock `projectMenu`: colour in place, switch/fold/rename, order, mute, close.
-    private func projectMenu(_ p: WorkbenchProject, colorKey: DesignTokens.GroupColor, folded: Bool) -> ClairMenuSpec {
+    private func projectMenu(_ p: WorkbenchProject, colorKey: String, folded: Bool) -> ClairMenuSpec {
       let name = CommandArg.string(p.name)
       let index = st.projects.firstIndex(of: p) ?? 0
       let muted = st.notices.mutedProjects.contains(p.name)
       return ClairMenuSpec(title: p.displayName, sub: p.path, entries: [
-        .swatches(colorKey) { store.run("project.setColor", ["name": name, "color": .string($0.rawValue)]) },
+        .swatches(colorKey) { store.run("project.setColor", ["name": name, "color": .string($0)]) },
         .separator,
         .item("このProjectに切り替え", disabled: st.project == p.name) { store.run("project.switch", ["name": name]) },
         .item(folded ? "グループを展開" : "グループを折りたたむ") {

@@ -502,7 +502,9 @@ extension CommandRegistry {
         palette: false,
         preflight: { s, i throws(CommandError) in
           try require(s.projects.contains { $0.name == i["name"]!.string! }, "no project \(i["name"]!)")
-          try require(["blue", "green", "amber", "red", "purple", "gray"].contains(i["color"]!.string!), "unknown color \(i["color"]!)")
+          let color = i["color"]!.string!
+          try require(["blue", "green", "amber", "red", "purple", "gray"].contains(color) || color.wholeMatch(of: /#[0-9a-fA-F]{6}/) != nil,
+                      "unknown color \(i["color"]!)")
           return .write
         }) { s, i in
       s.projects[s.projects.firstIndex { $0.name == i["name"]!.string! }!].color = i["color"]!.string!

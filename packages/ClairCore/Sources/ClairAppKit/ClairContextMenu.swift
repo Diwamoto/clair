@@ -24,8 +24,8 @@
   enum ClairMenuEntry {
     case item(ClairMenuItem)
     case separator
-    /// Mock `swatches` row: the tab-group colour picked in place.
-    case swatches(DesignTokens.GroupColor, (DesignTokens.GroupColor) -> Void)
+    /// Mock `swatches` row: the tab-group colour picked in place — a key or a custom `#RRGGBB`.
+    case swatches(String, (String) -> Void)
 
     static func item(
       _ label: String, shortcut: String? = nil, disabled: Bool = false, destructive: Bool = false,
@@ -205,18 +205,28 @@
     private var rule: some View { Rectangle().fill(L.hairline).frame(height: 1).padding(.horizontal, 8).padding(.vertical, 4) }
 
     // ponytail: mouse only; the mock's ←/→ swatch focus is not ported.
-    private func swatchRow(_ value: DesignTokens.GroupColor, _ pick: @escaping (DesignTokens.GroupColor) -> Void) -> some View {
+    private func swatchRow(_ value: String, _ pick: @escaping (String) -> Void) -> some View {
       let names: [DesignTokens.GroupColor: String] = [.blue: "青", .green: "緑", .amber: "黄", .red: "赤", .purple: "紫", .gray: "なし"]
+      // ponytail: the picker writes on every change while dragging in the colour panel; debounce if that shows up.
+      let custom = Binding<Color>(
+        get: { DesignTokens.GroupColor.resolve(value) ?? .gray },
+        set: { c in
+          guard let s = NSColor(c).usingColorSpace(.sRGB) else { return }
+          pick(String(format: "#%02x%02x%02x", Int((s.redComponent * 255).rounded()), Int((s.greenComponent * 255).rounded()), Int((s.blueComponent * 255).rounded())))
+        })
       return HStack(spacing: 4) {
         ForEach(DesignTokens.GroupColor.allCases, id: \.self) { key in
-          Button { close(); pick(key) } label: {
+          Button { close(); pick(key.rawValue) } label: {
             RoundedRectangle(cornerRadius: Radius.control).fill(key.color).frame(width: 26, height: 18)
               .padding(2)
-              .overlay(RoundedRectangle(cornerRadius: Radius.control + 2).stroke(value == key ? C.textSecondary : .clear, lineWidth: 1.5))
+              .overlay(RoundedRectangle(cornerRadius: Radius.control + 2).stroke(value == key.rawValue ? C.textSecondary : .clear, lineWidth: 1.5))
           }
           .buttonStyle(.plain).help(names[key] ?? key.rawValue)
-          .accessibilityLabel(names[key] ?? key.rawValue).accessibilityAddTraits(value == key ? .isSelected : [])
+          .accessibilityLabel(names[key] ?? key.rawValue).accessibilityAddTraits(value == key.rawValue ? .isSelected : [])
         }
+        ColorPicker("任意の色", selection: custom, supportsOpacity: false).labelsHidden()
+          .help("任意の色").accessibilityLabel("任意の色")
+          .accessibilityAddTraits(value.hasPrefix("#") ? .isSelected : [])
       }
       .padding(.horizontal, 6).frame(height: 32)
       .onHover { if $0 { active = nil; sub = nil } }

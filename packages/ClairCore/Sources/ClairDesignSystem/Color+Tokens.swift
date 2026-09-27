@@ -133,5 +133,12 @@ extension DesignTokens {
       guard let swatchHex else { return color }
       return SwiftUI.Color(hex: swatchHex, alpha: alpha)
     }
+
+    /// A stored group colour: a key (`"blue"`) or a custom `#RRGGBB` from the colour picker.
+    public static func resolve(_ raw: String) -> SwiftUI.Color? {
+      if let key = GroupColor(rawValue: raw) { return key.color }
+      guard raw.wholeMatch(of: /#[0-9a-fA-F]{6}/) != nil else { return nil }
+      return SwiftUI.Color(hex: raw)
+    }
   }
 }
