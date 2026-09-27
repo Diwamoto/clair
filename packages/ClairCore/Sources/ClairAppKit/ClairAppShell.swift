@@ -2809,7 +2809,7 @@ import Observation
         VStack(spacing: 0) {
           if kind != .editor {
             PaneHeaderView(
-              id: id, label: kind == .preview ? "プレビュー" : kind == .graph ? "コミットグラフ" : title(id), focused: id == focused,
+              id: id, label: kind == .preview ? "" : kind == .graph ? "コミットグラフ" : title(id), focused: id == focused,
               onSwap: { run("pane.swap", ["idA": .int($0), "idB": .int($1)]) },
               onDragStart: { dragging = id }, onDragEnd: { dragging = nil },
               onClose: { run("pane.focus", ["id": .int(id)]); run("pane.close", [:]) })
