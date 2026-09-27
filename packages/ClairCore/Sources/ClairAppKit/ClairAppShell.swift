@@ -1173,12 +1173,12 @@ import Observation
     private var settingsHeader: some View {
       HStack(spacing: 0) {
         Color.clear.frame(width: 76 + 25)  // room for the native traffic lights (inset 5pt by AppDelegate)
-        Text("設定").font(.system(size: 19.5, weight: .semibold)).foregroundStyle(C.textPrimary)
+        Text("設定").font(.system(size: 16, weight: .semibold)).foregroundStyle(C.textPrimary)
         Spacer(minLength: 0)
         Button { store.run("settings.close") } label: {
           Image(systemName: "xmark").font(.system(size: 13, weight: .medium)).foregroundStyle(C.chromeInkMuted)
             .frame(width: 26, height: 26)
-        }.buttonStyle(.hoverWash).padding(.trailing, 16).help("設定を閉じる")
+        }.buttonStyle(.hoverWash).keyboardShortcut(.cancelAction).padding(.trailing, 16).help("設定を閉じる")
       }
       .frame(height: ChromeBudget.titlebar)
       .background(TitlebarArea())
@@ -1188,17 +1188,16 @@ import Observation
 
     private var settingsPanel: some View {
       VStack(alignment: .leading, spacing: 12) {
-        Text("設定を検索").font(.system(size: 18)).foregroundStyle(C.textQuaternary)
+        Text("設定を検索").font(.system(size: 15)).foregroundStyle(C.textQuaternary)
           .padding(.horizontal, 8).frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
           .background(C.chrome, in: RoundedRectangle(cornerRadius: Radius.control))
           .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.hairline))
-        Text("ワークスペース").font(.system(size: 18, weight: .semibold)).foregroundStyle(C.textTertiary).padding(.horizontal, 8)
         VStack(alignment: .leading, spacing: 0) {
           ForEach(["一般", "AIプロバイダー", "使用状況", "エディタ", "ターミナル", "モバイル", "アップデート"], id: \.self) { section in
             let selected = st.section == section
             Button { store.run("settings.open", ["section": .string(section)]) } label: {
               Text(section)
-                .font(.system(size: 18, weight: selected ? .semibold : .regular))
+                .font(.system(size: 15, weight: selected ? .semibold : .regular))
                 .foregroundStyle(selected ? C.textPrimary : C.textSecondary)
                 .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
                 .padding(.horizontal, 8)
@@ -1210,7 +1209,7 @@ import Observation
         Spacer(minLength: 0)
       }
       .padding(.horizontal, 8).padding(.vertical, 16)
-      .frame(width: 260)
+      .frame(width: 240)
       .background(C.chrome)
       .overlay(alignment: .trailing) { Rectangle().fill(L.chrome).frame(width: 1) }
     }
@@ -2003,8 +2002,8 @@ import Observation
     private var settingsMain: some View {
       ScrollView {
         VStack(alignment: .leading, spacing: 8) {
-          Text(st.section).font(.system(size: 30, weight: .semibold)).foregroundStyle(C.textPrimary)
-          Text(Self.sectionNotes[st.section] ?? "\(st.section) の設定です。").font(.system(size: 18)).foregroundStyle(C.textTertiary)
+          Text(st.section).font(.system(size: 25, weight: .semibold)).foregroundStyle(C.textPrimary)
+          Text(Self.sectionNotes[st.section] ?? "\(st.section) の設定です。").font(.system(size: 15)).foregroundStyle(C.textTertiary)
             .padding(.bottom, 16)
           switch st.section {
           case "使用状況":
@@ -2050,7 +2049,7 @@ import Observation
             EmptyView()
           }
         }
-        .font(.system(size: 18))
+        .font(.system(size: 15))
         .padding(.horizontal, 40).padding(.vertical, 40).frame(maxWidth: 880, alignment: .leading).frame(maxWidth: .infinity, alignment: .leading)
         // Destination change: short cross-fade on the screen token; SwiftUI retargets it mid-flight (interruptible), and reduce motion swaps instantly.
         .id(st.section).transition(.opacity)
@@ -2105,16 +2104,16 @@ import Observation
       SettingsCard(title: "バージョン") {
         SettingsRow(title: "現在のバージョン", note: "\(c.channel.displayName) \(c.currentVersion)") {
           if c.channel == .dev {
-            Text("Dev ビルドは更新フィードを持ちません。").font(.system(size: 16.5)).foregroundStyle(C.textMuted)
+            Text("Dev ビルドは更新フィードを持ちません。").font(.system(size: 14)).foregroundStyle(C.textMuted)
           } else {
             switch store.update {
-            case .idle: Text("最新の状態です。").font(.system(size: 16.5)).foregroundStyle(C.textTertiary)
-            case .checking: Text("確認中…").font(.system(size: 16.5)).foregroundStyle(C.textTertiary)
-            case .installing: Text("更新を適用しています。完了後に再起動します。").font(.system(size: 16.5)).foregroundStyle(C.textTertiary)
-            case .failed(let m): Text(m).font(.system(size: 16.5)).foregroundStyle(C.textTertiary)
+            case .idle: Text("最新の状態です。").font(.system(size: 14)).foregroundStyle(C.textTertiary)
+            case .checking: Text("確認中…").font(.system(size: 14)).foregroundStyle(C.textTertiary)
+            case .installing: Text("更新を適用しています。完了後に再起動します。").font(.system(size: 14)).foregroundStyle(C.textTertiary)
+            case .failed(let m): Text(m).font(.system(size: 14)).foregroundStyle(C.textTertiary)
             case .available(let u):
               HStack(spacing: 8) {
-                Text("\(u.version) が利用できます").font(.system(size: 16.5)).foregroundStyle(C.textSecondary)
+                Text("\(u.version) が利用できます").font(.system(size: 14)).foregroundStyle(C.textSecondary)
                 Button("適用して再起動") { Task { await store.installUpdate() } }
               }
             }

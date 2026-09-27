@@ -192,9 +192,6 @@ export function SettingsPanel() {
             }}
           />
           <nav>
-            <div style={{ margin: '4px 8px', color: color.textTertiary, fontSize: fs.secondary, fontWeight: 600 }}>
-              ワークスペース
-            </div>
             {sections.map((s) => {
               const on = section === s;
               return (

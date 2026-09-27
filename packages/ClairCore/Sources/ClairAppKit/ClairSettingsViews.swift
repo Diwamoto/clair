@@ -11,7 +11,7 @@
     @ViewBuilder var content: Content
     var body: some View {
       VStack(alignment: .leading, spacing: 16) {
-        Text(title).font(Typography.font(Typography.title)).foregroundStyle(C.textPrimary)
+        Text(title).font(.system(size: 18, weight: .semibold)).foregroundStyle(C.textPrimary)
         VStack(spacing: 0) { content }
       }
       .padding(.horizontal, 22).padding(.vertical, 20)
@@ -27,8 +27,8 @@
     var body: some View {
       HStack(spacing: 12) {
         VStack(alignment: .leading, spacing: 2) {
-          Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(C.textPrimary)
-          if let note { Text(note).font(.system(size: 11)).foregroundStyle(C.textTertiary).fixedSize(horizontal: false, vertical: true) }
+          Text(title).font(.system(size: 15, weight: .semibold)).foregroundStyle(C.textPrimary)
+          if let note { Text(note).font(.system(size: 14)).foregroundStyle(C.textTertiary).fixedSize(horizontal: false, vertical: true) }
         }
         Spacer(minLength: 0)
         control
@@ -48,9 +48,9 @@
         ForEach(options, id: \.self) { o in
           let on = o == value
           Button { onChange(o) } label: {
-            Text(o).font(.system(size: 11, weight: on ? .semibold : .regular))
+            Text(o).font(.system(size: 14, weight: on ? .semibold : .regular))
               .foregroundStyle(on ? C.textPrimary : C.textSecondary)
-              .padding(.horizontal, 10).frame(height: 26).background(on ? C.surfaceActive : .clear)
+              .padding(.horizontal, 10).frame(height: 36).background(on ? C.surfaceActive : .clear)
           }.buttonStyle(HoverWashStyle(radius: 0))
         }
       }
@@ -78,8 +78,8 @@
   struct SettingsField: View {
     let text: String
     var body: some View {
-      Text(text).font(.system(size: 11)).foregroundStyle(C.textSecondary).lineLimit(1)
-        .padding(.horizontal, 8).frame(minHeight: 26)
+      Text(text).font(.system(size: 14)).foregroundStyle(C.textSecondary).lineLimit(1)
+        .padding(.horizontal, 8).frame(minHeight: 36)
         .background(C.chrome, in: RoundedRectangle(cornerRadius: Radius.control))
         .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.hairline))
     }
