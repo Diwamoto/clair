@@ -24,7 +24,7 @@ func coreDeclaresTheAcceptedModuleBoundaries() {
 
 @Test
 func appCompositionUsesOnlyClairComponents() {
-  #expect(ClairAppComposition.packageName == "ClairCore")
+  #expect(ClairAppComposition.packageName == "Clair")
   #expect(
     ClairAppComposition.componentNames == [
       "ClairWorkspace",

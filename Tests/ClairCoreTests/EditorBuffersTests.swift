@@ -28,6 +28,14 @@
   }
 
   @MainActor final class EditorBuffersTests: XCTestCase {
+    // The store seeds its first project from the launch directory; keep that off the (large) repo root.
+    override func setUp() {
+      super.setUp()
+      let seed = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+      try? FileManager.default.createDirectory(at: seed, withIntermediateDirectories: true)
+      setenv("CLAIR_PROJECT_ROOT", seed.path, 1)
+    }
+
     private func root(_ files: [String: Data]) throws -> String {
       let d = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
       try FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)

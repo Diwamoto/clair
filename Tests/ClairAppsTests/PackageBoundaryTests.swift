@@ -6,7 +6,7 @@ import Testing
 
 @Test
 func appPackageUsesOnlyTheNewCorePackage() {
-  #expect(ClairAppComposition.packageName == "ClairCore")
+  #expect(ClairAppComposition.packageName == "Clair")
   #expect(ClairMobileModule.name.hasPrefix("Clair"))
   #expect(ClairDaemonModule.name.hasPrefix("Clair"))
 }

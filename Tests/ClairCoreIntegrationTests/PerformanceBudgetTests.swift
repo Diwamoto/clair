@@ -391,8 +391,7 @@ struct PerformanceBudgetTests {
     let appKit = URL(fileURLWithPath: #filePath)
       .deletingLastPathComponent()  // ClairCoreIntegrationTests
       .deletingLastPathComponent()  // Tests
-      .deletingLastPathComponent()  // ClairCore
-      .appending(path: "Sources/ClairAppKit")
+      .appending(path: "apps/mac/ClairAppKit")
     let files = try FileManager.default
       .contentsOfDirectory(at: appKit, includingPropertiesForKeys: nil)
       .filter { $0.pathExtension == "swift" }

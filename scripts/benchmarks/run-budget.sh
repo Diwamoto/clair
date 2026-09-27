@@ -8,7 +8,7 @@ set -euo pipefail
 # slower here and would condemn operations that actually ship inside budget.
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-core_package="$repo_root/packages/ClairCore"
+core_package="$repo_root"
 
 regenerate=0
 out_file=""

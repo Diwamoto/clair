@@ -14,7 +14,7 @@ the MIT License.
 - Pinned commit: `d4c88d8069912b653d707191388ca98e24751f12` (`1.3.2-dev`)
 - License: MIT — Copyright (c) 2024 Mitchell Hashimoto, Ghostty contributors
 - The upstream `LICENSE` file is staged at vendor time to
-  `packages/ClairCore/Vendor/ghostty/LICENSE-ghostty` (git-ignored,
+  `packages/Vendor/ghostty/LICENSE-ghostty` (git-ignored,
   materialized by `scripts/ghostty.sh vendor`, not redistributed from
   this repository).
 
@@ -28,7 +28,7 @@ that transitive dependency set.
 
 ## Swift packages
 
-Resolved by SwiftPM from `packages/ClairCore/Package.swift`; not vendored.
+Resolved by SwiftPM from `Package.swift`; not vendored.
 
 | Package | License |
 | --- | --- |
@@ -40,7 +40,7 @@ Resolved by SwiftPM from `packages/ClairCore/Package.swift`; not vendored.
 ## Vendored tree-sitter grammars
 
 Generated `parser.c`/`scanner.c` sources are vendored under
-`packages/ClairCore/Sources/ClairEditorLanguage<Name>/`. Each directory carries
+`packages/ClairEditorLanguage<Name>/`. Each directory carries
 the upstream `LICENSE` and a `VENDOR.md` recording the source commit.
 
 | Directory | Upstream | License |

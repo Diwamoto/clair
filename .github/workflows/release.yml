@@ -29,7 +29,7 @@ jobs:
         id: ghostty
         uses: actions/cache/restore@v6
         with:
-          path: packages/ClairCore/Vendor/ghostty
+          path: packages/Vendor/ghostty
           key: ghostty-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Config/ghostty-pin.json', 'scripts/ghostty.sh') }}
 
       - name: Vendor libghostty
@@ -43,7 +43,7 @@ jobs:
         if: steps.ghostty.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
-          path: packages/ClairCore/Vendor/ghostty
+          path: packages/Vendor/ghostty
           key: ${{ steps.ghostty.outputs.cache-primary-key }}
 
       - name: Test

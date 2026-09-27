@@ -4,6 +4,7 @@
 # Xcode and local Swift state
 /.build/
 /packages/*/.build/
+/apps/mobile/ClairMobile.xcodeproj/project.xcworkspace/
 /DerivedData/
 *.xcresult
 *.xcuserstate
@@ -22,9 +23,8 @@ __pycache__/
 # Materialized libghostty/GhosttyKit vendor artifact and its build/fetch
 # cache (Config/ghostty-pin.json is the tracked source of truth; see
 # scripts/ghostty.sh and docs/plans/clair-t01-libghostty-foundation.md).
-/packages/ClairCore/Vendor/ghostty
+/packages/Vendor/ghostty
 /.cache/ghostty/
-/ClairMobile.xcodeproj/project.xcworkspace/
 
 # Per-developer signing (Apple Team ID); see Config/Signing.xcconfig.
 /Config/Signing.local.xcconfig

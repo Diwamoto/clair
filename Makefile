@@ -15,9 +15,9 @@ dev: ## Build and launch the Clair macOS app (Ctrl-C to stop). Sessions share on
 	@./scripts/run-dev.sh
 
 dev-daemon-restart: ## Rebuild and restart the shared dev daemon; running `make dev` sessions bring it back.
-	@swift build --package-path packages/ClairApps --product ClairDaemon
-	@swift build --package-path packages/ClairApps --product clair
-	@CLAIR_CHANNEL=dev packages/ClairApps/.build/arm64-apple-macosx/debug/clair daemon stop || true
+	@swift build --package-path . --product ClairDaemon
+	@swift build --package-path . --product clair
+	@CLAIR_CHANNEL=dev .build/arm64-apple-macosx/debug/clair daemon stop || true
 
 dev-ios: ## Build and launch Clair Mobile in an iOS Simulator.
 	@./scripts/run-mobile-simulator.sh
@@ -51,7 +51,7 @@ perf-startup: ## Measure bundled Release startup against half a Dock bounce.
 perf: perf-budget perf-startup ## Run the full Clair v2 performance budget gate.
 
 lint-swift: ## Check Swift formatting.
-	@swift format lint --recursive --parallel --strict apple
+	@swift format lint --recursive --parallel --strict apps/mobile/ClairMobileTests apps/mobile/ClairMobileUITests
 
 lint: lint-swift ## Run all formatting and static checks.
 

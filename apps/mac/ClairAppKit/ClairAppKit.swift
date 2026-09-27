@@ -6,7 +6,7 @@ import ClairTerminal
 import ClairWorkspace
 
 public enum ClairAppComposition {
-  public static let packageName = "ClairCore"
+  public static let packageName = "Clair"
   public static let componentNames = [
     ClairWorkspaceModule.name,
     ClairAgentModule.name,

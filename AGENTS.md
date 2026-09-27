@@ -17,6 +17,17 @@ ever needed; do not reintroduce its code paths. `v2` is a migration-era word
 with no product meaning — task `B04` removes it from the code, so do not add new
 `v2`-named symbols or files.
 
+## Layout
+
+One SwiftPM package at the repo root (`Package.swift`):
+
+- `apps/mac`, `apps/mobile`, `apps/daemon`, `apps/cli` — each program's entry
+  point plus its app-only library (`ClairAppKit`, `ClairMobileKit`,
+  `ClairDaemonKit`, …). The iOS Xcode wrapper is `apps/mobile/ClairMobile.xcodeproj`.
+- `packages/` — libraries shared across apps (editor, terminal, Ghostty,
+  workspace, transport, …), plus the git-ignored `packages/Vendor/ghostty`.
+- `Tests/` — all Swift test targets.
+
 ## Dev-environment lifecycle
 
 Clair has several long-running development environments. Starting duplicates

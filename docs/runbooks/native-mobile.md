@@ -20,7 +20,7 @@ device identity、transport、APNs entitlement/provider、完成 UI は後続 ta
   internal tester 権限も必要である。
 - bundle ID は `com.diwamoto.clair.mobile` に固定する。証明書、provisioning profile、APNs key、
   App Store Connect API key は repository に保存しない。
-- Xcode bundle は `ClairMobile.xcodeproj` を使う。v1 の `Clair.xcodeproj` は削除済みである。
+- Xcode bundle は `apps/mobile/ClairMobile.xcodeproj` を使う。v1 の `Clair.xcodeproj` は削除済みである。
 
 ## Package and Simulator smoke
 
@@ -36,7 +36,7 @@ make foundation
 
 ```sh
 xcodebuild \
-  -project ClairMobile.xcodeproj \
+  -project apps/mobile/ClairMobile.xcodeproj \
   -scheme ClairMobile \
   -configuration Debug \
   -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
@@ -56,14 +56,14 @@ Overview 表示と Sessions への navigation smoke が通ることである。S
 Apple account の操作は release owner が行う。次の手順は account access が利用可能な場合だけ
 実行し、秘密情報をコマンドライン、ログ、repositoryへ残さない。
 
-1. Xcode で `ClairMobile.xcodeproj` を開き、`ClairMobile` target の Signing & Capabilities
+1. Xcode で `apps/mobile/ClairMobile.xcodeproj` を開き、`ClairMobile` target の Signing & Capabilities
    で Automatic signing と Team `3UY66R4X2N` を選ぶ。Bundle Identifier が
    `com.diwamoto.clair.mobile` と一致し、登録済みの iPhone/iPad が選択できることを確認する。
 2. `generic/platform=iOS` 向けに Release archive を作る。
 
    ```sh
    xcodebuild \
-     -project ClairMobile.xcodeproj \
+     -project apps/mobile/ClairMobile.xcodeproj \
      -scheme ClairMobile \
      -configuration Release \
      -destination 'generic/platform=iOS' \

@@ -4,7 +4,7 @@ import XCTest
 
 final class ClairAgentSkillTests: XCTestCase {
   func testShippedSkillMatchesRepoSkill() throws {
-    let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../../../../.agents/skills/clair-agents/SKILL.md")
+    let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../../.agents/skills/clair-agents/SKILL.md")
     XCTAssertEqual(ClairAgentSkill.markdown, try String(contentsOf: repo, encoding: .utf8))
   }
 

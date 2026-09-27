@@ -13,7 +13,7 @@
 // When `CLAIR_GHOSTTY_VENDORED` is defined (set by Package.swift only when
 // both the pinned commit's real `ghostty.h` AND a built
 // `GhosttyKit.xcframework` have been materialized into
-// `packages/ClairCore/Vendor/ghostty/` by `scripts/ghostty.sh vendor`),
+// `packages/Vendor/ghostty/` by `scripts/ghostty.sh vendor`),
 // this header additionally includes the real upstream header and statically
 // asserts that this subset still matches it: struct layout via
 // `_Static_assert(sizeof/offsetof, ...)`, and function presence/signature by

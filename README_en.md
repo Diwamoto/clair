@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="packages/ClairApps/Sources/ClairMacApp/Resources/AppIcon.png" width="128" alt="Clair">
+<img src="apps/mac/ClairMacApp/Resources/AppIcon.png" width="128" alt="Clair">
 
 # Clair
 

@@ -19,14 +19,13 @@ public enum GhosttyResources {
     case nushell
   }
 
-  /// `packages/ClairCore/Vendor/ghostty/resources`, resolved relative to
+  /// `packages/Vendor/ghostty/resources`, resolved relative to
   /// this source file rather than the process's current working directory
   /// (which build tools may set to anything).
   static var vendorResourcesDirectory: URL {
     URL(fileURLWithPath: #filePath)
       .deletingLastPathComponent() // ClairGhostty
-      .deletingLastPathComponent() // Sources
-      .deletingLastPathComponent() // ClairCore
+      .deletingLastPathComponent() // packages
       .appendingPathComponent("Vendor/ghostty/resources", isDirectory: true)
   }
 

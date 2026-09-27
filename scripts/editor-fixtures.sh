@@ -23,7 +23,7 @@ generate() {
   _TMP_BUILD_DIR="$(mktemp -d)"
 
   # Generate via a small SwiftPM executable target so fixture logic stays in one place.
-  swift run --package-path "$repo_root/packages/ClairCore" \
+  swift run --package-path "$repo_root" \
     --build-path "$_TMP_BUILD_DIR/.build" \
     EditorFixtureGenerator "$fixture_dir"
 

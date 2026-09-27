@@ -43,7 +43,7 @@ file paths, component names, commands, and raw tool output as they are.
   can be opened from a phone; `README.md` there records the current URL,
   the shell structure, and the motion model.
 - **Native work** goes through [`clair-task`](../clair-task/SKILL.md).
-  This skill never edits `apple/` or `packages/`.
+  This skill never edits `apps/`, `packages/`, or `Package.swift`.
 - `scripts/canvas_edit.py` in this skill directory extracts and repacks the
   canvas artifact.
 

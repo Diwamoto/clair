@@ -13,7 +13,7 @@ set -euo pipefail
 # dyld and static initialisers that an external stopwatch cannot see.
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-apps_package="$repo_root/packages/ClairApps"
+apps_package="$repo_root"
 
 # Dock launch bounce is ~600 ms per full bounce, so half a bounce is 300 ms.
 # Calibration knob: measure the bounce period on the target machine and set

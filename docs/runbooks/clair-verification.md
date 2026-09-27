@@ -36,11 +36,11 @@ make test    # Core / Apps package tests
 
 ### E01: invariants / baseline / fixtures
 
-`packages/ClairCore/Sources/ClairEditorFixtures` に invariant と baseline evidence が置かれる。コンパイルとテストを確認する。
+`packages/ClairEditorFixtures` に invariant と baseline evidence が置かれる。コンパイルとテストを確認する。
 
 ```sh
-swift build --package-path packages/ClairCore --target ClairEditorFixtures
-swift test --package-path packages/ClairCore --filter EditorFixtures
+swift build --target ClairEditorFixtures
+swift test --filter EditorFixtures
 ```
 
 確認観点:
@@ -55,14 +55,14 @@ swift test --package-path packages/ClairCore --filter EditorFixtures
 Core 実装の確認は package test で行う。
 
 ```sh
-swift test --package-path packages/ClairCore --filter ClairEditor
+swift test --filter ClairEditor
 ```
 
 手動で harness を動かす場合:
 
 ```sh
-swift run --package-path packages/ClairCore EditorBenchmark \
-  --fixture packages/ClairCore/Tests/Fixtures/10mb.swift \
+swift run EditorBenchmark \
+  --fixture Tests/Fixtures/10mb.swift \
   --operation keystroke \
   --iterations 20
 ```
@@ -80,14 +80,14 @@ swift run --package-path packages/ClairCore EditorBenchmark \
 macOS surface は `ClairMacApp` 経由で確認する。
 
 ```sh
-swift run --package-path packages/ClairApps ClairMacApp
+swift run ClairMacApp
 ```
 
 iOS surface は Simulator 経由。
 
 ```sh
 xcodebuild \
-  -project ClairMobile.xcodeproj \
+  -project apps/mobile/ClairMobile.xcodeproj \
   -scheme ClairMobile \
   -configuration Debug \
   -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
@@ -108,8 +108,8 @@ xcodebuild \
 ### E09-E10: review anchor / integration gate
 
 ```sh
-swift test --package-path packages/ClairCore --filter ClairReview
-swift test --package-path packages/ClairCore --filter ClairEditorIntegration
+swift test --filter ClairReview
+swift test --filter ClairEditorIntegration
 ```
 
 確認観点:
@@ -133,8 +133,8 @@ scripts/ghostty.sh vendor    # 初回 or pin 更新時の fetch/build
 package ビルド:
 
 ```sh
-swift build --package-path packages/ClairCore --target ClairGhostty
-swift build --package-path packages/ClairCore --target ClairGhosttyABI
+swift build --target ClairGhostty
+swift build --target ClairGhosttyABI
 ```
 
 確認観点:
@@ -149,7 +149,7 @@ swift build --package-path packages/ClairCore --target ClairGhosttyABI
 `ClairDaemon` が PTY / process / session を所有する。すでに queue 上は `done` だが、回帰確認に使える。
 
 ```sh
-swift run --package-path packages/ClairApps ClairDaemon \
+swift run ClairDaemon \
   --directory ~/.clair-daemon \
   --project-root /path/to/project \
   --opencode-executable /path/to/opencode
@@ -166,14 +166,14 @@ swift run --package-path packages/ClairApps ClairDaemon \
 macOS surface:
 
 ```sh
-swift run --package-path packages/ClairApps ClairMacApp
+swift run ClairMacApp
 ```
 
 iOS surface:
 
 ```sh
 xcodebuild \
-  -project ClairMobile.xcodeproj \
+  -project apps/mobile/ClairMobile.xcodeproj \
   -scheme ClairMobile \
   -configuration Debug \
   -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
@@ -199,13 +199,13 @@ xcodebuild \
 
 ```sh
 # editor core だけ
-swift test --package-path packages/ClairCore --filter EditorInvariantsTests
+swift test --filter EditorInvariantsTests
 
 # terminal core だけ
-swift test --package-path packages/ClairCore --filter ClairGhosttyTests
+swift test --filter ClairGhosttyTests
 
 # daemon だけ
-swift test --package-path packages/ClairCore --filter ClairDaemonKitTests
+swift test --filter ClairDaemonKitTests
 ```
 
 広い確認は変更が波及しそうなときだけ実行する。

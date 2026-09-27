@@ -19,7 +19,7 @@
 // Like `ClairGhosttyABI`: when `CLAIR_GHOSTTY_VT_VENDORED` is defined
 // (set by Package.swift only when both the pinned commit's real
 // `ghostty/vt.h` headers AND a built `GhosttyVT.xcframework` have been
-// materialized into `packages/ClairCore/Vendor/ghostty/` by
+// materialized into `packages/Vendor/ghostty/` by
 // `scripts/ghostty.sh vendor-vt`), this header additionally includes
 // the real upstream headers and statically asserts that this subset still
 // matches them: struct layout via `_Static_assert(sizeof/offsetof, ...)`,

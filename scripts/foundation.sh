@@ -2,8 +2,8 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-core_package="$repo_root/packages/ClairCore"
-apps_package="$repo_root/packages/ClairApps"
+core_package="$repo_root"
+apps_package="$repo_root"
 
 core_targets=(
   ClairPush
@@ -57,7 +57,7 @@ build_mobile_simulator() {
 test_packages() {
   swift test --package-path "$core_package" --parallel --filter ClairCoreTests
   swift test --package-path "$core_package" --parallel --filter ClairDesignSystemTests
-  swift test --package-path "$apps_package" --parallel
+  swift test --package-path "$apps_package" --parallel --filter ClairAppsTests
 }
 
 test_integration_packages() {
@@ -79,16 +79,14 @@ check_sources() {
   # Match real v1 dependencies (a WebKit editor, libvterm calls), not prose that names them.
   if grep -rnE --include='*.swift' \
     '^[[:space:]]*import (WebKit|ClairTextKit)$|WKWebView\(|vterm_[a-z_]+\(' \
-    "$core_package/Sources" "$apps_package/Sources" \
-    "$core_package/Package.swift" "$apps_package/Package.swift"; then
+    "$repo_root/packages" "$repo_root/apps" "$repo_root/Package.swift"; then
     printf 'foundation: v1 runtime dependency found in packages.\n' >&2
     return 1
   fi
 }
 
 check() {
-  check_package "$core_package"
-  check_package "$apps_package"
+  check_package "$repo_root"
   check_sources
   printf 'foundation: package manifests and v1 dependency boundary passed.\n'
 }

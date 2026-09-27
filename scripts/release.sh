@@ -33,10 +33,10 @@ public_key="$(tr -d '[:space:]' <Config/update-public-key)"
 # Release notes are the CHANGELOG.md section for this version (Keep a Changelog; written by the clair-release skill).
 notes="$(awk -v h="## [$version]" 'index($0, "## [") == 1 { f = (index($0, h) == 1); next } f' CHANGELOG.md)"
 [[ -n "${notes//[[:space:]]/}" ]] || die "CHANGELOG.md has no '## [$version]' section"
-[[ -f packages/ClairCore/Vendor/ghostty/GhosttyKit.xcframework/Info.plist ]] ||
+[[ -f packages/Vendor/ghostty/GhosttyKit.xcframework/Info.plist ]] ||
   die "libghostty is not vendored (run scripts/ghostty.sh vendor); a release without it has no terminal"
 
-pkg="packages/ClairApps"
+pkg="."
 printf 'release: building %s (release)...\n' "$tag"
 for product in ClairMacApp ClairDaemon clair; do
   swift build -c release --package-path "$pkg" --product "$product"
@@ -53,7 +53,7 @@ cp "$bin/ClairMacApp" "$bin/ClairDaemon" "$bin/clair" "$app/Contents/MacOS/"
 # there and the bundle cannot be sealed by codesign. Move them to Contents/Resources (custom accessor
 # or an Xcode app target) when Developer ID signing/notarization is adopted.
 cp -R "$bin"/*.bundle "$app/"
-scripts/make-icns.sh "$pkg/Sources/ClairMacApp/Resources/AppIcon.png" "$app/Contents/Resources/AppIcon.icns"
+scripts/make-icns.sh "apps/mac/ClairMacApp/Resources/AppIcon.png" "$app/Contents/Resources/AppIcon.icns"
 cat >"$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

@@ -8,7 +8,7 @@ derived_data="${CLAIR_MOBILE_DERIVED_DATA:-$repo_root/.build/xcode/mobile-simula
 "$repo_root/scripts/doctor.sh" xcode
 
 xcodebuild \
-    -project "$repo_root/ClairMobile.xcodeproj" \
+    -project "$repo_root/apps/mobile/ClairMobile.xcodeproj" \
     -scheme "ClairMobile" \
     -configuration Debug \
     -destination "$destination" \

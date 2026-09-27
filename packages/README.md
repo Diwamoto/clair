@@ -1,8 +1,9 @@
-# Clair core packages
+# Clair shared packages
 
-This package is the dependency root for the native rewrite foundation. Each
-target is a deliberately small, independently buildable boundary for a single
-component. The targets contain no v1 application or mobile-control module.
+Libraries shared by the apps in `../apps`, one folder per target, declared in
+the root `Package.swift`. Each target is a deliberately small, independently
+buildable boundary for a single component. `Vendor/ghostty` is the git-ignored
+libghostty artifact materialized by `scripts/ghostty.sh`.
 
 'ClairShared' owns the transport-neutral protocol contract used by later
 daemon, client, and native UI tasks. It does not open a socket, perform
@@ -129,7 +130,7 @@ state machine.
 
 ## N02 native mobile client
 
-`ClairMobileKit` owns the typed mobile client state machine and the protected
+`ClairMobileKit` (in `apps/mobile/`) owns the typed mobile client state machine and the protected
 identity boundary. `ClairKeychainDeviceIdentityStore` stores the device signer
 and opaque credential as one device-only Keychain record; tests use the
 deterministic `ClairInMemoryDeviceIdentityStore`. Locked, unavailable,

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-package_path="$repo_root/packages/ClairApps"
+package_path="$repo_root"
 bin_dir="$package_path/.build/arm64-apple-macosx/debug"
 
 # Dev must never touch Stable's workspace/socket/update state (ADR-0008); `clair` needs the same CLAIR_CHANNEL.
@@ -85,7 +85,7 @@ fi
 # A bare executable shows the generic exec icon to anything reading the bundle (AltTab, Finder), so launch
 # from a minimal .app wrapper. Bundle.module still resolves through SwiftPM's debug build-path fallback.
 app="$package_path/.build/dev-bundle/Clair Dev.app"
-icon_png="$package_path/Sources/ClairMacApp/Resources/AppIconDev.png"
+icon_png="$package_path/apps/mac/ClairMacApp/Resources/AppIconDev.png"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 [[ "$icon_png" -nt "$app/Contents/Resources/AppIcon.icns" ]] && "$repo_root/scripts/make-icns.sh" "$icon_png" "$app/Contents/Resources/AppIcon.icns"
 cat >"$app/Contents/Info.plist" <<'PLIST'
@@ -118,7 +118,7 @@ launch_app
 # ponytail: mtime polling (no fswatch dependency); swap for fswatch if the 1s scan gets slow.
 stamp="$(mktemp)"
 trap 'rm -f "$stamp"' EXIT
-watch_dirs=("$package_path/Sources" "$repo_root/packages/ClairCore/Sources")
+watch_dirs=("$repo_root/apps" "$repo_root/packages")
 
 # The app exiting ends the session; the daemon exiting just gets it restarted. (`wait -n` needs
 # bash 4.3+; macOS ships bash 3.2, so poll instead.)

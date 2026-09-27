@@ -4,7 +4,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 pin_path="$repo_root/Config/ghostty-pin.json"
-vendor_dir="$repo_root/packages/ClairCore/Vendor/ghostty"
+vendor_dir="$repo_root/packages/Vendor/ghostty"
 framework_path="$vendor_dir/GhosttyKit.xcframework"
 vt_framework_path="$vendor_dir/GhosttyVT.xcframework"
 vt_include_path="$vendor_dir/include-vt"
