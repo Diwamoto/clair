@@ -1476,6 +1476,9 @@ import Observation
                   FileIcon.forPath(f.path).image(size: 10, ink: on ? C.textSecondary : C.textTertiary).frame(width: 16)
                   Text(r.label).font(.system(size: 13, weight: on ? .semibold : .regular)).foregroundStyle(Self.changeColor(ranks[f.path]) ?? (on ? C.textPrimary : C.textSecondary)).lineLimit(1)
                   Spacer(minLength: 0)
+                  if let tint = Self.changeColor(ranks[f.path]) {
+                    Text(st.dirty.contains(f.path) ? "M" : f.status ?? "M").font(.system(size: 12, weight: .semibold)).foregroundStyle(tint)
+                  }
                 }
                 .clairContextMenu(menus) { fileMenu(f.path, tab: false) }
               } else {
@@ -1485,6 +1488,7 @@ import Observation
                   FileIcon.folder(open: open).image(size: 11, ink: C.textTertiary).frame(width: 16)
                   Text(r.label).font(.system(size: 13)).foregroundStyle(Self.changeColor(ranks[r.id]) ?? C.textSecondary).lineLimit(1)
                   Spacer(minLength: 0)
+                  if let tint = Self.changeColor(ranks[r.id]) { Circle().fill(tint).frame(width: 6, height: 6) }
                 }
                 .clairContextMenu(menus) {
                   if let folder = addedFolder(r.id) {
