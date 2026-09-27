@@ -202,7 +202,6 @@ function useWorkbenchState() {
   const [tabWidth, setTabWidth] = useState(4);
   const [defaultShell, setDefaultShell] = useState('/bin/zsh');
   const [scrollbackLines, setScrollbackLines] = useState(5000);
-  const [updateChannel, setUpdateChannel] = useState<'Stable' | 'Dev'>('Stable');
   const [appearance, setAppearance] = useState<'ダーク' | 'ライト' | 'システム'>('ダーク');
   const systemLight = typeof matchMedia !== 'undefined' && matchMedia('(prefers-color-scheme: light)').matches;
   applyScheme(appearance === 'ライト' || (appearance === 'システム' && systemLight) ? 'light' : 'dark');
@@ -664,8 +663,6 @@ function useWorkbenchState() {
     setDefaultShell,
     scrollbackLines,
     setScrollbackLines,
-    updateChannel,
-    setUpdateChannel,
     appearance,
     setAppearance,
     branches,

@@ -2123,13 +2123,6 @@ import Observation
 
     @ViewBuilder private var updateSection: some View {
       let c = store.updateConfig
-      SettingsCard(title: "更新チャンネル") {
-        SettingsRow(title: "チャンネル", note: "Dev は先行ビルド。署名検証・backup/rollback はどちらも同じです。") {
-          // The channel is the running bundle's identity (ADR-0008), not a preference, so it is shown, not switched.
-          SettingsSegmented(options: ["Stable", "Dev"], value: c.channel.displayName, onChange: { _ in })
-            .allowsHitTesting(false)
-        }
-      }
       SettingsCard(title: "バージョン") {
         SettingsRow(title: "現在のバージョン", note: "\(c.channel.displayName) \(c.currentVersion)") {
           if c.channel == .dev {

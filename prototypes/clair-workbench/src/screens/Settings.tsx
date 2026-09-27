@@ -411,14 +411,9 @@ export function SettingsMain() {
               </Card>
             ) : section === 'アップデート' ? (
               <>
-                <Card title="更新チャンネル">
+                <Card title="動作">
                   <Row
                     first
-                    title="チャンネル"
-                    note="Dev は先行ビルド。署名検証・backup/rollback はどちらも同じです。"
-                    control={<Segmented value={wb.updateChannel} options={['Stable', 'Dev'] as const} onChange={wb.setUpdateChannel} />}
-                  />
-                  <Row
                     last
                     title="Agent実行中はスリープを抑止"
                     note="長時間タスクの途中でMacがスリープしないようにします。"
@@ -426,7 +421,7 @@ export function SettingsMain() {
                   />
                 </Card>
                 <Card title="バージョン">
-                  <Row first last title="現在のバージョン" note={`Clair 2.0.0-${wb.updateChannel.toLowerCase()} · 最新`} control={<span />} />
+                  <Row first last title="現在のバージョン" note={`Clair 2.0.0 · 最新`} control={<span />} />
                 </Card>
               </>
             ) : (
