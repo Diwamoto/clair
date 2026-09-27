@@ -2264,9 +2264,9 @@ import Observation
                 GitBranchGlyph().stroke(style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round))
                   .frame(width: 11, height: 11)
                 Text(branch)
-              }
+              }.padding(.horizontal, 6).frame(minHeight: 18)
             }
-            .buttonStyle(.plain).fixedSize().disabled(gitOperation != nil)
+            .buttonStyle(.hoverWash).fixedSize().disabled(gitOperation != nil).help("ブランチを切り替え / 作成")
           }
           if st.isRepo {
             // VS Code-style sync: one button shows ↓behind ↑ahead and runs pull then push.
