@@ -514,10 +514,8 @@
                 }
                 let items: [Pair] = split ? Self.pairs(rows) : rows.enumerated().map { Pair(id: $0, left: $1, right: $1) }
                 // The divider stays centred; a line longer than its half is clipped and revealed by scrolling (12px mono ≈ 7.3pt/char).
-                // The divider sits on the window's centre line (clamped so each half keeps a gutter).
-                let paneX = viewport.frame(in: .global).minX
-                let windowW = NSApp.keyWindow?.contentView?.bounds.width ?? (paneX + viewport.size.width)
-                let half: CGFloat = split ? min(max(windowW / 2 - paneX, 120), viewport.size.width - 121) : 0
+                // The divider sits on the diff pane's centre line.
+                let half: CGFloat = split ? (viewport.size.width - 1) / 2 : 0
                 ForEach(items, id: \.id) { p in
                   let r = p.right ?? p.left!
                   if compact, let s = fold[p.id], s == p.id, !expanded.contains(s) {
@@ -587,7 +585,7 @@
     private func overflowWidth(_ viewport: CGFloat) -> CGFloat {
       guard split else { return 0 }
       let longest = model.rows.lazy.map { $0.text.count }.max() ?? 0
-      return max(0, 68 + 7.3 * CGFloat(longest) - 120)  // ponytail: sized for the narrowest half, may over-scroll a little
+      return max(0, 68 + 7.3 * CGFloat(longest) - (viewport - 1) / 2)
     }
 
     @ViewBuilder private func pairRow(_ p: Pair, half: CGFloat, width: CGFloat) -> some View {
