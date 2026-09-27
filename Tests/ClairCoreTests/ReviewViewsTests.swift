@@ -36,6 +36,17 @@
       XCTAssertLessThan(elapsed, 0.2, "20,000-file explorer model took \(elapsed)s")
     }
 
+    func testFolderTakesHighestChangeRank() {
+      let files = [("a/new.swift", "U"), ("a/b/edit.swift", "M"), ("a/b/gone.swift", "D"), ("c/new.swift", "A"), ("c/typed.swift", nil), ("d/x", nil)]
+        .map { WorkbenchFile(path: $0.0, status: $0.1) }
+      let r = ClairAppShell.changeRanks(files, dirty: ["c/typed.swift"])
+      XCTAssertEqual(r["a/new.swift"], 1)
+      XCTAssertEqual(r["a/b"], 3)
+      XCTAssertEqual(r["a"], 3)
+      XCTAssertEqual(r["c"], 2)
+      XCTAssertNil(r["d"])
+    }
+
     func testAddedFolderIsOneTopLevelRow() {
       let files = ["main.go", "../../x/docs/a/b.md"].map { WorkbenchFile(path: $0, status: nil) }
       let rows = ClairAppShell.explorerRows(for: files, roots: ["../../x/docs"])

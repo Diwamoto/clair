@@ -1427,6 +1427,27 @@ import Observation
       }
     }
 
+    /// Change rank per file and folder: 1 added, 2 modified, 3 deleted; a folder takes the highest rank inside it.
+    nonisolated static func changeRanks(_ files: [WorkbenchFile], dirty: Set<String>) -> [String: Int] {
+      var out: [String: Int] = [:]
+      for f in files {
+        var rank = switch f.status { case nil: 0; case "A", "U", "?": 1; case "D": 3; default: 2 }
+        if dirty.contains(f.path) { rank = max(rank, 2) }
+        guard rank > 0 else { continue }
+        var path = f.path[...]
+        while true {
+          out[String(path)] = max(out[String(path)] ?? 0, rank)
+          guard let slash = path.lastIndex(of: "/") else { break }
+          path = path[..<slash]
+        }
+      }
+      return out
+    }
+
+    nonisolated static func changeColor(_ rank: Int?) -> Color? {
+      switch rank { case 1: C.success; case 2: C.attention; case 3: C.danger; default: nil }
+    }
+
     /// Folders derived from the file paths; click toggles, files open a tab.
     private var explorer: some View {
       return LazyVStack(alignment: .leading, spacing: 0) {
@@ -1446,15 +1467,14 @@ import Observation
             ClairMenuSpec(title: st.project, entries: [reviewMenu("この Project をレビュー", .project, disabled: !st.dirty.isEmpty)])
           }
           if !rootFolded {
+            let ranks = Self.changeRanks(st.files, dirty: st.dirty)
             ForEach(visibleExplorerRows) { r in
               if let f = r.file {
                 let on = st.active == f.path && !st.settingsOpen
-                let badge = st.dirty.contains(f.path) ? "M" : f.status
                 treeRow(depth: r.depth, selected: on, action: { store.run("tab.open", ["path": .string(f.path)]) }) {
                   FileIcon.forPath(f.path).image(size: 11, ink: on ? C.textSecondary : C.textTertiary).frame(width: 12)
-                  Text(r.label).font(.system(size: 13, weight: on ? .semibold : .regular)).foregroundStyle(on ? C.textPrimary : C.textSecondary).lineLimit(1)
+                  Text(r.label).font(.system(size: 13, weight: on ? .semibold : .regular)).foregroundStyle(Self.changeColor(ranks[f.path]) ?? (on ? C.textPrimary : C.textSecondary)).lineLimit(1)
                   Spacer(minLength: 0)
-                  if let b = badge { Text(b).font(.system(size: 13, weight: .semibold)).foregroundStyle(b == "A" || b == "?" ? C.success : C.attention) }
                 }
                 .clairContextMenu(menus) { fileMenu(f.path, tab: false) }
               } else {
@@ -1462,7 +1482,7 @@ import Observation
                 treeRow(depth: r.depth, selected: false, action: { store.run("explorer.toggle", ["path": .string(r.id)]) }) {
                   chevron(open: open)
                   FileIcon.folder(open: open).image(size: 11, ink: C.textTertiary).frame(width: 12)
-                  Text(r.label).font(.system(size: 13)).foregroundStyle(C.textSecondary).lineLimit(1)
+                  Text(r.label).font(.system(size: 13)).foregroundStyle(Self.changeColor(ranks[r.id]) ?? C.textSecondary).lineLimit(1)
                   Spacer(minLength: 0)
                 }
                 .clairContextMenu(menus) {
