@@ -19,6 +19,11 @@ final class TableFileTests: XCTestCase {
     s.tabs = ["data/x.csv"]; s.active = "data/x.csv"
     _ = try CommandRegistry.workbench.execute("editor.markdownPreview", state: &s).get()
     XCTAssertEqual(s.tree.leaves.filter { $0.kind == .preview }.count, 1)
+    // A second file gets its own pane; the first keeps showing the CSV.
+    s.tabs.append("notes.md"); s.active = "notes.md"
+    _ = try CommandRegistry.workbench.execute("editor.markdownPreview", state: &s).get()
+    let previews = s.tree.leaves.filter { $0.kind == .preview }.map { s.previews[$0.id] }
+    XCTAssertEqual(Set(previews), ["data/x.csv", "notes.md"])
   }
 
   func testColumnNames() {

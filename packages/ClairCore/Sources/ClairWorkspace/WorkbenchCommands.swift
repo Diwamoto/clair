@@ -49,6 +49,8 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var dirty: Set<String> = []
   public var collapsed: Set<String> = []
   public var launches: [Int: AgentLaunch] = [:]
+  /// Preview pane id → the file it was opened for (Markdown rendered, CSV/TSV as a table).
+  public var previews: [Int: String] = [:]
   /// CLI agents started by hand in Clair terminals. Refreshed from live process facts, never saved.
   public var detectedLaunches: [String: [Int: AgentLaunch]] = [:]
   /// Latest OSC 0/2 window title per `NotificationLog.paneKey`, as Ghostty shows in its tab. Transient.
@@ -648,18 +650,22 @@ extension CommandRegistry {
         preflight: { s, _ throws(CommandError) in try require(s.active != nil, "ファイルが開かれていません"); return .read }) { _, _ in .ok },
     cmd("editor.definition", "定義へ移動", .read, ai: false, shortcut: "⌃⌘J",
         preflight: { s, _ throws(CommandError) in try require(s.active != nil, "ファイルが開かれていません"); return .read }) { _, _ in .ok },
-    // E15: one preview pane follows the active file (Markdown rendered, CSV/TSV as an editable table); a second request just focuses it.
+    // E15: each preview pane is bound to the file it was opened for (Markdown rendered, CSV/TSV as an editable
+    // table) and keeps showing it when the editor switches files; asking again for the same file just focuses it.
     cmd("editor.markdownPreview", "プレビュー / 表で開く", .additive, ai: false, shortcut: "⌘⇧V",
         preflight: { s, _ throws(CommandError) in
           try require(s.active.map { MarkdownPreview.isMarkdown($0) || TableFile.separator($0) != nil } == true, "Markdown / CSV ファイルが開かれていません"); return .additive
         }) { s, _ in
+      guard let path = s.active else { return .ok }
       s.panesClosed = false
-      if let preview = s.tree.leaves.first(where: { $0.kind == .preview }) {
+      if let preview = s.tree.leaves.first(where: { $0.kind == .preview && s.previews[$0.id] == path }) {
         if s.tree.maximized != nil { s.tree.toggleMaximize() }
         return .pane(preview.id)
       }
       guard let editor = s.tree.leaves.first(where: { $0.kind == .editor }) else { return .ok }
-      return .pane(s.tree.split(editor.id, .horizontal, kind: .preview))
+      let id = s.tree.split(editor.id, .horizontal, kind: .preview)
+      s.previews[id] = path
+      return .pane(id)
     },
     cmd("editor.references", "参照を検索", .read, ai: false, shortcut: "⌃⌘R",
         preflight: { s, _ throws(CommandError) in try require(s.active != nil, "ファイルが開かれていません"); return .read }) { _, _ in .ok },

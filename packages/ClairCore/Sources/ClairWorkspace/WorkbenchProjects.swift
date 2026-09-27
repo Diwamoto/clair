@@ -82,6 +82,9 @@ public struct ProjectLayout: Sendable, Codable, Equatable {
   public var collapsed: Set<String> = []
   /// V07: live agent terminals by pane id. Never persisted — restore must not silently respawn agents.
   public var launches: [Int: AgentLaunch] = [:]
+  /// Preview pane id → bound file. Not persisted: a restored preview follows the active file.
+  // ponytail: persist with the layout if losing the binding on relaunch matters.
+  public var previews: [Int: String] = [:]
   /// Every pane closed in this Project only; not persisted (restore reopens the layout).
   public var panesClosed = false
   private enum CodingKeys: String, CodingKey { case tree, tabs, active, dirty, collapsed }
@@ -89,8 +92,12 @@ public struct ProjectLayout: Sendable, Codable, Equatable {
 
 extension WorkbenchState {
   var layout: ProjectLayout {
-    get { ProjectLayout(tree: tree, tabs: tabs, active: active, dirty: dirty, collapsed: collapsed, launches: launches, panesClosed: panesClosed) }
-    set { tree = newValue.tree; tabs = newValue.tabs; active = newValue.active; dirty = newValue.dirty; collapsed = newValue.collapsed; launches = newValue.launches; panesClosed = newValue.panesClosed }
+    get {
+      var l = ProjectLayout(tree: tree, tabs: tabs, active: active, dirty: dirty, collapsed: collapsed, launches: launches, panesClosed: panesClosed)
+      l.previews = previews
+      return l
+    }
+    set { tree = newValue.tree; tabs = newValue.tabs; active = newValue.active; dirty = newValue.dirty; collapsed = newValue.collapsed; launches = newValue.launches; previews = newValue.previews; panesClosed = newValue.panesClosed }
   }
 
   /// The open Project with the deepest root containing `file` (a nested Project wins over its parent).
@@ -182,6 +189,7 @@ extension WorkbenchState {
     }
     if !l.tree.isValid { l.tree = PaneTree() }
     l.launches = l.launches.filter { id, _ in l.tree.leaves.contains { $0.id == id } }
+    l.previews = l.previews.filter { id, _ in l.tree.leaves.contains { $0.id == id } }
     layout = l
     notices.markRead(project: p.name)  // looking at a Project clears its badge
   }

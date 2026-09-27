@@ -1938,7 +1938,7 @@ import Observation
               _ = store.run("debug.breakpoint", ["path": .string(root + "/" + path), "line": .int(line)])
             },
             onDefinition: { store.run("editor.definition") },
-            onEdit: { store.edited($0) }, onCaret: { store.buffers.setCaret($0, $1, in: $2) }),
+            onEdit: { store.edited($0) }, onCaret: { store.buffers.setCaret($0, $1, in: $2) }, previews: st.previews),
           run: { _ = store.run($0, $1) }, dragging: $draggingPane)
         }
       }
@@ -2827,7 +2827,7 @@ import Observation
         VStack(spacing: 0) {
           if kind != .editor {
             PaneHeaderView(
-              id: id, label: kind == .preview ? "" : kind == .graph ? "コミットグラフ" : title(id), focused: id == focused,
+              id: id, label: kind == .preview ? (editor.previews[id].map { ($0 as NSString).lastPathComponent } ?? "") : kind == .graph ? "コミットグラフ" : title(id), focused: id == focused,
               onSwap: { run("pane.swap", ["idA": .int($0), "idB": .int($1)]) },
               onDragStart: { dragging = id }, onDragEnd: { dragging = nil },
               onClose: { run("pane.focus", ["id": .int(id)]); run("pane.close", [:]) })
@@ -2836,8 +2836,8 @@ import Observation
             C.surface
             if kind == .terminal { ClairGhosttySurface(launch: launches[id].map { ($0.command, $0.cwd) } ?? (project.hasPrefix("/") ? ("", project) : nil), pane: id, sessionKey: ClairWorkbenchStore.terminalKey(root: project, pane: id), focused: id == focused, onFocus: { if id != focused { onFocus(id) } }, onFacts: { onFacts(id, $0, $1, $2) }, onTitle: { onTitle(id, $0) }) }  // one surface per terminal leaf, attached to the daemon shell keyed by project#pane
             else if kind == .graph { CommitGraphPane(root: project) }
-            else if kind == .preview, let path = editor.path, TableFile.separator(path) != nil { TablePane(buffers: editor.buffers, path: path, onEdit: editor.onEdit) }
-            else if kind == .preview { MarkdownPreviewPane(buffers: editor.buffers, root: editor.root, path: editor.path) }
+            else if kind == .preview, let path = editor.previews[id] ?? editor.path, TableFile.separator(path) != nil { TablePane(buffers: editor.buffers, path: path, onEdit: editor.onEdit) }
+            else if kind == .preview { MarkdownPreviewPane(buffers: editor.buffers, root: editor.root, path: editor.previews[id] ?? editor.path) }
             else { editor.inPane(focused: id == focused, onFocus: { if id != focused { onFocus(id) } }) }
             if let from = dragging, from != id {
               PaneDropZones { edge in

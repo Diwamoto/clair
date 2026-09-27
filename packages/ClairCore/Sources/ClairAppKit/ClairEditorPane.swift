@@ -362,6 +362,8 @@
     var onDefinition: (() -> Void)? = nil
     let onEdit: (String) -> Void
     let onCaret: (String, TextSelectionSet, TextSnapshot) -> Void
+    /// Preview pane id → the file it shows (`WorkbenchState.previews`).
+    var previews: [Int: String] = [:]
 
     var body: some View {
       if let path, let root {
