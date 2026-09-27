@@ -273,7 +273,7 @@
               treeRow(depth: d, selected: false, action: { if open { collapsed.insert(ids[d]) } else { collapsed.remove(ids[d]) } }) {
                 Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold)).foregroundStyle(C.textTertiary)
                   .rotationEffect(.degrees(open ? 90 : 0)).frame(width: 10)
-                FileIcon.folder(open: open).image(size: 10, ink: C.textTertiary).frame(width: 12)
+                FileIcon.folder(open: open).image(size: 11, ink: C.textTertiary).frame(width: 16)
                 Text(dirs[d]).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textSecondary).lineLimit(1)
                 Spacer(minLength: 0)
               }
@@ -283,7 +283,8 @@
             let t = target(c), on = selected == t, name = c.path.split(separator: "/").last.map(String.init) ?? c.path
             let badge = c.untracked ? "U" : c.index == "A" || c.worktree == "A" ? "A" : c.index == "D" || c.worktree == "D" ? "D" : "M"
             treeRow(depth: dirs.count, selected: on, action: { onSelect(t) }) {
-              FileIcon.forPath(c.path).image(size: 10, ink: on ? C.textSecondary : C.textTertiary).frame(width: 12)
+              Color.clear.frame(width: 10)  // chevron slot: a file lines up with its sibling folders
+              FileIcon.forPath(c.path).image(size: 10, ink: on ? C.textSecondary : C.textTertiary).frame(width: 16)
               Text(name).font(.system(size: 12, weight: on ? .semibold : .regular)).foregroundStyle(on ? C.textPrimary : C.textSecondary).lineLimit(1)
               Spacer(minLength: 0)
               if hovered == t {
