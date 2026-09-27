@@ -641,10 +641,10 @@ extension CommandRegistry {
         preflight: { s, _ throws(CommandError) in try require(s.active != nil, "ファイルが開かれていません"); return .read }) { _, _ in .ok },
     cmd("editor.definition", "定義へ移動", .read, ai: false, shortcut: "⌃⌘J",
         preflight: { s, _ throws(CommandError) in try require(s.active != nil, "ファイルが開かれていません"); return .read }) { _, _ in .ok },
-    // E15: one preview pane follows the active file; a second request just focuses it.
-    cmd("editor.markdownPreview", "Markdown プレビューを開く", .additive, ai: false, shortcut: "⌘⇧V",
+    // E15: one preview pane follows the active file (Markdown rendered, CSV/TSV as an editable table); a second request just focuses it.
+    cmd("editor.markdownPreview", "プレビュー / 表で開く", .additive, ai: false, shortcut: "⌘⇧V",
         preflight: { s, _ throws(CommandError) in
-          try require(s.active.map(MarkdownPreview.isMarkdown) == true, "Markdown ファイルが開かれていません"); return .additive
+          try require(s.active.map { MarkdownPreview.isMarkdown($0) || TableFile.separator($0) != nil } == true, "Markdown / CSV ファイルが開かれていません"); return .additive
         }) { s, _ in
       s.panesClosed = false
       if let preview = s.tree.leaves.first(where: { $0.kind == .preview }) {

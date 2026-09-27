@@ -1,6 +1,7 @@
 #if os(macOS)
   import AppKit
   import ClairDesignSystem
+  import ClairEditorCore
   import ClairWorkspace
   import SwiftUI
 
@@ -103,6 +104,89 @@
       let a = (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
         ?? AttributedString(s)
       return Text(a)
+    }
+  }
+#endif
+
+#if os(macOS)
+  /// CSV / TSV opened in the preview pane as an editable grid. Each committed cell (Return or focus
+  /// leaving it) rewrites the buffer as one undo unit, so ⌘Z, dirty and ⌘S work as in the text editor.
+  struct TablePane: View {
+    let buffers: EditorBuffers
+    let path: String
+    let onEdit: (String) -> Void
+    @State private var rows: [[String]] = []
+    @FocusState private var cell: Cell?
+    private struct Cell: Hashable { let r: Int, c: Int }
+
+    var body: some View {
+      if case .ready(let m)? = buffers.peek(path), let sep = TableFile.separator(path) {
+        let edit = buffers.edits[path, default: 0]
+        let width = rows.map(\.count).max() ?? 0
+        ScrollView([.horizontal, .vertical]) {
+          Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
+            ForEach(rows.indices, id: \.self) { r in
+              GridRow {
+                Text("\(r + 1)").font(.system(size: 10).monospacedDigit()).foregroundStyle(C.textTertiary)
+                  .frame(width: 32).contextMenu {
+                    Button("上に行を挿入") { mutate(m, sep) { $0.insert(Array(repeating: "", count: width), at: r) } }
+                    Button("下に行を挿入") { mutate(m, sep) { $0.insert(Array(repeating: "", count: width), at: r + 1) } }
+                    Button("行を削除") { mutate(m, sep) { $0.remove(at: r) } }
+                  }
+                ForEach(0..<width, id: \.self) { c in
+                  TextField("", text: binding(r, c))
+                    .textFieldStyle(.plain).font(.system(size: 12, weight: r == 0 ? .semibold : .regular))
+                    .focused($cell, equals: Cell(r: r, c: c))
+                    .onSubmit { commit(m, sep) }
+                    .padding(.horizontal, 6).padding(.vertical, 4).frame(minWidth: 90, maxWidth: 240, alignment: .leading)
+                    .border(C.textTertiary.opacity(0.2), width: 0.5)
+                }
+              }
+            }
+          }
+          .padding(12)
+          HStack {
+            Button("行を追加") { mutate(m, sep) { $0.append(Array(repeating: "", count: max(width, 1))) } }
+            Button("列を追加") { mutate(m, sep) { rs in for i in rs.indices { rs[i].append("") } } }
+          }
+          .buttonStyle(.borderless).font(.system(size: 11)).padding(.horizontal, 12).padding(.bottom, 12)
+          .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(C.canvas)
+        .onAppear { reload(m, sep) }
+        .onChange(of: edit) { _, _ in if cell == nil { reload(m, sep) } }  // outside edits land when no cell is being typed in
+        .onChange(of: cell) { old, _ in if old != nil { commit(m, sep) } }
+      } else {
+        Text("CSV / TSV ファイルを開くと表で編集できます。")
+          .font(.system(size: 12)).foregroundStyle(C.textTertiary)
+          .frame(maxWidth: .infinity, maxHeight: .infinity).background(C.canvas)
+      }
+    }
+
+    private func binding(_ r: Int, _ c: Int) -> Binding<String> {
+      Binding(get: { r < rows.count && c < rows[r].count ? rows[r][c] : "" }, set: { v in
+        guard r < rows.count else { return }
+        while rows[r].count <= c { rows[r].append("") }  // ragged rows grow only when typed into
+        rows[r][c] = v
+      })
+    }
+
+    private func reload(_ m: EditorTransactionManager, _ sep: Character) {
+      rows = TableFile.parse(m.buffer.snapshot.string(), separator: sep)
+    }
+
+    private func mutate(_ m: EditorTransactionManager, _ sep: Character, _ f: (inout [[String]]) -> Void) {
+      f(&rows); commit(m, sep)
+    }
+
+    private func commit(_ m: EditorTransactionManager, _ sep: Character) {
+      let snap = m.buffer.snapshot, old = snap.string()
+      let text = TableFile.serialize(rows, separator: sep, lineEnding: old.contains("\r\n") ? "\r\n" : "\n",
+                                     trailingNewline: old.isEmpty || old.hasSuffix("\n"))
+      // Re-serializing an untouched file may still normalize quoting; only a real cell change writes.
+      guard rows != TableFile.parse(old, separator: sep) else { return }
+      guard (try? m.apply([TextEdit(range: snap.fullRange, replacement: text)], label: "表の編集")) != nil else { return }
+      buffers.refresh(path); buffers.edited(path); onEdit(path)
     }
   }
 #endif
