@@ -69,6 +69,7 @@ final class PaneTreeTests: XCTestCase {
     var t = PaneTree()
     t.toggleMaximize(); XCTAssertEqual(t.maximized, 1)
     t.focusNext(); XCTAssertEqual(t.maximized, 2)
+    t.focus(1); XCTAssertEqual(t.maximized, 1)
     t.toggleMaximize(); XCTAssertNil(t.maximized)
   }
 

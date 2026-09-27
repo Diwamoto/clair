@@ -386,6 +386,10 @@ import Observation
     /// Menu/palette entry point. Saving may materialise and write a 10 MiB snapshot, so the native
     /// UI acknowledges the shortcut immediately and completes the durable write off-main.
     public func performFromUI(_ id: String, _ input: CommandInput = [:]) {
+      if id == "pane.close", let target = state.activeDiff {
+        _ = run("diff.close", ["path": .string(target.path), "staged": .bool(target.staged), "untracked": .bool(target.untracked)])
+        return
+      }
       if id == "pane.close", state.panesClosed { _ = run("pane.open", ["kind": .string("editor")]); return }
       if id == "pane.close", state.tree.leaves.first(where: { $0.id == state.tree.focused })?.kind == .editor {
         _ = run(state.active != nil ? "tab.close" : "pane.close")
@@ -741,11 +745,11 @@ import Observation
     @State private var noticesOpen = false
     @State private var collapsedGroups: Set<String> = []
     @State private var rootFolded = false
+    @State private var menus = ClairMenuController()
     @State private var changes: [GitChange] = []
     @State private var branch: String?
     @State private var branches: [String] = []
     @State private var sync: (behind: Int, ahead: Int)?
-    @State private var menus = ClairMenuController()
     @State private var changesTask: Task<Void, Never>?
     @State private var gitOperation: String?
     @State private var gitMessage: String?
@@ -816,11 +820,11 @@ import Observation
       }
       .background(C.canvas)
       .frame(minWidth: 900, minHeight: 560)
+      .clairMenuHost(menus)
       .overlay {
         if st.palette == .search { searchOverlay }
         else if let p = st.palette { paletteView(p) }
       }
-      .clairMenuHost(menus)
       .animation(.easeOut(duration: 0.09), value: st.palette == nil)
       .onChange(of: st.choices["appearance"], initial: true) { _, v in ColorSchemeChoice(setting: v).apply() }
       .onChange(of: st.palette) {
@@ -832,13 +836,20 @@ import Observation
         if sidebarMode == "ladybug", let frame { openDebugFrame(frame) }
       }
       .onChange(of: st.project) {
-        diff = nil; loadedDiff = nil; gitMessage = nil; gitFailed = false
+        diff = st.activeDiff.map { DiffTarget(path: $0.path, staged: $0.staged, untracked: $0.untracked) }
+        loadedDiff = nil; gitMessage = nil; gitFailed = false
         rebuildExplorer(); reloadChanges()
       }
       .onChange(of: st.files) { rebuildExplorer(); reloadChanges() }
       .onChange(of: st.collapsed) { rebuildVisibleExplorer() }
+      .onChange(of: st.activeDiff) {
+        diff = st.activeDiff.map { DiffTarget(path: $0.path, staged: $0.staged, untracked: $0.untracked) }
+      }
       .onChange(of: diff) { loadDiff() }
-      .onAppear { rebuildExplorer(); reloadChanges() }
+      .onAppear {
+        diff = st.activeDiff.map { DiffTarget(path: $0.path, staged: $0.staged, untracked: $0.untracked) }
+        rebuildExplorer(); reloadChanges()
+      }
       .task {
         while !Task.isCancelled {
           await store.refreshDetectedAgents()
@@ -917,7 +928,8 @@ import Observation
     private func projectGroup(_ p: WorkbenchProject, colorKey: String) -> some View {
       let color = DesignTokens.GroupColor.resolve(colorKey) ?? DesignTokens.GroupColor.gray.color
       let active = st.project == p.name
-      let tabs = active ? st.tabs : (st.layouts[p.name]?.tabs ?? [])
+      let tabs = active ? st.titlebarTabs : (st.layouts[p.name]?.titlebarTabs ?? [])
+      let orderedTabs = tabs
       let selectedTab = active ? st.selectedTitlebarTab : nil
       let dirty = active ? st.dirty : (st.layouts[p.name]?.dirty ?? [])
       let folded = collapsedGroups.contains(p.name)
@@ -953,33 +965,60 @@ import Observation
         .clairContextMenu(menus) { projectMenu(p, colorKey: colorKey, folded: folded) }
         if !folded {
           HStack(spacing: 4) {
-            ForEach(Array(tabs.enumerated()), id: \.element) { i, path in
+            ForEach(Array(orderedTabs.enumerated()), id: \.element) { i, tab in
               if i > 0 { Rectangle().fill(L.chromeSoft).frame(width: 1, height: 18) }
-              fileTab(path, projectActive: active, project: p.name,
-                selected: selectedTab == .file(path),
-                dirty: dirty.contains(path))
-            }
-            // Terminal panes ride along as tabs; the title follows the shell's OSC title.
-            ForEach(Array((active ? st.tree : st.layouts[p.name]?.tree ?? PaneTree()).leaves.filter { $0.kind == .terminal }.enumerated()), id: \.element.id) { i, leaf in
-              if i > 0 || !tabs.isEmpty { Rectangle().fill(L.chromeSoft).frame(width: 1, height: 18) }
-              let title = terminalTabTitle(p.name, leaf.id)
-              let agent = st.agentSessions.first { $0.project == p.name && $0.pane == leaf.id && !$0.status.isExited }
-              FileTabButton(
-                path: "\(leaf.id)", name: title, selected: selectedTab == .terminal(leaf.id), dirty: false,
-                onActivate: {
-                  if !active { store.run("project.switch", ["name": .string(p.name)]) }
-                  store.run("pane.focus", ["id": .int(leaf.id)])
-                },
-                onClose: {
-                  if !active { store.run("project.switch", ["name": .string(p.name)]) }
-                  store.run("pane.focus", ["id": .int(leaf.id)]); store.run("pane.close")
-                }, icon: "terminal", providerIcon: agent?.title)
-              .help(title)
+              switch tab {
+              case .file(let path):
+                fileTab(path, projectActive: active, project: p.name,
+                  selected: selectedTab == tab, dirty: dirty.contains(path))
+              case .terminal(let id), .graph(let id):
+                let title = tab == .graph(id) ? "コミットグラフ" : terminalTabTitle(p.name, id)
+                let agent = st.agentSessions.first { $0.project == p.name && $0.pane == id && !$0.status.isExited }
+                FileTabButton(
+                  path: tab.dragID, name: title, selected: selectedTab == tab, dirty: false,
+                  onActivate: {
+                    if !active { store.run("project.switch", ["name": .string(p.name)]) }
+                    store.run("pane.focus", ["id": .int(id)])
+                  },
+                  onClose: {
+                    if !active { store.run("project.switch", ["name": .string(p.name)]) }
+                    store.run("pane.focus", ["id": .int(id)]); store.run("pane.close")
+                  }, icon: tab == .graph(id) ? "point.3.connected.trianglepath.dotted" : "terminal",
+                  providerIcon: tab == .graph(id) ? nil : agent?.title,
+                  onMove: active ? { from in store.run("tab.reorder", ["source": .string(from), "target": .string(tab.dragID)]) } : nil)
+                .help(title)
+              case .diff(let target):
+                FileTabButton(
+                  path: tab.dragID, name: "差分: \(name(target.path))", selected: selectedTab == tab, dirty: false,
+                  onActivate: {
+                    if !active { store.run("project.switch", ["name": .string(p.name)]) }
+                    store.run("diff.activate", diffInput(target))
+                  },
+                  onClose: {
+                    if !active { store.run("project.switch", ["name": .string(p.name)]) }
+                    store.run("diff.close", diffInput(target))
+                  }, icon: "square.split.2x1",
+                  onMove: active ? { from in store.run("tab.reorder", ["source": .string(from), "target": .string(tab.dragID)]) } : nil)
+                .help(target.path)
+              }
             }
           }.padding(.leading, 4)
           .transition(reduceMotion ? .opacity : .scale(scale: 0.05, anchor: .leading).combined(with: .opacity))
         }
       }
+    }
+
+    private func diffInput(_ target: WorkbenchDiffTab) -> CommandInput {
+      ["path": .string(target.path), "staged": .bool(target.staged), "untracked": .bool(target.untracked)]
+    }
+
+    private func openDiff(_ target: DiffTarget) {
+      store.run("diff.open", diffInput(WorkbenchDiffTab(path: target.path, staged: target.staged, untracked: target.untracked)))
+    }
+
+    private func closeDiff() {
+      guard let target = st.activeDiff else { return }
+      store.run("diff.close", diffInput(target))
     }
 
     /// The shell's OSC title; an agent whose title is just its folder name (Codex) shows its profile name instead.
@@ -991,14 +1030,14 @@ import Observation
 
     private func fileTab(_ path: String, projectActive: Bool, project: String, selected: Bool, dirty: Bool) -> some View {
       FileTabButton(
-        path: path, name: name(path), selected: selected, dirty: dirty,
+        path: WorkbenchTab.file(path).dragID, name: name(path), selected: selected, dirty: dirty,
         onActivate: {
           if !projectActive { store.run("project.switch", ["name": .string(project)]) }
           store.run("tab.activate", ["path": .string(path)])
         },
         onClose: { store.run("tab.close", ["path": .string(path)]) },
         // Reorder within the active group only; other groups' tabs live in saved layouts.
-        onMove: projectActive ? { from in store.run("tab.move", ["path": .string(from), "target": .string(path)]) } : nil
+        onMove: projectActive ? { from in store.run("tab.reorder", ["source": .string(from), "target": .string(WorkbenchTab.file(path).dragID)]) } : nil
       )
       .clairContextMenu(menus) { projectActive ? fileMenu(path, tab: true) : ClairMenuSpec(entries: []) }
     }
@@ -1088,7 +1127,9 @@ import Observation
         sidebarMode = icon
         if st.sidebarHidden { store.run("sidebar.toggle") }  // any activity-bar click brings the ⌘B-hidden sidebar back
         if icon != "terminal" { chat = nil }
-        if icon == "folder" { diff = nil }
+        if icon == "folder", st.activeDiff != nil, let path = st.active {
+          store.run("tab.activate", ["path": .string(path)])
+        }
         if icon == "shield" { reloadChanges() }
         if icon == "ladybug" { store.run("debug.open") }
       }
@@ -1276,7 +1317,7 @@ import Observation
     private var changesList: some View {
       VStack(alignment: .leading, spacing: 0) {
         if st.isRepo { ChangesList(
-          changes: changes, selected: diff, onSelect: { diff = $0 },
+          changes: changes, selected: diff, onSelect: { openDiff($0) },
           onToggle: { change, stage in
             runGit(
               [(stage ? "git.stage" : "git.unstage", ["path": .string(change.path)])],
@@ -1357,8 +1398,10 @@ import Observation
         let snapshot = await (loadedChanges, loadedBranch, loadedBranches, loadedSync)
         guard !Task.isCancelled, store.activeRoot == root else { return }
         changes = snapshot.0; branch = snapshot.1; branches = snapshot.2; sync = snapshot.3
-        if let d = diff, !changes.contains(where: { $0.path == d.path }) { diff = nil }
-        else if diff != nil { loadDiff() }
+        for target in st.diffTabs where !changes.contains(where: { $0.path == target.path }) {
+          store.run("diff.close", diffInput(target))
+        }
+        if diff != nil { loadDiff() }
       }
     }
 
@@ -1528,7 +1571,7 @@ import Observation
         : [.item("開く") { store.run("tab.open", ["path": .string(path)]) }]
       let change = changes.first { $0.path == path }
       e.append(.item("変更を確認", disabled: change == nil) {
-        if let c = change { diff = DiffTarget(path: c.path, staged: c.staged && !c.unstaged, untracked: c.untracked) }
+        if let c = change { openDiff(DiffTarget(path: c.path, staged: c.staged && !c.unstaged, untracked: c.untracked)) }
       })
       e.append(reviewMenu("このファイルをレビュー", .file(path), disabled: st.dirty.contains(path)))
       e.append(.separator)
@@ -1633,8 +1676,8 @@ import Observation
         },
       ]
     }
-
     // MARK: V13 Debug (Workbench Debug screen, with VS Code style run configuration)
+
     private var debugPanel: some View {
       VStack(alignment: .leading, spacing: 0) {
         Text("実行とデバッグ").font(.system(size: 12, weight: .semibold)).foregroundStyle(C.textTertiary)
@@ -1903,7 +1946,7 @@ import Observation
                 if let a = st.agentSessions.first(where: { $0.project == st.project && !$0.status.isExited }) { store.run("pane.focus", ["id": .int(a.pane)]); diff = nil }
               }
             },
-            onClose: { diff = nil },
+            onClose: { closeDiff() },
             editor: d.staged ? nil : EditorPane(
               buffers: store.buffers, root: root, path: d.path, focused: true,
               softWrap: st.toggles["softWrap"] == true,

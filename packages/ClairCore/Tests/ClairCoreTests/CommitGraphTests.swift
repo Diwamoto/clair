@@ -59,10 +59,21 @@ final class CommitGraphTests: XCTestCase {
     let pane = try r.execute("git.graph", state: &s).get()
     XCTAssertEqual(s.tree.leaves.filter { $0.kind == .graph }.count, 1)
     XCTAssertEqual(pane, .pane(s.tree.focused))
-    XCTAssertEqual(s.tree.maximized, s.tree.focused, "the graph opens over the whole pane area")
+    let graphID = s.tree.focused
+    XCTAssertEqual(s.tree.maximized, graphID, "the graph opens over the whole pane area")
+    XCTAssertTrue(s.titlebarTabs.contains(.graph(graphID)))
+    XCTAssertEqual(s.selectedTitlebarTab, .graph(graphID))
+    _ = try r.execute("tab.reorder", ["source": .string(WorkbenchTab.graph(graphID).dragID), "target": .string(WorkbenchTab.terminal(2).dragID)], state: &s).get()
+    XCTAssertTrue(s.titlebarTabs.firstIndex(of: .graph(graphID))! > s.titlebarTabs.firstIndex(of: .terminal(2))!)
+    _ = try r.execute("tab.next", state: &s).get()
+    _ = try r.execute("git.graph", state: &s).get()
+    XCTAssertEqual(s.selectedTitlebarTab, .graph(graphID))
+    XCTAssertEqual(s.tree.maximized, graphID)
     _ = try r.execute("git.graph", state: &s).get()
     XCTAssertEqual(s.tree.leaves.filter { $0.kind == .graph }.count, 1)
-    XCTAssertEqual(s.tree.maximized, s.tree.focused)
+    _ = try r.execute("pane.close", state: &s).get()
+    XCTAssertFalse(s.titlebarTabs.contains(.graph(graphID)))
+    XCTAssertFalse(s.tree.leaves.contains { $0.kind == .graph })
   }
 
   func testSplitsPatchPerFile() {

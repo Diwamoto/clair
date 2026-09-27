@@ -46,6 +46,10 @@ final class WorkbenchCommandTests: XCTestCase {
     _ = try r.execute("tab.next", state: &state).get()
     XCTAssertEqual(state.tree.focused, 2)
     XCTAssertEqual(state.selectedTitlebarTab, .terminal(2))
+    _ = try r.execute("pane.focus", ["id": .int(1)], state: &state).get()
+    XCTAssertEqual(state.selectedTitlebarTab, .file("second.swift"))
+    _ = try r.execute("pane.focus", ["id": .int(2)], state: &state).get()
+    XCTAssertEqual(state.selectedTitlebarTab, .terminal(2))
     _ = try r.execute("tab.activate", ["path": .string("first.swift")], state: &state).get()
     XCTAssertEqual(state.tree.focused, 1)
     XCTAssertEqual(state.selectedTitlebarTab, .file("first.swift"))
@@ -61,6 +65,61 @@ final class WorkbenchCommandTests: XCTestCase {
     XCTAssertEqual(state.tree.focused, 3)
     _ = try r.execute("tab.next", state: &state).get()
     XCTAssertEqual(state.tree.focused, 1)
+  }
+
+  func testDiffIsOrderedSelectableAndClosableLikeOtherTabs() throws {
+    var state = WorkbenchState()
+    state.projects = [WorkbenchProject(name: "Sample", path: "/tmp")]
+    state.project = "Sample"
+    state.tabs = ["first.swift", "second.swift"]
+    state.active = "first.swift"
+    let diff = WorkbenchDiffTab(path: "first.swift", staged: false, untracked: false)
+    let input: CommandInput = ["path": .string(diff.path), "staged": .bool(false), "untracked": .bool(false)]
+    _ = try r.execute("diff.open", input, state: &state).get()
+    XCTAssertEqual(state.selectedTitlebarTab, .diff(diff))
+    XCTAssertEqual(state.titlebarTabs.filter { $0 == .diff(diff) }.count, 1)
+    _ = try r.execute("tab.reorder", ["source": .string(WorkbenchTab.diff(diff).dragID), "target": .string(WorkbenchTab.file("first.swift").dragID)], state: &state).get()
+    XCTAssertEqual(state.titlebarTabs.first, .diff(diff))
+    _ = try r.execute("tab.next", state: &state).get()
+    XCTAssertEqual(state.selectedTitlebarTab, .file("first.swift"))
+    _ = try r.execute("diff.activate", input, state: &state).get()
+    _ = try r.execute("diff.close", input, state: &state).get()
+    XCTAssertNil(state.activeDiff)
+    XCTAssertFalse(state.titlebarTabs.contains(.diff(diff)))
+    XCTAssertEqual(state.selectedTitlebarTab, .file("first.swift"))
+  }
+
+  func testDiffTabsRestoreWithProjectAndOldLayoutStillDecodes() throws {
+    let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let snapshot = folder.appending(path: "workspace.json")
+    var state = WorkbenchState()
+    state.openProject(WorkbenchProject(name: "Sample", path: folder.path), scanFiles: false)
+    let diff = WorkbenchDiffTab(path: "changed.swift", staged: false, untracked: false)
+    state.openDiff(diff)
+    state.moveTab(.diff(diff), to: .terminal(2))
+    try state.save(to: snapshot)
+    let restored = try XCTUnwrap(WorkbenchState.restore(from: snapshot, scanFiles: false))
+    XCTAssertEqual(restored.activeDiff, diff)
+    XCTAssertEqual(restored.titlebarTabs, state.titlebarTabs)
+
+    // Old persisted layouts omit every diff field; decoding must supply empty defaults.
+    var oldLayout = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(state.layout)) as? [String: Any])
+    oldLayout.removeValue(forKey: "diffTabs")
+    oldLayout.removeValue(forKey: "activeDiff")
+    oldLayout.removeValue(forKey: "tabOrder")
+    let decoded = try JSONDecoder().decode(ProjectLayout.self, from: JSONSerialization.data(withJSONObject: oldLayout))
+    XCTAssertTrue(decoded.diffTabs.isEmpty)
+  }
+
+  func testFocusingAPaneClearsDiffTabSelection() throws {
+    var state = WorkbenchState()
+    let diff = WorkbenchDiffTab(path: "first.swift", staged: false, untracked: false)
+    state.openDiff(diff)
+    XCTAssertEqual(state.selectedTitlebarTab, .diff(diff))
+    _ = try r.execute("pane.focus", ["id": .int(2)], state: &state).get()
+    XCTAssertEqual(state.selectedTitlebarTab, .terminal(2))
   }
 
   func testUsageSectionIsReachableThroughSettingsCommand() throws {

@@ -170,7 +170,9 @@ public struct PaneTree: Sendable, Equatable, Codable {
   }
 
   public mutating func focus(_ id: Int) {
-    if leaves.contains(where: { $0.id == id }) { focused = id }
+    guard leaves.contains(where: { $0.id == id }) else { return }
+    focused = id
+    if maximized != nil { maximized = id }  // a titlebar tab must show its pane, not keep the old one maximized
   }
 
   /// Swaps what two leaves show (their `kind`); tree shape, ratios and focus are untouched

@@ -46,6 +46,9 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var panesClosed = false
   public var tabs: [String] = ["apple/ClairApp/ContentView.swift"]
   public var active: String? = "apple/ClairApp/ContentView.swift"
+  public var diffTabs: [WorkbenchDiffTab] = []
+  public var activeDiff: WorkbenchDiffTab?
+  public var tabOrder: [WorkbenchTab] = []
   public var dirty: Set<String> = []
   public var collapsed: Set<String> = []
   public var launches: [Int: AgentLaunch] = [:]
@@ -299,7 +302,11 @@ extension CommandRegistry {
     cmd("pane.focus", "ペインにフォーカス", .read, params: [CommandParam("id", .int)],
         preflight: { s, i throws(CommandError) in
           try require(s.tree.leaves.contains { $0.id == i["id"]?.int }, "no pane \(i["id"]!)"); return .read
-        }) { s, i in s.tree.focus(i["id"]!.int!); return .ok },
+        }) { s, i in
+      s.tree.focus(i["id"]!.int!)
+      s.activeDiff = nil
+      return .ok
+    },
     cmd("pane.maximize", "ペインを最大化", .read, shortcut: "⌃⌘M") { s, _ in s.tree.toggleMaximize(); return .ok },
     cmd("pane.equalize", "分割を均等化", .read, shortcut: "⌃⌘=") { s, _ in s.tree.equalize(); return .ok },
     cmd("pane.setRatio", "分割比を変更", .read, params: [CommandParam("id", .int), CommandParam("ratio", .double)]) { s, i in
@@ -443,6 +450,41 @@ extension CommandRegistry {
     },
     cmd("tab.next", "次のタブ", .read, shortcut: "⌃⌘→") { s, _ in s.cycleTab(1); return .ok },
     cmd("tab.previous", "前のタブ", .read, shortcut: "⌃⌘←") { s, _ in s.cycleTab(-1); return .ok },
+    cmd("diff.open", "差分を開く", .read,
+        params: [CommandParam("path", .string), CommandParam("staged", .bool), CommandParam("untracked", .bool)],
+        palette: false,
+        preflight: { s, i throws(CommandError) in
+          let path = i["path"]!.string!
+          try require(!path.isEmpty && !path.hasPrefix("/") && !path.split(separator: "/").contains(".."), "invalid diff path")
+          try require(s.projects.contains { $0.name == s.project }, "no active Project")
+          return .read
+        }) { s, i in
+      s.openDiff(WorkbenchDiffTab(path: i["path"]!.string!, staged: i["staged"]!.bool!, untracked: i["untracked"]!.bool!))
+      return .ok
+    },
+    cmd("diff.activate", "差分タブを切り替え", .read,
+        params: [CommandParam("path", .string), CommandParam("staged", .bool), CommandParam("untracked", .bool)],
+        palette: false) { s, i in
+      s.selectTab(.diff(WorkbenchDiffTab(path: i["path"]!.string!, staged: i["staged"]!.bool!, untracked: i["untracked"]!.bool!)))
+      return .ok
+    },
+    cmd("diff.close", "差分タブを閉じる", .write,
+        params: [CommandParam("path", .string), CommandParam("staged", .bool), CommandParam("untracked", .bool)],
+        palette: false) { s, i in
+      s.closeDiff(WorkbenchDiffTab(path: i["path"]!.string!, staged: i["staged"]!.bool!, untracked: i["untracked"]!.bool!))
+      return .ok
+    },
+    cmd("tab.reorder", "タブを並べ替え", .read,
+        params: [CommandParam("source", .string), CommandParam("target", .string)], palette: false,
+        preflight: { s, i throws(CommandError) in
+          try require(s.titlebarTabs.contains { $0.dragID == i["source"]!.string! }, "no source tab")
+          try require(s.titlebarTabs.contains { $0.dragID == i["target"]!.string! }, "no target tab")
+          return .read
+        }) { s, i in
+      let tabs = s.titlebarTabs
+      s.moveTab(tabs.first { $0.dragID == i["source"]!.string! }!, to: tabs.first { $0.dragID == i["target"]!.string! }!)
+      return .ok
+    },
     // Drag-reorder: moves `path` into `target`'s slot.
     cmd("tab.move", "タブを移動", .read, params: [CommandParam("path", .string), CommandParam("target", .string)],
         preflight: { s, i throws(CommandError) in
@@ -461,6 +503,7 @@ extension CommandRegistry {
       let p = i["path"]?.string ?? s.active!
       let idx = s.tabs.firstIndex(of: p)!
       s.tabs.remove(at: idx); s.dirty.remove(p)
+      s.tabOrder.removeAll { $0 == .file(p) }
       if s.active == p { s.active = s.tabs.isEmpty ? nil : s.tabs[max(idx - 1, 0)] }
       if s.active == nil { s.tree.closeExtraEditors() }  // at most one empty editor
       return .ok
@@ -547,6 +590,7 @@ extension CommandRegistry {
       s.filesCache[p.name] = nil
       if p.name == s.project {
         s.files.removeAll { $0.path.hasPrefix(prefix) }
+        for tab in s.tabs where tab.hasPrefix(prefix) { s.tabOrder.removeAll { $0 == .file(tab) } }
         s.tabs.removeAll { $0.hasPrefix(prefix) }
         if s.active.map({ $0.hasPrefix(prefix) }) == true { s.active = s.tabs.last }
       }

@@ -1,8 +1,29 @@
 import Foundation
 
-public enum WorkbenchTab: Sendable, Equatable {
+public struct WorkbenchDiffTab: Sendable, Codable, Hashable {
+  public let path: String
+  public let staged: Bool
+  public let untracked: Bool
+
+  public init(path: String, staged: Bool, untracked: Bool) {
+    self.path = path; self.staged = staged; self.untracked = untracked
+  }
+}
+
+public enum WorkbenchTab: Sendable, Codable, Hashable {
   case file(String)
   case terminal(Int)
+  case graph(Int)
+  case diff(WorkbenchDiffTab)
+
+  public var dragID: String {
+    switch self {
+    case .file(let path): return "file:\(path)"
+    case .terminal(let id): return "terminal:\(id)"
+    case .graph(let id): return "graph:\(id)"
+    case .diff(let target): return "diff:\(target.staged):\(target.untracked):\(target.path)"
+    }
+  }
 }
 
 // V04: Project model, real file tree, and layout persistence for the Mac workbench.
@@ -25,8 +46,6 @@ public struct WorkbenchProject: Sendable, Codable, Equatable {
   /// Optional so workspaces saved before this field still decode.
   public var folders: [String]? = nil
 
-  public var displayName: String { label ?? name }
-
   /// A random hue at a fixed, chrome-friendly saturation/brightness, as `#rrggbb`.
   public static func randomColor() -> String {
     let h = Double.random(in: 0..<6), s = 0.55, v = 0.9, c = v * s, x = c * (1 - abs(h.truncatingRemainder(dividingBy: 2) - 1))
@@ -37,6 +56,8 @@ public struct WorkbenchProject: Sendable, Codable, Equatable {
 
   /// Relative prefixes of `folders`, in order — the explorer's extra top-level rows.
   public var folderPrefixes: [String] { (folders ?? []).map { WorkbenchFiles.relative($0, from: path) } }
+
+  public var displayName: String { label ?? name }
 
   public init(name: String, path: String, origin: String? = nil, branch: String? = nil) {
     self.name = name
@@ -78,6 +99,9 @@ public struct ProjectLayout: Sendable, Codable, Equatable {
   public var tree = PaneTree()
   public var tabs: [String] = []
   public var active: String?
+  public var diffTabs: [WorkbenchDiffTab] = []
+  public var activeDiff: WorkbenchDiffTab?
+  public var tabOrder: [WorkbenchTab] = []
   public var dirty: Set<String> = []
   public var collapsed: Set<String> = []
   /// V07: live agent terminals by pane id. Never persisted — restore must not silently respawn agents.
@@ -87,17 +111,49 @@ public struct ProjectLayout: Sendable, Codable, Equatable {
   public var previews: [Int: String] = [:]
   /// Every pane closed in this Project only; not persisted (restore reopens the layout).
   public var panesClosed = false
-  private enum CodingKeys: String, CodingKey { case tree, tabs, active, dirty, collapsed }
+  private enum CodingKeys: String, CodingKey { case tree, tabs, active, dirty, collapsed, diffTabs, activeDiff, tabOrder }
+
+  public init() {}
+
+  public var titlebarTabs: [WorkbenchTab] {
+    let available = tabs.map(WorkbenchTab.file) + diffTabs.map(WorkbenchTab.diff)
+      + tree.leaves.compactMap { leaf -> WorkbenchTab? in
+        switch leaf.kind {
+        case .terminal: return .terminal(leaf.id)
+        case .graph: return .graph(leaf.id)
+        default: return nil
+        }
+      }
+    return tabOrder.filter(available.contains) + available.filter { !tabOrder.contains($0) }
+  }
+
+
+  public init(tree: PaneTree, tabs: [String], active: String?, dirty: Set<String>, collapsed: Set<String>, launches: [Int: AgentLaunch], panesClosed: Bool, diffTabs: [WorkbenchDiffTab], activeDiff: WorkbenchDiffTab?, tabOrder: [WorkbenchTab]) {
+    self.tree = tree; self.tabs = tabs; self.active = active; self.dirty = dirty; self.collapsed = collapsed
+    self.launches = launches; self.panesClosed = panesClosed; self.diffTabs = diffTabs; self.activeDiff = activeDiff; self.tabOrder = tabOrder
+  }
+
+  public init(from decoder: Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    tree = try c.decode(PaneTree.self, forKey: .tree)
+    tabs = try c.decode([String].self, forKey: .tabs)
+    active = try c.decodeIfPresent(String.self, forKey: .active)
+    dirty = try c.decode(Set<String>.self, forKey: .dirty)
+    collapsed = try c.decode(Set<String>.self, forKey: .collapsed)
+    diffTabs = try c.decodeIfPresent([WorkbenchDiffTab].self, forKey: .diffTabs) ?? []
+    activeDiff = try c.decodeIfPresent(WorkbenchDiffTab.self, forKey: .activeDiff)
+    tabOrder = try c.decodeIfPresent([WorkbenchTab].self, forKey: .tabOrder) ?? []
+  }
 }
 
 extension WorkbenchState {
   var layout: ProjectLayout {
     get {
-      var l = ProjectLayout(tree: tree, tabs: tabs, active: active, dirty: dirty, collapsed: collapsed, launches: launches, panesClosed: panesClosed)
+      var l = ProjectLayout(tree: tree, tabs: tabs, active: active, dirty: dirty, collapsed: collapsed, launches: launches, panesClosed: panesClosed, diffTabs: diffTabs, activeDiff: activeDiff, tabOrder: tabOrder)
       l.previews = previews
       return l
     }
-    set { tree = newValue.tree; tabs = newValue.tabs; active = newValue.active; dirty = newValue.dirty; collapsed = newValue.collapsed; launches = newValue.launches; previews = newValue.previews; panesClosed = newValue.panesClosed }
+    set { tree = newValue.tree; tabs = newValue.tabs; active = newValue.active; dirty = newValue.dirty; collapsed = newValue.collapsed; launches = newValue.launches; previews = newValue.previews; panesClosed = newValue.panesClosed; diffTabs = newValue.diffTabs; activeDiff = newValue.activeDiff; tabOrder = newValue.tabOrder }
   }
 
   /// The open Project with the deepest root containing `file` (a nested Project wins over its parent).
@@ -129,21 +185,20 @@ extension WorkbenchState {
     panesClosed = false
     tree.ensureEditorAtLeft()
     if !tabs.contains(path) { tabs.append(path) }
-    active = path; settingsOpen = false; palette = nil
+    active = path; activeDiff = nil; settingsOpen = false; palette = nil
   }
 
   /// Titlebar order and selection are shared by shortcuts and native chrome.
   /// Editor panes show the active file; they are not extra titlebar tabs.
-  public var titlebarTabs: [WorkbenchTab] {
-    tabs.map(WorkbenchTab.file) + tree.leaves.filter { $0.kind == .terminal }.map { .terminal($0.id) }
-  }
+  public var titlebarTabs: [WorkbenchTab] { layout.titlebarTabs }
 
   public var selectedTitlebarTab: WorkbenchTab? {
+    if let activeDiff { return .diff(activeDiff) }
     guard let pane = tree.leaves.first(where: { $0.id == tree.focused }) else { return nil }
     switch pane.kind {
     case .editor, .preview: return active.flatMap { tabs.contains($0) ? .file($0) : nil }
     case .terminal: return .terminal(pane.id)
-    case .graph: return nil
+    case .graph: return .graph(pane.id)
     }
   }
 
@@ -152,11 +207,45 @@ extension WorkbenchState {
     case .file(let path):
       guard tabs.contains(path), let editor = tree.leaves.first(where: { $0.kind == .editor }) else { return }
       active = path
+      activeDiff = nil
       tree.focus(editor.id)
     case .terminal(let id):
       guard tree.leaves.contains(where: { $0.id == id && $0.kind == .terminal }) else { return }
       tree.focus(id)
+      activeDiff = nil
+    case .graph(let id):
+      guard tree.leaves.contains(where: { $0.id == id && $0.kind == .graph }) else { return }
+      tree.focus(id)
+      activeDiff = nil
+    case .diff(let target):
+      guard diffTabs.contains(target) else { return }
+      activeDiff = target
     }
+  }
+
+  mutating func openDiff(_ target: WorkbenchDiffTab) {
+    if !diffTabs.contains(target) { diffTabs.append(target) }
+    activeDiff = target; settingsOpen = false; palette = nil
+  }
+
+  mutating func closeDiff(_ target: WorkbenchDiffTab) {
+    guard let index = diffTabs.firstIndex(of: target) else { return }
+    let selected = activeDiff == target
+    let position = titlebarTabs.firstIndex(of: .diff(target)) ?? 0
+    diffTabs.remove(at: index)
+    tabOrder.removeAll { $0 == .diff(target) }
+    if selected {
+      activeDiff = nil
+      let remaining = titlebarTabs
+      if !remaining.isEmpty { selectTab(remaining[min(position, remaining.count - 1)]) }
+    }
+  }
+
+  mutating func moveTab(_ source: WorkbenchTab, to target: WorkbenchTab) {
+    var order = titlebarTabs
+    guard let from = order.firstIndex(of: source), let destination = order.firstIndex(of: target), from != destination else { return }
+    order.insert(order.remove(at: from), at: destination)
+    tabOrder = order
   }
 
   mutating func cycleTab(_ direction: Int) {
@@ -187,6 +276,10 @@ extension WorkbenchState {
       l.dirty.formIntersection(l.tabs)
       if l.active.map(l.tabs.contains) != true { l.active = l.tabs.last }
     }
+    l.diffTabs = l.diffTabs.filter { target in
+      !target.path.isEmpty && !target.path.hasPrefix("/") && !target.path.split(separator: "/").contains("..")
+    }
+    if l.activeDiff.map(l.diffTabs.contains) != true { l.activeDiff = nil }
     if !l.tree.isValid { l.tree = PaneTree() }
     l.launches = l.launches.filter { id, _ in l.tree.leaves.contains { $0.id == id } }
     l.previews = l.previews.filter { id, _ in l.tree.leaves.contains { $0.id == id } }
