@@ -480,7 +480,7 @@ function TerminalPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
 
   return (
     <div className="pane-hoverable" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
-      <PaneHeader node={node} label="ターミナル" />
+      <PaneHeader node={node} label="Terminal" />
       <div
         ref={scrollRef}
         onMouseDown={(event) => {

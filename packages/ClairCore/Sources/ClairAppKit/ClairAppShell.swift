@@ -978,7 +978,7 @@ import Observation
     /// The shell's OSC title; an agent whose title is just its folder name (Codex) shows its profile name instead.
     private func terminalTabTitle(_ project: String, _ pane: Int) -> String {
       let osc = st.paneTitles[NotificationLog.paneKey(project, pane)].flatMap { $0.isEmpty ? nil : $0 }
-      guard let agent = st.agentSessions.first(where: { $0.project == project && $0.pane == pane }) else { return osc ?? "ターミナル" }
+      guard let agent = st.agentSessions.first(where: { $0.project == project && $0.pane == pane }) else { return osc ?? "Terminal" }
       return osc.flatMap { $0 == (agent.cwd as NSString).lastPathComponent ? nil : $0 } ?? agent.title
     }
 
