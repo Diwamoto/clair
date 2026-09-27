@@ -2307,7 +2307,7 @@ import Observation
       }
       .font(Typography.font(Typography.chrome)).monospacedDigit().foregroundStyle(C.textTertiary)
       .padding(.horizontal, 12).frame(height: ChromeBudget.statusBar)
-      .background(C.chrome)
+      .background(C.chrome.overlay(ClairChannel.current == .dev ? Color.orange.opacity(0.14) : .clear))  // Dev is told apart at a glance (owner, 2026-09-27)
       .overlay(alignment: .top) { Rectangle().fill(C.surfaceActive).frame(height: 1) }
       // Off the main actor, every 5 min while the toggle is on; turning it off cancels the loop.
       .task(id: st.toggles["showQuota"] == true) {
