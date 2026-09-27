@@ -2265,7 +2265,7 @@ import Observation
               }
             } label: {
               HStack(spacing: 4) {
-                Image(systemName: "arrow.triangle.branch").font(.system(size: 10))
+                Image(nsImage: branchMenuIcon)
                 Text(branch)
               }
             }
@@ -2479,6 +2479,18 @@ import Observation
   }
 
   /// Git branch glyph: two nodes and the curved branch joining the stem.
+  // Menu labels only render Text/Image, so the sidebar's branch glyph goes in as a template image.
+  @MainActor private var branchMenuIcon: NSImage {
+    let renderer = ImageRenderer(content: GitBranchGlyph()
+      .stroke(style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round))
+      .frame(width: 11, height: 11))
+    renderer.scale = 2
+    let image = renderer.nsImage ?? NSImage()
+    image.size = NSSize(width: 11, height: 11)
+    image.isTemplate = true
+    return image
+  }
+
   private struct GitBranchGlyph: Shape {
     func path(in rect: CGRect) -> Path {
       let s = min(rect.width, rect.height) / 24
