@@ -332,7 +332,7 @@
     @State private var hunk = -1
     @State private var sent = false
     @State private var compact = false
-    @State private var split = false
+    @AppStorage("clair.diffSplit") private var split = false
     @State private var editing = false
     /// A diff this long is cut with a notice instead of laying out every row.
     nonisolated static let maxLines = 5000
