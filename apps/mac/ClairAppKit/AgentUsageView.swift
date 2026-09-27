@@ -3,7 +3,9 @@ import ClairWorkspace
 
 /// Activity is the number of prompts the user sent, across all three provider histories.
 struct AgentUsageView: View {
-  @State private var summary: AgentUsageSummary?
+  /// Kept across window openings so Settings shows the last totals at once; 再集計 rescans.
+  @MainActor private static var cachedSummary: AgentUsageSummary?
+  @State private var summary = Self.cachedSummary
   @State private var hoveredDate: Date?
   private let calendar = Calendar.current
 
@@ -65,7 +67,10 @@ struct AgentUsageView: View {
         Text("依頼・追記").font(.system(size: 19, weight: .semibold))
         Spacer()
         Button("再集計") {
-          Task { summary = AgentUsageSummary(histories: await AgentHistoryStore.shared.refresh()) }
+          Task {
+            summary = AgentUsageSummary(histories: await AgentHistoryStore.shared.refresh())
+            Self.cachedSummary = summary
+          }
         }.font(.system(size: 13))
       }
       HStack(spacing: 10) {
@@ -99,20 +104,32 @@ struct AgentUsageView: View {
                           .allowsHitTesting(false)
                       }
                     }
-                    .popover(isPresented: Binding(
-                      get: { hoveredDate == date },
-                      set: { if !$0 && hoveredDate == date { hoveredDate = nil } }
-                    ), arrowEdge: .bottom) {
-                      Text(detail(for: date))
-                        .font(.system(size: 13))
-                        .padding(12)
-                        .frame(minWidth: 190, alignment: .leading)
+                    .anchorPreference(key: HoveredCellAnchor.self, value: .bounds) {
+                      hoveredDate == date ? $0 : nil
                     }
                     .accessibilityLabel(detail(for: date))
                 } else {
                   Color.clear.frame(width: 15, height: 15)
                 }
               }
+            }
+          }
+        }
+        // An overlay, not a popover: a popover window covers the neighbouring cells and eats their hover.
+        .overlayPreferenceValue(HoveredCellAnchor.self) { anchor in
+          GeometryReader { proxy in
+            if let anchor, let hoveredDate {
+              let cell = proxy[anchor]
+              Text(detail(for: hoveredDate))
+                .font(.system(size: 13))
+                .padding(12)
+                .frame(minWidth: 190, alignment: .leading)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                .shadow(radius: 4)
+                .fixedSize()
+                .frame(width: 1, height: 1, alignment: .bottom) // grows upward from the point below
+                .position(x: cell.midX, y: cell.minY - 6)
+                .allowsHitTesting(false)
             }
           }
         }
@@ -146,8 +163,16 @@ struct AgentUsageView: View {
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .task {
-      let histories = await AgentHistoryStore.shared.all()
-      summary = AgentUsageSummary(histories: histories)
+      guard summary == nil else { return }
+      summary = AgentUsageSummary(histories: await AgentHistoryStore.shared.all())
+      Self.cachedSummary = summary
     }
+  }
+}
+
+private struct HoveredCellAnchor: PreferenceKey {
+  static let defaultValue: Anchor<CGRect>? = nil
+  static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+    value = value ?? nextValue()
   }
 }
