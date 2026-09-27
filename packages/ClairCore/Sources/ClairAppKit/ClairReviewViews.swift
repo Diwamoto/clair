@@ -765,7 +765,7 @@
           Text(message).font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary)
             .padding(.horizontal, 12).padding(.bottom, 6)
         }
-        ScrollView {
+        ScrollViewReader { proxy in ScrollView {
           LazyVStack(alignment: .leading, spacing: 0) {
             ForEach(indexedGroups, id: \.path) { group in
               HStack(spacing: 6) {
@@ -790,10 +790,11 @@
                   .contentShape(Rectangle())
                 }
                 .buttonStyle(.hoverWash).onHover { if $0 { selection = item.index } }
+                .id(item.index)
               }
             }
           }.padding(.horizontal, 8).padding(.bottom, 8)
-        }.frame(minHeight: 322, maxHeight: 420)
+        }.onChange(of: selection) { proxy.scrollTo(selection) } }.frame(minHeight: 322, maxHeight: 420)
         HStack(spacing: 8) {
           ForEach([("検索", false), ("置換 ⌥⌘F", true)], id: \.1) { label, mode in
             Button { replaceMode = mode } label: {

@@ -2363,7 +2363,7 @@ import Observation
           .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.hairline))
           .contentShape(Rectangle()).onTapGesture { paletteFocused = true }
           .padding(12)
-          ScrollView {
+          ScrollViewReader { proxy in ScrollView {
             LazyVStack(spacing: 0) {
               ForEach(Array(list.enumerated()), id: \.offset) { i, it in
                 let on = i == selection
@@ -2390,9 +2390,10 @@ import Observation
                 .contentShape(Rectangle())
                 .onHover { if $0 { selection = i } }
                 .onTapGesture { selection = i; run(list) }
+                .id(i)
               }
             }.padding(.horizontal, 8).padding(.bottom, 8)
-          }.frame(minHeight: 322, maxHeight: 420)
+          }.onChange(of: selection) { proxy.scrollTo(selection) } }.frame(minHeight: 322, maxHeight: 420)
           HStack(spacing: 8) {
             ForEach([("コマンド", WorkbenchState.Palette.commands), ("ファイルへ移動", .files)], id: \.1) { label, mode in
               Button { store.run(mode == .commands ? "palette.commands" : "palette.files") } label: {
