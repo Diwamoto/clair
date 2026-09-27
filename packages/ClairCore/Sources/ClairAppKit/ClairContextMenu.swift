@@ -310,6 +310,7 @@
     @State private var h: Double
     @State private var s: Double
     @State private var b: Double
+    @State private var open = false
 
     init(initial: Color, pick: @escaping (String) -> Void) {
       self.pick = pick
@@ -318,6 +319,24 @@
     }
 
     var body: some View {
+      VStack(alignment: .leading, spacing: 8) {
+        // Collapsed by default: the picker opens only when asked for.
+        Button { open.toggle() } label: {
+          HStack(spacing: 8) {
+            RoundedRectangle(cornerRadius: Radius.control).fill(Color(hue: h, saturation: s, brightness: b)).frame(width: 18, height: 12)
+            Text("色を変更").font(.system(size: 12)).foregroundStyle(C.textSecondary)
+            Spacer(minLength: 0)
+            Image(systemName: open ? "chevron.up" : "chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(C.textQuaternary)
+          }
+          .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain).accessibilityLabel(open ? "カラーピッカーを閉じる" : "カラーピッカーを開く")
+        if open { picker }
+      }
+      .frame(width: 208)
+    }
+
+    private var picker: some View {
       VStack(spacing: 8) {
         GeometryReader { g in
           ZStack {
@@ -346,7 +365,6 @@
         .frame(height: 12)
         .accessibilityLabel("色相")
       }
-      .frame(width: 208)
     }
 
     private func clamp(_ v: Double) -> Double { min(1, max(0, v)) }
