@@ -101,22 +101,24 @@
 
     private func detailView(_ id: String) -> some View {
       let subject = graph.rows.first { $0.commit.id == id }?.commit.subject ?? ""
-      return ScrollView {
+      // The commit's back button and subject stay fixed above the scrolling diffs.
+      return VStack(alignment: .leading, spacing: 0) {
+        Button { selected = nil } label: {
+          Label("グラフに戻る", systemImage: "chevron.left")
+            .padding(.horizontal, 12).frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+        }
+        .buttonStyle(HoverWashStyle(radius: 0)).font(.system(size: 12)).foregroundStyle(C.textSecondary)
+        Text(subject).font(.system(size: 12, weight: .semibold)).foregroundStyle(C.textPrimary)
+          .lineLimit(3).help(subject).padding(.horizontal, 12).padding(.top, 4).padding(.bottom, 10)
+      ScrollView {
         LazyVStack(alignment: .leading, spacing: 0, pinnedViews: .sectionHeaders) {
-          Button { selected = nil } label: {
-            Label("グラフに戻る", systemImage: "chevron.left")
-              .padding(.horizontal, 12).frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
-          }
-          .buttonStyle(HoverWashStyle(radius: 0)).font(.system(size: 12)).foregroundStyle(C.textSecondary)
-          Text(subject).font(.system(size: 12, weight: .semibold)).foregroundStyle(C.textPrimary)
-            .lineLimit(3).help(subject).padding(.horizontal, 12).padding(.top, 4).padding(.bottom, 10)
           if loadingFiles {
             ProgressView().frame(maxWidth: .infinity).padding(24)
           } else if files.isEmpty {
             Text("差分はありません。").font(.system(size: 12)).foregroundStyle(C.textTertiary).frame(maxWidth: .infinity).padding(24)
           }
-          // Every file of the commit stacked; each DiffView gets its full height (30px header + 19px rows) so
-          // only the outer view scrolls vertically.
+          // Every file of the commit stacked; each DiffView gets its full height (19px rows) so only the outer
+          // view scrolls vertically, and each file's header stays pinned until the next one pushes it off.
           ForEach(Array(files.enumerated()), id: \.offset) { _, f in
             Section {
               DiffView(
@@ -129,6 +131,7 @@
             } header: { fileHeader(f.path, f.model) }
           }
         }.clairScroller()
+      }
       }
     }
 
