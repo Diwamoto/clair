@@ -503,7 +503,7 @@
                   Text("差分が長いため \(Self.maxLines) 行で打ち切りました。").font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).padding(12)
                 }
               }
-              .frame(minWidth: viewport.size.width, minHeight: viewport.size.height, alignment: .topLeading)
+              .frame(minWidth: viewport.size.width, minHeight: viewport.size.height, alignment: .topLeading).clairScroller()
             }
           }
         }

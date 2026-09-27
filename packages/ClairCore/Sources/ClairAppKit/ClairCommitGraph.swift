@@ -44,7 +44,7 @@
           }
           if loading { ProgressView().controlSize(.small).padding(8) }
           if graph.rows.isEmpty, exhausted { Text("コミットがありません").font(.system(size: 12)).foregroundStyle(C.textTertiary).padding(12) }
-        }
+        }.clairScroller()
       }
     }
 
@@ -124,7 +124,7 @@
               label: String(id.prefix(8)), commentable: false)
             .frame(height: 30 + 19 * CGFloat(max(f.model.rows.count, 1)) + 24)
           }
-        }
+        }.clairScroller()
       }
     }
 
