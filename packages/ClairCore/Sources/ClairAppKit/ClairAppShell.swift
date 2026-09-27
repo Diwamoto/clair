@@ -2443,7 +2443,8 @@ import Observation
   /// a double-click does what System Settings › Desktop & Dock › "Double-click a window's title bar to" says.
   private struct TitlebarArea: NSViewRepresentable {
     final class Area: NSView {
-      override var mouseDownCanMoveWindow: Bool { true }
+      // Only this view's mouseDown should move the window; a tab above it owns its own drag.
+      override var mouseDownCanMoveWindow: Bool { false }
       override func mouseDown(with event: NSEvent) {
         guard let w = window else { return }
         guard event.clickCount == 2 else { return w.performDrag(with: event) }

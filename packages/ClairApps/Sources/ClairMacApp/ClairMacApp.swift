@@ -52,6 +52,9 @@ import SwiftUI
 
   @objc private func layoutWindow(_ notification: Notification) {
     guard let w = notification.object as? NSWindow, let close = w.standardWindowButton(.closeButton), let bar = close.superview?.superview else { return }
+    // The SwiftUI tab strip occupies the hidden titlebar. Let only TitlebarArea's explicit
+    // performDrag move the window, so a tab drag cannot also move its window.
+    w.isMovableByWindowBackground = false
     let h = ChromeBudget.titlebar
     bar.setFrameSize(NSSize(width: bar.frame.width, height: h))
     bar.setFrameOrigin(NSPoint(x: 0, y: w.frame.height - h))
