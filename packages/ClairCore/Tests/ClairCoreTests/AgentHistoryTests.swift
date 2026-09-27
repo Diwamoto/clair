@@ -140,6 +140,8 @@ final class AgentHistoryTests: XCTestCase {
     XCTAssertEqual(histories.first { $0.provider == .claude }?.estimatedUSD, 0.25)
     let summary = AgentUsageSummary(histories: histories)
     XCTAssertEqual(summary.days.map(\.prompts), [2])
+    XCTAssertEqual(summary.days[0].providerPrompts[.codex], 1)
+    XCTAssertEqual(summary.days[0].providerPrompts[.claude], 1)
     XCTAssertTrue(Calendar.current.isDate(summary.days[0].date, inSameDayAs: ISO8601DateFormatter().date(from: "2026-09-24T00:00:00Z")!))
     XCTAssertEqual(summary.sessionsWithoutCost, 0)
   }

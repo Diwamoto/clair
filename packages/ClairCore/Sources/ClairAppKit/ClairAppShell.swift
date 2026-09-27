@@ -1995,7 +1995,10 @@ import Observation
       }
     }
 
-    private static let sectionNotes = ["一般": "ワークスペースの基本動作とアプリ全体の表示を設定します。"]
+    private static let sectionNotes = [
+      "一般": "ワークスペースの基本動作とアプリ全体の表示を設定します。",
+      "使用状況": "依頼・追記と推定費用の集計",
+    ]
 
     private var settingsMain: some View {
       ScrollView {
@@ -2558,7 +2561,7 @@ import Observation
   }
 
   /// Shared by the status quota and terminal tabs, with the same offline fallback.
-  private struct ProviderBrandIcon: View {
+  struct ProviderBrandIcon: View {
     let provider: String
     let size: CGFloat
     // Claude's installed app ships a transparent menu-bar symbol. Read it once;

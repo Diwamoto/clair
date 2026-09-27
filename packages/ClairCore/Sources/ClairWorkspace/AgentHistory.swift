@@ -63,6 +63,7 @@ public struct AgentHistorySection: Sendable, Identifiable {
 public struct AgentUsageDay: Sendable, Identifiable {
   public let date: Date
   public let prompts: Int
+  public let providerPrompts: [AgentHistory.Provider: Int]
   public var id: Date { date }
 }
 
@@ -82,12 +83,16 @@ public struct AgentUsageSummary: Sendable {
 
   public init(histories: [AgentHistory], calendar: Calendar = .current) {
     var counts: [Date: Int] = [:]
+    var providerCounts: [Date: [AgentHistory.Provider: Int]] = [:]
     for history in histories {
       for message in history.messages where message.role == "user" {
-        counts[calendar.startOfDay(for: message.date), default: 0] += 1
+        let day = calendar.startOfDay(for: message.date)
+        counts[day, default: 0] += 1
+        providerCounts[day, default: [:]][history.provider, default: 0] += 1
       }
     }
-    days = counts.map { AgentUsageDay(date: $0.key, prompts: $0.value) }.sorted { $0.date < $1.date }
+    days = counts.map { AgentUsageDay(date: $0.key, prompts: $0.value, providerPrompts: providerCounts[$0.key] ?? [:]) }
+      .sorted { $0.date < $1.date }
     estimatedUSD = histories.compactMap(\.estimatedUSD).reduce(0, +)
     sessionsWithoutCost = histories.filter { $0.estimatedUSD == nil }.count
     providers = AgentHistory.Provider.allCases.map { provider in
@@ -100,6 +105,10 @@ public struct AgentUsageSummary: Sendable {
 
   public func prompts(on day: Date, calendar: Calendar = .current) -> Int {
     days.first { calendar.isDate($0.date, inSameDayAs: day) }?.prompts ?? 0
+  }
+
+  public func usage(on day: Date, calendar: Calendar = .current) -> AgentUsageDay? {
+    days.first { calendar.isDate($0.date, inSameDayAs: day) }
   }
 }
 
