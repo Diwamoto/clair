@@ -1473,7 +1473,7 @@ import Observation
                 let on = st.active == f.path && !st.settingsOpen
                 treeRow(depth: r.depth, selected: on, action: { store.run("tab.open", ["path": .string(f.path)]) }) {
                   Color.clear.frame(width: 10)  // chevron slot: a file lines up with its sibling folders
-                  FileIcon.forPath(f.path).image(size: 11, ink: on ? C.textSecondary : C.textTertiary).frame(width: 16)
+                  FileIcon.forPath(f.path).image(size: 10, ink: on ? C.textSecondary : C.textTertiary).frame(width: 16)
                   Text(r.label).font(.system(size: 13, weight: on ? .semibold : .regular)).foregroundStyle(Self.changeColor(ranks[f.path]) ?? (on ? C.textPrimary : C.textSecondary)).lineLimit(1)
                   Spacer(minLength: 0)
                 }
@@ -1482,7 +1482,7 @@ import Observation
                 let open = !st.collapsed.contains(r.id)
                 treeRow(depth: r.depth, selected: false, action: { store.run("explorer.toggle", ["path": .string(r.id)]) }) {
                   chevron(open: open)
-                  FileIcon.folder(open: open).image(size: 12, ink: C.textTertiary).frame(width: 16)
+                  FileIcon.folder(open: open).image(size: 11, ink: C.textTertiary).frame(width: 16)
                   Text(r.label).font(.system(size: 13)).foregroundStyle(Self.changeColor(ranks[r.id]) ?? C.textSecondary).lineLimit(1)
                   Spacer(minLength: 0)
                 }
