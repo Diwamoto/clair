@@ -1086,6 +1086,7 @@ import Observation
     private func activityBarButton(_ icon: String) -> some View {
       return ActivityBarButton(icon: icon, on: sidebarMode == icon && !st.settingsOpen, enabled: true) {
         sidebarMode = icon
+        if st.sidebarHidden { store.run("sidebar.toggle") }  // any activity-bar click brings the ⌘B-hidden sidebar back
         if icon != "terminal" { chat = nil }
         if icon == "folder" { diff = nil }
         if icon == "shield" { reloadChanges() }
