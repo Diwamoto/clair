@@ -303,6 +303,11 @@
   }
 
   /// Unified diff of one file. Colour is only for add/remove (state meaning); hunk headers stay quiet.
+  private struct HScrollKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+  }
+
   /// Lines that exist on the new side can be commented.
   struct DiffView: View {
     let target: DiffTarget
@@ -337,6 +342,8 @@
     /// Folds unchanged runs down to `context` lines around each change; `expanded` holds opened run starts.
     @State private var compact = true
     @State private var expanded: Set<Int> = []
+    /// Split view: how far the diff is scrolled right; the halves stay pinned and scroll their text inside.
+    @State private var hScroll: CGFloat = 0
     @AppStorage("clair.diffSplit") private var split = false
     @State private var editing = false
     /// A diff this long is cut with a notice instead of laying out every row.
@@ -509,9 +516,11 @@
                   return threads[n] != nil || suggestionsByLine[n] != nil
                 }
                 let items: [Pair] = split ? Self.pairs(rows) : rows.enumerated().map { Pair(id: $0, left: $1, right: $1) }
-                // Both halves share one width so the divider lines up; long lines widen it (12px mono ≈ 7.3pt/char).
-                let longest: Int = rows.lazy.map { $0.text.count }.max() ?? 0
-                let half: CGFloat = split ? max((viewport.size.width - 1) / 2, 68 + 7.3 * CGFloat(longest)) : 0
+                // The divider stays centred; a line longer than its half is clipped and revealed by scrolling (12px mono ≈ 7.3pt/char).
+                // The divider sits on the window's centre line (clamped so each half keeps a gutter).
+                let paneX = viewport.frame(in: .global).minX
+                let windowW = NSApp.keyWindow?.contentView?.bounds.width ?? (paneX + viewport.size.width)
+                let half: CGFloat = split ? min(max(windowW / 2 - paneX, 120), viewport.size.width - 121) : 0
                 ForEach(items, id: \.id) { p in
                   let r = p.right ?? p.left!
                   if compact, let s = fold[p.id], s == p.id, !expanded.contains(s) {
@@ -535,8 +544,12 @@
                   Text("差分が長いため \(Self.maxLines) 行で打ち切りました。").font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).padding(12)
                 }
               }
-              .frame(minWidth: viewport.size.width, minHeight: viewport.size.height, alignment: .topLeading).clairScroller()
+              .frame(minWidth: viewport.size.width + overflowWidth(viewport.size.width), minHeight: viewport.size.height, alignment: .topLeading)
+              .background(GeometryReader { g in Color.clear.preference(key: HScrollKey.self, value: -g.frame(in: .named("diff")).minX) })
+              .clairScroller()
             }
+            .coordinateSpace(name: "diff")
+            .onPreferenceChange(HScrollKey.self) { hScroll = max(0, $0) }
           }
         }
       }.background(C.canvas)
@@ -566,6 +579,13 @@
       .frame(minWidth: width, alignment: .leading).frame(height: 19).background(tint)
     }
 
+    /// Extra scroll width so the longest line can be scrolled fully into its half (12px mono ≈ 7.3pt/char).
+    private func overflowWidth(_ viewport: CGFloat) -> CGFloat {
+      guard split else { return 0 }
+      let longest = model.rows.lazy.map { $0.text.count }.max() ?? 0
+      return max(0, 68 + 7.3 * CGFloat(longest) - 120)  // ponytail: sized for the narrowest half, may over-scroll a little
+    }
+
     @ViewBuilder private func pairRow(_ p: Pair, half: CGFloat, width: CGFloat) -> some View {
       let r = p.right ?? p.left!
       Group {
@@ -573,8 +593,8 @@
           HStack(spacing: 0) {
             cell(p.left, number: p.left?.oldLine, width: half)
             Rectangle().fill(L.hairline).frame(width: 1)
-            cell(p.right, number: p.right?.newLine, width: half)
-          }.frame(height: 19)
+            cell(p.right, number: p.right?.newLine, width: width - half - 1)
+          }.frame(height: 19).offset(x: hScroll)  // pinned to the viewport while the content scrolls
         } else {
           line(r, width: width)
         }
@@ -594,7 +614,8 @@
         Group {
           if l.hasPrefix("@@") { Text(l).foregroundStyle(C.textQuaternary) }
           else { Text(l.dropFirst()).foregroundStyle(C.code) }  // the tint already marks +/−
-        }.font(mono).padding(.horizontal, 12)
+        }.font(mono).fixedSize().padding(.horizontal, 12).offset(x: -hScroll)
+        .frame(maxWidth: .infinity, alignment: .leading).clipped()
       }
       .frame(width: width, alignment: .leading).frame(maxHeight: .infinity)
       .background(r == nil ? C.textQuaternary.opacity(0.06) : added ? C.success.opacity(0.10) : removed ? C.danger.opacity(0.10) : .clear)
