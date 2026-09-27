@@ -24,7 +24,7 @@ final class WorkbenchMCPTests: XCTestCase {
 
   func testAIUnavailableCommandRejectedWithoutPrompt() {
     for id in ["worktree.create", "project.open", "settings.set", "palette.commands"] {
-      let g = gate(id, ["path": .string("/"), "profile": .string("claude"), "key": .string("showQuota"), "value": .bool(true)])
+      let g = gate(id, ["path": .string("/"), "profile": .string("claude"), "key": .string("hideQuota"), "value": .bool(true)])
       XCTAssertEqual(try? g.0.get(), nil); XCTAssertEqual(g.asked + g.ran, 0, id)
       if case .failure(let e) = g.0 { XCTAssertEqual(e.code, .notAvailableToAI, id) }
     }
@@ -42,10 +42,10 @@ final class WorkbenchMCPTests: XCTestCase {
     let s = WorkbenchState()
     let open = call("tab.open", ["path": .string(s.files[0].path)], approve: false)  // AI, read: no card
     XCTAssertEqual(open.1, 0); XCTAssertEqual(open.2, 1)
-    let set = call("settings.set", ["key": .string("showQuota"), "value": .bool(true)], approve: false)  // non-AI: card, denied
+    let set = call("settings.set", ["key": .string("hideQuota"), "value": .bool(true)], approve: false)  // non-AI: card, denied
     XCTAssertEqual(set.1, 1); XCTAssertEqual(set.2, 0)
     if case .failure(let e) = set.0 { XCTAssertEqual(e.code, .denied) } else { XCTFail() }
-    XCTAssertEqual(call("settings.set", ["key": .string("showQuota"), "value": .bool(true)], approve: true).2, 1)
+    XCTAssertEqual(call("settings.set", ["key": .string("hideQuota"), "value": .bool(true)], approve: true).2, 1)
   }
 
   func testWriteAndDestructiveNeedApprovalAndDenialBlocks() {
@@ -69,7 +69,7 @@ final class WorkbenchMCPTests: XCTestCase {
     var seen: WorkbenchIPCRequest?
     let list = try XCTUnwrap(MCPServer.respond(to: #"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#, call: { _ in WorkbenchIPCReply() }))
     XCTAssertTrue(list.contains("state.snapshot")); XCTAssertTrue(list.contains("agent.launch")); XCTAssertFalse(list.contains("settings.set"))
-    let denied = MCPServer.respond(to: #"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"settings.set","arguments":{"key":"showQuota","value":true,"risk":"read"}}}"#, call: { seen = $0; return WorkbenchIPCReply() })
+    let denied = MCPServer.respond(to: #"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"settings.set","arguments":{"key":"hideQuota","value":true,"risk":"read"}}}"#, call: { seen = $0; return WorkbenchIPCReply() })
     XCTAssertNil(seen); XCTAssertTrue(try XCTUnwrap(denied).contains("unknown tool"))
     _ = MCPServer.respond(to: #"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"pane.focus","arguments":{"id":1}}}"#, call: { seen = $0; return WorkbenchIPCReply() })
     XCTAssertEqual(seen?.via, .mcp)

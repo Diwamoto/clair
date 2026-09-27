@@ -189,7 +189,7 @@ function useWorkbenchState() {
   const [toggles, setToggles] = useState<Record<string, boolean>>({
     restoreLayout: true,
     confirmClose: true,
-    showQuota: true,
+    hideQuota: false,
     formatOnSave: true,
     showWhitespace: false,
     terminalApprovals: true,

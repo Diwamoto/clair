@@ -291,8 +291,8 @@ export function SettingsMain() {
                   />
                   <Row
                     last
-                    title="ステータスバーの利用枠を表示"
-                    control={<Switch on={wb.toggles.showQuota} onClick={() => wb.setToggle('showQuota')} />}
+                    title="ステータスバーの利用枠を隠す"
+                    control={<Switch on={wb.toggles.hideQuota} onClick={() => wb.setToggle('hideQuota')} />}
                   />
                 </Card>
               </>
@@ -349,9 +349,9 @@ export function SettingsMain() {
                   <Row
                     first
                     last
-                    title="ステータスバーの利用枠を表示"
+                    title="ステータスバーの利用枠を隠す"
                     note="一般タブの同じ項目と共通です。"
-                    control={<Switch on={wb.toggles.showQuota} onClick={() => wb.setToggle('showQuota')} />}
+                    control={<Switch on={wb.toggles.hideQuota} onClick={() => wb.setToggle('hideQuota')} />}
                   />
                 </Card>
               </>

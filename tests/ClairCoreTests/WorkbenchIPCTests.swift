@@ -76,7 +76,7 @@ final class WorkbenchIPCTests: XCTestCase {
     XCTAssertThrowsError(try WorkbenchIPCServer(socket: url, handler: { _ in .success(.ok) }).start()) {
       XCTAssertEqual($0 as? WorkbenchIPCError, .alreadyRunning)
     }
-    XCTAssertEqual(WorkbenchCLI.parse(["settings.set", "key=showQuota", "value=true"])?.input, ["key": .string("showQuota"), "value": .bool(true)])
+    XCTAssertEqual(WorkbenchCLI.parse(["settings.set", "key=hideQuota", "value=true"])?.input, ["key": .string("hideQuota"), "value": .bool(true)])
     let cwd = FileManager.default.currentDirectoryPath
     let rel = try XCTUnwrap(WorkbenchCLI.parse(["open", "a/b.swift:7:2"]))
     XCTAssertEqual(rel.command, "file.open")

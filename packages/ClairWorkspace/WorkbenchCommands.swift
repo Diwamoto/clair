@@ -16,7 +16,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public enum Palette: String, Sendable, Codable { case commands, files, search, symbols, references, branches }
 
   public static let sections = ["一般", "AIプロバイダー", "使用状況", "エディタ", "ターミナル", "モバイル", "アップデート"]
-  public static let toggleKeys = ["restoreLayout", "confirmClose", "showQuota", "preventSleepOnBattery", "formatOnSave", "showWhitespace", "softWrap", "terminalApprovals"]
+  public static let toggleKeys = ["restoreLayout", "confirmClose", "hideQuota", "preventSleepOnBattery", "formatOnSave", "showWhitespace", "softWrap", "terminalApprovals"]
   /// Closed-set settings (the mock's segmented controls). The first option is the default.
   public static let choiceOptions: [String: [String]] = [
     "defaultAgent": ["claude", "codex"],
@@ -69,7 +69,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var palette: Palette?
   /// E17: definition-jump history for ⌃- / ⌃⇧-. Transient (not in `WorkspaceSnapshot`).
   public var navigation = NavigationHistory()
-  public var toggles = ["restoreLayout": true, "confirmClose": true, "showQuota": true, "preventSleepOnBattery": false, "formatOnSave": false, "showWhitespace": false, "softWrap": false, "terminalApprovals": true]
+  public var toggles = ["restoreLayout": true, "confirmClose": true, "hideQuota": false, "preventSleepOnBattery": false, "formatOnSave": false, "showWhitespace": false, "softWrap": false, "terminalApprovals": true]
   public var choices = WorkbenchState.choiceOptions.mapValues { $0[0] }
   /// V11: user shortcut assignments over the registry defaults. An empty string unassigns a default.
   public var shortcuts: [String: String] = [:]

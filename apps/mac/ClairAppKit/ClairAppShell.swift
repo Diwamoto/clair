@@ -2044,7 +2044,7 @@ import Observation
             }
             SettingsCard(title: "インターフェース") {
               choiceRow("外観", "appearance", note: "エディタ、ターミナル、サイドバーの配色をまとめて切り替えます。")
-              switchRow("ステータスバーの利用枠を表示", "showQuota")
+              switchRow("ステータスバーの利用枠を隠す", "hideQuota")
             }
           case "AIプロバイダー":
             SettingsCard(title: "Agent") {
@@ -2361,7 +2361,7 @@ import Observation
           languageStatus
         }
         Spacer()
-        if st.toggles["showQuota"] == true { quotaMeter }
+        if st.toggles["hideQuota"] != true { quotaMeter }
         Button { sidebarMode = "terminal" } label: {
           HStack(spacing: 5) {
             if waiting > 0 { Circle().fill(C.attention).frame(width: 6, height: 6) }
@@ -2375,8 +2375,8 @@ import Observation
       .background(C.chrome.overlay(ClairChannel.current == .dev ? Color.orange.opacity(0.14) : .clear))  // Dev is told apart at a glance (owner, 2026-09-27)
       .overlay(alignment: .top) { Rectangle().fill(C.surfaceActive).frame(height: 1) }
       // Off the main actor, every 5 min while the toggle is on; turning it off cancels the loop.
-      .task(id: st.toggles["showQuota"] == true) {
-        guard st.toggles["showQuota"] == true else { quota = []; return }
+      .task(id: st.toggles["hideQuota"] != true) {
+        guard st.toggles["hideQuota"] != true else { quota = []; return }
         while !Task.isCancelled {
           let previous = quota
           quota = await Task.detached(priority: .utility) { await ProviderQuota.fetchAll(previous: previous) }.value

@@ -977,7 +977,7 @@ function AppStatusBar({ context, trailing }: { context?: ReactNode; trailing?: R
       </span>
       {context}
       <div style={{ flex: 1 }} />
-      {wb.toggles.showQuota ? <QuotaMeter /> : null}
+      {!wb.toggles.hideQuota ? <QuotaMeter /> : null}
       <span>{wb.sessions.length} セッション</span>
       {trailing}
     </div>
