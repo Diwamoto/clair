@@ -997,7 +997,7 @@
               Spacer(minLength: 0)
               Text("\(listTime(group.date)) · \(group.estimatedUSD.formatted(.currency(code: "USD"))) · \(group.histories.count) 件")
                 .font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textQuaternary)
-            }.foregroundStyle(C.textSecondary).padding(.horizontal, 20).padding(.vertical, 4).contentShape(Rectangle())
+            }.foregroundStyle(C.textSecondary).padding(.horizontal, 20).padding(.vertical, 8).contentShape(Rectangle())
           }.buttonStyle(.hoverWash)
           if !collapsed {
             ForEach(group.histories) { history in historyRow(history) }
