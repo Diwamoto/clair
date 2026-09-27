@@ -617,6 +617,8 @@ extension CommandRegistry {
       s.choices[i["key"]!.string!] = i["value"]!.string!; return .ok
     },
     cmd("palette.commands", "コマンドパレット", .read, ai: false, shortcut: "⌘K", palette: false) { s, _ in s.palette = .commands; return .ok },
+    // VS Code habit: ⌘⇧P opens the same command palette as ⌘K.
+    cmd("palette.commandsAlt", "コマンドパレット", .read, ai: false, shortcut: "⌘⇧P", palette: false) { s, _ in s.palette = .commands; return .ok },
     cmd("palette.files", "ファイルへ移動", .read, ai: false, shortcut: "⌘P", palette: false) { s, _ in s.palette = .files; return .ok },
     cmd("palette.search", "Project を検索", .read, ai: false, shortcut: "⌘⇧F", palette: false) { s, _ in s.palette = .search; return .ok },
     // ponytail: ⌘F opens the same search panel; a per-file find bar replaces this when the editor grows one.
