@@ -14,7 +14,6 @@
     @State private var exhausted = false
     @State private var selected: String?
     @State private var files: [(path: String, model: DiffView.Model)] = []
-    @State private var file = 0
     @State private var loadingFiles = false
 
     nonisolated static let pageSize = 400
@@ -100,41 +99,31 @@
 
     private func detailView(_ id: String) -> some View {
       let subject = graph.rows.first { $0.commit.id == id }?.commit.subject ?? ""
-      return HStack(spacing: 0) {
-        ScrollView {
-          LazyVStack(alignment: .leading, spacing: 0) {
-            Button { selected = nil } label: {
-              Label("グラフに戻る", systemImage: "chevron.left")
-                .padding(.horizontal, 12).frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
-            }
-            .buttonStyle(HoverWashStyle(radius: 0)).font(.system(size: 12)).foregroundStyle(C.textSecondary)
-            Text(subject).font(.system(size: 12, weight: .semibold)).foregroundStyle(C.textPrimary)
-              .lineLimit(3).help(subject).padding(.horizontal, 12).padding(.top, 4).padding(.bottom, 10)
-            ForEach(Array(files.enumerated()), id: \.offset) { i, f in
-              Button { file = i } label: {
-                Text(f.path).font(.system(size: 12)).lineLimit(1).truncationMode(.head)
-                  .foregroundStyle(i == file ? C.textPrimary : C.textSecondary)
-                  .padding(.horizontal, 12).frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
-                  .background(i == file ? C.surfaceActive : .clear)
-              }
-              .buttonStyle(HoverWashStyle(radius: 0)).help(f.path)
-            }
+      return ScrollView {
+        LazyVStack(alignment: .leading, spacing: 0) {
+          Button { selected = nil } label: {
+            Label("グラフに戻る", systemImage: "chevron.left")
+              .padding(.horizontal, 12).frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
           }
-        }
-        .frame(width: 220).background(C.chrome)
-        if files.indices.contains(file) {
-          let f = files[file]
-          DiffView(
-            target: DiffTarget(path: f.path, staged: false, untracked: false), model: f.model,
-            threads: [:], suggestions: [], onComment: { _, _, _ in }, onSuggest: { _, _ in },
-            onResolve: { _ in }, onApply: { _ in nil }, onReject: { _ in }, onSend: nil,
-            onClose: { selected = nil }, editor: nil, onSave: nil, isDirty: false,
-            label: String(id.prefix(8)), commentable: false)
-          .id(f.path)
-        } else if loadingFiles {
-          ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-          Text("差分はありません。").font(.system(size: 12)).foregroundStyle(C.textTertiary).frame(maxWidth: .infinity, maxHeight: .infinity)
+          .buttonStyle(HoverWashStyle(radius: 0)).font(.system(size: 12)).foregroundStyle(C.textSecondary)
+          Text(subject).font(.system(size: 12, weight: .semibold)).foregroundStyle(C.textPrimary)
+            .lineLimit(3).help(subject).padding(.horizontal, 12).padding(.top, 4).padding(.bottom, 10)
+          if loadingFiles {
+            ProgressView().frame(maxWidth: .infinity).padding(24)
+          } else if files.isEmpty {
+            Text("差分はありません。").font(.system(size: 12)).foregroundStyle(C.textTertiary).frame(maxWidth: .infinity).padding(24)
+          }
+          // Every file of the commit stacked; each DiffView gets its full height (30px header + 19px rows) so
+          // only the outer view scrolls vertically.
+          ForEach(Array(files.enumerated()), id: \.offset) { _, f in
+            DiffView(
+              target: DiffTarget(path: f.path, staged: false, untracked: false), model: f.model,
+              threads: [:], suggestions: [], onComment: { _, _, _ in }, onSuggest: { _, _ in },
+              onResolve: { _ in }, onApply: { _ in nil }, onReject: { _ in }, onSend: nil,
+              onClose: { selected = nil }, editor: nil, onSave: nil, isDirty: false,
+              label: String(id.prefix(8)), commentable: false)
+            .frame(height: 30 + 19 * CGFloat(max(f.model.rows.count, 1)) + 24)
+          }
         }
       }
     }
@@ -152,7 +141,7 @@
 
     private func open(_ id: String) {
       selected = id
-      files = []; file = 0; loadingFiles = true
+      files = []; loadingFiles = true
       let root = root
       Task {
         let loaded = await Task.detached(priority: .userInitiated) {
