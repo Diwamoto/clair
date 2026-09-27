@@ -46,6 +46,9 @@ import Foundation
       guard let clair = binary("clair") else {
         return "echo 'Clair: the clair executable was not found next to the app (set CLAIR_BIN_DIR).'; exit 1"
       }
+      // The daemon may have died since launch; without this every new pane fails with
+      // `controlSocketMissing` until the app restarts. `clair attach` retries for ~5 s meanwhile.
+      Task.detached(priority: .userInitiated) { ensureRunning() }
       var parts = [
         clair.path, "attach", "--key", key, "--cwd", cwd, "--directory", paths.directoryURL.path,
       ]

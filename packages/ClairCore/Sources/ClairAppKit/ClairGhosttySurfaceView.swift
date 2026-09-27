@@ -167,6 +167,9 @@ import Foundation
         } catch {
           lastReportedError = String(describing: error)
         }
+        // The frame libghostty renders for this resize finishes after AppKit has moved the layer on,
+        // so its size check drops it and an idle shell never draws again. Re-render once layout settles.
+        DispatchQueue.main.async { [weak self] in self?.ghosttySurface?.refresh() }
         needsDisplay = true
         return
       }

@@ -201,6 +201,10 @@ void clair_ghostty_surface_set_size(
   ghostty_surface_set_size((ghostty_surface_t)surface, width_px, height_px);
 }
 
+void clair_ghostty_surface_refresh(clair_ghostty_surface_t surface) {
+  ghostty_surface_refresh((ghostty_surface_t)surface);
+}
+
 clair_ghostty_surface_size_s clair_ghostty_surface_size(clair_ghostty_surface_t surface) {
   ghostty_surface_size_s real = ghostty_surface_size((ghostty_surface_t)surface);
   clair_ghostty_surface_size_s out;

@@ -345,6 +345,14 @@ public final class GhosttySurfaceHandle {
     #endif
   }
 
+  /// Re-render the current screen. libghostty drops a frame whose size no longer matches the layer.
+  public func refresh() {
+    guard isValid else { return }
+    #if CLAIR_GHOSTTY_VENDORED
+      clair_ghostty_surface_refresh(raw)
+    #endif
+  }
+
   /// The rendered cell grid's current dimensions.
   public func size() throws -> GhosttySurfaceSize {
     guard isValid else { throw GhosttyError.handleExpired }
