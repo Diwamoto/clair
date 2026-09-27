@@ -333,12 +333,22 @@ public enum WorkbenchFiles {
     // The enumerator yields realpath(3) paths (`/private/var/…`), which `resolvingSymlinksInPath` strips to `/var/…`.
     let prefix = (realpath(base.path, nil).map { p in defer { free(p) }; return String(cString: p) } ?? base.path).count + 1
     var paths: [String] = []
-    for case let u as URL in e {
-      if skipped.contains(u.lastPathComponent) { e.skipDescendants(); continue }
-      let v = try? u.resourceValues(forKeys: Set(keys))
-      guard v?.isRegularFile == true, v?.isSymbolicLink != true else { continue }
-      paths.append(String(u.path.dropFirst(prefix)))  // `base` is resolved and the enumerator never follows links, so no per-file realpath
-      if paths.count >= limit { break }
+    // A Git repo lists tracked + untracked-but-not-ignored files, so a huge ignored cache cannot eat the cap.
+    if FileManager.default.fileExists(atPath: root + "/.git"), case let r = WorkbenchGit.run(root, ["ls-files", "-co", "--exclude-standard", "-z"]), r.ok {
+      for rel in r.out.split(separator: "\0").map(String.init) where !isSkipped(rel) {
+        let v = try? base.appendingPathComponent(rel).resourceValues(forKeys: Set(keys))
+        guard v?.isRegularFile == true, v?.isSymbolicLink != true else { continue }  // also drops deleted rows; status re-adds them
+        paths.append(rel)
+        if paths.count >= limit { break }
+      }
+    } else {
+      for case let u as URL in e {
+        if skipped.contains(u.lastPathComponent) { e.skipDescendants(); continue }
+        let v = try? u.resourceValues(forKeys: Set(keys))
+        guard v?.isRegularFile == true, v?.isSymbolicLink != true else { continue }
+        paths.append(String(u.path.dropFirst(prefix)))  // `base` is resolved and the enumerator never follows links, so no per-file realpath
+        if paths.count >= limit { break }
+      }
     }
     let status = gitStatus(root)
     paths += status.compactMap { $0.value == "D" ? $0.key : nil }  // deleted files: kept so folders can turn red; hidden from explorer and quick open
