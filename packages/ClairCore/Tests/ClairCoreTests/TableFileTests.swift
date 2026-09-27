@@ -20,4 +20,8 @@ final class TableFileTests: XCTestCase {
     _ = try CommandRegistry.workbench.execute("editor.markdownPreview", state: &s).get()
     XCTAssertEqual(s.tree.leaves.filter { $0.kind == .preview }.count, 1)
   }
+
+  func testColumnNames() {
+    XCTAssertEqual([0, 25, 26, 27, 701, 702].map(TableFile.columnName), ["A", "Z", "AA", "AB", "ZZ", "AAA"])
+  }
 }

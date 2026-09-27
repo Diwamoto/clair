@@ -12,6 +12,11 @@ public enum TableFile {
     }
   }
 
+  /// Spreadsheet column label: 0 → "A", 25 → "Z", 26 → "AA".
+  public static func columnName(_ i: Int) -> String {
+    i < 26 ? String(UnicodeScalar(65 + i)!) : columnName(i / 26 - 1) + columnName(i % 26)
+  }
+
   public static func parse(_ text: String, separator sep: Character) -> [[String]] {
     var rows: [[String]] = [], row: [String] = [], field = "", quoted = false
     var it = Array(text).makeIterator(), pending: Character? = nil

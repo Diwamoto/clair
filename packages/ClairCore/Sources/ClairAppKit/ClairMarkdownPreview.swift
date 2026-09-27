@@ -122,36 +122,44 @@
     var body: some View {
       if case .ready(let m)? = buffers.peek(path), let sep = TableFile.separator(path) {
         let edit = buffers.edits[path, default: 0]
-        let width = rows.map(\.count).max() ?? 0
-        ScrollView([.horizontal, .vertical]) {
-         VStack(alignment: .leading, spacing: 0) {
-          Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
-            ForEach(rows.indices, id: \.self) { r in
-              GridRow {
-                Text("\(r + 1)").font(.system(size: 10).monospacedDigit()).foregroundStyle(C.textTertiary)
-                  .frame(width: 32).contextMenu {
-                    Button("上に行を挿入") { mutate(m, sep) { $0.insert(Array(repeating: "", count: width), at: r) } }
-                    Button("下に行を挿入") { mutate(m, sep) { $0.insert(Array(repeating: "", count: width), at: r + 1) } }
-                    Button("行を削除") { mutate(m, sep) { $0.remove(at: r) } }
+        let width = max(rows.map(\.count).max() ?? 0, 1)
+        VStack(spacing: 0) {
+          ScrollView([.horizontal, .vertical]) {
+            LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+              Section {
+                ForEach(rows.indices, id: \.self) { r in
+                  HStack(spacing: 0) {
+                    gutter("\(r + 1)", width: 40, active: cell?.r == r).contextMenu {
+                      Button("上に行を挿入") { mutate(m, sep) { $0.insert(Array(repeating: "", count: width), at: r) } }
+                      Button("下に行を挿入") { mutate(m, sep) { $0.insert(Array(repeating: "", count: width), at: r + 1) } }
+                      Button("行を削除") { mutate(m, sep) { $0.remove(at: r) } }
+                    }
+                    ForEach(0..<width, id: \.self) { c in cellView(m, sep, r, c) }
                   }
-                ForEach(0..<width, id: \.self) { c in
-                  TextField("", text: binding(r, c))
-                    .textFieldStyle(.plain).font(.system(size: 12, weight: r == 0 ? .semibold : .regular))
-                    .focused($cell, equals: Cell(r: r, c: c))
-                    .onSubmit { commit(m, sep) }
-                    .padding(.horizontal, 6).padding(.vertical, 4).frame(minWidth: 90, maxWidth: 240, alignment: .leading)
-                    .border(C.textTertiary.opacity(0.2), width: 0.5)
+                }
+              } header: {
+                HStack(spacing: 0) {
+                  gutter("", width: 40, active: false)
+                  ForEach(0..<width, id: \.self) { c in
+                    gutter(TableFile.columnName(c), width: Self.colWidth, active: cell?.c == c).contextMenu {
+                      Button("左に列を挿入") { mutate(m, sep) { rs in for i in rs.indices { rs[i].insert("", at: min(c, rs[i].count)) } } }
+                      Button("右に列を挿入") { mutate(m, sep) { rs in for i in rs.indices { rs[i].insert("", at: min(c + 1, rs[i].count)) } } }
+                      Button("列を削除") { mutate(m, sep) { rs in for i in rs.indices where c < rs[i].count { rs[i].remove(at: c) } } }
+                    }
+                  }
                 }
               }
             }
           }
-          .padding(12)
-          HStack {
-            Button("行を追加") { mutate(m, sep) { $0.append(Array(repeating: "", count: max(width, 1))) } }
+          Divider()
+          HStack(spacing: 12) {
+            Text(cell.map { "\(TableFile.columnName($0.c))\($0.r + 1)" } ?? "—").monospacedDigit().foregroundStyle(C.textSecondary)
+            Text("\(rows.count) 行 × \(width) 列").foregroundStyle(C.textTertiary)
+            Spacer()
+            Button("行を追加") { mutate(m, sep) { $0.append(Array(repeating: "", count: width)) } }
             Button("列を追加") { mutate(m, sep) { rs in for i in rs.indices { rs[i].append("") } } }
           }
-          .buttonStyle(.borderless).font(.system(size: 11)).padding(.horizontal, 12).padding(.bottom, 12)
-         }
+          .buttonStyle(.borderless).font(.system(size: 11)).padding(.horizontal, 10).padding(.vertical, 5).background(C.chrome)
         }
         .defaultScrollAnchor(.topLeading)
         .background(C.canvas)
@@ -163,6 +171,32 @@
           .font(.system(size: 12)).foregroundStyle(C.textTertiary)
           .frame(maxWidth: .infinity, maxHeight: .infinity).background(C.canvas)
       }
+    }
+
+    private static let colWidth: CGFloat = 120
+
+    /// Row/column header cell: grey band like a spreadsheet, highlighted on the selected row/column.
+    private func gutter(_ label: String, width: CGFloat, active: Bool) -> some View {
+      Text(label).font(.system(size: 10, weight: active ? .semibold : .regular).monospacedDigit())
+        .foregroundStyle(active ? C.debugBlueText : C.textTertiary)
+        .frame(width: width, height: 22).background(active ? C.surfaceActive : C.chrome)
+        .overlay(alignment: .trailing) { C.divider.frame(width: 0.5) }
+        .overlay(alignment: .bottom) { C.divider.frame(height: 0.5) }
+    }
+
+    private func cellView(_ m: EditorTransactionManager, _ sep: Character, _ r: Int, _ c: Int) -> some View {
+      let selected = cell == Cell(r: r, c: c)
+      let numeric = Double(binding(r, c).wrappedValue.trimmingCharacters(in: .whitespaces)) != nil
+      return TextField("", text: binding(r, c))
+        .textFieldStyle(.plain).font(.system(size: 12, weight: r == 0 ? .semibold : .regular).monospacedDigit())
+        .multilineTextAlignment(numeric && r > 0 ? .trailing : .leading)
+        .focused($cell, equals: Cell(r: r, c: c))
+        .onSubmit { commit(m, sep); if r + 1 < rows.count { cell = Cell(r: r + 1, c: c) } }  // Return moves down, as in Excel
+        .padding(.horizontal, 6).frame(width: Self.colWidth, height: 22)
+        .background(r == 0 ? C.surfaceActive : r % 2 == 0 ? C.surfaceHover : C.canvas)
+        .overlay(alignment: .trailing) { C.divider.opacity(0.6).frame(width: 0.5) }
+        .overlay(alignment: .bottom) { C.divider.opacity(0.6).frame(height: 0.5) }
+        .overlay { if selected { Rectangle().stroke(C.debugBlue, lineWidth: 2) } }
     }
 
     private func binding(_ r: Int, _ c: Int) -> Binding<String> {
