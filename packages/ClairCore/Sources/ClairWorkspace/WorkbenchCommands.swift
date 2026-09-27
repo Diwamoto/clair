@@ -57,7 +57,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var settingsOpen = false
   /// Transient UI navigation request. The sidebar selection itself belongs to the app shell.
   public var debugNavigationGeneration = 0
-  /// ⌘⇧B hides the sidebar panel (activity bar stays). Transient.
+  /// ⌘B hides the sidebar panel (activity bar stays). Transient.
   public var sidebarHidden = false
   public var debugPhase = "idle"  // transient; refreshed by the GUI before a debugger command
   public var section = "一般"
@@ -620,7 +620,7 @@ extension CommandRegistry {
         }) { s, i in
       s.choices[i["key"]!.string!] = i["value"]!.string!; return .ok
     },
-    cmd("sidebar.toggle", "サイドバーの表示切替", .read, ai: false, shortcut: "⌘⇧B") { s, _ in s.sidebarHidden.toggle(); return .ok },
+    cmd("sidebar.toggle", "サイドバーの表示切替", .read, ai: false, shortcut: "⌘B") { s, _ in s.sidebarHidden.toggle(); return .ok },
     cmd("palette.commands", "コマンドパレット", .read, ai: false, shortcut: "⌘K", palette: false) { s, _ in s.palette = .commands; return .ok },
     // VS Code habit: ⌘⇧P opens the same command palette as ⌘K.
     cmd("palette.commandsAlt", "コマンドパレット", .read, ai: false, shortcut: "⌘⇧P", palette: false) { s, _ in s.palette = .commands; return .ok },
