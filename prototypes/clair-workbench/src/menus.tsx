@@ -163,7 +163,7 @@ export function fileMenu(wb: Workbench, path: string, from: 'tab' | 'tree'): Men
       item('右に分割して開く', { icon: <IconSplitRight size={12} />, run: () => wb.openInSplit(path, 'horizontal') }),
       item('下に分割して開く', { icon: <IconSplitDown size={12} />, run: () => wb.openInSplit(path, 'vertical') }),
       separator,
-      item('Agentに送る', { icon: <IconSparkle size={12} />, submenu: agentsSubmenu(wb, `@${path} を見てください。`) }),
+      item('Send to Agent', { icon: <IconSparkle size={12} />, submenu: agentsSubmenu(wb, `@${path} を見てください。`) }),
       item('変更を確認', {
         icon: <IconBranch size={12} />,
         disabled: !changed,
@@ -259,7 +259,7 @@ export function editorMenu(wb: Workbench, ctx: EditorMenuContext): MenuSpec {
       item('コピー', { shortcut: '⌘C', disabled: !has, run: ctx.copy }),
       item('ペースト', { shortcut: '⌘V', run: ctx.paste }),
       separator,
-      item(has ? '選択範囲をAgentに送る' : 'Agentに送る', {
+      item('Send to Agent', {
         icon: <IconSparkle size={12} />,
         submenu: agentsSubmenu(wb, message),
       }),
