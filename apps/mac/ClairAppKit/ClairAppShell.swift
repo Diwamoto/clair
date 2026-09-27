@@ -2716,7 +2716,7 @@ import Observation
       HStack(spacing: Spacing.scale[0]) {
         // Title top-left so a running agent's task stays readable; drag handle top-centre.
         Text(label).font(Typography.font(Typography.chrome)).foregroundStyle(focused ? C.textTertiary : C.textQuaternary)
-          .lineLimit(1).truncationMode(.tail).frame(maxWidth: .infinity, alignment: .leading)
+          .lineLimit(1).truncationMode(.tail).padding(.leading, 6).frame(maxWidth: .infinity, alignment: .leading)
           .overlay {
             Image(systemName: "ellipsis").font(.system(size: 11)).foregroundStyle(C.textQuaternary)
               .opacity(isHovered ? 1 : 0).accessibilityHidden(true)
