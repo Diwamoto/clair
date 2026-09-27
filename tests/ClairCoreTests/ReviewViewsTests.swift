@@ -18,6 +18,13 @@
       XCTAssertEqual([st.added, st.removed], [2, 1])
     }
 
+    func testDiffFoldsKeepThreeLinesAroundChanges() {
+      let ctx = (1...10).map { " c\($0)" }.joined(separator: "\n")
+      let f = DiffView.folds(DiffView.rows("@@ -1,11 +1,11 @@\n" + ctx + "\n-x\n+y"))
+      // header(0) keeps c1-c3 visible, c4-c7 fold as one run starting at row 4, c8-c10 sit next to the change.
+      XCTAssertEqual(f, [nil, nil, nil, nil, 4, 4, 4, 4, nil, nil, nil, nil, nil])
+    }
+
     func testLargeDiffParsingStaysWithinInteractionBudget() {
       let text = "@@ -1,5000 +1,5000 @@\n" + (0..<5000).map { $0.isMultiple(of: 3) ? "+line \($0)" : " line \($0)" }.joined(separator: "\n")
       let start = Date()

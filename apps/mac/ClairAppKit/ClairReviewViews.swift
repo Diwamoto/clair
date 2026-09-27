@@ -334,7 +334,9 @@
     @State private var applyError: String?
     @State private var hunk = -1
     @State private var sent = false
-    @State private var compact = false
+    /// Folds unchanged runs down to `context` lines around each change; `expanded` holds opened run starts.
+    @State private var compact = true
+    @State private var expanded: Set<Int> = []
     @AppStorage("clair.diffSplit") private var split = false
     @State private var editing = false
     /// A diff this long is cut with a notice instead of laying out every row.
@@ -351,6 +353,24 @@
       let removed: Int
       let hunks: [Int]
       let visibleLines: Set<Int>
+      /// Per row: the start index of the folded unchanged run it belongs to (nil = always shown).
+      let fold: [Int?]
+    }
+
+    nonisolated static let context = 3
+
+    /// Context rows further than `context` from any change collapse into runs keyed by their first row.
+    nonisolated static func folds(_ rows: [Row]) -> [Int?] {
+      let changed = rows.map { r in ["+", "-", "@@", "\\"].contains { r.text.hasPrefix($0) } }
+      var dist = Array(repeating: Int.max, count: rows.count), d = Int.max
+      for i in rows.indices { d = changed[i] ? 0 : (d == .max ? d : d + 1); dist[i] = d }
+      d = .max
+      for i in rows.indices.reversed() { d = changed[i] ? 0 : (d == .max ? d : d + 1); dist[i] = min(dist[i], d) }
+      var out: [Int?] = [], start: Int?
+      for i in rows.indices {
+        if dist[i] > context { start = start ?? i; out.append(start) } else { start = nil; out.append(nil) }
+      }
+      return out
     }
 
     nonisolated static func model(_ text: String) -> Model {
@@ -359,7 +379,7 @@
       return Model(
         text: text, rows: parsed, added: counts.added, removed: counts.removed,
         hunks: parsed.indices.filter { parsed[$0].text.hasPrefix("@@") },
-        visibleLines: Set(parsed.compactMap(\.newLine)))
+        visibleLines: Set(parsed.compactMap(\.newLine)), fold: folds(parsed))
     }
 
     /// Parses `@@ -a,b +c,d @@` for `a` and `c`, then numbers old (context/removed) and new (context/added) lines.
@@ -482,9 +502,10 @@
                   }
                   ForEach(looseSuggestions) { suggestion($0) }
                 }
-                let shown: (Row) -> Bool = { r in
-                  let t = r.text, n = r.newLine ?? -1
-                  if !compact || t.hasPrefix("@@") || t.hasPrefix("+") || t.hasPrefix("-") || t.hasPrefix("\\") { return true }
+                let fold = model.fold
+                let shown: (Int) -> Bool = { i in
+                  guard compact, let s = fold[i], !expanded.contains(s) else { return true }
+                  let n = rows[i].newLine ?? -1
                   return threads[n] != nil || suggestionsByLine[n] != nil
                 }
                 let items: [Pair] = split ? Self.pairs(rows) : rows.enumerated().map { Pair(id: $0, left: $1, right: $1) }
@@ -493,7 +514,15 @@
                 let half: CGFloat = split ? max((viewport.size.width - 1) / 2, 68 + 7.3 * CGFloat(longest)) : 0
                 ForEach(items, id: \.id) { p in
                   let r = p.right ?? p.left!
-                  if shown(p.left ?? r) || shown(r) {
+                  if compact, let s = fold[p.id], s == p.id, !expanded.contains(s) {
+                    let count = fold[s...].prefix { $0 == s }.count
+                    Button { expanded.insert(s) } label: {
+                      Text("⋯ 変更のない \(count) 行を表示").font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+                        .padding(.leading, 100).frame(minWidth: viewport.size.width, alignment: .leading).frame(height: 22)
+                        .background(C.surface).contentShape(Rectangle())
+                    }.buttonStyle(.plain).help("折りたたまれた行を展開")
+                  }
+                  if shown(p.id) {
                     pairRow(p, half: half, width: viewport.size.width).id(p.id)
                     if let n = r.newLine {
                       ForEach(threads[n] ?? []) { thread($0) }
