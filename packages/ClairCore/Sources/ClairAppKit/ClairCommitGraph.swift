@@ -75,10 +75,11 @@
     }
 
     private func lanes(_ row: GraphRow) -> some View {
-      Canvas { ctx, size in
+      let palette = Self.lanePalette
+      return Canvas { ctx, size in
         let w = Self.laneWidth, h = size.height, mid = h / 2
         func x(_ lane: Int) -> CGFloat { CGFloat(lane) * w + w / 2 }
-        func color(_ lane: Int) -> Color { Self.lanePalette[lane % Self.lanePalette.count] }
+        func color(_ lane: Int) -> Color { palette[lane % palette.count] }
         func line(_ from: CGPoint, _ to: CGPoint, _ lane: Int) {
           var p = Path()
           p.move(to: from)
