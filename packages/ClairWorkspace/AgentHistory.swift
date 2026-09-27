@@ -29,34 +29,18 @@ public struct AgentHistory: Sendable, Identifiable {
   public var promptCount: Int { messages.filter { $0.role == "user" }.count }
 }
 
-/// ccedit-style grouping: relative-day sections, then one group per project inside each.
-public struct AgentHistorySection: Sendable, Identifiable {
-  public struct Group: Sendable, Identifiable {
-    public let id: String
-    public let project: String
-    public let histories: [AgentHistory]
-    public var estimatedUSD: Double { histories.compactMap(\.estimatedUSD).reduce(0, +) }
-  }
+/// ccedit's project list: one group per project (repo folder name), most recently active first.
+public struct AgentHistoryGroup: Sendable, Identifiable {
+  public let project: String
+  public let histories: [AgentHistory]
+  public var id: String { project }
+  public var date: Date { histories[0].date }
+  public var estimatedUSD: Double { histories.compactMap(\.estimatedUSD).reduce(0, +) }
 
-  public let label: String
-  public let groups: [Group]
-  public var id: String { label }
-
-  public static func group(_ histories: [AgentHistory], now: Date = .now, calendar: Calendar = .current) -> [AgentHistorySection] {
-    let labels = ["今日", "昨日", "先週", "それ以前"]
-    let today = calendar.startOfDay(for: now)
-    func label(_ date: Date) -> String {
-      let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: today).day ?? .max
-      return days <= 0 ? labels[0] : days == 1 ? labels[1] : days <= 7 ? labels[2] : labels[3]
-    }
-    let byLabel = Dictionary(grouping: histories.sorted { $0.date > $1.date }) { label($0.date) }
-    return labels.compactMap { label in
-      guard let items = byLabel[label] else { return nil }
-      let byProject = Dictionary(grouping: items) { $0.project.map { URL(filePath: $0).lastPathComponent } ?? "不明" }
-      let groups = byProject.map { Group(id: "\(label)::\($0.key)", project: $0.key, histories: $0.value) }
-        .sorted { $0.histories[0].date > $1.histories[0].date }
-      return AgentHistorySection(label: label, groups: groups)
-    }
+  public static func group(_ histories: [AgentHistory]) -> [AgentHistoryGroup] {
+    Dictionary(grouping: histories.sorted { $0.date > $1.date }) { $0.project.map { URL(filePath: $0).lastPathComponent } ?? "不明" }
+      .map { AgentHistoryGroup(project: $0.key, histories: $0.value) }
+      .sorted { $0.date > $1.date }
   }
 }
 

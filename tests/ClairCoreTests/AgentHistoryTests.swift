@@ -75,14 +75,11 @@ final class AgentHistoryTests: XCTestCase {
     func item(_ id: String, _ daysAgo: Double, _ project: String?) -> AgentHistory {
       AgentHistory(id: id, provider: .claude, title: id, date: now - daysAgo * 86_400, messages: [], estimatedUSD: 1, project: project)
     }
-    let sections = AgentHistorySection.group(
-      [item("a", 0, "/w/clair"), item("b", 0.1, "/x/clair"), item("c", 0, "/w/ccedit"), item("d", 1, nil), item("e", 5, "/w/clair"), item("f", 30, "/w/clair")],
-      now: now, calendar: calendar)
-    XCTAssertEqual(sections.map(\.label), ["今日", "昨日", "先週", "それ以前"])
-    XCTAssertEqual(sections[0].groups.map(\.project).sorted(), ["ccedit", "clair"])
-    XCTAssertEqual(sections[0].groups.first { $0.project == "clair" }?.histories.map(\.id), ["a", "b"])
-    XCTAssertEqual(sections[0].groups.first { $0.project == "clair" }?.estimatedUSD, 2)
-    XCTAssertEqual(sections[1].groups.map(\.project), ["不明"])
+    let groups = AgentHistoryGroup.group(
+      [item("a", 0, "/w/clair"), item("b", 0.1, "/x/clair"), item("c", 0.05, "/w/ccedit"), item("d", 1, nil), item("e", 5, "/w/clair")])
+    XCTAssertEqual(groups.map(\.project), ["clair", "ccedit", "不明"])
+    XCTAssertEqual(groups[0].histories.map(\.id), ["a", "b", "e"])
+    XCTAssertEqual(groups[0].estimatedUSD, 3)
   }
 
   func testArchiveIsSplitByModifiedTimeBeforeParsing() throws {

@@ -882,7 +882,7 @@
     let openHistory: (AgentHistory) -> Void
     @State private var histories: [AgentHistory] = []
     @State private var historyLoading = true
-    @State private var collapsedGroups: Set<String> = []
+    @State private var expandedGroups: Set<String> = []
     @State private var archive: [AgentHistory]?
     @State private var archiveOpen = false
 
@@ -937,7 +937,7 @@
         Text("履歴はありません").font(Typography.font(Typography.sidebar)).foregroundStyle(C.textQuaternary).padding(16)
       }
       // ponytail: regrouped on every render; cache in @State if history counts make this visible.
-      historySections(AgentHistorySection.group(histories))
+      ForEach(AgentHistoryGroup.group(histories)) { group in historyGroup(group, key: "recent") }
       Button {
         archiveOpen.toggle()
         if archiveOpen, archive == nil { Task { archive = await AgentHistoryStore.shared.load(.archive) } }
@@ -953,8 +953,7 @@
           if archive.isEmpty {
             Text("アーカイブはありません").font(Typography.font(Typography.sidebar)).foregroundStyle(C.textQuaternary).padding(16)
           }
-          // Archive is older than every relative-day bucket, so its one section is labelled by project only.
-          ForEach(AgentHistorySection.group(archive).flatMap(\.groups)) { group in historyGroup(group) }
+          ForEach(AgentHistoryGroup.group(archive)) { group in historyGroup(group, key: "archive") }
         } else {
           Text("Loading...").font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
           .padding(.horizontal, 20).frame(height: 28)
@@ -962,25 +961,19 @@
       }
     }
 
-    @ViewBuilder private func historySections(_ sections: [AgentHistorySection]) -> some View {
-      ForEach(sections) { section in
-        Text(section.label).font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textQuaternary)
-          .padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 3)
-        ForEach(section.groups) { group in historyGroup(group) }
-      }
-    }
-
-    @ViewBuilder private func historyGroup(_ group: AgentHistorySection.Group) -> some View {
-          let collapsed = collapsedGroups.contains(group.id)
+    /// Projects start collapsed, like ccedit's project list; opening one lists its chats newest first.
+    @ViewBuilder private func historyGroup(_ group: AgentHistoryGroup, key: String) -> some View {
+          let id = "\(key)::\(group.id)"
+          let collapsed = !expandedGroups.contains(id)
           Button {
-            if collapsed { collapsedGroups.remove(group.id) } else { collapsedGroups.insert(group.id) }
+            if collapsed { expandedGroups.insert(id) } else { expandedGroups.remove(id) }
           } label: {
             HStack(spacing: 6) {
               Image(systemName: collapsed ? "chevron.right" : "chevron.down").frame(width: 14)
               RoundedRectangle(cornerRadius: 2).fill(projectTint(group.project)).frame(width: 8, height: 8)
               Text(group.project).font(Typography.font(Typography.sidebarStrong)).lineLimit(1)
               Spacer(minLength: 0)
-              Text("\(group.estimatedUSD.formatted(.currency(code: "USD"))) · \(group.histories.count) 件")
+              Text("\(listTime(group.date)) · \(group.estimatedUSD.formatted(.currency(code: "USD"))) · \(group.histories.count) 件")
                 .font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textQuaternary)
             }.foregroundStyle(C.textSecondary).padding(.horizontal, 20).padding(.vertical, 4).contentShape(Rectangle())
           }.buttonStyle(.hoverWash)
