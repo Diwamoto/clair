@@ -182,11 +182,11 @@
     @State private var hovered: DiffTarget?
     @State private var collapsed: Set<String> = []
 
-    /// Same geometry as the explorer's treeRow in ClairAppShell: inset, rounded 24px row, 12px indent per level.
+    /// Same geometry as the explorer's treeRow in ClairAppShell: inset, rounded 28px row, 12px indent per level.
     private func treeRow<Content: View>(depth: Int, selected: Bool, action: @escaping () -> Void, @ViewBuilder _ content: () -> Content) -> some View {
       Button(action: action) {
         HStack(spacing: 10, content: content)
-          .padding(.leading, 8 + CGFloat(depth + 1) * 12).padding(.trailing, 8).frame(height: 24)
+          .padding(.leading, 8 + CGFloat(depth + 1) * 12).padding(.trailing, 8).frame(height: 28)
           .frame(maxWidth: .infinity, alignment: .leading)
           .background(selected ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
           .contentShape(Rectangle())
@@ -259,7 +259,7 @@
             Text(stage ? "+" : "−").font(Typography.font(Typography.title)).foregroundStyle(C.textTertiary).frame(width: 18, height: 18)
           }.buttonStyle(.hoverWash).disabled(busy).help(stage ? "すべてステージに追加" : "すべてステージから外す")
         }.padding(.leading, 20).padding(.trailing, 12).frame(height: 26)
-        // Tree styled like the explorer (24px rows, 12px indent, chevron + folder). A folder row is emitted
+        // Tree styled like the explorer (28px rows, 12px indent, chevron + folder). A folder row is emitted
         // wherever a directory component first differs from the previous sorted path.
         let sorted = rows.sorted { $0.path < $1.path }
         ForEach(Array(sorted.enumerated()), id: \.element.path) { i, c in

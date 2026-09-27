@@ -1432,14 +1432,14 @@ import Observation
       return LazyVStack(alignment: .leading, spacing: 0) {
         // Only the first scan blanks the tree; a rescan (every watcher event) swaps rows in place.
         if store.scanning && st.files.isEmpty {
-          Text("Loading...").font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
+          Text("Loading...").font(.system(size: 13)).foregroundStyle(C.textTertiary)
             .padding(.horizontal, 16).frame(height: 28)
         } else {
           // Project root: uppercase, branch glyph, no chevron — it reads as a
           // section label, not one more row in the same list as its children.
           // Folds the whole tree (GUI-local); click-to-collapse is unchanged.
           treeRow(depth: 0, selected: false, action: { rootFolded.toggle() }) {
-            Text(st.project).font(.system(size: 12, weight: .semibold)).textCase(.uppercase).foregroundStyle(C.textPrimary)
+            Text(st.project).font(.system(size: 13, weight: .semibold)).textCase(.uppercase).foregroundStyle(C.textPrimary)
             Spacer(minLength: 0)
           }
           .clairContextMenu(menus) {
@@ -1451,18 +1451,18 @@ import Observation
                 let on = st.active == f.path && !st.settingsOpen
                 let badge = st.dirty.contains(f.path) ? "M" : f.status
                 treeRow(depth: r.depth, selected: on, action: { store.run("tab.open", ["path": .string(f.path)]) }) {
-                  FileIcon.forPath(f.path).image(size: 10, ink: on ? C.textSecondary : C.textTertiary).frame(width: 12)
-                  Text(r.label).font(.system(size: 12, weight: on ? .semibold : .regular)).foregroundStyle(on ? C.textPrimary : C.textSecondary).lineLimit(1)
+                  FileIcon.forPath(f.path).image(size: 11, ink: on ? C.textSecondary : C.textTertiary).frame(width: 12)
+                  Text(r.label).font(.system(size: 13, weight: on ? .semibold : .regular)).foregroundStyle(on ? C.textPrimary : C.textSecondary).lineLimit(1)
                   Spacer(minLength: 0)
-                  if let b = badge { Text(b).font(.system(size: 12, weight: .semibold)).foregroundStyle(b == "A" || b == "?" ? C.success : C.attention) }
+                  if let b = badge { Text(b).font(.system(size: 13, weight: .semibold)).foregroundStyle(b == "A" || b == "?" ? C.success : C.attention) }
                 }
                 .clairContextMenu(menus) { fileMenu(f.path, tab: false) }
               } else {
                 let open = !st.collapsed.contains(r.id)
                 treeRow(depth: r.depth, selected: false, action: { store.run("explorer.toggle", ["path": .string(r.id)]) }) {
                   chevron(open: open)
-                  FileIcon.folder(open: open).image(size: 10, ink: C.textTertiary).frame(width: 12)
-                  Text(r.label).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textSecondary).lineLimit(1)
+                  FileIcon.folder(open: open).image(size: 11, ink: C.textTertiary).frame(width: 12)
+                  Text(r.label).font(.system(size: 13)).foregroundStyle(C.textSecondary).lineLimit(1)
                   Spacer(minLength: 0)
                 }
                 .clairContextMenu(menus) {
@@ -1550,11 +1550,11 @@ import Observation
         .rotationEffect(.degrees(open ? 90 : 0)).frame(width: 10)
     }
 
-    /// Explorer row: an inset, rounded 24px tab with 12px indent per level.
+    /// Explorer row: an inset, rounded 28px tab with 12px indent per level.
     private func treeRow<Content: View>(depth: Int, selected: Bool, action: @escaping () -> Void, @ViewBuilder _ content: () -> Content) -> some View {
       Button(action: action) {
         HStack(spacing: 10, content: content)
-          .padding(.leading, 8 + CGFloat(depth) * 12).padding(.trailing, 8).frame(height: 24)
+          .padding(.leading, 8 + CGFloat(depth) * 12).padding(.trailing, 8).frame(height: 28)
           .frame(maxWidth: .infinity, alignment: .leading)
           .background(selected ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
           .contentShape(Rectangle())
