@@ -124,6 +124,7 @@
         let edit = buffers.edits[path, default: 0]
         let width = rows.map(\.count).max() ?? 0
         ScrollView([.horizontal, .vertical]) {
+         VStack(alignment: .leading, spacing: 0) {
           Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
             ForEach(rows.indices, id: \.self) { r in
               GridRow {
@@ -150,8 +151,9 @@
             Button("列を追加") { mutate(m, sep) { rs in for i in rs.indices { rs[i].append("") } } }
           }
           .buttonStyle(.borderless).font(.system(size: 11)).padding(.horizontal, 12).padding(.bottom, 12)
-          .frame(maxWidth: .infinity, alignment: .leading)
+         }
         }
+        .defaultScrollAnchor(.topLeading)
         .background(C.canvas)
         .onAppear { reload(m, sep) }
         .onChange(of: edit) { _, _ in if cell == nil { reload(m, sep) } }  // outside edits land when no cell is being typed in
