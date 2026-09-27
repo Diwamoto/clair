@@ -303,11 +303,6 @@
   }
 
   /// Unified diff of one file. Colour is only for add/remove (state meaning); hunk headers stay quiet.
-  private struct HScrollKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
-  }
-
   /// Lines that exist on the new side can be commented.
   struct DiffView: View {
     let target: DiffTarget
@@ -344,6 +339,8 @@
     @State private var expanded: Set<Int> = []
     /// Split view: how far the diff is scrolled right; the halves stay pinned and scroll their text inside.
     @State private var hScroll: CGFloat = 0
+    @State private var hovering = false
+    @State private var wheelMonitor: Any?
     @AppStorage("clair.diffSplit") private var split = false
     @State private var editing = false
     /// A diff this long is cut with a notice instead of laying out every row.
@@ -500,7 +497,7 @@
           Text("差分はありません。").font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
           GeometryReader { viewport in
-            ScrollView([.vertical, .horizontal]) {
+            ScrollView(split ? .vertical : [.vertical, .horizontal]) {
               LazyVStack(alignment: .leading, spacing: 0) {
                 if !looseThreads.isEmpty || !looseSuggestions.isEmpty {
                   Text("この差分に表示できないコメント・提案").font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textTertiary).padding(.horizontal, 12).padding(.vertical, 6)
@@ -544,12 +541,19 @@
                   Text("差分が長いため \(Self.maxLines) 行で打ち切りました。").font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).padding(12)
                 }
               }
-              .frame(minWidth: viewport.size.width + overflowWidth(viewport.size.width), minHeight: viewport.size.height, alignment: .topLeading)
-              .background(GeometryReader { g in Color.clear.preference(key: HScrollKey.self, value: -g.frame(in: .named("diff")).minX) })
+              .frame(minWidth: viewport.size.width, minHeight: viewport.size.height, alignment: .topLeading)
               .clairScroller()
             }
-            .coordinateSpace(name: "diff")
-            .onPreferenceChange(HScrollKey.self) { hScroll = max(0, $0) }
+            // Split view scrolls sideways by hand: the divider stays put and both halves move together.
+            .onHover { hovering = $0 }
+            .onAppear {
+              wheelMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { e in
+                guard split, hovering, abs(e.scrollingDeltaX) > abs(e.scrollingDeltaY) else { return e }
+                hScroll = min(max(0, hScroll - e.scrollingDeltaX), overflowWidth(viewport.size.width))
+                return nil
+              }
+            }
+            .onDisappear { wheelMonitor.map(NSEvent.removeMonitor); wheelMonitor = nil }
           }
         }
       }.background(C.canvas)
@@ -594,7 +598,7 @@
             cell(p.left, number: p.left?.oldLine, width: half)
             Rectangle().fill(L.hairline).frame(width: 1)
             cell(p.right, number: p.right?.newLine, width: width - half - 1)
-          }.frame(height: 19).offset(x: hScroll)  // pinned to the viewport while the content scrolls
+          }.frame(height: 19)
         } else {
           line(r, width: width)
         }
