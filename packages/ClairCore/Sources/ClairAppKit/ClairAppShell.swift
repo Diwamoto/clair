@@ -2259,24 +2259,14 @@ import Observation
           Text("設定 · \(st.section)")
         } else {
           if let branch {
-            Menu {
-              ForEach(branches, id: \.self) { candidate in
-                Button {
-                  if candidate != branch {
-                    runGit([("git.switch", ["name": .string(candidate)])], label: "ブランチ切替")
-                  }
-                } label: {
-                  if candidate == branch { Label(candidate, systemImage: "checkmark") }
-                  else { Text(candidate) }
-                }
-              }
-            } label: {
+            Button { store.run("git.branches") } label: {
               HStack(spacing: 4) {
-                Image(nsImage: branchMenuIcon)
+                GitBranchGlyph().stroke(style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round))
+                  .frame(width: 11, height: 11)
                 Text(branch)
               }
             }
-            .menuStyle(.borderlessButton).fixedSize().disabled(gitOperation != nil)
+            .buttonStyle(.plain).fixedSize().disabled(gitOperation != nil)
           }
           if st.isRepo {
             // VS Code-style sync: one button shows ↓behind ↑ahead and runs pull then push.
@@ -2332,6 +2322,15 @@ import Observation
     private func items(_ p: WorkbenchState.Palette) -> [PaletteItem] {
       switch p {
       case .symbols: return store.languageItems
+      case .branches:
+        let q = query.trimmingCharacters(in: .whitespaces)
+        let rows = branches.filter { q.isEmpty || $0.lowercased().contains(q.lowercased()) }.map {
+          // The checked-out branch just closes the palette (switching to it would be a no-op that can still fail on dirty buffers).
+          $0 == branch ? PaletteItem(title: $0, hint: "現在", id: "palette.close", input: [:])
+            : PaletteItem(title: $0, hint: "", id: "git.switch", input: ["name": .string($0)])
+        }
+        guard !q.isEmpty, !branches.contains(q) else { return rows }
+        return rows + [PaletteItem(title: "新しいブランチを作成: \(q)", hint: "", id: "git.branchCreate", input: ["name": .string(q)])]
       case .references:
         let q = query.lowercased()
         return store.languageItems.filter { q.isEmpty || $0.hint.lowercased().contains(q) }
@@ -2376,13 +2375,19 @@ import Observation
                 let on = i == selection
                 HStack(spacing: 8) {
                   if p == .files { FileIcon.forPath(it.title).image(size: 11, ink: C.textTertiary).frame(width: 14) }
+                  if p == .branches {
+                    Group {
+                      if it.id == "git.branchCreate" { Image(systemName: "plus").font(.system(size: 10)) }
+                      else { GitBranchGlyph().stroke(style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round)).frame(width: 11, height: 11) }
+                    }.foregroundStyle(C.textTertiary).frame(width: 14)
+                  }
                   Text(p == .files ? name(it.title) : it.title).font(.system(size: 12)).lineLimit(1)
                     .foregroundStyle(on ? C.textPrimary : C.textSecondary)
                   Spacer(minLength: 0)
                   if p == .files {
                     Text(it.title).font(.system(size: 11)).lineLimit(1).truncationMode(.head).foregroundStyle(C.textQuaternary)
                   }
-                  if p == .symbols || p == .references {
+                  if p == .symbols || p == .references || p == .branches {
                     Text(it.hint).font(.system(size: 11)).lineLimit(1).truncationMode(.head).foregroundStyle(C.textQuaternary)
                   } else { HStack(spacing: 2) {
                     ForEach(Array(it.hint), id: \.self) { k in
@@ -2423,8 +2428,13 @@ import Observation
 
     private func run(_ list: [PaletteItem]) {
       guard selection < list.count else { return }
+      let it = list[selection]
       store.run("palette.close")
-      store.performFromUI(list[selection].id, list[selection].input)
+      switch it.id {
+      case "git.switch": runGit([(it.id, it.input)], label: "ブランチ切替")
+      case "git.branchCreate": runGit([(it.id, it.input)], label: "ブランチ作成")
+      default: store.performFromUI(it.id, it.input)
+      }
     }
   }
 
@@ -2486,18 +2496,6 @@ import Observation
   }
 
   /// Git branch glyph: two nodes and the curved branch joining the stem.
-  // Menu labels only render Text/Image, so the sidebar's branch glyph goes in as a template image.
-  @MainActor private var branchMenuIcon: NSImage {
-    let renderer = ImageRenderer(content: GitBranchGlyph()
-      .stroke(style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round))
-      .frame(width: 11, height: 11))
-    renderer.scale = 2
-    let image = renderer.nsImage ?? NSImage()
-    image.size = NSSize(width: 11, height: 11)
-    image.isTemplate = true
-    return image
-  }
-
   private struct GitBranchGlyph: Shape {
     func path(in rect: CGRect) -> Path {
       let s = min(rect.width, rect.height) / 24

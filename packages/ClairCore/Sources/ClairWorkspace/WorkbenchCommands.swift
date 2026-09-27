@@ -13,7 +13,7 @@ public struct WorkbenchFile: Sendable, Codable, Equatable {
 }
 
 public struct WorkbenchState: Sendable, Codable, Equatable {
-  public enum Palette: String, Sendable, Codable { case commands, files, search, symbols, references }
+  public enum Palette: String, Sendable, Codable { case commands, files, search, symbols, references, branches }
 
   public static let sections = ["一般", "AIプロバイダー", "使用状況", "エディタ", "ターミナル", "モバイル", "アップデート"]
   public static let toggleKeys = ["restoreLayout", "confirmClose", "showQuota", "preventSleepOnBattery", "formatOnSave", "showWhitespace", "softWrap", "terminalApprovals"]
@@ -227,8 +227,8 @@ public struct CommandRegistry: Sendable {
     case .files:
       return QuickOpen.rank(query, state.files)
         .map { PaletteItem(title: $0.path, hint: "", id: "tab.open", input: ["path": .string($0.path)]) }
-    case .search, .symbols, .references:
-      return []  // search runs in the GUI; symbols/references come from the language server
+    case .search, .symbols, .references, .branches:
+      return []  // search runs in the GUI; symbols/references come from the language server; branches load off the main thread
     }
   }
 

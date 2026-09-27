@@ -242,6 +242,25 @@ extension CommandRegistry {
         }
         return r.ok ? .ok : .text(r.out)
       },
+      // `switch -c` carries the working tree over, so unsaved buffers stay valid.
+      cmd("git.branchCreate", "ブランチを作成", .write, params: [CommandParam("name", .string)], palette: false,
+          preflight: { s, i throws(CommandError) in
+            let root = try repo(s), b = try branch(i)
+            guard !WorkbenchGit.branchExists(root, b) else { throw CommandError(.preconditionFailed, "branch \(b) already exists") }
+            return .write
+          }) { s, i in
+        let created = i["name"]!.string!
+        let r = WorkbenchGit.run(s.current!.path, ["switch", "-c", created], merge: true)
+        if r.ok {
+          if let index = s.projects.firstIndex(where: { $0.name == s.project }), s.projects[index].origin != nil {
+            s.projects[index].branch = created
+          }
+          s.refreshStatus()
+        }
+        return r.ok ? .ok : .text(r.out)
+      },
+      cmd("git.branches", "ブランチを切り替え…", .read, ai: false,
+          preflight: { s, _ throws(CommandError) in _ = try repo(s); return .read }) { s, _ in s.palette = .branches; return .ok },
       cmd("git.pull", "Pull", .external, ai: false, palette: false,
           preflight: { s, _ throws(CommandError) in
             let root = try repo(s)

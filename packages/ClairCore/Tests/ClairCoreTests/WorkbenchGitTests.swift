@@ -113,6 +113,17 @@ final class WorkbenchGitTests: XCTestCase {
     XCTAssertEqual(r.execute("git.switch", ["name": .string("a b")], state: &s).failure?.code, .invalidInput)
   }
 
+  func testBranchCreateSwitchesToNewBranchAndRefusesExisting() throws {
+    var (s, root) = try repo()
+    s.dirty = ["a.txt"]  // switch -c keeps the working tree, so unsaved buffers don't block it
+    try r.execute("git.branchCreate", ["name": .string("feat/new")], state: &s).get()
+    XCTAssertEqual(WorkbenchGit.currentBranch(root), "feat/new")
+    XCTAssertEqual(r.execute("git.branchCreate", ["name": .string("main")], state: &s).failure?.code, .preconditionFailed)
+    XCTAssertEqual(r.execute("git.branchCreate", ["name": .string("a b")], state: &s).failure?.code, .invalidInput)
+    try r.execute("git.branches", state: &s).get()
+    XCTAssertEqual(s.palette, .branches)
+  }
+
   func testBranchesSwitchAndRemoteCommandsUseTypedRegistry() throws {
     var (s, root) = try repo()
     sh(root, "branch", "topic")
