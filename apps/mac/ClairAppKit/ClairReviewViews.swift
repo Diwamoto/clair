@@ -994,7 +994,6 @@
           } label: {
             HStack(spacing: 6) {
               Image(systemName: collapsed ? "chevron.right" : "chevron.down").frame(width: 14)
-              RoundedRectangle(cornerRadius: 2).fill(projectTint(group.project)).frame(width: 8, height: 8)
               Text(group.project).font(Typography.font(Typography.sidebarStrong)).lineLimit(1)
               Spacer(minLength: 0)
               Text("\(listTime(group.date)) · \(group.estimatedUSD.formatted(.currency(code: "USD"))) · \(group.histories.count) 件")
