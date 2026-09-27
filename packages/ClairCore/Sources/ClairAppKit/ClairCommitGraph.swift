@@ -121,7 +121,7 @@
             }
           }
         }
-        .frame(width: 220).background(C.panel)
+        .frame(width: 220).background(C.chrome)
         if files.indices.contains(file) {
           let f = files[file]
           DiffView(
