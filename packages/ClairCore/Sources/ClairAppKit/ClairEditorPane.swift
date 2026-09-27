@@ -4,6 +4,7 @@
   import ClairEditorCore
   import ClairEditorLanguage
   import ClairEditorView
+  import ClairWorkspace
   import Observation
   import SwiftUI
 
@@ -360,6 +361,8 @@
     var onToggleDebugBreakpoint: ((Int) -> Void)? = nil
     /// E17: ⌘-click on a definition link / F12. nil (the diff review editor) disables both.
     var onDefinition: (() -> Void)? = nil
+    /// Opens the Markdown preview pane; the corner button shows only while this editor is focused on a `.md` file.
+    var onPreview: (() -> Void)? = nil
     let onEdit: (String) -> Void
     let onCaret: (String, TextSelectionSet, TextSnapshot) -> Void
     /// Preview pane id → the file it shows (`WorkbenchState.previews`).
@@ -394,6 +397,10 @@
               // keystroke are fast enough (BUDGET-OP-100) to need nothing.
               if buffers.highlightsLoading.contains(path) {
                 ProgressView().controlSize(.small).padding(8)
+              } else if focused, let onPreview, MarkdownPreview.isMarkdown(path) {
+                Button(action: onPreview) { Image(systemName: "eye") }
+                  .buttonStyle(.borderless).help("プレビューを開く (⌘⇧V)").accessibilityLabel("Markdown プレビューを開く")
+                  .padding(8)
               }
             }
           }
@@ -432,6 +439,11 @@
             .foregroundStyle(i == parts.count - 1 ? C.textSecondary : C.textQuaternary).lineLimit(1)
         }
         Spacer(minLength: 0)
+        if let onPreview, TableFile.separator(path) != nil {
+          Button(action: onPreview) { Image(systemName: "tablecells").font(.system(size: 11)) }
+            .buttonStyle(.borderless).foregroundStyle(C.textSecondary)
+            .help("表で編集 (⌘⇧V)").accessibilityLabel("表エディタを開く")
+        }
       }.padding(.horizontal, 12).frame(height: 24).background(C.canvas)
     }
 

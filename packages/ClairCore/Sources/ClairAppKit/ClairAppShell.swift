@@ -1980,6 +1980,7 @@ import Observation
               _ = store.run("debug.breakpoint", ["path": .string(root + "/" + path), "line": .int(line)])
             },
             onDefinition: { store.run("editor.definition") },
+            onPreview: { store.run("editor.markdownPreview") },
             onEdit: { store.edited($0) }, onCaret: { store.buffers.setCaret($0, $1, in: $2) }, previews: st.previews),
           run: { _ = store.run($0, $1) }, dragging: $draggingPane)
         }
