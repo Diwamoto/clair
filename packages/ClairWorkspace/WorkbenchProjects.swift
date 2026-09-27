@@ -341,7 +341,7 @@ public enum WorkbenchFiles {
       if paths.count >= limit { break }
     }
     let status = gitStatus(root)
-    paths += status.compactMap { $0.value == "D" ? $0.key : nil }  // deleted files stay listed (red) until committed
+    paths += status.compactMap { $0.value == "D" ? $0.key : nil }  // deleted files: kept so folders can turn red; hidden from explorer and quick open
     return paths.sorted(by: treeOrder).map { WorkbenchFile(path: $0, status: status[$0]) }
   }
 

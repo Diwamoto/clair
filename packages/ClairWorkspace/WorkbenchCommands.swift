@@ -230,7 +230,7 @@ public struct CommandRegistry: Sendable {
         + AgentProfile.all.map { PaletteItem(title: "\($0.title) を起動", hint: "", id: "agent.launch", input: ["profile": .string($0.id)]) }
           .filter { q.isEmpty || $0.title.lowercased().contains(q) }
     case .files:
-      return QuickOpen.rank(query, state.files)
+      return QuickOpen.rank(query, state.files.filter { $0.status != "D" })
         .map { PaletteItem(title: $0.path, hint: "", id: "tab.open", input: ["path": .string($0.path)]) }
     case .search, .symbols, .references, .branches:
       return []  // search runs in the GUI; symbols/references come from the language server; branches load off the main thread
@@ -437,7 +437,7 @@ extension CommandRegistry {
     },
     cmd("tab.open", "ファイルを開く", .read, params: [CommandParam("path", .string)],
         preflight: { s, i throws(CommandError) in
-          try require(s.files.contains { $0.path == i["path"]?.string }, "no file \(i["path"]!)"); return .read
+          try require(s.files.contains { $0.path == i["path"]?.string && $0.status != "D" }, "no file \(i["path"]!)"); return .read
         }) { s, i in
       s.openTab(i["path"]!.string!); return .ok
     },

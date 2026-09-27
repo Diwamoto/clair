@@ -1540,7 +1540,7 @@ import Observation
       var out: [ExplorerRow] = []
       var seen = Set<String>()
       out.reserveCapacity(files.count * 2)
-      for file in files {
+      for file in files where file.status != "D" {  // deleted files only tint their folders (changeRanks)
         guard !Task.isCancelled else { return [] }
         let root = roots.first { file.path.hasPrefix($0 + "/") }
         let parts = root.map { [$0] + file.path.dropFirst($0.count + 1).split(separator: "/").map(String.init) }

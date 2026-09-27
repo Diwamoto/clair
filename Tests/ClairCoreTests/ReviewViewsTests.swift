@@ -45,6 +45,7 @@
       XCTAssertEqual(r["a"], 3)
       XCTAssertEqual(r["c"], 2)
       XCTAssertNil(r["d"])
+      XCTAssertFalse(ClairAppShell.explorerRows(for: files).contains { $0.id == "a/b/gone.swift" })
     }
 
     func testAddedFolderIsOneTopLevelRow() {
