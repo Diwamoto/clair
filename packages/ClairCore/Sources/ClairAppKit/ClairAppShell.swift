@@ -784,8 +784,10 @@ import Observation
             titlebar
             HStack(spacing: 0) {
               activityBar
-              sidebar
-              Rectangle().fill(C.surfaceActive).frame(width: 1)
+              if !st.sidebarHidden {
+                sidebar
+                Rectangle().fill(C.surfaceActive).frame(width: 1)
+              }
               main
             }
           }
