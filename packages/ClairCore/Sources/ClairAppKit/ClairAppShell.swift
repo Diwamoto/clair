@@ -2825,7 +2825,7 @@ import Observation
       switch node {
       case .leaf(let id, let kind):
         VStack(spacing: 0) {
-          if kind != .editor {
+          if kind != .editor && kind != .graph {
             PaneHeaderView(
               id: id, label: kind == .preview ? (editor.previews[id].map { ($0 as NSString).lastPathComponent } ?? "") : kind == .graph ? "コミットグラフ" : title(id), focused: id == focused,
               onSwap: { run("pane.swap", ["idA": .int($0), "idB": .int($1)]) },

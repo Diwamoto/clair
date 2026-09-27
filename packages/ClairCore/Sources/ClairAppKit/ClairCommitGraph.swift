@@ -15,6 +15,7 @@
     @State private var selected: String?
     @State private var files: [(path: String, model: DiffView.Model)] = []
     @State private var loadingFiles = false
+    @AppStorage("clair.diffSplit") private var split = false
 
     nonisolated static let pageSize = 400
     private static let laneWidth: CGFloat = 12
@@ -101,7 +102,7 @@
     private func detailView(_ id: String) -> some View {
       let subject = graph.rows.first { $0.commit.id == id }?.commit.subject ?? ""
       return ScrollView {
-        LazyVStack(alignment: .leading, spacing: 0) {
+        LazyVStack(alignment: .leading, spacing: 0, pinnedViews: .sectionHeaders) {
           Button { selected = nil } label: {
             Label("グラフに戻る", systemImage: "chevron.left")
               .padding(.horizontal, 12).frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
@@ -117,16 +118,33 @@
           // Every file of the commit stacked; each DiffView gets its full height (30px header + 19px rows) so
           // only the outer view scrolls vertically.
           ForEach(Array(files.enumerated()), id: \.offset) { _, f in
-            DiffView(
-              target: DiffTarget(path: f.path, staged: false, untracked: false), model: f.model,
-              threads: [:], suggestions: [], onComment: { _, _, _ in }, onSuggest: { _, _ in },
-              onResolve: { _ in }, onApply: { _ in nil }, onReject: { _ in }, onSend: nil,
-              onClose: { selected = nil }, editor: nil, onSave: nil, isDirty: false,
-              label: String(id.prefix(8)), commentable: false)
-            .frame(height: 30 + 19 * CGFloat(max(f.model.rows.count, 1)) + 24)
+            Section {
+              DiffView(
+                target: DiffTarget(path: f.path, staged: false, untracked: false), model: f.model,
+                threads: [:], suggestions: [], onComment: { _, _, _ in }, onSuggest: { _, _ in },
+                onResolve: { _ in }, onApply: { _ in nil }, onReject: { _ in }, onSend: nil,
+                onClose: { selected = nil }, editor: nil, onSave: nil, isDirty: false,
+                label: String(id.prefix(8)), commentable: false, showsHeader: false)
+              .frame(height: 19 * CGFloat(max(f.model.rows.count, 1)) + 24)
+            } header: { fileHeader(f.path, f.model) }
           }
         }.clairScroller()
       }
+    }
+
+    private func fileHeader(_ path: String, _ m: DiffView.Model) -> some View {
+      HStack {
+        Text(path).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary)
+        Text("+\(m.added)").font(Typography.font(Typography.chrome)).foregroundStyle(C.success)
+        Text("−\(m.removed)").font(Typography.font(Typography.chrome)).foregroundStyle(C.danger)
+        Spacer()
+        Button { split.toggle() } label: { Image(systemName: split ? "rectangle" : "rectangle.split.2x1") }
+          .accessibilityLabel(split ? "インライン" : "並べて表示")
+          .foregroundStyle(C.textSecondary).buttonStyle(.hoverWash)
+          .help(split ? "差分を 1 列で表示" : "変更前と変更後を左右に並べて表示")
+      }
+      .padding(.horizontal, 16).frame(height: 30).background(C.canvas)
+      .overlay(alignment: .bottom) { Rectangle().fill(DesignTokens.Line.hairline).frame(height: 1) }
     }
 
     private func loadMore() async {

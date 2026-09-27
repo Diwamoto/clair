@@ -325,6 +325,8 @@
     var label: String? = nil
     /// A historical diff has nowhere to anchor review comments.
     var commentable = true
+    /// The commit view pins its own per-file header instead.
+    var showsHeader = true
     @State private var composing: Int?
     @State private var draft = ""
     @State private var suggesting = false
@@ -416,7 +418,7 @@
       let suggestionsByLine = Dictionary(grouping: suggestions, by: \.line)
       ScrollViewReader { proxy in
       VStack(spacing: 0) {
-        HStack {
+        if showsHeader { HStack {
           Text(target.path).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary)
           Text(label ?? (target.staged ? "HEAD → index" : target.untracked ? "未追跡ファイル" : "index → 作業ツリー"))
             .font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary)
@@ -463,7 +465,7 @@
           }
           Button(action: onClose) { Image(systemName: "xmark").foregroundStyle(C.chromeInk) }.buttonStyle(.hoverWash)
         }.padding(.horizontal, 16).frame(height: 30).background(C.canvas)
-          .overlay(alignment: .bottom) { Rectangle().fill(L.hairline).frame(height: 1) }
+          .overlay(alignment: .bottom) { Rectangle().fill(L.hairline).frame(height: 1) } }
         if editing, let editor {
           editor
         } else if model.text.isEmpty {
