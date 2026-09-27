@@ -699,6 +699,11 @@ import Observation
             .keyboardShortcut(Self.shortcut(state.shortcut(for: d)!))
             .disabled(store == nil)
         }
+        // Ctrl-Tab is the conventional tab cycle; unclaimed, AppKit only walks the focus ring over the tab buttons.
+        Button("次のタブ") { store?.performFromUI("tab.next") }
+          .keyboardShortcut(.tab, modifiers: .control).disabled(store == nil)
+        Button("前のタブ") { store?.performFromUI("tab.previous") }
+          .keyboardShortcut(.tab, modifiers: [.control, .shift]).disabled(store == nil)
       }
     }
 
