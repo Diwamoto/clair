@@ -33,6 +33,9 @@ import SwiftUI
     for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResizeNotification, NSWindow.didExitFullScreenNotification] {
       NotificationCenter.default.addObserver(self, selector: #selector(layoutWindow(_:)), name: name, object: nil)
     }
+    // A bundled app's window can already be key before this runs (dev's is not), so the first
+    // didBecomeKey is missed; lay out the windows that exist now.
+    NSApp.windows.forEach(layoutLights)
   }
 
   /// U10: the v1 AppIcon / AppIconDev art (1024px, full bleed), masked to the macOS icon grid (824pt body,
@@ -51,7 +54,11 @@ import SwiftUI
   private var lightsX: [CGFloat]?
 
   @objc private func layoutWindow(_ notification: Notification) {
-    guard let w = notification.object as? NSWindow, let close = w.standardWindowButton(.closeButton), let bar = close.superview?.superview else { return }
+    if let w = notification.object as? NSWindow { layoutLights(w) }
+  }
+
+  private func layoutLights(_ w: NSWindow) {
+    guard let close = w.standardWindowButton(.closeButton), let bar = close.superview?.superview else { return }
     // The SwiftUI tab strip occupies the hidden titlebar. Let only TitlebarArea's explicit
     // performDrag move the window, so a tab drag cannot also move its window.
     w.isMovableByWindowBackground = false
