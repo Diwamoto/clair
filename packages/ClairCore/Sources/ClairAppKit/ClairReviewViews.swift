@@ -437,7 +437,8 @@
             }
           }
           if !editing {
-            Button(split ? "インライン" : "並べて表示") { split.toggle() }
+            Button { split.toggle() } label: { Image(systemName: split ? "rectangle" : "rectangle.split.2x1") }
+              .accessibilityLabel(split ? "インライン" : "並べて表示")
               .font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary).buttonStyle(.hoverWash)
               .help(split ? "差分を 1 列で表示" : "変更前と変更後を左右に並べて表示")
             Button(compact ? "全文脈" : "変更箇所") { compact.toggle() }
