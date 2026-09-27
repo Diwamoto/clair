@@ -6,6 +6,22 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-28
+
+### Changed
+
+- **Status bar**: the quota meter is shown by default; the settings toggle now hides it.
+- **Panes**: the pane header title is inset from the left edge.
+
+### Removed
+
+- **Settings**: the update channel card.
+
+### Fixed
+
+- **Window**: traffic lights are laid out correctly for a window that is already focused at launch.
+- **Usage**: hover moves freely across the activity grid, and totals are kept between openings.
+
 ## [0.2.0] - 2026-09-28
 
 ### Added
@@ -61,6 +77,7 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/Diwamoto/clair/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Diwamoto/clair/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Diwamoto/clair/releases/tag/v0.1.0
