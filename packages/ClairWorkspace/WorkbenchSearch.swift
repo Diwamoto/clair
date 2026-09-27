@@ -111,29 +111,42 @@ extension WorkbenchState {
 }
 
 #if os(macOS)
-/// FSEvents on a Project root; `onChange` gets root-relative paths (debounced by FSEvents latency).
+/// FSEvents on a Project root and its added folders; `onChange` gets root-relative paths (debounced by FSEvents latency).
 public final class FileWatcher: @unchecked Sendable {
   private var stream: FSEventStreamRef?
-  private let root: String
+  /// (watched realpath, root-relative prefix): `""` for the root, `../docs/` for an added folder.
+  private let roots: [(path: String, prefix: String)]
   private let onChange: @Sendable (Set<String>) -> Void
 
-  public init?(root: String, latency: TimeInterval = 0.2, onChange: @escaping @Sendable (Set<String>) -> Void) {
-    self.root = realpath(root, nil).map { String(cString: $0) } ?? root  // FSEvents reports /private/var, which Foundation would strip
+  public init?(root: String, folders: [String] = [], latency: TimeInterval = 0.2, onChange: @escaping @Sendable (Set<String>) -> Void) {
+    // FSEvents reports /private/var, which Foundation would strip
+    func real(_ p: String) -> String { realpath(p, nil).map { c in defer { free(c) }; return String(cString: c) } ?? p }
+    roots = [(real(root), "")] + folders.map { (real($0), WorkbenchFiles.relative($0, from: root) + "/") }
     self.onChange = onChange
     var ctx = FSEventStreamContext(version: 0, info: Unmanaged.passUnretained(self).toOpaque(), retain: nil, release: nil, copyDescription: nil)
     let cb: FSEventStreamCallback = { _, info, n, paths, _, _ in
       let w = Unmanaged<FileWatcher>.fromOpaque(info!).takeUnretainedValue()
       let list = unsafeBitCast(paths, to: NSArray.self) as! [String]
-      // `.git/` and build output are ignored: our own `git status` rewrites `.git/index`, which would otherwise re-trigger a rescan forever.
-      let rel = Set(list.prefix(n).compactMap { $0.hasPrefix(w.root + "/") ? String($0.dropFirst(w.root.count + 1)) : nil }.filter { !WorkbenchFiles.isSkipped($0) })
+      let rel = Set(list.prefix(n).compactMap { w.relative($0) })
       if !rel.isEmpty { w.onChange(rel) }
     }
-    guard let s = FSEventStreamCreate(nil, cb, &ctx, [self.root] as CFArray, FSEventStreamEventId(kFSEventStreamEventIdSinceNow), latency,
+    guard let s = FSEventStreamCreate(nil, cb, &ctx, roots.map(\.path) as CFArray, FSEventStreamEventId(kFSEventStreamEventIdSinceNow), latency,
       FSEventStreamCreateFlags(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagUseCFTypes))
     else { return nil }
     stream = s
     FSEventStreamSetDispatchQueue(s, DispatchQueue(label: "clair.filewatcher"))
     FSEventStreamStart(s)
+  }
+
+  /// Root-relative path for an event, or nil when it is noise. Build output and `.git/` are ignored,
+  /// except `.git/index` and `.git/HEAD` so a commit/stage/checkout in a terminal recolors the tree.
+  /// Our own scans never write them: `git status` runs with `GIT_OPTIONAL_LOCKS=0`.
+  /// ponytail: a linked worktree's index lives outside the root and is not watched; watch its gitdir if that matters.
+  func relative(_ path: String) -> String? {
+    guard let r = roots.first(where: { path.hasPrefix($0.path + "/") }) else { return nil }
+    let inner = String(path.dropFirst(r.path.count + 1))
+    if inner == ".git/index" || inner == ".git/HEAD" { return r.prefix + inner }
+    return WorkbenchFiles.isSkipped(inner) ? nil : r.prefix + inner
   }
 
   deinit { if let s = stream { FSEventStreamStop(s); FSEventStreamInvalidate(s); FSEventStreamRelease(s) } }

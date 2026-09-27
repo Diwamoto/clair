@@ -528,13 +528,16 @@ import Observation
     }
 
     private func watchProject(refresh: Bool = false) {
-      guard watched != state.project else { return }
+      let project = state.projects.first { $0.name == state.project }
+      let folders = project?.folders ?? []
+      let key = ([state.project] + folders).joined(separator: "\0")  // adding/removing a folder re-watches
+      guard watched != key else { return }
       let first = watched.isEmpty
-      watched = state.project
+      watched = key
       scanGeneration += 1
       let generation = scanGeneration
-      guard let root = state.projects.first(where: { $0.name == state.project })?.path else { watcher = nil; return }
-      watcher = FileWatcher(root: root) { [weak self] paths in
+      guard let root = project?.path else { watcher = nil; return }
+      watcher = FileWatcher(root: root, folders: folders) { [weak self] paths in
         // Scan (directory walk + `git status`) off the main thread; only the state swap runs on it.
         // One scan at a time: events arriving meanwhile are merged and rescanned once.
         DispatchQueue.main.async { self?.diskChanged(paths, root: root, generation: generation) }

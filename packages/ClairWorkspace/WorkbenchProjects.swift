@@ -299,7 +299,7 @@ public enum WorkbenchFiles {
   }
 
   /// The root's files, then each extra folder's under its relative prefix (kept contiguous for the explorer).
-  /// ponytail: extra folders carry no Git status and are not watched; they refresh with the root's rescans.
+  /// ponytail: extra folders carry no Git status.
   public static func scan(_ root: String, folders: [String]) -> [WorkbenchFile] {
     scan(root) + scanFolders(folders, from: root)
   }
@@ -375,6 +375,7 @@ public enum WorkbenchFiles {
     let p = Process(), out = Pipe()
     p.executableURL = URL(fileURLWithPath: "/usr/bin/git")
     p.arguments = ["-C", root, "status", "--porcelain=v1", "-z", "--untracked-files=all"]
+    p.environment = ProcessInfo.processInfo.environment.merging(["GIT_OPTIONAL_LOCKS": "0"]) { _, v in v }  // never rewrite .git/index: the watcher listens to it
     p.standardOutput = out; p.standardError = FileHandle.nullDevice
     guard (try? p.run()) != nil else { return [:] }
     let deadline = p.terminate(after: WorkbenchGit.timeout)

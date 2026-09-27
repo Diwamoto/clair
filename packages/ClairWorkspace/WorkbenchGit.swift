@@ -59,6 +59,7 @@ public enum WorkbenchGit {
     p.arguments = ["-C", root] + args
     p.environment = ProcessInfo.processInfo.environment.merging([
       "GIT_TERMINAL_PROMPT": "0",
+      "GIT_OPTIONAL_LOCKS": "0",  // reads must not rewrite .git/index, which the file watcher listens to
       "GCM_INTERACTIVE": "never",
       "GIT_ASKPASS": "/usr/bin/false",
       "SSH_ASKPASS": "/usr/bin/false",
