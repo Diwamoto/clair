@@ -1916,6 +1916,7 @@ import Observation
           focused: st.tree.focused, launches: st.launches, project: store.activeRoot ?? st.project, onFocus: { store.run("pane.focus", ["id": .int($0)]) },
           onFacts: { store.facts(pane: $0, bells: $1, exit: $2, notification: $3) },
           onTitle: { store.title(pane: $0, $1) },
+          title: { terminalTabTitle(st.project, $0) },
           onRatio: { store.run("pane.setRatio", ["id": .int($0), "ratio": .double($1)]) },
           editor: EditorPane(buffers: store.buffers, root: store.activeRoot, path: st.active,
             softWrap: st.toggles["softWrap"] == true,
@@ -2626,10 +2627,13 @@ import Observation
       // button fades in on hover or while focused — the 24px bar itself is
       // always laid out so this never becomes a permanent line of chrome.
       HStack(spacing: Spacing.scale[0]) {
-        // Top-centre drag handle; no title/label (U06).
-        Image(systemName: "ellipsis").font(.system(size: 11)).foregroundStyle(C.textQuaternary)
-          .opacity(isHovered ? 1 : 0).frame(maxWidth: .infinity)
-          .accessibilityLabel(label)
+        // Title top-left so a running agent's task stays readable; drag handle top-centre.
+        Text(label).font(Typography.font(Typography.chrome)).foregroundStyle(focused ? C.textTertiary : C.textQuaternary)
+          .lineLimit(1).truncationMode(.tail).frame(maxWidth: .infinity, alignment: .leading)
+          .overlay {
+            Image(systemName: "ellipsis").font(.system(size: 11)).foregroundStyle(C.textQuaternary)
+              .opacity(isHovered ? 1 : 0).accessibilityHidden(true)
+          }
         Button(action: onClose) {
           Image(systemName: "xmark").font(.system(size: 9, weight: .medium)).foregroundStyle(C.textQuaternary)
         }.buttonStyle(.hoverWash).help("パネルを閉じる").opacity((isHovered || focused) ? 1 : 0)
@@ -2771,6 +2775,8 @@ import Observation
     let onFocus: (Int) -> Void
     let onFacts: (Int, Int, Int?, (title: String, body: String)?) -> Void
     let onTitle: (Int, String) -> Void
+    /// A terminal pane's live title (OSC 0/2, e.g. what `claude` is doing).
+    let title: (Int) -> String
     let onRatio: (Int, Double) -> Void
     let editor: EditorPane
     let run: (String, CommandInput) -> Void
@@ -2790,10 +2796,10 @@ import Observation
     @ViewBuilder
     private func parts(_ axis: PaneTree.Axis, _ total: CGFloat, _ a: PaneTree.Node, _ b: PaneTree.Node, ratio: Double) -> some View {
       let h = axis == .horizontal
-      PaneView(node: a, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onTitle: onTitle, onRatio: onRatio, editor: editor, run: run, dragging: $dragging)
+      PaneView(node: a, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onTitle: onTitle, title: title, onRatio: onRatio, editor: editor, run: run, dragging: $dragging)
         .frame(width: h ? total * ratio : nil, height: h ? nil : total * ratio)
       Rectangle().fill(L.paneDivider).frame(width: h ? 1 : nil, height: h ? nil : 1)
-      PaneView(node: b, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onTitle: onTitle, onRatio: onRatio, editor: editor, run: run, dragging: $dragging)
+      PaneView(node: b, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onTitle: onTitle, title: title, onRatio: onRatio, editor: editor, run: run, dragging: $dragging)
     }
 
     var body: some View {
@@ -2802,7 +2808,7 @@ import Observation
         VStack(spacing: 0) {
           if kind != .editor {
             PaneHeaderView(
-              id: id, label: kind == .preview ? "プレビュー" : kind == .graph ? "コミットグラフ" : "ターミナル", focused: id == focused,
+              id: id, label: kind == .preview ? "プレビュー" : kind == .graph ? "コミットグラフ" : title(id), focused: id == focused,
               onSwap: { run("pane.swap", ["idA": .int($0), "idB": .int($1)]) },
               onDragStart: { dragging = id }, onDragEnd: { dragging = nil },
               onClose: { run("pane.focus", ["id": .int(id)]); run("pane.close", [:]) })

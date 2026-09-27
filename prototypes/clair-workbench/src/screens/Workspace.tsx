@@ -407,7 +407,7 @@ function PaneHeader({ node, label }: { node: Extract<PaneNode, { kind: 'leaf' }>
       <span className="pane-header-actions" style={{ display: 'flex', alignItems: 'center', color: color.textQuaternary }}>
         <IconEllipsis size={12} />
       </span>
-      <span style={{ flex: 1, textAlign: 'center', fontSize: fs.caption, color: color.textQuaternary }}>{label}</span>
+      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left', fontSize: fs.caption, color: color.textQuaternary }}>{label}</span>
       <button
         onClick={(event) => {
           event.stopPropagation();
