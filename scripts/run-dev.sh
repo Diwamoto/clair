@@ -105,7 +105,8 @@ cat >"$app/Contents/Info.plist" <<'PLIST'
 PLIST
 launch_app() {
     cp "$bin_dir/ClairMacApp" "$app/Contents/MacOS/ClairMacApp"
-    "$app/Contents/MacOS/ClairMacApp" &
+    # Stay in the background so launches/reloads don't steal focus; CLAIR_NO_ACTIVATE= make dev to opt out.
+    CLAIR_NO_ACTIVATE="${CLAIR_NO_ACTIVATE-1}" "$app/Contents/MacOS/ClairMacApp" &
     app_pid=$!
 }
 

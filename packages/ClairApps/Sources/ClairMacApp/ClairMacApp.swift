@@ -10,7 +10,8 @@ import SwiftUI
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSApp.setActivationPolicy(.regular)
     NSApp.applicationIconImage = Self.appIcon()
-    NSApp.activate(ignoringOtherApps: true)
+    // `make dev` relaunches on every rebuild; CLAIR_NO_ACTIVATE keeps it from stealing focus each time.
+    if ProcessInfo.processInfo.environment["CLAIR_NO_ACTIVATE", default: ""].isEmpty { NSApp.activate(ignoringOtherApps: true) }
     ClairStartupTrace.armIfRequested()  // BUDGET-START-HALFBOUNCE; no-op without CLAIR_STARTUP_TRACE
     // Daemon health uses IPC and can wait on a stale socket. The first window never depends on it;
     // terminal attachment already waits for the daemon when a terminal is actually opened.
