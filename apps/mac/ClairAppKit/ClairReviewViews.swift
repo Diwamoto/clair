@@ -619,6 +619,7 @@
       }
       .frame(width: width, alignment: .leading).frame(maxHeight: .infinity)
       .background(r == nil ? C.textQuaternary.opacity(0.06) : added ? C.success.opacity(0.10) : removed ? C.danger.opacity(0.10) : .clear)
+      .background(C.canvas).clipped()  // opaque and clipped: a long line never shows through the other half
     }
 
     private func thread(_ t: ReviewThread, note: String? = nil) -> some View {
