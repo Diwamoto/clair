@@ -62,7 +62,7 @@ swift test --filter ClairEditor
 
 ```sh
 swift run EditorBenchmark \
-  --fixture Tests/Fixtures/10mb.swift \
+  --fixture tests/Fixtures/10mb.swift \
   --operation keystroke \
   --iterations 20
 ```
@@ -139,7 +139,7 @@ swift build --target ClairGhosttyABI
 
 確認観点:
 
-- `Config/ghostty-pin.json` に commit SHA / toolchain / digest が記録されていること
+- `config/ghostty-pin.json` に commit SHA / toolchain / digest が記録されていること
 - vendor 産物が gitignored ディレクトリにあり、repository にコミットされていないこと
 - `ghostty_init` / `ghostty_info` の round-trip が artifact ありで通ること
 - artifact なしの環境では `runtimeUnavailable` が fail-closed で返ること

@@ -66,6 +66,20 @@ final class WorkbenchSearchTests: XCTestCase {
     }
   }
 
+  /// Added folders map to their `../x/` prefix; `.git/index`/`HEAD` pass so terminal commits recolor the tree.
+  func testWatcherMapsFoldersAndGitIndex() throws {
+    let base = try tmp(), root = base + "/app", docs = base + "/docs"
+    for d in [root, docs] { try FileManager.default.createDirectory(atPath: d, withIntermediateDirectories: true) }
+    let w = try XCTUnwrap(FileWatcher(root: root, folders: [docs]) { _ in })
+    let r = realpath(base, nil).map { String(cString: $0) }!
+    XCTAssertEqual(w.relative(r + "/app/a.swift"), "a.swift")
+    XCTAssertEqual(w.relative(r + "/docs/x.md"), "../docs/x.md")
+    XCTAssertEqual(w.relative(r + "/app/.git/index"), ".git/index")
+    XCTAssertNil(w.relative(r + "/app/.git/objects/ab"))
+    XCTAssertNil(w.relative(r + "/app/.build/x"))
+    XCTAssertNil(w.relative("/elsewhere/y"))
+  }
+
   func testTenThousandFilesStayResponsive() throws {
     let root = try tmp()
     for i in 0..<10_000 { FileManager.default.createFile(atPath: root + "/f\(i).txt", contents: Data("line \(i)\n".utf8)) }

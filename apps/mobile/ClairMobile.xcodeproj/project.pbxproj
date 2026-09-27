@@ -27,7 +27,7 @@
 		B00000000000000000000030 /* Clair Mobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Clair Mobile.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		B00000000000000000000031 /* ClairMobileTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ClairMobileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B00000000000000000000032 /* ClairMobileUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ClairMobileUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		B00000000000000000000026 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = ../../Config/Signing.xcconfig; sourceTree = SOURCE_ROOT; };
+		B00000000000000000000026 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = ../../config/Signing.xcconfig; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */

@@ -11,7 +11,7 @@ Stable の `Clair.app` をこのリポジトリ(`Diwamoto/clair`、public)の Gi
 - **トリガー**: `v<version>` tag の push で `.github/workflows/release.yml` が走る。tag と `VERSION` が
   食い違うと失敗する。main への通常の push では配布しない。再実行は同じ tag を選んで `workflow_dispatch`。
 - **Runner**: GitHub hosted の `macos-26`(public repo なので無料)。libghostty(zig + Metal toolchain)は
-  `actions/cache` に載せ、`Config/ghostty-pin.json` か `scripts/ghostty.sh` が変わったときだけ再ビルドする。
+  `actions/cache` に載せ、`config/ghostty-pin.json` か `scripts/ghostty.sh` が変わったときだけ再ビルドする。
 - **本体**: `scripts/release.sh`。CI には依存しないので、他の CI や手元の Mac からも同じ入力で実行できる。
   1. `swift build -c release` で `ClairMacApp`・`ClairDaemon`・`clair` をビルドし、`Clair.app` を組み立てる
      (3 つとも `Contents/MacOS`、SwiftPM の resource bundle は `.app` 直下)。
@@ -26,11 +26,11 @@ Stable の `Clair.app` をこのリポジトリ(`Diwamoto/clair`、public)の Gi
 ## 初回セットアップ(1 回だけ)
 
 署名鍵を作る。秘密鍵はログイン Keychain(`clair-update-signing`)と Actions secret
-`CLAIR_UPDATE_PRIVATE_KEY` にだけ保存され、画面には出ない。公開鍵が書かれる `Config/update-public-key` は commit する。
+`CLAIR_UPDATE_PRIVATE_KEY` にだけ保存され、画面には出ない。公開鍵が書かれる `config/update-public-key` は commit する。
 
 ```sh
 scripts/setup-update-key.sh
-git add Config/update-public-key && git commit -m "build: add Stable update public key" -- Config/update-public-key
+git add config/update-public-key && git commit -m "build: add Stable update public key" -- config/update-public-key
 ```
 
 秘密鍵をなくすと、インストール済みのアプリは二度と更新を受け取れない。Keychain の項目は消さないこと。
@@ -64,7 +64,7 @@ curl -fsSL https://raw.githubusercontent.com/Diwamoto/clair/main/scripts/install
 
 ## 停止条件
 
-- `latest.json` の署名が検証できない(`Config/update-public-key` と secret の鍵が食い違っている)
+- `latest.json` の署名が検証できない(`config/update-public-key` と secret の鍵が食い違っている)
 - 起動スモークが最初の frame に届かない
 - Release に asset か `latest.json` が欠けている
 

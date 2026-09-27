@@ -7,7 +7,7 @@ Clair binaries.
 
 Clair's terminal engine (`ClairGhosttyABI`/`ClairGhostty`) links the
 pinned `libghostty-internal` static library, built from upstream Ghostty at
-the commit recorded in `Config/ghostty-pin.json`. Ghostty is available under
+the commit recorded in `config/ghostty-pin.json`. Ghostty is available under
 the MIT License.
 
 - Project: https://github.com/ghostty-org/ghostty

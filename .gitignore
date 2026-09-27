@@ -21,10 +21,10 @@ __pycache__/
 /docs-site/
 
 # Materialized libghostty/GhosttyKit vendor artifact and its build/fetch
-# cache (Config/ghostty-pin.json is the tracked source of truth; see
+# cache (config/ghostty-pin.json is the tracked source of truth; see
 # scripts/ghostty.sh and docs/plans/clair-t01-libghostty-foundation.md).
 /packages/Vendor/ghostty
 /.cache/ghostty/
 
-# Per-developer signing (Apple Team ID); see Config/Signing.xcconfig.
-/Config/Signing.local.xcconfig
+# Per-developer signing (Apple Team ID); see config/Signing.xcconfig.
+/config/Signing.local.xcconfig

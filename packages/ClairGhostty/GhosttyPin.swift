@@ -1,11 +1,11 @@
-/// Swift mirror of `Config/ghostty-pin.json`, the single tracked source of
+/// Swift mirror of `config/ghostty-pin.json`, the single tracked source of
 /// truth for the pinned libghostty/GhosttyKit dependency.
 ///
 /// These constants exist so the pin is visible from Swift without parsing
 /// JSON at runtime. They must never drift from the manifest: the drift
 /// itself is exactly the failure mode this task's invariants call out
 /// ("manifest and Swift constants drift apart"). A test in
-/// `ClairCoreTests` reads `Config/ghostty-pin.json` from disk and asserts
+/// `ClairCoreTests` reads `config/ghostty-pin.json` from disk and asserts
 /// every field below is byte-for-byte equal to it; a hand-edit of one side
 /// without the other fails that test, not silently.
 public enum GhosttyPin {

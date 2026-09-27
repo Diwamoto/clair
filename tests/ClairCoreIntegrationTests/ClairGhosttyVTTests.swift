@@ -3,7 +3,7 @@ import Foundation
 import XCTest
 
 /// Mirrors `ClairGhosttyTests`' structure for the separate
-/// `libghostty-vt` artifact (`ClairGhosttyVTABI`/`Config/ghostty-pin.json`'s
+/// `libghostty-vt` artifact (`ClairGhosttyVTABI`/`config/ghostty-pin.json`'s
 /// `libghostty_vt` block). Unlike `GhosttyKit.xcframework` (which has a
 /// macos-arm64 slice, so `ClairGhosttyTests`' vendored-path test can run
 /// on a macOS host that has vendored it), `GhosttyVT.xcframework` only has

@@ -40,7 +40,7 @@ if ghosttyVendored {
 }
 
 // T05: libghostty-vt (iOS terminal VT parsing, no GPU embedder -- see
-// `ClairGhosttyVTABI`'s header comment and `Config/ghostty-pin.json`'s
+// `ClairGhosttyVTABI`'s header comment and `config/ghostty-pin.json`'s
 // `libghostty_vt` block for why this is a separate vendored artifact from
 // `GhosttyKit.xcframework` above). `scripts/ghostty.sh vendor-vt`
 // materializes both pieces independently of the macOS embedder vendor
@@ -57,7 +57,7 @@ let ghosttyVTArtifactPresent = FileManager.default.fileExists(
 let ghosttyVTVendored = ghosttyVTHeaderPresent && ghosttyVTArtifactPresent
 
 // `GhosttyVT.xcframework` only has ios-arm64/ios-arm64-simulator slices
-// (see `libghostty_vt.slices` in `Config/ghostty-pin.json`) -- unlike
+// (see `libghostty_vt.slices` in `config/ghostty-pin.json`) -- unlike
 // `GhosttyKit.xcframework`, which has a macos-arm64 slice and so needs no
 // platform-conditioned dependency edge. Linking it into a macOS build
 // would fail ("no applicable architecture") the moment anything actually
@@ -418,7 +418,7 @@ let clairTargets: [Target] = [
       "ClairTransport",
       "ClairWorkspace",
     ],
-    path: "Tests/ClairCoreTests"),
+    path: "tests/ClairCoreTests"),
   // Real subprocess/PTY/daemon-socket/ghostty integration tests, split out
   // of `ClairCoreTests` so the fast unit suite (`swift test`) doesn't pay
   // for spawning real `/bin/sh` children and real daemon sockets on every
@@ -447,11 +447,11 @@ let clairTargets: [Target] = [
       "ClairTransport",
       "ClairWorkspace",
     ],
-    path: "Tests/ClairCoreIntegrationTests"),
+    path: "tests/ClairCoreIntegrationTests"),
   .testTarget(
     name: "ClairDesignSystemTests",
     dependencies: ["ClairDesignSystem"],
-    path: "Tests/ClairDesignSystemTests"),
+    path: "tests/ClairDesignSystemTests"),
   .executableTarget(
     name: "EditorFixtureGenerator",
     dependencies: ["ClairEditorFixtures"],
@@ -479,7 +479,7 @@ let clairTargets: [Target] = [
   .testTarget(
     name: "ClairAppsTests",
     dependencies: ["ClairAppKit", "ClairDaemonKit", "ClairMobileKit"],
-    path: "Tests/ClairAppsTests"),
+    path: "tests/ClairAppsTests"),
 ]
 
 let package = Package(

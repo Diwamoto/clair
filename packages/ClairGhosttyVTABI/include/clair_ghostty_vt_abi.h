@@ -1,7 +1,7 @@
 #ifndef CLAIR_GHOSTTY_VT_ABI_H
 #define CLAIR_GHOSTTY_VT_ABI_H
 
-// Pinned C ABI subset for libghostty-vt (see Config/ghostty-pin.json's
+// Pinned C ABI subset for libghostty-vt (see config/ghostty-pin.json's
 // `libghostty_vt` block). This is a *different* upstream build artifact
 // than `ClairGhosttyABI`'s `ghostty.h`/`GhosttyKit.xcframework`: T05
 // (2026-09-18) confirmed upstream removed the full embedder/app target's

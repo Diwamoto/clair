@@ -62,7 +62,7 @@ make perf-startup          # warm 5 trials
 
 結果は `docs/benchmarks/results/<UTC日付>-<host>/` へ JSON で落ちる。
 契約の正本は
-[`PerformanceBudgetTests.swift`](../../Tests/ClairCoreIntegrationTests/PerformanceBudgetTests.swift)
+[`PerformanceBudgetTests.swift`](../../tests/ClairCoreIntegrationTests/PerformanceBudgetTests.swift)
 の operation table であり、本書はその読み方を書いたもの。表と本書が食い違ったら表が正しい。
 
 ## 3. 敵対的 corpus

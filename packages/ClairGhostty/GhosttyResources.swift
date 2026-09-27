@@ -2,7 +2,7 @@ import Foundation
 
 /// Runtime resources (terminfo database, shell-integration scripts) staged
 /// by `scripts/ghostty.sh vendor` from the same pinned build as the
-/// library (see `Config/ghostty-pin.json`'s `resources` section for the
+/// library (see `config/ghostty-pin.json`'s `resources` section for the
 /// upstream install-tree paths these are copied from).
 ///
 /// Lookups go through this API rather than a hardcoded absolute developer

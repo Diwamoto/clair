@@ -4,7 +4,7 @@
 # CI-agnostic: .github/workflows/release.yml runs it on a v* tag push, but any
 # macOS arm64 host with the inputs below can run it too.
 #
-#   CLAIR_UPDATE_PRIVATE_KEY  Ed25519 signing key (base64); must match Config/update-public-key
+#   CLAIR_UPDATE_PRIVATE_KEY  Ed25519 signing key (base64); must match config/update-public-key
 #   GH_TOKEN                  token that can push tags and create releases on Diwamoto/clair
 #
 # `--dry-run` builds, smoke-launches, packages and signs into .build/release without tagging or publishing.
@@ -29,7 +29,7 @@ if ((publish)) && gh release view "$tag" --repo "$repo" >/dev/null 2>&1; then
   exit 0
 fi
 [[ -n "${CLAIR_UPDATE_PRIVATE_KEY:-}" ]] || die "CLAIR_UPDATE_PRIVATE_KEY is not set"
-public_key="$(tr -d '[:space:]' <Config/update-public-key)"
+public_key="$(tr -d '[:space:]' <config/update-public-key)"
 # Release notes are the CHANGELOG.md section for this version (Keep a Changelog; written by the clair-release skill).
 notes="$(awk -v h="## [$version]" 'index($0, "## [") == 1 { f = (index($0, h) == 1); next } f' CHANGELOG.md)"
 [[ -n "${notes//[[:space:]]/}" ]] || die "CHANGELOG.md has no '## [$version]' section"

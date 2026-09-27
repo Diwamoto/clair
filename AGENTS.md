@@ -26,7 +26,7 @@ One SwiftPM package at the repo root (`Package.swift`):
   `ClairDaemonKit`, …). The iOS Xcode wrapper is `apps/mobile/ClairMobile.xcodeproj`.
 - `packages/` — libraries shared across apps (editor, terminal, Ghostty,
   workspace, transport, …), plus the git-ignored `packages/Vendor/ghostty`.
-- `Tests/` — all Swift test targets.
+- `tests/` — all Swift test targets.
 
 ## Dev-environment lifecycle
 

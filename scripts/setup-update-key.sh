@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-time: create the Stable update signing key (ADR-0009). The private half goes only to the
 # login Keychain (backup) and the Diwamoto/clair Actions secret; it is never printed. The public half
-# is written to Config/update-public-key, which must be committed. Rotating the key strands every
+# is written to config/update-public-key, which must be committed. Rotating the key strands every
 # installed app on its current version, so run this once and keep the Keychain item.
 set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -16,5 +16,5 @@ unset keys
 security add-generic-password -a clair -s clair-update-signing -l "Clair update signing key (Ed25519)" -w "$private_key"
 gh secret set CLAIR_UPDATE_PRIVATE_KEY --repo Diwamoto/clair <<<"$private_key"
 unset private_key
-printf '%s\n' "$public_key" >"$repo_root/Config/update-public-key"
-echo "setup-update-key: stored the private key; commit Config/update-public-key"
+printf '%s\n' "$public_key" >"$repo_root/config/update-public-key"
+echo "setup-update-key: stored the private key; commit config/update-public-key"

@@ -80,7 +80,7 @@ final class ClairGhosttyTests: XCTestCase {
       .deletingLastPathComponent() // ClairGhosttyTests.swift
       .deletingLastPathComponent() // ClairCoreTests
       .deletingLastPathComponent() // Tests
-    let pinURL = repoRoot.appendingPathComponent("Config/ghostty-pin.json")
+    let pinURL = repoRoot.appendingPathComponent("config/ghostty-pin.json")
     let data = try Data(contentsOf: pinURL)
     let pin = try JSONSerialization.jsonObject(with: data) as? [String: Any]
     XCTAssertNotNil(pin)

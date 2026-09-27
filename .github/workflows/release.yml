@@ -30,7 +30,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: packages/Vendor/ghostty
-          key: ghostty-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Config/ghostty-pin.json', 'scripts/ghostty.sh') }}
+          key: ghostty-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('config/ghostty-pin.json', 'scripts/ghostty.sh') }}
 
       - name: Vendor libghostty
         if: steps.ghostty.outputs.cache-hit != 'true'

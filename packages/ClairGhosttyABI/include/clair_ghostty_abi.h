@@ -1,7 +1,7 @@
 #ifndef CLAIR_GHOSTTY_ABI_H
 #define CLAIR_GHOSTTY_ABI_H
 
-// Pinned C ABI subset for libghostty (see Config/ghostty-pin.json).
+// Pinned C ABI subset for libghostty (see config/ghostty-pin.json).
 //
 // libghostty's embedder C API (`ghostty.h`) is explicitly pre-1.0 and
 // undocumented upstream: "The only consumer of this API is the macOS app...
