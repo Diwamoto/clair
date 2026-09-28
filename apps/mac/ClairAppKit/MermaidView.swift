@@ -9,6 +9,12 @@
   /// A ```mermaid fence drawn natively: `MermaidDiagram` parses and lays it out, a SwiftUI `Canvas` strokes it.
   struct MermaidView: View {
     let diagram: MermaidDiagram
+    @State private var zoom: CGFloat = 1
+    @GestureState private var pinch: CGFloat = 1
+    @State private var hovering = false
+
+    private static let zoomRange: ClosedRange<CGFloat> = 0.5...3
+    private var scale: CGFloat { min(max(zoom * pinch, Self.zoomRange.lowerBound), Self.zoomRange.upperBound) }
 
     private static let font = NSFont.systemFont(ofSize: 12)
 
@@ -19,14 +25,51 @@
     }
 
     var body: some View {
-      ScrollView(.horizontal, showsIndicators: false) { canvas }
-        .frame(maxWidth: .infinity, alignment: .leading)
+      // Centered when it fits; a diagram wider than the preview scrolls sideways instead.
+      ViewThatFits(in: .horizontal) {
+        canvas
+        ScrollView(.horizontal, showsIndicators: false) { canvas }
+      }
+      .frame(maxWidth: .infinity, alignment: .center)
+      .padding(.vertical, 12)
+      .contentShape(Rectangle())
+      .gesture(MagnifyGesture().updating($pinch) { v, s, _ in s = v.magnification }
+        .onEnded { v in zoom = min(max(zoom * v.magnification, Self.zoomRange.lowerBound), Self.zoomRange.upperBound) })
+      .overlay(alignment: .topTrailing) { if hovering || zoom != 1 { zoomControls } }
+      .onHover { hovering = $0 }
+    }
+
+    private var zoomControls: some View {
+      HStack(spacing: 2) {
+        Button { zoom = max(zoom / 1.25, Self.zoomRange.lowerBound) } label: { Image(systemName: "minus.magnifyingglass") }
+          .help("縮小").accessibilityLabel("縮小").disabled(zoom <= Self.zoomRange.lowerBound)
+        Text("\(Int((scale * 100).rounded()))%").monospacedDigit().frame(minWidth: 36)
+        Button { zoom = min(zoom * 1.25, Self.zoomRange.upperBound) } label: { Image(systemName: "plus.magnifyingglass") }
+          .help("拡大").accessibilityLabel("拡大").disabled(zoom >= Self.zoomRange.upperBound)
+        Button { zoom = 1 } label: { Image(systemName: "arrow.counterclockwise") }
+          .help("元のサイズに戻す").accessibilityLabel("元のサイズに戻す").disabled(zoom == 1)
+      }
+      .buttonStyle(.borderless).font(.system(size: 11)).foregroundStyle(C.textSecondary)
+      .padding(.horizontal, 6).padding(.vertical, 3)
+      .background(C.panel, in: RoundedRectangle(cornerRadius: 5))
+      .overlay(RoundedRectangle(cornerRadius: 5).stroke(C.divider))
+    }
+
+    /// Scales a drawn diagram and reserves its scaled size, so zooming reflows the preview and scrolls sideways.
+    private func zoomed(_ v: some View, _ size: CGSize) -> some View {
+      v.frame(width: size.width, height: size.height)
+        .scaleEffect(scale, anchor: .topLeading)
+        .frame(width: size.width * scale, height: size.height * scale, alignment: .topLeading)
     }
 
     @ViewBuilder var canvas: some View {
       switch diagram {
-      case .flowchart(let f): flowchart(MermaidDiagram.layout(f, measure: Self.measure))
-      case .sequence(let s): sequence(SequenceLayout(s, measure: Self.measure))
+      case .flowchart(let f):
+        let l = MermaidDiagram.layout(f, measure: Self.measure)
+        zoomed(flowchart(l), l.size)
+      case .sequence(let s):
+        let l = SequenceLayout(s, measure: Self.measure)
+        zoomed(sequence(l), CGSize(width: l.width, height: l.height))
       }
     }
 
@@ -36,6 +79,8 @@
       Canvas { ctx, _ in
         for e in l.edges {
           line(&ctx, e.start, e.end, via: e.control, dashed: e.edge.dashed, width: e.edge.thick ? 2.5 : 1.2, arrow: e.edge.arrow)
+        }
+        for e in l.edges {  // labels after every line, so no later line crosses one
           if let t = e.edge.label {
             label(&ctx, t, at: CGPoint(x: (e.start.x + 2 * e.control.x + e.end.x) / 4, y: (e.start.y + 2 * e.control.y + e.end.y) / 4))
           }
@@ -47,7 +92,6 @@
           ctx.draw(text(n.node.label, C.textPrimary), at: CGPoint(x: n.frame.midX, y: n.frame.midY))
         }
       }
-      .frame(width: l.size.width, height: l.size.height)
       .accessibilityLabel(l.nodes.map(\.node.label).joined(separator: ", "))
     }
 
@@ -100,7 +144,6 @@
           }
         }
       }
-      .frame(width: l.width, height: l.height)
       .accessibilityLabel(l.participants.map(\.label).joined(separator: ", "))
     }
 
@@ -167,6 +210,11 @@
       }
       width = max(cx + (boxWidth.last ?? 0) / 2 + 4, x.enumerated().map { $1 + boxWidth[$0] / 2 }.max() ?? 0) + 60
       height = y
+      for step in s.steps {  // a right-of note may reach past the last column
+        if case .note(let over, "right", let t) = step {
+          width = max(width, x[over.map(column).max() ?? 0] + 10 + measure(t).width + 16 + 4)
+        }
+      }
     }
 
     func column(_ id: String) -> Int { participants.firstIndex { $0.id == id } ?? 0 }
