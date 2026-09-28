@@ -22,6 +22,20 @@ final class WorkbenchCommandTests: XCTestCase {
     XCTAssertEqual(r.execute("state.snapshot", state: &viaHarness), .success(.snapshot(viaPalette)))
   }
 
+  // Every setting is reachable from ⌘K without opening the settings window.
+  func testPaletteChangesSettingsAndInstallsTheCLI() {
+    var s = WorkbenchState()
+    let wrap = r.paletteItems(.commands, query: "行の折り返しをオン", state: s)[0]
+    XCTAssertEqual(r.execute(wrap.id, wrap.input, state: &s), .success(.ok))
+    XCTAssertEqual(s.toggles["softWrap"], true)
+    XCTAssertEqual(r.paletteItems(.commands, query: "設定: 行の折り返し", state: s).map(\.title), ["設定: 行の折り返しをオフにする"])
+    let tab = r.paletteItems(.commands, query: "タブ幅を 4", state: s)[0]
+    r.execute(tab.id, tab.input, state: &s)
+    XCTAssertEqual(s.choices["tabWidth"], "4")
+    XCTAssertTrue(r.paletteItems(.commands, query: "clair コマンド", state: s).contains { $0.id == "cli.install" })
+    XCTAssertEqual(WorkbenchState.settingTitles.keys.sorted(), (WorkbenchState.toggleKeys + WorkbenchState.choiceOptions.keys).sorted())
+  }
+
   func testProjectSearchIsACommandWithTheAdvertisedShortcut() throws {
     var state = WorkbenchState()
     XCTAssertEqual(r.commands.first { $0.id == "palette.search" }?.shortcut, "⌘⇧F")

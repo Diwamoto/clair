@@ -18,6 +18,14 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public static let sections = ["一般", "AIプロバイダー", "使用状況", "エディタ", "ターミナル", "モバイル", "アップデート"]
   public static let toggleKeys = ["restoreLayout", "confirmClose", "hideQuota", "preventSleepOnBattery", "formatOnSave", "showWhitespace", "softWrap", "terminalApprovals"]
   /// Closed-set settings (the mock's segmented controls). The first option is the default.
+  /// Palette titles of `toggleKeys` / `choiceOptions`, matching the settings rows, so every setting is reachable from ⌘K.
+  public static let settingTitles = [
+    "restoreLayout": "前回のレイアウトを復元", "confirmClose": "閉じる前に確認", "hideQuota": "ステータスバーの利用枠を隠す",
+    "preventSleepOnBattery": "バッテリー駆動中もエージェント実行中はスリープさせない", "formatOnSave": "保存時に整形",
+    "showWhitespace": "空白文字を表示", "softWrap": "行の折り返し", "terminalApprovals": "コマンド実行前に確認",
+    "defaultAgent": "既定のAgent", "approvalPolicy": "承認ポリシー", "tabWidth": "タブ幅", "defaultShell": "デフォルトシェル",
+    "scrollback": "スクロールバック", "appearance": "外観",
+  ]
   public static let choiceOptions: [String: [String]] = [
     "defaultAgent": ["claude", "codex"],
     "approvalPolicy": ["毎回確認", "セッション中は許可", "自動承認"],
@@ -254,12 +262,28 @@ public struct CommandRegistry: Sendable {
         .map { PaletteItem(title: $0.title, hint: state.shortcut(for: $0) ?? "", id: $0.id, input: [:]) }
         + AgentProfile.all.map { PaletteItem(title: "\($0.title) を起動", hint: "", id: "agent.launch", input: ["profile": .string($0.id)]) }
           .filter { q.isEmpty || $0.title.lowercased().contains(q) }
+        + settingItems(state).filter { q.isEmpty || $0.title.lowercased().contains(q) }
     case .files:
       return QuickOpen.rank(query, state.files.filter { $0.status != "D" })
         .map { PaletteItem(title: $0.path, hint: "", id: "tab.open", input: ["path": .string($0.path)]) }
     case .search, .symbols, .references, .branches:
       return []  // search runs in the GUI; symbols/references come from the language server; branches load off the main thread
     }
+  }
+
+  /// One row per settings value: flip each toggle, pick each other choice, open each section.
+  private func settingItems(_ state: WorkbenchState) -> [PaletteItem] {
+    let t = WorkbenchState.settingTitles
+    return WorkbenchState.toggleKeys.map { k in
+      let on = state.toggles[k] == true
+      return PaletteItem(title: "設定: \(t[k] ?? k)を\(on ? "オフ" : "オン")にする", hint: "", id: "settings.set", input: ["key": .string(k), "value": .bool(!on)])
+    }
+      + WorkbenchState.choiceOptions.keys.sorted().flatMap { k in
+        WorkbenchState.choiceOptions[k]!.filter { $0 != state.choices[k] }.map {
+          PaletteItem(title: "設定: \(t[k] ?? k)を \($0) にする", hint: "", id: "settings.choose", input: ["key": .string(k), "value": .string($0)])
+        }
+      }
+      + WorkbenchState.sections.map { PaletteItem(title: "設定を開く: \($0)", hint: "", id: "settings.open", input: ["section": .string($0)]) }
   }
 
   private static func validate(_ input: CommandInput, _ params: [CommandParam]) throws(CommandError) {
@@ -704,6 +728,9 @@ extension CommandRegistry {
       if let sec = i["section"]?.string { s.section = sec }
       return .ok
     },
+    // The GUI performs these after success (they touch the file system outside any Project); state is unchanged here.
+    cmd("cli.install", "clair コマンドをインストール", .write, ai: false) { _, _ in .ok },
+    cmd("skill.install", "Agent skill をインストール", .write, ai: false) { _, _ in .ok },
     cmd("settings.close", "設定を閉じる", .read) { s, _ in s.settingsOpen = false; return .ok },
     cmd("settings.set", "設定を変更", .write, ai: false,
         params: [CommandParam("key", .string, allowed: WorkbenchState.toggleKeys), CommandParam("value", .bool)]) { s, i in
