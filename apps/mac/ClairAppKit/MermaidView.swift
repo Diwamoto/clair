@@ -55,11 +55,10 @@
       .overlay(RoundedRectangle(cornerRadius: 5).stroke(C.divider))
     }
 
-    /// Scales a drawn diagram and reserves its scaled size, so zooming reflows the preview and scrolls sideways.
+    /// Reserves the diagram's zoomed size; the canvases draw at that scale (`ctx.scaleBy`), so zooming redraws
+    /// sharp vectors instead of stretching a bitmap, reflows the preview, and scrolls sideways.
     private func zoomed(_ v: some View, _ size: CGSize) -> some View {
-      v.frame(width: size.width, height: size.height)
-        .scaleEffect(scale, anchor: .topLeading)
-        .frame(width: size.width * scale, height: size.height * scale, alignment: .topLeading)
+      v.frame(width: size.width * scale, height: size.height * scale)
     }
 
     @ViewBuilder var canvas: some View {
@@ -77,6 +76,7 @@
 
     private func flowchart(_ l: MermaidDiagram.FlowLayout) -> some View {
       Canvas { ctx, _ in
+        ctx.scaleBy(x: scale, y: scale)
         for e in l.edges {
           line(&ctx, e.start, e.end, via: e.control, dashed: e.edge.dashed, width: e.edge.thick ? 2.5 : 1.2, arrow: e.edge.arrow)
         }
@@ -113,6 +113,7 @@
 
     private func sequence(_ l: SequenceLayout) -> some View {
       Canvas { ctx, _ in
+        ctx.scaleBy(x: scale, y: scale)
         for (i, p) in l.participants.enumerated() {
           let x = l.x[i]
           line(&ctx, CGPoint(x: x, y: l.boxHeight), CGPoint(x: x, y: l.height), dashed: true, width: 1, arrow: false)
