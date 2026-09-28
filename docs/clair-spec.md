@@ -390,7 +390,11 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
 - palette から action、Project、file、symbol へ到達できる
 - shortcut は任意 command へユーザーが割り当てられる
 - `clair open path:line:column` は path を所有する open Project の active pane へ
-  file を開く。該当 Project がなければ新規 Project として開く
+  file を開く。該当 Project がなければ Git root を新規 Project として開く。どの
+  Project にも Git repository にも属さない ad-hoc file は Project を作らず、
+  editor だけの単独ウィンドウで開く(1 file 1 window、未保存の変更は閉じる前に確認)
+- Clair.app は text file の document type を宣言し、macOS の「このアプリケーションで
+  開く」/既定アプリに設定できる。Finder から開いた file は `clair open` と同じ経路を通る
 - 起動中 Clair を操作する CLI を提供する
 - `clair mcp serve` の stdio adapter で AI 向け command を公開する
 - Clair の terminal 内の agent は CLI/MCP で子 agent を起動(prompt・worktree 指定)、状態確認、完了待ち、出力回収、pane の close ができる。子 agent 起動と worktree 作成は AI に公開するが `external` risk として GUI 承認を必須にする。terminal 内から来た CLI 呼び出しも AI 経由として同じ gate を通す

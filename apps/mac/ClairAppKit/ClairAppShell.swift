@@ -107,6 +107,16 @@ import Observation
     private let persistURL: URL?
     private let scanFiles: @Sendable (String) -> [WorkbenchFile]
 
+    /// The first window's store: Finder / `open -a` requests (the app as the default editor) land here.
+    private static weak var main: ClairWorkbenchStore?
+    private static var pendingOpens: [String] = []
+
+    /// `application(_:open:)`: each file opens like `clair open path`. Before the first window exists, queued.
+    public static func open(files: [String]) {
+      guard let main else { pendingOpens += files; return }
+      for path in files { _ = main.run(WorkbenchProject.normalized(path) == nil ? "file.open" : "project.open", ["path": .string(path)]) }
+    }
+
     public convenience init(persistAt url: URL? = ClairWorkbenchStore.defaultPersistURL) {
       self.init(persistAt: url, scanFiles: WorkbenchFiles.scan)
     }
@@ -124,6 +134,12 @@ import Observation
         state.openProject(WorkbenchProject(name: URL(fileURLWithPath: root).lastPathComponent, path: root), scanFiles: false)
       }
       let store = self
+      if Self.main == nil {
+        Self.main = self
+        let queued = Self.pendingOpens
+        Self.pendingOpens = []
+        Self.open(files: queued)
+      }
       let server = WorkbenchIPCServer { req in
         var req = req
         // V16: `parent` is whoever called, never what the client claims.
@@ -253,6 +269,10 @@ import Observation
           WorkbenchProject(name: URL(fileURLWithPath: path).lastPathComponent, path: path),
           scanFiles: false)
         r = .success(.ok)
+      } else if id == "file.open", case .string(let raw)? = input["path"], let file = state.adhocFile(raw) {
+        if case .int(let line)? = input["line"], line < 1 { return .failure(CommandError(.preconditionFailed, "line must be 1 or more")) }
+        AdhocEditorWindow.show(file, line: { if case .int(let l)? = input["line"] { l } else { nil } }())
+        return .success(.ok)
       } else {
         r = registry.execute(id, input, confirmed: confirmed, state: &state)
       }

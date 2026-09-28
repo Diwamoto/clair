@@ -84,13 +84,17 @@ public struct WorkbenchProject: Sendable, Codable, Equatable {
 
   /// The Project a file outside every open Project becomes: its nearest Git root, else its folder.
   static func root(containing file: String) -> WorkbenchProject {
+    let dir = gitRoot(containing: file) ?? URL(fileURLWithPath: file).deletingLastPathComponent()
+    return WorkbenchProject(name: dir.lastPathComponent, path: dir.path)
+  }
+
+  static func gitRoot(containing file: String) -> URL? {
     var dir = URL(fileURLWithPath: file).deletingLastPathComponent()
-    let folder = dir
     while dir.path != "/" {
-      if FileManager.default.fileExists(atPath: dir.appending(path: ".git").path) { return WorkbenchProject(name: dir.lastPathComponent, path: dir.path) }
+      if FileManager.default.fileExists(atPath: dir.appending(path: ".git").path) { return dir }
       dir.deleteLastPathComponent()
     }
-    return WorkbenchProject(name: folder.lastPathComponent, path: folder.path)
+    return nil
   }
 }
 
@@ -160,6 +164,14 @@ extension WorkbenchState {
   /// The open Project with the deepest root containing `file` (a nested Project wins over its parent).
   func owner(of file: String) -> WorkbenchProject? {
     projects.filter { file.hasPrefix($0.path + "/") }.max { $0.path.count < $1.path.count }
+  }
+
+  /// An ad-hoc file: an existing file outside every open Project and every Git repository. The GUI opens it in a
+  /// standalone editor window instead of turning its folder (say `~`) into a Project. Returns the normalized path.
+  public func adhocFile(_ path: String) -> String? {
+    guard let file = WorkbenchProject.normalizedFile(path), owner(of: file) == nil,
+      WorkbenchProject.gitRoot(containing: file) == nil else { return nil }
+    return file
   }
 
   /// Switches to the Project at `p.path`, adding it (under a unique name) if it is not open yet.

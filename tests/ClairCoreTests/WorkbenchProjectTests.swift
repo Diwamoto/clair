@@ -233,6 +233,18 @@ final class WorkbenchProjectTests: XCTestCase {
     XCTAssertEqual(s.project, "outer"); XCTAssertEqual(s.active, "node_modules/p.js")
   }
 
+  // Ad-hoc: outside every open Project and every Git repository → the GUI's standalone editor window.
+  func testAdhocFileIsOutsideProjectsAndRepositories() throws {
+    let owned = try folder("owned", ["a.txt"]), repo = try folder("arepo", ["m.swift", ".git/HEAD"])
+    let loose = try folder("aloose", ["n.txt"])
+    var s = WorkbenchState()
+    open(owned, &s)
+    XCTAssertNil(s.adhocFile(owned + "/a.txt"))
+    XCTAssertNil(s.adhocFile(repo + "/m.swift"))
+    XCTAssertEqual(s.adhocFile(loose + "/n.txt"), loose + "/n.txt")
+    XCTAssertNil(s.adhocFile(loose))  // a folder is not a file
+  }
+
   func testFileOpenRejectsBadInput() throws {
     let a = try folder("a", ["f"])
     var s = WorkbenchState()

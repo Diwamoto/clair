@@ -97,6 +97,13 @@ cat >"$app/Contents/Info.plist" <<'PLIST'
   <key>CFBundleIdentifier</key><string>com.diwamoto.clair.dev</string>
   <key>CFBundleName</key><string>Clair Dev</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
+  <key>CFBundleDocumentTypes</key>
+  <array><dict>
+    <key>CFBundleTypeName</key><string>Text</string>
+    <key>CFBundleTypeRole</key><string>Editor</string>
+    <key>LSHandlerRank</key><string>Alternate</string>
+    <key>LSItemContentTypes</key><array><string>public.text</string><string>public.data</string></array>
+  </dict></array>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSPrincipalClass</key><string>NSApplication</string>

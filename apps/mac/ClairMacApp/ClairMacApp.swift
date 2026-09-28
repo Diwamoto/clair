@@ -72,6 +72,11 @@ import SwiftUI
     }
   }
 
+  /// Finder "Open With" / default app / `open -a Clair file`: same path as `clair open`.
+  func application(_ application: NSApplication, open urls: [URL]) {
+    ClairWorkbenchStore.open(files: urls.filter(\.isFileURL).map(\.path))
+  }
+
   /// ⌘Q asks first: quitting also stops the daemon's shells. An update relaunch is already confirmed.
   func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
     // The startup benchmark quits itself unattended (CLAIR_STARTUP_TRACE=exit).
