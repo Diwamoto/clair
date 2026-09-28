@@ -154,12 +154,6 @@ struct AgentUsageView: View {
           }
         }
       }
-      Text("推定費用 · provider の記録値または 2026-09-24 時点のモデル別 API 単価。実際の請求額とは異なります。")
-        .font(.system(size: 12)).foregroundStyle(.secondary)
-      if let missing = summary?.sessionsWithoutCost, missing > 0 {
-        Text("費用情報なし: \(missing) チャット（推定額に含まれません）")
-          .font(.system(size: 12)).foregroundStyle(.secondary)
-      }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .task {
