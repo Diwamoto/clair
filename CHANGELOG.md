@@ -6,6 +6,29 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-28
+
+### Added
+
+- **Files**: Clair registers as a text editor; opening a file from Finder or `clair open` adds it as the last tab of the active Project.
+- **Editor**: a dedicated breakpoint column with a hover preview.
+- **Debug**: clicking a breakpoint in the list jumps to and selects its line; its red dot removes it.
+- **Tabs**: reopen closed tabs with Cmd-Shift-T.
+- **Command palette**: change every setting, and install or uninstall the `clair` command and skill.
+- **Settings**: configurable extension-to-language mapping, edited as a list.
+
+### Changed
+
+- **Terminal**: terminals stay alive when switching Projects.
+- **Editor**: the pointer is an arrow over the gutter and an I-beam only over text.
+- **Settings**: the usage pane no longer shows cost footnotes.
+
+### Fixed
+
+- **Explorer**: folders stay closed unless you opened them.
+- **Editor**: Terraform comments are colored correctly.
+- **CLI**: `clair open` from a Clair terminal no longer asks for approval and brings Clair to the front.
+
 ## [0.2.1] - 2026-09-28
 
 ### Changed
@@ -77,7 +100,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Diwamoto/clair/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/Diwamoto/clair/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Diwamoto/clair/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Diwamoto/clair/releases/tag/v0.1.0
