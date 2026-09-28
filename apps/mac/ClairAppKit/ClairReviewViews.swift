@@ -172,8 +172,10 @@
     let selected: DiffTarget?
     let onSelect: (DiffTarget) -> Void
     let onToggle: (GitChange, _ staged: Bool) -> Void
-    /// Discards a file's worktree change (deletes it when untracked); confirmed here first.
-    let onDiscard: (GitChange) -> Void
+    /// Asks to discard a file's change; the flag is the row's section (staged → back to HEAD).
+    let onDiscard: (GitChange, _ staged: Bool) -> Void
+    let menus: ClairMenuController
+    let menu: (GitChange, _ staged: Bool) -> ClairMenuSpec
     /// Section-wide stage/unstage; the flag is the desired state.
     let onBulk: ([GitChange], _ stage: Bool) -> Void
     /// Starts a commit through the typed command registry.
@@ -183,7 +185,6 @@
     @State private var message = ""
     @State private var hovered: DiffTarget?
     @State private var collapsed: Set<String> = []
-    @State private var discarding: GitChange?
 
     /// Same geometry as the explorer's treeRow in ClairAppShell: inset, rounded 28px row, 12px indent per level.
     private func treeRow<Content: View>(depth: Int, selected: Bool, action: @escaping () -> Void, @ViewBuilder _ content: () -> Content) -> some View {
@@ -248,12 +249,6 @@
           section("未追跡", changes.filter(\.untracked)) { DiffTarget(path: $0.path, staged: false, untracked: true) }
         }
       }
-      .confirmationDialog(
-        discarding.map { $0.untracked ? "\($0.path) を削除しますか？" : "\($0.path) の変更を破棄しますか？" } ?? "",
-        isPresented: Binding(get: { discarding != nil }, set: { if !$0 { discarding = nil } }), titleVisibility: .visible
-      ) {
-        Button(discarding?.untracked == true ? "削除" : "変更を破棄", role: .destructive) { if let c = discarding { onDiscard(c) } }
-      } message: { Text("この操作は取り消せません。") }
     }
 
     @ViewBuilder
@@ -297,11 +292,9 @@
               Text(name).font(.system(size: 12, weight: on ? .semibold : .regular)).foregroundStyle(on ? C.textPrimary : C.textSecondary).lineLimit(1)
               Spacer(minLength: 0)
               if hovered == t {
-                if !t.staged {
-                  Button { discarding = c } label: {
-                    Image(systemName: "arrow.uturn.backward").font(.system(size: 10, weight: .semibold)).foregroundStyle(C.textTertiary).frame(width: 18, height: 18)
-                  }.buttonStyle(.hoverWash).disabled(busy).help(c.untracked ? "ファイルを削除" : "変更を元に戻す")
-                }
+                Button { onDiscard(c, t.staged) } label: {
+                  Image(systemName: "arrow.uturn.backward").font(.system(size: 10, weight: .semibold)).foregroundStyle(C.textTertiary).frame(width: 18, height: 18)
+                }.buttonStyle(.hoverWash).disabled(busy).help(c.untracked ? "ファイルを削除" : "変更を元に戻す")
                 Button { onToggle(c, !t.staged) } label: {
                   Text(t.staged ? "−" : "+").font(Typography.font(Typography.title)).foregroundStyle(C.textTertiary).frame(width: 18, height: 18)
                 }.buttonStyle(.hoverWash).disabled(busy).help(t.staged ? "ステージを取り消す" : "ステージに追加")
@@ -309,6 +302,7 @@
               Text(badge).font(.system(size: 12, weight: .semibold)).foregroundStyle(badge == "A" || badge == "U" ? C.success : badge == "D" ? C.textTertiary : C.attention)
             }
             .onHover { hovered = $0 ? t : (hovered == t ? nil : hovered) }
+            .clairContextMenu(menus) { menu(c, t.staged) }
             .help(c.path)
           }
         }

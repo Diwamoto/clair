@@ -1405,8 +1405,17 @@ import Observation
               [(stage ? "git.stage" : "git.unstage", ["path": .string(change.path)])],
               label: stage ? "ステージ" : "ステージ解除")
           },
-          onDiscard: { change in
-            runGit([("git.discard", ["path": .string(change.path)])], label: "変更の破棄", confirmed: true)
+          onDiscard: discard,
+          menus: menus,
+          menu: { change, staged in
+            ClairMenuSpec(title: (change.path as NSString).lastPathComponent, sub: change.path, entries: [
+              .item("変更を確認") { openDiff(DiffTarget(path: change.path, staged: staged, untracked: change.untracked)) },
+              .item(staged ? "ステージを取り消す" : "ステージに追加") {
+                runGit([(staged ? "git.unstage" : "git.stage", ["path": .string(change.path)])], label: staged ? "ステージ解除" : "ステージ")
+              },
+              .separator,
+              .item(change.untracked ? "ファイルを削除…" : "変更を元に戻す…", destructive: true) { discard(change, staged) },
+            ])
           },
           onBulk: { rows, stage in
             runGit(
@@ -1449,6 +1458,17 @@ import Observation
         reviewError = nil; diff = nil; sidebarMode = "terminal"
       case .failure(let error): reviewError = error.message
       }
+    }
+
+    private func discard(_ change: GitChange, _ staged: Bool) {
+      let name = (change.path as NSString).lastPathComponent
+      menus.ask(ClairDialog(
+        title: change.untracked ? "\(name) を削除しますか？" : "\(name) の変更を破棄しますか？",
+        message: staged ? "ステージ済みと未ステージの変更をすべて HEAD の状態に戻します。取り消せません。" : "取り消せません。",
+        confirm: change.untracked ? "削除" : "破棄", destructive: true
+      ) { _ in
+        runGit([("git.discard", ["path": .string(change.path), "staged": .bool(staged)])], label: "変更の破棄", confirmed: true)
+      })
     }
 
     private func runGit(

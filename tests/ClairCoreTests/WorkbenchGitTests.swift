@@ -61,6 +61,20 @@ final class WorkbenchGitTests: XCTestCase {
     XCTAssertEqual(r.execute("git.discard", ["path": .string("a.txt")], confirmed: true, state: &s).failure?.code, .preconditionFailed)
   }
 
+  func testDiscardStagedGoesBackToHead() throws {
+    var (s, root) = try repo()
+    try "b".write(toFile: root + "/a.txt", atomically: true, encoding: .utf8)
+    try "n".write(toFile: root + "/new.txt", atomically: true, encoding: .utf8)
+    try r.execute("git.stage", ["path": .string("a.txt")], state: &s).get()
+    try r.execute("git.stage", ["path": .string("new.txt")], state: &s).get()
+    let staged: CommandInput = ["staged": .bool(true)]
+    try r.execute("git.discard", ["path": .string("a.txt")] .merging(staged) { $1 }, confirmed: true, state: &s).get()
+    try r.execute("git.discard", ["path": .string("new.txt")] .merging(staged) { $1 }, confirmed: true, state: &s).get()
+    XCTAssertEqual(try String(contentsOfFile: root + "/a.txt", encoding: .utf8), "a")
+    XCTAssertFalse(FileManager.default.fileExists(atPath: root + "/new.txt"))
+    XCTAssertTrue(WorkbenchGit.changes(root).isEmpty)
+  }
+
   func testNonGitProjectHasNoGitCommands() throws {
     let dir = URL.temporaryDirectory.appending(path: "clair-v06-\(UUID().uuidString)").resolvingSymlinksInPath()
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

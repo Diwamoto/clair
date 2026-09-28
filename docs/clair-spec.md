@@ -374,7 +374,7 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
 - pane の focus、移動、close、最大化、幅/高さ/全体均等
 - file tree、search、Git の sidebar と、pane へ開く補助 view
 - Quick Open、全文検索・置換、file watcher
-- diff、stage/unstage、変更の破棄(working tree のみ。未追跡は削除。確認必須・AI 不可)、commit、branch/worktree の作成・切替
+- diff、stage/unstage、変更の破棄(ボタンと右クリック。「変更」は working tree のみ、「ステージ済み」は HEAD へ戻す、未追跡は削除。確認必須・AI 不可)、commit、branch/worktree の作成・切替
 - commit graph(branch/merge の履歴を graph で表示し、commit から diff へ移動)
 - managed worktree は repository 外の Clair 管理領域へ置く
 - branch review は base に対する全差分を、commit 済みと未 commit/untracked に

@@ -215,18 +215,28 @@ extension CommandRegistry {
     return [
       stage("git.stage", "変更をステージ", ["add"]),
       stage("git.unstage", "ステージを解除", ["restore", "--staged"]),
-      // Worktree-only: staged content survives (`restore` reads the index); untracked files are deleted.
-      cmd("git.discard", "変更を破棄", .destructive, ai: false, params: [CommandParam("path", .string)], palette: false,
+      // `staged` discards back to HEAD (index and worktree); otherwise worktree only, so staged content survives.
+      // Untracked (and staged-new) files are deleted.
+      // ponytail: a staged rename discards only the new path; the old path's staged deletion stays.
+      cmd("git.discard", "変更を破棄", .destructive, ai: false,
+          params: [CommandParam("path", .string), CommandParam("staged", .bool, required: false)], palette: false,
           preflight: { s, i throws(CommandError) in
-            let root = try repo(s), p = try inFiles(s, i)
-            guard WorkbenchGit.changes(root).contains(where: { $0.path == p && $0.unstaged }) else {
-              throw CommandError(.preconditionFailed, "no unstaged change in \(p)")
+            let root = try repo(s), p = try inFiles(s, i), staged = i["staged"]?.bool == true
+            guard WorkbenchGit.changes(root).contains(where: { $0.path == p && (staged ? $0.staged : $0.unstaged) }) else {
+              throw CommandError(.preconditionFailed, "no \(staged ? "staged" : "unstaged") change in \(p)")
             }
             return .destructive
           }) { s, i in
         let root = s.current!.path, p = i["path"]!.string!
-        let untracked = WorkbenchGit.changes(root).contains { $0.path == p && $0.untracked }
-        let r = WorkbenchGit.run(root, (untracked ? ["clean", "-f"] : ["restore"]) + ["--", p], merge: true)
+        let args: [String]
+        if i["staged"]?.bool == true {
+          args = WorkbenchGit.run(root, ["cat-file", "-e", "HEAD:" + p]).ok
+            ? ["restore", "--source=HEAD", "--staged", "--worktree", "--", p] : ["rm", "-f", "--", p]
+        } else {
+          let untracked = WorkbenchGit.changes(root).contains { $0.path == p && $0.untracked }
+          args = (untracked ? ["clean", "-f"] : ["restore"]) + ["--", p]
+        }
+        let r = WorkbenchGit.run(root, args, merge: true)
         s.refreshStatus(reconcileOpenFiles: true); return r.ok ? .ok : .text(r.out)
       },
       cmd("git.commit", "コミット", .write, params: [CommandParam("message", .string)], palette: false,
