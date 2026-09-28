@@ -8,7 +8,7 @@
   private typealias C = DesignTokens.Color
 
   /// E15: native Markdown preview of the active file's buffer (unsaved edits included). No WebView or JS
-  /// (spec §4, §12) except ```mermaid fences, drawn offline by `MermaidView`: blocks come from `MarkdownPreview.parse`, inline markup from `AttributedString(markdown:)`.
+  /// (spec §4, §12); ```mermaid fences are drawn natively by `MermaidView`: blocks come from `MarkdownPreview.parse`, inline markup from `AttributedString(markdown:)`.
   struct MarkdownPreviewPane: View {
     let buffers: EditorBuffers
     let root: String?
@@ -68,8 +68,8 @@
           inline(text)
         }
         .font(.system(size: 13)).foregroundStyle(C.textSecondary).padding(.leading, CGFloat(depth) * 18)
-      case .code(let language, let text) where language.lowercased() == "mermaid":
-        MermaidView(source: text).frame(maxWidth: .infinity, alignment: .leading)
+      case .code(let language, let text) where language.lowercased() == "mermaid" && MermaidDiagram.parse(text) != nil:
+        MermaidView(diagram: MermaidDiagram.parse(text)!)
       case .code(_, let text):
         ScrollView(.horizontal, showsIndicators: false) {
           Text(text).font(.system(size: 12, design: .monospaced)).foregroundStyle(C.code).padding(10)
