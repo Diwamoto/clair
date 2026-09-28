@@ -1802,25 +1802,21 @@ import Observation
           ForEach(session.breakpoints.keys.sorted(), id: \.self) { path in
             ForEach((session.breakpoints[path] ?? []).sorted(), id: \.self) { line in
               let status = session.breakpointStatus[path]?[line]
-              Button { _ = store.run("debug.breakpoint", ["path": .string(path), "line": .int(line)]) } label: {
-                Label("\(URL(fileURLWithPath: path).lastPathComponent):\(status?.line ?? line)",
-                  systemImage: status?.verified == true ? "circle.fill" : "circle.dotted")
-                  .font(.system(size: 12)).foregroundStyle(status?.verified == false ? C.attention : C.textSecondary)
-                  .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
-              }.buttonStyle(.hoverWash).help(status?.message ?? (status == nil ? "未検証" : "検証済み"))
-                .padding(.horizontal, 12)
+              HStack(spacing: 0) {
+                // The red dot removes the breakpoint; the rest of the row jumps to its line.
+                Button { _ = store.run("debug.breakpoint", ["path": .string(path), "line": .int(line)]) } label: {
+                  Image(systemName: "circle.fill").font(.system(size: 9)).foregroundStyle(C.danger)
+                    .frame(width: 24, height: 28).contentShape(Rectangle())
+                }.buttonStyle(.hoverWash).help("ブレークポイントを削除")
+                Button { _ = store.run("file.open", ["path": .string(path), "line": .int(status?.line ?? line)]) } label: {
+                  Text("\(URL(fileURLWithPath: path).lastPathComponent):\(status?.line ?? line)")
+                    .font(.system(size: 12)).foregroundStyle(status?.verified == false ? C.attention : C.textSecondary)
+                    .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading).contentShape(Rectangle())
+                }.buttonStyle(.hoverWash).help(status?.message ?? (status == nil ? "未検証" : "検証済み"))
+              }.padding(.horizontal, 12)
             }
           }
         } else { debugEmpty("設定されていません") }
-        Button { toggleBreakpointAtCaret() } label: {
-          Label("現在の行に追加", systemImage: "plus")
-            .foregroundStyle(st.active == nil ? C.textQuaternary : C.textPrimary)
-            .frame(maxWidth: .infinity).frame(height: 28)
-            .background(C.surfaceActive, in: RoundedRectangle(cornerRadius: Radius.control))
-            .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.strong))
-        }
-          .buttonStyle(.hoverWash).font(.system(size: 12)).padding(.horizontal, 12).padding(.top, 6)
-          .disabled(st.active == nil)
         debugSection("スレッドとコールスタック")
         if let session = store.debugSession, !session.threads.isEmpty {
           ForEach(session.threads) { thread in
@@ -1904,11 +1900,6 @@ import Observation
         let program = debugMode == "test" ? URL(fileURLWithPath: root + "/" + rel).deletingLastPathComponent().path : root + "/" + rel
         _ = store.run("debug.launch", ["program": .string(program), "mode": .string(debugMode)], confirmed: true)
       }
-    }
-
-    private func toggleBreakpointAtCaret() {
-      guard let rel = st.active, let root = store.activeRoot, let caret = store.buffers.caret[rel] else { return }
-      _ = store.run("debug.breakpoint", ["path": .string(root + "/" + rel), "line": .int(caret.line)])
     }
 
     private func openDebugFrame(_ frame: ClairDebugSession.Frame) {
