@@ -407,13 +407,14 @@ private struct WorkspaceSnapshot: Codable {
   var toggles: [String: Bool]
   var choices: [String: String]?
   var shortcuts: [String: String]?
+  var fileAssociations: [String: String]?
 }
 
 extension WorkbenchState {
   public func save(to url: URL) throws {
     var s = self
     if !s.project.isEmpty { s.layouts[s.project] = s.layout }
-    let data = try JSONEncoder().encode(WorkspaceSnapshot(projects: s.projects, project: s.project, layouts: s.layouts, toggles: s.toggles, choices: s.choices, shortcuts: s.shortcuts))
+    let data = try JSONEncoder().encode(WorkspaceSnapshot(projects: s.projects, project: s.project, layouts: s.layouts, toggles: s.toggles, choices: s.choices, shortcuts: s.shortcuts, fileAssociations: s.fileAssociations))
     try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     try data.write(to: url, options: .atomic)
   }
@@ -426,6 +427,7 @@ extension WorkbenchState {
     for (k, v) in snap.toggles where s.toggles[k] != nil { s.toggles[k] = v }
     for (k, v) in snap.choices ?? [:] where WorkbenchState.choiceOptions[k]?.contains(v) == true { s.choices[k] = v }
     for (id, key) in snap.shortcuts ?? [:] where key.isEmpty || WorkbenchState.canonicalShortcut(key) == key { s.shortcuts[id] = key }
+    if let a = snap.fileAssociations { s.fileAssociations = a }
     s.projects = snap.projects.filter { WorkbenchProject.normalized($0.path) != nil }.map {
       var p = $0; p.folders = p.folders?.filter { WorkbenchProject.normalized($0) != nil }; return p
     }

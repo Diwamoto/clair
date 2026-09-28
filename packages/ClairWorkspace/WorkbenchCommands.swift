@@ -73,6 +73,22 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var choices = WorkbenchState.choiceOptions.mapValues { $0[0] }
   /// V11: user shortcut assignments over the registry defaults. An empty string unassigns a default.
   public var shortcuts: [String: String] = [:]
+  /// File extension (lowercased, no dot) → editor language id. Overrides the built-in detection.
+  public var fileAssociations = ["tpl": "terraform"]
+  /// `"tpl=terraform, j2=python"` ⇄ the map. Malformed pairs are dropped.
+  public static func parseAssociations(_ text: String) -> [String: String] {
+    var map: [String: String] = [:]
+    for pair in text.split(whereSeparator: { $0 == "," || $0 == "\n" }) {
+      let kv = pair.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+      guard kv.count == 2, !kv[1].isEmpty else { continue }
+      let ext = kv[0].hasPrefix(".") ? String(kv[0].dropFirst()) : kv[0]
+      if !ext.isEmpty { map[ext] = kv[1] }
+    }
+    return map
+  }
+  public static func formatAssociations(_ map: [String: String]) -> String {
+    map.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: ", ")
+  }
 
   public init() {}
 
@@ -665,6 +681,10 @@ extension CommandRegistry {
           return .write
         }) { s, i in
       s.choices[i["key"]!.string!] = i["value"]!.string!; return .ok
+    },
+    cmd("settings.fileAssociations", "拡張子の言語を設定", .write, ai: false,
+        params: [CommandParam("value", .string)]) { s, i in
+      s.fileAssociations = WorkbenchState.parseAssociations(i["value"]!.string!); return .ok
     },
     cmd("sidebar.toggle", "サイドバーの表示切替", .read, ai: false, shortcut: "⌘B") { s, _ in s.sidebarHidden.toggle(); return .ok },
     cmd("palette.commands", "コマンドパレット", .read, ai: false, shortcut: "⌘K", palette: false) { s, _ in s.palette = .commands; return .ok },

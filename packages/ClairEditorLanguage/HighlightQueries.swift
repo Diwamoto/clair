@@ -1185,7 +1185,7 @@ enum HighlightQueries {
 [
   (comment)
   (multiline_comment)
-] @comment @spell
+] @comment
 
 ((comment) @comment.documentation
   (#match? @comment.documentation "^///[^/]"))
@@ -1949,7 +1949,7 @@ enum HighlightQueries {
 
 (null_lit) @constant
 
-(comment) @comment @spell
+(comment) @comment
 
 (identifier) @variable
 

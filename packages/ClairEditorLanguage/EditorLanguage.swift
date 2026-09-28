@@ -26,6 +26,15 @@ public enum EditorLanguageID: String, Sendable, CaseIterable {
     EditorGrammar.cached(for: self)
   }
 
+  /// User extension → language overrides (設定 › エディタ «拡張子の言語»), consulted
+  /// before the built-in table. The app pushes `WorkbenchState.fileAssociations` here.
+  public static var associations: [String: String] {
+    get { associationLock.withLock { associationStore } }
+    set { associationLock.withLock { associationStore = newValue } }
+  }
+  private static let associationLock = NSLock()
+  nonisolated(unsafe) private static var associationStore: [String: String] = [:]
+
   /// Extension-first detection; shell also accepts an extensionless file
   /// whose first line is a `#!` shebang naming a shell. A file whose
   /// extension matches nothing here returns `nil` — the caller (E11 wiring
@@ -33,6 +42,7 @@ public enum EditorLanguageID: String, Sendable, CaseIterable {
   public static func detect(path: String, shebangLine: String? = nil) -> EditorLanguageID? {
     let name = (path as NSString).lastPathComponent
     let ext = (name as NSString).pathExtension.lowercased()
+    if let mapped = associations[ext].flatMap(EditorLanguageID.init(rawValue:)) { return mapped }
     switch ext {
     case "swift": return .swift
     case "go": return .go

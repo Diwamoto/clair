@@ -368,10 +368,15 @@ export function SettingsMain() {
                   control={<Segmented value={String(wb.tabWidth)} options={['2', '4', '8'] as const} onChange={(v) => wb.setTabWidth(Number(v))} />}
                 />
                 <Row
-                  last
                   title="空白文字を表示"
                   note="タブ・行末の空白を薄く可視化します。"
                   control={<Switch on={wb.toggles.showWhitespace} onClick={() => wb.setToggle('showWhitespace')} />}
+                />
+                <Row
+                  last
+                  title="拡張子の言語"
+                  note="例: tpl=terraform, j2=python。開き直したファイルから反映されます。"
+                  control={<input defaultValue="tpl=terraform" style={{ width: 240 }} />}
                 />
               </Card>
             ) : section === 'ターミナル' ? (

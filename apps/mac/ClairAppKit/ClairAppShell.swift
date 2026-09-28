@@ -743,6 +743,7 @@ import Observation
     @AppStorage("clair.sidebarWidth") private var sidebarWidth = 242.0
     @State private var debugMode = "debug"
     @State private var debugPID = ""
+    @State private var associationsDraft = ""
     @State private var quota: [ProviderQuota] = []
     @State private var quotaHovered = false
     @State private var noticesOpen = false
@@ -830,6 +831,7 @@ import Observation
       }
       .animation(.easeOut(duration: 0.09), value: st.palette == nil)
       .onChange(of: st.choices["appearance"], initial: true) { _, v in ColorSchemeChoice(setting: v).apply() }
+      .onChange(of: st.fileAssociations, initial: true) { _, v in EditorLanguageID.associations = v }
       .onChange(of: st.palette) {
         query = ""; selection = 0
         if st.palette == .search { searchSelection = 0; runSearch() }
@@ -2058,6 +2060,12 @@ import Observation
               choiceRow("タブ幅", "tabWidth")
               switchRow("空白文字を表示", "showWhitespace", note: "タブ・行末の空白を薄く可視化します。")
               switchRow("行の折り返し", "softWrap", note: "長い行をエディタの幅に合わせて折り返します。⌥Z でも切り替えられます。")
+              SettingsRow(title: "拡張子の言語", note: "例: tpl=terraform, j2=python。開き直したファイルから反映されます。") {
+                TextField("tpl=terraform", text: $associationsDraft)
+                  .textFieldStyle(.roundedBorder).frame(width: 240)
+                  .onAppear { associationsDraft = WorkbenchState.formatAssociations(st.fileAssociations) }
+                  .onSubmit { store.run("settings.fileAssociations", ["value": .string(associationsDraft)]) }
+              }
             }
           case "ターミナル":
             SettingsCard(title: "シェルと承認") {
