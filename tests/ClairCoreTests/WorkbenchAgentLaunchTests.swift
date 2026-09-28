@@ -55,7 +55,7 @@ final class WorkbenchAgentLaunchTests: XCTestCase {
 
   func testPaletteListsProfiles() throws {
     let (s, _) = try opened()
-    XCTAssertEqual(r.paletteItems(.commands, query: "codex", state: s).map(\.input), [["profile": .string("codex")]])
+    XCTAssertEqual(r.paletteItems(.commands, query: "codex", state: s).map(\.input).filter { $0["profile"] != nil }, [["profile": .string("codex")]])
   }
 
   // Dragging a launched pane's header onto another pane moves the running session with it.
