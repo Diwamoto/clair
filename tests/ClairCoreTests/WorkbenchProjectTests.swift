@@ -210,7 +210,7 @@ final class WorkbenchProjectTests: XCTestCase {
     XCTAssertEqual(s.expanded, ["a"], "opening a folder leaves its subfolders closed")
   }
 
-  // V11 `clair open`: the owning open Project wins (deepest root), else a Git root, else the folder.
+  // V11 `clair open`: the owning open Project wins (deepest root), else a Git root, else an ad-hoc tab.
   func testFileOpenResolvesOwnerThenGitRootThenFolder() throws {
     let outer = try folder("outer", ["a.txt", "inner/b.txt"]), inner = outer + "/inner"
     var s = WorkbenchState()
@@ -226,23 +226,23 @@ final class WorkbenchProjectTests: XCTestCase {
 
     let loose = try folder("loose/deep", ["n.txt"])
     r.execute("file.open", ["path": .string(loose + "/n.txt")], state: &s)
-    XCTAssertEqual(s.projects.last?.path, loose); XCTAssertEqual(s.active, "n.txt")  // no repo: its folder
+    XCTAssertEqual(s.projects.last?.path, repo); XCTAssertEqual(s.active, "../loose/deep/n.txt")  // no repo: an ad-hoc tab
 
     let skipped = try folder("outer/node_modules", ["p.js"])
     r.execute("file.open", ["path": .string(skipped + "/p.js")], state: &s)  // not in the scan, still opens
     XCTAssertEqual(s.project, "outer"); XCTAssertEqual(s.active, "node_modules/p.js")
   }
 
-  // Ad-hoc: outside every open Project and every Git repository → the GUI's standalone editor window.
-  func testAdhocFileIsOutsideProjectsAndRepositories() throws {
-    let owned = try folder("owned", ["a.txt"]), repo = try folder("arepo", ["m.swift", ".git/HEAD"])
-    let loose = try folder("aloose", ["n.txt"])
+  // Ad-hoc: outside every open Project and Git repository → a tab at the end of the active Project.
+  func testAdhocFileOpensAsLastTabOfActiveProject() throws {
+    let owned = try folder("owned", ["a.txt"]), loose = try folder("aloose/deep", ["n.txt"])
     var s = WorkbenchState()
     open(owned, &s)
-    XCTAssertNil(s.adhocFile(owned + "/a.txt"))
-    XCTAssertNil(s.adhocFile(repo + "/m.swift"))
-    XCTAssertEqual(s.adhocFile(loose + "/n.txt"), loose + "/n.txt")
-    XCTAssertNil(s.adhocFile(loose))  // a folder is not a file
+    r.execute("file.open", ["path": .string(owned + "/a.txt")], state: &s)
+    XCTAssertEqual(r.execute("file.open", ["path": .string(loose + "/n.txt")], state: &s).success, .ok)
+    XCTAssertEqual(s.projects.count, 1); XCTAssertEqual(s.project, "owned")
+    XCTAssertEqual(s.tabs, ["a.txt", "../aloose/deep/n.txt"]); XCTAssertEqual(s.active, "../aloose/deep/n.txt")
+    XCTAssertFalse(s.files.contains { $0.path.hasPrefix("..") })
   }
 
   func testFileOpenRejectsBadInput() throws {

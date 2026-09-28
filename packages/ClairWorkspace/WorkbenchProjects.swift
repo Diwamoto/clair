@@ -166,14 +166,6 @@ extension WorkbenchState {
     projects.filter { file.hasPrefix($0.path + "/") }.max { $0.path.count < $1.path.count }
   }
 
-  /// An ad-hoc file: an existing file outside every open Project and every Git repository. The GUI opens it in a
-  /// standalone editor window instead of turning its folder (say `~`) into a Project. Returns the normalized path.
-  public func adhocFile(_ path: String) -> String? {
-    guard let file = WorkbenchProject.normalizedFile(path), owner(of: file) == nil,
-      WorkbenchProject.gitRoot(containing: file) == nil else { return nil }
-    return file
-  }
-
   /// Switches to the Project at `p.path`, adding it (under a unique name) if it is not open yet.
   public mutating func openProject(_ p: WorkbenchProject, scanFiles: Bool = true) {
     if let open = projects.first(where: { $0.path == p.path }) { switchProject(to: open, scanFiles: scanFiles); return }
@@ -187,6 +179,13 @@ extension WorkbenchState {
   /// Opens an absolute, normalized file path in its owning Project. The requested file opens immediately;
   /// the GUI fills the rest of a newly discovered Project in the background instead of blocking on a full walk.
   mutating func openFile(_ file: String) {
+    // Ad-hoc (outside every open Project and Git repository): a tab at the end of the active Project, relative to its
+    // root (`../..`), instead of turning the file's folder (say `~`) into a Project. Not added to the explorer.
+    if owner(of: file) == nil, WorkbenchProject.gitRoot(containing: file) == nil,
+      let root = projects.first(where: { $0.name == project })?.path
+    {
+      openTab(WorkbenchFiles.relative(file, from: root)); return
+    }
     let owner = owner(of: file) ?? WorkbenchProject.root(containing: file)
     openProject(owner, scanFiles: false)
     let rel = String(file.dropFirst(owner.path.count + 1))

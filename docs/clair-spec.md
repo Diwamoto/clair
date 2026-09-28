@@ -389,12 +389,12 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   ([ADR-0007](decisions/0007-unify-operations-in-a-typed-command-registry.md))
 - palette から action、Project、file、symbol へ到達できる
 - 設定画面にある各設定(toggle・選択肢・section)と `clair` コマンド / Agent skill の
-  インストールは palette からも実行できる
+  インストール・アンインストールは palette からも実行できる
 - shortcut は任意 command へユーザーが割り当てられる
 - `clair open path:line:column` は path を所有する open Project の active pane へ
   file を開く。該当 Project がなければ Git root を新規 Project として開く。どの
   Project にも Git repository にも属さない ad-hoc file は Project を作らず、
-  editor だけの単独ウィンドウで開く(1 file 1 window、未保存の変更は閉じる前に確認)
+  active Project のタブ列の末尾に開く(root からの相対パス `../…`、explorer には出さない)
 - Clair.app は text file の document type を宣言し、macOS の「このアプリケーションで
   開く」/既定アプリに設定できる。Finder から開いた file は `clair open` と同じ経路を通る
 - 起動中 Clair を操作する CLI を提供する

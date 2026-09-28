@@ -269,10 +269,6 @@ import Observation
           WorkbenchProject(name: URL(fileURLWithPath: path).lastPathComponent, path: path),
           scanFiles: false)
         r = .success(.ok)
-      } else if id == "file.open", case .string(let raw)? = input["path"], let file = state.adhocFile(raw) {
-        if case .int(let line)? = input["line"], line < 1 { return .failure(CommandError(.preconditionFailed, "line must be 1 or more")) }
-        AdhocEditorWindow.show(file, line: { if case .int(let l)? = input["line"] { l } else { nil } }())
-        return .success(.ok)
       } else {
         r = registry.execute(id, input, confirmed: confirmed, state: &state)
       }
@@ -294,7 +290,9 @@ import Observation
           buffers.reveal(p, line: to.line, column: to.column)
         }
         if id.hasPrefix("debug.") { runDebugCommand(id, input) }
-        if id == "cli.install" || id == "skill.install" { Self.install(cli: id == "cli.install") }
+        if ["cli.install", "skill.install", "cli.uninstall", "skill.uninstall"].contains(id) {
+          Self.install(cli: id.hasPrefix("cli."), remove: id.hasSuffix("uninstall"))
+        }
         if let view = state.active.flatMap(buffers.view) {
           switch id {
           case "editor.fold": view.foldAtCaret()
@@ -315,13 +313,19 @@ import Observation
     }
 
     /// ⌘K install rows: the result is an alert because the palette has already closed (the settings rows show it inline).
-    private static func install(cli: Bool) {
+    private static func install(cli: Bool, remove: Bool) {
       Task.detached {
+        let what = cli ? "clair コマンド" : "Agent skill", verb = remove ? "アンインストール" : "インストール"
         let message: String
         do {
-          if cli { try ClairDaemonLauncher.installCommand() } else { try ClairAgentSkill.install() }
-          message = cli ? "clair コマンドをインストールしました(\(ClairDaemonLauncher.commandLink.path))。" : "Agent skill をインストールしました。"
-        } catch { message = "インストールできません: \(error.localizedDescription)" }
+          switch (cli, remove) {
+          case (true, false): try ClairDaemonLauncher.installCommand()
+          case (true, true): try ClairDaemonLauncher.uninstallCommand()
+          case (false, false): try ClairAgentSkill.install()
+          case (false, true): try ClairAgentSkill.uninstall()
+          }
+          message = "\(what)を\(verb)しました。"
+        } catch { message = "\(what)を\(verb)できません: \(error.localizedDescription)" }
         await MainActor.run {
           let alert = NSAlert()
           alert.messageText = message

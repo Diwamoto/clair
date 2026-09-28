@@ -94,7 +94,19 @@ import Foundation
       if (try? fm.removeItem(at: commandLink)) != nil || !fm.fileExists(atPath: commandLink.path),
         (try? fm.createSymbolicLink(at: commandLink, withDestinationURL: clair)) != nil
       { return }
-      let shell = "mkdir -p /usr/local/bin && ln -sfn \(shellQuote(clair.path)) \(shellQuote(commandLink.path))"
+      try runAsAdmin("mkdir -p /usr/local/bin && ln -sfn \(shellQuote(clair.path)) \(shellQuote(commandLink.path))")
+      guard isCommandInstalled else { throw InstallError("インストールを中止しました。") }
+    }
+
+    /// Removes the link only when it points at this app's `clair`; a file or foreign link stays.
+    public static func uninstallCommand() throws {
+      guard isCommandInstalled else { throw InstallError("\(commandLink.path) はこの Clair のリンクではないため削除しません。") }
+      if (try? FileManager.default.removeItem(at: commandLink)) != nil { return }
+      try runAsAdmin("rm -f \(shellQuote(commandLink.path))")
+      guard !isCommandInstalled else { throw InstallError("アンインストールを中止しました。") }
+    }
+
+    private static func runAsAdmin(_ shell: String) throws {
       let apple = "do shell script \"" + shell.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
         + "\" with administrator privileges"
       let p = Process()
@@ -102,7 +114,6 @@ import Foundation
       p.arguments = ["-e", apple]
       p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
       try p.run(); p.waitUntilExit()
-      guard p.terminationStatus == 0, isCommandInstalled else { throw InstallError("インストールを中止しました。") }
     }
 
     public struct InstallError: LocalizedError {

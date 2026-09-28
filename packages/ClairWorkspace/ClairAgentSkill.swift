@@ -69,4 +69,11 @@ through the normal Git flow (the user can adopt them from Clair's Git panel).
       try markdown.write(to: url, atomically: true, encoding: .utf8)
     }
   }
+
+  /// Removes each skill folder Clair installed; a SKILL.md the user edited is left alone.
+  public static func uninstall(home: URL = .homeDirectory) throws {
+    for url in targets(home: home) where (try? String(contentsOf: url, encoding: .utf8)) == markdown {
+      try FileManager.default.removeItem(at: url.deletingLastPathComponent())
+    }
+  }
 }

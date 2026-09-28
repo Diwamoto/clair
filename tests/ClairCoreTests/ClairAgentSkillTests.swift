@@ -14,4 +14,14 @@ final class ClairAgentSkillTests: XCTestCase {
     try ClairAgentSkill.install(home: home)
     XCTAssertTrue(ClairAgentSkill.isInstalled(home: home))
   }
+
+  func testUninstallRemovesOnlyUnmodifiedSkills() throws {
+    let home = URL.temporaryDirectory.appending(path: "clair-skill-\(UUID().uuidString)")
+    try ClairAgentSkill.install(home: home)
+    let targets = ClairAgentSkill.targets(home: home), edited = targets[0], pristine = targets[1]
+    try "mine".write(to: edited, atomically: true, encoding: .utf8)
+    try ClairAgentSkill.uninstall(home: home)
+    XCTAssertTrue(FileManager.default.fileExists(atPath: edited.path))
+    XCTAssertFalse(FileManager.default.fileExists(atPath: pristine.deletingLastPathComponent().path))
+  }
 }
