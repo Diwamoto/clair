@@ -12,6 +12,9 @@
     @State private var zoom: CGFloat = 1
     @GestureState private var pinch: CGFloat = 1
     @State private var hovering = false
+    /// Offset of the zoomed diagram from centered, in viewport points; `drag` is the in-flight part.
+    @State private var pan: CGSize = .zero
+    @GestureState private var drag: CGSize = .zero
 
     private static let zoomRange: ClosedRange<CGFloat> = 0.5...3
     private var scale: CGFloat { min(max(zoom * pinch, Self.zoomRange.lowerBound), Self.zoomRange.upperBound) }
@@ -25,28 +28,23 @@
     }
 
     var body: some View {
-      // Centered when it fits; a diagram wider than the preview scrolls sideways instead.
-      ViewThatFits(in: .horizontal) {
-        canvas
-        ScrollView(.horizontal, showsIndicators: false) { canvas }
-      }
-      .frame(maxWidth: .infinity, alignment: .center)
-      .padding(.vertical, 12)
-      .contentShape(Rectangle())
-      .gesture(MagnifyGesture().updating($pinch) { v, s, _ in s = v.magnification }
-        .onEnded { v in zoom = min(max(zoom * v.magnification, Self.zoomRange.lowerBound), Self.zoomRange.upperBound) })
+      canvas
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
+        .gesture(MagnifyGesture().updating($pinch) { v, s, _ in s = v.magnification }
+          .onEnded { v in setZoom(zoom * v.magnification) })
       .overlay(alignment: .topTrailing) { if hovering || zoom != 1 { zoomControls } }
       .onHover { hovering = $0 }
     }
 
     private var zoomControls: some View {
       HStack(spacing: 2) {
-        Button { zoom = max(zoom / 1.25, Self.zoomRange.lowerBound) } label: { Image(systemName: "minus.magnifyingglass") }
+        Button { setZoom(zoom / 1.25) } label: { Image(systemName: "minus.magnifyingglass") }
           .help("縮小").accessibilityLabel("縮小").disabled(zoom <= Self.zoomRange.lowerBound)
         Text("\(Int((scale * 100).rounded()))%").monospacedDigit().frame(minWidth: 36)
-        Button { zoom = min(zoom * 1.25, Self.zoomRange.upperBound) } label: { Image(systemName: "plus.magnifyingglass") }
+        Button { setZoom(zoom * 1.25) } label: { Image(systemName: "plus.magnifyingglass") }
           .help("拡大").accessibilityLabel("拡大").disabled(zoom >= Self.zoomRange.upperBound)
-        Button { zoom = 1 } label: { Image(systemName: "arrow.counterclockwise") }
+        Button { zoom = 1; pan = .zero } label: { Image(systemName: "arrow.counterclockwise") }
           .help("元のサイズに戻す").accessibilityLabel("元のサイズに戻す").disabled(zoom == 1)
       }
       .buttonStyle(.borderless).font(.system(size: 11)).foregroundStyle(C.textSecondary)
@@ -55,27 +53,57 @@
       .overlay(RoundedRectangle(cornerRadius: 5).stroke(C.divider))
     }
 
-    /// Reserves the diagram's zoomed size; the canvases draw at that scale (`ctx.scaleBy`), so zooming redraws
-    /// sharp vectors instead of stretching a bitmap, reflows the preview, and scrolls sideways.
-    private func zoomed(_ v: some View, _ size: CGSize) -> some View {
-      v.frame(width: size.width * scale, height: size.height * scale)
+    /// Zooms about the viewport center: the pan scales with the diagram so the same spot stays in view.
+    private func setZoom(_ z: CGFloat) {
+      let z = min(max(z, Self.zoomRange.lowerBound), Self.zoomRange.upperBound)
+      pan = CGSize(width: pan.width * z / zoom, height: pan.height * z / zoom)
+      zoom = z
+    }
+
+    /// Where the zoomed diagram sits: centered on an axis where it fits, otherwise centered plus the pan,
+    /// clamped so the diagram's edge never comes inside the viewport.
+    private func origin(viewport: CGSize, content: CGSize, pan: CGSize) -> CGPoint {
+      func axis(_ v: CGFloat, _ c: CGFloat, _ p: CGFloat) -> CGFloat {
+        let w = c * scale
+        return w <= v ? (v - w) / 2 : min(0, max(v - w, (v - w) / 2 + p))
+      }
+      return CGPoint(x: axis(viewport.width, content.width, pan.width), y: axis(viewport.height, content.height, pan.height))
+    }
+
+    /// A fixed viewport — the preview's width by the diagram's unzoomed height — that the diagram is drawn into
+    /// at `scale` (sharp vectors, not a stretched bitmap). Dragging pans the zoomed diagram inside it.
+    private func viewport<V: View>(_ size: CGSize, @ViewBuilder _ draw: @escaping (CGPoint) -> V) -> some View {
+      GeometryReader { g in
+        let live = CGSize(width: pan.width + drag.width, height: pan.height + drag.height)
+        let o = origin(viewport: g.size, content: size, pan: live)
+        draw(o)
+          .gesture(DragGesture(minimumDistance: 2).updating($drag) { v, s, _ in s = v.translation }
+            .onEnded { v in
+              // Store the clamped pan so dragging back from an edge responds at once.
+              let end = origin(viewport: g.size, content: size, pan: CGSize(width: pan.width + v.translation.width, height: pan.height + v.translation.height))
+              pan = CGSize(width: end.x - (g.size.width - size.width * scale) / 2, height: end.y - (g.size.height - size.height * scale) / 2)
+            })
+      }
+      .frame(maxWidth: .infinity).frame(height: size.height)
+      .clipped()
     }
 
     @ViewBuilder var canvas: some View {
       switch diagram {
       case .flowchart(let f):
         let l = MermaidDiagram.layout(f, measure: Self.measure)
-        zoomed(flowchart(l), l.size)
+        viewport(l.size) { flowchart(l, at: $0) }
       case .sequence(let s):
         let l = SequenceLayout(s, measure: Self.measure)
-        zoomed(sequence(l), CGSize(width: l.width, height: l.height))
+        viewport(CGSize(width: l.width, height: l.height)) { sequence(l, at: $0) }
       }
     }
 
     // MARK: Flowchart
 
-    private func flowchart(_ l: MermaidDiagram.FlowLayout) -> some View {
+    private func flowchart(_ l: MermaidDiagram.FlowLayout, at o: CGPoint) -> some View {
       Canvas { ctx, _ in
+        ctx.translateBy(x: o.x, y: o.y)
         ctx.scaleBy(x: scale, y: scale)
         for e in l.edges {
           line(&ctx, e.start, e.end, via: e.control, dashed: e.edge.dashed, width: e.edge.thick ? 2.5 : 1.2, arrow: e.edge.arrow)
@@ -111,8 +139,9 @@
 
     // MARK: Sequence
 
-    private func sequence(_ l: SequenceLayout) -> some View {
+    private func sequence(_ l: SequenceLayout, at o: CGPoint) -> some View {
       Canvas { ctx, _ in
+        ctx.translateBy(x: o.x, y: o.y)
         ctx.scaleBy(x: scale, y: scale)
         for (i, p) in l.participants.enumerated() {
           let x = l.x[i]
