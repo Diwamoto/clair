@@ -50,7 +50,8 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var activeDiff: WorkbenchDiffTab?
   public var tabOrder: [WorkbenchTab] = []
   public var dirty: Set<String> = []
-  public var collapsed: Set<String> = []
+  /// Explorer folders the user opened; every other folder starts closed, including ones that appear later.
+  public var expanded: Set<String> = []
   public var launches: [Int: AgentLaunch] = [:]
   /// Preview pane id → the file it was opened for (Markdown rendered, CSV/TSV as a table).
   public var previews: [Int: String] = [:]
@@ -659,7 +660,7 @@ extension CommandRegistry {
     },
     cmd("explorer.toggle", "フォルダを開閉", .read, params: [CommandParam("path", .string)]) { s, i in
       let p = i["path"]!.string!
-      if !s.collapsed.insert(p).inserted { s.collapsed.remove(p) }
+      if !s.expanded.insert(p).inserted { s.expanded.remove(p) }
       return .ok
     },
     cmd("settings.open", "設定を開く", .read, params: [CommandParam("section", .string, required: false, allowed: WorkbenchState.sections)],

@@ -103,7 +103,7 @@ public struct ProjectLayout: Sendable, Codable, Equatable {
   public var activeDiff: WorkbenchDiffTab?
   public var tabOrder: [WorkbenchTab] = []
   public var dirty: Set<String> = []
-  public var collapsed: Set<String> = []
+  public var expanded: Set<String> = []
   /// V07: live agent terminals by pane id. Never persisted — restore must not silently respawn agents.
   public var launches: [Int: AgentLaunch] = [:]
   /// Preview pane id → bound file. Not persisted: a restored preview follows the active file.
@@ -111,7 +111,7 @@ public struct ProjectLayout: Sendable, Codable, Equatable {
   public var previews: [Int: String] = [:]
   /// Every pane closed in this Project only; not persisted (restore reopens the layout).
   public var panesClosed = false
-  private enum CodingKeys: String, CodingKey { case tree, tabs, active, dirty, collapsed, diffTabs, activeDiff, tabOrder }
+  private enum CodingKeys: String, CodingKey { case tree, tabs, active, dirty, expanded, diffTabs, activeDiff, tabOrder }
 
   public init() {}
 
@@ -128,8 +128,8 @@ public struct ProjectLayout: Sendable, Codable, Equatable {
   }
 
 
-  public init(tree: PaneTree, tabs: [String], active: String?, dirty: Set<String>, collapsed: Set<String>, launches: [Int: AgentLaunch], panesClosed: Bool, diffTabs: [WorkbenchDiffTab], activeDiff: WorkbenchDiffTab?, tabOrder: [WorkbenchTab]) {
-    self.tree = tree; self.tabs = tabs; self.active = active; self.dirty = dirty; self.collapsed = collapsed
+  public init(tree: PaneTree, tabs: [String], active: String?, dirty: Set<String>, expanded: Set<String>, launches: [Int: AgentLaunch], panesClosed: Bool, diffTabs: [WorkbenchDiffTab], activeDiff: WorkbenchDiffTab?, tabOrder: [WorkbenchTab]) {
+    self.tree = tree; self.tabs = tabs; self.active = active; self.dirty = dirty; self.expanded = expanded
     self.launches = launches; self.panesClosed = panesClosed; self.diffTabs = diffTabs; self.activeDiff = activeDiff; self.tabOrder = tabOrder
   }
 
@@ -139,7 +139,8 @@ public struct ProjectLayout: Sendable, Codable, Equatable {
     tabs = try c.decode([String].self, forKey: .tabs)
     active = try c.decodeIfPresent(String.self, forKey: .active)
     dirty = try c.decode(Set<String>.self, forKey: .dirty)
-    collapsed = try c.decode(Set<String>.self, forKey: .collapsed)
+    // A layout saved with the old `collapsed` key restores with every folder closed.
+    expanded = try c.decodeIfPresent(Set<String>.self, forKey: .expanded) ?? []
     diffTabs = try c.decodeIfPresent([WorkbenchDiffTab].self, forKey: .diffTabs) ?? []
     activeDiff = try c.decodeIfPresent(WorkbenchDiffTab.self, forKey: .activeDiff)
     tabOrder = try c.decodeIfPresent([WorkbenchTab].self, forKey: .tabOrder) ?? []
@@ -149,11 +150,11 @@ public struct ProjectLayout: Sendable, Codable, Equatable {
 extension WorkbenchState {
   var layout: ProjectLayout {
     get {
-      var l = ProjectLayout(tree: tree, tabs: tabs, active: active, dirty: dirty, collapsed: collapsed, launches: launches, panesClosed: panesClosed, diffTabs: diffTabs, activeDiff: activeDiff, tabOrder: tabOrder)
+      var l = ProjectLayout(tree: tree, tabs: tabs, active: active, dirty: dirty, expanded: expanded, launches: launches, panesClosed: panesClosed, diffTabs: diffTabs, activeDiff: activeDiff, tabOrder: tabOrder)
       l.previews = previews
       return l
     }
-    set { tree = newValue.tree; tabs = newValue.tabs; active = newValue.active; dirty = newValue.dirty; collapsed = newValue.collapsed; launches = newValue.launches; previews = newValue.previews; panesClosed = newValue.panesClosed; diffTabs = newValue.diffTabs; activeDiff = newValue.activeDiff; tabOrder = newValue.tabOrder }
+    set { tree = newValue.tree; tabs = newValue.tabs; active = newValue.active; dirty = newValue.dirty; expanded = newValue.expanded; launches = newValue.launches; previews = newValue.previews; panesClosed = newValue.panesClosed; diffTabs = newValue.diffTabs; activeDiff = newValue.activeDiff; tabOrder = newValue.tabOrder }
   }
 
   /// The open Project with the deepest root containing `file` (a nested Project wins over its parent).
@@ -265,9 +266,6 @@ extension WorkbenchState {
     let cached = filesCache[p.name]
     files = cached ?? (scanFiles ? WorkbenchFiles.scan(p.path, folders: p.folders ?? []) : [])
     var l = layouts[p.name] ?? ProjectLayout()
-    // Nothing folded yet (a new Project, or a layout saved before folding was the default): fold every directory,
-    // since an unfolded tree of a big repo is thousands of rows. ponytail: a tree the user fully unfolded is folded again on the next switch.
-    if l.collapsed.isEmpty { l.collapsed = WorkbenchFiles.directories(of: files) }
     // With a deferred first scan, keep restored tabs until the background result tells us which
     // paths still exist. Cached and synchronous trees can be reconciled immediately.
     if cached != nil || scanFiles {

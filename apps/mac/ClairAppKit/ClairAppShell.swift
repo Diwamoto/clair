@@ -765,6 +765,8 @@ import Observation
     @State private var diffTask: Task<Void, Never>?
     @State private var explorerRows: [ExplorerRow] = []
     @State private var visibleExplorerRows: [ExplorerRow] = []
+    /// `changeRanks` cached per files/dirty change, not recomputed on every body render.
+    @State private var explorerRanks: [String: Int] = [:]
     @State private var explorerTask: Task<Void, Never>?
     @State private var explorerVisibilityTask: Task<Void, Never>?
     // V05: search panel state (GUI-local).
@@ -846,7 +848,7 @@ import Observation
         rebuildExplorer(); reloadChanges()
       }
       .onChange(of: st.files) { rebuildExplorer(); reloadChanges() }
-      .onChange(of: st.collapsed) { rebuildVisibleExplorer() }
+      .onChange(of: st.expanded) { rebuildVisibleExplorer() }
       .onChange(of: st.activeDiff) {
         diff = st.activeDiff.map { DiffTarget(path: $0.path, staged: $0.staged, untracked: $0.untracked) }
       }
@@ -1415,7 +1417,7 @@ import Observation
       }
     }
 
-    /// Rows outside a collapsed folder. `files` is in tree order, so a folder's descendants follow it contiguously: one pass, no per-row scan of `collapsed`.
+    /// Rows whose every ancestor folder is expanded. `files` is in tree order, so a folder's descendants follow it contiguously: one pass, no per-row scan of `expanded`.
     struct ExplorerRow: Identifiable, Sendable, Equatable {
       let id: String
       let label: String
@@ -1423,11 +1425,11 @@ import Observation
       let file: WorkbenchFile?
     }
 
-    nonisolated static func visibleExplorerRows(_ rows: [ExplorerRow], collapsed: Set<String>) -> [ExplorerRow] {
+    nonisolated static func visibleExplorerRows(_ rows: [ExplorerRow], expanded: Set<String>) -> [ExplorerRow] {
       var hidden: String?
       return rows.filter { r in
         if let h = hidden { if r.id.hasPrefix(h) { return false }; hidden = nil }
-        if r.file == nil, collapsed.contains(r.id) { hidden = r.id + "/" }
+        if r.file == nil, !expanded.contains(r.id) { hidden = r.id + "/" }
         return true
       }
     }
@@ -1472,7 +1474,7 @@ import Observation
             ClairMenuSpec(title: st.project, entries: [reviewMenu("この Project をレビュー", .project, disabled: !st.dirty.isEmpty)])
           }
           if !rootFolded {
-            let ranks = Self.changeRanks(st.files, dirty: st.dirty)
+            let ranks = explorerRanks
             ForEach(visibleExplorerRows) { r in
               if let f = r.file {
                 let on = st.active == f.path && !st.settingsOpen
@@ -1487,7 +1489,7 @@ import Observation
                 }
                 .clairContextMenu(menus) { fileMenu(f.path, tab: false) }
               } else {
-                let open = !st.collapsed.contains(r.id)
+                let open = st.expanded.contains(r.id)
                 treeRow(depth: r.depth, selected: false, action: { store.run("explorer.toggle", ["path": .string(r.id)]) }) {
                   chevron(open: open)
                   FileIcon.folder(open: open).image(size: 11, ink: C.textTertiary).frame(width: 16)
@@ -1519,6 +1521,7 @@ import Observation
           }
         }
       }.padding(.vertical, 4)
+      .onChange(of: st.dirty) { explorerRanks = Self.changeRanks(st.files, dirty: st.dirty) }
       .alert("レビューを開始できませんでした", isPresented: Binding(get: { reviewError != nil }, set: { if !$0 { reviewError = nil } })) {
         Button("OK") {}
       } message: { Text(reviewError ?? "") }
@@ -1526,6 +1529,7 @@ import Observation
 
     private func rebuildExplorer() {
       explorerTask?.cancel()
+      explorerRanks = Self.changeRanks(st.files, dirty: st.dirty)
       let files = st.files, project = st.project, roots = currentProject?.folderPrefixes ?? []
       explorerTask = Task {
         let rows = await Task.detached(priority: .utility) { Self.explorerRows(for: files, roots: roots) }.value
@@ -1537,10 +1541,10 @@ import Observation
 
     private func rebuildVisibleExplorer() {
       explorerVisibilityTask?.cancel()
-      let rows = explorerRows, collapsed = st.collapsed
+      let rows = explorerRows, expanded = st.expanded
       explorerVisibilityTask = Task {
-        let visible = await Task.detached(priority: .utility) { Self.visibleExplorerRows(rows, collapsed: collapsed) }.value
-        guard !Task.isCancelled, explorerRows == rows, st.collapsed == collapsed else { return }
+        let visible = await Task.detached(priority: .utility) { Self.visibleExplorerRows(rows, expanded: expanded) }.value
+        guard !Task.isCancelled, explorerRows == rows, st.expanded == expanded else { return }
         visibleExplorerRows = visible
       }
     }

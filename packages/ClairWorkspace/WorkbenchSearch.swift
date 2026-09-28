@@ -100,7 +100,6 @@ extension WorkbenchState {
     files = scanned
     filesCache[project] = scanned
     if firstDeferredLoad {
-      if collapsed.isEmpty { collapsed = WorkbenchFiles.directories(of: scanned) }
       let existing = Set(scanned.map(\.path))
       tabs = tabs.filter(existing.contains)
       dirty.formIntersection(tabs)

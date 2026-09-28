@@ -109,7 +109,7 @@ final class WorkbenchProjectTests: XCTestCase {
 
     restored.applyDiskChange([], files: WorkbenchFiles.scan(a))
     XCTAssertEqual(restored.files.map(\.path), ["src/one.txt", "two.txt"])
-    XCTAssertEqual(restored.collapsed, ["src"])
+    XCTAssertEqual(restored.expanded, [], "folders start closed")
     XCTAssertEqual(restored.active, "src/one.txt")
   }
 
@@ -205,7 +205,9 @@ final class WorkbenchProjectTests: XCTestCase {
     try "x".write(to: dir.appending(path: "top.txt"), atomically: true, encoding: .utf8)
     var s = WorkbenchState()
     try CommandRegistry.workbench.execute("project.open", ["path": .string(dir.path)], state: &s).get()
-    XCTAssertEqual(s.collapsed, ["a", "a/b"])
+    XCTAssertEqual(s.expanded, [])
+    try CommandRegistry.workbench.execute("explorer.toggle", ["path": .string("a")], state: &s).get()
+    XCTAssertEqual(s.expanded, ["a"], "opening a folder leaves its subfolders closed")
   }
 
   // V11 `clair open`: the owning open Project wins (deepest root), else a Git root, else the folder.
