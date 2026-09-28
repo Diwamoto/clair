@@ -395,6 +395,7 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   file を開く。該当 Project がなければ Git root を新規 Project として開く。どの
   Project にも Git repository にも属さない ad-hoc file は Project を作らず、
   active Project のタブ列の末尾に開く(root からの相対パス `../…`、explorer には出さない)
+- Clair の terminal からの `clair open` は承認なしで実行し、Clair を前面に出す(MCP からは呼べない)
 - Clair.app は text file の document type を宣言し、macOS の「このアプリケーションで
   開く」/既定アプリに設定できる。Finder から開いた file は `clair open` と同じ経路を通る
 - 起動中 Clair を操作する CLI を提供する

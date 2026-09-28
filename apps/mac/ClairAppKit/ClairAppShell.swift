@@ -281,6 +281,11 @@ import Observation
         if id == "pane.focus", case .int(let pane)? = input["id"] {
           state.notices.markRead(project: state.project, pane: pane)
         }
+        // `clair open` / Finder usually come while another app is in front: bring the file into view.
+        if id == "file.open" {
+          NSApp.activate(ignoringOtherApps: true)
+          if let w = NSApp.windows.first(where: { $0.isMiniaturized && $0.title != "Pair a device" }) { w.deminiaturize(nil) }
+        }
         if id == "file.open", case .int(let line)? = input["line"], let p = state.active {
           let column: Int = if case .int(let c)? = input["column"] { c } else { 0 }
           buffers.reveal(p, line: line, column: column)

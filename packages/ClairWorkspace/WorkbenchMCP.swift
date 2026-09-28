@@ -25,7 +25,9 @@ public enum MCPGate {
     let terminal = req.via == nil && req.caller != nil
     guard d.aiAvailable || terminal else { return .failure(CommandError(.notAvailableToAI, "\(req.command) is not available to AI")) }
     let seen = snapshot()
-    switch registry.preflight(req.command, req.input, seen).map({ d.aiAvailable ? $0 : max($0, .write) }) {
+    // `clair open` from a Clair terminal needs no approval (owner, 2026-09-28): it only shows a file. MCP still cannot call it.
+    let unattended = d.aiAvailable || req.command == "file.open"
+    switch registry.preflight(req.command, req.input, seen).map({ unattended ? $0 : max($0, .write) }) {
     case .failure(let e): return .failure(e)
     case .success(let risk) where risk < .write:
       return run({ _ in nil }, false)

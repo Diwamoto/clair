@@ -46,6 +46,13 @@ final class WorkbenchMCPTests: XCTestCase {
     XCTAssertEqual(set.1, 1); XCTAssertEqual(set.2, 0)
     if case .failure(let e) = set.0 { XCTAssertEqual(e.code, .denied) } else { XCTFail() }
     XCTAssertEqual(call("settings.set", ["key": .string("hideQuota"), "value": .bool(true)], approve: true).2, 1)
+    // `clair open` from a Clair terminal runs without a card (owner, 2026-09-28); over MCP it stays unavailable.
+    let file = FileManager.default.temporaryDirectory.appending(path: "clair-open-\(UUID().uuidString).txt")
+    FileManager.default.createFile(atPath: file.path, contents: Data())
+    defer { try? FileManager.default.removeItem(at: file) }
+    let opened = call("file.open", ["path": .string(file.path)], approve: false)
+    XCTAssertEqual(opened.1, 0); XCTAssertEqual(opened.2, 1)
+    XCTAssertEqual(gate("file.open", ["path": .string(file.path)]).ran, 0)
   }
 
   func testWriteAndDestructiveNeedApprovalAndDenialBlocks() {
