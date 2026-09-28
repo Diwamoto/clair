@@ -36,6 +36,7 @@ import SwiftUI
     // A bundled app's window can already be key before this runs (dev's is not), so the first
     // didBecomeKey is missed; lay out the windows that exist now.
     NSApp.windows.forEach(layoutLights)
+    ClairCrashReport.offerIfCrashed()
   }
 
   /// U10: the v1 AppIcon / AppIconDev art (1024px, full bleed), masked to the macOS icon grid (824pt body,
