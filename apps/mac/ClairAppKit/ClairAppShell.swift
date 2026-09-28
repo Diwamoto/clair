@@ -66,6 +66,8 @@ import Observation
     /// V09: update flow state (Stable only; Dev has no feed).
     public enum UpdateStatus: Equatable { case idle, checking, available(ClairUpdate), installing, failed(String) }
     public var update: UpdateStatus = .idle
+    /// Version whose bottom-right popup the user dismissed; a newer release shows it again.
+    public var dismissedUpdate: String?
     public let updateConfig = ClairUpdateConfiguration.live()
     private var updateTask: Task<Void, Never>?
     private var sleepAssertion: IOPMAssertionID = 0
@@ -879,6 +881,8 @@ import Observation
         else if let p = st.palette { paletteView(p) }
       }
       .animation(.easeOut(duration: 0.09), value: st.palette == nil)
+      .overlay(alignment: .bottomTrailing) { updateToast.padding(.trailing, 16).padding(.bottom, ChromeBudget.statusBar + 12) }
+      .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: store.update)
       .onChange(of: st.choices["appearance"], initial: true) { _, v in ColorSchemeChoice(setting: v).apply() }
       .onChange(of: st.fileAssociations, initial: true) { _, v in EditorLanguageID.associations = v }
       .onChange(of: st.palette) {
@@ -1332,6 +1336,31 @@ import Observation
         case .success(let n): hits = []; searchMessage = "\(n) 件を置換しました"; runSearch()
         case .failure(let error): searchMessage = "置換できません: \(error)"
         }
+      }
+    }
+
+    /// ADR-0009: an available release is offered, never applied on its own.
+    @ViewBuilder private var updateToast: some View {
+      let body: (title: String, note: String?, actions: Bool)? = switch store.update {
+      case .available(let u) where store.dismissedUpdate != u.version: ("Clair \(u.version) が利用できます", nil, true)
+      case .installing: ("更新を適用しています", "完了後に再起動します。", false)
+      default: nil
+      }
+      if let body {
+        VStack(alignment: .leading, spacing: 10) {
+          Text(body.title).font(.system(size: 14, weight: .semibold)).foregroundStyle(C.textPrimary)
+          if let note = body.note { Text(note).font(.system(size: 13)).foregroundStyle(C.textTertiary) }
+          if body.actions, case .available(let u) = store.update {
+            HStack(spacing: 8) {
+              Button("あとで") { store.dismissedUpdate = u.version }
+              Button("適用して再起動") { Task { await store.installUpdate() } }
+            }
+          }
+        }
+        .padding(14).frame(width: 300, alignment: .leading)
+        .background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.overlay))
+        .overlay(RoundedRectangle(cornerRadius: Radius.overlay).stroke(L.strong))
+        .transition(.opacity)
       }
     }
 
