@@ -114,6 +114,21 @@
       XCTAssertTrue(view.folds.isEmpty)
     }
 
+    func testBreakpointColumnMapsPointsToLinesOnlyWhenEnabled() throws {
+      let view = try makeView()
+      let row2 = NSPoint(x: 8, y: 1.5 * view.lineHeight)
+      XCTAssertNil(view.breakpointSlot(at: row2))
+      var toggled: [Int] = []
+      view.onToggleBreakpoint = { toggled.append($0) }
+      XCTAssertEqual(view.breakpointSlot(at: row2), 2)
+      XCTAssertNil(view.breakpointSlot(at: NSPoint(x: ClairEditorView.breakpointColumnWidth, y: row2.y)))  // line-number area
+      XCTAssertNil(view.breakpointSlot(at: NSPoint(x: 8, y: 50 * view.lineHeight)))  // past the last line
+      view.mouseDown(with: try XCTUnwrap(NSEvent.mouseEvent(
+        with: .leftMouseDown, location: view.convert(row2, to: nil), modifierFlags: [], timestamp: 0,
+        windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)))
+      XCTAssertEqual(toggled, [2])
+    }
+
     func testGutterClickAndCaretCommandsFoldAndUnfold() throws {
       let view = try makeView()
       view.foldRanges = [byteRange(Self.source, from: "func a", through: "}")]

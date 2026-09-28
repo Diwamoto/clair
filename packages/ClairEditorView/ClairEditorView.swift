@@ -90,7 +90,11 @@ import ClairEditorCore
     public var debugBreakpoints: Set<Int> = [] { didSet { needsDisplay = true } }  // 1-based
     public var debugLineColor: NSColor = .systemBlue.withAlphaComponent(0.14) { didSet { needsDisplay = true } }
     public var debugBreakpointColor: NSColor = .systemRed { didSet { needsDisplay = true } }
+    /// Setting this reserves the gutter's leftmost `breakpointColumnWidth` points for breakpoint dots.
     public var onToggleBreakpoint: ((Int) -> Void)?
+    public static let breakpointColumnWidth: CGFloat = 16
+    /// 1-based line whose breakpoint slot is under the pointer; drawn as a faint dot.
+    var hoveredBreakpointLine: Int? { didSet { if hoveredBreakpointLine != oldValue { needsDisplay = true } } }
     /// Called after a mouse-driven selection change. The owner is
     /// responsible for reconciling this back into its
     /// `EditorTransactionManager`; this view does not own that state.
@@ -332,10 +336,7 @@ import ClairEditorCore
       // in favor of pointing elsewhere.
       if composition != nil { inputContext?.discardMarkedText() }
       let point = convert(event.locationInWindow, from: nil)
-      if point.x >= 0, point.x < 16, let onToggleBreakpoint {
-        let (line, subrow) = rowMap.line(atRow: Int(max(point.y, 0) / lineHeight))
-        if subrow == 0 { onToggleBreakpoint(line + 1); return }
-      }
+      if let line = breakpointSlot(at: point), let onToggleBreakpoint { onToggleBreakpoint(line); return }
       if handleFoldClick(at: point) { return }
       // E17: ⌘-click on a confirmed definition link jumps; anywhere else ⌘-click still adds a cursor.
       if event.clickCount == 1, isCommandOnly(event.modifierFlags), let link = definitionLink,
@@ -486,9 +487,10 @@ import ClairEditorCore
           drawText(seg, context: context)
           if seg.isFirst, gutterWidth > 0 {
             drawLineNumber(index, top: seg.top, context: context)
-            if debugBreakpoints.contains(index + 1) {
-              context.setFillColor(debugBreakpointColor.cgColor)
-              context.fillEllipse(in: CGRect(x: 5, y: seg.top + (lineHeight - 8) / 2, width: 8, height: 8))
+            let on = debugBreakpoints.contains(index + 1)
+            if on || hoveredBreakpointLine == index + 1 {
+              context.setFillColor(debugBreakpointColor.withAlphaComponent(on ? 1 : 0.3).cgColor)
+              context.fillEllipse(in: CGRect(x: 3, y: seg.top + (lineHeight - 10) / 2, width: 10, height: 10))
             }
             drawFoldMarker(index, top: seg.top, context: context)
           }
@@ -541,6 +543,14 @@ import ClairEditorCore
       context.textPosition = CGPoint(x: textInset - seg.shift, y: seg.top + baselineShift + ascent)
       CTLineDraw(seg.ctLine, context)
       context.restoreGState()
+    }
+
+    /// The 1-based line whose breakpoint slot contains `point`, if any.
+    func breakpointSlot(at point: NSPoint) -> Int? {
+      guard onToggleBreakpoint != nil, gutterWidth > 0, point.x >= 0, point.x < Self.breakpointColumnWidth,
+        point.y >= 0, point.y < CGFloat(rowMap.rowCount) * lineHeight else { return nil }
+      let (line, subrow) = rowMap.line(atRow: Int(point.y / lineHeight))
+      return subrow == 0 ? line + 1 : nil
     }
 
     /// Right-aligned 1-based number with room for the fold marker beside it.

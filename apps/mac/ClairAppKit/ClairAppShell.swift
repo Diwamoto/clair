@@ -2028,8 +2028,11 @@ import Observation
             debugLine: store.debugSession?.frames.first(where: { $0.id == store.debugSession?.selectedFrame }).flatMap {
               $0.path == store.activeRoot.map { $0 + "/" + (st.active ?? "") } ? $0.line : nil
             },
-            debugBreakpoints: Set(store.debugSession?.breakpointStatus[(store.activeRoot ?? "") + "/" + (st.active ?? "")]?.values
-              .filter(\.verified).map(\.line) ?? []),
+            // Requested breakpoints show before a session starts; the adapter's line wins once it answers.
+            debugBreakpoints: store.debugSession.map { s in
+              let key = (store.activeRoot ?? "") + "/" + (st.active ?? "")
+              return Set((s.breakpoints[key] ?? []).map { s.breakpointStatus[key]?[$0]?.line ?? $0 })
+            } ?? [],
             onToggleDebugBreakpoint: { line in
               guard let root = store.activeRoot, let path = st.active else { return }
               _ = store.run("debug.breakpoint", ["path": .string(root + "/" + path), "line": .int(line)])

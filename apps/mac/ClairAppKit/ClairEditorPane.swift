@@ -518,7 +518,7 @@
       scroll.scrollerStyle = .overlay; scroll.autohidesScrollers = true
       scroll.verticalScroller = ClairScroller(); scroll.horizontalScroller = ClairScroller()
       scroll.drawsBackground = true; scroll.backgroundColor = NSColor(C.canvas)
-      // Mock editor: 12px mono on 19px rows, One Dark on the canvas colour, 54px gutter.
+      // Mock editor: 12px mono on 19px rows, One Dark on the canvas colour, 54px gutter + 16px breakpoint column.
       let view = ClairEditorView(
         snapshot: manager.buffer.snapshot, selection: manager.selection,
         font: .monospacedSystemFont(ofSize: 12, weight: .regular), lineHeight: 19)
@@ -529,7 +529,7 @@
       }
       view.caretColor = resolved { NSColor(C.textPrimary).blended(withFraction: 0.9, of: NSColor(C.debugBlue)) ?? NSColor(C.textPrimary) }
       view.selectionColor = resolved { NSColor(C.debugBlue).withAlphaComponent(0.3) }
-      view.gutterWidth = 54
+      view.gutterWidth = 54 + ClairEditorView.breakpointColumnWidth
       view.lineNumberColor = NSColor(C.lineNumber); view.currentLineNumberColor = NSColor(C.textTertiary)
       view.blameAnnotation = blame; view.blameColor = NSColor(C.textQuaternary)
       view.debugStoppedLine = debugLine; view.debugBreakpoints = debugBreakpoints

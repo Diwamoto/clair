@@ -111,10 +111,13 @@ function CodeGutterRow({
   breakpoint: boolean;
   onToggle: () => void;
 }) {
+  const [hover, setHover] = useState(false);
   return (
     <>
       <button
         onClick={onToggle}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
         title="ブレークポイントを切り替え"
         style={{
           position: 'relative',
@@ -127,17 +130,18 @@ function CodeGutterRow({
           display: 'block',
         }}
       >
-        {breakpoint ? (
+        {breakpoint || hover ? (
           <span
             style={{
               position: 'absolute',
-              left: 6,
+              left: 3,
               top: '50%',
               transform: 'translateY(-50%)',
-              width: 8,
-              height: 8,
+              width: 10,
+              height: 10,
               borderRadius: '50%',
               background: color.danger,
+              opacity: breakpoint ? 1 : 0.3,
             }}
           />
         ) : null}

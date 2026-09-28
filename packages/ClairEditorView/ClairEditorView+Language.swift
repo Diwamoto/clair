@@ -14,7 +14,7 @@ import ClairEditorCore
       for area in trackingAreas where area.owner === self { removeTrackingArea(area) }
       addTrackingArea(
         NSTrackingArea(
-          rect: .zero, options: [.mouseMoved, .activeInKeyWindow, .inVisibleRect], owner: self))
+          rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self))
     }
 
     /// AppKit shows `toolTip` after its own hover delay, so swapping it as the
@@ -25,6 +25,12 @@ import ClairEditorCore
       let message = diagnosticMessage(at: point)
       if toolTip != message { toolTip = message }
       updateDefinitionHover(at: point, flags: event.modifierFlags)
+      hoveredBreakpointLine = breakpointSlot(at: point)
+    }
+
+    public override func mouseExited(with event: NSEvent) {
+      super.mouseExited(with: event)
+      hoveredBreakpointLine = nil
     }
 
     public override func flagsChanged(with event: NSEvent) {
