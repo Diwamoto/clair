@@ -149,7 +149,8 @@ let clairTargets: [Target] = [
       "ClairTransport",
       "ClairWorkspace",
     ],
-    path: "apps/mac/ClairAppKit"),
+    path: "apps/mac/ClairAppKit",
+    resources: [.copy("Resources/mermaid.min.js")]),
   .target(
     name: "ClairEditorFixtures",
     dependencies: ["ClairShared"],
