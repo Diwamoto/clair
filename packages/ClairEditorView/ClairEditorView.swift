@@ -74,7 +74,9 @@ import ClairEditorCore
     public var selectionColor: NSColor = .selectedTextBackgroundColor { didSet { needsDisplay = true } }
     public var caretColor: NSColor = .textColor { didSet { needsDisplay = true } }
     /// Width of the line-number column; 0 hides it. Text starts after it.
-    public var gutterWidth: CGFloat = 0 { didSet { renderer.invalidateAll(); needsDisplay = true } }
+    public var gutterWidth: CGFloat = 0 {
+      didSet { renderer.invalidateAll(); needsDisplay = true; window?.invalidateCursorRects(for: self) }
+    }
     public var lineNumberColor: NSColor = .secondaryLabelColor { didSet { needsDisplay = true } }
     /// Line number of the caret's line is drawn in this colour instead.
     public var currentLineNumberColor: NSColor = .labelColor { didSet { needsDisplay = true } }
@@ -201,7 +203,10 @@ import ClairEditorCore
     public override var acceptsFirstResponder: Bool { true }
 
     public override func resetCursorRects() {
-      addCursorRect(bounds, cursor: .iBeam)
+      // Only the text gets the I-beam; the gutter (breakpoints, numbers, folds) keeps the arrow.
+      let (gutter, text) = bounds.divided(atDistance: min(gutterWidth, bounds.width), from: .minXEdge)
+      addCursorRect(gutter, cursor: .arrow)
+      addCursorRect(text, cursor: .iBeam)
     }
 
     // MARK: - Content
