@@ -241,6 +241,23 @@ final class WorkbenchCommandTests: XCTestCase {
     XCTAssertEqual(r.execute("tab.move", ["path": .string("x"), "target": .string("b")], state: &s).failure?.code, .preconditionFailed)
   }
 
+  func testReopenClosedTabs() throws {
+    var s = WorkbenchState()
+    let file = s.active!
+    try r.execute("tab.close", state: &s).get()
+    let terminal = s.tree.leaves.first { $0.kind == .terminal }!.id
+    s.tree.focus(terminal)
+    try r.execute("pane.close", state: &s).get()
+    let terminals = s.tree.leaves.filter { $0.kind == .terminal }.count
+    try r.execute("tab.reopenClosed", state: &s).get()  // newest first: a fresh terminal
+    XCTAssertEqual(s.tree.leaves.filter { $0.kind == .terminal }.count, terminals + 1)
+    try r.execute("tab.reopenClosed", state: &s).get()
+    XCTAssertEqual(s.active, file)
+    XCTAssertEqual(r.execute("tab.reopenClosed", state: &s).failure?.code, .preconditionFailed)
+    for _ in 0..<12 { s.recordClosed(.file(file)) }
+    XCTAssertEqual(s.closedTabs.count, 10)
+  }
+
   func testLastPaneAndTabPreconditions() {
     var s = WorkbenchState()
     r.execute("tab.close", state: &s)
