@@ -96,6 +96,8 @@ import Foundation
     public override func viewDidMoveToWindow() {
       super.viewDidMoveToWindow()
       guard window != nil else {
+        // A kept surface stays live off-screen (Project switch), so its drawn screen survives the round trip.
+        if let keptKey, Self.kept[keptKey] === self { return }
         teardownGhosttySurface()
         return
       }
@@ -615,6 +617,24 @@ import Foundation
       sendText(text)
     }
 
+    /// Surfaces by daemon session key, kept across unmounts so switching Projects doesn't rebuild the
+    /// screen from a fresh `clair attach`. Dropped only when the session itself closes.
+    // ponytail: hidden surfaces keep their poll timer; pause it off-window if idle CPU with many Projects matters.
+    nonisolated(unsafe) private static var kept: [String: ClairGhosttySurfaceView] = [:]
+    private var keptKey: String?
+    static func reusable(key: String) -> ClairGhosttySurfaceView? {
+      guard let v = kept[key], v.window == nil, v.superview == nil else { return nil }
+      return v
+    }
+    static func keep(_ v: ClairGhosttySurfaceView, key: String) {
+      guard kept[key] == nil else { return }  // another window shows this key; the extra view stays unkept
+      v.keptKey = key; kept[key] = v
+    }
+    public static func discard(key: String) {
+      guard let v = kept.removeValue(forKey: key) else { return }
+      if v.window == nil { v.teardownGhosttySurface() }
+    }
+
     /// Terminal surfaces by pane id, so the shell can type into an agent pane (no Return — the user confirms).
     /// ponytail: pane ids are per-Project; only the visible Project's tree is mounted, so a flat map is enough.
     nonisolated(unsafe) private static var byPane: [Int: Weak] = [:]
@@ -812,10 +832,14 @@ import Foundation
 
     public func makeNSView(context: Context) -> ClairGhosttySurfaceView {
       // The real surface's child is `clair attach`; the shell itself lives in the daemon.
-      let cwd = launch?.cwd ?? FileManager.default.homeDirectoryForCurrentUser.path
-      let attach = ClairDaemonLauncher.attachCommand(
-        key: sessionKey, cwd: cwd, command: launch.map(\.command).flatMap { $0.isEmpty ? nil : $0 })
-      let v = ClairGhosttySurfaceView(launch: (attach, cwd))
+      let v = ClairGhosttySurfaceView.reusable(key: sessionKey) ?? {
+        let cwd = launch?.cwd ?? FileManager.default.homeDirectoryForCurrentUser.path
+        let attach = ClairDaemonLauncher.attachCommand(
+          key: sessionKey, cwd: cwd, command: launch.map(\.command).flatMap { $0.isEmpty ? nil : $0 })
+        let v = ClairGhosttySurfaceView(launch: (attach, cwd))
+        ClairGhosttySurfaceView.keep(v, key: sessionKey)
+        return v
+      }()
       v.onFacts = onFacts
       v.onTitle = onTitle
       v.onFocus = onFocus
