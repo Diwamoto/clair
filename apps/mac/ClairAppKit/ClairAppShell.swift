@@ -743,7 +743,8 @@ import Observation
     @AppStorage("clair.sidebarWidth") private var sidebarWidth = 242.0
     @State private var debugMode = "debug"
     @State private var debugPID = ""
-    @State private var associationsDraft = ""
+    struct AssociationDraft: Identifiable, Equatable { let id = UUID(); var ext: String; var lang: String }
+    @State private var associationRows: [AssociationDraft] = []
     @State private var quota: [ProviderQuota] = []
     @State private var quotaHovered = false
     @State private var noticesOpen = false
@@ -2064,11 +2065,31 @@ import Observation
               choiceRow("タブ幅", "tabWidth")
               switchRow("空白文字を表示", "showWhitespace", note: "タブ・行末の空白を薄く可視化します。")
               switchRow("行の折り返し", "softWrap", note: "長い行をエディタの幅に合わせて折り返します。⌥Z でも切り替えられます。")
-              SettingsRow(title: "拡張子の言語", note: "例: tpl=terraform, j2=python。開き直したファイルから反映されます。") {
-                TextField("tpl=terraform", text: $associationsDraft)
-                  .textFieldStyle(.roundedBorder).frame(width: 240)
-                  .onAppear { associationsDraft = WorkbenchState.formatAssociations(st.fileAssociations) }
-                  .onSubmit { store.run("settings.fileAssociations", ["value": .string(associationsDraft)]) }
+              SettingsRow(title: "拡張子の言語", note: "組み込みの判定より優先されます。開き直したファイルから反映されます。") {
+                VStack(alignment: .trailing, spacing: 6) {
+                  ForEach($associationRows) { $row in
+                    HStack(spacing: 6) {
+                      TextField("tpl", text: $row.ext).textFieldStyle(.roundedBorder).frame(width: 90)
+                        .accessibilityLabel("拡張子")
+                      Picker("言語", selection: $row.lang) {
+                        ForEach(EditorLanguageID.allCases, id: \.rawValue) { Text($0.rawValue).tag($0.rawValue) }
+                      }
+                      .labelsHidden().frame(width: 130)
+                      Button { associationRows.removeAll { $0.id == row.id } } label: { Image(systemName: "minus.circle") }
+                        .buttonStyle(.plain).foregroundStyle(C.textTertiary).accessibilityLabel("削除")
+                    }
+                  }
+                  Button { associationRows.append(AssociationDraft(ext: "", lang: EditorLanguageID.terraform.rawValue)) } label: {
+                    Label("追加", systemImage: "plus")
+                  }
+                }
+                .onAppear {
+                  associationRows = st.fileAssociations.sorted { $0.key < $1.key }.map { AssociationDraft(ext: $0.key, lang: $0.value) }
+                }
+                .onChange(of: associationRows) { _, rows in
+                  let text = rows.map { "\($0.ext)=\($0.lang)" }.joined(separator: ",")
+                  store.run("settings.fileAssociations", ["value": .string(text)])
+                }
               }
             }
           case "ターミナル":

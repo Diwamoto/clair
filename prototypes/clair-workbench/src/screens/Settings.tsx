@@ -375,8 +375,8 @@ export function SettingsMain() {
                 <Row
                   last
                   title="拡張子の言語"
-                  note="例: tpl=terraform, j2=python。開き直したファイルから反映されます。"
-                  control={<input defaultValue="tpl=terraform" style={{ width: 240 }} />}
+                  note="組み込みの判定より優先されます。開き直したファイルから反映されます。"
+                  control={<AssociationList />}
                 />
               </Card>
             ) : section === 'ターミナル' ? (
@@ -525,6 +525,29 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
       >
         設定 · {wb.settingsSection}
       </div>
+    </div>
+  );
+}
+
+const LANGUAGES = ['swift', 'go', 'typescript', 'javascript', 'python', 'json', 'markdown', 'rust', 'shell', 'ruby', 'java', 'php', 'terraform'];
+
+/** Extension → language rows; + adds one. Mirrors the native 設定 › エディタ list. */
+function AssociationList() {
+  const [rows, setRows] = useState([{ id: 0, ext: 'tpl', lang: 'terraform' }]);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+      {rows.map((r) => (
+        <div key={r.id} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <input aria-label="拡張子" placeholder="tpl" value={r.ext} style={{ width: 90 }}
+            onChange={(e) => setRows(rows.map((x) => (x.id === r.id ? { ...x, ext: e.target.value } : x)))} />
+          <select aria-label="言語" value={r.lang} style={{ width: 130 }}
+            onChange={(e) => setRows(rows.map((x) => (x.id === r.id ? { ...x, lang: e.target.value } : x)))}>
+            {LANGUAGES.map((l) => <option key={l}>{l}</option>)}
+          </select>
+          <button aria-label="削除" onClick={() => setRows(rows.filter((x) => x.id !== r.id))}>−</button>
+        </div>
+      ))}
+      <button onClick={() => setRows([...rows, { id: Date.now(), ext: '', lang: 'terraform' }])}>＋ 追加</button>
     </div>
   );
 }

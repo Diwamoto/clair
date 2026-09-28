@@ -295,7 +295,7 @@ macOS の `NSTextInputClient` は行ローカルの UTF-16 空間で答える(�
 
 - カラースキーム: app chrome、editor の syntax 色、terminal の色を 1 つの scheme として切り替える。同梱の dark / light と、OS の外観への追従を持つ。scheme は Clair 同梱の定義だけで、VS Code テーマ互換や外部テーマの読み込みは約束しない
 - 言語ごとのファイルアイコン: file tree、editor tab、検索結果、quick open で拡張子・既知ファイル名から言語アイコンを出す。未知の種類は汎用アイコン
-- 拡張子の言語: 設定 › エディタ「拡張子の言語」(`tpl=terraform, j2=python`) が組み込みの拡張子判定より優先される。既定は `tpl=terraform`。未知の言語名は無視して組み込み判定へ落ちる
+- 拡張子の言語: 設定 › エディタ「拡張子の言語」(拡張子と言語セレクトの行リスト、＋で追加) が組み込みの拡張子判定より優先される。既定は `tpl=terraform`。未知の言語名は無視して組み込み判定へ落ちる
 
 minimap、AI inline 補完(2026-09-27 オーナー決定)、VS Code extension 互換、独自 plugin runtime は対象外。
 

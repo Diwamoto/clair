@@ -53,6 +53,14 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   /// Explorer folders the user opened; every other folder starts closed, including ones that appear later.
   public var expanded: Set<String> = []
   public var launches: [Int: AgentLaunch] = [:]
+  /// ⌘⇧T history, newest last, capped at `closedLimit`. Terminals reopen as fresh shells. Transient.
+  public struct ClosedTab: Sendable, Codable, Equatable { public let project: String, tab: WorkbenchTab }
+  public var closedTabs: [ClosedTab] = []
+  static let closedLimit = 10
+  mutating func recordClosed(_ tab: WorkbenchTab) {
+    closedTabs.append(ClosedTab(project: project, tab: tab))
+    if closedTabs.count > Self.closedLimit { closedTabs.removeFirst() }
+  }
   /// Preview pane id → the file it was opened for (Markdown rendered, CSV/TSV as a table).
   public var previews: [Int: String] = [:]
   /// CLI agents started by hand in Clair terminals. Refreshed from live process facts, never saved.
@@ -76,7 +84,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var shortcuts: [String: String] = [:]
   /// File extension (lowercased, no dot) → editor language id. Overrides the built-in detection.
   public var fileAssociations = ["tpl": "terraform"]
-  /// `"tpl=terraform, j2=python"` ⇄ the map. Malformed pairs are dropped.
+  /// `"tpl=terraform,j2=python"` ⇄ the map (the settings list sends this). Malformed or empty pairs are dropped.
   public static func parseAssociations(_ text: String) -> [String: String] {
     var map: [String: String] = [:]
     for pair in text.split(whereSeparator: { $0 == "," || $0 == "\n" }) {
@@ -369,6 +377,11 @@ extension CommandRegistry {
           try require(!s.panesClosed, "no pane to close")
           return .write
         }) { s, _ in
+      switch s.tree.leaves.first(where: { $0.id == s.tree.focused })?.kind {
+      case .terminal: s.recordClosed(.terminal(s.tree.focused))
+      case .graph: s.recordClosed(.graph(s.tree.focused))
+      default: break
+      }
       if s.tree.leaves.first?.id == s.tree.focused, s.tree.leaves.first?.kind == .editor {
         s.tree.replaceFocusedEditor()
         return .ok
@@ -488,7 +501,29 @@ extension CommandRegistry {
     cmd("diff.close", "差分タブを閉じる", .write,
         params: [CommandParam("path", .string), CommandParam("staged", .bool), CommandParam("untracked", .bool)],
         palette: false) { s, i in
-      s.closeDiff(WorkbenchDiffTab(path: i["path"]!.string!, staged: i["staged"]!.bool!, untracked: i["untracked"]!.bool!))
+      let target = WorkbenchDiffTab(path: i["path"]!.string!, staged: i["staged"]!.bool!, untracked: i["untracked"]!.bool!)
+      if s.diffTabs.contains(target) { s.recordClosed(.diff(target)) }
+      s.closeDiff(target)
+      return .ok
+    },
+    // Pops this Project's newest closed tab; entries whose file is gone are dropped on the way.
+    cmd("tab.reopenClosed", "閉じたタブを再度開く", .additive, shortcut: "⌘⇧T",
+        preflight: { s, _ throws(CommandError) in
+          try require(s.closedTabs.contains { $0.project == s.project }, "no closed tab"); return .additive
+        }) { s, _ in
+      while let i = s.closedTabs.lastIndex(where: { $0.project == s.project }) {
+        let tab = s.closedTabs.remove(at: i).tab
+        s.panesClosed = false
+        switch tab {
+        case .file(let path):
+          guard s.files.contains(where: { $0.path == path && $0.status != "D" }) else { continue }
+          s.openTab(path)
+        case .diff(let target): s.openDiff(target)
+        case .terminal: s.tree.splitFocused(.horizontal, kind: .terminal)
+        case .graph: s.tree.splitFocused(.horizontal, kind: .graph)
+        }
+        return .ok
+      }
       return .ok
     },
     cmd("tab.reorder", "タブを並べ替え", .read,
@@ -519,7 +554,7 @@ extension CommandRegistry {
         }) { s, i in
       let p = i["path"]?.string ?? s.active!
       let idx = s.tabs.firstIndex(of: p)!
-      s.tabs.remove(at: idx); s.dirty.remove(p)
+      s.tabs.remove(at: idx); s.dirty.remove(p); s.recordClosed(.file(p))
       s.tabOrder.removeAll { $0 == .file(p) }
       if s.active == p { s.active = s.tabs.isEmpty ? nil : s.tabs[max(idx - 1, 0)] }
       if s.active == nil { s.tree.closeExtraEditors() }  // at most one empty editor
