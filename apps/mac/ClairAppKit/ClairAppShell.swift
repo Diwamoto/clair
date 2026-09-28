@@ -2099,9 +2099,8 @@ import Observation
                         .buttonStyle(.plain).foregroundStyle(C.textTertiary).accessibilityLabel("削除")
                     }
                   }
-                  Button { associationRows.append(AssociationDraft(ext: "", lang: EditorLanguageID.terraform.rawValue)) } label: {
-                    Label("追加", systemImage: "plus")
-                  }
+                  Button { associationRows.append(AssociationDraft(ext: "", lang: EditorLanguageID.terraform.rawValue)) } label: { Image(systemName: "plus") }
+                    .accessibilityLabel("追加")
                 }
                 .onAppear {
                   associationRows = st.fileAssociations.sorted { $0.key < $1.key }.map { AssociationDraft(ext: $0.key, lang: $0.value) }

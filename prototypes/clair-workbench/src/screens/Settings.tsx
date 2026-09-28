@@ -547,7 +547,7 @@ function AssociationList() {
           <button aria-label="削除" onClick={() => setRows(rows.filter((x) => x.id !== r.id))}>−</button>
         </div>
       ))}
-      <button onClick={() => setRows([...rows, { id: Date.now(), ext: '', lang: 'terraform' }])}>＋ 追加</button>
+      <button aria-label="追加" onClick={() => setRows([...rows, { id: Date.now(), ext: '', lang: 'terraform' }])}>＋</button>
     </div>
   );
 }
