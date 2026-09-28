@@ -48,6 +48,19 @@ final class WorkbenchGitTests: XCTestCase {
     XCTAssertTrue(WorkbenchGit.changes(root).first { $0.path == "a.txt" }?.unstaged == true)
   }
 
+  func testDiscardRestoresWorktreeAndDeletesUntracked() throws {
+    var (s, root) = try repo()
+    try "b".write(toFile: root + "/a.txt", atomically: true, encoding: .utf8)
+    try "n".write(toFile: root + "/new.txt", atomically: true, encoding: .utf8)
+    s.refreshStatus()
+    XCTAssertEqual(r.execute("git.discard", ["path": .string("a.txt")], state: &s).failure?.code, .confirmationRequired)
+    try r.execute("git.discard", ["path": .string("a.txt")], confirmed: true, state: &s).get()
+    XCTAssertEqual(try String(contentsOfFile: root + "/a.txt", encoding: .utf8), "a")
+    try r.execute("git.discard", ["path": .string("new.txt")], confirmed: true, state: &s).get()
+    XCTAssertFalse(FileManager.default.fileExists(atPath: root + "/new.txt"))
+    XCTAssertEqual(r.execute("git.discard", ["path": .string("a.txt")], confirmed: true, state: &s).failure?.code, .preconditionFailed)
+  }
+
   func testNonGitProjectHasNoGitCommands() throws {
     let dir = URL.temporaryDirectory.appending(path: "clair-v06-\(UUID().uuidString)").resolvingSymlinksInPath()
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

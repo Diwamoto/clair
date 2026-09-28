@@ -455,7 +455,7 @@ import Observation
       let project = state.project
       let snapshot = state
       let registry = registry
-      let changesWorkingTree = commands.contains { $0.0 == "git.switch" || $0.0 == "git.pull" }
+      let changesWorkingTree = commands.contains { $0.0 == "git.switch" || $0.0 == "git.pull" || $0.0 == "git.discard" }
       if changesWorkingTree { beginGitFilesystemMutation(root: root) }
       let result = await Task.detached(priority: .userInitiated) {
         var detached = snapshot
@@ -1404,6 +1404,9 @@ import Observation
             runGit(
               [(stage ? "git.stage" : "git.unstage", ["path": .string(change.path)])],
               label: stage ? "ステージ" : "ステージ解除")
+          },
+          onDiscard: { change in
+            runGit([("git.discard", ["path": .string(change.path)])], label: "変更の破棄", confirmed: true)
           },
           onBulk: { rows, stage in
             runGit(
