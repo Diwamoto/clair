@@ -376,8 +376,9 @@ export function SettingsMain() {
                   last
                   title="拡張子の言語"
                   note="組み込みの判定より優先されます。開き直したファイルから反映されます。"
-                  control={<AssociationList />}
+                  control={null}
                 />
+                <AssociationList />
               </Card>
             ) : section === 'ターミナル' ? (
               <Card title="シェルと承認">
@@ -535,12 +536,12 @@ const LANGUAGES = ['swift', 'go', 'typescript', 'javascript', 'python', 'json', 
 function AssociationList() {
   const [rows, setRows] = useState([{ id: 0, ext: 'tpl', lang: 'terraform' }]);
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8, paddingBottom: 12 }}>
       {rows.map((r) => (
         <div key={r.id} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <input aria-label="拡張子" placeholder="tpl" value={r.ext} style={{ width: 90 }}
+          <input aria-label="拡張子" placeholder="tpl" value={r.ext} style={{ width: 160, height: 28 }}
             onChange={(e) => setRows(rows.map((x) => (x.id === r.id ? { ...x, ext: e.target.value } : x)))} />
-          <select aria-label="言語" value={r.lang} style={{ width: 130 }}
+          <select aria-label="言語" value={r.lang} style={{ width: 180, height: 28 }}
             onChange={(e) => setRows(rows.map((x) => (x.id === r.id ? { ...x, lang: e.target.value } : x)))}>
             {LANGUAGES.map((l) => <option key={l}>{l}</option>)}
           </select>

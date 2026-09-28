@@ -294,6 +294,7 @@ import Observation
           buffers.reveal(p, line: to.line, column: to.column)
         }
         if id.hasPrefix("debug.") { runDebugCommand(id, input) }
+        if id == "cli.install" || id == "skill.install" { Self.install(cli: id == "cli.install") }
         if let view = state.active.flatMap(buffers.view) {
           switch id {
           case "editor.fold": view.foldAtCaret()
@@ -303,7 +304,7 @@ import Observation
           default: break
           }
         }
-        if let closing { ClairDaemonLauncher.closeSession(key: closing) }  // T09: closing a pane ends its shell; closing a window does not
+        if let closing { ClairDaemonLauncher.closeSession(key: closing); ClairGhosttySurfaceView.discard(key: closing) }  // T09: closing a pane ends its shell; closing a window does not
         if id == "agent.launch" || id == "pane.close" || id == "agent.close"
           || (id == "settings.set" && input["key"] == .string("preventSleepOnBattery"))
         { refreshSleepAssertion() }
@@ -311,6 +312,22 @@ import Observation
         persistState()
       }
       return r
+    }
+
+    /// ⌘K install rows: the result is an alert because the palette has already closed (the settings rows show it inline).
+    private static func install(cli: Bool) {
+      Task.detached {
+        let message: String
+        do {
+          if cli { try ClairDaemonLauncher.installCommand() } else { try ClairAgentSkill.install() }
+          message = cli ? "clair コマンドをインストールしました(\(ClairDaemonLauncher.commandLink.path))。" : "Agent skill をインストールしました。"
+        } catch { message = "インストールできません: \(error.localizedDescription)" }
+        await MainActor.run {
+          let alert = NSAlert()
+          alert.messageText = message
+          alert.runModal()
+        }
+      }
     }
 
     private func runDebugCommand(_ id: String, _ input: CommandInput) {
@@ -2088,23 +2105,27 @@ import Observation
               choiceRow("タブ幅", "tabWidth")
               switchRow("空白文字を表示", "showWhitespace", note: "タブ・行末の空白を薄く可視化します。")
               switchRow("行の折り返し", "softWrap", note: "長い行をエディタの幅に合わせて折り返します。⌥Z でも切り替えられます。")
-              SettingsRow(title: "拡張子の言語", note: "組み込みの判定より優先されます。開き直したファイルから反映されます。") {
-                VStack(alignment: .trailing, spacing: 6) {
-                  ForEach($associationRows) { $row in
-                    HStack(spacing: 6) {
-                      TextField("tpl", text: $row.ext).textFieldStyle(.roundedBorder).frame(width: 90)
-                        .accessibilityLabel("拡張子")
-                      Picker("言語", selection: $row.lang) {
-                        ForEach(EditorLanguageID.allCases, id: \.rawValue) { Text($0.rawValue).tag($0.rawValue) }
-                      }
-                      .labelsHidden().frame(width: 130)
-                      Button { associationRows.removeAll { $0.id == row.id } } label: { Image(systemName: "minus.circle") }
-                        .buttonStyle(.plain).foregroundStyle(C.textTertiary).accessibilityLabel("削除")
+              // Full-width block: the rows sit under the title instead of squeezing into the trailing control slot.
+              VStack(alignment: .leading, spacing: 8) {
+                SettingsRow(title: "拡張子の言語", note: "組み込みの判定より優先されます。開き直したファイルから反映されます。") { EmptyView() }
+                ForEach($associationRows) { $row in
+                  HStack(spacing: 8) {
+                    TextField("tpl", text: $row.ext).textFieldStyle(.plain)
+                      .padding(.horizontal, 8).frame(width: 160, height: 28)
+                      .background(RoundedRectangle(cornerRadius: 6).fill(C.surfaceActive))
+                      .accessibilityLabel("拡張子")
+                    Picker("言語", selection: $row.lang) {
+                      ForEach(EditorLanguageID.allCases, id: \.rawValue) { Text($0.rawValue).tag($0.rawValue) }
                     }
+                    .labelsHidden().controlSize(.large).frame(width: 180)
+                    Button { associationRows.removeAll { $0.id == row.id } } label: { Image(systemName: "minus.circle") }
+                      .buttonStyle(.plain).foregroundStyle(C.textTertiary).accessibilityLabel("削除")
                   }
-                  Button { associationRows.append(AssociationDraft(ext: "", lang: EditorLanguageID.terraform.rawValue)) } label: { Image(systemName: "plus") }
-                    .accessibilityLabel("追加")
                 }
+                Button { associationRows.append(AssociationDraft(ext: "", lang: EditorLanguageID.terraform.rawValue)) } label: { Image(systemName: "plus") }
+                  .accessibilityLabel("追加")
+              }
+              .padding(.bottom, 12)
                 .onAppear {
                   associationRows = st.fileAssociations.sorted { $0.key < $1.key }.map { AssociationDraft(ext: $0.key, lang: $0.value) }
                 }
@@ -2112,7 +2133,6 @@ import Observation
                   let text = rows.map { "\($0.ext)=\($0.lang)" }.joined(separator: ",")
                   store.run("settings.fileAssociations", ["value": .string(text)])
                 }
-              }
             }
           case "ターミナル":
             SettingsCard(title: "シェルと承認") {
