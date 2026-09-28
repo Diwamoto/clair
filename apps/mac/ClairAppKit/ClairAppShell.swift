@@ -1808,12 +1808,16 @@ import Observation
                   Image(systemName: "circle.fill").font(.system(size: 9)).foregroundStyle(C.danger)
                     .frame(width: 24, height: 28).contentShape(Rectangle())
                 }.buttonStyle(.hoverWash).help("ブレークポイントを削除")
-                Button { _ = store.run("file.open", ["path": .string(path), "line": .int(status?.line ?? line)]) } label: {
+                Button {
+                  let target = status?.line ?? line
+                  _ = store.run("file.open", ["path": .string(path), "line": .int(target)])
+                  if let rel = store.state.active { store.buffers.reveal(rel, line: target, column: -1) }  // select the line
+                } label: {
                   Text("\(URL(fileURLWithPath: path).lastPathComponent):\(status?.line ?? line)")
                     .font(.system(size: 12)).foregroundStyle(status?.verified == false ? C.attention : C.textSecondary)
                     .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading).contentShape(Rectangle())
                 }.buttonStyle(.hoverWash).help(status?.message ?? (status == nil ? "未検証" : "検証済み"))
-              }.padding(.horizontal, 12)
+              }.padding(.horizontal, 12).padding(.leading, 2)
             }
           }
         } else { debugEmpty("設定されていません") }

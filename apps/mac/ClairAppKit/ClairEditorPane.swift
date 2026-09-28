@@ -145,7 +145,7 @@
       else { return }
       caret[path] = (p.line.value + 1, p.column.value + 1)
     }
-    /// Search-hit jump target (1-based line, 0-based UTF-16 column); `nonce` makes a repeat jump to the same line still fire.
+    /// Search-hit jump target (1-based line, 0-based UTF-16 column, -1 selects the line); `nonce` makes a repeat jump to the same line still fire.
     private(set) var reveal: (path: String, line: Int, column: Int, nonce: Int)?
     /// Above this the file is refused rather than loaded whole (large-file paths are E10's scope).
     /// Spec §5.9: the canonical `10mb` fixture must open, and it is written in whole lines, so it lands a

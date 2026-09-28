@@ -73,9 +73,17 @@ import ClairEditorCore
     }
 
     /// Moves the caret to `line`/`utf16Column` (0-based, clamped) and scrolls there.
+    /// A negative `utf16Column` selects the whole line instead of placing a caret.
     public func reveal(line: Int, utf16Column: Int) {
       reveal(line: line)
       let i = min(max(line, 0), snapshot.lineCount - 1)
+      if utf16Column < 0, let l = try? snapshot.line(at: TextLineIndex(i)),
+        let whole = try? TextSelectionSet([TextSelection(anchor: l.contentRange.lowerBound, head: l.contentRange.upperBound)]) {
+        selection = whole
+        onSelectionChange?(selection)
+        needsDisplay = true
+        return
+      }
       guard utf16Column > 0,
         let offset = try? snapshot.offset(
           at: TextLinePosition<UTF16Unit>(line: TextLineIndex(i), column: UTF16Offset(utf16Column)),

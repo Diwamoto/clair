@@ -129,6 +129,14 @@
       XCTAssertEqual(toggled, [2])
     }
 
+    func testRevealWithNegativeColumnSelectsTheWholeLine() throws {
+      let view = try makeView()
+      view.reveal(line: 1, utf16Column: -1)
+      let sel = view.selection.selections[0]
+      XCTAssertEqual(sel.anchor.value, "func a() {\n".utf8.count)
+      XCTAssertEqual(sel.head.value, "func a() {\n\tx := 1".utf8.count)
+    }
+
     func testGutterClickAndCaretCommandsFoldAndUnfold() throws {
       let view = try makeView()
       view.foldRanges = [byteRange(Self.source, from: "func a", through: "}")]
