@@ -62,26 +62,29 @@ function ChildChip({ child, focused, onFocus }: { child: Child; focused: boolean
   );
 }
 
-export function ConciergePanel() {
-  const [messages, setMessages] = useState<Msg[]>(SEED);
-  const [draft, setDraft] = useState('');
-  const [running, setRunning] = useState(true);
-  const [tasksOpen, setTasksOpen] = useState(true);
-  const [openTool, setOpenTool] = useState<string | null>(null);
-  const [focused, setFocused] = useState<string | null>(null);
-  const feedRef = useRef<HTMLDivElement>(null);
-
+// ponytail: module-level state shared by panel and main; a store slice if the mock grows more concierge state.
+let shared = { running: true, focused: null as string | null };
+const listeners = new Set<() => void>();
+function useShared() {
+  const [, bump] = useState(0);
   useEffect(() => {
-    const el = feedRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length]);
-
-  const send = () => {
-    const text = draft.trim();
-    if (!text) return;
-    setMessages((m) => [...m, { id: `u${m.length}`, from: 'user', text }]);
-    setDraft('');
+    const l = () => bump((n) => n + 1);
+    listeners.add(l);
+    return () => void listeners.delete(l);
+  }, []);
+  const set = (patch: Partial<typeof shared>) => {
+    shared = { ...shared, ...patch };
+    listeners.forEach((l) => l());
   };
+  return [shared, set] as const;
+}
+
+/** Sidebar: the concierge itself, its tasks, and its instructions. */
+export function ConciergePanel() {
+  const [{ running, focused }, set] = useShared();
+  const [tasksOpen, setTasksOpen] = useState(true);
+  const setRunning = (v: boolean) => set({ running: v });
+  const setFocused = (v: string) => set({ focused: v });
   const active = CHILDREN.filter((c) => !c.state.startsWith('終了')).length;
 
   return (
@@ -122,8 +125,46 @@ export function ConciergePanel() {
         ) : null}
       </div>
 
+      <div style={{ flex: 1 }} />
+
+      {/* footer: per-Project instructions */}
+      <button
+        className="hoverable"
+        style={{ display: 'flex', alignItems: 'center', gap: space[2], height: 30, padding: '0 12px', borderTop: `1px solid ${line.hairline}`, color: color.textTertiary, fontSize: fs.caption }}
+      >
+        <IconMarkdown size={12} />
+        .clair/concierge.md を編集
+      </button>
+    </div>
+  );
+}
+
+/** Main area: the concierge's transcript as a full-size chat panel. */
+export function ConciergeMain() {
+  const [{ running, focused }, set] = useShared();
+  const [messages, setMessages] = useState<Msg[]>(SEED);
+  const [draft, setDraft] = useState('');
+  const [openTool, setOpenTool] = useState<string | null>(null);
+  const setFocused = (v: string) => set({ focused: v });
+  const feedRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = feedRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages.length]);
+
+  const send = () => {
+    const text = draft.trim();
+    if (!text) return;
+    setMessages((m) => [...m, { id: `u${m.length}`, from: 'user', text }]);
+    setDraft('');
+  };
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, background: color.canvas }}>
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', width: '100%', maxWidth: 760, margin: '0 auto' }}>
       {/* chat: the concierge's transcript */}
-      <div ref={feedRef} className="scroll" style={{ flex: 1, minHeight: 0, padding: '12px 12px 4px' }}>
+      <div ref={feedRef} className="scroll" style={{ flex: 1, minHeight: 0, padding: '26px 16px 8px' }}>
         {!running ? (
           <div style={{ color: color.textQuaternary, fontSize: fs.caption, textAlign: 'center', marginTop: 40 }}>
             コンシェルジュは起動していません
@@ -159,9 +200,9 @@ export function ConciergePanel() {
                     borderRadius: radius.overlay,
                     background: m.from === 'user' ? wash.strong : undefined,
                     color: m.from === 'user' ? color.textPrimary : color.textSecondary,
-                    fontSize: fs.secondary,
+                    fontSize: fs.body,
                     lineHeight: 1.55,
-                    maxWidth: m.from === 'user' ? '88%' : undefined,
+                    maxWidth: m.from === 'user' ? '85%' : undefined,
                     marginLeft: m.from === 'user' ? 'auto' : undefined,
                     width: m.from === 'user' ? 'fit-content' : undefined,
                   }}
@@ -197,14 +238,7 @@ export function ConciergePanel() {
         </div>
       </div>
 
-      {/* footer: per-Project instructions */}
-      <button
-        className="hoverable"
-        style={{ display: 'flex', alignItems: 'center', gap: space[2], height: 30, padding: '0 12px', borderTop: `1px solid ${line.hairline}`, color: color.textTertiary, fontSize: fs.caption }}
-      >
-        <IconMarkdown size={12} />
-        .clair/concierge.md を編集
-      </button>
+      </div>
     </div>
   );
 }

@@ -26,7 +26,7 @@ import { AgentsPanel, MergeGraphMain, SessionsMain, SessionsStatus } from './scr
 import { MobileApp } from './screens/Mobile';
 import { ReviewMain, ReviewPanel, ReviewStatus } from './screens/Review';
 import { SettingsScreen } from './screens/Settings';
-import { ConciergePanel } from './screens/Concierge';
+import { ConciergeMain, ConciergePanel } from './screens/Concierge';
 import { ExplorerPanel, WorkspaceMain, WorkspaceStatus } from './screens/Workspace';
 import { AppShell, navIdFor } from './chrome';
 import { PanelStage, ScreenStage } from './motion';
@@ -250,6 +250,8 @@ function Ide() {
       <DebugMain />
     ) : wb.screen === 'debugAgent' ? (
       <DebugAgentMain />
+    ) : wb.screen === 'concierge' ? (
+      <ConciergeMain />
     ) : wb.screen === 'sessions' ? (
       <SessionsMain />
     ) : (
