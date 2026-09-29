@@ -10,6 +10,7 @@ struct ProcessSample: Equatable {
   var cpuSeconds: [pid_t: Double] = [:]
   var footprintBytes: [pid_t: UInt64] = [:]
   var names: [pid_t: String] = [:]
+  var parents: [pid_t: pid_t] = [:]
 
   var totalFootprint: UInt64 { footprintBytes.values.reduce(0, +) }
 
@@ -18,7 +19,9 @@ struct ProcessSample: Equatable {
     mach_timebase_info(&timebase)
     let ticksToSeconds = Double(timebase.numer) / Double(timebase.denom) / 1_000_000_000
     var sample = ProcessSample()
-    for pid in descendants(of: root) {
+    let (pids, parents) = descendants(of: root)
+    sample.parents = parents
+    for pid in pids {
       var info = rusage_info_v2()
       let ok = withUnsafeMutablePointer(to: &info) {
         $0.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) { proc_pid_rusage(pid, RUSAGE_INFO_V2, $0) }
@@ -34,25 +37,51 @@ struct ProcessSample: Equatable {
   }
 
   /// `root` and every process below it, from one scan of the process table.
-  static func descendants(of root: pid_t) -> [pid_t] {
+  static func descendants(of root: pid_t) -> (pids: [pid_t], parents: [pid_t: pid_t]) {
     let capacity = Int(proc_listallpids(nil, 0)) + 64
     var pids = [pid_t](repeating: 0, count: capacity)
     let count = Int(proc_listallpids(&pids, Int32(capacity * MemoryLayout<pid_t>.size)))
-    var children: [pid_t: [pid_t]] = [:]
+    var children: [pid_t: [pid_t]] = [:], parents: [pid_t: pid_t] = [:]
     for pid in pids.prefix(max(count, 0)) where pid > 0 {
       var info = proc_bsdshortinfo()
       if proc_pidinfo(pid, PROC_PIDT_SHORTBSDINFO, 0, &info, Int32(MemoryLayout<proc_bsdshortinfo>.size)) > 0 {
         children[pid_t(info.pbsi_ppid), default: []].append(pid)
+        parents[pid] = pid_t(info.pbsi_ppid)
       }
     }
     var result = [root], i = 0
     while i < result.count { result += children[result[i]] ?? []; i += 1 }
-    return result
+    return (result, parents)
   }
 
   /// `root#pane` of the Clair terminal `pid` runs in, read from its inherited `CLAIR_TERMINAL_KEY`.
   /// Only our own user's processes are readable; anything else (or the daemon itself) is nil.
   static func terminalKey(of pid: pid_t) -> (root: String, pane: Int)? {
+    guard let value = rawTerminalKey(of: pid), let hash = value.lastIndex(of: "#"),
+      let pane = Int(value[value.index(after: hash)...]) else { return nil }
+    return (String(value[..<hash]), pane)
+  }
+
+  private static func rawTerminalKey(of pid: pid_t) -> String? {
+    arguments(of: pid)?.env.first { $0.hasPrefix("CLAIR_TERMINAL_KEY=") }.map { String($0.dropFirst("CLAIR_TERMINAL_KEY=".count)) }
+  }
+
+  /// The command the terminal is running on `pid`'s behalf: the daemon spawns one shell per terminal,
+  /// so climb to the process whose parent is `ClairDaemon` (the shell) and print the job just below it.
+  static func terminalCommand(of pid: pid_t, in sample: ProcessSample) -> String? {
+    var chain = [pid]
+    while let parent = sample.parents[chain.last!], parent > 1, chain.count < 64 {
+      if sample.names[parent] == "ClairDaemon" { break }
+      chain.append(parent)
+    }
+    guard chain.count >= 2, sample.names[sample.parents[chain.last!] ?? 0] == "ClairDaemon",
+      let argv = arguments(of: chain[chain.count - 2])?.argv, let first = argv.first else { return nil }
+    let line = ([(first as NSString).lastPathComponent] + argv.dropFirst()).joined(separator: " ")
+    return line.count > 60 ? String(line.prefix(59)) + "…" : line
+  }
+
+  /// argv and environment of one of our own processes (`KERN_PROCARGS2`).
+  static func arguments(of pid: pid_t) -> (argv: [String], env: [String])? {
     var mib = [CTL_KERN, KERN_PROCARGS2, pid]
     var size = 0
     guard sysctl(&mib, 3, nil, &size, nil, 0) == 0, size > 4 else { return nil }
@@ -60,14 +89,9 @@ struct ProcessSample: Equatable {
     guard sysctl(&mib, 3, &buf, &size, nil, 0) == 0 else { return nil }
     // Layout: argc (Int32), exec path, NUL padding, argv[argc], then environment, all NUL-separated.
     let argc = buf.withUnsafeBytes { $0.load(as: Int32.self) }
-    let strings = buf[4..<size].split(separator: 0, omittingEmptySubsequences: true)
-    for entry in strings.dropFirst(1 + Int(argc)) {
-      guard let line = String(bytes: entry, encoding: .utf8), line.hasPrefix("CLAIR_TERMINAL_KEY=") else { continue }
-      let value = line.dropFirst("CLAIR_TERMINAL_KEY=".count)
-      guard let hash = value.lastIndex(of: "#"), let pane = Int(value[value.index(after: hash)...]) else { return nil }
-      return (String(value[..<hash]), pane)
-    }
-    return nil
+    let strings = buf[4..<size].split(separator: 0, omittingEmptySubsequences: true).map { String(decoding: $0, as: UTF8.self) }
+    let count = min(Int(argc), max(strings.count - 1, 0))
+    return (Array(strings.dropFirst().prefix(count)), Array(strings.dropFirst(1 + count)))
   }
 
   /// CPU percent of one core between two samples (over 100 on several cores, like Activity Monitor).
@@ -166,7 +190,8 @@ struct ClairResourceMeter: View {
   private func owner(_ pid: pid_t) -> String? {
     guard let key = ProcessSample.terminalKey(of: pid) else { return nil }
     let project = (key.root as NSString).lastPathComponent
-    return "\(project) · " + sessionTitle(key.root, key.pane)
+    let command = ProcessSample.terminalCommand(of: pid, in: sample).map { " · " + $0 } ?? ""
+    return "\(project) · " + sessionTitle(key.root, key.pane) + command
   }
 
   private static func bytes(_ n: UInt64) -> String { ByteCountFormatter.string(fromByteCount: Int64(n), countStyle: .memory) }
