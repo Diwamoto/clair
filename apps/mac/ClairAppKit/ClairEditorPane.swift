@@ -415,9 +415,9 @@
               // keystroke are fast enough (BUDGET-OP-100) to need nothing.
               if buffers.highlightsLoading.contains(path) {
                 ProgressView().controlSize(.small).padding(8)
-              } else if focused, let onPreview, MarkdownPreview.isMarkdown(path) {
+              } else if focused, let onPreview, MarkdownPreview.isMarkdown(path) || TableFile.separator(path) != nil || path.lowercased().hasSuffix(".html") || path.lowercased().hasSuffix(".htm") {
                 Button(action: onPreview) { Image(systemName: "eye") }
-                  .buttonStyle(.borderless).help("プレビューを開く (⌘⇧V)").accessibilityLabel("Markdown プレビューを開く")
+                  .buttonStyle(.borderless).help("プレビューを開く (⌘⇧V)").accessibilityLabel("プレビューを開く")
                   .padding(8)
               }
             }

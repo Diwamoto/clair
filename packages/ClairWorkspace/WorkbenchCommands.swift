@@ -804,7 +804,7 @@ extension CommandRegistry {
     // table) and keeps showing it when the editor switches files; asking again for the same file just focuses it.
     cmd("editor.markdownPreview", "プレビュー / 表で開く", .additive, ai: false, shortcut: "⌘⇧V",
         preflight: { s, _ throws(CommandError) in
-          try require(s.active.map { MarkdownPreview.isMarkdown($0) || TableFile.separator($0) != nil } == true, "Markdown / CSV ファイルが開かれていません"); return .additive
+          try require(s.active.map { MarkdownPreview.isMarkdown($0) || TableFile.separator($0) != nil || $0.lowercased().hasSuffix(".html") || $0.lowercased().hasSuffix(".htm") } == true, "Markdown / CSV / HTML ファイルが開かれていません"); return .additive
         }) { s, _ in
       guard let path = s.active else { return .ok }
       s.panesClosed = false

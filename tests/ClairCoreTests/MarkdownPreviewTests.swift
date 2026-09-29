@@ -79,4 +79,16 @@ final class MarkdownPreviewTests: XCTestCase {
     let restored = try JSONDecoder().decode(PaneTree.self, from: JSONEncoder().encode(s.tree))
     XCTAssertEqual(restored, s.tree)
   }
+
+  func testHTMLPreviewUsesExistingPaneForSameFile() throws {
+    let registry = CommandRegistry.workbench
+    var state = WorkbenchState()
+    state.files = [WorkbenchFile(path: "artifact.html", status: nil)]
+    _ = try registry.execute("tab.open", ["path": .string("artifact.html")], state: &state).get()
+    _ = try registry.execute("editor.markdownPreview", state: &state).get()
+    XCTAssertEqual(state.tree.leaves.filter { $0.kind == .preview }.count, 1)
+    _ = try registry.execute("editor.markdownPreview", state: &state).get()
+    XCTAssertEqual(state.tree.leaves.filter { $0.kind == .preview }.count, 1)
+    XCTAssertEqual(state.previews.values.first, "artifact.html")
+  }
 }
