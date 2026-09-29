@@ -848,7 +848,7 @@ import Observation
       CommandGroup(after: .newItem) { items(.file) }
       CommandGroup(after: .textEditing) { items(.edit) }
       CommandGroup(after: .toolbar) { items(.view) }
-      CommandMenu("移動") {
+      CommandMenu("Pane") {
         items(.go)
         // Ctrl-Tab is the conventional tab cycle; unclaimed, AppKit only walks the focus ring over the tab buttons.
         Button("次のタブ") { store?.performFromUI("tab.next") }
