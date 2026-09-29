@@ -58,7 +58,7 @@ final class WorkbenchProjectTests: XCTestCase {
     r.execute("pane.splitRight", state: &s)
     let aTree = s.tree
     open(try folder("b", ["two.txt"]), &s)
-    XCTAssertEqual(s.tree, PaneTree()); XCTAssertEqual(s.tabs, [])
+    XCTAssertEqual(s.tree, PaneTree(single: .editor)); XCTAssertEqual(s.tabs, [])
     s.panesClosed = true  // closing every pane in b must not blank a
     r.execute("project.switch", ["name": .string("a")], state: &s)
     XCTAssertEqual(s.tree, aTree); XCTAssertEqual(s.tabs, ["one.txt"]); XCTAssertEqual(s.active, "one.txt")
@@ -123,12 +123,12 @@ final class WorkbenchProjectTests: XCTestCase {
     json = json.replacingOccurrences(of: "\"focused\":1", with: "\"focused\":99")  // focus points at no pane
     XCTAssertNotEqual(json, try String(contentsOf: url, encoding: .utf8))
     try Data(json.utf8).write(to: url)
-    XCTAssertEqual(try XCTUnwrap(WorkbenchState.restore(from: url)).tree, PaneTree())
+    XCTAssertEqual(try XCTUnwrap(WorkbenchState.restore(from: url)).tree, PaneTree(single: .editor))
 
     r.execute("pane.splitRight", state: &s)
     r.execute("settings.set", ["key": .string("restoreLayout"), "value": .bool(false)], state: &s)
     try s.save(to: url)
-    XCTAssertEqual(try XCTUnwrap(WorkbenchState.restore(from: url)).tree, PaneTree())
+    XCTAssertEqual(try XCTUnwrap(WorkbenchState.restore(from: url)).tree, PaneTree(single: .editor))
   }
 
   func testGitStatusBadges() throws {

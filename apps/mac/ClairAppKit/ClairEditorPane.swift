@@ -404,6 +404,8 @@
     let onCaret: (String, TextSelectionSet, TextSnapshot) -> Void
     /// Preview pane id → the file it shows (`WorkbenchState.previews`).
     var previews: [Int: String] = [:]
+    /// Shortcut rows for the home screen shown while no file is open; empty keeps the plain note.
+    var home: [(title: String, keys: String)] = []
 
     var body: some View {
       if let path, let root {
@@ -443,8 +445,10 @@
           }
         case .failed(let message)?: note(message)
         }
-      } else {
+      } else if home.isEmpty {
         note("ファイルを選択してください。")
+      } else {
+        HomeView(shortcuts: home)
       }
     }
 
@@ -492,6 +496,41 @@
 
     private func note(_ s: String) -> some View {
       Text(s).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+    }
+  }
+
+  /// The first screen of a Project with no file open: the Clair mark in block characters over its command shortcuts, centred.
+  struct HomeView: View {
+    let shortcuts: [(title: String, keys: String)]
+    // A/B/C pick the icon's three blues (TL / TR+BL / BR); the 24×11 grid follows the app icon's four rounded squares.
+    private static let art = [
+      "  AAAAAAAAAA   BBBBBBB", "  AAAAAAAAAA   BBBBBBB", "  AAAAAAAAAA   BBBBBBB",
+      "  AAAAAAAAAA", "  AAAAAAAAAA",
+      "            CCCCCCCCCC", "            CCCCCCCCCC",
+      "  BBBBBBB   CCCCCCCCCC", "  BBBBBBB   CCCCCCCCCC", "  BBBBBBB   CCCCCCCCCC",
+    ]
+    private static let blue: [Character: Color] = ["A": Color(red: 0.18, green: 0.62, blue: 1), "B": Color(red: 0.05, green: 0.47, blue: 0.85), "C": Color(red: 0.41, green: 0.77, blue: 1)]
+
+    var body: some View {
+      VStack(spacing: 28) {
+        VStack(spacing: 0) {
+          ForEach(Array(Self.art.enumerated()), id: \.offset) { _, row in
+            row.padding(toLength: 24, withPad: " ", startingAt: 0).reduce(Text("")) { $0 + Text(String($1 == " " ? " " : "█")).foregroundColor(Self.blue[$1] ?? .clear) }
+          }
+        }
+        .font(.system(size: 14, design: .monospaced)).accessibilityHidden(true)
+        VStack(spacing: 8) {
+          ForEach(shortcuts, id: \.title) { s in
+            HStack(spacing: 24) {
+              Text(s.title).frame(width: 150, alignment: .trailing)
+              Text(s.keys).frame(width: 60, alignment: .leading).foregroundStyle(C.textTertiary)
+            }
+          }
+        }
+        .font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary)
+      }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .background(C.canvas)
     }
   }
 

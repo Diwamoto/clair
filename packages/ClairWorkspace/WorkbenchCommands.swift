@@ -77,7 +77,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var layouts: [String: ProjectLayout] = [:]
   /// Last scanned tree per Project; not persisted, only makes switching back instant.
   var filesCache: [String: [WorkbenchFile]] = [:]
-  public var tree = PaneTree()
+  public var tree = PaneTree(single: .editor)
   /// Every pane was closed (⌘W on the last one): the shell shows the empty panel instead of `tree`. Transient.
   public var panesClosed = false
   public var tabs: [String] = ["apple/ClairApp/ContentView.swift"]

@@ -102,7 +102,7 @@ public struct WorkbenchProject: Sendable, Codable, Equatable {
 
 /// Restorable per-Project UI state.
 public struct ProjectLayout: Sendable, Codable, Equatable {
-  public var tree = PaneTree()
+  public var tree = PaneTree(single: .editor)
   public var tabs: [String] = []
   public var active: String?
   public var diffTabs: [WorkbenchDiffTab] = []
@@ -297,7 +297,7 @@ extension WorkbenchState {
       !target.path.isEmpty && !target.path.hasPrefix("/") && !target.path.split(separator: "/").contains("..")
     }
     if l.activeDiff.map(l.diffTabs.contains) != true { l.activeDiff = nil }
-    if !l.tree.isValid { l.tree = PaneTree() }
+    if !l.tree.isValid { l.tree = PaneTree(single: .editor) }
     l.launches = l.launches.filter { id, _ in l.tree.leaves.contains { $0.id == id } }
     l.previews = l.previews.filter { id, _ in l.tree.leaves.contains { $0.id == id } }
     layout = l

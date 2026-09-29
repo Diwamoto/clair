@@ -32,7 +32,8 @@ public struct PaneTree: Sendable, Equatable, Codable {
   public private(set) var maximized: Int?
   private var nextID: Int
 
-  /// editor (left, 0.62) | terminal for an agent (top right) / terminal (bottom right, 0.55)
+  /// editor (left, 0.62) | terminal for an agent (top right) / terminal (bottom right, 0.55).
+  /// Not the default: a Project opens on a single editor showing the home screen (`init(single:)`).
   public init() {
     root = .split(
       axis: .horizontal, ratio: 0.62,
