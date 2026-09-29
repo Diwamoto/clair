@@ -538,6 +538,31 @@ import Foundation
       }
     }
 
+    // Hover tracking so libghostty underlines a link while cmd is held.
+    public override func updateTrackingAreas() {
+      super.updateTrackingAreas()
+      trackingAreas.forEach(removeTrackingArea)
+      addTrackingArea(NSTrackingArea(
+        rect: .zero, options: [.mouseMoved, .activeInKeyWindow, .inVisibleRect], owner: self))
+    }
+
+    public override func mouseMoved(with event: NSEvent) { sendHover(event) }
+
+    // cmd pressed/released without moving: resend the position so the underline toggles.
+    public override func flagsChanged(with event: NSEvent) {
+      super.flagsChanged(with: event)
+      sendHover(event)
+    }
+
+    private func sendHover(_ event: NSEvent) {
+      guard let ghosttySurface, let window else { return }
+      let point = convert(window.mouseLocationOutsideOfEventStream, from: nil)
+      guard bounds.contains(point) else { return }
+      try? ghosttySurface.sendMousePosition(
+        x: Double(point.x), y: Double(point.y), mods: Self.ghosttyMods(event.modifierFlags))
+      needsDisplay = true
+    }
+
     public override func mouseUp(with event: NSEvent) {
       guard let ghosttySurface else { return }
       do {
