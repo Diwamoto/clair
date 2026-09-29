@@ -110,6 +110,7 @@
     @State private var draft = ""
     /// Shown until the transcript catches up with what was just sent.
     @State private var pending: String?
+    @FocusState private var focused: Bool
 
     var body: some View {
       VStack(spacing: 0) {
@@ -155,7 +156,9 @@
     private var composer: some View {
       HStack(alignment: .bottom, spacing: 8) {
         TextField(tr("コンシェルジュに頼む…"), text: $draft, axis: .vertical)
-          .textFieldStyle(.plain).lineLimit(1...6).font(Typography.font(Typography.chrome))
+          .textFieldStyle(.plain).lineLimit(2...8).font(Typography.font(Typography.chrome))
+          .frame(maxWidth: .infinity, minHeight: 40, alignment: .topLeading)
+          .focused($focused)
           .onSubmit(send)
         let empty = draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         Button(action: send) {
@@ -163,8 +166,10 @@
             .frame(width: 26, height: 26).background(empty ? C.textQuaternary : C.textPrimary, in: Circle())
         }.buttonStyle(.plain).disabled(empty).help(tr("送信")).accessibilityLabel(tr("送信"))
       }
-      .padding(.leading, 12).padding(.trailing, 6).padding(.vertical, 6)
-      .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(C.divider, lineWidth: 1))
+      .padding(.leading, 12).padding(.trailing, 8).padding(.vertical, 10)
+      .contentShape(RoundedRectangle(cornerRadius: 10))
+      .onTapGesture { focused = true }  // the whole box is the input, not just the text line
+      .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(focused ? C.textTertiary : C.divider, lineWidth: 1))
     }
 
     /// Types the text into the concierge PTY, then Return on its own write so the TUI reads it as a submit, not a pasted newline.
