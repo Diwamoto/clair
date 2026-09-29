@@ -851,9 +851,9 @@ import Observation
       CommandMenu("Pane") {
         items(.go)
         // Ctrl-Tab is the conventional tab cycle; unclaimed, AppKit only walks the focus ring over the tab buttons.
-        Button("次のタブ") { store?.performFromUI("tab.next") }
+        Button("Next Tab") { store?.performFromUI("tab.next") }
           .keyboardShortcut(.tab, modifiers: .control).disabled(store == nil)
-        Button("前のタブ") { store?.performFromUI("tab.previous") }
+        Button("Previous Tab") { store?.performFromUI("tab.previous") }
           .keyboardShortcut(.tab, modifiers: [.control, .shift]).disabled(store == nil)
       }
     }
@@ -873,10 +873,27 @@ import Observation
       return .view
     }
 
+    /// Menu-bar titles follow macOS English menus; the palette keeps the registry's titles.
+    static let titles: [String: String] = [
+      "settings.open": "Settings…", "file.save": "Save", "tab.reopenClosed": "Reopen Closed Tab",
+      "pane.close": "Close Tab or Pane", "palette.recent": "Open Recent…", "palette.compare": "Compare With…",
+      "window.restart": "Restart Window", "app.restart": "Restart App",
+      "palette.find": "Find", "palette.search": "Find in Project", "editor.format": "Format Document",
+      "editor.fold": "Fold", "editor.unfold": "Unfold", "editor.foldAll": "Fold All", "editor.unfoldAll": "Unfold All",
+      "sidebar.toggle": "Toggle Sidebar", "palette.commands": "Command Palette", "palette.commandsAlt": "Command Palette",
+      "pane.splitRight": "Split Right", "pane.splitDown": "Split Down", "pane.maximize": "Maximize Pane",
+      "pane.equalize": "Equalize Panes", "terminal.show": "Show Terminal", "editor.toggleWrap": "Toggle Word Wrap",
+      "editor.markdownPreview": "Open Preview", "editor.definition": "Go to Definition",
+      "editor.references": "Find References", "editor.navigateBack": "Go Back", "editor.navigateForward": "Go Forward",
+      "palette.files": "Go to File…", "palette.symbols": "Go to Symbol…", "palette.references": "Find References…",
+      "tab.next": "Next Tab", "tab.previous": "Previous Tab", "pane.focusNext": "Focus Next Pane",
+      "pane.focusPrevious": "Focus Previous Pane",
+    ]
+
     @ViewBuilder private func items(_ m: Menu) -> some View {
       let state = store?.state ?? WorkbenchState()
       ForEach(CommandRegistry.workbench.commands.filter { Self.menu($0.id) == m && state.shortcut(for: $0) != nil }, id: \.id) { d in
-        Button(d.id == "pane.close" ? "タブまたはペインを閉じる" : d.title) { store?.performFromUI(d.id) }
+        Button(Self.titles[d.id] ?? d.title) { store?.performFromUI(d.id) }
           .keyboardShortcut(Self.shortcut(state.shortcut(for: d)!))
           .disabled(store == nil)
       }
