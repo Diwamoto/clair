@@ -510,6 +510,7 @@ typedef struct {
   bool notification_changed;
   char notification_title[512];
   char notification_body[4096];
+  char open_url[2048];  // drained on read; a cmd-clicked link, empty = none
 } clair_ghostty_app_events_s;
 void clair_ghostty_app_take_events(clair_ghostty_app_t app, clair_ghostty_app_events_s *out);
 clair_ghostty_surface_config_s clair_ghostty_surface_config_new(void);

@@ -103,6 +103,7 @@ typedef struct {
   bool notification_changed;
   char notification_title[512];
   char notification_body[4096];
+  char open_url[2048];  // latest cmd-clicked link; empty = none
 } clair_ghostty_app_events_record;
 
 static bool clair_ghostty_action_cb(
@@ -125,6 +126,13 @@ static bool clair_ghostty_action_cb(
     rec->title_changed = true;
   } else if (action.tag == GHOSTTY_ACTION_SHOW_CHILD_EXITED)
     rec->exit_code = (int64_t)action.action.child_exited.exit_code;
+  else if (action.tag == GHOSTTY_ACTION_OPEN_URL) {
+    const ghostty_action_open_url_s u = action.action.open_url;
+    if (!u.url || u.len >= sizeof(rec->open_url)) return false;
+    memcpy(rec->open_url, u.url, u.len);
+    rec->open_url[u.len] = 0;
+    return true;  // Swift opens it after `tick()`
+  }
   return false;
 }
 
@@ -151,13 +159,16 @@ void clair_ghostty_app_take_events(clair_ghostty_app_t app, clair_ghostty_app_ev
   clair_ghostty_app_events_record *rec = ghostty_app_userdata((ghostty_app_t)app);
   out->bells = rec ? rec->bells : 0;
   out->exit_code = rec ? rec->exit_code : -1;
+  out->open_url[0] = 0;
   out->title_changed = rec && rec->title_changed;
   if (rec) memcpy(out->title, rec->title, sizeof(out->title));
   out->notification_changed = rec && rec->notification_changed;
   if (rec) {
     memcpy(out->notification_title, rec->notification_title, sizeof(out->notification_title));
     memcpy(out->notification_body, rec->notification_body, sizeof(out->notification_body));
+    memcpy(out->open_url, rec->open_url, sizeof(out->open_url));
     rec->bells = 0; rec->title_changed = false; rec->notification_changed = false;
+    rec->open_url[0] = 0;
   }
 }
 

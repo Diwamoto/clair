@@ -376,6 +376,10 @@ import Foundation
       let exit = exitReported ? nil : e.exitCode
       if exit != nil { exitReported = true }
       if let title = e.title { onTitle?(title) }
+      // Only web links: a cmd-click must not launch local files or custom schemes.
+      if let s = e.openURL, let url = URL(string: s), ["http", "https"].contains(url.scheme?.lowercased()) {
+        NSWorkspace.shared.open(url)
+      }
       if e.bells > 0 || exit != nil { onFacts?(e.bells, exit, e.notification) }
       if redraw { needsDisplay = true }
     }
