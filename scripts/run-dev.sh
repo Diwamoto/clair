@@ -112,6 +112,10 @@ cat >"$app/Contents/Info.plist" <<'PLIST'
 PLIST
 launch_app() {
     cp "$bin_dir/ClairMacApp" "$app/Contents/MacOS/ClairMacApp"
+    # Ad-hoc signature: UNUserNotificationCenter ties its authorization/registration to the
+    # bundle's code identity. An unsigned bundle has none, so requestAuthorization silently
+    # fails and the app never shows up under System Settings > Notifications.
+    codesign --force --sign - "$app" >/dev/null 2>&1 || printf 'dev: codesign unavailable, continuing unsigned (macOS notifications will not work)\n'
     # Stay in the background so launches/reloads don't steal focus; CLAIR_NO_ACTIVATE= make dev to opt out.
     CLAIR_NO_ACTIVATE="${CLAIR_NO_ACTIVATE-1}" "$app/Contents/MacOS/ClairMacApp" &
     app_pid=$!
