@@ -29,6 +29,14 @@ public struct AgentHistory: Sendable, Identifiable {
   /// Provider-native session id, the argument of the provider's resume command.
   public var sessionID: String { String(id.dropFirst(provider.rawValue.count + 1)) }
 
+  /// Shell line that resumes this chat from its recorded directory, for pasting into any terminal; nil if not resumable.
+  public var resumeCommand: String? {
+    guard let profile = AgentProfile.all.first(where: { $0.title == provider.rawValue }) else { return nil }
+    let resume = AgentLaunch(profile: profile.id, cwd: project ?? "", resume: sessionID).command
+    guard resume != profile.command else { return nil }
+    return project.map { "cd \(AgentRun.quote($0)) && \(resume)" } ?? resume
+  }
+
   public var promptCount: Int { messages.filter { $0.role == "user" }.count }
 }
 

@@ -1564,8 +1564,10 @@ import Observation
       })
     }
 
-    private func resume(_ history: AgentHistory) {
+    private func resume(_ history: AgentHistory, in project: String) {
       guard let profile = AgentProfile.all.first(where: { $0.title == history.provider.rawValue }) else { return }
+      // agent.launch runs in the active Project root, so open the chat's Project first.
+      if project != st.project { store.run("project.switch", ["name": .string(project)]) }
       // The button is the user's approval, as with review launches.
       switch store.run("agent.launch", ["profile": .string(profile.id), "resume": .string(history.sessionID)], confirmed: true) {
       case .success(.pane(let pane)):
@@ -2265,7 +2267,7 @@ import Observation
       // Chat history covers the panes instead of replacing them, so the
       // terminal surfaces stay mounted and keep their scrollback.
       .overlay {
-        if let chat { AgentChatView(history: chat, onResume: chat.project == store.activeRoot ? { resume(chat) } : nil) { self.chat = nil }.id(chat.id).background(C.canvas) }
+        if let chat { AgentChatView(history: chat, onResume: st.projects.first(where: { $0.path == chat.project }).map { p in { resume(chat, in: p.name) } }) { self.chat = nil }.id(chat.id).background(C.canvas) }
       }
     }
 

@@ -1095,7 +1095,7 @@
   /// left bubbles whose avatar shows once per run, opening at the latest message; and very long turns start collapsed.
   struct AgentChatView: View {
     let history: AgentHistory
-    /// nil when the chat cannot be resumed here (its project is not the active one).
+    /// nil when the chat cannot be resumed here (its directory is not a registered Project).
     let onResume: (() -> Void)?
     let onClose: () -> Void
     @State private var transcript: [AgentHistory.Message]?
@@ -1117,7 +1117,13 @@
           Spacer(minLength: 0)
           Button { onResume?() } label: { Label("ターミナルで再開", systemImage: "arrow.uturn.forward") }
             .buttonStyle(.hoverWash).disabled(onResume == nil)
-            .help(onResume == nil ? "このチャットの Project を開くと再開できます" : "\(history.provider.rawValue) をターミナルで開き、このチャットを再開")
+            .help(onResume == nil ? "このチャットのディレクトリを Project に追加すると再開できます" : "\(history.provider.rawValue) をターミナルで開き、このチャットを再開")
+          if let command = history.resumeCommand {
+            Button {
+              NSPasteboard.general.clearContents(); NSPasteboard.general.setString(command, forType: .string)
+            } label: { Image(systemName: "doc.on.doc").foregroundStyle(C.chromeInk) }
+              .buttonStyle(.hoverWash).help("再開コマンドをコピー: \(command)").accessibilityLabel("再開コマンドをコピー")
+          }
           Button(action: onClose) { Image(systemName: "xmark").foregroundStyle(C.chromeInk) }.buttonStyle(.hoverWash).help("閉じる")
         }.padding(.horizontal, 14).padding(.vertical, 8).background(C.chromeRaised)
         ScrollView {

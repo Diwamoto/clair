@@ -142,4 +142,10 @@ final class AgentHistoryTests: XCTestCase {
     XCTAssertTrue(Calendar.current.isDate(summary.days[0].date, inSameDayAs: ISO8601DateFormatter().date(from: "2026-09-24T00:00:00Z")!))
     XCTAssertEqual(summary.sessionsWithoutCost, 0)
   }
+
+  func testResumeCommandCdsIntoRecordedDirectory() {
+    let chat = AgentHistory(id: "Claude Code:abc-1", provider: .claude, title: "t", date: .now, messages: [],
+                            estimatedUSD: nil, project: "/tmp/it's")
+    XCTAssertEqual(chat.resumeCommand, #"cd '/tmp/it'\''s' && claude --resume abc-1"#)
+  }
 }
