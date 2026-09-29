@@ -948,7 +948,16 @@
         let (text, color) = label(s)
         Button { open(s) } label: {
           HStack(alignment: .top, spacing: 8) {
-            Circle().fill(color).frame(width: 6, height: 6).padding(.top, 6)
+            if let provider = AgentHistory.Provider(rawValue: s.title) {
+              // Same avatar as past chats; the status dot rides its corner.
+              ProviderAvatar(provider: provider, size: 26)
+                .overlay(alignment: .bottomTrailing) {
+                  Circle().fill(color).frame(width: 8, height: 8).overlay(Circle().strokeBorder(C.panel, lineWidth: 1.5))
+                }
+                .padding(.top, 1)
+            } else {
+              Circle().fill(color).frame(width: 6, height: 6).padding(.top, 6)
+            }
             VStack(alignment: .leading, spacing: 2) {
               Text(s.title).font(Typography.font(Typography.sidebarStrong)).foregroundStyle(C.textPrimary)
               if let activity = s.activity {
