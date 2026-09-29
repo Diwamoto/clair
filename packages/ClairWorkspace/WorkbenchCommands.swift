@@ -539,27 +539,31 @@ extension CommandRegistry {
     cmd("tab.next", "次のタブ", .read, shortcut: "⌃⌘→") { s, _ in s.cycleTab(1); return .ok },
     cmd("tab.previous", "前のタブ", .read, shortcut: "⌃⌘←") { s, _ in s.cycleTab(-1); return .ok },
     cmd("diff.open", "差分を開く", .read,
-        params: [CommandParam("path", .string), CommandParam("staged", .bool), CommandParam("untracked", .bool)],
+        params: [CommandParam("path", .string), CommandParam("staged", .bool), CommandParam("untracked", .bool),
+                 CommandParam("against", .string, required: false)],
         palette: false,
         preflight: { s, i throws(CommandError) in
-          let path = i["path"]!.string!
-          try require(!path.isEmpty && !path.hasPrefix("/") && !path.split(separator: "/").contains(".."), "invalid diff path")
+          for path in [i["path"]!.string!] + [i["against"]?.string].compactMap({ $0 }) {
+            try require(!path.isEmpty && !path.hasPrefix("/") && !path.split(separator: "/").contains(".."), "invalid diff path")
+          }
           try require(s.projects.contains { $0.name == s.project }, "no active Project")
           return .read
         }) { s, i in
-      s.openDiff(WorkbenchDiffTab(path: i["path"]!.string!, staged: i["staged"]!.bool!, untracked: i["untracked"]!.bool!))
+      s.openDiff(WorkbenchDiffTab(path: i["path"]!.string!, staged: i["staged"]!.bool!, untracked: i["untracked"]!.bool!, against: i["against"]?.string))
       return .ok
     },
     cmd("diff.activate", "差分タブを切り替え", .read,
-        params: [CommandParam("path", .string), CommandParam("staged", .bool), CommandParam("untracked", .bool)],
+        params: [CommandParam("path", .string), CommandParam("staged", .bool), CommandParam("untracked", .bool),
+                 CommandParam("against", .string, required: false)],
         palette: false) { s, i in
-      s.selectTab(.diff(WorkbenchDiffTab(path: i["path"]!.string!, staged: i["staged"]!.bool!, untracked: i["untracked"]!.bool!)))
+      s.selectTab(.diff(WorkbenchDiffTab(path: i["path"]!.string!, staged: i["staged"]!.bool!, untracked: i["untracked"]!.bool!, against: i["against"]?.string)))
       return .ok
     },
     cmd("diff.close", "差分タブを閉じる", .write,
-        params: [CommandParam("path", .string), CommandParam("staged", .bool), CommandParam("untracked", .bool)],
+        params: [CommandParam("path", .string), CommandParam("staged", .bool), CommandParam("untracked", .bool),
+                 CommandParam("against", .string, required: false)],
         palette: false) { s, i in
-      let target = WorkbenchDiffTab(path: i["path"]!.string!, staged: i["staged"]!.bool!, untracked: i["untracked"]!.bool!)
+      let target = WorkbenchDiffTab(path: i["path"]!.string!, staged: i["staged"]!.bool!, untracked: i["untracked"]!.bool!, against: i["against"]?.string)
       if s.diffTabs.contains(target) { s.recordClosed(.diff(target)) }
       s.closeDiff(target)
       return .ok

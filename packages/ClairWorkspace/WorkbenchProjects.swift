@@ -4,9 +4,11 @@ public struct WorkbenchDiffTab: Sendable, Codable, Hashable {
   public let path: String
   public let staged: Bool
   public let untracked: Bool
+  /// Set for a two-file compare: `against` (left) → `path` (right), no Git involved.
+  public let against: String?
 
-  public init(path: String, staged: Bool, untracked: Bool) {
-    self.path = path; self.staged = staged; self.untracked = untracked
+  public init(path: String, staged: Bool, untracked: Bool, against: String? = nil) {
+    self.path = path; self.staged = staged; self.untracked = untracked; self.against = against
   }
 }
 
@@ -21,7 +23,7 @@ public enum WorkbenchTab: Sendable, Codable, Hashable {
     case .file(let path): return "file:\(path)"
     case .terminal(let id): return "terminal:\(id)"
     case .graph(let id): return "graph:\(id)"
-    case .diff(let target): return "diff:\(target.staged):\(target.untracked):\(target.path)"
+    case .diff(let target): return "diff:\(target.staged):\(target.untracked):\(target.path)" + (target.against.map { "<\($0)" } ?? "")
     }
   }
 }

@@ -243,17 +243,36 @@
     /// `ClairEditorView.highlights` — an attribute overlay that never calls
     /// through `EditorTransactionManager`, so it cannot advance the content
     /// revision (`INV-REV-002`).
-    func startHighlighting(
-      _ path: String, manager: EditorTransactionManager, onSpans: @escaping (SyntaxResult) -> Void
-    ) {
-      guard highlightTasks[path] == nil else { return }
+    /// Latest parse per path and every live view of it: split editors show the same file, so a
+    /// result (initial or from an edit in either pane) paints all of them, and a new split starts colored.
+    private var syntaxResults: [String: SyntaxResult] = [:]
+    private var syntaxViews: [String: [WeakView]] = [:]
+
+    private func publish(_ path: String, _ result: SyntaxResult) {
+      syntaxResults[path] = result
+      syntaxViews[path] = syntaxViews[path]?.filter { $0.view != nil }
+      for v in syntaxViews[path] ?? [] { result.apply(to: v.view) }
+    }
+
+    /// Replays an edit committed in `source` into the other split views of `path` (they share the buffer).
+    func mirror(_ path: String, from source: ClairEditorView, _ edits: [TextEdit], old: TextSnapshot, new: TextSnapshot) {
+      let sorted = edits.sorted { $0.range.lowerBound.value < $1.range.lowerBound.value }
+      for case let view? in (syntaxViews[path] ?? []).map(\.view) where view !== source && view.snapshot.revision == old.revision {
+        view.applyEdits(edits, oldSnapshot: old, newSnapshot: new, selection: view.selection.mapped(through: sorted))
+      }
+    }
+
+    func startHighlighting(_ path: String, manager: EditorTransactionManager, view: ClairEditorView) {
+      syntaxViews[path, default: []].append(WeakView(view: view))
+      if let cached = syntaxResults[path], cached.revision == manager.buffer.snapshot.revision { cached.apply(to: view) }
+      guard highlightTasks[path] == nil, syntaxResults[path] == nil else { return }
       highlightsLoading.insert(path)
       let snapshot = manager.buffer.snapshot
       let syntax = self.syntax
       highlightTasks[path] = Task { [weak self] in
         let result = await syntax.reset(path, snapshot: snapshot)
         guard !Task.isCancelled else { return }
-        onSpans(result)
+        self?.publish(path, result)
         self?.highlightsLoading.remove(path)
         self?.highlightTasks.removeValue(forKey: path)
       }
@@ -262,16 +281,13 @@
     /// Differential reparse after one committed edit. Same attribute-only
     /// guarantee as `startHighlighting`: `onSpans` only ever reaches
     /// `view.highlights`, never `manager`.
-    func updateHighlights(
-      _ path: String, edits: [TextEdit], oldSnapshot: TextSnapshot, newSnapshot: TextSnapshot,
-      onSpans: @escaping (SyntaxResult) -> Void
-    ) {
+    func updateHighlights(_ path: String, edits: [TextEdit], oldSnapshot: TextSnapshot, newSnapshot: TextSnapshot) {
       let syntax = self.syntax
-      Task {
+      Task { [weak self] in
         guard let result = await syntax.update(path, edits: edits, oldSnapshot: oldSnapshot, newSnapshot: newSnapshot)
         else { return }
         guard !Task.isCancelled else { return }
-        onSpans(result)
+        self?.publish(path, result)
       }
     }
 
@@ -298,6 +314,7 @@
       for path in paths {
         highlightTasks.removeValue(forKey: path)?.cancel()
         highlightsLoading.remove(path)
+        syntaxResults[path] = nil
       }
       let syntax = self.syntax
       Task { for path in paths { await syntax.drop(path) } }
@@ -381,6 +398,8 @@
     var onDefinition: (() -> Void)? = nil
     /// Opens the Markdown preview pane; the corner button shows only while this editor is focused on a `.md` file.
     var onPreview: (() -> Void)? = nil
+    /// Closes this split editor pane; nil for the anchored leftmost editor.
+    var onClose: (() -> Void)? = nil
     let onEdit: (String) -> Void
     let onCaret: (String, TextSelectionSet, TextSnapshot) -> Void
     /// Preview pane id → the file it shows (`WorkbenchState.previews`).
@@ -429,10 +448,11 @@
       }
     }
 
-    func inPane(focused: Bool, onFocus: @escaping () -> Void) -> EditorPane {
+    func inPane(focused: Bool, onFocus: @escaping () -> Void, onClose: (() -> Void)? = nil) -> EditorPane {
       var pane = self
       pane.focused = focused
       pane.onFocus = onFocus
+      pane.onClose = onClose
       return pane
     }
 
@@ -461,6 +481,11 @@
           Button(action: onPreview) { Image(systemName: "tablecells").font(.system(size: 11)) }
             .buttonStyle(.borderless).foregroundStyle(C.textSecondary)
             .help("表で編集 (⌘⇧V)").accessibilityLabel("表エディタを開く")
+        }
+        if let onClose {
+          Button(action: onClose) { Image(systemName: "xmark").font(.system(size: 10)) }
+            .buttonStyle(.borderless).foregroundStyle(C.textSecondary)
+            .help("分割を閉じる (⌘W)").accessibilityLabel("分割を閉じる")
         }
       }.padding(.horizontal, 12).frame(height: 24).background(C.canvas)
     }
@@ -564,6 +589,7 @@
         let old = manager.buffer.snapshot
         guard let new = try? manager.apply(edits) else { return }
         view.applyEdits(edits, oldSnapshot: old, newSnapshot: new, selection: manager.selection)
+        buffers.mirror(path, from: view, edits, old: old, new: new)
         buffers.dropBlame(path)
         buffers.edited(path)
         onEdit()
@@ -573,9 +599,7 @@
         // E11: background differential reparse; never blocks this closure,
         // never touches `manager` (INV-REV-002 — see `updateHighlights`'s
         // doc comment).
-        buffers.updateHighlights(path, edits: edits, oldSnapshot: old, newSnapshot: new) { [weak view] in
-          $0.apply(to: view)
-        }
+        buffers.updateHighlights(path, edits: edits, oldSnapshot: old, newSnapshot: new)
       }
       let replay: (Bool) -> Void = { [weak view, manager, onEdit, onCaret, buffers, path, root, weak completion] redo in
         guard let view else { return }
@@ -583,15 +607,14 @@
         guard let new = try? (redo ? manager.redo() : manager.undo()) else { return }
         let edits = manager.lastCommittedEdits
         view.applyEdits(edits, oldSnapshot: old, newSnapshot: new, selection: manager.selection)
+        buffers.mirror(path, from: view, edits, old: old, new: new)
         buffers.dropBlame(path)
         buffers.edited(path)
         onEdit()
         onCaret(manager.selection)
         buffers.language.change(root + "/" + path, root: root, edits: edits, old: old, new: new)
         completion?.didEdit(edits)
-        buffers.updateHighlights(path, edits: edits, oldSnapshot: old, newSnapshot: new) { [weak view] in
-          $0.apply(to: view)
-        }
+        buffers.updateHighlights(path, edits: edits, oldSnapshot: old, newSnapshot: new)
       }
       view.onUndo = { replay(false) }
       view.onRedo = { replay(true) }
@@ -614,7 +637,7 @@
       scroll.documentView = view
       // E11: kick off this file's initial background highlight parse once,
       // when its `ClairEditorView` is first created.
-      buffers.startHighlighting(path, manager: manager) { [weak view] in $0.apply(to: view) }
+      buffers.startHighlighting(path, manager: manager, view: view)
       buffers.startBlame(path, root: root, snapshot: manager.buffer.snapshot)
       view.softWrap = softWrap
       scroll.hasHorizontalScroller = !softWrap

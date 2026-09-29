@@ -67,7 +67,7 @@ public struct TextSelectionSet: Sendable {
     return result
   }
 
-  func mapped(through edits: [TextEdit]) -> TextSelectionSet {
+  public func mapped(through edits: [TextEdit]) -> TextSelectionSet {
     TextSelectionSet(normalized: Self.normalize(selections.map { $0.mapped(through: edits) }))
   }
 

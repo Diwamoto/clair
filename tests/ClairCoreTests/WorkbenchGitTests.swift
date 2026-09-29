@@ -250,6 +250,14 @@ final class WorkbenchGitTests: XCTestCase {
     XCTAssertTrue(WorkbenchGit.diff(root, "new.txt", staged: false, untracked: true).contains("+n"))
   }
 
+  func testCompareTwoFiles() throws {
+    let (_, root) = try repo()
+    try "same\nleft\n".write(toFile: root + "/l.txt", atomically: true, encoding: .utf8)
+    try "same\nright\n".write(toFile: root + "/r.txt", atomically: true, encoding: .utf8)
+    let d = WorkbenchGit.diff(root, "r.txt", staged: false, against: "l.txt", fullContext: true)
+    XCTAssertTrue(d.contains("-left") && d.contains("+right") && d.contains(" same"))
+  }
+
   func testFullContextDiffIncludesUnchangedBeginningAndEnd() throws {
     let (_, root) = try repo()
     let original = (1...30).map { "line \($0)" }

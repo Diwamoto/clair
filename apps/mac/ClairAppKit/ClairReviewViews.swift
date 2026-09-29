@@ -15,6 +15,7 @@
     let path: String
     let staged: Bool
     let untracked: Bool
+    var against: String? = nil
   }
 
   /// A suggestion as the diff shows it. `stale`: the buffer changed since it was made, so it can no longer apply.
@@ -459,7 +460,7 @@
       VStack(spacing: 0) {
         if showsHeader { HStack {
           Text(target.path).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary)
-          Text(label ?? (target.staged ? "HEAD → index" : target.untracked ? "未追跡ファイル" : "index → 作業ツリー"))
+          Text(label ?? (target.against.map { "\($0) → \(target.path)" } ?? (target.staged ? "HEAD → index" : target.untracked ? "未追跡ファイル" : "index → 作業ツリー")))
             .font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary)
           if added + removed > 0 {
             Text("+\(added)").font(Typography.font(Typography.chrome)).foregroundStyle(C.success)

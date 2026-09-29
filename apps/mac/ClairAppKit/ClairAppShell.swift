@@ -500,10 +500,16 @@ import Observation
     /// UI acknowledges the shortcut immediately and completes the durable write off-main.
     public func performFromUI(_ id: String, _ input: CommandInput = [:]) {
       if id == "pane.close", let target = state.activeDiff {
-        _ = run("diff.close", ["path": .string(target.path), "staged": .bool(target.staged), "untracked": .bool(target.untracked)])
+        var input: CommandInput = ["path": .string(target.path), "staged": .bool(target.staged), "untracked": .bool(target.untracked)]
+        if let against = target.against { input["against"] = .string(against) }
+        _ = run("diff.close", input)
         return
       }
       if id == "pane.close", state.panesClosed { _ = run("pane.open", ["kind": .string("editor")]); return }
+      if id == "pane.close", state.tree.leaves.first?.id != state.tree.focused,
+        state.tree.leaves.first(where: { $0.id == state.tree.focused })?.kind == .editor {
+        _ = run("pane.close"); return  // a split editor: ⌘W closes the split, not the shared tab
+      }
       if id == "pane.close", state.tree.leaves.first(where: { $0.id == state.tree.focused })?.kind == .editor {
         _ = run(state.active != nil ? "tab.close" : "pane.close")
         return
@@ -910,6 +916,8 @@ import Observation
     @State private var diff: DiffTarget?
     @State private var chat: AgentHistory?
     @State private var loadedDiff: LoadedDiff?
+    /// Left side of a two-file compare, picked from a file menu ("比較対象として選択").
+    @State private var compareBase: String?
     @State private var diffTask: Task<Void, Never>?
     @State private var explorerRows: [ExplorerRow] = []
     @State private var visibleExplorerRows: [ExplorerRow] = []
@@ -997,18 +1005,18 @@ import Observation
         if sidebarMode == "ladybug", let frame { openDebugFrame(frame) }
       }
       .onChange(of: st.project) {
-        diff = st.activeDiff.map { DiffTarget(path: $0.path, staged: $0.staged, untracked: $0.untracked) }
+        diff = st.activeDiff.map { DiffTarget(path: $0.path, staged: $0.staged, untracked: $0.untracked, against: $0.against) }
         loadedDiff = nil; gitMessage = nil; gitFailed = false
         rebuildExplorer(); reloadChanges()
       }
       .onChange(of: st.files) { rebuildExplorer(); reloadChanges() }
       .onChange(of: st.expanded) { rebuildVisibleExplorer() }
       .onChange(of: st.activeDiff) {
-        diff = st.activeDiff.map { DiffTarget(path: $0.path, staged: $0.staged, untracked: $0.untracked) }
+        diff = st.activeDiff.map { DiffTarget(path: $0.path, staged: $0.staged, untracked: $0.untracked, against: $0.against) }
       }
       .onChange(of: diff) { loadDiff() }
       .onAppear {
-        diff = st.activeDiff.map { DiffTarget(path: $0.path, staged: $0.staged, untracked: $0.untracked) }
+        diff = st.activeDiff.map { DiffTarget(path: $0.path, staged: $0.staged, untracked: $0.untracked, against: $0.against) }
         rebuildExplorer(); reloadChanges()
       }
       .task {
@@ -1150,7 +1158,7 @@ import Observation
                 .help(title)
               case .diff(let target):
                 FileTabButton(
-                  path: tab.dragID, name: "差分: \(name(target.path))", selected: selectedTab == tab, dirty: false,
+                  path: tab.dragID, name: target.against.map { "比較: \(name($0)) ↔ \(name(target.path))" } ?? "差分: \(name(target.path))", selected: selectedTab == tab, dirty: false,
                   onActivate: {
                     if !active { store.run("project.switch", ["name": .string(p.name)]) }
                     store.run("diff.activate", diffInput(target))
@@ -1170,11 +1178,13 @@ import Observation
     }
 
     private func diffInput(_ target: WorkbenchDiffTab) -> CommandInput {
-      ["path": .string(target.path), "staged": .bool(target.staged), "untracked": .bool(target.untracked)]
+      var input: CommandInput = ["path": .string(target.path), "staged": .bool(target.staged), "untracked": .bool(target.untracked)]
+      if let against = target.against { input["against"] = .string(against) }
+      return input
     }
 
     private func openDiff(_ target: DiffTarget) {
-      store.run("diff.open", diffInput(WorkbenchDiffTab(path: target.path, staged: target.staged, untracked: target.untracked)))
+      store.run("diff.open", diffInput(WorkbenchDiffTab(path: target.path, staged: target.staged, untracked: target.untracked, against: target.against)))
     }
 
     private func closeDiff() {
@@ -1830,6 +1840,10 @@ import Observation
       e.append(.item("変更を確認", disabled: change == nil) {
         if let c = change { openDiff(DiffTarget(path: c.path, staged: c.staged && !c.unstaged, untracked: c.untracked)) }
       })
+      e.append(.item("比較対象として選択") { compareBase = path })
+      if let base = compareBase, base != path {
+        e.append(.item("\(name(base)) と比較") { openDiff(DiffTarget(path: path, staged: false, untracked: false, against: base)) })
+      }
       e.append(reviewMenu("このファイルをレビュー", .file(path), disabled: st.dirty.contains(path)))
       e.append(.separator)
       e.append(agentItems(path))
@@ -2153,7 +2167,7 @@ import Observation
       guard let target = diff, let root = store.activeRoot else { return }
       diffTask = Task {
         async let rendered = Task.detached(priority: .userInitiated) {
-          DiffView.model(WorkbenchGit.diff(root, target.path, staged: target.staged, untracked: target.untracked, fullContext: true))
+          DiffView.model(WorkbenchGit.diff(root, target.path, staged: target.staged, untracked: target.untracked, against: target.against, fullContext: true))
         }.value
         async let lines = Task.detached(priority: .utility) {
           (try? String(contentsOfFile: root + "/" + target.path, encoding: .utf8))?
@@ -3180,6 +3194,8 @@ import Observation
     let run: (String, CommandInput) -> Void
     /// Pane whose header handle is being dragged; other panes show edge drop zones meanwhile.
     @Binding var dragging: Int?
+    /// Only first children all the way down: the anchored editor slot (`PaneTree.replaceFocusedEditor`).
+    var leftmost = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shown = false
 
@@ -3194,10 +3210,10 @@ import Observation
     @ViewBuilder
     private func parts(_ axis: PaneTree.Axis, _ total: CGFloat, _ a: PaneTree.Node, _ b: PaneTree.Node, ratio: Double) -> some View {
       let h = axis == .horizontal
-      PaneView(node: a, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onTitle: onTitle, title: title, onRatio: onRatio, editor: editor, run: run, dragging: $dragging)
+      PaneView(node: a, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onTitle: onTitle, title: title, onRatio: onRatio, editor: editor, run: run, dragging: $dragging, leftmost: leftmost)
         .frame(width: h ? total * ratio : nil, height: h ? nil : total * ratio)
       Rectangle().fill(L.paneDivider).frame(width: h ? 1 : nil, height: h ? nil : 1)
-      PaneView(node: b, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onTitle: onTitle, title: title, onRatio: onRatio, editor: editor, run: run, dragging: $dragging)
+      PaneView(node: b, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onTitle: onTitle, title: title, onRatio: onRatio, editor: editor, run: run, dragging: $dragging, leftmost: false)
     }
 
     var body: some View {
@@ -3218,7 +3234,9 @@ import Observation
             else if kind == .preview, let path = editor.previews[id] ?? editor.path, TableFile.separator(path) != nil { TablePane(buffers: editor.buffers, path: path, onEdit: editor.onEdit) }
             else if kind == .preview, let path = editor.previews[id] ?? editor.path, path.lowercased().hasSuffix(".html") || path.lowercased().hasSuffix(".htm") { HTMLPreviewPane(buffers: editor.buffers, root: editor.root, path: path) }
             else if kind == .preview { MarkdownPreviewPane(buffers: editor.buffers, root: editor.root, path: editor.previews[id] ?? editor.path) }
-            else { editor.inPane(focused: id == focused, onFocus: { if id != focused { onFocus(id) } }) }
+            else { editor.inPane(focused: id == focused, onFocus: { if id != focused { onFocus(id) } },
+              // Split editors have no pane header; the leftmost one is anchored (`pane.close` replaces it).
+              onClose: leftmost ? nil : { run("pane.focus", ["id": .int(id)]); run("pane.close", [:]) }) }
             if let from = dragging, from != id {
               PaneDropZones { edge in
                 run("pane.move", ["id": .int(from), "target": .int(id), "edge": .string(edge.rawValue)])
