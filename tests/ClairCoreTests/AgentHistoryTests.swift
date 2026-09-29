@@ -83,6 +83,9 @@ final class AgentHistoryTests: XCTestCase {
     let days = AgentHistoryDay.group(
       [item("a", 0, "/w/clair"), item("c", 0.05, "/w/ccedit"), item("d", 1, nil), item("e", 5, "/w/clair")], calendar: calendar)
     XCTAssertEqual(days.map { $0.groups.map(\.project) }, [["clair", "ccedit"], ["Unknown"], ["clair"]])
+    let spanning = AgentHistory(id: "s", provider: .claude, title: "s", date: now, messages: [
+      .init(id: "1", role: "user", text: "", date: now - 2 * 86_400), .init(id: "2", role: "user", text: "", date: now)], estimatedUSD: 1, project: "/w/clair")
+    XCTAssertEqual(AgentHistoryDay.group([spanning], calendar: calendar).count, 2)
   }
 
   func testArchiveIsSplitByModifiedTimeBeforeParsing() throws {
