@@ -3028,9 +3028,7 @@ import Observation
       Button(action: action) {
         Group {
           if icon == "concierge" {
-            // ADR-0020: no SF Symbol pairs a person with a sparkle, so compose one.
-            Image(systemName: "person").font(.system(size: 16))
-              .overlay(alignment: .bottomTrailing) { Image(systemName: "sparkle").font(.system(size: 8, weight: .bold)).offset(x: 5, y: 2) }
+            Image(systemName: "brain.head.profile").font(.system(size: 16))
           } else if icon == "shield" {
             GitBranchGlyph().stroke(style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
               .frame(width: 16, height: 16)

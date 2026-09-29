@@ -42,9 +42,9 @@ export const IconCodex = stroke(<path d="M8 1.6l5.5 3.2v6.4L8 14.4l-5.5-3.2V4.8z
   strokeLinejoin: 'round',
 });
 
-// Concierge: a person with a sparkle (ADR-0020).
+// Concierge: a head in profile with a brain (native: SF Symbol brain.head.profile).
 export const IconConcierge = stroke(
-  <><circle cx="6.5" cy="5.2" r="2.4" /><path d="M2.2 13.6c.4-2.5 2.2-3.9 4.3-3.9 1 0 1.9.3 2.6.8" /><path d="M12 8.6l.55 1.55 1.55.55-1.55.55L12 12.8l-.55-1.55-1.55-.55 1.55-.55z" fill="currentColor" stroke="none" /></>,
+  <><path d="M10.4 14v-2.1c1.7-.6 2.8-2.2 2.8-4 0-2.8-2.3-5.1-5.2-5.1S2.9 5.1 2.9 7.8c0 .7.2 1.3.4 1.8L2.3 11.2h1.5v1.3c0 .8.7 1.5 1.5 1.5h1.5V14" strokeLinejoin="round" /><path d="M6.6 6.3c.3-.7 1.3-.9 1.9-.3.7-.3 1.6.1 1.6 1 0 .8-.7 1.2-1.3 1-.3.7-1.3.8-1.8.2-.7.2-1.4-.3-1.3-1 0-.5.4-.8.9-.9z" strokeLinejoin="round" /></>,
 );
 
 export const IconSearch = stroke(
