@@ -872,6 +872,7 @@ import Observation
               }
             }
             .background(C.canvas)
+            .background(ResignWorkbenchFocus())
             .transition(.opacity.combined(with: .scale(scale: 1.04)))
           }
         }
@@ -1225,6 +1226,16 @@ import Observation
         SplitHandle(horizontal: true, ratio: sidebarWidth, total: 1) { sidebarWidth = min(max($0, 160), 600) }
           .frame(width: 6).offset(x: 3)
       }
+    }
+
+    /// Settings only covers the workbench, whose editor/terminal kept first responder: Esc (the ✕ button's
+    /// cancelAction) and typing went to the hidden pane. Mounting this with settings takes the keyboard away.
+    private struct ResignWorkbenchFocus: NSViewRepresentable {
+      final class Probe: NSView {
+        override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); window?.makeFirstResponder(nil) }
+      }
+      func makeNSView(context: Context) -> NSView { Probe() }
+      func updateNSView(_ nsView: NSView, context: Context) {}
     }
 
     /// Settings takes over the whole window — its own header (with the one
@@ -2081,7 +2092,7 @@ import Observation
             },
             onClose: { closeDiff() },
             editor: d.staged ? nil : EditorPane(
-              buffers: store.buffers, root: root, path: d.path, focused: true,
+              buffers: store.buffers, root: root, path: d.path, focused: !st.settingsOpen,
               softWrap: st.toggles["softWrap"] == true, style: editorStyle,
               onEdit: { store.edited($0) },
               onCaret: { store.buffers.setCaret($0, $1, in: $2) }),
@@ -2097,7 +2108,8 @@ import Observation
         } else {
         PaneView(
           node: st.tree.maximized.flatMap { id in st.tree.leaves.first { $0.id == id }.map { .leaf(id: $0.id, kind: $0.kind) } } ?? st.tree.root,
-          focused: st.tree.focused, launches: st.launches, project: store.activeRoot ?? st.project, onFocus: { store.run("pane.focus", ["id": .int($0)]) },
+          // No pane is focused under settings, so a rebuilt editor/terminal cannot take the keyboard back; closing refocuses it.
+          focused: st.settingsOpen ? -1 : st.tree.focused, launches: st.launches, project: store.activeRoot ?? st.project, onFocus: { store.run("pane.focus", ["id": .int($0)]) },
           onFacts: { store.facts(pane: $0, bells: $1, exit: $2, notification: $3) },
           onTitle: { store.title(pane: $0, $1) },
           title: { terminalTabTitle(st.project, $0) },
