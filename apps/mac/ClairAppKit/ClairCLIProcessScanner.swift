@@ -1,5 +1,6 @@
 #if os(macOS)
   import ClairDaemonKit
+  import ClairWorkspace
   import Darwin
   import Foundation
 
@@ -37,13 +38,8 @@
         let parts = process.path.split(separator: "/")
         let name = parts.count > 2 && parts[parts.count - 2] == "versions"
           ? String(parts[parts.count - 3]) : process.name.lowercased()
-        let profile: String? = switch name {
-        case "claude": "claude"
-        case "codex": "codex"
-        case "opencode": "opencode"
-        default: nil
-        }
-        guard let profile else { continue }
+        // agent registry: any registered AgentProfile is detectable by its id matching the process name.
+        guard let profile = AgentProfile.named(name)?.id else { continue }
         var parent = process.parent
         var seen: Set<Int32> = [process.pid]
         while parent > 1, seen.insert(parent).inserted {

@@ -2190,7 +2190,7 @@ import Observation
             }
           case "AIプロバイダー":
             SettingsCard(title: "Agent") {
-              choiceRow("既定のAgent", "defaultAgent", note: "⌃⌘N で追加するときの初期選択。titlebarのタブは個別に選べます。")
+              defaultAgentRow
               choiceRow("承認ポリシー", "approvalPolicy", note: "ターミナル・Agent会話での変更提案を、どこまで自動で通すか。")
             }
             integrationCard
@@ -2366,6 +2366,21 @@ import Observation
       SettingsRow(title: title, note: note) {
         SettingsSegmented(options: WorkbenchState.choiceOptions[key] ?? [], value: st.choices[key] ?? "") {
           store.run("settings.choose", ["key": .string(key), "value": .string($0)])
+        }
+      }
+    }
+
+    // agent registry: a Menu, not SettingsSegmented, because the registry can list more agents
+    // than a segmented control reads well; same picker idiom as the "〜をレビュー" submenu.
+    private var defaultAgentRow: some View {
+      SettingsRow(title: "既定のAgent", note: "⌃⌘N で追加するときの初期選択。titlebarのタブは個別に選べます。") {
+        Menu {
+          ForEach(AgentProfile.all, id: \.id) { profile in
+            Button(profile.title) { store.run("settings.choose", ["key": .string("defaultAgent"), "value": .string(profile.id)]) }
+          }
+        } label: {
+          Text(AgentProfile.named(st.choices["defaultAgent"] ?? "")?.title ?? "Agent")
+            .font(.system(size: 14)).foregroundStyle(C.textSecondary)
         }
       }
     }

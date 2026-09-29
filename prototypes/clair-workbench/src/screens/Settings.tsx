@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { RouteLink } from '../App';
+import { AGENT_PROFILES } from '../data';
 import { IconCloseThin } from '../icons';
 import { useWorkbench } from '../store';
 
@@ -42,6 +43,40 @@ function Segmented<T extends string>({
         );
       })}
     </div>
+  );
+}
+
+/** A closed set too long to read well as Segmented (e.g. the agent registry) —
+ * same bordered-control look as FieldValue, native <select> for behaviour. */
+function Dropdown<T extends string>({
+  value,
+  options,
+  onChange,
+}: {
+  value: T;
+  options: readonly { id: T; title: string }[];
+  onChange: (next: T) => void;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value as T)}
+      style={{
+        height: 26,
+        padding: '0 6px',
+        border: `1px solid ${line.hairline}`,
+        borderRadius: radius.control,
+        background: color.chrome,
+        color: color.textPrimary,
+        fontSize: fs.caption,
+      }}
+    >
+      {options.map((o) => (
+        <option key={o.id} value={o.id}>
+          {o.title}
+        </option>
+      ))}
+    </select>
   );
 }
 
@@ -330,7 +365,7 @@ export function SettingsMain() {
                     first
                     title="既定のAgent"
                     note="⌃⌘N で追加するときの初期選択。titlebarのタブは個別に選べます。"
-                    control={<Segmented value={wb.defaultAgent} options={['claude', 'codex'] as const} onChange={wb.setDefaultAgent} />}
+                    control={<Dropdown value={wb.defaultAgent} options={AGENT_PROFILES} onChange={wb.setDefaultAgent} />}
                   />
                   <Row
                     last

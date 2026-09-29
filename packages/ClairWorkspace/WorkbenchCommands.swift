@@ -43,8 +43,10 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
     "lineNumbers": "行番号を表示", "terminalCursorBlink": "ターミナルのカーソルを点滅", "editorFontSize": "エディタの文字サイズ",
     "terminalFontSize": "ターミナルの文字サイズ", "terminalCursorStyle": "ターミナルのカーソルの形",
   ]
+  // agent registry: `defaultAgent` reads its choices from the `AgentProfile` registry instead of
+  // a literal list, so switching to a newly registered agent needs no change here.
   public static let choiceOptions: [String: [String]] = [
-    "defaultAgent": ["claude", "codex"],
+    "defaultAgent": AgentProfile.all.map(\.id),
     "approvalPolicy": ["毎回確認", "セッション中は許可", "自動承認"],
     "tabWidth": ["2", "4", "8"],
     "defaultShell": ["/bin/zsh", "/bin/bash"],
