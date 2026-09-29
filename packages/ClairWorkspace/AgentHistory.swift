@@ -56,6 +56,19 @@ public struct AgentHistoryGroup: Sendable, Identifiable {
   }
 }
 
+/// One calendar day of past chats, split into projects (newest first at both levels).
+public struct AgentHistoryDay: Sendable, Identifiable {
+  public let date: Date
+  public let groups: [AgentHistoryGroup]
+  public var id: Date { date }
+
+  public static func group(_ histories: [AgentHistory], calendar: Calendar = .current) -> [AgentHistoryDay] {
+    Dictionary(grouping: histories) { calendar.startOfDay(for: $0.date) }
+      .map { AgentHistoryDay(date: $0.key, groups: AgentHistoryGroup.group($0.value)) }
+      .sorted { $0.date > $1.date }
+  }
+}
+
 public struct AgentUsageDay: Sendable, Identifiable {
   public let date: Date
   public let prompts: Int

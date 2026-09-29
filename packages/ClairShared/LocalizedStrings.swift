@@ -413,6 +413,7 @@ extension LocalizedStrings {
     "%@ · %@ · %@ 件": "%@ · %@ · %@ prompts",
     "送信した依頼 %@ 件": "%@ prompts sent",
     "昨日": "Yesterday",
+    "さらに表示（残り %@ 件）": "Show more (%@ left)",
     "依頼 %@ 件": "%@ prompts",
     "推定 %@": "Est. %@",
     "ターミナルで再開": "Resume in Terminal",

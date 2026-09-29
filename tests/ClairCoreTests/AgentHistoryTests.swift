@@ -80,6 +80,9 @@ final class AgentHistoryTests: XCTestCase {
     XCTAssertEqual(groups.map(\.project), ["clair", "ccedit", "Unknown"])
     XCTAssertEqual(groups[0].histories.map(\.id), ["a", "b", "e"])
     XCTAssertEqual(groups[0].estimatedUSD, 3)
+    let days = AgentHistoryDay.group(
+      [item("a", 0, "/w/clair"), item("c", 0.05, "/w/ccedit"), item("d", 1, nil), item("e", 5, "/w/clair")], calendar: calendar)
+    XCTAssertEqual(days.map { $0.groups.map(\.project) }, [["clair", "ccedit"], ["Unknown"], ["clair"]])
   }
 
   func testArchiveIsSplitByModifiedTimeBeforeParsing() throws {

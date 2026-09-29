@@ -923,6 +923,9 @@
     @State private var histories: [AgentHistory] = []
     @State private var historyLoading = true
     @State private var expandedGroups: Set<String> = []
+    /// Rows shown per list (days, a day's projects, a project's chats); "show more" adds a page.
+    @State private var shown: [String: Int] = [:]
+    private static let page = 10
     @State private var archive: [AgentHistory]?
     @State private var archiveOpen = false
     /// cwd → "repo · branch", read off the main thread.
@@ -999,7 +1002,7 @@
         Text(tr("履歴はありません")).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textQuaternary).padding(16)
       }
       // ponytail: regrouped on every render; cache in @State if history counts make this visible.
-      ForEach(AgentHistoryGroup.group(histories)) { group in historyGroup(group, key: "recent") }
+      historyDays(histories, key: "recent")
       Button {
         archiveOpen.toggle()
         if archiveOpen, archive == nil { Task { archive = await AgentHistoryStore.shared.load(.archive) } }
@@ -1015,12 +1018,42 @@
           if archive.isEmpty {
             Text(tr("アーカイブはありません")).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textQuaternary).padding(16)
           }
-          ForEach(AgentHistoryGroup.group(archive)) { group in historyGroup(group, key: "archive") }
+          historyDays(archive, key: "archive")
         } else {
           Text("Loading...").font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
           .padding(.horizontal, 20).frame(height: 28)
         }
       }
+    }
+
+    /// Date → project → chats, each list paged by `page`.
+    @ViewBuilder private func historyDays(_ histories: [AgentHistory], key: String) -> some View {
+      let days = AgentHistoryDay.group(histories)
+      ForEach(days.prefix(limit(key))) { day in
+        let dayKey = "\(key)::\(day.date.timeIntervalSince1970)"
+        Text(dayTitle(day.date)).font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textQuaternary)
+          .padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 2)
+        ForEach(day.groups.prefix(limit(dayKey))) { group in historyGroup(group, key: dayKey) }
+        moreButton(dayKey, total: day.groups.count)
+      }
+      moreButton(key, total: days.count)
+    }
+
+    private func limit(_ key: String) -> Int { shown[key] ?? Self.page }
+
+    @ViewBuilder private func moreButton(_ key: String, total: Int) -> some View {
+      if total > limit(key) {
+        Button { shown[key] = limit(key) + Self.page } label: {
+          Text(tr("さらに表示（残り %@ 件）", total - limit(key))).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
+            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20).padding(.vertical, 4).contentShape(Rectangle())
+        }.buttonStyle(.hoverWash)
+      }
+    }
+
+    private func dayTitle(_ date: Date) -> String {
+      if Calendar.current.isDateInToday(date) { return tr("今日") }
+      if Calendar.current.isDateInYesterday(date) { return tr("昨日") }
+      return date.formatted(.dateTime.month().day().weekday(.abbreviated))
     }
 
     /// Projects start collapsed, like ccedit's project list; opening one lists its chats newest first.
@@ -1034,12 +1067,13 @@
               Image(systemName: collapsed ? "chevron.right" : "chevron.down").frame(width: 14)
               Text(group.project).font(Typography.font(Typography.sidebarStrong)).lineLimit(1)
               Spacer(minLength: 0)
-              Text(tr("%@ · %@ · %@ 件", listTime(group.date), group.estimatedUSD.formatted(.currency(code: "USD")), group.histories.count))
+              Text(tr("%@ · %@ · %@ 件", group.date.formatted(date: .omitted, time: .shortened), group.estimatedUSD.formatted(.currency(code: "USD")), group.histories.count))
                 .font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textQuaternary)
             }.foregroundStyle(C.textSecondary).padding(.horizontal, 20).padding(.vertical, 8).contentShape(Rectangle())
           }.buttonStyle(.hoverWash)
           if !collapsed {
-            ForEach(group.histories) { history in historyRow(history) }
+            ForEach(group.histories.prefix(limit(id))) { history in historyRow(history) }
+            moreButton(id, total: group.histories.count)
           }
     }
 
@@ -1108,8 +1142,6 @@
     var body: some View {
       ProviderBrandIcon(provider: provider.rawValue, size: size * 0.55)
         .frame(width: size, height: size)
-        .background(Circle().fill(provider.tint.opacity(0.18)))
-        .overlay(Circle().strokeBorder(provider.tint.opacity(0.45), lineWidth: 1))
         .help(provider.rawValue)
     }
   }
