@@ -125,6 +125,11 @@ public enum AgentHistoryReader {
     return readFile(file, provider: history.provider, full: true)?.messages ?? history.messages
   }
 
+  /// ADR-0020: one session file read in full, for a live chat whose file is already known.
+  public static func transcript(file: URL, provider: AgentHistory.Provider) -> [AgentHistory.Message] {
+    readFile(file, provider: provider, full: true)?.messages ?? []
+  }
+
   private static func readJSONL(root: URL, provider: AgentHistory.Provider, period: DateInterval?, full: Bool) -> [AgentHistory] {
     guard let files = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey, .contentModificationDateKey]) else { return [] }
     let paths = (files.allObjects as? [URL] ?? []).filter { file in

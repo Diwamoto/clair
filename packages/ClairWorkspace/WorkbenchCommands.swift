@@ -574,6 +574,21 @@ extension CommandRegistry {
       s.withLayout(t.project) { l in l.tree.close(t.pane); l.launches[t.pane] = nil }
       return .ok
     },
+    // ADR-0020: focus the Project's concierge, starting it if needed. GUI-only (ai: false): an agent
+    // must not spawn a concierge; it launches children through agent.launch instead.
+    cmd("concierge.open", "コンシェルジュを開く", .external, ai: false,
+        preflight: { s, _ throws(CommandError) in
+          _ = try s.launchHome(nil)
+          return .external
+        }) { s, _ in
+      if let c = s.concierge(in: s.project) { s.tree.focus(c.pane); return .pane(c.pane) }
+      let home = try! s.launchHome(nil)
+      s.tree.splitFocused(.horizontal, kind: .terminal)
+      let pane = s.tree.focused
+      s.launches[pane] = AgentLaunch(profile: "claude", cwd: home.project.path, concierge: UUID().uuidString.lowercased())
+      s.panesClosed = false
+      return .pane(pane)
+    },
     cmd("tab.open", "ファイルを開く", .read, params: [CommandParam("path", .string)],
         preflight: { s, i throws(CommandError) in
           try require(s.files.contains { $0.path == i["path"]?.string && $0.status != "D" }, "no file \(i["path"]!)"); return .read

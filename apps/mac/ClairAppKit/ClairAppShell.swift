@@ -976,6 +976,7 @@ import Observation
     @State private var reviewError: String?
     @State private var diff: DiffTarget?
     @State private var chat: AgentHistory?
+    @State private var conciergeChat = true
     @State private var loadedDiff: LoadedDiff?
     /// Left side of a two-file compare, picked from a file menu ("比較対象として選択").
     @State private var compareBase: String?
@@ -1353,7 +1354,7 @@ import Observation
     /// pair, and icons are bigger now that they own a whole column.
     private var activityBar: some View {
       VStack(spacing: 2) {
-        ForEach(["folder", "shield", "terminal", "ladybug"], id: \.self) { icon in
+        ForEach(["folder", "shield", "terminal", "ladybug", "concierge"], id: \.self) { icon in
           activityBarButton(icon)
         }
         // ponytail: no overflow "…" menu — the Workbench shows it only when nav items overflow; four always fit here.
@@ -1374,6 +1375,7 @@ import Observation
           store.run("tab.activate", ["path": .string(path)])
         }
         if icon == "shield" { reloadChanges() }
+        if icon == "concierge" { conciergeChat = true }
         if icon == "ladybug" { store.run("debug.open") }
       }
     }
@@ -1381,7 +1383,7 @@ import Observation
     private var sidebar: some View {
       VStack(spacing: 0) {
         // Lazy: a Project can list thousands of files, and an eager tree makes accessibility traversal (and layout) block the main thread.
-        ScrollView { LazyVStack(alignment: .leading, spacing: 0) { sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "terminal" ? AnyView(sessionList) : sidebarMode == "ladybug" ? AnyView(debugPanel) : AnyView(explorer) }.clairScroller() }
+        ScrollView { LazyVStack(alignment: .leading, spacing: 0) { sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "terminal" ? AnyView(sessionList) : sidebarMode == "ladybug" ? AnyView(debugPanel) : sidebarMode == "concierge" ? AnyView(conciergeSidebar) : AnyView(explorer) }.clairScroller() }
         Spacer(minLength: 0)
         if sidebarMode == "shield", st.isRepo {
           // Same filled control as the commit button, so it reads as a button and the whole box is the hit target.
@@ -1581,6 +1583,43 @@ import Observation
           .overlay(RoundedRectangle(cornerRadius: Radius.overlay).stroke(L.strong))
           .transition(.scale(scale: 0.97).combined(with: .opacity))
       }
+    }
+
+    // MARK: concierge (ADR-0020)
+
+    private var conciergeSidebar: some View {
+      ConciergeSidebar(
+        running: st.concierge(in: st.project) != nil, showingChat: conciergeChat,
+        children: st.conciergeChildren(in: st.project), start: startConcierge,
+        toggleView: {
+          conciergeChat.toggle()
+          if !conciergeChat, let c = st.concierge(in: st.project) { store.run("pane.focus", ["id": .int(c.pane)]) }
+        },
+        focus: focusConciergeChild, editInstructions: editConciergeInstructions)
+    }
+
+    private func startConcierge() {
+      conciergeChat = true
+      store.run("concierge.open", [:], confirmed: true)
+    }
+
+    /// A child link shows the real terminal: leave the chat and focus that pane.
+    private func focusConciergeChild(_ s: AgentSession) {
+      if s.project != st.project { store.run("project.switch", ["name": .string(s.project)]) }
+      store.run("pane.focus", ["id": .int(s.pane)])
+      conciergeChat = false
+    }
+
+    private func editConciergeInstructions() {
+      guard let root = store.activeRoot else { return }
+      let url = URL(fileURLWithPath: root).appending(path: Concierge.instructionsPath)
+      if !FileManager.default.fileExists(atPath: url.path) {
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? Data("# コンシェルジュへの指示\n\nこの Project で守ってほしいことを書きます。次回の起動から反映されます。\n".utf8).write(to: url, options: .withoutOverwriting)
+      }
+      conciergeChat = false
+      store.refreshProjectFiles()
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { store.run("tab.open", ["path": .string(Concierge.instructionsPath)]) }
     }
 
     private var sessionList: some View {
@@ -2321,6 +2360,10 @@ import Observation
       // terminal surfaces stay mounted and keep their scrollback.
       .overlay {
         if let chat { AgentChatView(history: chat, onResume: st.projects.first(where: { $0.path == chat.project }).map { p in { resume(chat, in: p.name) } }) { self.chat = nil }.id(chat.id).background(C.canvas) }
+        else if sidebarMode == "concierge", conciergeChat {
+          let c = st.concierge(in: st.project)
+          ConciergeChatView(session: c?.session, pane: c?.pane, children: st.conciergeChildren(in: st.project), focus: focusConciergeChild, start: startConcierge)
+        }
       }
     }
 
@@ -2986,7 +3029,11 @@ import Observation
     var body: some View {
       Button(action: action) {
         Group {
-          if icon == "shield" {
+          if icon == "concierge" {
+            // ADR-0020: no SF Symbol pairs a person with a sparkle, so compose one.
+            Image(systemName: "person").font(.system(size: 16))
+              .overlay(alignment: .bottomTrailing) { Image(systemName: "sparkle").font(.system(size: 8, weight: .bold)).offset(x: 5, y: 2) }
+          } else if icon == "shield" {
             GitBranchGlyph().stroke(style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
               .frame(width: 16, height: 16)
           } else {

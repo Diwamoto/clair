@@ -47,12 +47,15 @@ public struct AgentLaunch: Sendable, Codable, Equatable {
   public var run: String?
   /// Provider session id to reopen instead of starting a fresh chat.
   public var resume: String?
-  public init(profile: String, cwd: String, prompt: String? = nil, parent: String? = nil, resume: String? = nil) {
-    self.profile = profile; self.cwd = cwd; self.prompt = prompt; self.parent = parent; self.resume = resume
+  /// ADR-0020: the fixed Claude Code session id of a Project's concierge.
+  public var concierge: String?
+  public init(profile: String, cwd: String, prompt: String? = nil, parent: String? = nil, resume: String? = nil, concierge: String? = nil) {
+    self.profile = profile; self.cwd = cwd; self.prompt = prompt; self.parent = parent; self.resume = resume; self.concierge = concierge
     run = prompt == nil ? nil : UUID().uuidString.lowercased()
   }
   public var command: String {
     guard let p = AgentProfile.named(profile) else { return "" }
+    if let concierge, AgentProfile.isSessionID(concierge) { return Concierge.command(session: concierge, root: cwd) }
     if let resume, let prefix = p.resume, AgentProfile.isSessionID(resume) { return "\(prefix) \(resume)" }
     guard let prompt, let run else { return p.command }
     // `script` keeps a TTY for the agent while recording it, and exits with the agent's status.
@@ -143,7 +146,7 @@ extension WorkbenchState {
     return l
   }
 
-  private func withLayoutCopy(_ name: String) -> ProjectLayout { name == project ? layout : layouts[name] ?? ProjectLayout() }
+  func withLayoutCopy(_ name: String) -> ProjectLayout { name == project ? layout : layouts[name] ?? ProjectLayout() }
 
   /// An agent started in a Clair terminal, either through a launch profile or detected in its shell.
   public func agentLaunch(in project: String, pane: Int) -> AgentLaunch? {
