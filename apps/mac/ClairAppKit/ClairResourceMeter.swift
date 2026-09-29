@@ -93,7 +93,7 @@ struct ProcessSample: Equatable {
 struct ClairResourceMeter: View {
   private typealias C = DesignTokens.Color
   /// Session title for a terminal pane (`root`, `pane`), if the workbench knows one.
-  var sessionTitle: (String, Int) -> String? = { _, _ in nil }
+  var sessionTitle: (String, Int) -> String = { _, pane in "ターミナル \(pane)" }
   @State private var sample = ProcessSample()
   @State private var cpu: Double = 0
   @State private var perProcess: [pid_t: Double] = [:]
@@ -166,7 +166,7 @@ struct ClairResourceMeter: View {
   private func owner(_ pid: pid_t) -> String? {
     guard let key = ProcessSample.terminalKey(of: pid) else { return nil }
     let project = (key.root as NSString).lastPathComponent
-    return "\(project) · " + (sessionTitle(key.root, key.pane) ?? "ターミナル \(key.pane)")
+    return "\(project) · " + sessionTitle(key.root, key.pane)
   }
 
   private static func bytes(_ n: UInt64) -> String { ByteCountFormatter.string(fromByteCount: Int64(n), countStyle: .memory) }
