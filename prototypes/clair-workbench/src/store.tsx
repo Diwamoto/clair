@@ -30,7 +30,8 @@ export type Screen =
   | 'debug'
   | 'debugAgent'
   | 'settings'
-  | 'sessions';
+  | 'sessions'
+  | 'concierge';
 
 export type Overlay = 'command' | 'quickOpen' | 'search' | 'addAgent' | null;
 

@@ -15,6 +15,7 @@ import { color, fs, groupColor, line, mono, radius, space, wash, withAlpha, type
 import {
   IconBranch,
   IconBug,
+  IconConcierge,
   IconCodex,
   IconCommand,
   IconEllipsis,
@@ -646,6 +647,7 @@ const NAV: Array<{ id: string; screen: Screen; label: string; icon: (p: { size?:
   { id: 'review', screen: 'review', label: 'Source Control', icon: IconBranch },
   { id: 'agents', screen: 'sessions', label: 'Agents', icon: IconSession },
   { id: 'debug', screen: 'debug', label: 'Debug', icon: IconBug },
+  { id: 'concierge', screen: 'concierge', label: 'コンシェルジュ', icon: IconConcierge },
 ];
 
 /** Which strip entry the current screen lights up, and which panel it shows. */
@@ -655,6 +657,7 @@ export function navIdFor(screen: Screen): string {
   // The agent conversation opens from its own titlebar tab; while it is up,
   // Agents is the entry that owns it.
   if (screen === 'sessions' || screen === 'activity') return 'agents';
+  if (screen === 'concierge') return 'concierge';
   if (screen === 'settings') return 'settings';
   return 'files';
 }

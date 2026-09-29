@@ -35,11 +35,12 @@ const KIND: Record<Screen, Kind> = {
   debug: 'depth',
   debugAgent: 'depth',
   sessions: 'lift',
+  concierge: 'depth',
   settings: 'sheet',
 };
 
 // Left-to-right order in the sidebar strip, so a slide knows its direction.
-const ORDER: Screen[] = ['workspace', 'graph', 'review', 'debug', 'debugAgent', 'activity', 'sessions', 'settings'];
+const ORDER: Screen[] = ['workspace', 'graph', 'review', 'debug', 'debugAgent', 'activity', 'sessions', 'concierge', 'settings'];
 
 function transitionFor(from: Screen, to: Screen) {
   // The screen being *entered* chooses the motion, except when returning to

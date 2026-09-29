@@ -42,6 +42,11 @@ export const IconCodex = stroke(<path d="M8 1.6l5.5 3.2v6.4L8 14.4l-5.5-3.2V4.8z
   strokeLinejoin: 'round',
 });
 
+// Concierge: a person with a sparkle (ADR-0020).
+export const IconConcierge = stroke(
+  <><circle cx="6.5" cy="5.2" r="2.4" /><path d="M2.2 13.6c.4-2.5 2.2-3.9 4.3-3.9 1 0 1.9.3 2.6.8" /><path d="M12 8.6l.55 1.55 1.55.55-1.55.55L12 12.8l-.55-1.55-1.55-.55 1.55-.55z" fill="currentColor" stroke="none" /></>,
+);
+
 export const IconSearch = stroke(
   <>
     <circle cx="7" cy="7" r="4.1" />
