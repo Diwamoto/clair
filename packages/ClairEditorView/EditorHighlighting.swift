@@ -11,7 +11,7 @@ import CoreGraphics
 /// per-language wiring task's job, not this rendering primitive's; E06
 /// only needs to prove the viewport can paint spans it is handed.
 public enum EditorTokenKind: Sendable, Hashable {
-  case keyword, string, comment, number, type, function, tag, variable, plain
+  case keyword, string, comment, number, type, function, tag, special, variable, plain
   /// Bracket pair colorization: a paired bracket at nesting `depth`, and one with no partner.
   case bracket(depth: Int), unmatchedBracket
 
@@ -26,6 +26,8 @@ public enum EditorTokenKind: Sendable, Hashable {
     case .type: return .scheme(0xe5c07b, 0x986801)
     case .function: return .scheme(0x61afef, 0x3a6ee0)
     case .tag: return .scheme(0xe06c75, 0xc8323f)
+    // One Dark hue-1: escapes, regexps, JSON literals.
+    case .special: return .scheme(0x56b6c2, 0x0184bc)
     // VS Code's editorBracketHighlight.foreground1–3 (cycling by depth) and unexpectedBracket.
     case .bracket(let depth):
       let cycle: [PlatformColor] = [.scheme(0xffd700, 0x0431fa), .scheme(0xda70d6, 0x319331), .scheme(0x179fff, 0x7b3814)]

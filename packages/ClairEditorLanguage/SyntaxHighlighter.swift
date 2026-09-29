@@ -12,15 +12,22 @@ import SwiftTreeSitter
 ///
 /// ponytail: coarse first-component matching, not the full capture
 /// hierarchy (e.g. `@keyword.return` and `@keyword.function` both just
-/// become `.keyword`). `EditorTokenKind` only has 9 cases; a richer palette
+/// become `.keyword`). `EditorTokenKind` only has 10 cases; a richer palette
 /// would need `EditorTokenKind` itself to grow first.
 enum CaptureMapping {
-  static func kind(for nameComponents: [String]) -> EditorTokenKind {
+  static func kind(for nameComponents: [String], in language: EditorLanguageID? = nil) -> EditorTokenKind {
     guard let first = nameComponents.first else { return .plain }
+    // Atom One Dark's json.less paints true/false/null cyan, not constant orange.
+    if language == .json, first == "constant" { return .special }
+    // HCL attribute names and object keys: `variable.*` is One Dark red.
+    if language == .terraform, nameComponents == ["variable", "member"] { return .tag }
     switch first {
     case "keyword": return .keyword
     // JSON object keys, Markdown headings/markers, JSX tags: One Dark red.
     case "string" where nameComponents.last == "key": return .tag
+    // `constant.character.escape` / `string.regexp`: One Dark cyan.
+    case "string" where nameComponents.contains { ["escape", "regex", "regexp"].contains($0) }: return .special
+    case "escape": return .special
     case "tag": return .tag
     case "text":
       switch nameComponents.dropFirst().first {
@@ -31,10 +38,11 @@ enum CaptureMapping {
       }
     case "string", "character": return .string
     case "comment": return .comment
-    case "number", "float": return .number
-    case "constant" where nameComponents.count > 1: return .number
-    case "type": return .type
-    case "function", "method", "constructor": return .function
+    // One Dark `constant.*` (booleans, nil, ALL_CAPS names) is orange like numbers.
+    case "number", "float", "boolean", "constant": return .number
+    // Classes and `Foo(...)` constructors: One Dark `entity.name.class` yellow.
+    case "type", "constructor": return .type
+    case "function", "method": return .function
     case "variable", "parameter", "property", "field", "attribute": return .variable
     default: return .plain
     }
@@ -70,7 +78,7 @@ public final class SyntaxHighlighter {
     let tree = try parser.reset(to: snapshot)
     foldRanges = Self.folds(tree: tree, languageID: languageID)
     bracketSpans = Self.brackets(tree: tree)
-    return Self.spans(tree: tree, query: query)
+    return Self.spans(tree: tree, query: query, languageID: languageID, snapshot: snapshot)
   }
 
   /// Incremental reparse (`SyntaxParser.update`, this type never reparses
@@ -86,7 +94,7 @@ public final class SyntaxHighlighter {
     let tree = try parser.update(edits: edits, oldSnapshot: oldSnapshot, newSnapshot: newSnapshot)
     foldRanges = Self.folds(tree: tree, languageID: languageID)
     bracketSpans = Self.brackets(tree: tree)
-    return Self.spans(tree: tree, query: query)
+    return Self.spans(tree: tree, query: query, languageID: languageID, snapshot: newSnapshot)
   }
 
   /// Walks every named node once (same order of cost as the highlight query pass).
@@ -189,21 +197,58 @@ public final class SyntaxHighlighter {
     }
   }
 
-  private static func spans(tree: Tree, query: Query?) -> [EditorHighlightSpan] {
+  private static func spans(
+    tree: Tree, query: Query?, languageID: EditorLanguageID, snapshot: TextSnapshot
+  ) -> [EditorHighlightSpan] {
     // No compiled query (e.g. a malformed vendored `.scm` — `EditorGrammar`
     // swallows `Query.init` failures into `nil` rather than crashing a
     // parse) means no spans, not a crash: `INV-PERF-005`'s "欠けても正しさは
     // 損なわれない" (missing highlights degrade the view, never correctness).
     guard let query else { return [] }
+    // A node captured by several patterns keeps one pattern's capture. Most
+    // vendored queries list the generic `(identifier) @variable` first and
+    // specific patterns after it (nvim-treesitter: last wins); Go, Rust and
+    // JSON keep upstream tree-sitter-highlight order (first wins). Within one
+    // pattern the first capture stays (`@comment @spell`).
+    let firstWins = [.go, .rust, .json].contains(languageID)
+    var winners: [Range<UInt32>: (pattern: Int, kind: EditorTokenKind)] = [:]
     let cursor = query.execute(in: tree)
-    var spans: [EditorHighlightSpan] = []
-    while let capture = cursor.nextCapture() {
-      let byteRange = capture.node.byteRange
-      guard byteRange.upperBound > byteRange.lowerBound else { continue }
-      let range = TextUTF8Range(
-        UTF8Offset(Int(byteRange.lowerBound)), UTF8Offset(Int(byteRange.upperBound)))
-      spans.append(EditorHighlightSpan(range: range, kind: CaptureMapping.kind(for: capture.nameComponents)))
+    while let match = cursor.next() {
+      guard match.predicates.allSatisfy({ allows($0, match, snapshot) }) else { continue }
+      for capture in match.captures {
+        let bytes = capture.node.byteRange
+        guard bytes.upperBound > bytes.lowerBound else { continue }
+        if let winner = winners[bytes],
+          firstWins ? winner.pattern <= match.patternIndex : winner.pattern >= match.patternIndex
+        { continue }
+        winners[bytes] = (match.patternIndex, CaptureMapping.kind(for: capture.nameComponents, in: languageID))
+      }
     }
-    return spans
+    // Outer nodes first so a nested capture paints over its parent.
+    return winners.sorted {
+      $0.key.lowerBound != $1.key.lowerBound
+        ? $0.key.lowerBound < $1.key.lowerBound : $0.key.upperBound > $1.key.upperBound
+    }.map {
+      EditorHighlightSpan(
+        range: TextUTF8Range(UTF8Offset(Int($0.key.lowerBound)), UTF8Offset(Int($0.key.upperBound))),
+        kind: $0.value.kind)
+    }
+  }
+
+  /// `#eq?` / `#match?` / `#any-of?` against the captured text. SwiftTreeSitter's
+  /// own `QueryMatch.allowed(in:)` assumes UTF-16 input (it halves byte
+  /// offsets), and this parser reads UTF-8, so the text comes from `byteRange`.
+  /// ponytail: `#is-not? local` passes — no locals.scm tracking; add a scope
+  /// resolver if Ruby's local-vs-method split matters.
+  private static func allows(_ predicate: Predicate, _ match: QueryMatch, _ snapshot: TextSnapshot) -> Bool {
+    switch predicate {
+    case .set, .generic, .isNot: return true
+    default:
+      return predicate.captures(in: match).allSatisfy { capture in
+        let bytes = capture.node.byteRange
+        let range = TextUTF8Range(UTF8Offset(Int(bytes.lowerBound)), UTF8Offset(Int(bytes.upperBound)))
+        return (try? snapshot.text(in: range)).map(predicate.evalulate(with:)) ?? false
+      }
+    }
   }
 }

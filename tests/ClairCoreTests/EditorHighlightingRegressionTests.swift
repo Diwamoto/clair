@@ -235,6 +235,55 @@ final class EditorHighlightingRegressionTests: XCTestCase {
     }
   }
 
+  /// The kind the renderer ends up painting on `needle`'s first byte: the
+  /// last overlapping span in `EditorSpanIndex` order wins, as in `EditorLineRenderer`.
+  private func paintedKind(of needle: String, in source: String, path: String) throws -> EditorTokenKind? {
+    let id = try XCTUnwrap(EditorLanguageID.detect(path: path))
+    let spans = try SyntaxHighlighter(languageID: id).reset(to: TextBuffer(source).snapshot)
+    let range = try XCTUnwrap(source.range(of: needle), needle)
+    let offset = source.utf8.distance(from: source.startIndex, to: range.lowerBound)
+    return EditorSpanIndex(spans, range: \.range)
+      .overlapping(TextUTF8Range(UTF8Offset(offset), UTF8Offset(offset + 1))).last?.kind
+  }
+
+  /// Atom One Dark's json.less: keys red, values green, true/false/null and escapes cyan.
+  func testJSONPaintsAtomOneDarkColors() throws {
+    let source = #"{"key": "v\n", "n": 1, "ok": true, "none": null}"#
+    XCTAssertEqual(try paintedKind(of: #""key""#, in: source, path: "a.json"), .tag)
+    XCTAssertEqual(try paintedKind(of: #""v"#, in: source, path: "a.json"), .string)
+    XCTAssertEqual(try paintedKind(of: #"\n"#, in: source, path: "a.json"), .special)
+    XCTAssertEqual(try paintedKind(of: "1", in: source, path: "a.json"), .number)
+    XCTAssertEqual(try paintedKind(of: "true", in: source, path: "a.json"), .special)
+    XCTAssertEqual(try paintedKind(of: "null", in: source, path: "a.json"), .special)
+  }
+
+  /// `#any-of?` / `#eq?` predicates must filter: before they were evaluated,
+  /// the terraform query's `bool`/`string`/... pattern painted every identifier yellow.
+  func testTerraformEvaluatesQueryPredicates() throws {
+    let source = """
+      resource "aws_s3_bucket" "logs" {
+        bucket  = var.name
+        enabled = true
+        size    = length(local.items)
+        lifecycle {}
+      }
+      """
+    XCTAssertEqual(try paintedKind(of: "resource", in: source, path: "main.tf"), .keyword)
+    XCTAssertEqual(try paintedKind(of: #""logs""#, in: source, path: "main.tf"), .string)
+    XCTAssertEqual(try paintedKind(of: "bucket ", in: source, path: "main.tf"), .tag)
+    XCTAssertEqual(try paintedKind(of: "var", in: source, path: "main.tf"), .variable)
+    XCTAssertEqual(try paintedKind(of: "true", in: source, path: "main.tf"), .number)
+    XCTAssertEqual(try paintedKind(of: "length", in: source, path: "main.tf"), .function)
+    XCTAssertEqual(try paintedKind(of: "lifecycle", in: source, path: "main.tf"), .type)
+  }
+
+  /// Go's upstream query lists specific patterns before `(identifier) @variable`.
+  func testGoKeepsFirstPatternForFunctionNames() throws {
+    let source = "package m\nfunc (s *S) Run() { fmt.Errorf(\"x\") }\n"
+    XCTAssertEqual(try paintedKind(of: "Run", in: source, path: "a.go"), .function)
+    XCTAssertEqual(try paintedKind(of: "Errorf", in: source, path: "a.go"), .function)
+  }
+
   func testIncrementalUpdateAfterEditStillProducesSpans() throws {
     let highlighter = try SyntaxHighlighter(languageID: .json)
     let buffer = try TextBuffer(#"{"a": 1}"#)
