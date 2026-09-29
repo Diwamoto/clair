@@ -1,5 +1,6 @@
 import ClairDesignSystem
 import ClairShared
+import Charts
 import Darwin
 import SwiftUI
 
@@ -60,12 +61,14 @@ struct ClairResourceMeter: View {
   @State private var sample = ProcessSample()
   @State private var cpu: Double = 0
   @State private var hovered = false
+  /// Last two minutes of (cpu %, footprint bytes), oldest first.
+  @State private var history: [(cpu: Double, bytes: UInt64)] = []
   private let interval = 2.0
 
   var body: some View {
     let memory = Self.bytes(sample.totalFootprint)
     HStack(spacing: 6) {
-      Image(systemName: "gauge.with.dots.needle.33percent").font(.system(size: 11))
+      spark(history.map(\.cpu), tint: C.debugBlue).frame(width: 34, height: 12)
       Text("CPU \(Int(cpu.rounded()))% · \(memory)")
     }
     .foregroundStyle(C.textQuaternary)
@@ -76,7 +79,9 @@ struct ClairResourceMeter: View {
       Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
         GridRow { Text("Clair 全体").font(.system(size: 14, weight: .semibold)); Text("") }
         row("CPU", String(format: "%.1f%%", cpu))
+        GridRow { spark(history.map(\.cpu), tint: C.debugBlue).frame(height: 36).gridCellColumns(2) }
         row("メモリ", memory)
+        GridRow { spark(history.map { Double($0.bytes) }, tint: C.success).frame(height: 36).gridCellColumns(2) }
         row("　アプリ本体", Self.bytes(app))
         row("　子プロセス", Self.bytes(sample.totalFootprint - app))
         row("プロセス数", "\(sample.footprintBytes.count)")
@@ -93,8 +98,19 @@ struct ClairResourceMeter: View {
         let next = await Task.detached(priority: .utility) { ProcessSample.current() }.value
         cpu = ProcessSample.cpuPercent(from: sample, to: next, interval: interval)
         sample = next
+        history = (history + [(cpu, next.totalFootprint)]).suffix(60)
       }
     }
+  }
+
+  /// Area sparkline from zero; no axes — the numbers sit in the row above it.
+  private func spark(_ values: [Double], tint: Color) -> some View {
+    Chart(Array(values.enumerated()), id: \.offset) { point in
+      AreaMark(x: .value("t", point.offset), y: .value("v", point.element)).foregroundStyle(tint.opacity(0.25))
+      LineMark(x: .value("t", point.offset), y: .value("v", point.element)).foregroundStyle(tint).lineStyle(StrokeStyle(lineWidth: 1))
+    }
+    .chartXScale(domain: 0...59).chartXAxis(.hidden).chartYAxis(.hidden)
+    .accessibilityHidden(true)
   }
 
   private static func bytes(_ n: UInt64) -> String { ByteCountFormatter.string(fromByteCount: Int64(n), countStyle: .memory) }
