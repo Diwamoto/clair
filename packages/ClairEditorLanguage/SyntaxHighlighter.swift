@@ -52,6 +52,8 @@ public final class SyntaxHighlighter {
   /// E13: foldable ranges of the last parse — one per header line (the
   /// widest multi-line syntax node starting on it), sorted by start.
   public private(set) var foldRanges: [TextUTF8Range] = []
+  /// Bracket pair colorization of the last parse; paint after the syntax spans so it wins.
+  public private(set) var bracketSpans: [EditorHighlightSpan] = []
 
   public init(languageID: EditorLanguageID) throws {
     self.languageID = languageID
@@ -67,6 +69,7 @@ public final class SyntaxHighlighter {
   public func reset(to snapshot: TextSnapshot) throws -> [EditorHighlightSpan] {
     let tree = try parser.reset(to: snapshot)
     foldRanges = Self.folds(tree: tree, languageID: languageID)
+    bracketSpans = Self.brackets(tree: tree)
     return Self.spans(tree: tree, query: query)
   }
 
@@ -82,6 +85,7 @@ public final class SyntaxHighlighter {
   ) throws -> [EditorHighlightSpan] {
     let tree = try parser.update(edits: edits, oldSnapshot: oldSnapshot, newSnapshot: newSnapshot)
     foldRanges = Self.folds(tree: tree, languageID: languageID)
+    bracketSpans = Self.brackets(tree: tree)
     return Self.spans(tree: tree, query: query)
   }
 
@@ -105,6 +109,40 @@ public final class SyntaxHighlighter {
     visit(root, root: true)
     return widest.values.sorted { $0.start < $1.start }
       .map { TextUTF8Range(UTF8Offset(Int($0.start)), UTF8Offset(Int($0.end))) }
+  }
+
+  /// Bracket pair colorization (VS Code's): paired bracket tokens coloured by nesting depth, the
+  /// rest `.unmatchedBracket`. Only anonymous grammar tokens count, so a bracket inside a string or
+  /// comment (one token) stays uncoloured; zero-width tokens are tree-sitter's MISSING recovery nodes.
+  /// ponytail: re-walks the whole tree per parse like `folds`; limit to changed ranges if 10 MiB edits lag.
+  static func brackets(tree: Tree) -> [EditorHighlightSpan] {
+    guard let root = tree.rootNode else { return [] }
+    let closers: [String: String] = ["(": ")", "[": "]", "{": "}", "${": "}", "#{": "}", "$(": ")"]
+    var spans: [EditorHighlightSpan] = []
+    var open: [(closer: String, span: Int)] = []
+    func visit(_ node: Node) {
+      let bytes = node.byteRange
+      if !node.isNamed, bytes.upperBound > bytes.lowerBound, let type = node.nodeType {
+        let range = TextUTF8Range(UTF8Offset(Int(bytes.lowerBound)), UTF8Offset(Int(bytes.upperBound)))
+        if let closer = closers[type] {
+          open.append((closer, spans.count))
+          spans.append(EditorHighlightSpan(range: range, kind: .bracket(depth: open.count - 1)))
+        } else if [")", "]", "}"].contains(type) {
+          if open.last?.closer == type {
+            open.removeLast()
+            spans.append(EditorHighlightSpan(range: range, kind: .bracket(depth: open.count)))
+          } else {
+            spans.append(EditorHighlightSpan(range: range, kind: .unmatchedBracket))
+          }
+        }
+      }
+      node.enumerateChildren { visit($0) }
+    }
+    visit(root)
+    for unclosed in open {
+      spans[unclosed.span] = EditorHighlightSpan(range: spans[unclosed.span].range, kind: .unmatchedBracket)
+    }
+    return spans
   }
 
   /// Only structural containers earn a gutter marker. A multiline expression,

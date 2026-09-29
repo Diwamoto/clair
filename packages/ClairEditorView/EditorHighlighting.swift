@@ -12,6 +12,8 @@ import CoreGraphics
 /// only needs to prove the viewport can paint spans it is handed.
 public enum EditorTokenKind: Sendable, Hashable {
   case keyword, string, comment, number, type, function, tag, variable, plain
+  /// Bracket pair colorization: a paired bracket at nesting `depth`, and one with no partner.
+  case bracket(depth: Int), unmatchedBracket
 
   /// Atom One Dark / One Light by appearance, matching `DesignTokens.Color.code*`
   /// in the design system (E18). `ClairEditorView.tokenColors` lets a caller override any subset.
@@ -24,6 +26,11 @@ public enum EditorTokenKind: Sendable, Hashable {
     case .type: return .scheme(0xe5c07b, 0x986801)
     case .function: return .scheme(0x61afef, 0x3a6ee0)
     case .tag: return .scheme(0xe06c75, 0xc8323f)
+    // VS Code's editorBracketHighlight.foreground1–3 (cycling by depth) and unexpectedBracket.
+    case .bracket(let depth):
+      let cycle: [PlatformColor] = [.scheme(0xffd700, 0x0431fa), .scheme(0xda70d6, 0x319331), .scheme(0x179fff, 0x7b3814)]
+      return cycle[depth % cycle.count]
+    case .unmatchedBracket: return .scheme(0xff1212, 0xff1212)
     case .variable, .plain: return .editorLabel
     }
   }
