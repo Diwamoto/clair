@@ -245,9 +245,31 @@ public struct PaletteItem: Sendable, Equatable {
   public let hint: String
   public let id: String
   public let input: CommandInput
+  /// Secondary label shown after the title (the Japanese title when `title` is the English command name).
+  public let detail: String
 
-  public init(title: String, hint: String, id: String, input: CommandInput) {
-    self.title = title; self.hint = hint; self.id = id; self.input = input
+  public init(title: String, hint: String, id: String, input: CommandInput, detail: String = "") {
+    self.title = title; self.hint = hint; self.id = id; self.input = input; self.detail = detail
+  }
+
+  /// Every whitespace-separated query token appears in the title or the detail (case-insensitive).
+  func matches(_ query: String) -> Bool {
+    let hay = (title + " " + detail).lowercased()
+    return query.lowercased().split(whereSeparator: \.isWhitespace).allSatisfy { hay.contains($0) }
+  }
+}
+
+extension CommandDescriptor {
+  /// English command name derived from the id: `pane.splitRight` → `Pane: Split Right`.
+  // ponytail: derived, not authored; add an explicit English title to `cmd(...)` when a derived name reads badly.
+  public var englishName: String {
+    func words(_ s: Substring) -> String {
+      var out = ""
+      for c in s { if c.isUppercase, !out.isEmpty { out += " " }; out.append(out.isEmpty || out.last == " " ? Character(c.uppercased()) : c) }
+      return out
+    }
+    let parts = id.split(separator: ".")
+    return parts.count > 1 ? "\(words(parts[0])): \(parts.dropFirst().map(words).joined(separator: " "))" : words(parts[0])
   }
 }
 
@@ -291,11 +313,12 @@ public struct CommandRegistry: Sendable {
     let q = query.lowercased()
     switch kind {
     case .commands:
-      return commands.filter { $0.inPalette && (state.isRepo || !($0.id.hasPrefix("git.") || $0.id.hasPrefix("worktree."))) && (q.isEmpty || $0.title.lowercased().contains(q)) }
-        .map { PaletteItem(title: $0.title, hint: state.shortcut(for: $0) ?? "", id: $0.id, input: [:]) }
+      return commands.filter { $0.inPalette && (state.isRepo || !($0.id.hasPrefix("git.") || $0.id.hasPrefix("worktree."))) }
+        .map { PaletteItem(title: $0.englishName, hint: state.shortcut(for: $0) ?? "", id: $0.id, input: [:], detail: $0.title) }
+        .filter { $0.matches(q) }
         + AgentProfile.all.map { PaletteItem(title: "\($0.title) を起動", hint: "", id: "agent.launch", input: ["profile": .string($0.id)]) }
-          .filter { q.isEmpty || $0.title.lowercased().contains(q) }
-        + settingItems(state).filter { q.isEmpty || $0.title.lowercased().contains(q) }
+          .filter { $0.matches(q) }
+        + settingItems(state).filter { $0.matches(q) }
     case .files:
       return QuickOpen.rank(query, state.files.filter { $0.status != "D" })
         .map { PaletteItem(title: $0.path, hint: "", id: "tab.open", input: ["path": .string($0.path)]) }

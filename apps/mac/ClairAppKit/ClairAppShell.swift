@@ -2776,6 +2776,7 @@ import Observation
                   }
                   Text(p == .files || p == .compare ? name(it.title) : it.title).font(.system(size: 12)).lineLimit(1)
                     .foregroundStyle(on ? C.textPrimary : C.textSecondary)
+                  if !it.detail.isEmpty { Text(it.detail).font(.system(size: 11)).lineLimit(1).foregroundStyle(C.textQuaternary) }
                   Spacer(minLength: 0)
                   if p == .files || p == .compare {
                     Text(it.title).font(.system(size: 11)).lineLimit(1).truncationMode(.head).foregroundStyle(C.textQuaternary)

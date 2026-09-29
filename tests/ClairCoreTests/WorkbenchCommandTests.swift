@@ -6,6 +6,14 @@ import XCTest
 final class WorkbenchCommandTests: XCTestCase {
   let r = CommandRegistry.workbench
 
+  func testPaletteCommandsUseEnglishNameWithJapaneseLabel() {
+    let s = WorkbenchState()
+    let en = r.paletteItems(.commands, query: "split right", state: s).first { $0.id == "pane.splitRight" }
+    XCTAssertEqual(en?.title, "Pane: Split Right")
+    XCTAssertEqual(en?.detail, "ペインを右に分割")
+    XCTAssertTrue(r.paletteItems(.commands, query: "右に分割", state: s).contains { $0.id == "pane.splitRight" })
+  }
+
   func testRestartChoicesAreSeparatePaletteCommands() throws {
     var state = WorkbenchState()
     state.palette = .commands
