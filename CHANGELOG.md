@@ -6,6 +6,24 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-29
+
+### Added
+
+- **Markdown preview**: Mermaid flowcharts and sequence diagrams render directly in Clair, with zoom and drag-to-pan controls.
+- **Settings**: choose editor and terminal fonts and sizes, toggle editor line numbers, and set the terminal cursor shape and blink.
+- **Editor**: matching brackets are coloured by nesting depth; unmatched brackets are highlighted.
+- **Source Control**: discard a file's staged or unstaged changes from its row or context menu, with confirmation.
+- **Updates**: an available update appears in a popup at the bottom right of the window.
+- **Crash reports**: after a crash, Clair offers a prefilled GitHub issue on the next launch.
+
+### Fixed
+
+- **Settings**: Esc closes the sheet, typing no longer reaches the covered editor, and the closing transition stays visible.
+- **Editor**: JSON and Terraform highlighting now matches the intended Atom One Dark colours.
+- **Source Control**: row buttons remain clickable when the row also opens a diff.
+- **Approvals**: simultaneous `clair` calls can each receive an approval card without timing out behind another request.
+
 ## [0.3.0] - 2026-09-28
 
 ### Added
@@ -100,7 +118,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Diwamoto/clair/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Diwamoto/clair/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/Diwamoto/clair/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Diwamoto/clair/compare/v0.1.0...v0.2.0
