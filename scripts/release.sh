@@ -81,6 +81,11 @@ cat >"$app/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
+# Ad-hoc signature: UNUserNotificationCenter ties its authorization/registration to the
+# bundle's code identity, same as the dev build (scripts/run-dev.sh). --deep also seals the
+# copied *.bundle resources above. Developer ID signing/notarization stays deferred (ADR-0008/0009).
+codesign --force --deep --sign - "$app"
+
 # Smoke: the shipped bundle must reach a first frame (a missing resource bundle is a launch-time crash).
 # Throwaway HOME so it never touches the host's Stable workspace, daemon or update state.
 smoke_home="$(mktemp -d)"
