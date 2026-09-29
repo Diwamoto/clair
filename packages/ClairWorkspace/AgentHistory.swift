@@ -56,20 +56,16 @@ public struct AgentHistoryGroup: Sendable, Identifiable {
   }
 }
 
-/// One calendar day of past chats, split into projects (newest first at both levels).
+/// One calendar day of past chats, split into projects — ccedit's DateView: a chat sits under the day
+/// it was last updated, days newest first, projects by name, chats newest first.
 public struct AgentHistoryDay: Sendable, Identifiable {
   public let date: Date
   public let groups: [AgentHistoryGroup]
   public var id: Date { date }
 
   public static func group(_ histories: [AgentHistory], calendar: Calendar = .current) -> [AgentHistoryDay] {
-    // A chat that spans several days is listed under every day it has messages on.
-    var byDay: [Date: [AgentHistory]] = [:]
-    for history in histories {
-      let days = Set(history.messages.map { calendar.startOfDay(for: $0.date) } + [calendar.startOfDay(for: history.date)])
-      for day in days { byDay[day, default: []].append(history) }
-    }
-    return byDay.map { AgentHistoryDay(date: $0.key, groups: AgentHistoryGroup.group($0.value)) }
+    Dictionary(grouping: histories) { calendar.startOfDay(for: $0.date) }
+      .map { AgentHistoryDay(date: $0.key, groups: AgentHistoryGroup.group($0.value).sorted { $0.project < $1.project }) }
       .sorted { $0.date > $1.date }
   }
 }
