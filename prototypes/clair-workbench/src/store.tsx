@@ -16,6 +16,7 @@ import {
   initiallyStagedPaths,
   projects,
   sessions,
+  type AgentProfileId,
   type ChatMessage,
   type Session,
 } from './data';
@@ -197,7 +198,7 @@ function useWorkbenchState() {
   });
 
   // AI プロバイダー / エディタ / ターミナル / アップデート — Switch 以外の設定値。
-  const [defaultAgent, setDefaultAgent] = useState<'claude' | 'codex'>('claude');
+  const [defaultAgent, setDefaultAgent] = useState<AgentProfileId>('claude');
   const [approvalPolicy, setApprovalPolicy] = useState<'毎回確認' | 'セッション中は許可' | '自動承認'>('毎回確認');
   const [tabWidth, setTabWidth] = useState(4);
   const [defaultShell, setDefaultShell] = useState('/bin/zsh');

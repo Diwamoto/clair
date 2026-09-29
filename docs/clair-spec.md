@@ -80,8 +80,10 @@ terminal をそのまま使えることを保証し、その周囲に Project ow
 - **Project**: Clair が開く local folder。Git repository でなくてよい。
 - **Workspace**: Project に保存された pane/tab/sidebar の layout と表示 state。
 - **Pane**: editor / terminal / diff を混在できる tab group。任意に split できる。
-- **Agent terminal**: launch profile から起動した Claude Code / Codex / OpenCode
-  の raw-terminal session。
+- **Agent terminal**: launch profile から起動した raw-terminal session。起動できる
+  agent は `AgentProfile` registry（`packages/ClairCore/Sources/ClairWorkspace/WorkbenchAgents.swift`）
+  が一元管理し、Claude Code / Codex / OpenCode を既定に、設定からの切り替え・
+  registry への追加で他の CLI agent にも対応する。
 - **Managed worktree**: Git Project に対して Clair が local 管理領域へ作る任意の
   isolated checkout。
 - **Command**: UI、CLI、MCP から共通利用する typed operation。
@@ -291,8 +293,10 @@ minimap、VS Code extension 互換、独自 plugin runtime は対象外。
 ## 6. AI review
 
 Mac の「変更を確認」には、現在のファイルをレビューする操作と Project 全体を
-レビューする操作を置く。利用者が Claude Code / Codex / OpenCode を選び、
-明示的に開始したときだけ、その Project の root で agent を起動する。
+レビューする操作を置く。利用者が `AgentProfile` registry に登録された agent
+（既定は Claude Code / Codex / OpenCode。設定で切り替え可能で、registry に
+追加すれば他の CLI agent も選べる）を選び、明示的に開始したときだけ、その
+Project の root で agent を起動する。
 ファイル対象は選択中の差分ファイル、なければ開いているファイルとする。
 依頼には対象、読み取り専用のレビューであること、問題箇所のファイル・行・理由を
 報告することを含める。結果は起動した terminal に表示する。未保存の editor

@@ -18,8 +18,10 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public static let sections = ["一般", "AIプロバイダー", "使用状況", "エディタ", "ターミナル", "モバイル", "アップデート"]
   public static let toggleKeys = ["restoreLayout", "confirmClose", "showQuota", "preventSleepOnBattery", "formatOnSave", "showWhitespace", "softWrap", "terminalApprovals"]
   /// Closed-set settings (the mock's segmented controls). The first option is the default.
+  /// agent registry: `defaultAgent` reads its choices from the `AgentProfile` registry instead of a
+  /// literal list, so switching to a newly registered agent needs no change here.
   public static let choiceOptions: [String: [String]] = [
-    "defaultAgent": ["claude", "codex"],
+    "defaultAgent": AgentProfile.all.map(\.id),
     "approvalPolicy": ["毎回確認", "セッション中は許可", "自動承認"],
     "tabWidth": ["2", "4", "8"],
     "defaultShell": ["/bin/zsh", "/bin/bash"],

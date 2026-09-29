@@ -2,6 +2,20 @@
 // canvas draws is copied from that artboard; the extra file bodies below exist
 // only so the editor, quick-open and search have something real to work on.
 
+// agent registry: mirrors the native AgentProfile registry (packages/ClairCore/Sources/ClairWorkspace/WorkbenchAgents.swift).
+// Keep ids and order in sync — the "既定のAgent" picker reads this list, not a literal option array.
+export const AGENT_PROFILES = [
+  { id: 'claude', title: 'Claude Code' },
+  { id: 'codex', title: 'Codex' },
+  { id: 'opencode', title: 'OpenCode' },
+  { id: 'gemini', title: 'Gemini CLI' },
+  { id: 'cursor-agent', title: 'Cursor CLI' },
+  { id: 'copilot', title: 'GitHub Copilot CLI' },
+  { id: 'aider', title: 'Aider' },
+] as const;
+
+export type AgentProfileId = (typeof AGENT_PROFILES)[number]['id'];
+
 export type FileKind = 'swift' | 'go' | 'md' | 'rust';
 
 export type MockFile = {

@@ -13,10 +13,14 @@
         ClairCLIProcessScanner.ProcessInfo(pid: 21, parent: 20, name: "codex"),
         ClairCLIProcessScanner.ProcessInfo(pid: 40, parent: 1, name: "zsh"),
         ClairCLIProcessScanner.ProcessInfo(pid: 41, parent: 40, name: "2.1.280", path: "/Users/u/.local/share/claude/versions/2.1.280"),
+        ClairCLIProcessScanner.ProcessInfo(pid: 50, parent: 1, name: "zsh"),
+        ClairCLIProcessScanner.ProcessInfo(pid: 51, parent: 50, name: "cursor-agent"),
       ]
       XCTAssertEqual(ClairCLIProcessScanner.profile(shell: 10, processes: processes), "claude")
       XCTAssertEqual(ClairCLIProcessScanner.profile(shell: 20, processes: processes), "codex")
       XCTAssertEqual(ClairCLIProcessScanner.profile(shell: 40, processes: processes), "claude")
+      // agent registry: detection reads the AgentProfile registry, so a newly added profile is found too.
+      XCTAssertEqual(ClairCLIProcessScanner.profile(shell: 50, processes: processes), "cursor-agent")
       XCTAssertNil(ClairCLIProcessScanner.profile(shell: 30, processes: processes))
     }
 

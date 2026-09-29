@@ -4,6 +4,9 @@ import Foundation
 // Project root (ADR-0002): Clair never parses its output; the terminal surface owns the PTY,
 // so a failing semantic adapter cannot affect the session. Only facts (bell, exit code shown
 // by the kept-open pane) are available.
+// agent registry: this list is the single registry of launchable agents — the palette, the settings
+// "既定のAgent" picker, the AI review provider menu, and process detection all read `all`
+// instead of naming profiles themselves. Add an agent here and it appears everywhere.
 // ponytail: fixed built-in list resolved via PATH; user-defined profiles / managed worktree cwd land with V06.
 
 public struct AgentProfile: Sendable, Equatable {
@@ -18,6 +21,12 @@ public struct AgentProfile: Sendable, Equatable {
     AgentProfile(id: "claude", title: "Claude Code", command: "claude", batch: "claude -p"),
     AgentProfile(id: "codex", title: "Codex", command: "codex", batch: "codex exec"),
     AgentProfile(id: "opencode", title: "OpenCode", command: "opencode", batch: "opencode run"),
+    // agent registry: added alongside the original three so users can switch to them; behaviour of
+    // claude/codex/opencode above is unchanged.
+    AgentProfile(id: "gemini", title: "Gemini CLI", command: "gemini", batch: "gemini -p"),
+    AgentProfile(id: "cursor-agent", title: "Cursor CLI", command: "cursor-agent", batch: "cursor-agent -p"),
+    AgentProfile(id: "copilot", title: "GitHub Copilot CLI", command: "copilot", batch: "copilot -p"),
+    AgentProfile(id: "aider", title: "Aider", command: "aider", batch: "aider --yes --message"),
   ]
 
   public static func named(_ id: String) -> AgentProfile? { all.first { $0.id == id } }
