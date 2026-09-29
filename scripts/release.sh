@@ -53,7 +53,7 @@ cp "$bin/ClairMacApp" "$bin/ClairDaemon" "$bin/clair" "$app/Contents/MacOS/"
 # there and the bundle cannot be sealed by codesign. Move them to Contents/Resources (custom accessor
 # or an Xcode app target) when Developer ID signing/notarization is adopted.
 cp -R "$bin"/*.bundle "$app/"
-scripts/make-icns.sh "apps/mac/ClairMacApp/Resources/AppIcon.png" "$app/Contents/Resources/AppIcon.icns"
+scripts/make-app-icon.sh "apps/mac/ClairMacApp/AppIcon.icon" "$app/Contents/Resources"
 cat >"$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -63,6 +63,7 @@ cat >"$app/Contents/Info.plist" <<PLIST
   <key>CFBundleIdentifier</key><string>com.diwamoto.clair</string>
   <key>CFBundleName</key><string>Clair</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
+  <key>CFBundleIconName</key><string>AppIcon</string>
   <key>CFBundleDocumentTypes</key>
   <array><dict>
     <key>CFBundleTypeName</key><string>Text</string>

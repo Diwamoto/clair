@@ -88,9 +88,9 @@ fi
 # A bare executable shows the generic exec icon to anything reading the bundle (AltTab, Finder), so launch
 # from a minimal .app wrapper. Bundle.module still resolves through SwiftPM's debug build-path fallback.
 app="$package_path/.build/dev-bundle/Clair Dev.app"
-icon_png="$package_path/apps/mac/ClairMacApp/Resources/AppIconDev.png"
+icon_src="$package_path/apps/mac/ClairMacApp/AppIconDev.icon"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-[[ "$icon_png" -nt "$app/Contents/Resources/AppIcon.icns" ]] && "$repo_root/scripts/make-icns.sh" "$icon_png" "$app/Contents/Resources/AppIcon.icns"
+[[ -e "$app/Contents/Resources/Assets.car" && -z "$(find "$icon_src" -newer "$app/Contents/Resources/Assets.car")" ]] || "$repo_root/scripts/make-app-icon.sh" "$icon_src" "$app/Contents/Resources"
 cat >"$app/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -99,7 +99,8 @@ cat >"$app/Contents/Info.plist" <<'PLIST'
   <key>CFBundleExecutable</key><string>ClairMacApp</string>
   <key>CFBundleIdentifier</key><string>com.diwamoto.clair.dev</string>
   <key>CFBundleName</key><string>Clair Dev</string>
-  <key>CFBundleIconFile</key><string>AppIcon</string>
+  <key>CFBundleIconFile</key><string>AppIconDev</string>
+  <key>CFBundleIconName</key><string>AppIconDev</string>
   <key>CFBundleDocumentTypes</key>
   <array><dict>
     <key>CFBundleTypeName</key><string>Text</string>
