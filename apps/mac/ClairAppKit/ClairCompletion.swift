@@ -1,4 +1,5 @@
 #if os(macOS)
+  import ClairShared
   import AppKit
   import ClairDesignSystem
   import ClairEditorCore
@@ -196,7 +197,7 @@
       }
       .background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.card))
       .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(L.strong))
-      .accessibilityElement(children: .contain).accessibilityLabel("補完候補")
+      .accessibilityElement(children: .contain).accessibilityLabel(tr("補完候補"))
     }
   }
 #endif

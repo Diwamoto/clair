@@ -1,3 +1,4 @@
+import ClairShared
 import Foundation
 
 // V08: Project badges, notification history and mute. OSC 9/777 notification
@@ -18,7 +19,7 @@ public struct WorkbenchNotice: Sendable, Codable, Equatable, Identifiable {
   public var read: Bool
 
   /// Fixed wording from the fact alone.
-  public var title: String { kind == .bell ? (sourceTitle.flatMap { $0.isEmpty ? nil : $0 } ?? "通知") : exitCode == 0 ? "正常終了" : "異常終了 (exit \(exitCode ?? -1))" }
+  public var title: String { kind == .bell ? (sourceTitle.flatMap { $0.isEmpty ? nil : $0 } ?? tr("通知")) : exitCode == 0 ? tr("正常終了") : tr("異常終了 (exit %@)", exitCode ?? -1) }
 }
 
 public struct NotificationLog: Sendable, Codable, Equatable {

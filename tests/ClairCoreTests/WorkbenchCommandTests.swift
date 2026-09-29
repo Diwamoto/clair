@@ -6,26 +6,26 @@ import XCTest
 final class WorkbenchCommandTests: XCTestCase {
   let r = CommandRegistry.workbench
 
-  func testPaletteCommandsUseEnglishNameWithJapaneseLabel() {
+  func testPaletteCommandsUseEnglishNameWithTitleLabel() {
     let s = WorkbenchState()
     let en = r.paletteItems(.commands, query: "split right", state: s).first { $0.id == "pane.splitRight" }
     XCTAssertEqual(en?.title, "Pane: Split Right")
-    XCTAssertEqual(en?.detail, "ペインを右に分割")
-    XCTAssertTrue(r.paletteItems(.commands, query: "右に分割", state: s).contains { $0.id == "pane.splitRight" })
+    XCTAssertEqual(en?.detail, "Split Pane Right")
+    XCTAssertTrue(r.paletteItems(.commands, query: "split pane right", state: s).contains { $0.id == "pane.splitRight" })
   }
 
   func testRestartChoicesAreSeparatePaletteCommands() throws {
     var state = WorkbenchState()
     state.palette = .commands
-    XCTAssertEqual(r.paletteItems(.commands, query: "再起動", state: state).map(\.id).filter { $0 == "window.restart" || $0 == "app.restart" }, ["window.restart", "app.restart"])
+    XCTAssertEqual(r.paletteItems(.commands, query: "restart", state: state).map(\.id).filter { $0 == "window.restart" || $0 == "app.restart" }, ["window.restart", "app.restart"])
     XCTAssertEqual(try r.execute("window.restart", state: &state).get(), .ok)
     XCTAssertNil(state.palette)
-    XCTAssertEqual(r.execute("app.restart", state: &state), .failure(CommandError(.confirmationRequired, "app.restart is 外部")))
+    XCTAssertEqual(r.execute("app.restart", state: &state), .failure(CommandError(.confirmationRequired, "app.restart is external")))
   }
 
   func testPaletteAndHarnessProduceSameTransitionAndResult() {
     var viaPalette = WorkbenchState(), viaHarness = WorkbenchState()
-    for (query, id) in [("右に分割", "pane.splitRight"), ("下に分割", "pane.splitDown"), ("均等", "pane.equalize"), ("閉じる", "pane.close")] {
+    for (query, id) in [("split right", "pane.splitRight"), ("split down", "pane.splitDown"), ("equalize", "pane.equalize"), ("close pane", "pane.close")] {
       let item = r.paletteItems(.commands, query: query, state: viaPalette).first { $0.id == id }!
       let a = r.execute(item.id, item.input, state: &viaPalette)
       let b = r.execute(id, state: &viaHarness)
@@ -80,14 +80,14 @@ final class WorkbenchCommandTests: XCTestCase {
   // Every setting is reachable from ⌘K without opening the settings window.
   func testPaletteChangesSettingsAndInstallsTheCLI() {
     var s = WorkbenchState()
-    let wrap = r.paletteItems(.commands, query: "行の折り返しをオン", state: s)[0]
+    let wrap = r.paletteItems(.commands, query: "turn word wrap on", state: s)[0]
     XCTAssertEqual(r.execute(wrap.id, wrap.input, state: &s), .success(.ok))
     XCTAssertEqual(s.toggles["softWrap"], true)
-    XCTAssertEqual(r.paletteItems(.commands, query: "設定: 行の折り返し", state: s).map(\.title), ["設定: 行の折り返しをオフにする"])
-    let tab = r.paletteItems(.commands, query: "タブ幅を 4", state: s)[0]
+    XCTAssertEqual(r.paletteItems(.commands, query: "settings: turn word wrap", state: s).map(\.title), ["Settings: turn Word wrap off"])
+    let tab = r.paletteItems(.commands, query: "tab width to 4", state: s)[0]
     r.execute(tab.id, tab.input, state: &s)
     XCTAssertEqual(s.choices["tabWidth"], "4")
-    XCTAssertTrue(r.paletteItems(.commands, query: "clair コマンド", state: s).contains { $0.id == "cli.install" })
+    XCTAssertTrue(r.paletteItems(.commands, query: "clair command", state: s).contains { $0.id == "cli.install" })
     XCTAssertEqual(WorkbenchState.settingTitles.keys.sorted(), (WorkbenchState.toggleKeys + WorkbenchState.choiceOptions.keys).sorted())
   }
 

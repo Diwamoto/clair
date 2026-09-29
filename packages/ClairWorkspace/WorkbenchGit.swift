@@ -1,3 +1,4 @@
+import ClairShared
 import Foundation
 
 // V06: Git/worktree workflow on top of the command registry. Shells out to /usr/bin/git with an
@@ -79,7 +80,7 @@ public enum WorkbenchGit {
     let text = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
     p.waitWithoutRunLoop()
     if p.terminationReason == .uncaughtSignal {
-      return (false, "git が \(Int(timeout)) 秒以内に終わらなかったため中断しました。\n\(text)")
+      return (false, tr("git が %@ 秒以内に終わらなかったため中断しました。\n%@", Int(timeout), text))
     }
     // Keep leading spaces: porcelain status uses them as the index/worktree column,
     // and unified diff context lines are also significant. Only strip line endings.
@@ -129,10 +130,10 @@ public enum WorkbenchGit {
       "authentication failed", "could not read username", "permission denied (publickey)",
       "terminal prompts disabled", "credentials", "repository not found",
     ].contains { lower.contains($0) }
-    let detail = output.isEmpty ? "Git から詳細が返りませんでした。" : output
+    let detail = output.isEmpty ? tr("Git から詳細が返りませんでした。") : output
     return authentication
-      ? "認証が必要です。ターミナルで Git の認証を設定してください。\n\(detail)"
-      : "\(action) に失敗しました。\n\(detail)"
+      ? tr("認証が必要です。ターミナルで Git の認証を設定してください。\n%@", detail)
+      : tr("%@ に失敗しました。\n%@", action, detail)
   }
 }
 
@@ -213,12 +214,12 @@ extension CommandRegistry {
       }
     }
     return [
-      stage("git.stage", "変更をステージ", ["add"]),
-      stage("git.unstage", "ステージを解除", ["restore", "--staged"]),
+      stage("git.stage", tr("変更をステージ"), ["add"]),
+      stage("git.unstage", tr("ステージを解除"), ["restore", "--staged"]),
       // `staged` discards back to HEAD (index and worktree); otherwise worktree only, so staged content survives.
       // Untracked (and staged-new) files are deleted.
       // ponytail: a staged rename discards only the new path; the old path's staged deletion stays.
-      cmd("git.discard", "変更を破棄", .destructive, ai: false,
+      cmd("git.discard", tr("変更を破棄"), .destructive, ai: false,
           params: [CommandParam("path", .string), CommandParam("staged", .bool, required: false)], palette: false,
           preflight: { s, i throws(CommandError) in
             let root = try repo(s), p = try inFiles(s, i), staged = i["staged"]?.bool == true
@@ -239,7 +240,7 @@ extension CommandRegistry {
         let r = WorkbenchGit.run(root, args, merge: true)
         s.refreshStatus(reconcileOpenFiles: true); return r.ok ? .ok : .text(r.out)
       },
-      cmd("git.commit", "コミット", .write, params: [CommandParam("message", .string)], palette: false,
+      cmd("git.commit", tr("コミット"), .write, params: [CommandParam("message", .string)], palette: false,
           preflight: { s, i throws(CommandError) in
             let root = try repo(s)
             guard !(i["message"]!.string!.trimmingCharacters(in: .whitespaces).isEmpty) else { throw CommandError(.invalidInput, "empty message") }
@@ -249,11 +250,11 @@ extension CommandRegistry {
         let r = WorkbenchGit.run(s.current!.path, ["commit", "-m", i["message"]!.string!], merge: true)
         s.refreshStatus(); return r.ok ? .ok : .text(r.out)
       },
-      cmd("git.switch", "ブランチを切り替え", .write, params: [CommandParam("name", .string)], palette: false,
+      cmd("git.switch", tr("ブランチを切り替え"), .write, params: [CommandParam("name", .string)], palette: false,
           preflight: { s, i throws(CommandError) in
             let root = try repo(s), b = try branch(i)
             guard WorkbenchGit.branchExists(root, b) else { throw CommandError(.preconditionFailed, "no branch \(b)") }
-            guard s.dirty.isEmpty else { throw CommandError(.preconditionFailed, "未保存のファイルを保存してから切り替えてください") }
+            guard s.dirty.isEmpty else { throw CommandError(.preconditionFailed, tr("未保存のファイルを保存してから切り替えてください")) }
             return .write
           }) { s, i in
         let root = s.current!.path
@@ -268,7 +269,7 @@ extension CommandRegistry {
         return r.ok ? .ok : .text(r.out)
       },
       // `switch -c` carries the working tree over, so unsaved buffers stay valid.
-      cmd("git.branchCreate", "ブランチを作成", .write, params: [CommandParam("name", .string)], palette: false,
+      cmd("git.branchCreate", tr("ブランチを作成"), .write, params: [CommandParam("name", .string)], palette: false,
           preflight: { s, i throws(CommandError) in
             let root = try repo(s), b = try branch(i)
             guard !WorkbenchGit.branchExists(root, b) else { throw CommandError(.preconditionFailed, "branch \(b) already exists") }
@@ -284,16 +285,16 @@ extension CommandRegistry {
         }
         return r.ok ? .ok : .text(r.out)
       },
-      cmd("git.branches", "ブランチを切り替え…", .read, ai: false,
+      cmd("git.branches", tr("ブランチを切り替え…"), .read, ai: false,
           preflight: { s, _ throws(CommandError) in _ = try repo(s); return .read }) { s, _ in s.palette = .branches; return .ok },
       cmd("git.pull", "Pull", .external, ai: false, palette: false,
           preflight: { s, _ throws(CommandError) in
             let root = try repo(s)
-            guard WorkbenchGit.currentBranch(root) != nil else { throw CommandError(.preconditionFailed, "detached HEAD では pull できません") }
+            guard WorkbenchGit.currentBranch(root) != nil else { throw CommandError(.preconditionFailed, tr("detached HEAD では pull できません")) }
             guard WorkbenchGit.run(root, ["rev-parse", "--verify", "@{u}"]).ok else {
-              throw CommandError(.preconditionFailed, "upstream が設定されていません")
+              throw CommandError(.preconditionFailed, tr("upstream が設定されていません"))
             }
-            guard s.dirty.isEmpty else { throw CommandError(.preconditionFailed, "未保存のファイルを保存してから pull してください") }
+            guard s.dirty.isEmpty else { throw CommandError(.preconditionFailed, tr("未保存のファイルを保存してから pull してください")) }
             return .external
           }) { s, _ in
         let r = WorkbenchGit.run(s.current!.path, ["pull", "--ff-only"], merge: true)
@@ -303,9 +304,9 @@ extension CommandRegistry {
       cmd("git.push", "Push", .external, ai: false, palette: false,
           preflight: { s, _ throws(CommandError) in
             let root = try repo(s)
-            guard WorkbenchGit.currentBranch(root) != nil else { throw CommandError(.preconditionFailed, "detached HEAD では push できません") }
+            guard WorkbenchGit.currentBranch(root) != nil else { throw CommandError(.preconditionFailed, tr("detached HEAD では push できません")) }
             guard WorkbenchGit.run(root, ["rev-parse", "--verify", "@{u}"]).ok else {
-              throw CommandError(.preconditionFailed, "upstream が設定されていません")
+              throw CommandError(.preconditionFailed, tr("upstream が設定されていません"))
             }
             return .external
           }) { s, _ in
@@ -313,7 +314,7 @@ extension CommandRegistry {
         return r.ok ? .ok : .text(WorkbenchGit.remoteFailure("Push", output: r.out))
       },
       // ai: false — deleting a branch is never an agent's call; individual confirmation for each.
-      cmd("git.branchDelete", "ブランチを削除", .destructive, ai: false, params: [CommandParam("name", .string)], palette: false,
+      cmd("git.branchDelete", tr("ブランチを削除"), .destructive, ai: false, params: [CommandParam("name", .string)], palette: false,
           preflight: { s, i throws(CommandError) in
             let root = try repo(s), b = try branch(i)
             guard WorkbenchGit.branchExists(root, b) else { throw CommandError(.preconditionFailed, "no branch \(b)") }
@@ -324,7 +325,7 @@ extension CommandRegistry {
         return r.ok ? .ok : .text(r.out)
       },
       // V17: one graph pane per Project layout, opened maximized so the graph and its diffs get the whole area; asking again focuses it.
-      cmd("git.graph", "コミットグラフを開く", .additive, ai: false,
+      cmd("git.graph", tr("コミットグラフを開く"), .additive, ai: false,
           preflight: { s, _ throws(CommandError) in _ = try repo(s); return .additive }) { s, _ in
         s.panesClosed = false
         if let graph = s.tree.leaves.first(where: { $0.kind == .graph }) {
@@ -335,10 +336,10 @@ extension CommandRegistry {
         if s.tree.maximized != s.tree.focused { if s.tree.maximized != nil { s.tree.toggleMaximize() }; s.tree.toggleMaximize() }
         return .pane(s.tree.focused)
       },
-      cmd("git.review", "ブランチ全体をレビュー", .read, params: [CommandParam("base", .string, required: false)],
+      cmd("git.review", tr("ブランチ全体をレビュー"), .read, params: [CommandParam("base", .string, required: false)],
           preflight: { s, _ throws(CommandError) in _ = try repo(s); return .read }) { s, i in .review(s.review(base: i["base"]?.string)) },
       // Creates <worktreeBase>/<project>/<branch> on a new branch and opens it as a Project.
-      cmd("worktree.create", "worktree を作成", .write, ai: false, params: [CommandParam("branch", .string)], palette: false,
+      cmd("worktree.create", tr("worktree を作成"), .write, ai: false, params: [CommandParam("branch", .string)], palette: false,
           preflight: { s, i throws(CommandError) in
             let root = try repo(s)
             guard s.current!.origin == nil else { throw CommandError(.preconditionFailed, "already inside a managed worktree") }
@@ -352,7 +353,7 @@ extension CommandRegistry {
         }
       },
       // Adoption: the worktree must be clean (everything committed); merge commit into origin's checked-out branch.
-      cmd("worktree.adopt", "worktree をマージ", .write, ai: false,
+      cmd("worktree.adopt", tr("worktree をマージ"), .write, ai: false,
           preflight: { s, _ throws(CommandError) in
             let root = try repo(s)
             guard s.current!.origin != nil else { throw CommandError(.preconditionFailed, "not a managed worktree") }
@@ -368,7 +369,7 @@ extension CommandRegistry {
         return .text("merge failed and was aborted; ask the agent to resolve conflicts on \(branch):\n\(r.out)")
       },
       // Refuses a dirty worktree (no --force); the branch is kept and deleted separately via git.branchDelete.
-      cmd("worktree.remove", "worktree を削除", .destructive, ai: false,
+      cmd("worktree.remove", tr("worktree を削除"), .destructive, ai: false,
           preflight: { s, _ throws(CommandError) in
             _ = try repo(s)
             guard s.current!.origin != nil else { throw CommandError(.preconditionFailed, "not a managed worktree") }

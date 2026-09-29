@@ -260,6 +260,8 @@ export function SettingsPanel() {
 export function SettingsMain() {
   const wb = useWorkbench();
   const section = wb.settingsSection;
+  // The mock stays in Japanese; the row shows the setting the native app has (English is the default there).
+  const [language, setLanguage] = useState<'English' | '日本語'>('English');
 
   return (
         <div className="scroll" style={{ flex: 1, minWidth: 0, minHeight: 0, padding: '40px 56px', background: color.canvas }}>
@@ -323,6 +325,10 @@ export function SettingsMain() {
                     title="外観"
                     note="エディタ、ターミナル、サイドバーの配色をまとめて切り替えます。"
                     control={<Segmented value={wb.appearance} options={['ダーク', 'ライト', 'システム'] as const} onChange={wb.setAppearance} />}
+                  />
+                  <Row
+                    title="言語"
+                    control={<Segmented value={language} options={['English', '日本語'] as const} onChange={setLanguage} />}
                   />
                   <Row
                     last

@@ -1,4 +1,5 @@
 #if os(macOS)
+  import ClairShared
   import ClairDesignSystem
   import ClairEditorCore
   import ClairEditorLanguage
@@ -45,7 +46,9 @@ import Observation
   /// mutation goes through `CommandRegistry.workbench`; a destructive effective
   /// risk parks the call in `pending` until the native confirmation approves it.
   @MainActor @Observable public final class ClairWorkbenchStore {
-    public var state = WorkbenchState()
+    public var state = WorkbenchState() {
+      didSet { ClairLanguage.current = ClairLanguage(rawValue: state.choices["language"] ?? "") ?? .english }
+    }
     public var pending: (id: String, input: CommandInput)?
     public var lastError: CommandError?
     public let registry = CommandRegistry.workbench
@@ -272,7 +275,7 @@ import Observation
         do {
           try buffers.save(p, root: root)
         } catch {
-          let e = CommandError(.preconditionFailed, "保存できません: \(error.localizedDescription)")
+          let e = CommandError(.preconditionFailed, tr("保存できません: %@", error.localizedDescription))
           lastError = e; return .failure(e)
         }
       }
@@ -342,8 +345,8 @@ import Observation
     private func restartApp() {
       guard state.dirty.isEmpty, state.layouts.values.allSatisfy({ $0.dirty.isEmpty }) else {
         let alert = NSAlert()
-        alert.messageText = "未保存の変更があります"
-        alert.informativeText = "変更を保存してからアプリを再起動してください。"
+        alert.messageText = tr("未保存の変更があります")
+        alert.informativeText = tr("変更を保存してからアプリを再起動してください。")
         alert.runModal()
         return
       }
@@ -378,7 +381,7 @@ import Observation
         NSApp.terminate(nil)
       } catch {
         let alert = NSAlert()
-        alert.messageText = "アプリを再起動できませんでした"
+        alert.messageText = tr("アプリを再起動できませんでした")
         alert.informativeText = error.localizedDescription
         alert.runModal()
       }
@@ -387,7 +390,7 @@ import Observation
     /// ⌘K install rows: the result is an alert because the palette has already closed (the settings rows show it inline).
     private static func install(cli: Bool, remove: Bool) {
       Task.detached {
-        let what = cli ? "clair コマンド" : "Agent skill", verb = remove ? "アンインストール" : "インストール"
+        let what = cli ? tr("clair コマンド") : "Agent skill", verb = remove ? tr("アンインストール") : tr("インストール")
         let message: String
         do {
           switch (cli, remove) {
@@ -396,8 +399,8 @@ import Observation
           case (false, false): try ClairSkills.install()
           case (false, true): try ClairSkills.uninstall()
           }
-          message = "\(what)を\(verb)しました。"
-        } catch { message = "\(what)を\(verb)できません: \(error.localizedDescription)" }
+          message = tr("%@を%@しました。", what, verb)
+        } catch { message = tr("%@を%@できません: %@", what, verb, error.localizedDescription) }
         await MainActor.run {
           let alert = NSAlert()
           alert.messageText = message
@@ -457,7 +460,7 @@ import Observation
       let at = try? m.buffer.snapshot.position(at: caret, columnUnit: UTF16Unit.self, rounding: .down)
       let from = EditorLocation(path: path, line: (at?.line.value ?? 0) + 1, column: at?.column.value ?? 0)
       guard EditorLanguageID.detect(path: rel)?.languageServer != nil else {
-        languageNotice = "このファイルの言語サーバーはありません"
+        languageNotice = tr("このファイルの言語サーバーはありません")
         return
       }
       languageNotice = nil
@@ -470,7 +473,7 @@ import Observation
         guard let found, !found.isEmpty else {
           languageNotice =
             found == nil
-            ? "言語サーバーが応答しません" : (references ? "参照が見つかりません" : "定義が見つかりません")
+            ? tr("言語サーバーが応答しません") : (references ? tr("参照が見つかりません") : tr("定義が見つかりません"))
           return
         }
         // E17: several definitions are listed like references; the history records direct jumps only.
@@ -522,7 +525,7 @@ import Observation
     /// A click on an explicitly labelled Pull/Push control is the native confirmation for its
     /// external risk; non-UI callers still have to pass the registry confirmation gate.
     func performGitFromUI(_ commands: [(String, CommandInput)], confirmed: Bool = false) async -> String? {
-      guard let root = activeRoot else { return "Git Project ではありません。" }
+      guard let root = activeRoot else { return tr("Git Project ではありません。") }
       let project = state.project
       let snapshot = state
       let registry = registry
@@ -571,7 +574,7 @@ import Observation
     /// Save the file shown in a diff editor, which may differ from the active tab.
     func saveFile(_ path: String) async -> Bool {
       guard let root = activeRoot, case .ready(let manager)? = buffers.peek(path) else {
-        lastError = CommandError(.preconditionFailed, "保存できません: ファイルを開けません。")
+        lastError = CommandError(.preconditionFailed, tr("保存できません: ファイルを開けません。"))
         return false
       }
       let project = state.project
@@ -591,7 +594,7 @@ import Observation
         lastError = nil; persistState()
         return true
       case .failure(let error):
-        lastError = CommandError(.preconditionFailed, "保存できません: \(error.localizedDescription)")
+        lastError = CommandError(.preconditionFailed, tr("保存できません: %@", error.localizedDescription))
         return false
       }
     }
@@ -617,7 +620,7 @@ import Observation
       let old = m.buffer.snapshot
       let text = old.string()
       guard let formatted = DocumentFormatter.format(path, text), formatted != text else { return }
-      guard (try? m.apply([TextEdit(range: old.fullRange, replacement: formatted)], label: "ドキュメントの整形")) != nil else { return }
+      guard (try? m.apply([TextEdit(range: old.fullRange, replacement: formatted)], label: tr("ドキュメントの整形"))) != nil else { return }
       buffers.refresh(path)
       edited(path)
     }
@@ -755,7 +758,7 @@ import Observation
       guard let agent = state.agentLaunch(in: state.project, pane: pane) else { return }
       let agentName = AgentProfile.named(agent.profile)?.title ?? agent.profile
       let oscTitle = state.paneTitles[NotificationLog.paneKey(state.project, pane)]
-      let sessionTitle = oscTitle.flatMap { $0.isEmpty || $0 == (agent.cwd as NSString).lastPathComponent ? nil : $0 } ?? "\(agentName) · ターミナル \(pane)"
+      let sessionTitle = oscTitle.flatMap { $0.isEmpty || $0 == (agent.cwd as NSString).lastPathComponent ? nil : $0 } ?? tr("%@ · ターミナル %@", agentName, pane)
       // Only this GUI writes facts (no command records them), so an agent cannot fabricate notifications.
       // History and badges always record; the toggles below only gate the macOS alert.
       var fresh: WorkbenchNotice?
@@ -763,12 +766,12 @@ import Observation
       if let exit, let n = state.notices.record(project: state.project, pane: pane, kind: .exited, exitCode: exit, sessionTitle: sessionTitle), state.toggles["notifyOnExit"] != false { fresh = n }
       refreshSleepAssertion()
       guard let n = fresh, state.toggles["notifyEnabled"] != false, !NSApp.isActive || state.toggles["notifyWhenActive"] == true else { return }
-      deliverNotification(title: n.sessionTitle ?? agentName, subtitle: "\(n.project) · \(agentName) · ターミナル \(n.pane) · \(n.title)", body: n.sourceBody ?? "", id: "clair-\(n.id)") { _ in }
+      deliverNotification(title: n.sessionTitle ?? agentName, subtitle: tr("%@ · %@ · ターミナル %@ · %@", n.project, agentName, n.pane, n.title), body: n.sourceBody ?? "", id: "clair-\(n.id)") { _ in }
     }
 
     /// Settings → 通知 → テスト. Ignores the enable/foreground toggles so the path can always be checked; `done(false)` = not allowed or not an app bundle.
     public func sendTestNotification(done: @escaping @MainActor (Bool) -> Void) {
-      deliverNotification(title: "Clair", subtitle: "テスト通知", body: "通知は正しく届いています。", id: "clair-test-\(UUID().uuidString)", done: done)
+      deliverNotification(title: "Clair", subtitle: tr("テスト通知"), body: tr("通知は正しく届いています。"), id: "clair-test-\(UUID().uuidString)", done: done)
     }
 
     private func deliverNotification(title: String, subtitle: String, body: String, id: String, done: @escaping @MainActor (Bool) -> Void) {
@@ -862,12 +865,12 @@ import Observation
       CommandGroup(after: .newItem) { items(.file) }
       CommandGroup(after: .textEditing) { items(.edit) }
       CommandGroup(after: .toolbar) { items(.view) }
-      CommandMenu("Pane") {
+      CommandMenu(tr("Pane")) {
         items(.go)
         // Ctrl-Tab is the conventional tab cycle; unclaimed, AppKit only walks the focus ring over the tab buttons.
-        Button("Next Tab") { store?.performFromUI("tab.next") }
+        Button(tr("Next Tab")) { store?.performFromUI("tab.next") }
           .keyboardShortcut(.tab, modifiers: .control).disabled(store == nil)
-        Button("Previous Tab") { store?.performFromUI("tab.previous") }
+        Button(tr("Previous Tab")) { store?.performFromUI("tab.previous") }
           .keyboardShortcut(.tab, modifiers: [.control, .shift]).disabled(store == nil)
       }
     }
@@ -907,7 +910,7 @@ import Observation
     @ViewBuilder private func items(_ m: Menu) -> some View {
       let state = store?.state ?? WorkbenchState()
       ForEach(CommandRegistry.workbench.commands.filter { Self.menu($0.id) == m && state.shortcut(for: $0) != nil }, id: \.id) { d in
-        Button(Self.titles[d.id] ?? d.title) { store?.performFromUI(d.id) }
+        Button(tr(Self.titles[d.id] ?? d.title)) { store?.performFromUI(d.id) }
           .keyboardShortcut(Self.shortcut(state.shortcut(for: d)!))
           .disabled(store == nil)
       }
@@ -1003,6 +1006,15 @@ import Observation
     /// Snapshot tests inject a fixture store.
     init(store: ClairWorkbenchStore) { _store = State(initialValue: store) }
 
+    @ViewBuilder private var pendingActions: some View {
+      if store.pending?.id == "debug.restart" { Button(tr("再起動")) { store.confirm() } }
+      else { Button(tr("破棄して続行"), role: .destructive) { store.confirm() } }
+    }
+
+    private var pendingTitle: String {
+      store.pending?.id == "debug.restart" ? tr("デバッグを再起動しますか？") : tr("未保存の変更を破棄しますか？")
+    }
+
     public var body: some View {
       VStack(spacing: 0) {
         // Mock `sheet` motion: settings comes over the top (scale 1.04 → 1 + fade).
@@ -1088,11 +1100,8 @@ import Observation
       }
       .focusedSceneValue(\.clairWorkbench, store)
       .confirmationDialog(
-        store.pending?.id == "debug.restart" ? "デバッグを再起動しますか？" : "未保存の変更を破棄しますか？", isPresented: Binding(get: { store.pending != nil }, set: { if !$0 { store.pending = nil } })
-      ) {
-        if store.pending?.id == "debug.restart" { Button("再起動") { store.confirm() } }
-        else { Button("破棄して続行", role: .destructive) { store.confirm() } }
-      }
+        Text(pendingTitle), isPresented: Binding(get: { store.pending != nil }, set: { if !$0 { store.pending = nil } })
+      ) { pendingActions }
       .overlay(alignment: .topTrailing) {
         if let a = store.mcpApproval {
           ApprovalCard(id: a.id, input: a.input, risk: a.risk, deadline: store.mcpApprovalDeadline, decide: store.resolveMCPApproval)
@@ -1115,7 +1124,7 @@ import Observation
                 projectGroup(p, colorKey: p.color.flatMap { DesignTokens.GroupColor.resolve($0) == nil ? nil : $0 } ?? projectColors[i % projectColors.count].rawValue)
               }
               Button(action: openFolder) { Image(systemName: "plus").font(.system(size: 13)).foregroundStyle(C.chromeInk).frame(width: 30, height: 30) }
-                .buttonStyle(.hoverWash).help("フォルダを開く")
+                .buttonStyle(.hoverWash).help(tr("フォルダを開く"))
             }
             .frame(minWidth: g.size.width, minHeight: g.size.height, alignment: .leading)
             .background(TitlebarArea())
@@ -1125,16 +1134,16 @@ import Observation
           Button { store.run("palette.search") } label: {
             HStack(spacing: 4) {
               Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(C.textQuaternary)
-              Text("ファイル、シンボル").font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+              Text(tr("ファイル、シンボル")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
               Spacer(minLength: 0)
               Text("⌘⇧F").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary)
             }
             .padding(.horizontal, 8).frame(width: 200, height: 28)
             .background(C.chrome, in: RoundedRectangle(cornerRadius: Radius.card))
             .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(L.hairlineFaint))
-          }.buttonStyle(.hoverWash).help("検索")
-          titlebarAction("command", "コマンドパレット", on: st.palette == .commands) { store.run("palette.commands") }
-          titlebarAction("gearshape", "設定", on: st.settingsOpen) { store.run(st.settingsOpen ? "settings.close" : "settings.open") }
+          }.buttonStyle(.hoverWash).help(tr("検索"))
+          titlebarAction("command", tr("コマンドパレット"), on: st.palette == .commands) { store.run("palette.commands") }
+          titlebarAction("gearshape", tr("設定"), on: st.settingsOpen) { store.run(st.settingsOpen ? "settings.close" : "settings.open") }
         }.padding(.horizontal, 12)
       }
       .frame(height: ChromeBudget.titlebar)
@@ -1148,6 +1157,11 @@ import Observation
         Image(systemName: icon).font(.system(size: 13)).foregroundStyle(on ? C.chromeInk : C.chromeInkMuted)
           .frame(width: 30, height: 30).background(on ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
       }.buttonStyle(.hoverWash).help(help)
+    }
+
+    private static func groupHelp(_ name: String, active: Bool, folded: Bool) -> String {
+      guard active else { return tr("%@ に切り替え", name) }
+      return folded ? tr("%@ タブグループを展開", name) : tr("%@ タブグループを折りたたむ", name)
     }
 
     /// An inactive group's chip switches to that Project (editor, terminals and sidebar follow `st.project`);
@@ -1187,7 +1201,7 @@ import Observation
             }
           }
         }
-        .buttonStyle(.hoverWash).help(active ? "\(p.displayName) タブグループを\(folded ? "展開" : "折りたたむ")" : "\(p.displayName) に切り替え")
+        .buttonStyle(.hoverWash).help(Self.groupHelp(p.displayName, active: active, folded: folded))
         .background(NoWindowDrag())
         .clairContextMenu(menus) { projectMenu(p, colorKey: colorKey, folded: folded) }
         if !folded {
@@ -1199,7 +1213,7 @@ import Observation
                 fileTab(path, projectActive: active, project: p.name,
                   selected: selectedTab == tab, dirty: dirty.contains(path))
               case .terminal(let id), .graph(let id):
-                let title = tab == .graph(id) ? "コミットグラフ" : terminalTabTitle(p.name, id)
+                let title = tab == .graph(id) ? tr("コミットグラフ") : terminalTabTitle(p.name, id)
                 let agent = st.agentSessions.first { $0.project == p.name && $0.pane == id && !$0.status.isExited }
                 FileTabButton(
                   path: tab.dragID, name: title, selected: selectedTab == tab, dirty: false,
@@ -1216,7 +1230,7 @@ import Observation
                 .help(title)
               case .diff(let target):
                 FileTabButton(
-                  path: tab.dragID, name: target.against.map { "比較: \(name($0)) ↔ \(name(target.path))" } ?? "差分: \(name(target.path))", selected: selectedTab == tab, dirty: false,
+                  path: tab.dragID, name: target.against.map { tr("比較: %@ ↔ %@", name($0), name(target.path)) } ?? tr("差分: %@", name(target.path)), selected: selectedTab == tab, dirty: false,
                   onActivate: {
                     if !active { store.run("project.switch", ["name": .string(p.name)]) }
                     store.run("diff.activate", diffInput(target))
@@ -1279,26 +1293,26 @@ import Observation
       return ClairMenuSpec(title: p.displayName, sub: p.path, entries: [
         .swatches(colorKey) { store.run("project.setColor", ["name": name, "color": .string($0)]) },
         .separator,
-        .item("このProjectに切り替え", disabled: st.project == p.name) { store.run("project.switch", ["name": name]) },
-        .item(folded ? "グループを展開" : "グループを折りたたむ") {
+        .item(tr("このProjectに切り替え"), disabled: st.project == p.name) { store.run("project.switch", ["name": name]) },
+        .item(folded ? tr("グループを展開") : tr("グループを折りたたむ")) {
           if folded { collapsedGroups.remove(p.name) } else { collapsedGroups.insert(p.name) }
         },
-        .item("フォルダを追加…") { addFolder(to: p.name) },
-        .item("Project名を変更…") {
-          menus.ask(ClairDialog(title: "Project名を変更", message: "空にするとフォルダ名に戻ります。", initial: p.displayName) {
+        .item(tr("フォルダを追加…")) { addFolder(to: p.name) },
+        .item(tr("Project名を変更…")) {
+          menus.ask(ClairDialog(title: tr("Project名を変更"), message: tr("空にするとフォルダ名に戻ります。"), initial: p.displayName) {
             store.run("project.rename", ["name": name, "label": .string($0)])
           })
         },
         .separator,
-        .item("左へ移動", disabled: index == 0) { store.run("project.move", ["name": name, "offset": .int(-1)]) },
-        .item("右へ移動", disabled: index >= st.projects.count - 1) { store.run("project.move", ["name": name, "offset": .int(1)]) },
+        .item(tr("左へ移動"), disabled: index == 0) { store.run("project.move", ["name": name, "offset": .int(-1)]) },
+        .item(tr("右へ移動"), disabled: index >= st.projects.count - 1) { store.run("project.move", ["name": name, "offset": .int(1)]) },
         .separator,
-        .item(muted ? "通知のミュートを解除" : "通知をミュート") {
+        .item(muted ? tr("通知のミュートを解除") : tr("通知をミュート")) {
           store.run("notice.muteProject", ["name": name, "muted": .bool(!muted)])
         },
-        .item("Projectを閉じる", disabled: st.projects.count < 2, destructive: true) {
+        .item(tr("Projectを閉じる"), disabled: st.projects.count < 2, destructive: true) {
           if case .failure(let e) = store.run("project.close", ["name": name]) {
-            menus.ask(ClairDialog(title: "閉じられませんでした", message: e.message) { _ in })
+            menus.ask(ClairDialog(title: tr("閉じられませんでした"), message: e.message) { _ in })
           }
         },
       ])
@@ -1315,10 +1329,10 @@ import Observation
     private func addFolder(to project: String) {
       let panel = NSOpenPanel()
       panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.allowsMultipleSelection = false
-      panel.prompt = "追加"
+      panel.prompt = tr("追加")
       guard panel.runModal() == .OK, let url = panel.url else { return }
       if case .failure(let e) = store.run("project.addFolder", ["name": .string(project), "path": .string(url.path)]) {
-        menus.ask(ClairDialog(title: "追加できませんでした", message: e.message) { _ in })
+        menus.ask(ClairDialog(title: tr("追加できませんでした"), message: e.message) { _ in })
       } else if project == st.project {
         store.refreshProjectFiles()
       }
@@ -1372,7 +1386,7 @@ import Observation
         if sidebarMode == "shield", st.isRepo {
           // Same filled control as the commit button, so it reads as a button and the whole box is the hit target.
           Button { store.run("git.graph") } label: {
-            Label("コミットグラフを開く", systemImage: "point.3.connected.trianglepath.dotted")
+            Label(tr("コミットグラフを開く"), systemImage: "point.3.connected.trianglepath.dotted")
               .foregroundStyle(C.textPrimary)
               .frame(maxWidth: .infinity).frame(height: 28)
               .background(C.surfaceActive, in: RoundedRectangle(cornerRadius: Radius.control))
@@ -1412,12 +1426,12 @@ import Observation
     private var settingsHeader: some View {
       HStack(spacing: 0) {
         Color.clear.frame(width: 76 + 25)  // room for the native traffic lights (inset 5pt by AppDelegate)
-        Text("設定").font(.system(size: 16, weight: .semibold)).foregroundStyle(C.textPrimary)
+        Text(tr("設定")).font(.system(size: 16, weight: .semibold)).foregroundStyle(C.textPrimary)
         Spacer(minLength: 0)
         Button { store.run("settings.close") } label: {
           Image(systemName: "xmark").font(.system(size: 13, weight: .medium)).foregroundStyle(C.chromeInkMuted)
             .frame(width: 26, height: 26)
-        }.buttonStyle(.hoverWash).keyboardShortcut(.cancelAction).padding(.trailing, 16).help("設定を閉じる")
+        }.buttonStyle(.hoverWash).keyboardShortcut(.cancelAction).padding(.trailing, 16).help(tr("設定を閉じる"))
       }
       .frame(height: ChromeBudget.titlebar)
       .background(TitlebarArea())
@@ -1427,15 +1441,15 @@ import Observation
 
     private var settingsPanel: some View {
       VStack(alignment: .leading, spacing: 12) {
-        Text("設定を検索").font(.system(size: 15)).foregroundStyle(C.textQuaternary)
+        Text(tr("設定を検索")).font(.system(size: 15)).foregroundStyle(C.textQuaternary)
           .padding(.horizontal, 8).frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
           .background(C.chrome, in: RoundedRectangle(cornerRadius: Radius.control))
           .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.hairline))
         VStack(alignment: .leading, spacing: 0) {
-          ForEach(["一般", "AIプロバイダー", "使用状況", "エディタ", "ターミナル", "モバイル", "アップデート"], id: \.self) { section in
+          ForEach(WorkbenchState.sections, id: \.self) { section in
             let selected = st.section == section
             Button { store.run("settings.open", ["section": .string(section)]) } label: {
-              Text(section)
+              Text(tr(section))
                 .font(.system(size: 15, weight: selected ? .semibold : .regular))
                 .foregroundStyle(selected ? C.textPrimary : C.textSecondary)
                 .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
@@ -1467,7 +1481,7 @@ import Observation
         return
       }
       let (files, pattern) = (st.files, searchPattern)
-      searching = true; searchMessage = "検索中…"
+      searching = true; searchMessage = tr("検索中…")
       searchTask = Task {
         // ponytail: 250 ms debounce for typing; the cancel above is what keeps stale results out.
         do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
@@ -1488,7 +1502,7 @@ import Observation
         await withTaskCancellationHandler(operation: {
           for await batch in batches where generation == searchGeneration {
             hits += batch
-            searchMessage = "検索中… \(hits.count) 件"
+            searchMessage = tr("検索中… %@ 件", hits.count)
           }
         }, onCancel: { worker.cancel() })
         let result = await worker.value
@@ -1496,12 +1510,12 @@ import Observation
         searching = false
         switch result {
         case .success:
-          searchMessage = hits.isEmpty ? "一致なし" : "\(hits.count) 件 / \(Set(hits.map(\.path)).count) ファイル"
+          searchMessage = hits.isEmpty ? tr("一致なし") : tr("%@ 件 / %@ ファイル", hits.count, Set(hits.map(\.path)).count)
         case .failure(let error) where error is CancellationError:
           break
         case .failure(let error):
           hits = []
-          searchMessage = error is SearchError ? "正規表現が不正です" : "検索できません: \(error)"
+          searchMessage = error is SearchError ? tr("正規表現が不正です") : tr("検索できません: %@", error)
         }
       }
     }
@@ -1509,13 +1523,13 @@ import Observation
     private func runReplace() {
       guard !replacing, let root = store.activeRoot, !hits.isEmpty else { return }
       let (files, pattern, r) = (st.files, searchPattern, replaceText)
-      searchTask?.cancel(); searching = false; replacing = true; searchMessage = "置換中…"
+      searchTask?.cancel(); searching = false; replacing = true; searchMessage = tr("置換中…")
       replaceTask = Task {
         let result = await Task.detached(priority: .userInitiated) { Result { try ProjectSearch.replace(root: root, files: files, pattern, with: r) } }.value
         replacing = false
         switch result {
-        case .success(let n): hits = []; searchMessage = "\(n) 件を置換しました"; runSearch()
-        case .failure(let error): searchMessage = "置換できません: \(error)"
+        case .success(let n): hits = []; searchMessage = tr("%@ 件を置換しました", n); runSearch()
+        case .failure(let error): searchMessage = tr("置換できません: %@", error)
         }
       }
     }
@@ -1523,8 +1537,8 @@ import Observation
     /// ADR-0009: an available release is offered, never applied on its own.
     @ViewBuilder private var updateToast: some View {
       let body: (title: String, note: String?, actions: Bool)? = switch store.update {
-      case .available(let u) where store.dismissedUpdate != u.version: ("Clair \(u.version) が利用できます", nil, true)
-      case .installing: ("更新を適用しています", "完了後に再起動します。", false)
+      case .available(let u) where store.dismissedUpdate != u.version: (tr("Clair %@ が利用できます", u.version), nil, true)
+      case .installing: (tr("更新を適用しています"), tr("完了後に再起動します。"), false)
       default: nil
       }
       if let body {
@@ -1533,8 +1547,8 @@ import Observation
           if let note = body.note { Text(note).font(.system(size: 13)).foregroundStyle(C.textTertiary) }
           if body.actions, case .available(let u) = store.update {
             HStack(spacing: 8) {
-              Button("あとで") { store.dismissedUpdate = u.version }
-              Button("適用して再起動") { Task { await store.installUpdate() } }
+              Button(tr("あとで")) { store.dismissedUpdate = u.version }
+              Button(tr("適用して再起動")) { Task { await store.installUpdate() } }
             }
           }
         }
@@ -1584,30 +1598,30 @@ import Observation
           onToggle: { change, stage in
             runGit(
               [(stage ? "git.stage" : "git.unstage", ["path": .string(change.path)])],
-              label: stage ? "ステージ" : "ステージ解除")
+              label: stage ? tr("ステージ") : tr("ステージ解除"))
           },
           onDiscard: discard,
           menus: menus,
           menu: { change, staged in
             ClairMenuSpec(title: (change.path as NSString).lastPathComponent, sub: change.path, entries: [
-              .item("変更を確認") { openDiff(DiffTarget(path: change.path, staged: staged, untracked: change.untracked)) },
-              .item(staged ? "ステージを取り消す" : "ステージに追加") {
-                runGit([(staged ? "git.unstage" : "git.stage", ["path": .string(change.path)])], label: staged ? "ステージ解除" : "ステージ")
+              .item(tr("変更を確認")) { openDiff(DiffTarget(path: change.path, staged: staged, untracked: change.untracked)) },
+              .item(staged ? tr("ステージを取り消す") : tr("ステージに追加")) {
+                runGit([(staged ? "git.unstage" : "git.stage", ["path": .string(change.path)])], label: staged ? tr("ステージ解除") : tr("ステージ"))
               },
               .separator,
-              .item(change.untracked ? "ファイルを削除…" : "変更を元に戻す…", destructive: true) { discard(change, staged) },
+              .item(change.untracked ? tr("ファイルを削除…") : tr("変更を元に戻す…"), destructive: true) { discard(change, staged) },
             ])
           },
           onBulk: { rows, stage in
             runGit(
               rows.map { (stage ? "git.stage" : "git.unstage", ["path": .string($0.path)]) },
-              label: stage ? "一括ステージ" : "一括ステージ解除")
+              label: stage ? tr("一括ステージ") : tr("一括ステージ解除"))
           },
           onCommit: { message in
-            runGit([("git.commit", ["message": .string(message)])], label: "コミット")
+            runGit([("git.commit", ["message": .string(message)])], label: tr("コミット"))
           },
           busy: gitOperation != nil,
-          operationMessage: gitOperation.map { "\($0)中…" } ?? gitMessage)
+          operationMessage: gitOperation.map { tr("%@中…", $0) } ?? gitMessage)
         }
       }
     }
@@ -1658,11 +1672,11 @@ import Observation
     private func discard(_ change: GitChange, _ staged: Bool) {
       let name = (change.path as NSString).lastPathComponent
       menus.ask(ClairDialog(
-        title: change.untracked ? "\(name) を削除しますか？" : "\(name) の変更を破棄しますか？",
-        message: staged ? "ステージ済みと未ステージの変更をすべて HEAD の状態に戻します。取り消せません。" : "取り消せません。",
-        confirm: change.untracked ? "削除" : "破棄", destructive: true
+        title: change.untracked ? tr("%@ を削除しますか？", name) : tr("%@ の変更を破棄しますか？", name),
+        message: staged ? tr("ステージ済みと未ステージの変更をすべて HEAD の状態に戻します。取り消せません。") : tr("取り消せません。"),
+        confirm: change.untracked ? tr("削除") : tr("破棄"), destructive: true
       ) { _ in
-        runGit([("git.discard", ["path": .string(change.path), "staged": .bool(staged)])], label: "変更の破棄", confirmed: true)
+        runGit([("git.discard", ["path": .string(change.path), "staged": .bool(staged)])], label: tr("変更の破棄"), confirmed: true)
       })
     }
 
@@ -1677,7 +1691,7 @@ import Observation
         gitOperation = nil
         guard store.activeRoot == root else { return }
         gitFailed = error != nil
-        gitMessage = error ?? "\(label)が完了しました。"
+        gitMessage = error ?? tr("%@が完了しました。", label)
         reloadChanges()
       }
     }
@@ -1706,8 +1720,8 @@ import Observation
     }
 
     private var sections: some View {
-      ForEach(["一般", "AIプロバイダー", "使用状況", "エディタ", "ターミナル", "モバイル", "アップデート"], id: \.self) { s in
-        row(s, depth: 0, selected: st.section == s) { store.run("settings.open", ["section": .string(s)]) }
+      ForEach(WorkbenchState.sections, id: \.self) { s in
+        row(tr(s), depth: 0, selected: st.section == s) { store.run("settings.open", ["section": .string(s)]) }
       }
     }
 
@@ -1765,7 +1779,7 @@ import Observation
             Spacer(minLength: 0)
           }
           .clairContextMenu(menus) {
-            ClairMenuSpec(title: st.project, entries: [reviewMenu("この Project をレビュー", .project, disabled: !st.dirty.isEmpty)])
+            ClairMenuSpec(title: st.project, entries: [reviewMenu(tr("この Project をレビュー"), .project, disabled: !st.dirty.isEmpty)])
           }
           if !rootFolded {
             let ranks = explorerRanks
@@ -1794,18 +1808,18 @@ import Observation
                 .clairContextMenu(menus) {
                   if let folder = addedFolder(r.id) {
                     ClairMenuSpec(title: r.label, sub: folder, entries: [
-                      .item(open ? "折りたたむ" : "開く") { store.run("explorer.toggle", ["path": .string(r.id)]) },
+                      .item(open ? tr("折りたたむ") : tr("開く")) { store.run("explorer.toggle", ["path": .string(r.id)]) },
                       .separator,
-                      .item("Project からフォルダを外す", destructive: true) {
+                      .item(tr("Project からフォルダを外す"), destructive: true) {
                         if case .failure(let e) = store.run("project.removeFolder", ["name": .string(st.project), "path": .string(folder)]) {
-                          menus.ask(ClairDialog(title: "外せませんでした", message: e.message) { _ in })
+                          menus.ask(ClairDialog(title: tr("外せませんでした"), message: e.message) { _ in })
                         }
                       },
                     ])
                   } else {
                   ClairMenuSpec(title: r.label, sub: r.id, entries: [
-                    .item(open ? "折りたたむ" : "開く") { store.run("explorer.toggle", ["path": .string(r.id)]) },
-                    reviewMenu("このフォルダをレビュー", .folder(r.id), disabled: st.dirty.contains(where: { $0.hasPrefix(r.id + "/") })),
+                    .item(open ? tr("折りたたむ") : tr("開く")) { store.run("explorer.toggle", ["path": .string(r.id)]) },
+                    reviewMenu(tr("このフォルダをレビュー"), .folder(r.id), disabled: st.dirty.contains(where: { $0.hasPrefix(r.id + "/") })),
                     .separator,
                   ] + pathItems(r.id) + [.separator] + fileOps(r.id, dir: true))
                   }
@@ -1816,7 +1830,7 @@ import Observation
         }
       }.padding(.vertical, 4)
       .onChange(of: st.dirty) { explorerRanks = Self.changeRanks(st.files, dirty: st.dirty) }
-      .alert("レビューを開始できませんでした", isPresented: Binding(get: { reviewError != nil }, set: { if !$0 { reviewError = nil } })) {
+      .alert(tr("レビューを開始できませんでした"), isPresented: Binding(get: { reviewError != nil }, set: { if !$0 { reviewError = nil } })) {
         Button("OK") {}
       } message: { Text(reviewError ?? "") }
     }
@@ -1893,18 +1907,18 @@ import Observation
 
     private func fileMenu(_ path: String, tab: Bool) -> ClairMenuSpec {
       var e: [ClairMenuEntry] = tab
-        ? [.item("タブを閉じる", shortcut: "⌘W") { store.run("tab.close", ["path": .string(path)]) },
-           .item("分割して開く") { store.run("tab.activate", ["path": .string(path)]); store.run("pane.splitRight") }]
-        : [.item("開く") { store.run("tab.open", ["path": .string(path)]) }]
+        ? [.item(tr("タブを閉じる"), shortcut: "⌘W") { store.run("tab.close", ["path": .string(path)]) },
+           .item(tr("分割して開く")) { store.run("tab.activate", ["path": .string(path)]); store.run("pane.splitRight") }]
+        : [.item(tr("開く")) { store.run("tab.open", ["path": .string(path)]) }]
       let change = changes.first { $0.path == path }
-      e.append(.item("変更を確認", disabled: change == nil) {
+      e.append(.item(tr("変更を確認"), disabled: change == nil) {
         if let c = change { openDiff(DiffTarget(path: c.path, staged: c.staged && !c.unstaged, untracked: c.untracked)) }
       })
-      e.append(.item("比較対象として選択") { compareBase = path })
+      e.append(.item(tr("比較対象として選択")) { compareBase = path })
       if let base = compareBase, base != path {
-        e.append(.item("\(name(base)) と比較") { openDiff(DiffTarget(path: path, staged: false, untracked: false, against: base)) })
+        e.append(.item(tr("%@ と比較", name(base))) { openDiff(DiffTarget(path: path, staged: false, untracked: false, against: base)) })
       }
-      e.append(reviewMenu("このファイルをレビュー", .file(path), disabled: st.dirty.contains(path)))
+      e.append(reviewMenu(tr("このファイルをレビュー"), .file(path), disabled: st.dirty.contains(path)))
       e.append(.separator)
       e.append(agentItems(path))
       e += pathItems(path)
@@ -1916,11 +1930,11 @@ import Observation
     private func fileOps(_ path: String, dir: Bool) -> [ClairMenuEntry] {
       let parent = dir ? path : (path as NSString).deletingLastPathComponent
       return [
-        .item("新しいファイル…") { createItem(in: parent, folder: false) },
-        .item("新しいフォルダー…") { createItem(in: parent, folder: true) },
+        .item(tr("新しいファイル…")) { createItem(in: parent, folder: false) },
+        .item(tr("新しいフォルダー…")) { createItem(in: parent, folder: true) },
         .separator,
-        .item("名前を変更…") { renameItem(path) },
-        .item("削除", destructive: true) { trashItem(path, dir: dir) },
+        .item(tr("名前を変更…")) { renameItem(path) },
+        .item(tr("削除"), destructive: true) { trashItem(path, dir: dir) },
       ]
     }
 
@@ -1938,11 +1952,11 @@ import Observation
     }
 
     private func fileError(_ error: Error) {
-      menus.ask(ClairDialog(title: "操作できませんでした", message: error.localizedDescription) { _ in })
+      menus.ask(ClairDialog(title: tr("操作できませんでした"), message: error.localizedDescription) { _ in })
     }
 
     private func createItem(in folder: String, folder isFolder: Bool) {
-      promptName(isFolder ? "新しいフォルダー" : "新しいファイル", initial: "") { name in
+      promptName(isFolder ? tr("新しいフォルダー") : tr("新しいファイル"), initial: "") { name in
         let rel = (folder as NSString).appendingPathComponent(name)
         guard let url = absolute(rel) else { return }
         guard !FileManager.default.fileExists(atPath: url.path) else {
@@ -1959,7 +1973,7 @@ import Observation
 
     private func renameItem(_ path: String) {
       let old = (path as NSString).lastPathComponent
-      promptName("名前を変更", initial: old) { name in
+      promptName(tr("名前を変更"), initial: old) { name in
         let rel = ((path as NSString).deletingLastPathComponent as NSString).appendingPathComponent(name)
         guard name != old, let from = absolute(path), let to = absolute(rel) else { return }
         do { try FileManager.default.moveItem(at: from, to: to) } catch { return fileError(error) }
@@ -1971,9 +1985,9 @@ import Observation
     private func trashItem(_ path: String, dir: Bool) {
       guard let url = absolute(path) else { return }
       menus.ask(ClairDialog(
-        title: "“\((path as NSString).lastPathComponent)” を削除しますか?",
-        message: dir ? "フォルダーとその中身をゴミ箱に移動します。" : "ゴミ箱に移動します。",
-        confirm: "ゴミ箱に移動", destructive: true
+        title: tr("“%@” を削除しますか?", (path as NSString).lastPathComponent),
+        message: dir ? tr("フォルダーとその中身をゴミ箱に移動します。") : tr("ゴミ箱に移動します。"),
+        confirm: tr("ゴミ箱に移動"), destructive: true
       ) { _ in
         do { try FileManager.default.trashItem(at: url, resultingItemURL: nil) } catch { return fileError(error) }
         closeTabs(under: path)
@@ -1991,7 +2005,7 @@ import Observation
     /// "Agent に送る ›": types `@path ` into a running agent terminal of this Project. No Return; the user reviews and sends.
     private func agentItems(_ path: String) -> ClairMenuEntry {
       let agents = st.agentSessions.filter { $0.project == st.project && !$0.status.isExited }
-      return .item("Agent に送る", disabled: agents.isEmpty, submenu: agents.map { a in
+      return .item(tr("Agent に送る"), disabled: agents.isEmpty, submenu: agents.map { a in
         .item("\(a.title) · pane \(a.pane)") {
           if ClairGhosttySurfaceView.send("@\(path) ", toPane: a.pane) { store.run("pane.focus", ["id": .int(a.pane)]) }
         }
@@ -2001,8 +2015,8 @@ import Observation
     private func pathItems(_ path: String) -> [ClairMenuEntry] {
       let full = store.activeRoot.map { ($0 as NSString).appendingPathComponent(path) }
       return [
-        .item("パスをコピー") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(path, forType: .string) },
-        .item("Finder で表示", disabled: full == nil) {
+        .item(tr("パスをコピー")) { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(path, forType: .string) },
+        .item(tr("Finder で表示"), disabled: full == nil) {
           full.map { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: $0)]) }
         },
       ]
@@ -2011,7 +2025,7 @@ import Observation
 
     private var debugPanel: some View {
       VStack(alignment: .leading, spacing: 0) {
-        Text("実行とデバッグ").font(.system(size: 12, weight: .semibold)).foregroundStyle(C.textTertiary)
+        Text(tr("実行とデバッグ")).font(.system(size: 12, weight: .semibold)).foregroundStyle(C.textTertiary)
           .padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 8)
         HStack(spacing: 4) {
           Button { startDebugFromUI() } label: {
@@ -2021,15 +2035,15 @@ import Observation
               .frame(width: 28, height: 28)
               .background(C.debugBlue.opacity(0.16), in: RoundedRectangle(cornerRadius: Radius.control))
           }
-          .buttonStyle(.hoverWash).help("デバッグを開始")
+          .buttonStyle(.hoverWash).help(tr("デバッグを開始"))
           .disabled(debugMode == "attach" ? (Int(debugPID) ?? 0) <= 0 : !(st.active?.hasSuffix(".go") ?? false))
           Menu {
-            Button("Go: 現在のファイル") { debugMode = "debug" }
-            Button("Go: 現在の package をテスト") { debugMode = "test" }
-            Button("プロセスに attach") { debugMode = "attach" }
+            Button(tr("Go: 現在のファイル")) { debugMode = "debug" }
+            Button(tr("Go: 現在の package をテスト")) { debugMode = "test" }
+            Button(tr("プロセスに attach")) { debugMode = "attach" }
           } label: {
             HStack(spacing: 6) {
-              Text(debugMode == "test" ? "Go: package テスト" : debugMode == "attach" ? "プロセスに attach" : "Go: 現在のファイル")
+              Text(debugMode == "test" ? tr("Go: package テスト") : debugMode == "attach" ? tr("プロセスに attach") : tr("Go: 現在のファイル"))
                 .lineLimit(1)
               Spacer(minLength: 0)
               Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
@@ -2042,10 +2056,10 @@ import Observation
             .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.strong))
           }
           .menuStyle(.borderlessButton)
-          .accessibilityLabel("デバッグ構成")
+          .accessibilityLabel(tr("デバッグ構成"))
         }.padding(.horizontal, 12)
         if debugMode == "attach" {
-          TextField("プロセス ID (PID)", text: $debugPID)
+          TextField(tr("プロセス ID (PID)"), text: $debugPID)
             .textFieldStyle(.plain)
             .font(.system(size: 12, design: .monospaced))
             .foregroundStyle(C.textPrimary)
@@ -2057,7 +2071,7 @@ import Observation
         Text(debugSetupMessage)
           .font(.system(size: 12)).foregroundStyle(C.textTertiary)
           .padding(.horizontal, 12).padding(.top, 8).fixedSize(horizontal: false, vertical: true)
-        debugSection("ブレークポイント")
+        debugSection(tr("ブレークポイント"))
         if let session = store.debugSession, !session.breakpoints.isEmpty {
           ForEach(session.breakpoints.keys.sorted(), id: \.self) { path in
             ForEach((session.breakpoints[path] ?? []).sorted(), id: \.self) { line in
@@ -2067,7 +2081,7 @@ import Observation
                 Button { _ = store.run("debug.breakpoint", ["path": .string(path), "line": .int(line)]) } label: {
                   Image(systemName: "circle.fill").font(.system(size: 9)).foregroundStyle(C.danger)
                     .frame(width: 24, height: 28).contentShape(Rectangle())
-                }.buttonStyle(.hoverWash).help("ブレークポイントを削除")
+                }.buttonStyle(.hoverWash).help(tr("ブレークポイントを削除"))
                 Button {
                   let target = status?.line ?? line
                   _ = store.run("file.open", ["path": .string(path), "line": .int(target)])
@@ -2076,12 +2090,12 @@ import Observation
                   Text("\(URL(fileURLWithPath: path).lastPathComponent):\(status?.line ?? line)")
                     .font(.system(size: 12)).foregroundStyle(status?.verified == false ? C.attention : C.textSecondary)
                     .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading).contentShape(Rectangle())
-                }.buttonStyle(.hoverWash).help(status?.message ?? (status == nil ? "未検証" : "検証済み"))
+                }.buttonStyle(.hoverWash).help(status?.message ?? (status == nil ? tr("未検証") : tr("検証済み")))
               }.padding(.horizontal, 12).padding(.leading, 2)
             }
           }
-        } else { debugEmpty("設定されていません") }
-        debugSection("スレッドとコールスタック")
+        } else { debugEmpty(tr("設定されていません")) }
+        debugSection(tr("スレッドとコールスタック"))
         if let session = store.debugSession, !session.threads.isEmpty {
           ForEach(session.threads) { thread in
             Button { _ = store.run("debug.selectThread", ["id": .int(thread.id)]) } label: {
@@ -2095,7 +2109,7 @@ import Observation
             Button { _ = store.run("debug.selectFrame", ["id": .int(frame.id)]); openDebugFrame(frame) } label: {
               VStack(alignment: .leading, spacing: 2) {
                 Text(frame.name).foregroundStyle(C.textPrimary).lineLimit(1)
-                Text(frame.path.map { "\(URL(fileURLWithPath: $0).lastPathComponent):\(frame.line)" } ?? "場所不明")
+                Text(frame.path.map { "\(URL(fileURLWithPath: $0).lastPathComponent):\(frame.line)" } ?? tr("場所不明"))
                   .foregroundStyle(C.textQuaternary)
               }.font(.system(size: 12)).frame(maxWidth: .infinity, alignment: .leading)
             }.buttonStyle(.hoverWash).padding(.horizontal, 12).frame(minHeight: 34)
@@ -2104,8 +2118,8 @@ import Observation
                 if session.selectedFrame == frame.id { C.debugBlue.frame(width: 2) }
               }
           }
-        } else { debugEmpty("停止すると表示されます") }
-        debugSection("変数")
+        } else { debugEmpty(tr("停止すると表示されます")) }
+        debugSection(tr("変数"))
         if let session = store.debugSession, !session.variables.isEmpty {
           ForEach(session.variables) { variable in
             Button { _ = store.run("debug.expandVariable", ["id": .string(variable.id)]) } label: {
@@ -2120,8 +2134,8 @@ import Observation
               }.font(.system(size: 12)).padding(.leading, 12 + CGFloat(variable.depth * 12)).padding(.trailing, 12).padding(.vertical, 4)
             }.buttonStyle(.hoverWash).disabled(variable.reference == 0)
           }
-        } else { debugEmpty("停止すると表示されます") }
-        debugSection("デバッグコンソール")
+        } else { debugEmpty(tr("停止すると表示されます")) }
+        debugSection(tr("デバッグコンソール"))
         if let session = store.debugSession, !session.console.isEmpty {
           ForEach(Array(session.console.enumerated()), id: \.offset) { _, line in
             Text(line).font(.system(size: 12, design: .monospaced))
@@ -2130,7 +2144,7 @@ import Observation
               .padding(.horizontal, 12).padding(.vertical, 2)
               .textSelection(.enabled)
           }
-        } else { debugEmpty("出力はありません") }
+        } else { debugEmpty(tr("出力はありません")) }
       }.frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -2143,14 +2157,14 @@ import Observation
     }
 
     private var debugSetupMessage: String {
-      guard let session = store.debugSession else { return "Go ファイルを開き、構成を選んで開始してください。Delve (dlv) が必要です。" }
+      guard let session = store.debugSession else { return tr("Go ファイルを開き、構成を選んで開始してください。Delve (dlv) が必要です。") }
       switch session.phase {
-      case .idle: return "構成を選んで開始してください。"
-      case .starting: return "Delve に接続中…"
-      case .configuring: return "ブレークポイントを設定中…"
-      case .running: return "実行中 · \(session.project.name)"
-      case .stopped: return "停止: \(session.stoppedReason ?? "一時停止")"
-      case .ended: return "デバッグセッションは終了しました"
+      case .idle: return tr("構成を選んで開始してください。")
+      case .starting: return tr("Delve に接続中…")
+      case .configuring: return tr("ブレークポイントを設定中…")
+      case .running: return tr("実行中 · %@", session.project.name)
+      case .stopped: return tr("停止: %@", session.stoppedReason ?? tr("一時停止"))
+      case .ended: return tr("デバッグセッションは終了しました")
       case .failed(let error): return error
       }
     }
@@ -2185,21 +2199,21 @@ import Observation
             .font(.system(size: 10)).foregroundStyle(C.textQuaternary)
             .frame(width: 14, height: 20)
           Rectangle().fill(L.strong).frame(width: 1, height: 18).padding(.horizontal, 4)
-          debugAction("play.fill", "続行", "debug.continue", enabled: store.debugSession?.phase == .stopped)
-          debugAction("pause.fill", "一時停止", "debug.pause", enabled: store.debugSession?.phase == .running)
-          debugAction("arrow.turn.down.right", "ステップオーバー", "debug.stepOver", enabled: store.debugSession?.phase == .stopped)
-          debugAction("arrow.down.right", "ステップイン", "debug.stepInto", enabled: store.debugSession?.phase == .stopped)
-          debugAction("arrow.up.right", "ステップアウト", "debug.stepOut", enabled: store.debugSession?.phase == .stopped)
+          debugAction("play.fill", tr("続行"), "debug.continue", enabled: store.debugSession?.phase == .stopped)
+          debugAction("pause.fill", tr("一時停止"), "debug.pause", enabled: store.debugSession?.phase == .running)
+          debugAction("arrow.turn.down.right", tr("ステップオーバー"), "debug.stepOver", enabled: store.debugSession?.phase == .stopped)
+          debugAction("arrow.down.right", tr("ステップイン"), "debug.stepInto", enabled: store.debugSession?.phase == .stopped)
+          debugAction("arrow.up.right", tr("ステップアウト"), "debug.stepOut", enabled: store.debugSession?.phase == .stopped)
           Rectangle().fill(L.strong).frame(width: 1, height: 18).padding(.horizontal, 4)
-          debugAction("arrow.clockwise", "再起動", "debug.restart", enabled: store.debugSession != nil)
-          debugAction("stop.fill", "終了", "debug.stop", enabled: store.debugSession != nil)
+          debugAction("arrow.clockwise", tr("再起動"), "debug.restart", enabled: store.debugSession != nil)
+          debugAction("stop.fill", tr("終了"), "debug.stop", enabled: store.debugSession != nil)
         }
         .padding(.horizontal, 4).frame(height: 34)
         .background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.card))
         .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(L.strong))
         .shadow(color: .black.opacity(0.4), radius: 10, y: 8)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("デバッグ操作")
+        .accessibilityLabel(tr("デバッグ操作"))
     }
 
     private func debugAction(_ symbol: String, _ title: String, _ command: String, enabled: Bool) -> some View {
@@ -2259,7 +2273,7 @@ import Observation
             },
             onResolve: { store.reviews.resolve(root: root, path: d.path, id: $0) },
             onApply: { id in
-              guard let m = buffer else { return "ファイルを開けません。" }
+              guard let m = buffer else { return tr("ファイルを開けません。") }
               let e = store.reviews.apply(root: root, path: d.path, id: id, in: m)
               if e == nil { store.buffers.refresh(d.path); store.edited(d.path) }
               return e
@@ -2284,7 +2298,7 @@ import Observation
             isDirty: st.dirty.contains(d.path))
           .id(d)
         } else if diff != nil {
-          ProgressView("差分を読み込み中…").frame(maxWidth: .infinity, maxHeight: .infinity)
+          ProgressView { Text(tr("差分を読み込み中…")) }.frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if st.panesClosed {
           HomeView(shortcuts: homeShortcuts(st))
         } else {
@@ -2296,24 +2310,7 @@ import Observation
           onTitle: { store.title(pane: $0, $1) },
           title: { terminalTabTitle(st.project, $0) },
           onRatio: { store.run("pane.setRatio", ["id": .int($0), "ratio": .double($1)]) },
-          editor: EditorPane(buffers: store.buffers, root: store.activeRoot, path: st.active,
-            softWrap: st.toggles["softWrap"] == true, style: editorStyle,
-            home: homeShortcuts(st),
-            debugLine: store.debugSession?.frames.first(where: { $0.id == store.debugSession?.selectedFrame }).flatMap {
-              $0.path == store.activeRoot.map { $0 + "/" + (st.active ?? "") } ? $0.line : nil
-            },
-            // Requested breakpoints show before a session starts; the adapter's line wins once it answers.
-            debugBreakpoints: store.debugSession.map { s in
-              let key = (store.activeRoot ?? "") + "/" + (st.active ?? "")
-              return Set((s.breakpoints[key] ?? []).map { s.breakpointStatus[key]?[$0]?.line ?? $0 })
-            } ?? [],
-            onToggleDebugBreakpoint: { line in
-              guard let root = store.activeRoot, let path = st.active else { return }
-              _ = store.run("debug.breakpoint", ["path": .string(root + "/" + path), "line": .int(line)])
-            },
-            onDefinition: { store.run("editor.definition") },
-            onPreview: { store.run("editor.markdownPreview") },
-            onEdit: { store.edited($0) }, onCaret: { store.editorSelectionChanged($0, $1, in: $2) }, previews: st.previews),
+          editor: activeEditor,
           run: { _ = store.run($0, $1) }, dragging: $draggingPane)
         }
       }
@@ -2327,6 +2324,32 @@ import Observation
       }
     }
 
+    /// The active Project's editor pane; its own property keeps the `PaneView` call within the type checker's budget.
+    private var activeEditor: EditorPane {
+      EditorPane(buffers: store.buffers, root: store.activeRoot, path: st.active,
+        softWrap: st.toggles["softWrap"] == true, style: editorStyle,
+        debugLine: store.debugSession?.frames.first(where: { $0.id == store.debugSession?.selectedFrame }).flatMap {
+          $0.path == store.activeRoot.map { $0 + "/" + (st.active ?? "") } ? $0.line : nil
+        },
+        // Requested breakpoints show before a session starts; the adapter's line wins once it answers.
+        debugBreakpoints: activeBreakpoints,
+        onToggleDebugBreakpoint: { line in
+          guard let root = store.activeRoot, let path = st.active else { return }
+          _ = store.run("debug.breakpoint", ["path": .string(root + "/" + path), "line": .int(line)])
+        },
+        onDefinition: { store.run("editor.definition") },
+        onPreview: { store.run("editor.markdownPreview") },
+        onEdit: { store.edited($0) }, onCaret: { store.editorSelectionChanged($0, $1, in: $2) }, previews: st.previews,
+        home: homeShortcuts(st))
+    }
+
+    /// Requested breakpoints of the active file; the adapter's line wins once it answers.
+    private var activeBreakpoints: Set<Int> {
+      guard let s = store.debugSession else { return [] }
+      let key = (store.activeRoot ?? "") + "/" + (st.active ?? "")
+      return Set((s.breakpoints[key] ?? []).map { s.breakpointStatus[key]?[$0]?.line ?? $0 })
+    }
+
     private static let sectionNotes = [
       "一般": "ワークスペースの基本動作とアプリ全体の表示を設定します。",
       "使用状況": "依頼・追記と推定費用の集計",
@@ -2335,79 +2358,80 @@ import Observation
     /// Home screen rows (new Project, or every pane closed): commands with a bound key, in this order.
     private func homeShortcuts(_ st: WorkbenchState) -> [(title: String, keys: String)] {
       ["terminal.show", "palette.files", "palette.commands", "sidebar.toggle", "pane.splitRight"].compactMap { id in
-        CommandRegistry.workbench.commands.first { $0.id == id }.flatMap { d in st.shortcut(for: d).map { (d.title, $0) } }
+        CommandRegistry.workbench.commands.first { $0.id == id }.flatMap { d in st.shortcut(for: d).map { (tr(d.title), $0) } }
       }
     }
 
     private var settingsMain: some View {
       ScrollView {
         VStack(alignment: .leading, spacing: 8) {
-          Text(st.section).font(.system(size: 25, weight: .semibold)).foregroundStyle(C.textPrimary)
-          Text(Self.sectionNotes[st.section] ?? "\(st.section) の設定です。").font(.system(size: 15)).foregroundStyle(C.textTertiary)
+          Text(tr(st.section)).font(.system(size: 25, weight: .semibold)).foregroundStyle(C.textPrimary)
+          Text(Self.sectionNotes[st.section].map { tr($0) } ?? tr("%@ の設定です。", tr(st.section))).font(.system(size: 15)).foregroundStyle(C.textTertiary)
             .padding(.bottom, 16)
           switch st.section {
           case "使用状況":
             AgentUsageView()
           case "一般":
-            SettingsCard(title: "ワークスペース") {
-              switchRow("前回のレイアウトを復元", "restoreLayout", note: "Projectごとのファイル、ターミナル、分割位置を再開します。")
-              switchRow("閉じる前に確認", "confirmClose", note: "実行中のターミナルや未保存のエディタを閉じる前に確認します。")
+            SettingsCard(title: tr("ワークスペース")) {
+              switchRow(tr("前回のレイアウトを復元"), "restoreLayout", note: tr("Projectごとのファイル、ターミナル、分割位置を再開します。"))
+              switchRow(tr("閉じる前に確認"), "confirmClose", note: tr("実行中のターミナルや未保存のエディタを閉じる前に確認します。"))
             }
-            SettingsCard(title: "インターフェース") {
-              choiceRow("外観", "appearance", note: "エディタ、ターミナル、サイドバーの配色をまとめて切り替えます。")
-              switchRow("ステータスバーの利用枠を隠す", "hideQuota")
+            SettingsCard(title: tr("インターフェース")) {
+              choiceRow(tr("外観"), "appearance", note: tr("エディタ、ターミナル、サイドバーの配色をまとめて切り替えます。"))
+              choiceRow(tr("言語"), "language")
+              switchRow(tr("ステータスバーの利用枠を隠す"), "hideQuota")
             }
           case "通知":
-            SettingsCard(title: "macOS 通知") {
-              switchRow("通知を有効にする", "notifyEnabled", note: "Clair の terminal で動く agent の通知要求と終了を macOS に送ります。")
-              switchRow("入力待ち・通知要求で通知", "notifyOnBell")
-              switchRow("終了で通知", "notifyOnExit", note: "正常終了・異常終了のどちらも対象です。")
-              switchRow("Clair が前面のときも通知", "notifyWhenActive", note: "オフのときは他のアプリを使っている間だけ通知します。")
-              switchRow("サウンドを鳴らす", "notifySound")
+            SettingsCard(title: tr("macOS 通知")) {
+              switchRow(tr("通知を有効にする"), "notifyEnabled", note: tr("Clair の terminal で動く agent の通知要求と終了を macOS に送ります。"))
+              switchRow(tr("入力待ち・通知要求で通知"), "notifyOnBell")
+              switchRow(tr("終了で通知"), "notifyOnExit", note: tr("正常終了・異常終了のどちらも対象です。"))
+              switchRow(tr("Clair が前面のときも通知"), "notifyWhenActive", note: tr("オフのときは他のアプリを使っている間だけ通知します。"))
+              switchRow(tr("サウンドを鳴らす"), "notifySound")
             }
-            SettingsCard(title: "テスト") {
-              SettingsRow(title: "テスト通知を送る", note: notificationTestResult ?? "macOS の通知許可と表示を確認します。") {
-                Button("送信") {
-                  store.sendTestNotification { notificationTestResult = $0 ? "送信しました。表示されない場合は システム設定 → 通知 → Clair を確認してください。" : "送信できませんでした。システム設定 → 通知 → Clair で許可してください（アプリ bundle 以外では動きません）。" }
+            SettingsCard(title: tr("テスト")) {
+              SettingsRow(title: tr("テスト通知を送る"), note: notificationTestResult ?? tr("macOS の通知許可と表示を確認します。")) {
+                Button(tr("送信")) {
+                  store.sendTestNotification { notificationTestResult = $0 ? tr("送信しました。表示されない場合は システム設定 → 通知 → Clair を確認してください。") : tr("送信できませんでした。システム設定 → 通知 → Clair で許可してください（アプリ bundle 以外では動きません）。") }
                 }
               }
             }
           case "AIプロバイダー":
             SettingsCard(title: "Agent") {
               defaultAgentRow
-              choiceRow("承認ポリシー", "approvalPolicy", note: "ターミナル・Agent会話での変更提案を、どこまで自動で通すか。")
+              choiceRow(tr("承認ポリシー"), "approvalPolicy", note: tr("ターミナル・Agent会話での変更提案を、どこまで自動で通すか。"))
             }
             integrationCard
           case "エディタ":
-            SettingsCard(title: "表示") {
+            SettingsCard(title: tr("表示")) {
               fontRow("editor")
-              choiceRow("文字サイズ", "editorFontSize")
-              switchRow("行番号を表示", "lineNumbers")
+              choiceRow(tr("文字サイズ"), "editorFontSize")
+              switchRow(tr("行番号を表示"), "lineNumbers")
             }
-            SettingsCard(title: "編集") {
-              switchRow("保存時に整形", "formatOnSave", note: "⌘S のタイミングでフォーマッタを実行します。")
-              choiceRow("タブ幅", "tabWidth")
-              switchRow("空白文字を表示", "showWhitespace", note: "タブ・行末の空白を薄く可視化します。")
-              switchRow("行の折り返し", "softWrap", note: "長い行をエディタの幅に合わせて折り返します。⌥Z でも切り替えられます。")
+            SettingsCard(title: tr("編集")) {
+              switchRow(tr("保存時に整形"), "formatOnSave", note: tr("⌘S のタイミングでフォーマッタを実行します。"))
+              choiceRow(tr("タブ幅"), "tabWidth")
+              switchRow(tr("空白文字を表示"), "showWhitespace", note: tr("タブ・行末の空白を薄く可視化します。"))
+              switchRow(tr("行の折り返し"), "softWrap", note: tr("長い行をエディタの幅に合わせて折り返します。⌥Z でも切り替えられます。"))
               // Full-width block: the rows sit under the title instead of squeezing into the trailing control slot.
               VStack(alignment: .leading, spacing: 8) {
-                SettingsRow(title: "拡張子の言語", note: "組み込みの判定より優先されます。開き直したファイルから反映されます。") { EmptyView() }
+                SettingsRow(title: tr("拡張子の言語"), note: tr("組み込みの判定より優先されます。開き直したファイルから反映されます。")) { EmptyView() }
                 ForEach($associationRows) { $row in
                   HStack(spacing: 8) {
                     TextField("tpl", text: $row.ext).textFieldStyle(.plain)
                       .padding(.horizontal, 8).frame(width: 160, height: 28)
                       .background(RoundedRectangle(cornerRadius: 6).fill(C.surfaceActive))
-                      .accessibilityLabel("拡張子")
-                    Picker("言語", selection: $row.lang) {
+                      .accessibilityLabel(tr("拡張子"))
+                    Picker(tr("言語"), selection: $row.lang) {
                       ForEach(EditorLanguageID.allCases, id: \.rawValue) { Text($0.rawValue).tag($0.rawValue) }
                     }
                     .labelsHidden().controlSize(.large).frame(width: 180)
                     Button { associationRows.removeAll { $0.id == row.id } } label: { Image(systemName: "minus.circle") }
-                      .buttonStyle(.plain).foregroundStyle(C.textTertiary).accessibilityLabel("削除")
+                      .buttonStyle(.plain).foregroundStyle(C.textTertiary).accessibilityLabel(tr("削除"))
                   }
                 }
                 Button { associationRows.append(AssociationDraft(ext: "", lang: EditorLanguageID.terraform.rawValue)) } label: { Image(systemName: "plus") }
-                  .accessibilityLabel("追加")
+                  .accessibilityLabel(tr("追加"))
               }
               .padding(.bottom, 12)
                 .onAppear {
@@ -2419,25 +2443,25 @@ import Observation
                 }
             }
           case "ターミナル":
-            SettingsCard(title: "表示") {
+            SettingsCard(title: tr("表示")) {
               fontRow("terminal")
-              choiceRow("文字サイズ", "terminalFontSize")
-              choiceRow("カーソルの形", "terminalCursorStyle")
-              switchRow("カーソルを点滅", "terminalCursorBlink", note: "シェルやアプリが形・点滅を指定したときはそちらが優先されます。")
+              choiceRow(tr("文字サイズ"), "terminalFontSize")
+              choiceRow(tr("カーソルの形"), "terminalCursorStyle")
+              switchRow(tr("カーソルを点滅"), "terminalCursorBlink", note: tr("シェルやアプリが形・点滅を指定したときはそちらが優先されます。"))
             }
-            SettingsCard(title: "シェルと承認") {
-              choiceRow("デフォルトシェル", "defaultShell")
-              switchRow("コマンド実行前に確認", "terminalApprovals", note: "agentが実行するコマンドの承認プロンプト。")
-              choiceRow("スクロールバック", "scrollback")
+            SettingsCard(title: tr("シェルと承認")) {
+              choiceRow(tr("デフォルトシェル"), "defaultShell")
+              switchRow(tr("コマンド実行前に確認"), "terminalApprovals", note: tr("agentが実行するコマンドの承認プロンプト。"))
+              choiceRow(tr("スクロールバック"), "scrollback")
             }
-            SettingsCard(title: "電源") {
-              switchRow("バッテリー駆動中もエージェント実行中はスリープさせない", "preventSleepOnBattery")
+            SettingsCard(title: tr("電源")) {
+              switchRow(tr("バッテリー駆動中もエージェント実行中はスリープさせない"), "preventSleepOnBattery")
             }
           case "アップデート":
             updateSection
           case "モバイル":
-            SettingsCard(title: "モバイル") {
-              SettingsRow(title: "セッションの確認", note: "同じネットワーク上の端末からセッションを確認します。") { EmptyView() }
+            SettingsCard(title: tr("モバイル")) {
+              SettingsRow(title: tr("セッションの確認"), note: tr("同じネットワーク上の端末からセッションを確認します。")) { EmptyView() }
             }
           default:
             EmptyView()
@@ -2454,17 +2478,17 @@ import Observation
 
     /// V16: lets agents in Clair terminals drive Clair (`clair agent.launch` …) and know how (the clair-agents skill).
     private var integrationCard: some View {
-      SettingsCard(title: "連携") {
+      SettingsCard(title: tr("連携")) {
         SettingsRow(
-          title: "clair コマンドをインストール",
+          title: tr("clair コマンドをインストール"),
           note: integrationNotes["command"] ?? (ClairDaemonLauncher.isCommandInstalled
-            ? "インストール済み(\(ClairDaemonLauncher.commandLink.path))。"
-            : "\(ClairDaemonLauncher.commandLink.path) にリンクし、ターミナルやAgentからClairを操作できるようにします。")
+            ? tr("インストール済み(%@)。", ClairDaemonLauncher.commandLink.path)
+            : tr("%@ にリンクし、ターミナルやAgentからClairを操作できるようにします。", ClairDaemonLauncher.commandLink.path))
         ) {
-          Button(ClairDaemonLauncher.isCommandInstalled ? "再インストール" : "インストール") {
+          Button(ClairDaemonLauncher.isCommandInstalled ? tr("再インストール") : tr("インストール")) {
             Task.detached {
               let note: String
-              do { try ClairDaemonLauncher.installCommand(); note = "インストールしました(\(ClairDaemonLauncher.commandLink.path))。" } catch {
+              do { try ClairDaemonLauncher.installCommand(); note = tr("インストールしました(%@)。", ClairDaemonLauncher.commandLink.path) } catch {
                 note = error.localizedDescription
               }
               await MainActor.run { integrationNotes["command"] = note }
@@ -2472,14 +2496,14 @@ import Observation
           }
         }
         SettingsRow(
-          title: "Agent skill をインストール",
+          title: tr("Agent skill をインストール"),
           note: integrationNotes["skill"] ?? (ClairSkills.isInstalled()
-            ? "インストール済み(~/.claude/skills, ~/.agents/skills)。"
-            : "clair-agents / clair-preview skill を ~/.claude/skills と ~/.agents/skills に置きます。")
+            ? tr("インストール済み(~/.claude/skills, ~/.agents/skills)。")
+            : tr("clair-agents / clair-preview skill を ~/.claude/skills と ~/.agents/skills に置きます。"))
         ) {
-          Button(ClairSkills.isInstalled() ? "再インストール" : "インストール") {
-            do { try ClairSkills.install(); integrationNotes["skill"] = "インストールしました。" } catch {
-              integrationNotes["skill"] = "インストールできません: \(error.localizedDescription)"
+          Button(ClairSkills.isInstalled() ? tr("再インストール") : tr("インストール")) {
+            do { try ClairSkills.install(); integrationNotes["skill"] = tr("インストールしました。") } catch {
+              integrationNotes["skill"] = tr("インストールできません: %@", error.localizedDescription)
             }
           }
         }
@@ -2488,26 +2512,26 @@ import Observation
 
     @ViewBuilder private var updateSection: some View {
       let c = store.updateConfig
-      SettingsCard(title: "バージョン") {
-        SettingsRow(title: "現在のバージョン", note: "\(c.channel.displayName) \(c.currentVersion)") {
+      SettingsCard(title: tr("バージョン")) {
+        SettingsRow(title: tr("現在のバージョン"), note: "\(c.channel.displayName) \(c.currentVersion)") {
           if c.channel == .dev {
-            Text("Dev ビルドは更新フィードを持ちません。").font(.system(size: 14)).foregroundStyle(C.textMuted)
+            Text(tr("Dev ビルドは更新フィードを持ちません。")).font(.system(size: 14)).foregroundStyle(C.textMuted)
           } else {
             switch store.update {
-            case .idle: Text("最新の状態です。").font(.system(size: 14)).foregroundStyle(C.textTertiary)
-            case .checking: Text("確認中…").font(.system(size: 14)).foregroundStyle(C.textTertiary)
-            case .installing: Text("更新を適用しています。完了後に再起動します。").font(.system(size: 14)).foregroundStyle(C.textTertiary)
+            case .idle: Text(tr("最新の状態です。")).font(.system(size: 14)).foregroundStyle(C.textTertiary)
+            case .checking: Text(tr("確認中…")).font(.system(size: 14)).foregroundStyle(C.textTertiary)
+            case .installing: Text(tr("更新を適用しています。完了後に再起動します。")).font(.system(size: 14)).foregroundStyle(C.textTertiary)
             case .failed(let m): Text(m).font(.system(size: 14)).foregroundStyle(C.textTertiary)
             case .available(let u):
               HStack(spacing: 8) {
-                Text("\(u.version) が利用できます").font(.system(size: 14)).foregroundStyle(C.textSecondary)
-                Button("適用して再起動") { Task { await store.installUpdate() } }
+                Text(tr("%@ が利用できます", u.version)).font(.system(size: 14)).foregroundStyle(C.textSecondary)
+                Button(tr("適用して再起動")) { Task { await store.installUpdate() } }
               }
             }
           }
         }
         if c.channel != .dev {
-          SettingsRow(title: "更新を確認") { Button("確認") { Task { await store.checkForUpdate(manual: true) } } }
+          SettingsRow(title: tr("更新を確認")) { Button(tr("確認")) { Task { await store.checkForUpdate(manual: true) } } }
         }
       }
     }
@@ -2526,9 +2550,9 @@ import Observation
     private func fontRow(_ key: String) -> some View {
       let current = st.fonts[key] ?? ""
       let families = Self.monospacedFamilies + (current.isEmpty || Self.monospacedFamilies.contains(current) ? [] : [current])
-      return SettingsRow(title: "フォント", note: "インストール済みの等幅フォントから選びます。") {
-        Picker("フォント", selection: Binding(get: { current }, set: { store.run("settings.font", ["key": .string(key), "value": .string($0)]) })) {
-          Text("システム等幅").tag("")
+      return SettingsRow(title: tr("フォント"), note: tr("インストール済みの等幅フォントから選びます。")) {
+        Picker(tr("フォント"), selection: Binding(get: { current }, set: { store.run("settings.font", ["key": .string(key), "value": .string($0)]) })) {
+          Text(tr("システム等幅")).tag("")
           ForEach(families, id: \.self) { Text($0).tag($0) }
         }
         .labelsHidden().controlSize(.large).frame(width: 220)
@@ -2557,7 +2581,7 @@ import Observation
     // agent registry: a Menu, not SettingsSegmented, because the registry can list more agents
     // than a segmented control reads well; same picker idiom as the "〜をレビュー" submenu.
     private var defaultAgentRow: some View {
-      SettingsRow(title: "既定のAgent", note: "⌃⌘N で追加するときの初期選択。titlebarのタブは個別に選べます。") {
+      SettingsRow(title: tr("既定のAgent"), note: tr("⌃⌘N で追加するときの初期選択。titlebarのタブは個別に選べます。")) {
         Menu {
           ForEach(AgentProfile.all, id: \.id) { profile in
             Button(profile.title) { store.run("settings.choose", ["key": .string("defaultAgent"), "value": .string(profile.id)]) }
@@ -2595,9 +2619,9 @@ import Observation
           Text("\(top.provider) \(top.window.label)").foregroundStyle(C.textQuaternary)
           Capsule().fill(L.strong).frame(width: 34, height: 4)
             .overlay(alignment: .leading) { Capsule().fill(tint).frame(width: 34 * min(max(1 - top.window.usedPercent / 100, 0), 1)) }
-          Text("残り\(top.window.remainingPercent)%").fontWeight(.semibold).foregroundStyle(tint)
+          Text(tr("残り%@%", top.window.remainingPercent)).fontWeight(.semibold).foregroundStyle(tint)
         } else {
-          Text(quota.isEmpty ? "利用枠を取得中…" : "利用枠 —").foregroundStyle(C.textQuaternary)
+          Text(quota.isEmpty ? tr("利用枠を取得中…") : tr("利用枠 —")).foregroundStyle(C.textQuaternary)
         }
       }
       .contentShape(Rectangle())
@@ -2605,7 +2629,7 @@ import Observation
       .popover(isPresented: $quotaHovered, arrowEdge: .top) {
         VStack(alignment: .leading, spacing: 12) {
           if quota.isEmpty {
-            Text("利用枠を取得中…").foregroundStyle(C.textTertiary)
+            Text(tr("利用枠を取得中…")).foregroundStyle(C.textTertiary)
           }
           ForEach(quota, id: \.provider) { provider in
             VStack(alignment: .leading, spacing: 7) {
@@ -2614,7 +2638,7 @@ import Observation
                 Text(provider.provider).font(.system(size: 14, weight: .semibold))
                 Spacer()
                 if case .ok = provider.state {
-                  Text(provider.isStale(now: now) ? "古い値 · \(provider.fetchedAt.formatted(date: .omitted, time: .shortened)) 取得" : "\(provider.fetchedAt.formatted(date: .omitted, time: .shortened)) 取得")
+                  Text(provider.isStale(now: now) ? tr("古い値 · %@ 取得", provider.fetchedAt.formatted(date: .omitted, time: .shortened)) : tr("%@ 取得", provider.fetchedAt.formatted(date: .omitted, time: .shortened)))
                     .foregroundStyle(C.textQuaternary)
                 }
               }
@@ -2626,7 +2650,7 @@ import Observation
                       Text(window.label)
                       Spacer(minLength: 8)
                       Text(window.resetText(now: now)).foregroundStyle(C.textQuaternary)
-                      Text("残り\(window.remainingPercent)%").fontWeight(.semibold)
+                      Text(tr("残り%@%", window.remainingPercent)).fontWeight(.semibold)
                     }
                     GeometryReader { geometry in
                       Capsule().fill(L.strong)
@@ -2641,9 +2665,9 @@ import Observation
                   .accessibilityElement(children: .combine)
                 }
               case .unavailable(let reason):
-                Text("取得できません — \(reason)").foregroundStyle(C.textTertiary)
+                Text(tr("取得できません — %@", reason)).foregroundStyle(C.textTertiary)
               case .unsupported(let reason):
-                Text("未対応 — \(reason)").foregroundStyle(C.textTertiary)
+                Text(tr("未対応 — %@", reason)).foregroundStyle(C.textTertiary)
               }
             }
           }
@@ -2663,7 +2687,7 @@ import Observation
         if let spans = store.buffers.language.diagnostics[path]?.spans, !spans.isEmpty {
           let errors = spans.filter { $0.severity == .error }.count
           let warnings = spans.filter { $0.severity == .warning }.count
-          Text([errors > 0 ? "エラー \(errors)" : nil, warnings > 0 ? "警告 \(warnings)" : nil].compactMap { $0 }.joined(separator: " · "))
+          Text([errors > 0 ? tr("エラー %@", errors) : nil, warnings > 0 ? tr("警告 %@", warnings) : nil].compactMap { $0 }.joined(separator: " · "))
             .foregroundStyle(errors > 0 ? C.attention : C.textTertiary)
         }
         if let notice = store.languageNotice { Text(notice).foregroundStyle(C.textQuaternary).lineLimit(1) }
@@ -2679,19 +2703,19 @@ import Observation
           if unread > 0 { Text("\(unread)").foregroundStyle(C.attention) }
         }.frame(minHeight: 18)
       }
-      .buttonStyle(.hoverWash).help("通知").accessibilityLabel(unread > 0 ? "通知 未読 \(unread) 件" : "通知")
+      .buttonStyle(.hoverWash).help(tr("通知")).accessibilityLabel(unread > 0 ? tr("通知 未読 %@ 件", unread) : tr("通知"))
       .popover(isPresented: $noticesOpen, arrowEdge: .top) {
         VStack(alignment: .leading, spacing: 0) {
           HStack {
-            Text("通知").font(.system(size: 13, weight: .semibold))
+            Text(tr("通知")).font(.system(size: 13, weight: .semibold))
             Spacer()
-            Button("すべて既読") { store.run("notice.markRead", [:]) }.disabled(unread == 0)
-            Button("消去") { store.run("notice.clear", [:]) }.disabled(st.notices.items.isEmpty)
+            Button(tr("すべて既読")) { store.run("notice.markRead", [:]) }.disabled(unread == 0)
+            Button(tr("消去")) { store.run("notice.clear", [:]) }.disabled(st.notices.items.isEmpty)
           }
           .buttonStyle(.borderless).padding(10)
           Divider()
           if st.notices.items.isEmpty {
-            Text("通知はありません").foregroundStyle(C.textQuaternary).padding(12)
+            Text(tr("通知はありません")).foregroundStyle(C.textQuaternary).padding(12)
           } else {
             ScrollView {
               LazyVStack(alignment: .leading, spacing: 0) {
@@ -2704,9 +2728,9 @@ import Observation
                     HStack(spacing: 8) {
                       Circle().fill(n.read ? Color.clear : C.attention).frame(width: 6, height: 6)
                       VStack(alignment: .leading, spacing: 2) {
-                        Text(n.sessionTitle ?? "ターミナル \(n.pane)")
+                        Text(n.sessionTitle ?? tr("ターミナル %@", n.pane))
                           .foregroundStyle(C.textPrimary)
-                        Text("\(n.project) · ターミナル \(n.pane) · \(n.title)").foregroundStyle(n.kind == .exited && n.exitCode != 0 ? C.attention : C.textTertiary)
+                        Text(tr("%@ · ターミナル %@ · %@", n.project, n.pane, n.title)).foregroundStyle(n.kind == .exited && n.exitCode != 0 ? C.attention : C.textTertiary)
                         if let body = n.sourceBody, !body.isEmpty { Text(body).foregroundStyle(C.textSecondary).fixedSize(horizontal: false, vertical: true) }
                       }
                       Spacer(minLength: 8)
@@ -2732,7 +2756,7 @@ import Observation
       let caret = st.active.flatMap { store.buffers.caret[$0] }
       return HStack(spacing: 12) {
         if st.settingsOpen {
-          Text("設定 · \(st.section)")
+          Text(tr("設定 · %@", tr(st.section)))
         } else {
           if let branch {
             Button { store.run("git.branches") } label: {
@@ -2742,7 +2766,7 @@ import Observation
                 Text(branch)
               }.padding(.horizontal, 6).frame(minHeight: 18)
             }
-            .buttonStyle(.hoverWash).fixedSize().disabled(gitOperation != nil).help("ブランチを切り替え / 作成")
+            .buttonStyle(.hoverWash).fixedSize().disabled(gitOperation != nil).help(tr("ブランチを切り替え / 作成"))
           }
           if st.isRepo {
             // VS Code-style sync: one button shows ↓behind ↑ahead and runs pull then push.
@@ -2751,8 +2775,8 @@ import Observation
                 Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 10))
                 if let sync, sync.behind + sync.ahead > 0 { Text("\(sync.behind)↓ \(sync.ahead)↑") }
               }.frame(minHeight: 18)
-            }.buttonStyle(.hoverWash).disabled(gitOperation != nil).help(sync.map { "\(branch ?? "") の同期: pull \($0.behind) 件 / push \($0.ahead) 件\nクリックで Pull → Push" } ?? "同期 (Pull → Push)")
-            if let gitOperation { ProgressView().controlSize(.small).help("\(gitOperation)中") }
+            }.buttonStyle(.hoverWash).disabled(gitOperation != nil).help(sync.map { tr("%@ の同期: pull %@ 件 / push %@ 件\nクリックで Pull → Push", branch ?? "", $0.behind, $0.ahead) } ?? tr("同期 (Pull → Push)"))
+            if let gitOperation { ProgressView().controlSize(.small).help(tr("%@中", gitOperation)) }
             // Failures only: a success toast is noise here (owner, 2026-09-24); the Git panel still shows it.
             if let gitMessage, gitFailed, gitOperation == nil {
               HStack(spacing: 4) {
@@ -2764,7 +2788,7 @@ import Observation
               .help(gitMessage)
             }
           }
-          if !st.dirty.isEmpty { Text("未保存 \(st.dirty.count)").foregroundStyle(C.attention) }
+          if !st.dirty.isEmpty { Text(tr("未保存 %@", st.dirty.count)).foregroundStyle(C.attention) }
           if let caret { Text("Ln \(caret.line), Col \(caret.col)") }
           languageStatus
         }
@@ -2774,7 +2798,7 @@ import Observation
         Button { sidebarMode = "terminal" } label: {
           HStack(spacing: 5) {
             if waiting > 0 { Circle().fill(C.attention).frame(width: 6, height: 6) }
-            Text("\(agents.count) セッション" + (waiting > 0 ? " · 入力待ち \(waiting)" : ""))
+            Text(tr("%@ セッション", agents.count) + (waiting > 0 ? tr(" · 入力待ち %@", waiting) : ""))
           }
         }.buttonStyle(.hoverWash)
         noticeButton
@@ -2805,11 +2829,11 @@ import Observation
         let q = query.trimmingCharacters(in: .whitespaces)
         let rows = branches.filter { q.isEmpty || $0.lowercased().contains(q.lowercased()) }.map {
           // The checked-out branch just closes the palette (switching to it would be a no-op that can still fail on dirty buffers).
-          $0 == branch ? PaletteItem(title: $0, hint: "現在", id: "palette.close", input: [:])
+          $0 == branch ? PaletteItem(title: $0, hint: tr("現在"), id: "palette.close", input: [:])
             : PaletteItem(title: $0, hint: "", id: "git.switch", input: ["name": .string($0)])
         }
         guard !q.isEmpty, !branches.contains(q) else { return rows }
-        return rows + [PaletteItem(title: "新しいブランチを作成: \(q)", hint: "", id: "git.branchCreate", input: ["name": .string(q)])]
+        return rows + [PaletteItem(title: tr("新しいブランチを作成: %@", q), hint: "", id: "git.branchCreate", input: ["name": .string(q)])]
       case .references:
         let q = query.lowercased()
         return store.languageItems.filter { q.isEmpty || $0.hint.lowercased().contains(q) }
@@ -2834,7 +2858,7 @@ import Observation
               .onKeyPress(.upArrow) { selection = max(selection - 1, 0); return .handled }
               .onKeyPress(.escape) { store.run("palette.close"); return .handled }
               .onChange(of: query) { selection = 0 }
-            Text("\(list.count) 件").font(.system(size: 11)).foregroundStyle(C.textQuaternary)
+            Text(tr("%@ 件", list.count)).font(.system(size: 11)).foregroundStyle(C.textQuaternary)
           }
           // ⌘T: ask the language servers as the query changes (debounced; a newer query cancels this one).
           .task(id: p == .symbols ? query : nil) {
@@ -2887,7 +2911,7 @@ import Observation
             }.padding(.horizontal, 8).padding(.bottom, 8)
           }.onChange(of: selection) { proxy.scrollTo(selection) } }.frame(minHeight: 322, maxHeight: 420)
           HStack(spacing: 8) {
-            ForEach([("コマンド", WorkbenchState.Palette.commands), ("ファイルへ移動", .files)], id: \.1) { label, mode in
+            ForEach([(tr("コマンド"), WorkbenchState.Palette.commands), (tr("ファイルへ移動"), .files)], id: \.1) { label, mode in
               Button { store.run(mode == .commands ? "palette.commands" : "palette.files") } label: {
                 Text(label).font(.system(size: 11, weight: .semibold))
                   .foregroundStyle(p == mode ? C.textPrimary : C.textTertiary)
@@ -2911,8 +2935,8 @@ import Observation
       let it = list[selection]
       store.run("palette.close")
       switch it.id {
-      case "git.switch": runGit([(it.id, it.input)], label: "ブランチ切替")
-      case "git.branchCreate": runGit([(it.id, it.input)], label: "ブランチ作成")
+      case "git.switch": runGit([(it.id, it.input)], label: tr("ブランチ切替"))
+      case "git.branchCreate": runGit([(it.id, it.input)], label: tr("ブランチ作成"))
       default: store.performFromUI(it.id, it.input)
       }
     }
@@ -2972,7 +2996,7 @@ import Observation
           .background(on ? W.selected : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
           .opacity(enabled ? 1 : 0.35)
       }
-      .buttonStyle(.hoverWash).disabled(!enabled).help(enabled ? "" : "準備中")
+      .buttonStyle(.hoverWash).disabled(!enabled).help(enabled ? "" : tr("準備中"))
     }
   }
 
@@ -3059,7 +3083,7 @@ import Observation
           Image(systemName: "xmark").font(.system(size: 9, weight: .medium)).foregroundStyle(C.textTertiary)
         }
         .buttonStyle(.hoverWash)
-        .help("閉じる")
+        .help(tr("閉じる"))
         .opacity((selected || isHovered) ? 1 : 0)
         .allowsHitTesting(selected || isHovered)
       }
@@ -3135,7 +3159,7 @@ import Observation
           }
         Button(action: onClose) {
           Image(systemName: "xmark").font(.system(size: 9, weight: .medium)).foregroundStyle(C.textQuaternary)
-        }.buttonStyle(.hoverWash).help("パネルを閉じる").opacity((isHovered || focused) ? 1 : 0)
+        }.buttonStyle(.hoverWash).help(tr("パネルを閉じる")).opacity((isHovered || focused) ? 1 : 0)
       }
       .padding(.horizontal, 8).frame(height: 24).frame(maxWidth: .infinity)
       .background(C.canvas)
@@ -3290,7 +3314,7 @@ import Observation
         VStack(spacing: 0) {
           if kind != .editor && kind != .graph {
             PaneHeaderView(
-              id: id, label: kind == .preview ? (editor.previews[id].map { ($0 as NSString).lastPathComponent } ?? "") : kind == .graph ? "コミットグラフ" : title(id), focused: id == focused,
+              id: id, label: kind == .preview ? (editor.previews[id].map { ($0 as NSString).lastPathComponent } ?? "") : kind == .graph ? tr("コミットグラフ") : title(id), focused: id == focused,
               onSwap: { run("pane.swap", ["idA": .int($0), "idB": .int($1)]) },
               onDragStart: { dragging = id }, onDragEnd: { dragging = nil },
               onClose: { run("pane.focus", ["id": .int(id)]); run("pane.close", [:]) })
@@ -3322,11 +3346,11 @@ import Observation
         .onTapGesture { onFocus(id) }
         // ponytail: the libghostty NSView may consume right-clicks, so terminal panes might not show this; copy/paste/clear items wait on U06 surface commands.
         .contextMenu {
-          Button("右に分割") { run("pane.focus", ["id": .int(id)]); run("pane.splitRight", [:]) }
-          Button("下に分割") { run("pane.focus", ["id": .int(id)]); run("pane.splitDown", [:]) }
-          Button("最大化") { run("pane.focus", ["id": .int(id)]); run("pane.maximize", [:]) }
+          Button(tr("右に分割")) { run("pane.focus", ["id": .int(id)]); run("pane.splitRight", [:]) }
+          Button(tr("下に分割")) { run("pane.focus", ["id": .int(id)]); run("pane.splitDown", [:]) }
+          Button(tr("最大化")) { run("pane.focus", ["id": .int(id)]); run("pane.maximize", [:]) }
           Divider()
-          Button("ペインを閉じる", role: .destructive) { run("pane.focus", ["id": .int(id)]); run("pane.close", [:]) }
+          Button(tr("ペインを閉じる"), role: .destructive) { run("pane.focus", ["id": .int(id)]); run("pane.close", [:]) }
         }
       case .split(let axis, let ratio, let a, let b):
         GeometryReader { g in

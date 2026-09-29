@@ -1,5 +1,6 @@
 #if os(macOS)
   import ClairDesignSystem
+  import ClairShared
   import SwiftUI
 
   private typealias C = DesignTokens.Color
@@ -48,7 +49,7 @@
         ForEach(options, id: \.self) { o in
           let on = o == value
           Button { onChange(o) } label: {
-            Text(o).font(.system(size: 14, weight: on ? .semibold : .regular))
+            Text(tr(o)).font(.system(size: 14, weight: on ? .semibold : .regular))
               .foregroundStyle(on ? C.textPrimary : C.textSecondary)
               .padding(.horizontal, 10).frame(height: 36).background(on ? C.surfaceActive : .clear)
           }.buttonStyle(HoverWashStyle(radius: 0))
@@ -70,7 +71,7 @@
           }
           .animation(.easeOut(duration: 0.12), value: on)
       }
-      .buttonStyle(.plain).accessibilityAddTraits(.isButton).accessibilityValue(on ? "オン" : "オフ")
+      .buttonStyle(.plain).accessibilityAddTraits(.isButton).accessibilityValue(on ? tr("オン") : tr("オフ"))
     }
   }
 

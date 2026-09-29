@@ -1,3 +1,4 @@
+import ClairShared
 import ClairDaemonKit
 import ClairWorkspace
 import Foundation
@@ -86,24 +87,24 @@ import Foundation
     /// Links without privileges when `/usr/local/bin` is writable, else asks for an administrator password.
     /// Never replaces a real file someone else put there.
     public static func installCommand() throws {
-      guard let clair = binary("clair") else { throw InstallError("clair 実行ファイルがアプリ内に見つかりません。") }
+      guard let clair = binary("clair") else { throw InstallError(tr("clair 実行ファイルがアプリ内に見つかりません。")) }
       let fm = FileManager.default
       if (try? fm.attributesOfItem(atPath: commandLink.path)[.type] as? FileAttributeType) == .typeRegular {
-        throw InstallError("\(commandLink.path) に別のファイルがあります。削除してから再試行してください。")
+        throw InstallError(tr("%@ に別のファイルがあります。削除してから再試行してください。", commandLink.path))
       }
       if (try? fm.removeItem(at: commandLink)) != nil || !fm.fileExists(atPath: commandLink.path),
         (try? fm.createSymbolicLink(at: commandLink, withDestinationURL: clair)) != nil
       { return }
       try runAsAdmin("mkdir -p /usr/local/bin && ln -sfn \(shellQuote(clair.path)) \(shellQuote(commandLink.path))")
-      guard isCommandInstalled else { throw InstallError("インストールを中止しました。") }
+      guard isCommandInstalled else { throw InstallError(tr("インストールを中止しました。")) }
     }
 
     /// Removes the link only when it points at this app's `clair`; a file or foreign link stays.
     public static func uninstallCommand() throws {
-      guard isCommandInstalled else { throw InstallError("\(commandLink.path) はこの Clair のリンクではないため削除しません。") }
+      guard isCommandInstalled else { throw InstallError(tr("%@ はこの Clair のリンクではないため削除しません。", commandLink.path)) }
       if (try? FileManager.default.removeItem(at: commandLink)) != nil { return }
       try runAsAdmin("rm -f \(shellQuote(commandLink.path))")
-      guard !isCommandInstalled else { throw InstallError("アンインストールを中止しました。") }
+      guard !isCommandInstalled else { throw InstallError(tr("アンインストールを中止しました。")) }
     }
 
     private static func runAsAdmin(_ shell: String) throws {

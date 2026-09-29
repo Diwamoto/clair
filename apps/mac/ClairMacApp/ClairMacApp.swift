@@ -1,3 +1,4 @@
+import ClairShared
 import AppKit
 import ClairAppKit
 import ClairDesignSystem
@@ -74,10 +75,10 @@ import SwiftUI
     // The startup benchmark quits itself unattended (CLAIR_STARTUP_TRACE=exit).
     if ClairDaemonLauncher.keepsSessionsOnQuit || ProcessInfo.processInfo.environment["CLAIR_STARTUP_TRACE"] != nil { return .terminateNow }
     let alert = NSAlert()
-    alert.messageText = "Clair を終了しますか？"
-    alert.informativeText = "実行中のターミナルとエージェントも終了します。"
-    alert.addButton(withTitle: "終了")
-    alert.addButton(withTitle: "キャンセル")
+    alert.messageText = tr("Clair を終了しますか？")
+    alert.informativeText = tr("実行中のターミナルとエージェントも終了します。")
+    alert.addButton(withTitle: tr("終了"))
+    alert.addButton(withTitle: tr("キャンセル"))
     return alert.runModal() == .alertFirstButtonReturn ? .terminateNow : .terminateCancel
   }
 

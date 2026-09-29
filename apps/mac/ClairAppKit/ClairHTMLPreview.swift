@@ -1,4 +1,5 @@
 #if os(macOS)
+  import ClairShared
   import AppKit
   import ClairDesignSystem
   import SwiftUI
@@ -16,9 +17,9 @@
       if case .ready(let manager)? = buffers.peek(path) {
         let _ = buffers.edits[path]
         HTMLWebView(html: manager.buffer.snapshot.string(), directory: HTMLPreviewPane.directory(root: root, path: path))
-          .accessibilityLabel("HTML プレビュー")
+          .accessibilityLabel(tr("HTML プレビュー"))
       } else {
-        Text("HTML ファイルを開くとプレビューを表示します。")
+        Text(tr("HTML ファイルを開くとプレビューを表示します。"))
           .font(.system(size: 12)).foregroundStyle(DesignTokens.Color.textTertiary)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
           .background(DesignTokens.Color.canvas)

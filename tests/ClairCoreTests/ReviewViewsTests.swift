@@ -108,7 +108,7 @@
       XCTAssertEqual(at("a\nb\nc").keys.sorted(), [2])
       XCTAssertEqual(at("x\ny\na\nb\nc").keys.sorted(), [4])  // lines inserted above: follows
       XCTAssertEqual(at("a\nB\nc").keys.sorted(), [0])  // line reworded: stale
-      XCTAssertTrue(try XCTUnwrap(s.prompt(root: "/r", path: "f", in: ["a", "B", "c"])).contains("f:2（コメント後に行が変更"))
+      XCTAssertTrue(try XCTUnwrap(s.prompt(root: "/r", path: "f", in: ["a", "B", "c"])).contains("f:2 (the line changed after the comment)"))
     }
 
     func testSuggestionAppliesOnceAndGoesStaleAfterEdit() throws {

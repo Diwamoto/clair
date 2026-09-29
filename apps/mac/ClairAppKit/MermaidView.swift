@@ -1,4 +1,5 @@
 #if os(macOS)
+  import ClairShared
   import AppKit
   import ClairDesignSystem
   import ClairWorkspace
@@ -40,12 +41,12 @@
     private var zoomControls: some View {
       HStack(spacing: 2) {
         Button { setZoom(zoom / 1.25) } label: { Image(systemName: "minus.magnifyingglass") }
-          .help("縮小").accessibilityLabel("縮小").disabled(zoom <= Self.zoomRange.lowerBound)
+          .help(tr("縮小")).accessibilityLabel(tr("縮小")).disabled(zoom <= Self.zoomRange.lowerBound)
         Text("\(Int((scale * 100).rounded()))%").monospacedDigit().frame(minWidth: 36)
         Button { setZoom(zoom * 1.25) } label: { Image(systemName: "plus.magnifyingglass") }
-          .help("拡大").accessibilityLabel("拡大").disabled(zoom >= Self.zoomRange.upperBound)
+          .help(tr("拡大")).accessibilityLabel(tr("拡大")).disabled(zoom >= Self.zoomRange.upperBound)
         Button { zoom = 1; pan = .zero } label: { Image(systemName: "arrow.counterclockwise") }
-          .help("元のサイズに戻す").accessibilityLabel("元のサイズに戻す").disabled(zoom == 1)
+          .help(tr("元のサイズに戻す")).accessibilityLabel(tr("元のサイズに戻す")).disabled(zoom == 1)
       }
       .buttonStyle(.borderless).font(.system(size: 11)).foregroundStyle(C.textSecondary)
       .padding(.horizontal, 6).padding(.vertical, 3)

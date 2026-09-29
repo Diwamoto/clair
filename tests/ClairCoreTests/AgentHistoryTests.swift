@@ -77,7 +77,7 @@ final class AgentHistoryTests: XCTestCase {
     }
     let groups = AgentHistoryGroup.group(
       [item("a", 0, "/w/clair"), item("b", 0.1, "/x/clair"), item("c", 0.05, "/w/ccedit"), item("d", 1, nil), item("e", 5, "/w/clair")])
-    XCTAssertEqual(groups.map(\.project), ["clair", "ccedit", "不明"])
+    XCTAssertEqual(groups.map(\.project), ["clair", "ccedit", "Unknown"])
     XCTAssertEqual(groups[0].histories.map(\.id), ["a", "b", "e"])
     XCTAssertEqual(groups[0].estimatedUSD, 3)
   }

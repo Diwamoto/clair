@@ -1,3 +1,4 @@
+import ClairShared
 import SwiftUI
 import ClairWorkspace
 
@@ -22,9 +23,9 @@ struct AgentUsageView: View {
     let usage = summary?.usage(on: date, calendar: calendar)
     let lines = AgentHistory.Provider.allCases.compactMap { provider -> String? in
       guard let count = usage?.providerPrompts[provider], count > 0 else { return nil }
-      return "\(provider.rawValue): \(count) 件"
+      return tr("%@: %@ 件", provider.rawValue, count)
     }
-    return (["\(date.formatted(date: .complete, time: .omitted))", "依頼・追記: \(usage?.prompts ?? 0) 件"] + lines)
+    return (["\(date.formatted(date: .complete, time: .omitted))", tr("依頼・追記: %@ 件", usage?.prompts ?? 0)] + lines)
       .joined(separator: "\n")
   }
 
@@ -64,9 +65,9 @@ struct AgentUsageView: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 20) {
       HStack {
-        Text("依頼・追記").font(.system(size: 19, weight: .semibold))
+        Text(tr("依頼・追記")).font(.system(size: 19, weight: .semibold))
         Spacer()
-        Button("再集計") {
+        Button(tr("再集計")) {
           Task {
             summary = AgentUsageSummary(histories: await AgentHistoryStore.shared.refresh())
             Self.cachedSummary = summary
@@ -74,15 +75,15 @@ struct AgentUsageView: View {
         }.font(.system(size: 13))
       }
       HStack(spacing: 10) {
-        metric("今日", value: recentPrompts(1).map(String.init) ?? "—", unit: "件")
-        metric("直近7日", value: recentPrompts(7).map(String.init) ?? "—", unit: "件")
-        metric("直近100日", value: recentPrompts(100).map(String.init) ?? "—", unit: "件")
+        metric(tr("今日"), value: recentPrompts(1).map(String.init) ?? "—", unit: tr("件"))
+        metric(tr("直近7日"), value: recentPrompts(7).map(String.init) ?? "—", unit: tr("件"))
+        metric(tr("直近100日"), value: recentPrompts(100).map(String.init) ?? "—", unit: tr("件"))
       }
-      metric("費用の推定・全期間", value: summary.map { String(format: "$%.2f", $0.estimatedUSD) } ?? "—", unit: "USD")
+      metric(tr("費用の推定・全期間"), value: summary.map { String(format: "$%.2f", $0.estimatedUSD) } ?? "—", unit: "USD")
 
       VStack(alignment: .leading, spacing: 10) {
-        Text("日別アクティビティ").font(.system(size: 17, weight: .semibold))
-        Text("直近100日 · 1マス = 1日 · 右端が最新")
+        Text(tr("日別アクティビティ")).font(.system(size: 17, weight: .semibold))
+        Text(tr("直近100日 · 1マス = 1日 · 右端が最新"))
           .font(.system(size: 13)).foregroundStyle(.secondary)
         HStack(alignment: .top, spacing: 3) {
           ForEach(weeks.indices, id: \.self) { index in
@@ -137,9 +138,9 @@ struct AgentUsageView: View {
       if let summary {
         VStack(alignment: .leading, spacing: 8) {
           HStack {
-            Text("エージェント別").font(.system(size: 17, weight: .semibold))
+            Text(tr("エージェント別")).font(.system(size: 17, weight: .semibold))
             Spacer()
-            Text("依頼・追記 / 推定費用").font(.system(size: 12)).foregroundStyle(.secondary)
+            Text(tr("依頼・追記 / 推定費用")).font(.system(size: 12)).foregroundStyle(.secondary)
           }
           ForEach(summary.providers) { item in
             HStack {

@@ -1,3 +1,4 @@
+import ClairShared
 import Foundation
 
 // V01: ADR-0007 typed Command Registry. Every Mac workbench operation is a
@@ -43,7 +44,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
     "lineNumbers": "行番号を表示", "terminalCursorBlink": "ターミナルのカーソルを点滅", "editorFontSize": "エディタの文字サイズ",
     "terminalFontSize": "ターミナルの文字サイズ", "terminalCursorStyle": "ターミナルのカーソルの形",
     "notifyEnabled": "通知を有効にする", "notifyOnBell": "入力待ち・通知要求で通知", "notifyOnExit": "終了で通知",
-    "notifyWhenActive": "Clair が前面のときも通知", "notifySound": "通知のサウンド",
+    "notifyWhenActive": "Clair が前面のときも通知", "notifySound": "通知のサウンド", "language": "言語",
   ]
   // agent registry: `defaultAgent` reads its choices from the `AgentProfile` registry instead of
   // a literal list, so switching to a newly registered agent needs no change here.
@@ -57,6 +58,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
     "editorFontSize": ["11", "12", "13", "14", "16", "18"],
     "terminalFontSize": ["11", "12", "13", "14", "16", "18"],
     "terminalCursorStyle": ["ブロック", "バー", "下線"],
+    "language": ClairLanguage.allCases.map(\.rawValue),  // English is the default
   ]
   /// Font family per surface (`editor`, `terminal`); "" is the system monospaced font.
   public static let fontKeys = ["editor", "terminal"]
@@ -175,7 +177,7 @@ extension WorkbenchState {
 public enum CommandRisk: Int, Sendable, Codable, Comparable {
   case read, additive, write, destructive, external
   public static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
-  public var label: String { ["読み取り", "追加", "書き込み", "破壊的", "外部"][rawValue] }
+  public var label: String { [tr("読み取り"), tr("追加"), tr("書き込み"), tr("破壊的"), tr("外部")][rawValue] }
 }
 
 public enum CommandArg: Sendable, Codable, Equatable {
@@ -323,9 +325,9 @@ public struct CommandRegistry: Sendable {
     switch kind {
     case .commands:
       return commands.filter { $0.inPalette && (state.isRepo || !($0.id.hasPrefix("git.") || $0.id.hasPrefix("worktree."))) }
-        .map { PaletteItem(title: $0.englishName, hint: state.shortcut(for: $0) ?? "", id: $0.id, input: [:], detail: $0.title) }
+        .map { PaletteItem(title: $0.englishName, hint: state.shortcut(for: $0) ?? "", id: $0.id, input: [:], detail: tr($0.title)) }
         .filter { $0.matches(q) }
-        + AgentProfile.all.map { PaletteItem(title: "\($0.title) を起動", hint: "", id: "agent.launch", input: ["profile": .string($0.id)]) }
+        + AgentProfile.all.map { PaletteItem(title: tr("%@ を起動", $0.title), hint: "", id: "agent.launch", input: ["profile": .string($0.id)]) }
           .filter { $0.matches(q) }
         + settingItems(state).filter { $0.matches(q) }
     case .files:
@@ -358,14 +360,14 @@ public struct CommandRegistry: Sendable {
     let t = WorkbenchState.settingTitles
     return WorkbenchState.toggleKeys.map { k in
       let on = state.toggles[k] == true
-      return PaletteItem(title: "設定: \(t[k] ?? k)を\(on ? "オフ" : "オン")にする", hint: "", id: "settings.set", input: ["key": .string(k), "value": .bool(!on)])
+      return PaletteItem(title: tr("設定: %@を%@にする", tr(t[k] ?? k), on ? tr("オフ") : tr("オン")), hint: "", id: "settings.set", input: ["key": .string(k), "value": .bool(!on)])
     }
       + WorkbenchState.choiceOptions.keys.sorted().flatMap { k in
         WorkbenchState.choiceOptions[k]!.filter { $0 != state.choices[k] }.map {
-          PaletteItem(title: "設定: \(t[k] ?? k)を \($0) にする", hint: "", id: "settings.choose", input: ["key": .string(k), "value": .string($0)])
+          PaletteItem(title: tr("設定: %@を %@ にする", tr(t[k] ?? k), tr($0)), hint: "", id: "settings.choose", input: ["key": .string(k), "value": .string($0)])
         }
       }
-      + WorkbenchState.sections.map { PaletteItem(title: "設定を開く: \($0)", hint: "", id: "settings.open", input: ["section": .string($0)]) }
+      + WorkbenchState.sections.map { PaletteItem(title: tr("設定を開く: %@", tr($0)), hint: "", id: "settings.open", input: ["section": .string($0)]) }
   }
 
   private static func validate(_ input: CommandInput, _ params: [CommandParam]) throws(CommandError) {
@@ -685,9 +687,9 @@ extension CommandRegistry {
         preflight: { s, i throws(CommandError) in
           let name = i["name"]!.string!
           try require(s.projects.contains { $0.name == name }, "no project \(name)")
-          try require(s.projects.count > 1, "最後の Project は閉じられません")
+          try require(s.projects.count > 1, tr("最後の Project は閉じられません"))
           let dirty = name == s.project ? s.dirty : s.layouts[name]?.dirty ?? []
-          try require(dirty.isEmpty, "\(name) に未保存の変更があります")
+          try require(dirty.isEmpty, tr("%@ に未保存の変更があります", name))
           return .write
         }) { s, i in
       let name = i["name"]!.string!
@@ -728,7 +730,7 @@ extension CommandRegistry {
           guard let path = WorkbenchProject.normalized(i["path"]!.string!) else { throw CommandError(.preconditionFailed, "not a directory \(i["path"]!)") }
           // Nested either way would list the same files twice.
           for other in [p.path] + (p.folders ?? []) {
-            try require(path != other && !path.hasPrefix(other + "/") && !other.hasPrefix(path + "/"), "\(path) は既にこの Project に含まれています")
+            try require(path != other && !path.hasPrefix(other + "/") && !other.hasPrefix(path + "/"), tr("%@ は既にこの Project に含まれています", path))
           }
           return .additive
         }) { s, i in
@@ -744,7 +746,7 @@ extension CommandRegistry {
           try require(p?.folders?.contains(i["path"]!.string!) == true, "not an added folder \(i["path"]!)")
           let prefix = WorkbenchFiles.relative(i["path"]!.string!, from: p!.path) + "/"
           let dirty = p!.name == s.project ? s.dirty : s.layouts[p!.name]?.dirty ?? []
-          try require(!dirty.contains { $0.hasPrefix(prefix) }, "未保存の変更があります")
+          try require(!dirty.contains { $0.hasPrefix(prefix) }, tr("未保存の変更があります"))
           return .write
         }) { s, i in
       let idx = s.projects.firstIndex { $0.name == i["name"]!.string! }!
@@ -798,7 +800,7 @@ extension CommandRegistry {
         preflight: { _, i throws(CommandError) in
           let path = i["path"]!.string!
           guard let file = WorkbenchProject.normalizedFile(path) else { throw CommandError(.preconditionFailed, "not a file \(path)") }
-          try require(file.lowercased().hasSuffix(".html") || file.lowercased().hasSuffix(".htm"), "HTML ファイルを指定してください")
+          try require(file.lowercased().hasSuffix(".html") || file.lowercased().hasSuffix(".htm"), tr("HTML ファイルを指定してください"))
           return .additive
         }) { s, i in
       let path = WorkbenchProject.normalizedFile(i["path"]!.string!)!
@@ -825,12 +827,12 @@ extension CommandRegistry {
         }) { s, _ in .editorContext(s.editorContext!) },
     // E17: the GUI reveals `navigation.current` after these succeed (the caret belongs to the editor).
     cmd("editor.navigateBack", "前の位置に戻る", .read, ai: false, shortcut: "⌃-",
-        preflight: { s, _ throws(CommandError) in try require(s.navigation.canGoBack, "戻る位置がありません"); return .read }) { s, _ in
+        preflight: { s, _ throws(CommandError) in try require(s.navigation.canGoBack, tr("戻る位置がありません")); return .read }) { s, _ in
       if let to = s.navigation.back(), let file = WorkbenchProject.normalizedFile(to.path) { s.openFile(file) }
       return .ok
     },
     cmd("editor.navigateForward", "次の位置に進む", .read, ai: false, shortcut: "⌃⇧-",
-        preflight: { s, _ throws(CommandError) in try require(s.navigation.canGoForward, "進む位置がありません"); return .read }) { s, _ in
+        preflight: { s, _ throws(CommandError) in try require(s.navigation.canGoForward, tr("進む位置がありません")); return .read }) { s, _ in
       if let to = s.navigation.forward(), let file = WorkbenchProject.normalizedFile(to.path) { s.openFile(file) }
       return .ok
     },
@@ -859,7 +861,7 @@ extension CommandRegistry {
         params: [CommandParam("key", .string, allowed: WorkbenchState.choiceOptions.keys.sorted()), CommandParam("value", .string)],
         preflight: { _, i throws(CommandError) in
           let key = i["key"]?.string ?? "", v = i["value"]?.string ?? ""
-          try require(WorkbenchState.choiceOptions[key]?.contains(v) == true, "\(key) に \(v) は選べません")
+          try require(WorkbenchState.choiceOptions[key]?.contains(v) == true, tr("%@ に %@ は選べません", key, v))
           return .write
         }) { s, i in
       s.choices[i["key"]!.string!] = i["value"]!.string!; return .ok
@@ -867,7 +869,7 @@ extension CommandRegistry {
     cmd("settings.font", "フォントを変更", .write, ai: false,
         params: [CommandParam("key", .string, allowed: WorkbenchState.fontKeys), CommandParam("value", .string)],
         preflight: { _, i throws(CommandError) in
-          try require(WorkbenchState.isValidFontFamily(i["value"]?.string ?? ""), "フォント名が不正です")
+          try require(WorkbenchState.isValidFontFamily(i["value"]?.string ?? ""), tr("フォント名が不正です"))
           return .write
         }) { s, i in
       s.fonts[i["key"]!.string!] = i["value"]!.string!; return .ok
@@ -902,20 +904,20 @@ extension CommandRegistry {
       s.toggles["softWrap"] = !(s.toggles["softWrap"] ?? false); return .ok
     },
     cmd("editor.fold", "折りたたむ", .read, ai: false, shortcut: "⌥⌘[",
-        preflight: { s, _ throws(CommandError) in try require(s.active != nil, "ファイルが開かれていません"); return .read }) { _, _ in .ok },
+        preflight: { s, _ throws(CommandError) in try require(s.active != nil, tr("ファイルが開かれていません")); return .read }) { _, _ in .ok },
     cmd("editor.unfold", "展開する", .read, ai: false, shortcut: "⌥⌘]",
-        preflight: { s, _ throws(CommandError) in try require(s.active != nil, "ファイルが開かれていません"); return .read }) { _, _ in .ok },
+        preflight: { s, _ throws(CommandError) in try require(s.active != nil, tr("ファイルが開かれていません")); return .read }) { _, _ in .ok },
     cmd("editor.foldAll", "すべて折りたたむ", .read, ai: false, shortcut: "⌃⌥[",
-        preflight: { s, _ throws(CommandError) in try require(s.active != nil, "ファイルが開かれていません"); return .read }) { _, _ in .ok },
+        preflight: { s, _ throws(CommandError) in try require(s.active != nil, tr("ファイルが開かれていません")); return .read }) { _, _ in .ok },
     cmd("editor.unfoldAll", "すべて展開する", .read, ai: false, shortcut: "⌃⌥]",
-        preflight: { s, _ throws(CommandError) in try require(s.active != nil, "ファイルが開かれていません"); return .read }) { _, _ in .ok },
+        preflight: { s, _ throws(CommandError) in try require(s.active != nil, tr("ファイルが開かれていません")); return .read }) { _, _ in .ok },
     cmd("editor.definition", "定義へ移動", .read, ai: false, shortcut: "⌃⌘J",
-        preflight: { s, _ throws(CommandError) in try require(s.active != nil, "ファイルが開かれていません"); return .read }) { _, _ in .ok },
+        preflight: { s, _ throws(CommandError) in try require(s.active != nil, tr("ファイルが開かれていません")); return .read }) { _, _ in .ok },
     // E15: each preview pane is bound to the file it was opened for (Markdown rendered, CSV/TSV as an editable
     // table) and keeps showing it when the editor switches files; asking again for the same file just focuses it.
     cmd("editor.markdownPreview", "プレビュー / 表で開く", .additive, ai: false, shortcut: "⌘⇧V",
         preflight: { s, _ throws(CommandError) in
-          try require(s.active.map { MarkdownPreview.isMarkdown($0) || TableFile.separator($0) != nil || $0.lowercased().hasSuffix(".html") || $0.lowercased().hasSuffix(".htm") } == true, "Markdown / CSV / HTML ファイルが開かれていません"); return .additive
+          try require(s.active.map { MarkdownPreview.isMarkdown($0) || TableFile.separator($0) != nil || $0.lowercased().hasSuffix(".html") || $0.lowercased().hasSuffix(".htm") } == true, tr("Markdown / CSV / HTML ファイルが開かれていません")); return .additive
         }) { s, _ in
       guard let path = s.active else { return .ok }
       s.panesClosed = false
@@ -929,12 +931,12 @@ extension CommandRegistry {
       return .pane(id)
     },
     cmd("editor.references", "参照を検索", .read, ai: false, shortcut: "⌃⌘R",
-        preflight: { s, _ throws(CommandError) in try require(s.active != nil, "ファイルが開かれていません"); return .read }) { _, _ in .ok },
+        preflight: { s, _ throws(CommandError) in try require(s.active != nil, tr("ファイルが開かれていません")); return .read }) { _, _ in .ok },
     // No LSP-backed `format` yet (spec §14 roadmap item), so this only covers formats with no server
     // dependency (JSON via `DocumentFormatter`). The GUI performs the actual buffer edit, like editor.fold.
     cmd("editor.format", "ドキュメントを整形", .write, ai: false, shortcut: "⌃⌥F",
         preflight: { s, _ throws(CommandError) in
-          try require(s.active.map(DocumentFormatter.supports) == true, "対応していないファイル形式です"); return .write
+          try require(s.active.map(DocumentFormatter.supports) == true, tr("対応していないファイル形式です")); return .write
         }) { _, _ in .ok },
     // V08. Reading history is `state.snapshot`; mute changes what the user is told, so ai: false.
     cmd("notice.markRead", "通知を既読にする", .write, params: [CommandParam("project", .string, required: false)]) { s, i in
@@ -967,53 +969,53 @@ extension CommandRegistry {
     cmd("debug.launch", "Go をデバッグ起動", .external, ai: false,
         params: [CommandParam("program", .string), CommandParam("mode", .string, required: false, allowed: ["debug", "test", "exec"])], palette: false,
         preflight: { s, i throws(CommandError) in
-          guard let root = s.projects.first(where: { $0.name == s.project })?.path else { throw CommandError(.preconditionFailed, "Project が開かれていません") }
+          guard let root = s.projects.first(where: { $0.name == s.project })?.path else { throw CommandError(.preconditionFailed, tr("Project が開かれていません")) }
           let path = URL(fileURLWithPath: i["program"]!.string!, relativeTo: URL(fileURLWithPath: root)).standardizedFileURL.resolvingSymlinksInPath().path
-          try require(path == root || path.hasPrefix(root + "/"), "起動対象は Project 内にしてください")
-          try require(FileManager.default.fileExists(atPath: path), "起動対象がありません: \(path)")
-          try require(["idle", "ended", "failed"].contains(s.debugPhase), "デバッグセッションが既に実行中です")
+          try require(path == root || path.hasPrefix(root + "/"), tr("起動対象は Project 内にしてください"))
+          try require(FileManager.default.fileExists(atPath: path), tr("起動対象がありません: %@", path))
+          try require(["idle", "ended", "failed"].contains(s.debugPhase), tr("デバッグセッションが既に実行中です"))
           return .external
         }) { _, _ in .ok },
     cmd("debug.attach", "Go プロセスに接続", .external, ai: false, params: [CommandParam("pid", .int)], palette: false,
         preflight: { s, i throws(CommandError) in
-          try require(s.projects.contains { $0.name == s.project }, "Project が開かれていません")
-          try require(i["pid"]!.int! > 0, "PID は正の整数にしてください")
-          try require(["idle", "ended", "failed"].contains(s.debugPhase), "デバッグセッションが既に実行中です")
+          try require(s.projects.contains { $0.name == s.project }, tr("Project が開かれていません"))
+          try require(i["pid"]!.int! > 0, tr("PID は正の整数にしてください"))
+          try require(["idle", "ended", "failed"].contains(s.debugPhase), tr("デバッグセッションが既に実行中です"))
           return .external
         }) { _, _ in .ok },
     cmd("debug.breakpoint", "ブレークポイントを切り替え", .write, ai: false,
         params: [CommandParam("path", .string), CommandParam("line", .int)], palette: false,
         preflight: { s, i throws(CommandError) in
-          guard let root = s.projects.first(where: { $0.name == s.project })?.path else { throw CommandError(.preconditionFailed, "Project が開かれていません") }
+          guard let root = s.projects.first(where: { $0.name == s.project })?.path else { throw CommandError(.preconditionFailed, tr("Project が開かれていません")) }
           let path = URL(fileURLWithPath: i["path"]!.string!).standardizedFileURL.resolvingSymlinksInPath().path
-          try require(path.hasPrefix(root + "/"), "ファイルが Project 外です")
-          try require(FileManager.default.fileExists(atPath: path), "ファイルがありません: \(path)")
-          try require(i["line"]!.int! > 0, "行は 1 以上にしてください")
+          try require(path.hasPrefix(root + "/"), tr("ファイルが Project 外です"))
+          try require(FileManager.default.fileExists(atPath: path), tr("ファイルがありません: %@", path))
+          try require(i["line"]!.int! > 0, tr("行は 1 以上にしてください"))
           return .write
         }) { _, _ in .ok },
     cmd("debug.selectThread", "デバッグスレッドを選択", .read, ai: false,
         params: [CommandParam("id", .int)], palette: false,
-        preflight: { s, _ throws(CommandError) in try require(s.debugPhase == "stopped", "停止中の session がありません"); return .read }) { _, _ in .ok },
+        preflight: { s, _ throws(CommandError) in try require(s.debugPhase == "stopped", tr("停止中の session がありません")); return .read }) { _, _ in .ok },
     cmd("debug.selectFrame", "スタックフレームを選択", .read, ai: false,
         params: [CommandParam("id", .int)], palette: false,
-        preflight: { s, _ throws(CommandError) in try require(s.debugPhase == "stopped", "停止中の session がありません"); return .read }) { _, _ in .ok },
+        preflight: { s, _ throws(CommandError) in try require(s.debugPhase == "stopped", tr("停止中の session がありません")); return .read }) { _, _ in .ok },
     cmd("debug.expandVariable", "変数を展開", .read, ai: false,
         params: [CommandParam("id", .string)], palette: false,
-        preflight: { s, _ throws(CommandError) in try require(s.debugPhase == "stopped", "停止中の session がありません"); return .read }) { _, _ in .ok },
+        preflight: { s, _ throws(CommandError) in try require(s.debugPhase == "stopped", tr("停止中の session がありません")); return .read }) { _, _ in .ok },
     cmd("debug.continue", "デバッグを続行", .write, ai: false,
-        preflight: { s, _ throws(CommandError) in try require(s.debugPhase == "stopped", "停止中の session がありません"); return .write }) { _, _ in .ok },
+        preflight: { s, _ throws(CommandError) in try require(s.debugPhase == "stopped", tr("停止中の session がありません")); return .write }) { _, _ in .ok },
     cmd("debug.pause", "デバッグを一時停止", .write, ai: false,
-        preflight: { s, _ throws(CommandError) in try require(s.debugPhase == "running", "実行中の session がありません"); return .write }) { _, _ in .ok },
+        preflight: { s, _ throws(CommandError) in try require(s.debugPhase == "running", tr("実行中の session がありません")); return .write }) { _, _ in .ok },
     cmd("debug.stepOver", "ステップオーバー", .write, ai: false,
-        preflight: { s, _ throws(CommandError) in try require(s.debugPhase == "stopped", "停止中の session がありません"); return .write }) { _, _ in .ok },
+        preflight: { s, _ throws(CommandError) in try require(s.debugPhase == "stopped", tr("停止中の session がありません")); return .write }) { _, _ in .ok },
     cmd("debug.stepInto", "ステップイン", .write, ai: false,
-        preflight: { s, _ throws(CommandError) in try require(s.debugPhase == "stopped", "停止中の session がありません"); return .write }) { _, _ in .ok },
+        preflight: { s, _ throws(CommandError) in try require(s.debugPhase == "stopped", tr("停止中の session がありません")); return .write }) { _, _ in .ok },
     cmd("debug.stepOut", "ステップアウト", .write, ai: false,
-        preflight: { s, _ throws(CommandError) in try require(s.debugPhase == "stopped", "停止中の session がありません"); return .write }) { _, _ in .ok },
+        preflight: { s, _ throws(CommandError) in try require(s.debugPhase == "stopped", tr("停止中の session がありません")); return .write }) { _, _ in .ok },
     cmd("debug.restart", "デバッグを再起動", .external, ai: false,
-        preflight: { s, _ throws(CommandError) in try require(!["idle", "ended"].contains(s.debugPhase), "再起動する session がありません"); return .external }) { _, _ in .ok },
+        preflight: { s, _ throws(CommandError) in try require(!["idle", "ended"].contains(s.debugPhase), tr("再起動する session がありません")); return .external }) { _, _ in .ok },
     cmd("debug.stop", "デバッグを終了", .write, ai: false,
-        preflight: { s, _ throws(CommandError) in try require(!["idle", "ended"].contains(s.debugPhase), "終了する session がありません"); return .write }) { _, _ in .ok },
+        preflight: { s, _ throws(CommandError) in try require(!["idle", "ended"].contains(s.debugPhase), tr("終了する session がありません")); return .write }) { _, _ in .ok },
     cmd("state.snapshot", "状態を取得", .read, palette: false) { s, _ in .snapshot(s) },
   ] + gitCommands
 

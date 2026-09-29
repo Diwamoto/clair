@@ -1,3 +1,4 @@
+import ClairShared
 import Foundation
 import SQLite3
 
@@ -49,7 +50,7 @@ public struct AgentHistoryGroup: Sendable, Identifiable {
   public var estimatedUSD: Double { histories.compactMap(\.estimatedUSD).reduce(0, +) }
 
   public static func group(_ histories: [AgentHistory]) -> [AgentHistoryGroup] {
-    Dictionary(grouping: histories.sorted { $0.date > $1.date }) { $0.project.map { URL(filePath: $0).lastPathComponent } ?? "不明" }
+    Dictionary(grouping: histories.sorted { $0.date > $1.date }) { $0.project.map { URL(filePath: $0).lastPathComponent } ?? tr("不明") }
       .map { AgentHistoryGroup(project: $0.key, histories: $0.value) }
       .sorted { $0.date > $1.date }
   }
@@ -223,7 +224,7 @@ public enum AgentHistoryReader {
         cost = claudeMessageCosts.values.reduce(0, +)
       }
       let title = messages.first { $0.role == "user" && !$0.text.hasPrefix("[Skill loaded") }?.text
-        .split(whereSeparator: \.isWhitespace).joined(separator: " ") ?? "チャット"
+        .split(whereSeparator: \.isWhitespace).joined(separator: " ") ?? tr("チャット")
       return AgentHistory(id: "\(provider.rawValue):\(sessionID)", provider: provider,
                           title: String(title.prefix(100)), date: messages.last?.date ?? .distantPast,
                           messages: messages, estimatedUSD: cost, project: cwd, source: full ? nil : file)
@@ -344,7 +345,7 @@ public enum AgentHistoryReader {
       let id = String(cString: sid)
       let text = String(cString: body)
       guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
-      let title = sqlite3_column_text(statement, 1).map { String(cString: $0) } ?? "チャット"
+      let title = sqlite3_column_text(statement, 1).map { String(cString: $0) } ?? tr("チャット")
       let updated = Date(timeIntervalSince1970: Double(sqlite3_column_int64(statement, 2)) / 1000)
       let cost = sqlite3_column_double(statement, 3)
       let created = Date(timeIntervalSince1970: Double(sqlite3_column_int64(statement, 5)) / 1000)

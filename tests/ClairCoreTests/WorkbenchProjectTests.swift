@@ -290,7 +290,7 @@ final class WorkbenchProjectTests: XCTestCase {
     XCTAssertEqual(set("file.save", "", &s).success, .ok)  // unassign a default
     XCTAssertNil(s.shortcut(for: r.commands.first { $0.id == "file.save" }!))
     XCTAssertFalse(r.commands.first { $0.id == "shortcut.set" }!.aiAvailable)
-    let hint = r.paletteItems(.commands, query: "ペインを閉じる", state: s).first?.hint
+    let hint = r.paletteItems(.commands, query: "close pane", state: s).first?.hint
     XCTAssertEqual(hint, "⌘⇧X")
 
     let a = try folder("a", ["f"])

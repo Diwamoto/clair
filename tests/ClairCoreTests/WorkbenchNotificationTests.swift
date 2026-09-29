@@ -8,7 +8,7 @@ final class WorkbenchNotificationTests: XCTestCase {
     XCTAssertNotNil(log.record(project: "a", pane: 2, kind: .bell))
     XCTAssertNotNil(log.record(project: "b", pane: 3, kind: .exited, exitCode: 1))
     XCTAssertEqual(log.unread("a"), 1); XCTAssertEqual(log.unread(), 2)
-    XCTAssertEqual(log.items.first?.title, "異常終了 (exit 1)")
+    XCTAssertEqual(log.items.first?.title, "Failed (exit 1)")
     log.mutedPanes.insert(NotificationLog.paneKey("a", 2))
     XCTAssertNil(log.record(project: "a", pane: 2, kind: .bell))  // muted pane: no alert…
     XCTAssertEqual(log.unread("a"), 1)  // …no badge…

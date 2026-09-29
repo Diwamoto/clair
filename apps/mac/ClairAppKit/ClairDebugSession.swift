@@ -1,4 +1,5 @@
 #if os(macOS)
+import ClairShared
 import ClairWorkspace
 import Foundation
 import Observation
@@ -59,14 +60,14 @@ import Observation
     do {
       switch configuration {
       case .launch(let raw, let mode):
-        guard ["debug", "test", "exec"].contains(mode) else { throw ClairDAPClient.Failure.rejected("未対応の起動モードです") }
+        guard ["debug", "test", "exec"].contains(mode) else { throw ClairDAPClient.Failure.rejected(tr("未対応の起動モードです")) }
         let file = URL(fileURLWithPath: raw, relativeTo: URL(fileURLWithPath: project.path)).standardizedFileURL.resolvingSymlinksInPath()
         guard file.path == project.path || file.path.hasPrefix(project.path + "/"), FileManager.default.fileExists(atPath: file.path) else {
-          throw ClairDAPClient.Failure.rejected("起動対象は Project 内の既存ファイルまたはフォルダを選んでください")
+          throw ClairDAPClient.Failure.rejected(tr("起動対象は Project 内の既存ファイルまたはフォルダを選んでください"))
         }
         startConfiguration = .launch(program: file.path, mode: mode)
       case .attach(let pid):
-        guard pid > 0 else { throw ClairDAPClient.Failure.rejected("PID は正の整数にしてください") }
+        guard pid > 0 else { throw ClairDAPClient.Failure.rejected(tr("PID は正の整数にしてください")) }
         startConfiguration = configuration
       }
       phase = .starting
@@ -110,7 +111,7 @@ import Observation
       let current = generation
       Task {
         do { try await sendBreakpoints(path, client: client, generation: current) }
-        catch { if current == generation { appendConsole("ブレークポイントを設定できません: \(error.localizedDescription)") } }
+        catch { if current == generation { appendConsole(tr("ブレークポイントを設定できません: %@", error.localizedDescription)) } }
       }
     }
   }
@@ -127,7 +128,7 @@ import Observation
         line: result["line"] as? Int ?? requested, message: result["message"] as? String))
     })
     for requested in lines where breakpointStatus[path]?[requested]?.verified == false {
-      appendConsole("ブレークポイント \(URL(fileURLWithPath: path).lastPathComponent):\(requested): \(breakpointStatus[path]?[requested]?.message ?? "検証されませんでした")")
+      appendConsole(tr("ブレークポイント %@:%@: %@", URL(fileURLWithPath: path).lastPathComponent, requested, breakpointStatus[path]?[requested]?.message ?? tr("検証されませんでした")))
     }
   }
 
@@ -161,7 +162,7 @@ import Observation
       default: return
       }
     } catch {
-      if current == generation { appendConsole("デバッグ操作 \(command) に失敗: \(error.localizedDescription)") }
+      if current == generation { appendConsole(tr("デバッグ操作 %@ に失敗: %@", command, error.localizedDescription)) }
     }
   }
 
@@ -179,7 +180,7 @@ import Observation
     client = nil
     phase = .ended; threads = []; frames = []; variables = []; selectedThread = nil; selectedFrame = nil
     expandingVariables = [:]
-    appendConsole("デバッグセッションを終了しました")
+    appendConsole(tr("デバッグセッションを終了しました"))
     // Attaching to an existing process never grants Clair permission to kill it.
     let terminate: Bool = { if case .launch? = startConfiguration { return true }; return false }()
     return (adapter, terminate)
@@ -253,7 +254,7 @@ import Observation
       stoppedReason = body["reason"] as? String
       stopGeneration += 1
       if stoppedReason == "exception" {
-        let detail = body["description"] as? String ?? body["text"] as? String ?? "例外で停止しました"
+        let detail = body["description"] as? String ?? body["text"] as? String ?? tr("例外で停止しました")
         appendConsole(detail)
         stoppedReason = detail
       }
@@ -274,7 +275,7 @@ import Observation
           adapterID: changed["id"] as? Int, verified: changed["verified"] as? Bool ?? false,
           line: actual, message: changed["message"] as? String)
       }
-    case "exited": appendConsole("終了コード: \(body["exitCode"] ?? "不明")")
+    case "exited": appendConsole(tr("終了コード: %@", body["exitCode"] ?? tr("不明")))
     case "terminated":
       let (adapter, terminate) = endSession()
       if let adapter { Task { await disconnect(adapter, terminate: terminate) } }
@@ -333,7 +334,7 @@ import Observation
 
   private func inspectionError(_ error: Error, generation current: Int, selection: Int) {
     guard current == generation, selection == selectionGeneration, phase == .stopped else { return }
-    appendConsole("デバッグ情報を取得できません: \(error.localizedDescription)")
+    appendConsole(tr("デバッグ情報を取得できません: %@", error.localizedDescription))
   }
 
   private static func parseVariables(_ response: Data, parent: String, reference: Int, depth: Int) -> [Variable] {

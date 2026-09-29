@@ -14,7 +14,7 @@ import ClairWorkspace
     _ = try commands.execute("project.open", ["path": .string(root.path)], state: &state).get()
     let launch: CommandInput = ["program": .string(file.path)]
     #expect(commands.preflight("debug.launch", launch, state) == .success(.external))
-    #expect(commands.execute("debug.launch", launch, state: &state) == .failure(CommandError(.confirmationRequired, "debug.launch is 外部")))
+    #expect(commands.execute("debug.launch", launch, state: &state) == .failure(CommandError(.confirmationRequired, "debug.launch is external")))
     #expect(commands.execute("debug.launch", launch, confirmed: true, state: &state) == .success(.ok))
     guard case .failure(let stoppedError) = commands.preflight("debug.continue", [:], state) else { Issue.record("continued without a session"); return }
     #expect(stoppedError.code == .preconditionFailed)
@@ -24,7 +24,7 @@ import ClairWorkspace
     let outside: CommandInput = ["program": .string("/etc/hosts")]
     guard case .failure(let error) = commands.preflight("debug.launch", outside, state) else { Issue.record("outside path accepted"); return }
     #expect(error.code == .preconditionFailed)
-    #expect(commands.execute("debug.breakpoint", ["path": .string(file.path), "line": .int(0)], state: &state) == .failure(CommandError(.preconditionFailed, "行は 1 以上にしてください")))
+    #expect(commands.execute("debug.breakpoint", ["path": .string(file.path), "line": .int(0)], state: &state) == .failure(CommandError(.preconditionFailed, "Line must be 1 or greater")))
   }
 
   @Test func navigationCommandChangesGeneration() throws {

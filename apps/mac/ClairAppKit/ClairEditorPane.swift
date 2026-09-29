@@ -1,4 +1,5 @@
 #if os(macOS)
+  import ClairShared
   import AppKit
   import ClairDesignSystem
   import ClairEditorCore
@@ -373,10 +374,10 @@
     }
 
     nonisolated private static func read(_ full: String) -> Load {
-      guard let data = FileManager.default.contents(atPath: full) else { return .failed("ファイルを読み込めません。") }
-      guard data.count <= maxBytes else { return .failed("\(maxBytes >> 20) MiB を超えるファイルは開けません。") }
+      guard let data = FileManager.default.contents(atPath: full) else { return .failed(tr("ファイルを読み込めません。")) }
+      guard data.count <= maxBytes else { return .failed(tr("%@ MiB を超えるファイルは開けません。", maxBytes >> 20)) }
       guard let text = String(data: data, encoding: .utf8), let buffer = try? TextBuffer(text) else {
-        return .failed("UTF-8 のテキストではないため開けません。")
+        return .failed(tr("UTF-8 のテキストではないため開けません。"))
       }
       return .ready(EditorTransactionManager(buffer: buffer, selection: TextSelectionSet(cursor: UTF8Offset(0))))
     }
@@ -438,7 +439,7 @@
                 ProgressView().controlSize(.small).padding(8)
               } else if focused, let onPreview, MarkdownPreview.isMarkdown(path) || TableFile.separator(path) != nil || path.lowercased().hasSuffix(".html") || path.lowercased().hasSuffix(".htm") {
                 Button(action: onPreview) { Image(systemName: "eye") }
-                  .buttonStyle(.borderless).help("プレビューを開く (⌘⇧V)").accessibilityLabel("プレビューを開く")
+                  .buttonStyle(.borderless).help(tr("プレビューを開く (⌘⇧V)")).accessibilityLabel(tr("プレビューを開く"))
                   .padding(8)
               }
             }
@@ -446,7 +447,7 @@
         case .failed(let message)?: note(message)
         }
       } else if home.isEmpty {
-        note("ファイルを選択してください。")
+        note(tr("ファイルを選択してください。"))
       } else {
         HomeView(shortcuts: home)
       }
@@ -484,12 +485,12 @@
         if let onPreview, TableFile.separator(path) != nil {
           Button(action: onPreview) { Image(systemName: "tablecells").font(.system(size: 11)) }
             .buttonStyle(.borderless).foregroundStyle(C.textSecondary)
-            .help("表で編集 (⌘⇧V)").accessibilityLabel("表エディタを開く")
+            .help(tr("表で編集 (⌘⇧V)")).accessibilityLabel(tr("表エディタを開く"))
         }
         if let onClose {
           Button(action: onClose) { Image(systemName: "xmark").font(.system(size: 10)) }
             .buttonStyle(.borderless).foregroundStyle(C.textSecondary)
-            .help("分割を閉じる (⌘W)").accessibilityLabel("分割を閉じる")
+            .help(tr("分割を閉じる (⌘W)")).accessibilityLabel(tr("分割を閉じる"))
         }
       }.padding(.horizontal, 12).frame(height: 24).background(C.canvas)
     }

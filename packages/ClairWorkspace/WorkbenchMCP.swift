@@ -1,3 +1,4 @@
+import ClairShared
 import Foundation
 
 // V03: `clair mcp serve` — stdio MCP adapter over the V02 IPC. Authorization never trusts the
@@ -53,12 +54,12 @@ public enum MCPGate {
       // risk itself may have moved while the card was up; never run something broader than what was shown.
       return run({ now in
         guard now.project == seen.project, now.active == seen.active, now.tree.focused == seen.tree.focused else {
-          return CommandError(.denied, "\(req.command): Clair の状態が承認中に変わったため実行しませんでした")
+          return CommandError(.denied, tr("%@: Clair の状態が承認中に変わったため実行しませんでした", req.command))
         }
         switch registry.preflight(req.command, req.input, now) {
         case .failure(let e): return e
         case .success(let r) where r > risk:
-          return CommandError(.denied, "\(req.command): 承認時より危険度が上がったため実行しませんでした")
+          return CommandError(.denied, tr("%@: 承認時より危険度が上がったため実行しませんでした", req.command))
         case .success: return nil
         }
       }, risk >= .destructive)

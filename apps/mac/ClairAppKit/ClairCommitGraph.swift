@@ -1,4 +1,5 @@
 #if os(macOS)
+  import ClairShared
   import ClairDesignSystem
   import ClairWorkspace
   import SwiftUI
@@ -24,7 +25,7 @@
 
     var body: some View {
       if !FileManager.default.fileExists(atPath: root + "/.git") {
-        Text("Git リポジトリではありません。").font(.system(size: 12)).foregroundStyle(C.textTertiary)
+        Text(tr("Git リポジトリではありません。")).font(.system(size: 12)).foregroundStyle(C.textTertiary)
           .frame(maxWidth: .infinity, maxHeight: .infinity).background(C.canvas)
       } else {
         Group { if let selected { detailView(selected) } else { list } }
@@ -44,7 +45,7 @@
               .onAppear { if i == graph.rows.count - 1 { Task { await loadMore() } } }
           }
           if loading { ProgressView().controlSize(.small).padding(8) }
-          if graph.rows.isEmpty, exhausted { Text("コミットがありません").font(.system(size: 12)).foregroundStyle(C.textTertiary).padding(12) }
+          if graph.rows.isEmpty, exhausted { Text(tr("コミットがありません")).font(.system(size: 12)).foregroundStyle(C.textTertiary).padding(12) }
         }.clairScroller()
       }
     }
@@ -104,7 +105,7 @@
       // The commit's back button and subject stay fixed above the scrolling diffs.
       return VStack(alignment: .leading, spacing: 0) {
         Button { selected = nil } label: {
-          Label("グラフに戻る", systemImage: "chevron.left")
+          Label(tr("グラフに戻る"), systemImage: "chevron.left")
             .padding(.horizontal, 12).frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
         }
         .buttonStyle(HoverWashStyle(radius: 0)).font(.system(size: 12)).foregroundStyle(C.textSecondary)
@@ -115,7 +116,7 @@
           if loadingFiles {
             ProgressView().frame(maxWidth: .infinity).padding(24)
           } else if files.isEmpty {
-            Text("差分はありません。").font(.system(size: 12)).foregroundStyle(C.textTertiary).frame(maxWidth: .infinity).padding(24)
+            Text(tr("差分はありません。")).font(.system(size: 12)).foregroundStyle(C.textTertiary).frame(maxWidth: .infinity).padding(24)
           }
           // Every file of the commit stacked; each DiffView gets its full height (19px rows) so only the outer
           // view scrolls vertically, and each file's header stays pinned until the next one pushes it off.
@@ -142,9 +143,9 @@
         Text("−\(m.removed)").font(Typography.font(Typography.chrome)).foregroundStyle(C.danger)
         Spacer()
         Button { split.toggle() } label: { Image(systemName: split ? "rectangle" : "rectangle.split.2x1") }
-          .accessibilityLabel(split ? "インライン" : "並べて表示")
+          .accessibilityLabel(split ? tr("インライン") : tr("並べて表示"))
           .foregroundStyle(C.textSecondary).buttonStyle(.hoverWash)
-          .help(split ? "差分を 1 列で表示" : "変更前と変更後を左右に並べて表示")
+          .help(split ? tr("差分を 1 列で表示") : tr("変更前と変更後を左右に並べて表示"))
       }
       .padding(.horizontal, 16).frame(height: 30).background(C.canvas)
       .overlay(alignment: .bottom) { Rectangle().fill(DesignTokens.Line.hairline).frame(height: 1) }

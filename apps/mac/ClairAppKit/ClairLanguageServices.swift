@@ -1,4 +1,5 @@
 #if os(macOS)
+  import ClairShared
   import ClairEditorCore
   import ClairEditorLanguage
   import ClairEditorView
@@ -47,7 +48,7 @@
       resolving[command.executable] = lookup
       guard let executable = await lookup.value else {
         // Set once: every keystroke asks again, and each write would re-render the status bar.
-        if status[key] == nil { status[key] = .failed("\(command.executable) 未インストール") }
+        if status[key] == nil { status[key] = .failed(tr("%@ 未インストール", command.executable)) }
         return nil
       }
       if let existing = clients[key] { return existing }
@@ -140,10 +141,10 @@
     func statusText(_ path: String, root: String) -> (text: String, failed: Bool)? {
       guard let (key, _, _) = key(path, root: root), let s = status[key] else { return nil }
       switch s {
-      case .starting: return ("\(key.executable) 起動中…", false)
+      case .starting: return (tr("%@ 起動中…", key.executable), false)
       case .running: return (key.executable, false)
       case .failed(let message): return (message, true)
-      case .stopped: return ("\(key.executable) 停止", true)
+      case .stopped: return (tr("%@ 停止", key.executable), true)
       }
     }
   }

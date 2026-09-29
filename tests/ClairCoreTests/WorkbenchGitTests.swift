@@ -192,8 +192,8 @@ final class WorkbenchGitTests: XCTestCase {
 
   func testRemoteAuthenticationFailureIsActionable() {
     let message = WorkbenchGit.remoteFailure("Push", output: "fatal: could not read Username; terminal prompts disabled")
-    XCTAssertTrue(message.contains("認証が必要"))
-    XCTAssertTrue(message.contains("ターミナル"))
+    XCTAssertTrue(message.contains("Authentication required"))
+    XCTAssertTrue(message.contains("terminal"))
   }
 
   /// V14: a hung child is killed at the deadline instead of pinning its caller; the pipe read returns.

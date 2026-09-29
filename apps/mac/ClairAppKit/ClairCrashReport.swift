@@ -1,3 +1,4 @@
+import ClairShared
 import AppKit
 import Foundation
 
@@ -18,10 +19,10 @@ public enum ClairCrashReport {
       let text = try? String(contentsOf: file, encoding: .utf8), let body = summary(ips: text)
     else { return }
     let alert = NSAlert()
-    alert.messageText = "前回 Clair がクラッシュしました"
-    alert.informativeText = "\(date.formatted()) のクラッシュレポートから GitHub issue を作成しますか？ブラウザで内容を確認してから送信できます。"
-    alert.addButton(withTitle: "issue を作成")
-    alert.addButton(withTitle: "閉じる")
+    alert.messageText = tr("前回 Clair がクラッシュしました")
+    alert.informativeText = tr("%@ のクラッシュレポートから GitHub issue を作成しますか？ブラウザで内容を確認してから送信できます。", date.formatted())
+    alert.addButton(withTitle: tr("issue を作成"))
+    alert.addButton(withTitle: tr("閉じる"))
     guard alert.runModal() == .alertFirstButtonReturn, let url = issueURL(body: body) else { return }
     NSWorkspace.shared.open(url)
   }

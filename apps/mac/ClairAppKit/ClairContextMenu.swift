@@ -1,4 +1,5 @@
 #if os(macOS)
+  import ClairShared
   import AppKit
   import ClairDesignSystem
   import SwiftUI
@@ -278,7 +279,7 @@
           HStack(spacing: 8) {
             Spacer(minLength: 0)
             Button(action: dismiss) {
-              Text("キャンセル").font(.system(size: 12)).foregroundStyle(C.textSecondary).padding(.horizontal, 12).frame(height: 26)
+              Text(tr("キャンセル")).font(.system(size: 12)).foregroundStyle(C.textSecondary).padding(.horizontal, 12).frame(height: 26)
             }.buttonStyle(.hoverWash).keyboardShortcut(.cancelAction)
             Button(action: confirm) {
               Text(dialog.confirm).font(.system(size: 12, weight: .semibold)).foregroundStyle(C.textPrimary)
@@ -324,13 +325,13 @@
         Button { open.toggle() } label: {
           HStack(spacing: 8) {
             RoundedRectangle(cornerRadius: Radius.control).fill(Color(hue: h, saturation: s, brightness: b)).frame(width: 18, height: 12)
-            Text("色を変更").font(.system(size: 12)).foregroundStyle(C.textSecondary)
+            Text(tr("色を変更")).font(.system(size: 12)).foregroundStyle(C.textSecondary)
             Spacer(minLength: 0)
             Image(systemName: open ? "chevron.up" : "chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(C.textQuaternary)
           }
           .contentShape(Rectangle())
         }
-        .buttonStyle(.plain).accessibilityLabel(open ? "カラーピッカーを閉じる" : "カラーピッカーを開く")
+        .buttonStyle(.plain).accessibilityLabel(open ? tr("カラーピッカーを閉じる") : tr("カラーピッカーを開く"))
         if open { picker }
       }
       .frame(width: 208)
@@ -352,7 +353,7 @@
             .onEnded { _ in commit() })
         }
         .frame(height: 120)
-        .accessibilityLabel("彩度と明るさ")
+        .accessibilityLabel(tr("彩度と明るさ"))
         GeometryReader { g in
           LinearGradient(colors: stride(from: 0.0, through: 1, by: 1.0 / 6).map { Color(hue: $0, saturation: 1, brightness: 1) },
                          startPoint: .leading, endPoint: .trailing)
@@ -363,7 +364,7 @@
               .onEnded { _ in commit() })
         }
         .frame(height: 12)
-        .accessibilityLabel("色相")
+        .accessibilityLabel(tr("色相"))
       }
     }
 

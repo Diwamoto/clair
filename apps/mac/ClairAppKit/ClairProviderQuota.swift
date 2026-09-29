@@ -1,3 +1,4 @@
+import ClairShared
 import Foundation
 
 /// H11: AI provider usage windows for the status bar, read from each provider's own API — never scraped from its TUI.
@@ -12,10 +13,10 @@ struct ProviderQuota: Sendable, Equatable {
 
     var label: String {
       switch minutes {
-      case ProviderQuota.monthMinutes: "1か月"
-      case let m where m.isMultiple(of: 1440): "\(m / 1440)日間"
-      case let m where m.isMultiple(of: 60): "\(m / 60)時間"
-      default: "\(minutes)分間"
+      case ProviderQuota.monthMinutes: tr("1か月")
+      case let m where m.isMultiple(of: 1440): tr("%@日間", m / 1440)
+      case let m where m.isMultiple(of: 60): tr("%@時間", m / 60)
+      default: tr("%@分間", minutes)
       }
     }
 
@@ -24,9 +25,9 @@ struct ProviderQuota: Sendable, Equatable {
       let d = s / 86400
       let h = s % 86400 / 3600
       let m = s % 3600 / 60
-      if s == 0 { return "まもなくリセット" }
-      if d > 0 { return "リセットまで \(d)日\(h)時間" }
-      return h > 0 ? "リセットまで \(h)時間\(m)分" : "リセットまで \(max(m, 1))分"
+      if s == 0 { return tr("まもなくリセット") }
+      if d > 0 { return tr("リセットまで %@日%@時間", d, h) }
+      return h > 0 ? tr("リセットまで %@時間%@分", h, m) : tr("リセットまで %@分", max(m, 1))
     }
   }
 
@@ -51,13 +52,13 @@ struct ProviderQuota: Sendable, Equatable {
     switch state {
     case .ok(let windows):
       let parts = windows.map {
-        "\($0.label) 残り\($0.remainingPercent)% · \($0.resetText(now: now))"
+        tr("%@ 残り%@% · %@", $0.label, $0.remainingPercent, $0.resetText(now: now))
       }
       let time = fetchedAt.formatted(date: .omitted, time: .shortened)
       return "\(provider): " + parts.joined(separator: " / ")
-        + (isStale(now: now) ? "(古い値 · \(time) 取得)" : "(\(time) 取得)")
-    case .unavailable(let why): return "\(provider): 取得できません — \(why)"
-    case .unsupported(let why): return "\(provider): 未対応 — \(why)"
+        + (isStale(now: now) ? tr("(古い値 · %@ 取得)", time) : tr("(%@ 取得)", time))
+    case .unavailable(let why): return tr("%@: 取得できません — %@", provider, why)
+    case .unsupported(let why): return tr("%@: 未対応 — %@", provider, why)
     }
   }
 
@@ -89,9 +90,9 @@ struct ProviderQuota: Sendable, Equatable {
     func answer(_ state: State) -> ProviderQuota { ProviderQuota(provider: "Claude Code", state: state, fetchedAt: now) }
     guard let oauth = claudeCredentials()?["claudeAiOauth"] as? [String: Any],
       let token = oauth["accessToken"] as? String, !token.isEmpty
-    else { return answer(.unavailable("Claude Code にログインしていません")) }
+    else { return answer(.unavailable(tr("Claude Code にログインしていません"))) }
     if let expires = (oauth["expiresAt"] as? NSNumber)?.doubleValue, expires / 1000 < now.timeIntervalSince1970 {
-      return answer(.unavailable("Claude Code のログインが期限切れです(claude を一度起動すると更新されます)"))
+      return answer(.unavailable(tr("Claude Code のログインが期限切れです(claude を一度起動すると更新されます)")))
     }
     var request = URLRequest(url: URL(string: "https://api.anthropic.com/api/oauth/usage")!, timeoutInterval: timeout)
     request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -100,17 +101,17 @@ struct ProviderQuota: Sendable, Equatable {
     request.setValue("claude-code/2.1.280", forHTTPHeaderField: "User-Agent")
     guard let (body, response) = try? await URLSession.shared.data(for: request),
       let http = response as? HTTPURLResponse
-    else { return answer(.unavailable("api.anthropic.com に接続できません")) }
+    else { return answer(.unavailable(tr("api.anthropic.com に接続できません"))) }
     switch http.statusCode {
     case 200: return answer(parseClaude(body))
-    case 401, 403: return answer(.unavailable("Claude Code の認証に失敗しました(\(http.statusCode))"))
+    case 401, 403: return answer(.unavailable(tr("Claude Code の認証に失敗しました(%@)", http.statusCode)))
     case 429:
       // Keep the last numbers (they turn stale on their own) and stay away until the server says so.
       let wait = http.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init) ?? 900
-      var held = previous ?? answer(.unavailable("利用枠 API の呼び出し制限中です"))
+      var held = previous ?? answer(.unavailable(tr("利用枠 API の呼び出し制限中です")))
       held.notBefore = now.addingTimeInterval(max(wait, 300))
       return held
-    default: return answer(.unavailable("api.anthropic.com が HTTP \(http.statusCode) を返しました"))
+    default: return answer(.unavailable(tr("api.anthropic.com が HTTP %@ を返しました", http.statusCode)))
     }
   }
 
@@ -145,7 +146,7 @@ struct ProviderQuota: Sendable, Equatable {
       else { return nil }
       return Window(minutes: minutes, usedPercent: min(max(used, 0), 100), resetsAt: reset)
     }
-    return windows.isEmpty ? .unavailable("このアカウントには利用枠の情報がありません") : .ok(windows)
+    return windows.isEmpty ? .unavailable(tr("このアカウントには利用枠の情報がありません")) : .ok(windows)
   }
 
   static func isoDate(_ s: String) -> Date? {
@@ -162,16 +163,16 @@ struct ProviderQuota: Sendable, Equatable {
     guard let file = try? Data(contentsOf: data.appending(path: "opencode/auth.json")),
       let auth = try? JSONSerialization.jsonObject(with: file) as? [String: Any],
       let key = (auth["opencode-go"] as? [String: Any])?["key"] as? String, !key.isEmpty
-    else { return .unavailable("OpenCode Go にログインしていません(opencode auth login)") }
+    else { return .unavailable(tr("OpenCode Go にログインしていません(opencode auth login)")) }
     var request = URLRequest(url: URL(string: "https://opencode.ai/zen/go/v1/usage")!, timeoutInterval: timeout)
     request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
     guard let (body, response) = try? await URLSession.shared.data(for: request),
       let status = (response as? HTTPURLResponse)?.statusCode
-    else { return .unavailable("opencode.ai に接続できません") }
+    else { return .unavailable(tr("opencode.ai に接続できません")) }
     switch status {
     case 200: return parseOpenCode(body)
-    case 401, 403: return .unavailable("OpenCode Go の認証に失敗しました(\(status))")
-    default: return .unavailable("opencode.ai が HTTP \(status) を返しました")
+    case 401, 403: return .unavailable(tr("OpenCode Go の認証に失敗しました(%@)", status))
+    default: return .unavailable(tr("opencode.ai が HTTP %@ を返しました", status))
     }
   }
 
@@ -186,7 +187,7 @@ struct ProviderQuota: Sendable, Equatable {
       else { return nil }
       return Window(minutes: minutes, usedPercent: min(max(used, 0), 100), resetsAt: reset)
     }
-    return windows.isEmpty ? .unavailable("このアカウントには利用枠の情報がありません") : .ok(windows)
+    return windows.isEmpty ? .unavailable(tr("このアカウントには利用枠の情報がありません")) : .ok(windows)
   }
 
   /// Codex's own app-server protocol: `account/rateLimits/read` over stdio JSON-RPC.
@@ -200,7 +201,7 @@ struct ProviderQuota: Sendable, Equatable {
     process.standardInput = input
     process.standardOutput = output
     process.standardError = FileHandle.nullDevice
-    do { try process.run() } catch { return .unavailable("Codex を起動できません") }
+    do { try process.run() } catch { return .unavailable(tr("Codex を起動できません")) }
     let requests = [
       #"{"method":"initialize","id":0,"params":{"clientInfo":{"name":"clair","title":"Clair","version":"0.1.0"}}}"#,
       #"{"method":"initialized","params":{}}"#,
@@ -227,7 +228,7 @@ struct ProviderQuota: Sendable, Equatable {
         if let state = parseCodex(Data(line)) { return state }
       }
     }
-    return .unavailable("Codex CLI が見つからないか応答しません")
+    return .unavailable(tr("Codex CLI が見つからないか応答しません"))
   }
 
   /// The `account/rateLimits/read` response line, or nil for any other line (notifications, the initialize reply).
@@ -238,7 +239,7 @@ struct ProviderQuota: Sendable, Equatable {
       return nil
     }
     if let error = o["error"] as? [String: Any] {
-      return .unavailable(error["message"] as? String ?? "取得に失敗しました")
+      return .unavailable(error["message"] as? String ?? tr("取得に失敗しました"))
     }
     let limits = (o["result"] as? [String: Any])?["rateLimits"] as? [String: Any]
     let windows = ["primary", "secondary"].compactMap { limits?[$0] as? [String: Any] }.compactMap {
@@ -251,6 +252,6 @@ struct ProviderQuota: Sendable, Equatable {
         minutes: minutes, usedPercent: min(max(used, 0), 100),
         resetsAt: Date(timeIntervalSince1970: reset))
     }
-    return windows.isEmpty ? .unavailable("このアカウントには利用枠の情報がありません") : .ok(windows)
+    return windows.isEmpty ? .unavailable(tr("このアカウントには利用枠の情報がありません")) : .ok(windows)
   }
 }

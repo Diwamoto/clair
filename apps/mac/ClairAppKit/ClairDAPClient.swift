@@ -1,4 +1,5 @@
 #if os(macOS)
+import ClairShared
 import ClairEditorLanguage
 import ClairPTY
 import ClairWorkspace
@@ -12,10 +13,10 @@ actor ClairDAPClient {
     case missingAdapter, connectionFailed, disconnected, timeout(String), rejected(String)
     var errorDescription: String? {
       switch self {
-      case .missingAdapter: "Delve (dlv) が見つかりません。go install github.com/go-delve/delve/cmd/dlv@latest で導入してください。"
-      case .connectionFailed: "デバッガーに接続できませんでした"
-      case .disconnected: "デバッガーとの接続が終了しました"
-      case .timeout(let command): "デバッガーの応答がありません: \(command)"
+      case .missingAdapter: tr("Delve (dlv) が見つかりません。go install github.com/go-delve/delve/cmd/dlv@latest で導入してください。")
+      case .connectionFailed: tr("デバッガーに接続できませんでした")
+      case .disconnected: tr("デバッガーとの接続が終了しました")
+      case .timeout(let command): tr("デバッガーの応答がありません: %@", command)
       case .rejected(let message): message
       }
     }
@@ -74,9 +75,9 @@ actor ClairDAPClient {
         while let bytes = connected.read(), !bytes.isEmpty {
           for body in try parser.append(bytes) { await self?.receive(body) }
         }
-        await self?.connectionLost("デバッガーとの接続が終了しました")
+        await self?.connectionLost(tr("デバッガーとの接続が終了しました"))
       } catch {
-        await self?.connectionLost("デバッガーの応答が不正です: \(error)")
+        await self?.connectionLost(tr("デバッガーの応答が不正です: %@", error))
       }
     }
   }
@@ -114,7 +115,7 @@ actor ClairDAPClient {
     guard let object = try? JSONSerialization.jsonObject(with: body) as? [String: Any], let type = object["type"] as? String else { return }
     if type == "response", let id = object["request_seq"] as? Int, let continuation = pending.removeValue(forKey: id) {
       if object["success"] as? Bool == false {
-        continuation.resume(throwing: Failure.rejected(object["message"] as? String ?? "デバッガーが \(object["command"] ?? "要求") を拒否しました"))
+        continuation.resume(throwing: Failure.rejected(object["message"] as? String ?? tr("デバッガーが %@ を拒否しました", object["command"] ?? tr("要求"))))
       } else { continuation.resume(returning: body) }
     } else if type == "event" { onEvent(body) }
   }

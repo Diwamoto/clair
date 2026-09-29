@@ -12,7 +12,7 @@
     func testParsesCodexWindows() throws {
       let state = try XCTUnwrap(ProviderQuota.parseCodex(Data(live.utf8)))
       guard case .ok(let w) = state else { return XCTFail("\(state)") }
-      XCTAssertEqual(w.map(\.label), ["5時間", "7日間"])
+      XCTAssertEqual(w.map(\.label), ["5 h", "7 d"])
       XCTAssertEqual(w.map(\.remainingPercent), [15, 24])
       XCTAssertEqual(w[0].resetsAt, Date(timeIntervalSince1970: 1_790_111_980))
     }
@@ -45,10 +45,10 @@
       XCTAssertEqual(top?.provider, "Codex")
       XCTAssertEqual(top?.window.minutes, 300)
       XCTAssertNil(ProviderQuota.tightest([q[1]]))
-      XCTAssertTrue(q[0].summary(now: now).contains("5時間 残り15% · リセットまで 3時間19分"))
-      XCTAssertEqual(q[1].summary(now: now), "Claude Code: 未対応 — statusLine hook 未接続")
+      XCTAssertTrue(q[0].summary(now: now).contains("5 h 15% left · Resets in 3h 19m"))
+      XCTAssertEqual(q[1].summary(now: now), "Claude Code: unsupported — statusLine hook 未接続")
       XCTAssertFalse(q[0].isStale(now: now))
-      XCTAssertTrue(q[0].summary(now: now.addingTimeInterval(601)).contains("古い値"))
+      XCTAssertTrue(q[0].summary(now: now.addingTimeInterval(601)).contains("stale"))
     }
 
     func testParsesOpenCodeGoWindows() {
@@ -56,7 +56,7 @@
       let body =
         #"{"usage":{"rolling":{"status":"ok","percent":0,"resetsAt":"2026-09-23T10:59:34.091Z"},"weekly":{"status":"ok","percent":0,"resetsAt":"2026-09-28T00:00:00.000Z"},"monthly":{"status":"ok","percent":76,"resetsAt":"2026-09-30T16:27:14.000Z"}}}"#
       guard case .ok(let w) = ProviderQuota.parseOpenCode(Data(body.utf8)) else { return XCTFail() }
-      XCTAssertEqual(w.map(\.label), ["5時間", "7日間", "1か月"])
+      XCTAssertEqual(w.map(\.label), ["5 h", "7 d", "1 mo"])
       XCTAssertEqual(w.map(\.remainingPercent), [100, 100, 24])
       XCTAssertEqual(w[0].resetsAt, Date(timeIntervalSince1970: 1_790_161_174.091))
       guard case .unavailable = ProviderQuota.parseOpenCode(Data(#"{"error":{"type":"AuthError"}}"#.utf8)) else {
@@ -69,7 +69,7 @@
       let body =
         #"{"five_hour":{"utilization":56.0,"resets_at":"2026-09-23T09:49:59.731944+00:00","locked_reason":null},"seven_day":{"utilization":14.0,"resets_at":"2026-09-26T00:59:59.731979+00:00"},"seven_day_opus":null,"extra_usage":{"is_enabled":false,"utilization":3.742}}"#
       guard case .ok(let w) = ProviderQuota.parseClaude(Data(body.utf8)) else { return XCTFail() }
-      XCTAssertEqual(w.map(\.label), ["5時間", "7日間"])
+      XCTAssertEqual(w.map(\.label), ["5 h", "7 d"])
       XCTAssertEqual(w.map(\.remainingPercent), [44, 86])
       XCTAssertEqual(w[0].resetsAt.timeIntervalSince1970, 1_790_156_999.731, accuracy: 0.001)
       guard case .unavailable = ProviderQuota.parseClaude(Data(#"{"type":"error"}"#.utf8)) else {

@@ -1,4 +1,5 @@
 #if os(macOS)
+  import ClairShared
   import AppKit
   import ClairDesignSystem
   import ClairEditorCore
@@ -41,7 +42,7 @@
           return .handled
         })
       } else {
-        Text("Markdown ファイルを開くとプレビューを表示します。")
+        Text(tr("Markdown ファイルを開くとプレビューを表示します。"))
           .font(.system(size: 12)).foregroundStyle(C.textTertiary)
           .frame(maxWidth: .infinity, maxHeight: .infinity).background(C.canvas)
       }
@@ -132,9 +133,9 @@
                 ForEach(rows.indices, id: \.self) { r in
                   HStack(spacing: 0) {
                     gutter("\(r + 1)", width: 40, active: cell?.r == r).contextMenu {
-                      Button("上に行を挿入") { mutate(m, sep) { $0.insert(Array(repeating: "", count: width), at: r) } }
-                      Button("下に行を挿入") { mutate(m, sep) { $0.insert(Array(repeating: "", count: width), at: r + 1) } }
-                      Button("行を削除") { mutate(m, sep) { $0.remove(at: r) } }
+                      Button(tr("上に行を挿入")) { mutate(m, sep) { $0.insert(Array(repeating: "", count: width), at: r) } }
+                      Button(tr("下に行を挿入")) { mutate(m, sep) { $0.insert(Array(repeating: "", count: width), at: r + 1) } }
+                      Button(tr("行を削除")) { mutate(m, sep) { $0.remove(at: r) } }
                     }
                     ForEach(0..<width, id: \.self) { c in cellView(m, sep, r, c) }
                   }
@@ -144,9 +145,9 @@
                   gutter("", width: 40, active: false)
                   ForEach(0..<width, id: \.self) { c in
                     gutter(TableFile.columnName(c), width: Self.colWidth, active: cell?.c == c).contextMenu {
-                      Button("左に列を挿入") { mutate(m, sep) { rs in for i in rs.indices { rs[i].insert("", at: min(c, rs[i].count)) } } }
-                      Button("右に列を挿入") { mutate(m, sep) { rs in for i in rs.indices { rs[i].insert("", at: min(c + 1, rs[i].count)) } } }
-                      Button("列を削除") { mutate(m, sep) { rs in for i in rs.indices where c < rs[i].count { rs[i].remove(at: c) } } }
+                      Button(tr("左に列を挿入")) { mutate(m, sep) { rs in for i in rs.indices { rs[i].insert("", at: min(c, rs[i].count)) } } }
+                      Button(tr("右に列を挿入")) { mutate(m, sep) { rs in for i in rs.indices { rs[i].insert("", at: min(c + 1, rs[i].count)) } } }
+                      Button(tr("列を削除")) { mutate(m, sep) { rs in for i in rs.indices where c < rs[i].count { rs[i].remove(at: c) } } }
                     }
                   }
                 }
@@ -156,10 +157,10 @@
           Divider()
           HStack(spacing: 12) {
             Text(cell.map { "\(TableFile.columnName($0.c))\($0.r + 1)" } ?? "—").monospacedDigit().foregroundStyle(C.textSecondary)
-            Text("\(rows.count) 行 × \(width) 列").foregroundStyle(C.textTertiary)
+            Text(tr("%@ 行 × %@ 列", rows.count, width)).foregroundStyle(C.textTertiary)
             Spacer()
-            Button("行を追加") { mutate(m, sep) { $0.append(Array(repeating: "", count: width)) } }
-            Button("列を追加") { mutate(m, sep) { rs in for i in rs.indices { rs[i].append("") } } }
+            Button(tr("行を追加")) { mutate(m, sep) { $0.append(Array(repeating: "", count: width)) } }
+            Button(tr("列を追加")) { mutate(m, sep) { rs in for i in rs.indices { rs[i].append("") } } }
           }
           .buttonStyle(.borderless).font(.system(size: 11)).padding(.horizontal, 10).padding(.vertical, 5).background(C.chrome)
         }
@@ -169,7 +170,7 @@
         .onChange(of: edit) { _, _ in if cell == nil { reload(m, sep) } }  // outside edits land when no cell is being typed in
         .onChange(of: cell) { old, _ in if old != nil { commit(m, sep) } }
       } else {
-        Text("CSV / TSV ファイルを開くと表で編集できます。")
+        Text(tr("CSV / TSV ファイルを開くと表で編集できます。"))
           .font(.system(size: 12)).foregroundStyle(C.textTertiary)
           .frame(maxWidth: .infinity, maxHeight: .infinity).background(C.canvas)
       }
@@ -223,7 +224,7 @@
                                      trailingNewline: old.isEmpty || old.hasSuffix("\n"))
       // Re-serializing an untouched file may still normalize quoting; only a real cell change writes.
       guard rows != TableFile.parse(old, separator: sep) else { return }
-      guard (try? m.apply([TextEdit(range: snap.fullRange, replacement: text)], label: "表の編集")) != nil else { return }
+      guard (try? m.apply([TextEdit(range: snap.fullRange, replacement: text)], label: tr("表の編集"))) != nil else { return }
       buffers.refresh(path); buffers.edited(path); onEdit(path)
     }
   }
