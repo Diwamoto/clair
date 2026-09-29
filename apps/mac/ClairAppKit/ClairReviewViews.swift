@@ -1026,30 +1026,64 @@
       }
     }
 
-    /// Date → project → chats, each list paged by `page`.
-    @ViewBuilder private func historyDays(_ histories: [AgentHistory], key: String) -> some View {
-      let days = AgentHistoryDay.group(histories)
-      // LazyVStack needs ids unique across days ("clair" repeats daily): a chat lives under one day only.
-      ForEach(days.prefix(limit(key)), id: \.groups[0].histories[0].id) { day in
-        let dayKey = "\(key)::\(day.date.timeIntervalSince1970)"
-        Text(dayTitle(day.date)).font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textQuaternary)
-          .padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 2)
-        ForEach(day.groups.prefix(limit(dayKey)), id: \.histories[0].id) { group in historyGroup(group, key: dayKey) }
-        moreButton(dayKey, total: day.groups.count)
+    /// One flat, uniquely keyed row of the date → project → chats list.
+    private enum HistoryRow: Identifiable {
+      case day(id: String, Date)
+      case group(id: String, AgentHistoryGroup, collapsed: Bool)
+      case chat(id: String, AgentHistory)
+      case more(id: String, key: String, remaining: Int)
+      var id: String {
+        switch self {
+        case .day(let id, _), .group(let id, _, _), .chat(let id, _), .more(let id, _, _): id
+        }
       }
-      moreButton(key, total: days.count)
+    }
+
+    /// Date → project → chats, each list paged by `page`. Flattened into one ForEach: nested ForEach with
+    /// conditional children inside the sidebar's LazyVStack dropped rows once a project repeated across days.
+    private func historyRows(_ histories: [AgentHistory], key: String) -> [HistoryRow] {
+      var rows: [HistoryRow] = []
+      func more(_ list: String, total: Int) {
+        if total > limit(list) { rows.append(.more(id: "\(list)::more", key: list, remaining: total - limit(list))) }
+      }
+      let days = AgentHistoryDay.group(histories)
+      for day in days.prefix(limit(key)) {
+        let dayKey = "\(key)::\(day.date.timeIntervalSince1970)"
+        rows.append(.day(id: dayKey, day.date))
+        for group in day.groups.prefix(limit(dayKey)) {
+          let groupKey = "\(dayKey)::\(group.id)"
+          let collapsed = !expandedGroups.contains(groupKey)
+          rows.append(.group(id: groupKey, group, collapsed: collapsed))
+          guard !collapsed else { continue }
+          for (i, history) in group.histories.prefix(limit(groupKey)).enumerated() {
+            rows.append(.chat(id: "\(groupKey)::\(i)", history))
+          }
+          more(groupKey, total: group.histories.count)
+        }
+        more(dayKey, total: day.groups.count)
+      }
+      more(key, total: days.count)
+      return rows
+    }
+
+    @ViewBuilder private func historyDays(_ histories: [AgentHistory], key: String) -> some View {
+      ForEach(historyRows(histories, key: key)) { row in
+        switch row {
+        case .day(_, let date):
+          Text(dayTitle(date)).font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textQuaternary)
+            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 2)
+        case .group(let id, let group, let collapsed): historyGroup(group, id: id, collapsed: collapsed)
+        case .chat(_, let history): historyRow(history)
+        case .more(_, let key, let remaining):
+          Button { shown[key] = limit(key) + Self.page } label: {
+            Text(tr("さらに表示（残り %@ 件）", remaining)).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
+              .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20).padding(.vertical, 4).contentShape(Rectangle())
+          }.buttonStyle(.hoverWash)
+        }
+      }
     }
 
     private func limit(_ key: String) -> Int { shown[key] ?? Self.page }
-
-    @ViewBuilder private func moreButton(_ key: String, total: Int) -> some View {
-      if total > limit(key) {
-        Button { shown[key] = limit(key) + Self.page } label: {
-          Text(tr("さらに表示（残り %@ 件）", total - limit(key))).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
-            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20).padding(.vertical, 4).contentShape(Rectangle())
-        }.buttonStyle(.hoverWash)
-      }
-    }
 
     private func dayTitle(_ date: Date) -> String {
       if Calendar.current.isDateInToday(date) { return tr("今日") }
@@ -1058,9 +1092,7 @@
     }
 
     /// Projects start collapsed, like ccedit's project list; opening one lists its chats newest first.
-    @ViewBuilder private func historyGroup(_ group: AgentHistoryGroup, key: String) -> some View {
-          let id = "\(key)::\(group.id)"
-          let collapsed = !expandedGroups.contains(id)
+    private func historyGroup(_ group: AgentHistoryGroup, id: String, collapsed: Bool) -> some View {
           Button {
             if collapsed { expandedGroups.insert(id) } else { expandedGroups.remove(id) }
           } label: {
@@ -1072,10 +1104,6 @@
                 .font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textQuaternary)
             }.foregroundStyle(C.textSecondary).padding(.horizontal, 20).padding(.vertical, 8).contentShape(Rectangle())
           }.buttonStyle(.hoverWash)
-          if !collapsed {
-            ForEach(group.histories.prefix(limit(id))) { history in historyRow(history) }
-            moreButton(id, total: group.histories.count)
-          }
     }
 
     /// LINE-style chat-list row: provider avatar, title + time, last-message preview + prompt count.
