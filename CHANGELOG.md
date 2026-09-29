@@ -6,6 +6,30 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-29
+
+### Added
+
+- **Split editors**: close a split editor on its own with Cmd-W or the close button in its breadcrumb; splits of the same file stay in sync, including syntax highlighting.
+- **Compare files**: pick a file as the compare base from the File menu, then compare another file against it in a diff tab.
+- **Chat history**: resume a past chat in a new terminal from the chat view.
+- **JSON formatting**: format the active JSON file (⌃⌥F or ⌘K), and "format on save" now works for JSON.
+- **Restart commands**: restart the current window or the whole app from the command palette.
+- **More agents**: Gemini CLI, Cursor CLI, GitHub Copilot CLI and Aider can be chosen as the default agent.
+
+### Changed
+
+- The app icon now uses the macOS Liquid Glass style.
+- HTML preview loads relative JS and CSS files from the previewed file's folder.
+- Preview panes no longer dim when another pane has focus.
+
+### Fixed
+
+- Files inside git submodules now appear in the project tree.
+- Opening a file from Finder no longer creates two windows.
+- macOS notifications now work in release builds.
+- Installing updates is more reliable.
+
 ## [0.5.0] - 2026-09-29
 
 ### Added
@@ -129,7 +153,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/Diwamoto/clair/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Diwamoto/clair/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Diwamoto/clair/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Diwamoto/clair/compare/v0.2.1...v0.3.0
