@@ -2731,6 +2731,7 @@ import Observation
           languageStatus
         }
         Spacer()
+        ClairResourceMeter()
         if st.toggles["hideQuota"] != true { quotaMeter }
         Button { sidebarMode = "terminal" } label: {
           HStack(spacing: 5) {
