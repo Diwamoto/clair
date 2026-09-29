@@ -290,7 +290,7 @@ macOS の `NSTextInputClient` は行ローカルの UTF-16 空間で答える(�
 - Markdown の live preview(editor と並べて表示、編集に追従)。preview / 表の pane は開いたファイルに束縛され、editor が別ファイルに切り替わっても表示を保つ。別ファイルで開くと別 pane になり、同じファイルなら既存 pane に focus する
 - Markdown preview の ```` ```mermaid ```` fence は WebView / JS を使わず native に描画する(flowchart と sequenceDiagram。未対応の図はコードブロックのまま表示)
 - CSV / TSV の表エディタ(preview と同じボタン・⌘⇧V で開き、セル編集は buffer への 1 undo 単位の書き戻し。保存は通常の ⌘S)
-- HTML / HTM のプレビュー(preview と同じボタン・⌘⇧V で開き、未保存 buffer の内容と JavaScript の動作を表示)。自己完結した artifact を対象とし、local file の相対参照とプレビュー内でのページ遷移は許可しない。JavaScript とリモートリソースはネットワーク通信できる。WebView は非永続のデータストアを使う。明示的にクリックした http/https/mailto リンクは既定のアプリで開く。WebView は editor の入力・描画経路に使用しない
+- HTML / HTM のプレビュー(preview と同じボタン・⌘⇧V で開き、未保存 buffer の内容と JavaScript の動作を表示)。相対パスの local file 参照はプレビュー対象ファイルと同じフォルダ内のみ解決できる(`..` や symlink でそのフォルダの外へは出られない)。プレビュー内でのページ遷移は許可しない。JavaScript とリモートリソースはネットワーク通信できる。WebView は非永続のデータストアを使う。明示的にクリックした http/https/mailto リンクは既定のアプリで開く。WebView は editor の入力・描画経路に使用しない
 - 定義ジャンプの直接操作(⌘+click、F12、前後の位置へ戻る/進む)
 
 見た目の基本として次を持つ(2026-09-26 オーナー決定)。

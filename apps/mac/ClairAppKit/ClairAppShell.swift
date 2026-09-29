@@ -3114,7 +3114,7 @@ import Observation
             if kind == .terminal { ClairGhosttySurface(launch: launches[id].map { ($0.command, $0.cwd) } ?? (project.hasPrefix("/") ? ("", project) : nil), pane: id, sessionKey: ClairWorkbenchStore.terminalKey(root: project, pane: id), focused: id == focused, onFocus: { if id != focused { onFocus(id) } }, onFacts: { onFacts(id, $0, $1, $2) }, onTitle: { onTitle(id, $0) }) }  // one surface per terminal leaf, attached to the daemon shell keyed by project#pane
             else if kind == .graph { CommitGraphPane(root: project) }
             else if kind == .preview, let path = editor.previews[id] ?? editor.path, TableFile.separator(path) != nil { TablePane(buffers: editor.buffers, path: path, onEdit: editor.onEdit) }
-            else if kind == .preview, let path = editor.previews[id] ?? editor.path, path.lowercased().hasSuffix(".html") || path.lowercased().hasSuffix(".htm") { HTMLPreviewPane(buffers: editor.buffers, path: path) }
+            else if kind == .preview, let path = editor.previews[id] ?? editor.path, path.lowercased().hasSuffix(".html") || path.lowercased().hasSuffix(".htm") { HTMLPreviewPane(buffers: editor.buffers, root: editor.root, path: path) }
             else if kind == .preview { MarkdownPreviewPane(buffers: editor.buffers, root: editor.root, path: editor.previews[id] ?? editor.path) }
             else { editor.inPane(focused: id == focused, onFocus: { if id != focused { onFocus(id) } }) }
             if let from = dragging, from != id {
