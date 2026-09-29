@@ -1615,7 +1615,7 @@ import Observation
       let url = URL(fileURLWithPath: root).appending(path: Concierge.instructionsPath)
       if !FileManager.default.fileExists(atPath: url.path) {
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? Data("# コンシェルジュへの指示\n\nこの Project で守ってほしいことを書きます。次回の起動から反映されます。\n".utf8).write(to: url, options: .withoutOverwriting)
+        try? Data(tr("# コンシェルジュへの指示\n\nこの Project で守ってほしいことを書きます。次回の起動から反映されます。\n").utf8).write(to: url, options: .withoutOverwriting)
       }
       conciergeChat = false
       store.refreshProjectFiles()
