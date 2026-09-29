@@ -30,8 +30,8 @@ public struct EditorContext: Sendable, Codable, Equatable {
 public struct WorkbenchState: Sendable, Codable, Equatable {
   public enum Palette: String, Sendable, Codable { case commands, files, search, symbols, references, branches, compare, recent }
 
-  public static let sections = ["一般", "AIプロバイダー", "使用状況", "エディタ", "ターミナル", "モバイル", "アップデート"]
-  public static let toggleKeys = ["restoreLayout", "confirmClose", "hideQuota", "preventSleepOnBattery", "formatOnSave", "showWhitespace", "softWrap", "terminalApprovals", "lineNumbers", "terminalCursorBlink"]
+  public static let sections = ["一般", "AIプロバイダー", "使用状況", "エディタ", "ターミナル", "通知", "モバイル", "アップデート"]
+  public static let toggleKeys = ["restoreLayout", "confirmClose", "hideQuota", "preventSleepOnBattery", "formatOnSave", "showWhitespace", "softWrap", "terminalApprovals", "lineNumbers", "terminalCursorBlink", "notifyEnabled", "notifyOnBell", "notifyOnExit", "notifyWhenActive", "notifySound"]
   /// Closed-set settings (the mock's segmented controls). The first option is the default.
   /// Palette titles of `toggleKeys` / `choiceOptions`, matching the settings rows, so every setting is reachable from ⌘K.
   public static let settingTitles = [
@@ -42,6 +42,8 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
     "scrollback": "スクロールバック", "appearance": "外観",
     "lineNumbers": "行番号を表示", "terminalCursorBlink": "ターミナルのカーソルを点滅", "editorFontSize": "エディタの文字サイズ",
     "terminalFontSize": "ターミナルの文字サイズ", "terminalCursorStyle": "ターミナルのカーソルの形",
+    "notifyEnabled": "通知を有効にする", "notifyOnBell": "入力待ち・通知要求で通知", "notifyOnExit": "終了で通知",
+    "notifyWhenActive": "Clair が前面のときも通知", "notifySound": "通知のサウンド",
   ]
   // agent registry: `defaultAgent` reads its choices from the `AgentProfile` registry instead of
   // a literal list, so switching to a newly registered agent needs no change here.
@@ -123,7 +125,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var palette: Palette?
   /// E17: definition-jump history for ⌃- / ⌃⇧-. Transient (not in `WorkspaceSnapshot`).
   public var navigation = NavigationHistory()
-  public var toggles = ["restoreLayout": true, "confirmClose": true, "hideQuota": false, "preventSleepOnBattery": false, "formatOnSave": false, "showWhitespace": false, "softWrap": false, "terminalApprovals": true, "lineNumbers": true, "terminalCursorBlink": true]
+  public var toggles = ["restoreLayout": true, "confirmClose": true, "hideQuota": false, "preventSleepOnBattery": false, "formatOnSave": false, "showWhitespace": false, "softWrap": false, "terminalApprovals": true, "lineNumbers": true, "terminalCursorBlink": true, "notifyEnabled": true, "notifyOnBell": true, "notifyOnExit": true, "notifyWhenActive": false, "notifySound": false]
   // Font sizes default to what Clair shipped with (mock editor 12px, terminal 13pt), not the smallest option.
   public var choices = WorkbenchState.choiceOptions.mapValues { $0[0] }.merging(["editorFontSize": "12", "terminalFontSize": "13"]) { $1 }
   public var fonts = ["editor": "", "terminal": ""]

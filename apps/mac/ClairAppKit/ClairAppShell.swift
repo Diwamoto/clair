@@ -757,20 +757,34 @@ import Observation
       let oscTitle = state.paneTitles[NotificationLog.paneKey(state.project, pane)]
       let sessionTitle = oscTitle.flatMap { $0.isEmpty || $0 == (agent.cwd as NSString).lastPathComponent ? nil : $0 } ?? "\(agentName) · ターミナル \(pane)"
       // Only this GUI writes facts (no command records them), so an agent cannot fabricate notifications.
+      // History and badges always record; the toggles below only gate the macOS alert.
       var fresh: WorkbenchNotice?
-      if bells > 0 { fresh = state.notices.record(project: state.project, pane: pane, kind: .bell, sourceTitle: notification?.title, sourceBody: notification?.body, sessionTitle: sessionTitle) ?? fresh }
-      if let exit { fresh = state.notices.record(project: state.project, pane: pane, kind: .exited, exitCode: exit, sessionTitle: sessionTitle) ?? fresh }
+      if bells > 0, let n = state.notices.record(project: state.project, pane: pane, kind: .bell, sourceTitle: notification?.title, sourceBody: notification?.body, sessionTitle: sessionTitle), state.toggles["notifyOnBell"] != false { fresh = n }
+      if let exit, let n = state.notices.record(project: state.project, pane: pane, kind: .exited, exitCode: exit, sessionTitle: sessionTitle), state.toggles["notifyOnExit"] != false { fresh = n }
       refreshSleepAssertion()
-      guard let n = fresh, !NSApp.isActive,
-        Bundle.main.bundleURL.pathExtension == "app",
-        Bundle.main.bundleIdentifier != nil  // UNUserNotificationCenter traps outside an app bundle (swift run / XCTest)
-      else { return }
+      guard let n = fresh, state.toggles["notifyEnabled"] != false, !NSApp.isActive || state.toggles["notifyWhenActive"] == true else { return }
+      deliverNotification(title: n.sessionTitle ?? agentName, subtitle: "\(n.project) · \(agentName) · ターミナル \(n.pane) · \(n.title)", body: n.sourceBody ?? "", id: "clair-\(n.id)") { _ in }
+    }
+
+    /// Settings → 通知 → テスト. Ignores the enable/foreground toggles so the path can always be checked; `done(false)` = not allowed or not an app bundle.
+    public func sendTestNotification(done: @escaping @MainActor (Bool) -> Void) {
+      deliverNotification(title: "Clair", subtitle: "テスト通知", body: "通知は正しく届いています。", id: "clair-test-\(UUID().uuidString)", done: done)
+    }
+
+    private func deliverNotification(title: String, subtitle: String, body: String, id: String, done: @escaping @MainActor (Bool) -> Void) {
+      guard Bundle.main.bundleURL.pathExtension == "app", Bundle.main.bundleIdentifier != nil  // UNUserNotificationCenter traps outside an app bundle (swift run / XCTest)
+      else { done(false); return }
+      let sound = state.toggles["notifySound"] == true
       let c = UNUserNotificationCenter.current()
-      c.requestAuthorization(options: [.alert]) { granted, _ in
-        guard granted else { return }
+      c.delegate = ClairNotificationPresenter.shared  // without it a foreground app shows nothing
+      c.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+        guard granted else { DispatchQueue.main.async { MainActor.assumeIsolated { done(false) } }; return }
         let m = UNMutableNotificationContent()
-        m.title = n.sessionTitle ?? agentName; m.subtitle = "\(n.project) · \(agentName) · ターミナル \(n.pane) · \(n.title)"; m.body = n.sourceBody ?? ""
-        c.add(UNNotificationRequest(identifier: "clair-\(n.id)", content: m, trigger: nil))
+        m.title = title; m.subtitle = subtitle; m.body = body
+        if sound { m.sound = .default }
+        c.add(UNNotificationRequest(identifier: id, content: m, trigger: nil)) { err in
+          DispatchQueue.main.async { MainActor.assumeIsolated { done(err == nil) } }
+        }
       }
     }
 
@@ -941,6 +955,7 @@ import Observation
     @State private var debugPID = ""
     struct AssociationDraft: Identifiable, Equatable { let id = UUID(); var ext: String; var lang: String }
     @State private var associationRows: [AssociationDraft] = []
+    @State private var notificationTestResult: String?
     @State private var quota: [ProviderQuota] = []
     @State private var quotaHovered = false
     @State private var noticesOpen = false
@@ -2342,6 +2357,21 @@ import Observation
               choiceRow("外観", "appearance", note: "エディタ、ターミナル、サイドバーの配色をまとめて切り替えます。")
               switchRow("ステータスバーの利用枠を隠す", "hideQuota")
             }
+          case "通知":
+            SettingsCard(title: "macOS 通知") {
+              switchRow("通知を有効にする", "notifyEnabled", note: "Clair の terminal で動く agent の通知要求と終了を macOS に送ります。")
+              switchRow("入力待ち・通知要求で通知", "notifyOnBell")
+              switchRow("終了で通知", "notifyOnExit", note: "正常終了・異常終了のどちらも対象です。")
+              switchRow("Clair が前面のときも通知", "notifyWhenActive", note: "オフのときは他のアプリを使っている間だけ通知します。")
+              switchRow("サウンドを鳴らす", "notifySound")
+            }
+            SettingsCard(title: "テスト") {
+              SettingsRow(title: "テスト通知を送る", note: notificationTestResult ?? "macOS の通知許可と表示を確認します。") {
+                Button("送信") {
+                  store.sendTestNotification { notificationTestResult = $0 ? "送信しました。表示されない場合は システム設定 → 通知 → Clair を確認してください。" : "送信できませんでした。システム設定 → 通知 → Clair で許可してください（アプリ bundle 以外では動きません）。" }
+                }
+              }
+            }
           case "AIプロバイダー":
             SettingsCard(title: "Agent") {
               defaultAgentRow
@@ -3316,6 +3346,13 @@ import Observation
           }
         }
       }
+    }
+  }
+  /// Lets banners show while Clair is frontmost (the "Clair が前面のときも通知" toggle and the test button).
+  final class ClairNotificationPresenter: NSObject, UNUserNotificationCenterDelegate, @unchecked Sendable {
+    static let shared = ClairNotificationPresenter()
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler done: @escaping (UNNotificationPresentationOptions) -> Void) {
+      done([.banner, .sound])
     }
   }
 #endif
