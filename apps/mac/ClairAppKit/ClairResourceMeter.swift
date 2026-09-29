@@ -3,50 +3,67 @@ import ClairShared
 import Darwin
 import SwiftUI
 
-/// Clair's own process footprint: CPU since the previous sample, and memory as Activity Monitor counts it.
+/// All of Clair: this app plus every descendant (daemon, shells, agents, language servers).
+/// CPU is cumulative seconds per pid; memory is the physical footprint Activity Monitor shows.
 struct ProcessSample: Equatable {
-  var cpuSeconds: Double
-  var footprintBytes: UInt64
-  var peakBytes: UInt64
-  var threads: Int
+  var cpuSeconds: [pid_t: Double] = [:]
+  var footprintBytes: [pid_t: UInt64] = [:]
 
-  static func current() -> ProcessSample {
-    var usage = rusage()
-    getrusage(RUSAGE_SELF, &usage)
-    let cpu = Double(usage.ru_utime.tv_sec + usage.ru_stime.tv_sec) + Double(usage.ru_utime.tv_usec + usage.ru_stime.tv_usec) / 1_000_000
-    var info = task_vm_info_data_t()
-    var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
-    let kr = withUnsafeMutablePointer(to: &info) {
-      $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count) }
+  var totalFootprint: UInt64 { footprintBytes.values.reduce(0, +) }
+
+  static func current(root: pid_t = getpid()) -> ProcessSample {
+    var timebase = mach_timebase_info_data_t()
+    mach_timebase_info(&timebase)
+    let ticksToSeconds = Double(timebase.numer) / Double(timebase.denom) / 1_000_000_000
+    var sample = ProcessSample()
+    for pid in descendants(of: root) {
+      var info = rusage_info_v2()
+      let ok = withUnsafeMutablePointer(to: &info) {
+        $0.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) { proc_pid_rusage(pid, RUSAGE_INFO_V2, $0) }
+      }
+      guard ok == 0 else { continue }  // exited, or not ours to read
+      sample.cpuSeconds[pid] = Double(info.ri_user_time + info.ri_system_time) * ticksToSeconds
+      sample.footprintBytes[pid] = info.ri_phys_footprint
     }
-    var threads: thread_act_array_t?
-    var threadCount: mach_msg_type_number_t = 0
-    if task_threads(mach_task_self_, &threads, &threadCount) == KERN_SUCCESS, let threads {
-      for i in 0..<Int(threadCount) { mach_port_deallocate(mach_task_self_, threads[i]) }
-      vm_deallocate(mach_task_self_, vm_address_t(bitPattern: threads), vm_size_t(Int(threadCount) * MemoryLayout<thread_t>.stride))
-    }
-    // ru_maxrss is bytes on macOS.
-    return ProcessSample(cpuSeconds: cpu, footprintBytes: kr == KERN_SUCCESS ? info.phys_footprint : 0,
-                         peakBytes: UInt64(max(usage.ru_maxrss, 0)), threads: Int(threadCount))
+    return sample
   }
 
-  /// CPU percent of one core between two samples (can exceed 100 on several cores, like Activity Monitor).
+  /// `root` and every process below it, from one scan of the process table.
+  static func descendants(of root: pid_t) -> [pid_t] {
+    let capacity = Int(proc_listallpids(nil, 0)) + 64
+    var pids = [pid_t](repeating: 0, count: capacity)
+    let count = Int(proc_listallpids(&pids, Int32(capacity * MemoryLayout<pid_t>.size)))
+    var children: [pid_t: [pid_t]] = [:]
+    for pid in pids.prefix(max(count, 0)) where pid > 0 {
+      var info = proc_bsdshortinfo()
+      if proc_pidinfo(pid, PROC_PIDT_SHORTBSDINFO, 0, &info, Int32(MemoryLayout<proc_bsdshortinfo>.size)) > 0 {
+        children[pid_t(info.pbsi_ppid), default: []].append(pid)
+      }
+    }
+    var result = [root], i = 0
+    while i < result.count { result += children[result[i]] ?? []; i += 1 }
+    return result
+  }
+
+  /// CPU percent of one core between two samples (over 100 on several cores, like Activity Monitor).
+  /// A process born since `old` counts from zero; one that exited drops out.
   static func cpuPercent(from old: ProcessSample, to new: ProcessSample, interval: Double) -> Double {
     guard interval > 0 else { return 0 }
-    return max(new.cpuSeconds - old.cpuSeconds, 0) / interval * 100
+    let used = new.cpuSeconds.reduce(0.0) { $0 + max($1.value - (old.cpuSeconds[$1.key] ?? 0), 0) }
+    return used / interval * 100
   }
 }
 
-/// Footer meter next to the quota meter: compact CPU/memory, full detail in a hover popover.
+/// Footer meter next to the quota meter: compact CPU/memory for all of Clair, detail in a hover popover.
 struct ClairResourceMeter: View {
   private typealias C = DesignTokens.Color
-  @State private var sample = ProcessSample.current()
+  @State private var sample = ProcessSample()
   @State private var cpu: Double = 0
   @State private var hovered = false
   private let interval = 2.0
 
   var body: some View {
-    let memory = ByteCountFormatter.string(fromByteCount: Int64(sample.footprintBytes), countStyle: .memory)
+    let memory = Self.bytes(sample.totalFootprint)
     HStack(spacing: 6) {
       Image(systemName: "gauge.with.dots.needle.33percent").font(.system(size: 11))
       Text("CPU \(Int(cpu.rounded()))% · \(memory)")
@@ -55,26 +72,32 @@ struct ClairResourceMeter: View {
     .contentShape(Rectangle())
     .onHover { hovered = $0 }
     .popover(isPresented: $hovered, arrowEdge: .top) {
+      let app = sample.footprintBytes[getpid()] ?? 0
       Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
-        GridRow { Text("Clair").font(.system(size: 14, weight: .semibold)); Text("") }
+        GridRow { Text("Clair 全体").font(.system(size: 14, weight: .semibold)); Text("") }
         row("CPU", String(format: "%.1f%%", cpu))
         row("メモリ", memory)
-        row("ピークメモリ", ByteCountFormatter.string(fromByteCount: Int64(sample.peakBytes), countStyle: .memory))
-        row("スレッド", "\(sample.threads)")
+        row("　アプリ本体", Self.bytes(app))
+        row("　子プロセス", Self.bytes(sample.totalFootprint - app))
+        row("プロセス数", "\(sample.footprintBytes.count)")
       }
       .font(Typography.font(Typography.chrome)).monospacedDigit()
       .frame(width: 240, alignment: .leading).padding(12)
     }
     .accessibilityElement(children: .combine)
     .task {
+      // Off the main actor: the process-table scan is a few hundred syscalls.
+      sample = await Task.detached(priority: .utility) { ProcessSample.current() }.value
       while !Task.isCancelled {
         try? await Task.sleep(for: .seconds(interval))
-        let next = ProcessSample.current()
+        let next = await Task.detached(priority: .utility) { ProcessSample.current() }.value
         cpu = ProcessSample.cpuPercent(from: sample, to: next, interval: interval)
         sample = next
       }
     }
   }
+
+  private static func bytes(_ n: UInt64) -> String { ByteCountFormatter.string(fromByteCount: Int64(n), countStyle: .memory) }
 
   private func row(_ title: LocalizedStringKey, _ value: String) -> some View {
     GridRow {
