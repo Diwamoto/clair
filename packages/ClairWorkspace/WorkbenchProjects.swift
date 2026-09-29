@@ -110,6 +110,8 @@ public struct ProjectLayout: Sendable, Codable, Equatable {
   public var tabOrder: [WorkbenchTab] = []
   public var dirty: Set<String> = []
   public var expanded: Set<String> = []
+  /// Recently opened files, newest first (Compare With… lists them first).
+  public var recent: [String] = []
   /// V07: live agent terminals by pane id. Never persisted — restore must not silently respawn agents.
   public var launches: [Int: AgentLaunch] = [:]
   /// Preview pane id → bound file. Not persisted: a restored preview follows the active file.
@@ -117,7 +119,7 @@ public struct ProjectLayout: Sendable, Codable, Equatable {
   public var previews: [Int: String] = [:]
   /// Every pane closed in this Project only; not persisted (restore reopens the layout).
   public var panesClosed = false
-  private enum CodingKeys: String, CodingKey { case tree, tabs, active, dirty, expanded, diffTabs, activeDiff, tabOrder }
+  private enum CodingKeys: String, CodingKey { case tree, tabs, active, dirty, expanded, diffTabs, activeDiff, tabOrder, recent }
 
   public init() {}
 
@@ -150,6 +152,7 @@ public struct ProjectLayout: Sendable, Codable, Equatable {
     diffTabs = try c.decodeIfPresent([WorkbenchDiffTab].self, forKey: .diffTabs) ?? []
     activeDiff = try c.decodeIfPresent(WorkbenchDiffTab.self, forKey: .activeDiff)
     tabOrder = try c.decodeIfPresent([WorkbenchTab].self, forKey: .tabOrder) ?? []
+    recent = try c.decodeIfPresent([String].self, forKey: .recent) ?? []
   }
 }
 
@@ -157,10 +160,10 @@ extension WorkbenchState {
   var layout: ProjectLayout {
     get {
       var l = ProjectLayout(tree: tree, tabs: tabs, active: active, dirty: dirty, expanded: expanded, launches: launches, panesClosed: panesClosed, diffTabs: diffTabs, activeDiff: activeDiff, tabOrder: tabOrder)
-      l.previews = previews
+      l.previews = previews; l.recent = recent
       return l
     }
-    set { tree = newValue.tree; tabs = newValue.tabs; active = newValue.active; dirty = newValue.dirty; expanded = newValue.expanded; launches = newValue.launches; previews = newValue.previews; panesClosed = newValue.panesClosed; diffTabs = newValue.diffTabs; activeDiff = newValue.activeDiff; tabOrder = newValue.tabOrder }
+    set { tree = newValue.tree; tabs = newValue.tabs; active = newValue.active; dirty = newValue.dirty; expanded = newValue.expanded; launches = newValue.launches; previews = newValue.previews; panesClosed = newValue.panesClosed; diffTabs = newValue.diffTabs; activeDiff = newValue.activeDiff; tabOrder = newValue.tabOrder; recent = newValue.recent }
   }
 
   /// The open Project with the deepest root containing `file` (a nested Project wins over its parent).

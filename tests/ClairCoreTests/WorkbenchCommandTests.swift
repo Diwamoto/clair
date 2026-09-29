@@ -58,6 +58,19 @@ final class WorkbenchCommandTests: XCTestCase {
     XCTAssertEqual(s.activeDiff?.against, pick.title)
   }
 
+  func testCompareWithListsRecentlyOpenedFilesFirstAndPersistsThem() throws {
+    var s = WorkbenchState()
+    s.projects = [WorkbenchProject(name: "Sample", path: "/tmp")]
+    s.project = "Sample"
+    let paths = s.files.filter { $0.status != "D" }.map(\.path).suffix(3)
+    for p in paths { r.execute("tab.open", ["path": .string(p)], state: &s) }
+    let rows = r.paletteItems(.compare, query: "", state: s).map(\.title)
+    XCTAssertEqual(Array(rows.prefix(2)), paths.dropLast().reversed())
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".json")
+    try s.save(to: url)
+    XCTAssertEqual(WorkbenchState.restore(from: url, scanFiles: false)?.recent, s.recent)
+  }
+
   // Every setting is reachable from ⌘K without opening the settings window.
   func testPaletteChangesSettingsAndInstallsTheCLI() {
     var s = WorkbenchState()

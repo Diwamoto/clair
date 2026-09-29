@@ -81,7 +81,14 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   /// Every pane was closed (⌘W on the last one): the shell shows the empty panel instead of `tree`. Transient.
   public var panesClosed = false
   public var tabs: [String] = ["apple/ClairApp/ContentView.swift"]
-  public var active: String? = "apple/ClairApp/ContentView.swift"
+  public var active: String? = "apple/ClairApp/ContentView.swift" {
+    didSet {  // every path that makes a file active counts as opening it
+      guard let active, active != oldValue else { return }
+      recent = [active] + recent.filter { $0 != active }.prefix(49)
+    }
+  }
+  /// Recently opened files in this Project, newest first; persisted with the layout.
+  public var recent: [String] = []
   /// Current editor selection; never written to WorkspaceSnapshot.
   public var editorContext: EditorContext?
   public var diffTabs: [WorkbenchDiffTab] = []
@@ -325,7 +332,13 @@ public struct CommandRegistry: Sendable {
     case .compare:
       // VS Code's "Compare Active File With…": the picked file is the left side, the active file the right.
       guard let active = state.active else { return [] }
-      return QuickOpen.rank(query, state.files.filter { $0.status != "D" && $0.path != active })
+      // Recently opened files first (newest first), then the rest in tree order; rank keeps that order on ties.
+      let candidates = state.files.filter { $0.status != "D" && $0.path != active }
+      let order = Dictionary(state.recent.enumerated().map { ($1, $0) }, uniquingKeysWith: min)
+      let byRecency = candidates.enumerated().sorted {
+        (order[$0.element.path] ?? .max, $0.offset) < (order[$1.element.path] ?? .max, $1.offset)
+      }.map(\.element)
+      return QuickOpen.rank(query, byRecency)
         .map { PaletteItem(title: $0.path, hint: "", id: "diff.open",
                            input: ["path": .string(active), "staged": .bool(false), "untracked": .bool(false), "against": .string($0.path)]) }
     case .search, .symbols, .references, .branches:
