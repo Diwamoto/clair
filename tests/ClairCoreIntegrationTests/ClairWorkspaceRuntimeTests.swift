@@ -8,6 +8,28 @@
   @testable import ClairWorkspace
 
   @Test
+  func workbenchFileTreeIncludesFilesBeyondFormerTwentyThousandLimit() throws {
+    let root = URL.temporaryDirectory.appending(path: "clair-large-tree-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let first = root.appending(path: "file00000.txt")
+    try Data("x".utf8).write(to: first)
+    for i in 1...20_000 {
+      try FileManager.default.linkItem(at: first, to: root.appending(path: String(format: "file%05d.txt", i)))
+    }
+    #expect(WorkbenchFiles.scan(root.path).count == 20_001)
+
+    let git = Process()
+    git.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+    git.arguments = ["-C", root.path, "init", "-q"]
+    try git.run(); git.waitUntilExit()
+    #expect(git.terminationStatus == 0)
+    let paths = WorkbenchFiles.scan(root.path).map(\.path)
+    #expect(paths.count == 20_001)
+    #expect(paths.contains("file20000.txt"))
+  }
+
+  @Test
   func workspaceCatalogUsesTypedProjectAndWorktreeIdentity() throws {
     let fixture = try WorkspaceFixture(gitRepository: true)
     defer { fixture.remove() }

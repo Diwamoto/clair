@@ -4,7 +4,7 @@ import Foundation
 /// Adversarial corpus for `BUDGET-OP-100` (docs/benchmarks/clair-v2-performance-budget.md §3).
 ///
 /// Built to break the measured paths, not to look like a normal repository: the
-/// file count sits exactly on `WorkbenchFiles.limit`, the nesting is deeper than
+/// file count exercises a large tree, the nesting is deeper than
 /// any real tree, and the Git state is dirty enough that `status` has real work.
 ///
 /// Generation is expensive (tens of thousands of files plus `git add`), so it is
@@ -15,7 +15,7 @@ enum BudgetCorpus {
   /// Bump when any generated shape below changes.
   static let layoutVersion = 1
 
-  static let wideFileCount = 20_000  // == WorkbenchFiles.limit
+  static let wideFileCount = 20_000
   static let wideDirectoryCount = 400
   static let deepDepth = 40
   static let dirtyModifiedCount = 3_000

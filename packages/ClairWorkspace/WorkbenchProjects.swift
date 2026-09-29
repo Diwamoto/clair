@@ -189,7 +189,7 @@ extension WorkbenchState {
     let owner = owner(of: file) ?? WorkbenchProject.root(containing: file)
     openProject(owner, scanFiles: false)
     let rel = String(file.dropFirst(owner.path.count + 1))
-    if !files.contains(where: { $0.path == rel }) { files.append(WorkbenchFile(path: rel, status: nil)) }  // outside the scan (skipped dir / over the cap)
+    if !files.contains(where: { $0.path == rel }) { files.append(WorkbenchFile(path: rel, status: nil)) }  // outside the scan (skipped dir)
     openTab(rel)
   }
 
@@ -334,8 +334,6 @@ public enum WorkbenchFiles {
   }
   /// True for a root-relative path inside a skipped directory (build output, VCS internals).
   static func isSkipped(_ relative: String) -> Bool { relative.split(separator: "/").contains { skipped.contains(String($0)) } }
-  static let limit = 20_000  // ponytail: flat cap (10k files scan in ~0.2s, V05); lazy per-directory listing beyond this.
-
   /// Regular files under `root` (relative, sorted), never following symlinks, with Git status if `root` is a repo.
   public static func scan(_ root: String) -> [WorkbenchFile] {
     let base = URL(fileURLWithPath: root).resolvingSymlinksInPath()
@@ -351,7 +349,6 @@ public enum WorkbenchFiles {
         let v = try? base.appendingPathComponent(rel).resourceValues(forKeys: Set(keys))
         guard v?.isRegularFile == true, v?.isSymbolicLink != true else { continue }  // also drops deleted rows; status re-adds them
         paths.append(rel)
-        if paths.count >= limit { break }
       }
     } else {
       for case let u as URL in e {
@@ -359,7 +356,6 @@ public enum WorkbenchFiles {
         let v = try? u.resourceValues(forKeys: Set(keys))
         guard v?.isRegularFile == true, v?.isSymbolicLink != true else { continue }
         paths.append(String(u.path.dropFirst(prefix)))  // `base` is resolved and the enumerator never follows links, so no per-file realpath
-        if paths.count >= limit { break }
       }
     }
     let status = gitStatus(root)

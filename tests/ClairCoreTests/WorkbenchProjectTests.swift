@@ -148,7 +148,7 @@ final class WorkbenchProjectTests: XCTestCase {
     XCTAssertEqual(m["tracked.txt"], "M"); XCTAssertEqual(m["new.txt"], "U"); XCTAssertEqual(m["renamed.txt"], "R")
   }
 
-  /// A huge gitignored cache must not eat the scan cap and hide real source folders.
+  /// Gitignored files stay out of the tree.
   func testScanSkipsGitIgnoredFiles() throws {
     let a = try folder("gi", [".gitignore", "cache/big.bin", "src/main.swift"])
     try Data("cache/\n".utf8).write(to: URL(fileURLWithPath: a + "/.gitignore"))

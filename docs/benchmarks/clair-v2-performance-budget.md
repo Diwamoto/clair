@@ -72,7 +72,7 @@ make perf-startup          # warm 5 trials
 
 | 名前 | 内容 | 何を壊しに来ているか |
 |---|---|---|
-| `wide` | 20,000 ファイル / 400 ディレクトリ、clean commit | `WorkbenchFiles.limit` の cap ちょうど。tree 走査と Quick Open の O(n) |
+| `wide` | 20,000 ファイル / 400 ディレクトリ、clean commit | 大きな tree の走査と Quick Open の O(n) |
 | `deep` | 深さ 40 の入れ子、底に 200 ファイル | path 分割・`treeOrder` の比較コスト |
 | `dirty` | 5,000 ファイル中 3,000 変更 + 1,000 untracked | `git status --untracked-files=all` の出力量と parse |
 | `10mb` | 10 MiB Swift / 200,000 行 (既存 fixture) | ファイル open / save / 編集 / 検索 |
