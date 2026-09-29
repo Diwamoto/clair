@@ -703,7 +703,12 @@ import Observation
       return ok
     }
 
+    /// One card at a time: a concurrent request waits its turn (its 60 s starts when its card shows) instead of overwriting the visible card.
+    private nonisolated let mcpSlot = DispatchSemaphore(value: 1)
+
     nonisolated func requestMCPApproval(_ id: String, _ input: CommandInput, _ risk: CommandRisk, timeout: TimeInterval = 60) -> Bool {
+      mcpSlot.wait()
+      defer { mcpSlot.signal() }
       let sem = DispatchSemaphore(value: 0)
       DispatchQueue.main.sync {
         MainActor.assumeIsolated { mcpApproval = (id, input, risk); mcpApprovalDeadline = Date().addingTimeInterval(timeout); mcpDecision = sem; mcpApproved = false }

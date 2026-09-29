@@ -85,4 +85,21 @@ final class WorkbenchIPCTests: XCTestCase {
     XCTAssertNil(WorkbenchCLI.parse([]))
     XCTAssertNil(WorkbenchCLI.parse(["pane.focus", "id"]))
   }
+
+  func testBlockedCallDoesNotHoldUpNextCall() throws {
+    let url = URL(fileURLWithPath: "/tmp/clair-ipc-\(UUID().uuidString.prefix(8))/c.sock")
+    let release = DispatchSemaphore(value: 0)
+    let server = WorkbenchIPCServer(socket: url) { req in
+      if req.command == "slow" { release.wait() }  // stands in for a call parked on an approval card
+      return .success(.ok)
+    }
+    try server.start()
+    addTeardownBlock { release.signal(); server.stop(); try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+    let slow = expectation(description: "slow")
+    DispatchQueue.global().async { _ = try? WorkbenchIPC.call(WorkbenchIPCRequest(command: "slow", input: [:]), socket: url); slow.fulfill() }
+    Thread.sleep(forTimeInterval: 0.2)
+    XCTAssertNoThrow(try WorkbenchIPC.call(WorkbenchIPCRequest(command: "fast", input: [:]), socket: url, timeout: 2))
+    release.signal()
+    wait(for: [slow], timeout: 3)
+  }
 }

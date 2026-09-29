@@ -110,8 +110,8 @@ public enum WorkbenchIPC {
 }
 
 /// Serves the registry on a private Unix socket (dir 0700, socket 0600) and
-/// drops any peer whose uid differs from `allowedUID`. One thread, one
-/// connection at a time: commands are tiny and must be serialized against GUI state anyway.
+/// drops any peer whose uid differs from `allowedUID`. One thread per connection;
+/// the handler serializes against GUI state on the main actor.
 public final class WorkbenchIPCServer: @unchecked Sendable {
   public typealias Handler = @Sendable (WorkbenchIPCRequest) -> Result<CommandResult, CommandError>
 
@@ -160,22 +160,27 @@ public final class WorkbenchIPCServer: @unchecked Sendable {
     while true {
       let c = accept(fd, nil, nil)
       if c < 0 { return }  // listener closed by stop()
-      defer { close(c) }
-      var tv = timeval(tv_sec: 5, tv_usec: 0)  // a silent client must not wedge the loop
-      setsockopt(c, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
-      var uid: uid_t = 0, gid: gid_t = 0
-      guard getpeereid(c, &uid, &gid) == 0, uid == allowedUID else { continue }
-      guard let data = WorkbenchIPC.readLine(c), let req = try? JSONDecoder().decode(WorkbenchIPCRequest.self, from: data) else {
-        WorkbenchIPC.writeAll(c, (try? JSONEncoder().encode(WorkbenchIPCReply(error: CommandError(.invalidInput, "malformed request")))) ?? Data())
-        continue
-      }
-      var reply = WorkbenchIPCReply()
-      switch handler(req) {
-      case .success(let r): reply.result = r
-      case .failure(let e): reply.error = e
-      }
-      WorkbenchIPC.writeAll(c, (try? JSONEncoder().encode(reply)) ?? Data())
+      // A call may block on a GUI approval card for a minute; it must not hold up the next `clair …`.
+      Thread.detachNewThread { [self] in handle(c) }
     }
+  }
+
+  private func handle(_ c: Int32) {
+    defer { close(c) }
+    var tv = timeval(tv_sec: 5, tv_usec: 0)  // a silent client must not wedge a handler
+    setsockopt(c, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
+    var uid: uid_t = 0, gid: gid_t = 0
+    guard getpeereid(c, &uid, &gid) == 0, uid == allowedUID else { return }
+    guard let data = WorkbenchIPC.readLine(c), let req = try? JSONDecoder().decode(WorkbenchIPCRequest.self, from: data) else {
+      WorkbenchIPC.writeAll(c, (try? JSONEncoder().encode(WorkbenchIPCReply(error: CommandError(.invalidInput, "malformed request")))) ?? Data())
+      return
+    }
+    var reply = WorkbenchIPCReply()
+    switch handler(req) {
+    case .success(let r): reply.result = r
+    case .failure(let e): reply.error = e
+    }
+    WorkbenchIPC.writeAll(c, (try? JSONEncoder().encode(reply)) ?? Data())
   }
 }
 

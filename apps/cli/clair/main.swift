@@ -36,7 +36,7 @@ if request.command == "agent.wait" {
   }
 }
 do {
-  let reply = try WorkbenchIPC.call(request)
+  let reply = try WorkbenchIPC.call(request, timeout: 90)  // may wait on a GUI approval card (60 s)
   let encoder = JSONEncoder()
   encoder.outputFormatting = [.sortedKeys]
   print(String(decoding: try encoder.encode(reply), as: UTF8.self))
