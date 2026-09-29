@@ -874,6 +874,8 @@ import Observation
             .background(C.canvas)
             .background(ResignWorkbenchFocus())
             .transition(.opacity.combined(with: .scale(scale: 1.04)))
+            // A ZStack child being removed loses its place on top, so closing played behind the workbench (unseen).
+            .zIndex(1)
           }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration), value: st.settingsOpen)
