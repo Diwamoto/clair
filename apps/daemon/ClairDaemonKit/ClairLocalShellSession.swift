@@ -155,7 +155,9 @@ import Foundation
         handle = spawned
         running = true
         let owned = spawned
-        DispatchQueue.global(qos: .userInitiated).async { [self] in pump(owned) }
+        // A dedicated thread: this loop lives as long as the shell, and parking one per shell
+        // on GCD's capped pool starved the control socket (clair attach: transportTimedOut).
+        Thread.detachNewThread { [self] in pump(owned) }
       }
     }
 
@@ -214,8 +216,13 @@ import Foundation
       try resizeTerminal(newSize)
     }
 
+    /// Hang up like a closed terminal: interactive shells ignore SIGTERM, so a closed pane's shell
+    /// (and its pump thread) used to live on forever. SIGKILL follows for anything ignoring SIGHUP.
     public func terminate() {
-      _ = commitTerminalSignal(SIGTERM)
+      _ = commitTerminalSignal(SIGHUP)
+      DispatchQueue.global().asyncAfter(deadline: .now() + 2) { [self] in
+        _ = commitTerminalSignal(SIGKILL)
+      }
     }
 
     private func pump(_ owned: clair_pty_handle) {

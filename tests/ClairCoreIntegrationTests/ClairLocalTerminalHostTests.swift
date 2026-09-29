@@ -56,6 +56,46 @@ import Testing
       await daemon.stop()
     }
 
+    /// Every shell's PTY pump runs for the shell's whole life. On GCD's capped worker pool (~64)
+    /// enough of them starved the control socket and `clair attach` hit transportTimedOut.
+    @Test func sixtyFourShellsDoNotStarveTheControlSocket() async throws {
+      let daemon = try LocalDaemon(command: "sleep 60")
+      do {
+        for index in 0..<64 { _ = try daemon.attach(key: "pane-\(index)") }
+        _ = try daemon.client.health()
+      } catch {
+        await daemon.stop()
+        throw error
+      }
+      await daemon.stop()
+    }
+
+    /// Interactive shells ignore SIGTERM; closing a pane must still end its shell, or every closed
+    /// pane leaks a shell and a pump thread until the daemon stops answering.
+    @Test func closingAPaneEndsItsInteractiveShell() async throws {
+      let daemon = try LocalDaemon(command: "exec zsh -f -i")
+      do {
+        _ = try daemon.attach(key: "pane")
+        try await Task.sleep(for: .milliseconds(500))
+        guard case .processID(let pid?) = try daemon.client.terminal(.processID(key: "pane")) else {
+          Issue.record("missing shell PID")
+          await daemon.stop()
+          return
+        }
+        #expect(try daemon.client.terminal(.close(key: "pane")) == .accepted)
+        var alive = true
+        for _ in 0..<60 where alive {
+          try await Task.sleep(for: .milliseconds(50))
+          alive = Darwin.kill(pid, 0) == 0
+        }
+        #expect(!alive)
+      } catch {
+        await daemon.stop()
+        throw error
+      }
+      await daemon.stop()
+    }
+
     @Test func t09ShellOutlivesDetachAndReattachStartsAtCurrentOutput() async throws {
       try await withDaemon { daemon in
         let first = try daemon.attach(key: "pane-1")

@@ -127,7 +127,8 @@ public struct ClairPTYAgentProcessFactory: ClairAgentProcessFactory {
         running = true
         pendingCleanup = false
         let owned = spawned
-        DispatchQueue.global(qos: .utility).async { [self] in pump(owned) }
+        // Lives as long as the process; kept off GCD's capped pool (see ClairLocalShellSession).
+        Thread.detachNewThread { [self] in pump(owned) }
       }
       return .running
     }

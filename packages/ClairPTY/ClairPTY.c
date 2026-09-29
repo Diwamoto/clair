@@ -166,6 +166,8 @@ static void supervise(const char *path, char *const argv[], char *const envp[],
       }
       for (ssize_t i = 0; i < count; ++i) {
         if (commands[i] == SIGKILL) kill(child, SIGKILL);
+        // A job-control shell leaves this group for its own, so hang it up directly too.
+        else if (commands[i] == SIGHUP) { kill(child, SIGHUP); kill(-getpid(), SIGHUP); }
         else if (commands[i] == SIGINT || commands[i] == SIGTERM || commands[i] == SIGHUP)
           kill(-getpid(), commands[i]);
       }

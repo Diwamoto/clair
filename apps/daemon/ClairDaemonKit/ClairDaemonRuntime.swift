@@ -381,7 +381,8 @@
             client,
             timeout: ClairDaemonSocketSupport.controlTimeout
           )
-          DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+          // Terminal reads long-poll for up to 2 s; a thread each keeps them off GCD's capped pool.
+          Thread.detachNewThread { [weak self] in
             self?.handle(client: client)
           }
           continue

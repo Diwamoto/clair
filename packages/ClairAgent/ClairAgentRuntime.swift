@@ -1286,7 +1286,8 @@ public struct ClairSystemAgentProcessFactory: ClairAgentProcessFactory {
         groupKeeperReaped = false
         processGroupKillIssued = false
         condition.unlock()
-        DispatchQueue.global(qos: .utility).async { [self] in
+        // Blocks in waitid for the process's life; kept off GCD's capped pool.
+        Thread.detachNewThread { [self] in
           waitForProcess(processID)
         }
         guard claimProcessGroup() else {
