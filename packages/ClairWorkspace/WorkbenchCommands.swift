@@ -28,7 +28,7 @@ public struct EditorContext: Sendable, Codable, Equatable {
 }
 
 public struct WorkbenchState: Sendable, Codable, Equatable {
-  public enum Palette: String, Sendable, Codable { case commands, files, search, symbols, references, branches }
+  public enum Palette: String, Sendable, Codable { case commands, files, search, symbols, references, branches, compare }
 
   public static let sections = ["一般", "AIプロバイダー", "使用状況", "エディタ", "ターミナル", "モバイル", "アップデート"]
   public static let toggleKeys = ["restoreLayout", "confirmClose", "hideQuota", "preventSleepOnBattery", "formatOnSave", "showWhitespace", "softWrap", "terminalApprovals", "lineNumbers", "terminalCursorBlink"]
@@ -299,6 +299,12 @@ public struct CommandRegistry: Sendable {
     case .files:
       return QuickOpen.rank(query, state.files.filter { $0.status != "D" })
         .map { PaletteItem(title: $0.path, hint: "", id: "tab.open", input: ["path": .string($0.path)]) }
+    case .compare:
+      // VS Code's "Compare Active File With…": the picked file is the left side, the active file the right.
+      guard let active = state.active else { return [] }
+      return QuickOpen.rank(query, state.files.filter { $0.status != "D" && $0.path != active })
+        .map { PaletteItem(title: $0.path, hint: "", id: "diff.open",
+                           input: ["path": .string(active), "staged": .bool(false), "untracked": .bool(false), "against": .string($0.path)]) }
     case .search, .symbols, .references, .branches:
       return []  // search runs in the GUI; symbols/references come from the language server; branches load off the main thread
     }
@@ -837,6 +843,10 @@ extension CommandRegistry {
     cmd("palette.search", "Project を検索", .read, ai: false, shortcut: "⌘⇧F", palette: false) { s, _ in s.palette = .search; return .ok },
     // ponytail: ⌘F opens the same search panel; a per-file find bar replaces this when the editor grows one.
     cmd("palette.find", "検索", .read, ai: false, shortcut: "⌘F", palette: false) { s, _ in s.palette = .search; return .ok },
+    cmd("palette.compare", "Compare With…（アクティブファイルと比較）", .read, ai: false,
+        preflight: { s, _ throws(CommandError) in try require(s.active != nil, "no active file"); return .read }) { s, _ in
+      s.palette = .compare; return .ok
+    },
     cmd("palette.close", "パレットを閉じる", .read, ai: false, palette: false) { s, _ in s.palette = nil; return .ok },
     // E12: language-server navigation. The registry only validates and opens the palette; the GUI asks the
     // server for the active file's caret (the answer is async and belongs to the editor, not to this state).

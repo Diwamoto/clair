@@ -31,6 +31,25 @@ final class WorkbenchCommandTests: XCTestCase {
     XCTAssertEqual(r.execute("state.snapshot", state: &viaHarness), .success(.snapshot(viaPalette)))
   }
 
+  func testCompareWithDiffsActiveFileAgainstPickedFile() throws {
+    var s = WorkbenchState()
+    s.projects = [WorkbenchProject(name: "Sample", path: "/tmp")]
+    s.project = "Sample"
+    let cmd = r.paletteItems(.commands, query: "compare with", state: s)[0]
+    XCTAssertEqual(cmd.id, "palette.compare")
+    s.active = nil
+    if case .success = r.preflight(cmd.id, [:], s) { XCTFail("needs an active file") }
+    r.execute("tab.open", ["path": .string("docs/architecture/pane-layout.md")], state: &s)
+    XCTAssertEqual(try r.execute(cmd.id, state: &s).get(), .ok)
+    XCTAssertEqual(s.palette, .compare)
+    let rows = r.paletteItems(.compare, query: "", state: s)
+    XCTAssertFalse(rows.map(\.title).contains("docs/architecture/pane-layout.md"))
+    let pick = rows[0]
+    _ = try r.execute(pick.id, pick.input, state: &s).get()
+    XCTAssertEqual(s.activeDiff?.path, "docs/architecture/pane-layout.md")
+    XCTAssertEqual(s.activeDiff?.against, pick.title)
+  }
+
   // Every setting is reachable from ⌘K without opening the settings window.
   func testPaletteChangesSettingsAndInstallsTheCLI() {
     var s = WorkbenchState()
