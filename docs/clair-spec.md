@@ -381,6 +381,12 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   チャットの directory が登録済みの別 Project ならその Project に切り替えてから
   実行し、どの Project でもないときは無効にする。再開コマンド
   (`cd <directory> && <resume コマンド>`)は常にコピーできる
+- activity bar の「コンシェルジュ」は Project ごとに一つのコンシェルジュ agent を
+  sidebar に出す([ADR-0020](decisions/0020-concierge-agent.md))。本体は既定 Agent を
+  通常の agent launch と同じく raw PTY で起動し、GUI はその session の公式 transcript を
+  チャットとして描画して、送信は PTY に書き込む。コンシェルジュが起動した子 agent
+  (`parent` がコンシェルジュ)は状態と pane へのリンクで示し、出力は中継しない。
+  Project ごとの指示は `.clair/concierge.md`
 - 設定の「使用状況」はユーザーが送信した依頼・追記を 1 件として日別に集計し、
   今日の件数と日別 activity calendar を示す。使用費用は取得可能な token/model
   情報から推定し、実際の請求額と区別して表示する。欠損分をゼロ扱いしない
