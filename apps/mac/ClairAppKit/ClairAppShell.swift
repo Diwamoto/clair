@@ -3125,8 +3125,8 @@ import Observation
             }
           }
         }
-        // Keep the editor fully legible even when another pane is focused.
-        .opacity(kind == .editor || id == focused ? 1 : 0.75)
+        // Keep the editor and preview panes fully legible even when another pane is focused.
+        .opacity(kind == .editor || kind == .preview || id == focused ? 1 : 0.75)
         // A split focuses the new pane, so the focused leaf fades in when it appears.
         // ponytail: the tree re-renders on split, so this keys off focus, not "is new".
         .opacity(shown || id != focused || reduceMotion ? 1 : 0)
