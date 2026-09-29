@@ -35,7 +35,7 @@ import SwiftUI
     }
     // A bundled app's window can already be key before this runs (dev's is not), so the first
     // didBecomeKey is missed; lay out the windows that exist now.
-    NSApp.windows.forEach(layoutLights)
+    NSApp.windows.forEach { $0.isRestorable = false; layoutLights($0) }
     ClairCrashReport.offerIfCrashed()
   }
 
@@ -55,7 +55,12 @@ import SwiftUI
   private var lightsX: [CGFloat]?
 
   @objc private func layoutWindow(_ notification: Notification) {
-    if let w = notification.object as? NSWindow { layoutLights(w) }
+    guard let w = notification.object as? NSWindow else { return }
+    // Clair owns its own window/session state (workspace.json); macOS's own window-restoration
+    // duplicates it and, on a Finder file-open launch, raced against the restored window to
+    // produce two windows. Every window Clair ever shows opts out, not just the chrome-bearing ones.
+    w.isRestorable = false
+    layoutLights(w)
   }
 
   private func layoutLights(_ w: NSWindow) {
