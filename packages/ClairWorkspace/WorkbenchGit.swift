@@ -100,6 +100,13 @@ public enum WorkbenchGit {
   public static func currentBranch(_ root: String) -> String? {
     let r = run(root, ["rev-parse", "--abbrev-ref", "HEAD"]); return r.ok && r.out != "HEAD" ? r.out : nil
   }
+  /// Repository folder name, the same for every worktree of one repo.
+  public static func repoName(_ root: String) -> String? {
+    let r = run(root, ["rev-parse", "--path-format=absolute", "--git-common-dir"])
+    guard r.ok else { return nil }
+    let url = URL(fileURLWithPath: r.out)
+    return (url.lastPathComponent == ".git" ? url.deletingLastPathComponent() : url).lastPathComponent
+  }
   public static func branches(_ root: String) -> [String] {
     lines(root, ["for-each-ref", "--format=%(refname:short)", "--sort=refname", "refs/heads"])
   }

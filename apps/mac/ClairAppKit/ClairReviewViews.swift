@@ -925,6 +925,8 @@
     @State private var expandedGroups: Set<String> = []
     @State private var archive: [AgentHistory]?
     @State private var archiveOpen = false
+    /// cwd → "repo · branch", read off the main thread.
+    @State private var gitLabels: [String: String] = [:]
 
     private func label(_ s: AgentSession) -> (String, Color) {
       switch s.status {
@@ -940,6 +942,14 @@
         .task {
           histories = await AgentHistoryStore.shared.load(.recent)
           historyLoading = false
+        }
+        .task(id: Set(sessions.map(\.cwd))) {
+          for cwd in Set(sessions.map(\.cwd)) where gitLabels[cwd] == nil {
+            gitLabels[cwd] = await Task.detached(priority: .utility) {
+              let repo = WorkbenchGit.repoName(cwd) ?? URL(fileURLWithPath: cwd).lastPathComponent
+              return [repo, WorkbenchGit.currentBranch(cwd)].compactMap { $0 }.joined(separator: " · ")
+            }.value
+          }
         }
       if sessions.isEmpty {
         Text(tr("起動中のエージェントはありません")).font(Typography.font(Typography.sidebarStrong)).foregroundStyle(C.textSecondary)
@@ -960,14 +970,17 @@
               Circle().fill(color).frame(width: 6, height: 6).padding(.top, 6)
             }
             VStack(alignment: .leading, spacing: 2) {
-              Text(s.title).font(Typography.font(Typography.sidebarStrong)).foregroundStyle(C.textPrimary)
-              if let activity = s.activity {
-                Text(activity).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textSecondary).lineLimit(1)
-              }
-              Text("\(text) · \(s.project == current ? "" : s.project + " · ")\(s.cwd.split(separator: "/").last.map(String.init) ?? s.cwd)")
+              // The session title leads; the provider name is already the avatar.
+              Text(s.activity ?? s.title).font(Typography.font(Typography.sidebarStrong)).foregroundStyle(C.textPrimary).lineLimit(1)
+              Text(([gitLabels[s.cwd] ?? URL(fileURLWithPath: s.cwd).lastPathComponent] + (s.status.isExited ? [text] : [])).joined(separator: " · "))
                 .font(Typography.font(Typography.sidebar)).foregroundStyle(C.textQuaternary).lineLimit(1)
             }
             Spacer(minLength: 0)
+            if s.status == .attention {
+              Image(systemName: "bell.badge.fill").font(.system(size: 13)).foregroundStyle(C.attention)
+                .symbolEffect(.pulse).padding(.top, 5)
+                .help(text).accessibilityLabel(text)
+            }
           }
           .padding(.horizontal, 20).padding(.vertical, 4).contentShape(Rectangle())
         }.buttonStyle(.hoverWash)
