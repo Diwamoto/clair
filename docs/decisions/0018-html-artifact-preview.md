@@ -12,8 +12,10 @@ HTML / HTM は既存の preview pane に表示する。編集 buffer を `WKWebV
 `loadHTMLString` に渡し、JavaScript を実行する。editor 本体の描画・入力経路には
 WebView を使わない。
 
-自己完結した artifact を対象とし、base URL を渡さない。相対パスによる local
-file の読み込みを許可しない。プレビュー内のページ遷移は止め、ユーザーがクリックした
+base URL はプレビュー対象ファイル自身のフォルダに限定する。`<script src>` /
+`<link href>` などの相対パスは同じフォルダ内のファイルだけ解決でき（`..` や
+symlink で Project の外へは出られない）、フォルダの外や他のプロジェクト、Mac の
+他の場所は読めない。プレビュー内のページ遷移は止め、ユーザーがクリックした
 http / https / mailto リンクだけ既定のアプリへ渡す。WebView のデータストアは
 非永続にする。
 

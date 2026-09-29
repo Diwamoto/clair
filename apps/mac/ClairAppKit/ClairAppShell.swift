@@ -3129,7 +3129,7 @@ import Observation
             if kind == .terminal { ClairGhosttySurface(launch: launches[id].map { ($0.command, $0.cwd) } ?? (project.hasPrefix("/") ? ("", project) : nil), pane: id, sessionKey: ClairWorkbenchStore.terminalKey(root: project, pane: id), focused: id == focused, onFocus: { if id != focused { onFocus(id) } }, onFacts: { onFacts(id, $0, $1, $2) }, onTitle: { onTitle(id, $0) }) }  // one surface per terminal leaf, attached to the daemon shell keyed by project#pane
             else if kind == .graph { CommitGraphPane(root: project) }
             else if kind == .preview, let path = editor.previews[id] ?? editor.path, TableFile.separator(path) != nil { TablePane(buffers: editor.buffers, path: path, onEdit: editor.onEdit) }
-            else if kind == .preview, let path = editor.previews[id] ?? editor.path, path.lowercased().hasSuffix(".html") || path.lowercased().hasSuffix(".htm") { HTMLPreviewPane(buffers: editor.buffers, path: path) }
+            else if kind == .preview, let path = editor.previews[id] ?? editor.path, path.lowercased().hasSuffix(".html") || path.lowercased().hasSuffix(".htm") { HTMLPreviewPane(buffers: editor.buffers, root: editor.root, path: path) }
             else if kind == .preview { MarkdownPreviewPane(buffers: editor.buffers, root: editor.root, path: editor.previews[id] ?? editor.path) }
             else { editor.inPane(focused: id == focused, onFocus: { if id != focused { onFocus(id) } }) }
             if let from = dragging, from != id {
@@ -3140,8 +3140,8 @@ import Observation
             }
           }
         }
-        // Keep the editor fully legible even when another pane is focused.
-        .opacity(kind == .editor || id == focused ? 1 : 0.75)
+        // Keep the editor and preview panes fully legible even when another pane is focused.
+        .opacity(kind == .editor || kind == .preview || id == focused ? 1 : 0.75)
         // A split focuses the new pane, so the focused leaf fades in when it appears.
         // ponytail: the tree re-renders on split, so this keys off focus, not "is new".
         .opacity(shown || id != focused || reduceMotion ? 1 : 0)
