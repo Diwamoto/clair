@@ -374,7 +374,11 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   再起動でも残る。追加 folder の Git status、file 監視、terminal / agent の cwd は
   root だけが対象になる
 - Agents 一覧は現在の agent terminal への移動と、3 provider の local chat history
-  の閲覧を統合する。履歴行には provider が分かるラベルとアイコンを付ける
+  の閲覧を統合する。履歴行には provider が分かるラベルとアイコンを付ける。
+  チャットを開くと「ターミナルで再開」で、その provider の resume コマンド
+  (`claude --resume` / `codex resume` / `opencode --session`)を新しい terminal で
+  実行する。既存の agent launch と同じ承認境界を通り、cwd は Project root のため、
+  チャットの Project が現在の Project と異なるときは無効にする
 - 設定の「使用状況」はユーザーが送信した依頼・追記を 1 件として日別に集計し、
   今日の件数と日別 activity calendar を示す。使用費用は取得可能な token/model
   情報から推定し、実際の請求額と区別して表示する。欠損分をゼロ扱いしない

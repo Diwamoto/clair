@@ -26,6 +26,9 @@ public struct AgentHistory: Sendable, Identifiable {
   /// Provider file to re-read for the full transcript; nil when `messages` is already complete.
   public var source: URL? = nil
 
+  /// Provider-native session id, the argument of the provider's resume command.
+  public var sessionID: String { String(id.dropFirst(provider.rawValue.count + 1)) }
+
   public var promptCount: Int { messages.filter { $0.role == "user" }.count }
 }
 

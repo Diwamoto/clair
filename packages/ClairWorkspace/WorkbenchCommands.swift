@@ -469,9 +469,10 @@ extension CommandRegistry {
           CommandParam("profile", .string, allowed: AgentProfile.all.map(\.id)),
           CommandParam("prompt", .string, required: false), CommandParam("branch", .string, required: false),
           CommandParam("direction", .string, required: false, allowed: ["right", "down"]),
-          CommandParam("parent", .string, required: false),
+          CommandParam("parent", .string, required: false), CommandParam("resume", .string, required: false),
         ], palette: false,
         preflight: { s, i throws(CommandError) in
+          try require(i["resume"]?.string.map(AgentProfile.isSessionID) ?? true, "invalid session id")
           let home = try s.launchHome(i["parent"]?.string)
           if let b = i["branch"]?.string {
             try require(FileManager.default.fileExists(atPath: home.project.path + "/.git"), "not a Git project")
@@ -488,7 +489,7 @@ extension CommandRegistry {
       }
       let launch = AgentLaunch(
         profile: i["profile"]!.string!, cwd: cwd, prompt: i["prompt"]?.string.flatMap { $0.isEmpty ? nil : $0 },
-        parent: i["parent"]?.string)
+        parent: i["parent"]?.string, resume: i["resume"]?.string)
       let axis: PaneTree.Axis = i["direction"]?.string == "down" ? .vertical : .horizontal
       let pane = s.withLayout(home.project.name) { l in
         let id = home.pane.map { l.tree.split($0, axis, kind: .terminal) } ?? { l.tree.splitFocused(.vertical, kind: .terminal); return l.tree.focused }()

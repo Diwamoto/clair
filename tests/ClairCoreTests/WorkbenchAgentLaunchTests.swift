@@ -38,6 +38,15 @@ final class WorkbenchAgentLaunchTests: XCTestCase {
     XCTAssertNotNil(s.launches[ida])
   }
 
+  func testResumeUsesProviderCommandAndRejectsUnsafeIDs() throws {
+    XCTAssertEqual(AgentLaunch(profile: "claude", cwd: "/x", resume: "abc-123").command, "claude --resume abc-123")
+    XCTAssertEqual(AgentLaunch(profile: "codex", cwd: "/x", resume: "abc-123").command, "codex resume abc-123")
+    XCTAssertEqual(AgentLaunch(profile: "opencode", cwd: "/x", resume: "ses_1").command, "opencode --session ses_1")
+    var (s, _) = try opened()
+    XCTAssertEqual(r.execute("agent.launch", ["profile": .string("claude"), "resume": .string("x; rm -rf ~")], confirmed: true, state: &s).failure?.code, .preconditionFailed)
+    XCTAssertTrue(s.launches.isEmpty)
+  }
+
   func testLaunchesAreNotPersisted() throws {
     var (s, _) = try opened()
     try r.execute("agent.launch", ["profile": .string("opencode")], confirmed: true, state: &s).get()

@@ -16,11 +16,13 @@ public struct AgentProfile: Sendable, Equatable {
   public let command: String
   /// V16: non-interactive form that takes the prompt as its last argument and exits when done.
   public let batch: String
+  /// Command prefix that takes a provider session id as its last argument and reopens that chat.
+  public var resume: String? = nil
 
   public static let all = [
-    AgentProfile(id: "claude", title: "Claude Code", command: "claude", batch: "claude -p"),
-    AgentProfile(id: "codex", title: "Codex", command: "codex", batch: "codex exec"),
-    AgentProfile(id: "opencode", title: "OpenCode", command: "opencode", batch: "opencode run"),
+    AgentProfile(id: "claude", title: "Claude Code", command: "claude", batch: "claude -p", resume: "claude --resume"),
+    AgentProfile(id: "codex", title: "Codex", command: "codex", batch: "codex exec", resume: "codex resume"),
+    AgentProfile(id: "opencode", title: "OpenCode", command: "opencode", batch: "opencode run", resume: "opencode --session"),
     // agent registry: added alongside the original three so users can switch to them; behaviour
     // of claude/codex/opencode above is unchanged.
     AgentProfile(id: "gemini", title: "Gemini CLI", command: "gemini", batch: "gemini -p"),
@@ -28,6 +30,9 @@ public struct AgentProfile: Sendable, Equatable {
     AgentProfile(id: "copilot", title: "GitHub Copilot CLI", command: "copilot", batch: "copilot -p"),
     AgentProfile(id: "aider", title: "Aider", command: "aider", batch: "aider --yes --message"),
   ]
+
+  /// Provider session ids are UUIDs or `ses_…`; anything else never reaches a shell.
+  public static func isSessionID(_ s: String) -> Bool { !s.isEmpty && s.allSatisfy { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" } && s.utf8.count <= 100 }
 
   public static func named(_ id: String) -> AgentProfile? { all.first { $0.id == id } }
 }
@@ -40,12 +45,15 @@ public struct AgentLaunch: Sendable, Codable, Equatable {
   /// V16: terminal key (`root#pane`) of the agent that launched this one.
   public var parent: String?
   public var run: String?
-  public init(profile: String, cwd: String, prompt: String? = nil, parent: String? = nil) {
-    self.profile = profile; self.cwd = cwd; self.prompt = prompt; self.parent = parent
+  /// Provider session id to reopen instead of starting a fresh chat.
+  public var resume: String?
+  public init(profile: String, cwd: String, prompt: String? = nil, parent: String? = nil, resume: String? = nil) {
+    self.profile = profile; self.cwd = cwd; self.prompt = prompt; self.parent = parent; self.resume = resume
     run = prompt == nil ? nil : UUID().uuidString.lowercased()
   }
   public var command: String {
     guard let p = AgentProfile.named(profile) else { return "" }
+    if let resume, let prefix = p.resume, AgentProfile.isSessionID(resume) { return "\(prefix) \(resume)" }
     guard let prompt, let run else { return p.command }
     // `script` keeps a TTY for the agent while recording it, and exits with the agent's status.
     // Wrapped in /bin/sh so the user's login shell (zsh, fish, …) only sees one quoted argument.
