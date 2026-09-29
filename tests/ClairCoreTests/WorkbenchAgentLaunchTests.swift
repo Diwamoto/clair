@@ -58,6 +58,19 @@ final class WorkbenchAgentLaunchTests: XCTestCase {
     XCTAssertEqual(r.paletteItems(.commands, query: "codex", state: s).map(\.input).filter { $0["profile"] != nil }, [["profile": .string("codex")]])
   }
 
+  // agent registry: the settings "既定のAgent" picker and agent.launch's allowed profiles both
+  // read the same AgentProfile registry, so a newly registered agent needs no change beyond `all`.
+  func testDefaultAgentChoicesMatchRegisteredProfilesAndAreLaunchable() throws {
+    XCTAssertEqual(WorkbenchState.choiceOptions["defaultAgent"], AgentProfile.all.map(\.id))
+    var (s, _) = try opened()
+    for id in ["gemini", "cursor-agent", "copilot", "aider"] {
+      s.panesClosed = true
+      let result = try r.execute("agent.launch", ["profile": .string(id)], confirmed: true, state: &s).get()
+      guard case .pane(let pane) = result else { return XCTFail() }
+      XCTAssertEqual(s.launches[pane]?.command, id)
+    }
+  }
+
   // Dragging a launched pane's header onto another pane moves the running session with it.
   func testSwapMovesLaunchToTheOtherPane() throws {
     var (s, _) = try opened()
