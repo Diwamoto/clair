@@ -208,6 +208,7 @@ public enum ClairUpdater {
       #if os(macOS)
       let p = Process()
       p.executableURL = URL(fileURLWithPath: "/usr/bin/ditto"); p.arguments = ["-x", "-k", archive.path, staging.path]
+      p.standardInput = FileHandle.nullDevice; p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
       try p.run(); p.waitWithoutRunLoop()
       guard p.terminationStatus == 0 else { throw ClairUpdateError.installFailed("ditto exited \(p.terminationStatus)") }
       #else
@@ -222,7 +223,7 @@ public enum ClairUpdater {
       return apps[0]
     } catch {
       try? fm.removeItem(at: staging)
-      throw error as? ClairUpdateError ?? .installFailed("\(error)")
+      throw error as? ClairUpdateError ?? .installFailed("archive extraction: \(error)")
     }
   }
 
@@ -259,7 +260,7 @@ public enum ClairUpdater {
       #endif
     } catch {
       try? fm.removeItem(at: pending(c)); try? fm.removeItem(at: script)
-      throw ClairUpdateError.installFailed("\(error)")
+      throw ClairUpdateError.installFailed("restart helper: \(error)")
     }
   }
 
