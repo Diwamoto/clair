@@ -104,24 +104,22 @@
     let pane: Int?
     let children: [(session: AgentSession, launch: AgentLaunch)]
     let focus: (AgentSession) -> Void
-    let start: () -> Void
+    /// Starts the concierge with `message` as its first request (the one undecided thing is decided on send).
+    let start: (String) -> Void
     @State private var messages: [AgentHistory.Message] = []
     @State private var draft = ""
+    /// Shown until the transcript catches up with what was just sent.
+    @State private var pending: String?
 
     var body: some View {
       VStack(spacing: 0) {
-        if session == nil {
-          VStack(spacing: 12) {
-            Text(tr("コンシェルジュは起動していません")).foregroundStyle(C.textTertiary)
-            Button(tr("起動"), action: start).buttonStyle(.hoverWash)
-          }.frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
           ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
-              if messages.isEmpty {
+              if messages.isEmpty && pending == nil {
                 Text(tr("依頼を送ると、ここに会話が表示されます")).foregroundStyle(C.textQuaternary).frame(maxWidth: .infinity).padding(.top, 40)
               }
-              ForEach(messages) { m in bubble(m) }
+              ForEach(messages) { m in bubble(m.role, m.text) }
+              if let pending { bubble("user", pending).opacity(0.6) }
               // Children are shown as links after the conversation, never as relayed output.
               if !children.isEmpty {
                 VStack(spacing: 4) {
@@ -133,17 +131,16 @@
             }.padding(.horizontal, 16).padding(.vertical, 26).frame(maxWidth: 760).frame(maxWidth: .infinity)
           }.defaultScrollAnchor(.bottom).clairScroller()
           composer.frame(maxWidth: 760).frame(maxWidth: .infinity).padding(.horizontal, 16).padding(.bottom, 12)
-        }
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity).background(C.canvas)
       .task(id: session) { await follow() }
     }
 
-    private func bubble(_ m: AgentHistory.Message) -> some View {
-      let text = Text((try? AttributedString(markdown: m.text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(m.text))
+    private func bubble(_ role: String, _ body: String) -> some View {
+      let text = Text((try? AttributedString(markdown: body, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(body))
         .font(Typography.font(Typography.chrome)).textSelection(.enabled)
       return Group {
-        if m.role == "user" {
+        if role == "user" {
           HStack {
             Spacer(minLength: 60)
             text.foregroundStyle(C.textPrimary).padding(.horizontal, 12).padding(.vertical, 8)
@@ -160,17 +157,23 @@
         TextField(tr("コンシェルジュに頼む…"), text: $draft, axis: .vertical)
           .textFieldStyle(.plain).lineLimit(1...6).font(Typography.font(Typography.chrome))
           .onSubmit(send)
-        Button(tr("送信"), action: send).buttonStyle(.hoverWash).disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        let empty = draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        Button(action: send) {
+          Image(systemName: "arrow.up").font(.system(size: 12, weight: .bold)).foregroundStyle(C.canvas)
+            .frame(width: 26, height: 26).background(empty ? C.textQuaternary : C.textPrimary, in: Circle())
+        }.buttonStyle(.plain).disabled(empty).help(tr("送信")).accessibilityLabel(tr("送信"))
       }
-      .padding(8)
-      .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(C.divider, lineWidth: 1))
+      .padding(.leading, 12).padding(.trailing, 6).padding(.vertical, 6)
+      .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(C.divider, lineWidth: 1))
     }
 
     /// Types the text into the concierge PTY, then Return on its own write so the TUI reads it as a submit, not a pasted newline.
     private func send() {
       let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-      guard !text.isEmpty, let pane, ClairGhosttySurfaceView.send(text, toPane: pane) else { return }
-      draft = ""
+      guard !text.isEmpty else { return }
+      guard let pane else { draft = ""; pending = text; return start(text) }
+      guard ClairGhosttySurfaceView.send(text, toPane: pane) else { return }
+      draft = ""; pending = text
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { ClairGhosttySurfaceView.send("\r", toPane: pane) }
     }
 
@@ -185,6 +188,7 @@
           if modified != seen {
             seen = modified
             messages = await Task.detached { AgentHistoryReader.transcript(file: file, provider: .claude) }.value
+            if messages.last?.role == "user" || messages.contains(where: { $0.role == "user" && $0.text == pending }) { pending = nil }
           }
         }
         try? await Task.sleep(for: .seconds(1))

@@ -53,6 +53,15 @@ final class WorkbenchConciergeTests: XCTestCase {
     XCTAssertEqual(AgentLaunch(profile: "claude", cwd: root, concierge: "x; rm -rf ~").command, "claude")
   }
 
+  func testMessageSentBeforeStartBecomesTheOpeningPrompt() throws {
+    var (s, _) = try opened()
+    guard case .pane(let pane) = try r.execute("concierge.open", ["message": .string("README を直して")], confirmed: true, state: &s).get()
+    else { return XCTFail() }
+    let cmd = try XCTUnwrap(s.launches[pane]?.command)
+    XCTAssertTrue(cmd.hasSuffix(" 'README を直して'"), cmd)
+    XCTAssertFalse(AgentLaunch(profile: "claude", cwd: "/x", concierge: "abc").command.hasSuffix("'README を直して'"))
+  }
+
   func testTranscriptFileIsFoundByIdUnderAnyProjectSlug() throws {
     let home = URL.temporaryDirectory.appending(path: "clair-home-\(UUID().uuidString)")
     let dir = home.appending(path: ".claude/projects/-Users-x-repo")

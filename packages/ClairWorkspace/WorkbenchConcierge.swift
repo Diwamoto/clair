@@ -45,10 +45,12 @@ public enum Concierge {
     return dirs.lazy.map { $0.appending(path: "\(session).jsonl") }.first { FileManager.default.fileExists(atPath: $0.path) }
   }
 
-  static func command(session: String, root: String) -> String {
+  /// `opening` rides as Claude's initial prompt, so a request sent before the TUI was up is never lost.
+  static func command(session: String, root: String, opening: String? = nil) -> String {
     // A restored pane reopens the same chat; a new one starts it under the fixed id.
     let start = transcriptFile(session: session) == nil ? "--session-id" : "--resume"
-    return "claude \(start) \(session) --append-system-prompt \(AgentRun.quote(prompt(root: root)))"
+    let first = start == "--session-id" ? opening.map { " " + AgentRun.quote($0) } ?? "" : ""
+    return "claude \(start) \(session) --append-system-prompt \(AgentRun.quote(prompt(root: root)))\(first)"
   }
 }
 

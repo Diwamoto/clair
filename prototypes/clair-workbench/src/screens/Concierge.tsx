@@ -153,9 +153,11 @@ export function ConciergeMain() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages.length]);
 
+  // Sending while the concierge is down starts it with this as its first request.
   const send = () => {
     const text = draft.trim();
     if (!text) return;
+    if (!running) set({ running: true });
     setMessages((m) => [...m, { id: `u${m.length}`, from: 'user', text }]);
     setDraft('');
   };
@@ -165,11 +167,7 @@ export function ConciergeMain() {
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', width: '100%', maxWidth: 760, margin: '0 auto' }}>
       {/* chat: the concierge's transcript */}
       <div ref={feedRef} className="scroll" style={{ flex: 1, minHeight: 0, padding: '26px 16px 8px' }}>
-        {!running ? (
-          <div style={{ color: color.textQuaternary, fontSize: fs.caption, textAlign: 'center', marginTop: 40 }}>
-            コンシェルジュは起動していません
-          </div>
-        ) : (
+        {(
           messages.map((m) => (
             <div key={m.id} className="msg" style={{ marginBottom: space[3] }}>
               {m.from === 'tool' ? (
@@ -217,11 +215,10 @@ export function ConciergeMain() {
 
       {/* composer: text goes to the concierge's PTY */}
       <div style={{ padding: '8px 12px' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: space[2], padding: 8, borderRadius: radius.card, border: `1px solid ${line.stronger}`, background: color.canvas }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: space[2], padding: '6px 6px 6px 12px', borderRadius: radius.overlay, border: `1px solid ${line.stronger}`, background: color.canvas }}>
           <textarea
             value={draft}
-            disabled={!running}
-            onChange={(e) => setDraft(e.target.value)}
+                        onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
@@ -232,8 +229,14 @@ export function ConciergeMain() {
             placeholder="コンシェルジュに頼む…"
             style={{ flex: 1, minWidth: 0, resize: 'none', border: 0, outline: 'none', background: 'transparent', color: color.textPrimary, fontSize: fs.secondary }}
           />
-          <button className="btn-primary" disabled={!running || !draft.trim()} onClick={send} style={{ height: 24, padding: '0 10px', borderRadius: radius.control, fontSize: fs.caption }}>
-            送信
+          <button
+            onClick={send}
+            disabled={!draft.trim()}
+            title="送信"
+            aria-label="送信"
+            style={{ width: 26, height: 26, flexShrink: 0, borderRadius: radius.pill, display: 'flex', alignItems: 'center', justifyContent: 'center', background: draft.trim() ? color.textPrimary : color.textQuaternary, color: color.canvas }}
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" /></svg>
           </button>
         </div>
       </div>

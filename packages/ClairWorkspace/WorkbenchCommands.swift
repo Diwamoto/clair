@@ -577,15 +577,18 @@ extension CommandRegistry {
     // ADR-0020: focus the Project's concierge, starting it if needed. GUI-only (ai: false): an agent
     // must not spawn a concierge; it launches children through agent.launch instead.
     cmd("concierge.open", "コンシェルジュを開く", .external, ai: false,
+        params: [CommandParam("message", .string, required: false)],
         preflight: { s, _ throws(CommandError) in
           _ = try s.launchHome(nil)
           return .external
-        }) { s, _ in
+        }) { s, i in
       if let c = s.concierge(in: s.project) { s.tree.focus(c.pane); return .pane(c.pane) }
       let home = try! s.launchHome(nil)
       s.tree.splitFocused(.horizontal, kind: .terminal)
       let pane = s.tree.focused
-      s.launches[pane] = AgentLaunch(profile: "claude", cwd: home.project.path, concierge: UUID().uuidString.lowercased())
+      s.launches[pane] = AgentLaunch(
+        profile: "claude", cwd: home.project.path, concierge: UUID().uuidString.lowercased(),
+        opening: i["message"]?.string.flatMap { $0.isEmpty ? nil : $0 })
       s.panesClosed = false
       return .pane(pane)
     },

@@ -49,13 +49,16 @@ public struct AgentLaunch: Sendable, Codable, Equatable {
   public var resume: String?
   /// ADR-0020: the fixed Claude Code session id of a Project's concierge.
   public var concierge: String?
-  public init(profile: String, cwd: String, prompt: String? = nil, parent: String? = nil, resume: String? = nil, concierge: String? = nil) {
+  /// The request typed before the concierge was running; handed to it as its first message.
+  public var opening: String?
+  public init(profile: String, cwd: String, prompt: String? = nil, parent: String? = nil, resume: String? = nil, concierge: String? = nil, opening: String? = nil) {
     self.profile = profile; self.cwd = cwd; self.prompt = prompt; self.parent = parent; self.resume = resume; self.concierge = concierge
+    self.opening = opening
     run = prompt == nil ? nil : UUID().uuidString.lowercased()
   }
   public var command: String {
     guard let p = AgentProfile.named(profile) else { return "" }
-    if let concierge, AgentProfile.isSessionID(concierge) { return Concierge.command(session: concierge, root: cwd) }
+    if let concierge, AgentProfile.isSessionID(concierge) { return Concierge.command(session: concierge, root: cwd, opening: opening) }
     if let resume, let prefix = p.resume, AgentProfile.isSessionID(resume) { return "\(prefix) \(resume)" }
     guard let prompt, let run else { return p.command }
     // `script` keeps a TTY for the agent while recording it, and exits with the agent's status.

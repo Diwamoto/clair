@@ -1590,7 +1590,7 @@ import Observation
     private var conciergeSidebar: some View {
       ConciergeSidebar(
         running: st.concierge(in: st.project) != nil, showingChat: conciergeChat,
-        children: st.conciergeChildren(in: st.project), start: startConcierge,
+        children: st.conciergeChildren(in: st.project), start: { startConcierge() },
         toggleView: {
           conciergeChat.toggle()
           if !conciergeChat, let c = st.concierge(in: st.project) { store.run("pane.focus", ["id": .int(c.pane)]) }
@@ -1598,9 +1598,9 @@ import Observation
         focus: focusConciergeChild, editInstructions: editConciergeInstructions)
     }
 
-    private func startConcierge() {
+    private func startConcierge(_ message: String? = nil) {
       conciergeChat = true
-      store.run("concierge.open", [:], confirmed: true)
+      store.run("concierge.open", message.map { ["message": .string($0)] } ?? [:], confirmed: true)
     }
 
     /// A child link shows the real terminal: leave the chat and focus that pane.
@@ -2362,7 +2362,7 @@ import Observation
         if let chat { AgentChatView(history: chat, onResume: st.projects.first(where: { $0.path == chat.project }).map { p in { resume(chat, in: p.name) } }) { self.chat = nil }.id(chat.id).background(C.canvas) }
         else if sidebarMode == "concierge", conciergeChat {
           let c = st.concierge(in: st.project)
-          ConciergeChatView(session: c?.session, pane: c?.pane, children: st.conciergeChildren(in: st.project), focus: focusConciergeChild, start: startConcierge)
+          ConciergeChatView(session: c?.session, pane: c?.pane, children: st.conciergeChildren(in: st.project), focus: focusConciergeChild, start: { startConcierge($0) })
         }
       }
     }
