@@ -2271,7 +2271,7 @@ import Observation
         } else if diff != nil {
           ProgressView("差分を読み込み中…").frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if st.panesClosed {
-          EmptyPanesView(open: { store.run("pane.open", ["kind": .string($0)]) })
+          HomeView(shortcuts: homeShortcuts(st))
         } else {
         PaneView(
           node: st.tree.maximized.flatMap { id in st.tree.leaves.first { $0.id == id }.map { .leaf(id: $0.id, kind: $0.kind) } } ?? st.tree.root,
@@ -2283,6 +2283,7 @@ import Observation
           onRatio: { store.run("pane.setRatio", ["id": .int($0), "ratio": .double($1)]) },
           editor: EditorPane(buffers: store.buffers, root: store.activeRoot, path: st.active,
             softWrap: st.toggles["softWrap"] == true, style: editorStyle,
+            home: homeShortcuts(st),
             debugLine: store.debugSession?.frames.first(where: { $0.id == store.debugSession?.selectedFrame }).flatMap {
               $0.path == store.activeRoot.map { $0 + "/" + (st.active ?? "") } ? $0.line : nil
             },
@@ -2315,6 +2316,13 @@ import Observation
       "一般": "ワークスペースの基本動作とアプリ全体の表示を設定します。",
       "使用状況": "依頼・追記と推定費用の集計",
     ]
+
+    /// Home screen rows (new Project, or every pane closed): commands with a bound key, in this order.
+    private func homeShortcuts(_ st: WorkbenchState) -> [(title: String, keys: String)] {
+      ["terminal.show", "palette.files", "palette.commands", "sidebar.toggle", "pane.splitRight"].compactMap { id in
+        CommandRegistry.workbench.commands.first { $0.id == id }.flatMap { d in st.shortcut(for: d).map { (d.title, $0) } }
+      }
+    }
 
     private var settingsMain: some View {
       ScrollView {
@@ -3209,25 +3217,6 @@ import Observation
   }
 
   /// Every pane closed: a quiet centre with the ways back in.
-  private struct EmptyPanesView: View {
-    let open: (String) -> Void
-
-    var body: some View {
-      VStack(spacing: 14) {
-        Image(systemName: "square.dashed").font(.system(size: 40, weight: .ultraLight)).foregroundStyle(.secondary)
-        Text("開いているペインはありません").font(.headline)
-        HStack(spacing: 10) {
-          Button("ターミナルを開く") { open("terminal") }
-          Button("エディタを開く") { open("editor") }
-        }
-        Text("⌘W でエディタを開けます").font(.caption).foregroundStyle(.secondary)
-      }
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
-      .background(C.surface)
-    }
-  }
-
-
   private struct PaneView: View {
     let node: PaneTree.Node
     let focused: Int
