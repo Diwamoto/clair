@@ -50,6 +50,26 @@ struct ProcessSample: Equatable {
     return result
   }
 
+  /// `root#pane` of the Clair terminal `pid` runs in, read from its inherited `CLAIR_TERMINAL_KEY`.
+  /// Only our own user's processes are readable; anything else (or the daemon itself) is nil.
+  static func terminalKey(of pid: pid_t) -> (root: String, pane: Int)? {
+    var mib = [CTL_KERN, KERN_PROCARGS2, pid]
+    var size = 0
+    guard sysctl(&mib, 3, nil, &size, nil, 0) == 0, size > 4 else { return nil }
+    var buf = [UInt8](repeating: 0, count: size)
+    guard sysctl(&mib, 3, &buf, &size, nil, 0) == 0 else { return nil }
+    // Layout: argc (Int32), exec path, NUL padding, argv[argc], then environment, all NUL-separated.
+    let argc = buf.withUnsafeBytes { $0.load(as: Int32.self) }
+    let strings = buf[4..<size].split(separator: 0, omittingEmptySubsequences: true)
+    for entry in strings.dropFirst(1 + Int(argc)) {
+      guard let line = String(bytes: entry, encoding: .utf8), line.hasPrefix("CLAIR_TERMINAL_KEY=") else { continue }
+      let value = line.dropFirst("CLAIR_TERMINAL_KEY=".count)
+      guard let hash = value.lastIndex(of: "#"), let pane = Int(value[value.index(after: hash)...]) else { return nil }
+      return (String(value[..<hash]), pane)
+    }
+    return nil
+  }
+
   /// CPU percent of one core between two samples (over 100 on several cores, like Activity Monitor).
   /// A process born since `old` counts from zero; one that exited drops out.
   static func cpuPercent(from old: ProcessSample, to new: ProcessSample, interval: Double) -> Double {
@@ -72,6 +92,8 @@ struct ProcessSample: Equatable {
 /// Footer meter next to the quota meter: compact CPU/memory for all of Clair, detail in a hover popover.
 struct ClairResourceMeter: View {
   private typealias C = DesignTokens.Color
+  /// Session title for a terminal pane (`root`, `pane`), if the workbench knows one.
+  var sessionTitle: (String, Int) -> String? = { _, _ in nil }
   @State private var sample = ProcessSample()
   @State private var cpu: Double = 0
   @State private var perProcess: [pid_t: Double] = [:]
@@ -104,13 +126,16 @@ struct ClairResourceMeter: View {
         GridRow { Text("上位プロセス").font(.system(size: 13, weight: .semibold)); Text("") }
         ForEach(ProcessSample.top(sample, cpu: perProcess), id: \.pid) { p in
           GridRow {
-            Text(p.pid == getpid() ? "Clair" : p.name).lineLimit(1).truncationMode(.middle).help("pid \(p.pid)")
+            VStack(alignment: .leading, spacing: 1) {
+              Text(p.pid == getpid() ? "Clair" : p.name).lineLimit(1).truncationMode(.middle)
+              if let where_ = owner(p.pid) { Text(where_).foregroundStyle(C.textQuaternary).lineLimit(1).truncationMode(.middle) }
+            }.help("pid \(p.pid)")
             Text(String(format: "%.0f%%", p.cpu) + " · " + Self.bytes(p.bytes)).gridColumnAlignment(.trailing)
           }
         }
       }
       .font(Typography.font(Typography.chrome)).monospacedDigit()
-      .frame(width: 300, alignment: .leading).padding(12)
+      .frame(width: 340, alignment: .leading).padding(12)
     }
     .accessibilityElement(children: .combine)
     .task {
@@ -135,6 +160,13 @@ struct ClairResourceMeter: View {
     }
     .chartXScale(domain: 0...59).chartXAxis(.hidden).chartYAxis(.hidden)
     .accessibilityHidden(true)
+  }
+
+  /// "project · session" for a process running in a Clair terminal.
+  private func owner(_ pid: pid_t) -> String? {
+    guard let key = ProcessSample.terminalKey(of: pid) else { return nil }
+    let project = (key.root as NSString).lastPathComponent
+    return "\(project) · " + (sessionTitle(key.root, key.pane) ?? "ターミナル \(key.pane)")
   }
 
   private static func bytes(_ n: UInt64) -> String { ByteCountFormatter.string(fromByteCount: Int64(n), countStyle: .memory) }

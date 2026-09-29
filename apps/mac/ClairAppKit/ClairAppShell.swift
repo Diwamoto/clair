@@ -2793,7 +2793,9 @@ import Observation
           languageStatus
         }
         Spacer()
-        ClairResourceMeter()
+        ClairResourceMeter { root, pane in
+          st.agentSessions.first { $0.project == root && $0.pane == pane }?.title ?? st.paneTitles[NotificationLog.paneKey(root, pane)].flatMap { $0.isEmpty ? nil : $0 }
+        }
         if st.toggles["hideQuota"] != true { quotaMeter }
         Button { sidebarMode = "terminal" } label: {
           HStack(spacing: 5) {
