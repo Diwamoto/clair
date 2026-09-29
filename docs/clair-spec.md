@@ -399,7 +399,8 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   file を開く。該当 Project がなければ Git root を新規 Project として開く。どの
   Project にも Git repository にも属さない ad-hoc file は Project を作らず、
   active Project のタブ列の末尾に開く(root からの相対パス `../…`、explorer には出さない)
-- Clair の terminal からの `clair open` は承認なしで実行し、Clair を前面に出す(MCP からは呼べない)
+- Clair の terminal からの `clair open` は承認なしで実行し、Clair を前面に出す。MCP の `file.open` は既に開いている Project 内の file だけを開け、Project を新規作成できない
+- MCP の `editor.context` は現在の editor file と選択範囲の位置、明示的に選択された text(最大 16 KiB)を返す。選択内容は workspace に保存しない
 - `clair preview <html-path>` は HTML file を開き、JavaScript 対応の preview pane を表示して Clair を前面に出す。CLI からの実行前に GUI 承認を求め、MCP には公開しない。`clair-preview` Agent skill は生成した HTML artifact を Clair で見せる方法を Claude / Codex / OpenCode に案内する
 - Clair.app は text file の document type を宣言し、macOS の「このアプリケーションで
   開く」/既定アプリに設定できる。Finder から開いた file は `clair open` と同じ経路を通る

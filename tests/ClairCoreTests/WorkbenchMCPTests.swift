@@ -46,7 +46,7 @@ final class WorkbenchMCPTests: XCTestCase {
     XCTAssertEqual(set.1, 1); XCTAssertEqual(set.2, 0)
     if case .failure(let e) = set.0 { XCTAssertEqual(e.code, .denied) } else { XCTFail() }
     XCTAssertEqual(call("settings.set", ["key": .string("hideQuota"), "value": .bool(true)], approve: true).2, 1)
-    // `clair open` from a Clair terminal runs without a card (owner, 2026-09-28); over MCP it stays unavailable.
+    // The terminal CLI can open any file. MCP is limited to an already open Project.
     let file = FileManager.default.temporaryDirectory.appending(path: "clair-open-\(UUID().uuidString).txt")
     FileManager.default.createFile(atPath: file.path, contents: Data())
     defer { try? FileManager.default.removeItem(at: file) }
@@ -67,6 +67,15 @@ final class WorkbenchMCPTests: XCTestCase {
       run: { _, _ in XCTFail("preview ran without approval"); return .success(.ok) })
     XCTAssertEqual(plainCLIAsked, 1)
     XCTAssertEqual(plainCLI.failure?.code, .denied)
+    var project = WorkbenchState()
+    let root = file.deletingLastPathComponent().path
+    project.openProject(WorkbenchProject(name: "fixture", path: root))
+    let inProject = gate("file.open", ["path": .string(file.path)], state: project)
+    XCTAssertEqual(inProject.asked, 0); XCTAssertEqual(inProject.ran, 1)
+    var removed = project
+    removed.projects.removeAll { $0.path == root }
+    let changed = gate("file.open", ["path": .string(file.path)], state: project, later: removed)
+    XCTAssertEqual(changed.ran, 0)
   }
 
   func testWriteAndDestructiveNeedApprovalAndDenialBlocks() {
@@ -86,10 +95,26 @@ final class WorkbenchMCPTests: XCTestCase {
     XCTAssertEqual(g.asked + g.ran, 0)
   }
 
+  func testEditorContextCannotReturnSelectionFromAnotherFile() throws {
+    var state = WorkbenchState()
+    let root = FileManager.default.temporaryDirectory.path
+    state.openProject(WorkbenchProject(name: "context", path: root))
+    state.active = "current.swift"
+    state.editorContext = EditorContext(path: root + "/old.swift", startLine: 1, startColumn: 0,
+      endLine: 1, endColumn: 4, selectedText: "secret")
+    XCTAssertEqual(gate("editor.context", state: state).ran, 0)
+    state.editorContext = EditorContext(path: root + "/current.swift", startLine: 2, startColumn: 1,
+      endLine: 2, endColumn: 5, selectedText: "code")
+    let result = try CommandRegistry.workbench.execute("editor.context", state: &state).get()
+    XCTAssertEqual(result, .editorContext(state.editorContext!))
+  }
+
   func testAdapterListsOnlyAIAvailableAndIgnoresClaimedRisk() throws {
     var seen: WorkbenchIPCRequest?
     let list = try XCTUnwrap(MCPServer.respond(to: #"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#, call: { _ in WorkbenchIPCReply() }))
-    XCTAssertTrue(list.contains("state.snapshot")); XCTAssertTrue(list.contains("agent.launch")); XCTAssertFalse(list.contains("settings.set"))
+    XCTAssertTrue(list.contains("state.snapshot")); XCTAssertTrue(list.contains("agent.launch"))
+    XCTAssertTrue(list.contains("editor.context")); XCTAssertTrue(list.contains("file.open"))
+    XCTAssertFalse(list.contains("settings.set"))
     let denied = MCPServer.respond(to: #"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"settings.set","arguments":{"key":"hideQuota","value":true,"risk":"read"}}}"#, call: { seen = $0; return WorkbenchIPCReply() })
     XCTAssertNil(seen); XCTAssertTrue(try XCTUnwrap(denied).contains("unknown tool"))
     _ = MCPServer.respond(to: #"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"pane.focus","arguments":{"id":1}}}"#, call: { seen = $0; return WorkbenchIPCReply() })

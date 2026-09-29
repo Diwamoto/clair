@@ -25,12 +25,26 @@ public enum MCPGate {
     let terminal = req.via == nil && (req.caller != nil || req.command == "file.preview")
     guard d.aiAvailable || terminal else { return .failure(CommandError(.notAvailableToAI, "\(req.command) is not available to AI")) }
     let seen = snapshot()
-    // `clair open` from a Clair terminal needs no approval (owner, 2026-09-28): it only shows a file. MCP still cannot call it.
+    // A file.open tool may navigate within an already open Project, but cannot open an arbitrary path
+    // and thereby create a Project or expose a file outside the current workspace.
+    if req.via == .mcp && req.command == "file.open" {
+      guard case .string(let raw)? = req.input["path"],
+        let path = WorkbenchProject.normalizedFile(raw), seen.owner(of: path) != nil
+      else { return .failure(CommandError(.notAvailableToAI, "file.open requires a file in an open Project")) }
+    }
+    // `clair open` from a Clair terminal needs no approval (owner, 2026-09-28).
     let unattended = d.aiAvailable || req.command == "file.open"
     switch registry.preflight(req.command, req.input, seen).map({ unattended ? $0 : max($0, .write) }) {
     case .failure(let e): return .failure(e)
     case .success(let risk) where risk < .write:
-      return run({ _ in nil }, false)
+      return run({ now in
+        if req.via == .mcp && req.command == "file.open" {
+          guard case .string(let raw)? = req.input["path"],
+            let path = WorkbenchProject.normalizedFile(raw), now.owner(of: path) != nil
+          else { return CommandError(.notAvailableToAI, "file.open requires a file in an open Project") }
+        }
+        return nil
+      }, false)
     case .success(let risk):
       guard approve(req.command, req.input, risk) else {
         return .failure(CommandError(.denied, "\(req.command) was not approved in Clair"))

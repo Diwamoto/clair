@@ -51,6 +51,19 @@ import Observation
     public let registry = CommandRegistry.workbench
     /// U05: open editor buffers of the active Project, keyed by relative path.
     public let buffers = EditorBuffers()
+    func editorSelectionChanged(_ path: String, _ selection: TextSelectionSet, in snapshot: TextSnapshot) {
+      buffers.setCaret(path, selection, in: snapshot)
+      guard state.active == path, let root = activeRoot, let first = selection.selections.first,
+        let start = try? snapshot.position(at: first.range.lowerBound, columnUnit: UTF16Unit.self),
+        let end = try? snapshot.position(at: first.range.upperBound, columnUnit: UTF16Unit.self)
+      else { return }
+      let length = first.range.upperBound.value - first.range.lowerBound.value
+      let text = first.isEmpty || length > 16_384 ? nil : try? snapshot.text(in: first.range)
+      state.editorContext = EditorContext(
+        path: URL(fileURLWithPath: root).appending(path: path).standardizedFileURL.path,
+        startLine: start.line.value + 1, startColumn: start.column.value,
+        endLine: end.line.value + 1, endColumn: end.column.value, selectedText: text)
+    }
     let reviews = ReviewStore()
     /// V13: a managed worktree is a separate Project and keeps its own debug session.
     private var debugSessions: [String: ClairDebugSession] = [:]
@@ -240,6 +253,7 @@ import Observation
 
     @discardableResult
     public func run(_ id: String, _ input: CommandInput = [:], confirmed: Bool = false) -> Result<CommandResult, CommandError> {
+      let previousEditor = (state.project, state.active)
       if id.hasPrefix("debug.") {
         state.debugPhase = switch debugSession?.phase {
         case .idle, nil: "idle"
@@ -279,6 +293,7 @@ import Observation
       // ponytail: kept for inspection only; no canvas error surface yet (U05/U07).
       case .failure(let e): lastError = e
       case .success:
+        if previousEditor.0 != state.project || previousEditor.1 != state.active { state.editorContext = nil }
         lastError = nil
         if id == "pane.focus", case .int(let pane)? = input["id"] {
           state.notices.markRead(project: state.project, pane: pane)
@@ -532,7 +547,10 @@ import Observation
     var activeRoot: String? { state.projects.first { $0.name == state.project }?.path }
 
     /// U05: called by the editor surface on every committed edit.
-    func edited(_ path: String) { state.dirty.insert(path) }  // the GUI owns dirty; never persisted (principle 8)
+    func edited(_ path: String) {
+      state.dirty.insert(path)
+      if state.active == path { state.editorContext = nil }
+    }  // the GUI owns dirty; never persisted (principle 8)
 
     /// Workspace commands must never synchronously encode and replace the persistence file on the
     /// main actor. Coalescing also keeps resize/focus bursts from queueing obsolete snapshots.
@@ -636,6 +654,7 @@ import Observation
             let changed = preserveDirty ? paths.subtracting(self.state.dirty) : paths
             self.state.applyDiskChange(changed, files: files)
             self.buffers.drop(changed)
+            if let active = self.state.active, changed.contains(active) { self.state.editorContext = nil }
           } else if generation == self.scanGeneration, self.gitFilesystemMutationRoot == root {
             if var pending = self.pendingScan, pending.generation == generation {
               pending.paths.formUnion(paths)
@@ -2097,7 +2116,7 @@ import Observation
               buffers: store.buffers, root: root, path: d.path, focused: !st.settingsOpen,
               softWrap: st.toggles["softWrap"] == true, style: editorStyle,
               onEdit: { store.edited($0) },
-              onCaret: { store.buffers.setCaret($0, $1, in: $2) }),
+              onCaret: { store.editorSelectionChanged($0, $1, in: $2) }),
             onSave: d.staged ? nil : {
               Task { if await store.saveFile(d.path) { loadDiff(clear: false) } }
             },
@@ -2132,7 +2151,7 @@ import Observation
             },
             onDefinition: { store.run("editor.definition") },
             onPreview: { store.run("editor.markdownPreview") },
-            onEdit: { store.edited($0) }, onCaret: { store.buffers.setCaret($0, $1, in: $2) }, previews: st.previews),
+            onEdit: { store.edited($0) }, onCaret: { store.editorSelectionChanged($0, $1, in: $2) }, previews: st.previews),
           run: { _ = store.run($0, $1) }, dragging: $draggingPane)
         }
       }

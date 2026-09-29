@@ -12,6 +12,21 @@ public struct WorkbenchFile: Sendable, Codable, Equatable {
   public let status: String?
 }
 
+/// Transient editor context exposed to agents. Text is present only for an explicit selection.
+public struct EditorContext: Sendable, Codable, Equatable {
+  public let path: String
+  public let startLine: Int
+  public let startColumn: Int
+  public let endLine: Int
+  public let endColumn: Int
+  public let selectedText: String?
+
+  public init(path: String, startLine: Int, startColumn: Int, endLine: Int, endColumn: Int, selectedText: String?) {
+    self.path = path; self.startLine = startLine; self.startColumn = startColumn
+    self.endLine = endLine; self.endColumn = endColumn; self.selectedText = selectedText
+  }
+}
+
 public struct WorkbenchState: Sendable, Codable, Equatable {
   public enum Palette: String, Sendable, Codable { case commands, files, search, symbols, references, branches }
 
@@ -65,6 +80,8 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var panesClosed = false
   public var tabs: [String] = ["apple/ClairApp/ContentView.swift"]
   public var active: String? = "apple/ClairApp/ContentView.swift"
+  /// Current editor selection; never written to WorkspaceSnapshot.
+  public var editorContext: EditorContext?
   public var diffTabs: [WorkbenchDiffTab] = []
   public var activeDiff: WorkbenchDiffTab?
   public var tabOrder: [WorkbenchTab] = []
@@ -198,6 +215,7 @@ public enum CommandResult: Sendable, Codable, Equatable {
   case pane(Int)
   case snapshot(WorkbenchState)
   case text(String)
+  case editorContext(EditorContext)
   case review(GitReview)
 }
 
@@ -704,9 +722,8 @@ extension CommandRegistry {
       let path = WorkbenchProject.normalized(i["path"]!.string!)!
       s.openProject(WorkbenchProject(name: URL(fileURLWithPath: path).lastPathComponent, path: path)); return .ok
     },
-    // V11 `clair open path:line`: the open Project that owns the file, else a new Project for its repository (or folder).
-    // ai: false — like project.open, an agent must not widen the readable file system on its own.
-    cmd("file.open", "パスからファイルを開く", .additive, ai: false,
+    // MCP may navigate only within a Project already open in Clair. The user's CLI keeps its wider file-open behavior.
+    cmd("file.open", "パスからファイルを開く", .additive,
         params: [CommandParam("path", .string), CommandParam("line", .int, required: false), CommandParam("column", .int, required: false)],
         palette: false,
         preflight: { _, i throws(CommandError) in
@@ -741,6 +758,15 @@ extension CommandRegistry {
       s.tree.focus(id)
       return .pane(id)
     },
+    cmd("editor.context", "現在のファイルと選択範囲を取得", .read, palette: false,
+        preflight: { s, _ throws(CommandError) in
+          guard let context = s.editorContext, let active = s.active,
+            let root = s.projects.first(where: { $0.name == s.project })?.path
+          else { throw CommandError(.preconditionFailed, "no active editor context") }
+          let current = URL(fileURLWithPath: root).appending(path: active).standardizedFileURL.path
+          try require(context.path == current, "editor context is stale")
+          return .read
+        }) { s, _ in .editorContext(s.editorContext!) },
     // E17: the GUI reveals `navigation.current` after these succeed (the caret belongs to the editor).
     cmd("editor.navigateBack", "前の位置に戻る", .read, ai: false, shortcut: "⌃-",
         preflight: { s, _ throws(CommandError) in try require(s.navigation.canGoBack, "戻る位置がありません"); return .read }) { s, _ in
