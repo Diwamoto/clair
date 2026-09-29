@@ -267,6 +267,7 @@ import Observation
       }
       // `file.save` from any caller (⌘S, CLI, MCP) writes the buffer first; a failed write keeps the dirty marker.
       if id == "file.save", let p = state.active, let root = activeRoot, buffers.isOpen(p) {
+        if state.toggles["formatOnSave"] == true { formatBuffer(p) }
         do {
           try buffers.save(p, root: root)
         } catch {
@@ -324,6 +325,7 @@ import Observation
           default: break
           }
         }
+        if id == "editor.format", let p = state.active { formatBuffer(p) }
         if let closing { ClairDaemonLauncher.closeSession(key: closing); ClairGhosttySurfaceView.discard(key: closing) }  // T09: closing a pane ends its shell; closing a window does not
         if id == "agent.launch" || id == "pane.close" || id == "agent.close"
           || (id == "settings.set" && input["key"] == .string("preventSleepOnBattery"))
@@ -551,6 +553,20 @@ import Observation
       state.dirty.insert(path)
       if state.active == path { state.editorContext = nil }
     }  // the GUI owns dirty; never persisted (principle 8)
+
+    /// `editor.format`, and ⌘S when 保存時に整形 is on. Reformats the buffer outside the live view's
+    /// own edit path, the way `ClairMarkdownPreview`'s table commit does: `buffers.refresh` rebuilds
+    /// the on-screen surface from the buffer afterward. No-op for an unsupported format, or one already
+    /// formatted (so it never manufactures a no-op undo step or a spurious dirty mark).
+    private func formatBuffer(_ path: String) {
+      guard case .ready(let m)? = buffers.peek(path) else { return }
+      let old = m.buffer.snapshot
+      let text = old.string()
+      guard let formatted = DocumentFormatter.format(path, text), formatted != text else { return }
+      guard (try? m.apply([TextEdit(range: old.fullRange, replacement: formatted)], label: "ドキュメントの整形")) != nil else { return }
+      buffers.refresh(path)
+      edited(path)
+    }
 
     /// Workspace commands must never synchronously encode and replace the persistence file on the
     /// main actor. Coalescing also keeps resize/focus bursts from queueing obsolete snapshots.
