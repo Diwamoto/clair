@@ -1029,11 +1029,12 @@
     /// Date → project → chats, each list paged by `page`.
     @ViewBuilder private func historyDays(_ histories: [AgentHistory], key: String) -> some View {
       let days = AgentHistoryDay.group(histories)
-      ForEach(days.prefix(limit(key))) { day in
+      // LazyVStack needs ids unique across days ("clair" repeats daily): a chat lives under one day only.
+      ForEach(days.prefix(limit(key)), id: \.groups[0].histories[0].id) { day in
         let dayKey = "\(key)::\(day.date.timeIntervalSince1970)"
         Text(dayTitle(day.date)).font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textQuaternary)
           .padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 2)
-        ForEach(day.groups.prefix(limit(dayKey))) { group in historyGroup(group, key: dayKey) }
+        ForEach(day.groups.prefix(limit(dayKey)), id: \.histories[0].id) { group in historyGroup(group, key: dayKey) }
         moreButton(dayKey, total: day.groups.count)
       }
       moreButton(key, total: days.count)
