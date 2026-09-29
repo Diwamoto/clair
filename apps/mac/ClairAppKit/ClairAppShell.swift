@@ -890,6 +890,7 @@ import Observation
       .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: store.update)
       .onChange(of: st.choices["appearance"], initial: true) { _, v in ColorSchemeChoice(setting: v).apply() }
       .onChange(of: st.fileAssociations, initial: true) { _, v in EditorLanguageID.associations = v }
+      .onChange(of: terminalStyle, initial: true) { _, v in ClairGhosttySurfaceView.style = v }
       .onChange(of: st.palette) {
         query = ""; selection = 0
         if st.palette == .search { searchSelection = 0; runSearch() }
@@ -2081,7 +2082,7 @@ import Observation
             onClose: { closeDiff() },
             editor: d.staged ? nil : EditorPane(
               buffers: store.buffers, root: root, path: d.path, focused: true,
-              softWrap: st.toggles["softWrap"] == true,
+              softWrap: st.toggles["softWrap"] == true, style: editorStyle,
               onEdit: { store.edited($0) },
               onCaret: { store.buffers.setCaret($0, $1, in: $2) }),
             onSave: d.staged ? nil : {
@@ -2102,7 +2103,7 @@ import Observation
           title: { terminalTabTitle(st.project, $0) },
           onRatio: { store.run("pane.setRatio", ["id": .int($0), "ratio": .double($1)]) },
           editor: EditorPane(buffers: store.buffers, root: store.activeRoot, path: st.active,
-            softWrap: st.toggles["softWrap"] == true,
+            softWrap: st.toggles["softWrap"] == true, style: editorStyle,
             debugLine: store.debugSession?.frames.first(where: { $0.id == store.debugSession?.selectedFrame }).flatMap {
               $0.path == store.activeRoot.map { $0 + "/" + (st.active ?? "") } ? $0.line : nil
             },
@@ -2161,6 +2162,11 @@ import Observation
             }
             integrationCard
           case "エディタ":
+            SettingsCard(title: "表示") {
+              fontRow("editor")
+              choiceRow("文字サイズ", "editorFontSize")
+              switchRow("行番号を表示", "lineNumbers")
+            }
             SettingsCard(title: "編集") {
               switchRow("保存時に整形", "formatOnSave", note: "⌘S のタイミングでフォーマッタを実行します。")
               choiceRow("タブ幅", "tabWidth")
@@ -2196,6 +2202,12 @@ import Observation
                 }
             }
           case "ターミナル":
+            SettingsCard(title: "表示") {
+              fontRow("terminal")
+              choiceRow("文字サイズ", "terminalFontSize")
+              choiceRow("カーソルの形", "terminalCursorStyle")
+              switchRow("カーソルを点滅", "terminalCursorBlink", note: "シェルやアプリが形・点滅を指定したときはそちらが優先されます。")
+            }
             SettingsCard(title: "シェルと承認") {
               choiceRow("デフォルトシェル", "defaultShell")
               switchRow("コマンド実行前に確認", "terminalApprovals", note: "agentが実行するコマンドの承認プロンプト。")
@@ -2287,6 +2299,34 @@ import Observation
       SettingsRow(title: title, note: note) {
         SettingsSwitch(on: st.toggles[key] ?? false) { store.run("settings.set", ["key": .string(key), "value": .bool($0)]) }
       }
+    }
+
+    /// Installed fixed-pitch families, read once; the stored family stays listed even if it was uninstalled.
+    private static let monospacedFamilies = NSFontManager.shared.availableFontFamilies.filter {
+      NSFontManager.shared.font(withFamily: $0, traits: [], weight: 5, size: 12)?.isFixedPitch == true
+    }
+
+    private func fontRow(_ key: String) -> some View {
+      let current = st.fonts[key] ?? ""
+      let families = Self.monospacedFamilies + (current.isEmpty || Self.monospacedFamilies.contains(current) ? [] : [current])
+      return SettingsRow(title: "フォント", note: "インストール済みの等幅フォントから選びます。") {
+        Picker("フォント", selection: Binding(get: { current }, set: { store.run("settings.font", ["key": .string(key), "value": .string($0)]) })) {
+          Text("システム等幅").tag("")
+          ForEach(families, id: \.self) { Text($0).tag($0) }
+        }
+        .labelsHidden().controlSize(.large).frame(width: 220)
+      }
+    }
+
+    private var editorStyle: EditorStyle {
+      EditorStyle(family: st.fonts["editor"] ?? "", size: CGFloat(Double(st.choices["editorFontSize"] ?? "") ?? 12),
+        lineNumbers: st.toggles["lineNumbers"] != false)
+    }
+
+    private var terminalStyle: ClairGhosttySurfaceView.Style {
+      .init(family: st.fonts["terminal"] ?? "", size: Double(st.choices["terminalFontSize"] ?? "") ?? 13,
+        cursor: ["バー": "bar", "下線": "underline"][st.choices["terminalCursorStyle"] ?? ""] ?? "block",
+        blink: st.toggles["terminalCursorBlink"] != false)
     }
 
     private func choiceRow(_ title: String, _ key: String, note: String? = nil) -> some View {

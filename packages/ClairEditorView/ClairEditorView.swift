@@ -77,6 +77,8 @@ import ClairEditorCore
     public var gutterWidth: CGFloat = 0 {
       didSet { renderer.invalidateAll(); needsDisplay = true; window?.invalidateCursorRects(for: self) }
     }
+    /// Off keeps the gutter's breakpoint and fold columns and drops only the numbers.
+    public var showsLineNumbers = true { didSet { needsDisplay = true } }
     public var lineNumberColor: NSColor = .secondaryLabelColor { didSet { needsDisplay = true } }
     /// Line number of the caret's line is drawn in this colour instead.
     public var currentLineNumberColor: NSColor = .labelColor { didSet { needsDisplay = true } }
@@ -491,7 +493,7 @@ import ClairEditorCore
           if !isComposingLine { drawSelections(seg, context: context) }
           drawText(seg, context: context)
           if seg.isFirst, gutterWidth > 0 {
-            drawLineNumber(index, top: seg.top, context: context)
+            if showsLineNumbers { drawLineNumber(index, top: seg.top, context: context) }
             let on = debugBreakpoints.contains(index + 1)
             if on || hoveredBreakpointLine == index + 1 {
               context.setFillColor(debugBreakpointColor.withAlphaComponent(on ? 1 : 0.3).cgColor)

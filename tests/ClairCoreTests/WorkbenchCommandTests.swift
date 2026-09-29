@@ -314,4 +314,19 @@ final class SettingsChoiceTests: XCTestCase {
     try s.save(to: url); defer { try? FileManager.default.removeItem(at: url) }
     XCTAssertEqual(WorkbenchState.restore(from: url)?.choices["tabWidth"], "4")
   }
+
+  func testFontSizesDefaultToShippedSizesAndFontFamilyRoundTrips() throws {
+    let r = CommandRegistry.workbench; var s = WorkbenchState()
+    XCTAssertEqual(s.choices["editorFontSize"], "12")
+    XCTAssertEqual(s.choices["terminalFontSize"], "13")
+    XCTAssertEqual(r.execute("settings.font", ["key": .string("terminal"), "value": .string("Menlo")], state: &s), .success(.ok))
+    // The terminal family becomes a Ghostty config line, so a newline must never get in.
+    guard case .failure = r.execute("settings.font", ["key": .string("terminal"), "value": .string("Menlo\nfont-size = 99")], state: &s) else {
+      return XCTFail("control characters are rejected")
+    }
+    XCTAssertEqual(s.fonts["terminal"], "Menlo")
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent("ws-\(UUID()).json")
+    try s.save(to: url); defer { try? FileManager.default.removeItem(at: url) }
+    XCTAssertEqual(WorkbenchState.restore(from: url)?.fonts, ["editor": "", "terminal": "Menlo"])
+  }
 }

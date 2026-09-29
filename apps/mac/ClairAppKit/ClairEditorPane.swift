@@ -10,6 +10,23 @@
 
   private typealias C = DesignTokens.Color
 
+  /// Settings › エディタ › 表示. A change rebuilds the editor view (its font is fixed at init).
+  struct EditorStyle: Hashable {
+    var family = ""
+    var size: CGFloat = 12
+    var lineNumbers = true
+
+    /// An uninstalled family falls back to the system monospaced font.
+    var font: NSFont {
+      (family.isEmpty ? nil : NSFontManager.shared.font(withFamily: family, traits: [], weight: 5, size: size))
+        ?? .monospacedSystemFont(ofSize: size, weight: .regular)
+    }
+    /// Mock editor: 12px on 19px rows; other sizes keep that ratio.
+    var lineHeight: CGFloat { (size * 19 / 12).rounded() }
+    /// Mock: a 54px number column at 12px beside the breakpoint column; hidden numbers leave room for fold markers.
+    var gutterWidth: CGFloat { (lineNumbers ? (54 * size / 12).rounded() : 14) + ClairEditorView.breakpointColumnWidth }
+  }
+
   struct EditorBlame: Sendable, Equatable {
     let author: String
     let summary: String
@@ -75,7 +92,7 @@
       else { return SyntaxResult(spans: [], folds: [], revision: snapshot.revision) }
       highlighters[path] = highlighter
       let spans = (try? highlighter.reset(to: snapshot)) ?? []
-      return SyntaxResult(spans: spans, folds: highlighter.foldRanges, revision: snapshot.revision)
+      return SyntaxResult(spans: spans + highlighter.bracketSpans, folds: highlighter.foldRanges, revision: snapshot.revision)
     }
 
     /// Differential reparse (`SyntaxParser.update`, never a from-scratch
@@ -88,7 +105,7 @@
       guard let highlighter = highlighters[path],
         let spans = try? highlighter.update(edits: edits, oldSnapshot: oldSnapshot, newSnapshot: newSnapshot)
       else { return nil }
-      return SyntaxResult(spans: spans, folds: highlighter.foldRanges, revision: newSnapshot.revision)
+      return SyntaxResult(spans: spans + highlighter.bracketSpans, folds: highlighter.foldRanges, revision: newSnapshot.revision)
     }
   }
 
@@ -356,6 +373,7 @@
     var focused = false
     var onFocus: (() -> Void)? = nil
     var softWrap = false
+    var style = EditorStyle()
     var debugLine: Int? = nil
     var debugBreakpoints: Set<Int> = []
     var onToggleDebugBreakpoint: ((Int) -> Void)? = nil
@@ -382,14 +400,14 @@
             breadcrumb(path)
             ZStack(alignment: .topTrailing) {
               EditorSurface(
-                manager: m, buffers: buffers, root: root, path: path, softWrap: softWrap, focused: focused,
+                manager: m, buffers: buffers, root: root, path: path, softWrap: softWrap, style: style, focused: focused,
                 onFocus: onFocus,
                 blame: selectedBlame(path, manager: m),
                 debugLine: debugLine, debugBreakpoints: debugBreakpoints, onToggleDebugBreakpoint: onToggleDebugBreakpoint,
                 onDefinition: onDefinition,
                 onCaret: { onCaret(path, $0, m.buffer.snapshot) },
                 reveal: buffers.reveal?.path == path ? buffers.reveal : nil, onEdit: { onEdit(path) }
-              ).id("\(path)#\(buffers.revision(path))")
+              ).id("\(path)#\(buffers.revision(path))#\(style)")
               // E11 dogfood review (2026-09-22): a small corner spinner while
               // the file's *initial* highlight parse is in flight, so a big
               // file doesn't flash from colorless to colored — never shown
@@ -494,6 +512,7 @@
     let root: String
     let path: String
     let softWrap: Bool
+    let style: EditorStyle
     let focused: Bool
     let onFocus: (() -> Void)?
     let blame: (line: Int, text: String)?
@@ -518,10 +537,9 @@
       scroll.scrollerStyle = .overlay; scroll.autohidesScrollers = true
       scroll.verticalScroller = ClairScroller(); scroll.horizontalScroller = ClairScroller()
       scroll.drawsBackground = true; scroll.backgroundColor = NSColor(C.canvas)
-      // Mock editor: 12px mono on 19px rows, One Dark on the canvas colour, 54px gutter + 16px breakpoint column.
+      // Mock editor: One Dark on the canvas colour; font, rows and gutter follow `style` (mock default 12px on 19px rows).
       let view = ClairEditorView(
-        snapshot: manager.buffer.snapshot, selection: manager.selection,
-        font: .monospacedSystemFont(ofSize: 12, weight: .regular), lineHeight: 19)
+        snapshot: manager.buffer.snapshot, selection: manager.selection, font: style.font, lineHeight: style.lineHeight)
       view.background = NSColor(C.canvas); view.textColor = NSColor(C.code)
       // Derived colours resolve per draw (NSColor(name:)), so they follow the colour scheme (E18).
       func resolved(_ make: @escaping () -> NSColor) -> NSColor {
@@ -529,7 +547,7 @@
       }
       view.caretColor = resolved { NSColor(C.textPrimary).blended(withFraction: 0.9, of: NSColor(C.debugBlue)) ?? NSColor(C.textPrimary) }
       view.selectionColor = resolved { NSColor(C.debugBlue).withAlphaComponent(0.3) }
-      view.gutterWidth = 54 + ClairEditorView.breakpointColumnWidth
+      view.gutterWidth = style.gutterWidth; view.showsLineNumbers = style.lineNumbers
       view.lineNumberColor = NSColor(C.lineNumber); view.currentLineNumberColor = NSColor(C.textTertiary)
       view.blameAnnotation = blame; view.blameColor = NSColor(C.textQuaternary)
       view.debugStoppedLine = debugLine; view.debugBreakpoints = debugBreakpoints

@@ -16,7 +16,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public enum Palette: String, Sendable, Codable { case commands, files, search, symbols, references, branches }
 
   public static let sections = ["一般", "AIプロバイダー", "使用状況", "エディタ", "ターミナル", "モバイル", "アップデート"]
-  public static let toggleKeys = ["restoreLayout", "confirmClose", "hideQuota", "preventSleepOnBattery", "formatOnSave", "showWhitespace", "softWrap", "terminalApprovals"]
+  public static let toggleKeys = ["restoreLayout", "confirmClose", "hideQuota", "preventSleepOnBattery", "formatOnSave", "showWhitespace", "softWrap", "terminalApprovals", "lineNumbers", "terminalCursorBlink"]
   /// Closed-set settings (the mock's segmented controls). The first option is the default.
   /// Palette titles of `toggleKeys` / `choiceOptions`, matching the settings rows, so every setting is reachable from ⌘K.
   public static let settingTitles = [
@@ -25,6 +25,8 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
     "showWhitespace": "空白文字を表示", "softWrap": "行の折り返し", "terminalApprovals": "コマンド実行前に確認",
     "defaultAgent": "既定のAgent", "approvalPolicy": "承認ポリシー", "tabWidth": "タブ幅", "defaultShell": "デフォルトシェル",
     "scrollback": "スクロールバック", "appearance": "外観",
+    "lineNumbers": "行番号を表示", "terminalCursorBlink": "ターミナルのカーソルを点滅", "editorFontSize": "エディタの文字サイズ",
+    "terminalFontSize": "ターミナルの文字サイズ", "terminalCursorStyle": "ターミナルのカーソルの形",
   ]
   public static let choiceOptions: [String: [String]] = [
     "defaultAgent": ["claude", "codex"],
@@ -33,7 +35,16 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
     "defaultShell": ["/bin/zsh", "/bin/bash"],
     "scrollback": ["1000", "5000", "10000"],
     "appearance": ["ダーク", "ライト", "システム"],  // E18; mirrors ClairDesignSystem.ColorSchemeChoice
+    "editorFontSize": ["11", "12", "13", "14", "16", "18"],
+    "terminalFontSize": ["11", "12", "13", "14", "16", "18"],
+    "terminalCursorStyle": ["ブロック", "バー", "下線"],
   ]
+  /// Font family per surface (`editor`, `terminal`); "" is the system monospaced font.
+  public static let fontKeys = ["editor", "terminal"]
+  /// A family name the settings can store: short, no control characters (the terminal's goes into a Ghostty config line).
+  public static func isValidFontFamily(_ name: String) -> Bool {
+    name.count <= 100 && !name.unicodeScalars.contains { CharacterSet.controlCharacters.contains($0) }
+  }
 
   // Sample tree only until a Project is opened (`project.open` replaces it with the real file system).
   public var files = [
@@ -86,8 +97,10 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var palette: Palette?
   /// E17: definition-jump history for ⌃- / ⌃⇧-. Transient (not in `WorkspaceSnapshot`).
   public var navigation = NavigationHistory()
-  public var toggles = ["restoreLayout": true, "confirmClose": true, "hideQuota": false, "preventSleepOnBattery": false, "formatOnSave": false, "showWhitespace": false, "softWrap": false, "terminalApprovals": true]
-  public var choices = WorkbenchState.choiceOptions.mapValues { $0[0] }
+  public var toggles = ["restoreLayout": true, "confirmClose": true, "hideQuota": false, "preventSleepOnBattery": false, "formatOnSave": false, "showWhitespace": false, "softWrap": false, "terminalApprovals": true, "lineNumbers": true, "terminalCursorBlink": true]
+  // Font sizes default to what Clair shipped with (mock editor 12px, terminal 13pt), not the smallest option.
+  public var choices = WorkbenchState.choiceOptions.mapValues { $0[0] }.merging(["editorFontSize": "12", "terminalFontSize": "13"]) { $1 }
+  public var fonts = ["editor": "", "terminal": ""]
   /// V11: user shortcut assignments over the registry defaults. An empty string unassigns a default.
   public var shortcuts: [String: String] = [:]
   /// File extension (lowercased, no dot) → editor language id. Overrides the built-in detection.
@@ -746,6 +759,14 @@ extension CommandRegistry {
           return .write
         }) { s, i in
       s.choices[i["key"]!.string!] = i["value"]!.string!; return .ok
+    },
+    cmd("settings.font", "フォントを変更", .write, ai: false,
+        params: [CommandParam("key", .string, allowed: WorkbenchState.fontKeys), CommandParam("value", .string)],
+        preflight: { _, i throws(CommandError) in
+          try require(WorkbenchState.isValidFontFamily(i["value"]?.string ?? ""), "フォント名が不正です")
+          return .write
+        }) { s, i in
+      s.fonts[i["key"]!.string!] = i["value"]!.string!; return .ok
     },
     cmd("settings.fileAssociations", "拡張子の言語を設定", .write, ai: false,
         params: [CommandParam("value", .string)]) { s, i in

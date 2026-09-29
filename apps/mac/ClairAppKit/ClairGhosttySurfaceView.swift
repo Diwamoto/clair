@@ -215,7 +215,7 @@ import Foundation
         let config = GhosttySurfaceConfig(
           platform: .macOS(Unmanaged.passUnretained(self).toOpaque()),
           scaleFactor: Double(window?.backingScaleFactor ?? 1),
-          fontSize: Double(font.pointSize),
+          fontSize: Self.style.size,
           workingDirectory: launch?.cwd ?? FileManager.default.homeDirectoryForCurrentUser.path,
           command: launch?.command,
           waitAfterCommand: launch != nil  // keep the pane so the exit code stays readable
@@ -251,14 +251,37 @@ import Foundation
         window-padding-x = 8
         font-codepoint-map = U+3000-U+30FF,U+3400-U+4DBF,U+4E00-U+9FFF,U+F900-U+FAFF,U+FF00-U+FFEF=BIZ UDGothic
 
-        """ + ansi.enumerated().map { "palette = \($0.offset)=\($0.element)\n" }.joined()
+        """ + ansi.enumerated().map { "palette = \($0.offset)=\($0.element)\n" }.joined() + style.config
     }
 
-    /// libghostty reads config from a file only; written once per scheme per process. nil (defaults) if the write fails.
-    static let themePaths: [Bool: String] = Dictionary(uniqueKeysWithValues: [false, true].compactMap { light in
-      let url = FileManager.default.temporaryDirectory.appending(path: "clair-ghostty-theme-\(light ? "light" : "dark")-\(getpid())")
-      return (try? Data(theme(light: light).utf8).write(to: url, options: .atomic)) != nil ? (light, url.path) : nil
-    })
+    /// Settings › ターミナル › 表示. Setting a new one rewrites the config files and reloads every live terminal.
+    struct Style: Equatable {
+      var family = ""  // "" keeps Ghostty's default font
+      var size = 13.0
+      var cursor = "block"  // Ghostty `cursor-style`: block, bar, underline
+      var blink = true
+      // `family` is validated free of control characters (`WorkbenchState.isValidFontFamily`), so it stays one line.
+      var config: String {
+        (family.isEmpty ? "" : "font-family = \(family)\n")
+          + "font-size = \(size)\ncursor-style = \(cursor)\ncursor-style-blink = \(blink)\n"
+      }
+    }
+    static var style = Style() {
+      didSet {
+        guard style != oldValue else { return }
+        themePaths = writeThemes()
+        for v in kept.values { v.reloadConfig() }
+      }
+    }
+
+    /// libghostty reads config from a file only; rewritten when `style` changes. nil (defaults) if the write fails.
+    static var themePaths = writeThemes()
+    private static func writeThemes() -> [Bool: String] {
+      Dictionary(uniqueKeysWithValues: [false, true].compactMap { light in
+        let url = FileManager.default.temporaryDirectory.appending(path: "clair-ghostty-theme-\(light ? "light" : "dark")-\(getpid())")
+        return (try? Data(theme(light: light).utf8).write(to: url, options: .atomic)) != nil ? (light, url.path) : nil
+      })
+    }
 
     private var isLight: Bool { effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .aqua }
     private var appliedLight: Bool?
@@ -267,7 +290,12 @@ import Foundation
     /// terminal in the other scheme without restarting its shell.
     public override func viewDidChangeEffectiveAppearance() {
       super.viewDidChangeEffectiveAppearance()
-      guard let surface = ghosttySurface, appliedLight != isLight, let path = Self.themePaths[isLight] else { return }
+      if appliedLight != isLight { reloadConfig() }
+    }
+
+    /// Re-reads the current scheme's config file into the live surface without restarting its shell.
+    private func reloadConfig() {
+      guard let surface = ghosttySurface, let path = Self.themePaths[isLight] else { return }
       appliedLight = isLight
       try? GhosttyRuntime.shared.withConfig { config in
         try config.loadFileAndFinalize(path)

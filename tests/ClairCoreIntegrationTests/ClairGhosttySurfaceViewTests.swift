@@ -168,6 +168,19 @@ import Testing
       #expect(reported == ["a", "b", "a"])
     }
 
+    /// Settings › ターミナル › 表示: the font and cursor lines are keys libghostty accepts in every value we write.
+    @Test(.enabled(if: GhosttyRuntime.isVendored)) @MainActor
+    func terminalStyleLinesAreAcceptedConfig() throws {
+      defer { ClairGhosttySurfaceView.style = .init() }
+      ClairGhosttySurfaceView.style = .init(family: "Menlo", size: 16, cursor: "underline", blink: false)
+      let path = try #require(ClairGhosttySurfaceView.themePaths[false])
+      let text = try String(contentsOfFile: path, encoding: .utf8)
+      #expect(text.contains("font-family = Menlo\n") && text.contains("cursor-style = underline\n") && text.contains("cursor-style-blink = false\n"))
+      let runtime = GhosttyRuntime()
+      try runtime.activate()
+      #expect(try runtime.withConfig { try $0.loadFileAndFinalize(path) } == 0)
+    }
+
     /// U06: the Clair theme file is loaded + finalized into the real config and the surface still spawns
     /// and renders its child (a bad key would only be a Ghostty diagnostic, so this guards finalize).
     @Test(.enabled(if: GhosttyRuntime.isVendored)) @MainActor

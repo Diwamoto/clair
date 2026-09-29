@@ -356,6 +356,8 @@ export function SettingsMain() {
                 </Card>
               </>
             ) : section === 'エディタ' ? (
+              <>
+              <DisplayCard terminal={false} />
               <Card title="編集">
                 <Row
                   first
@@ -380,7 +382,10 @@ export function SettingsMain() {
                 />
                 <AssociationList />
               </Card>
+              </>
             ) : section === 'ターミナル' ? (
+              <>
+              <DisplayCard terminal />
               <Card title="シェルと承認">
                 <Row
                   first
@@ -415,6 +420,7 @@ export function SettingsMain() {
                   }
                 />
               </Card>
+              </>
             ) : section === 'アップデート' ? (
               <>
                 <Card title="動作">
@@ -527,6 +533,46 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
         設定 · {wb.settingsSection}
       </div>
     </div>
+  );
+}
+
+const FONTS = ['システム等幅', 'Menlo', 'Monaco', 'Courier New', 'JetBrains Mono'];
+const FONT_SIZES = ['11', '12', '13', '14', '16', '18'] as const;
+
+/** 設定 › エディタ / ターミナル「表示」. Mirrors the native card; the font list there is the installed monospaced families. */
+function DisplayCard({ terminal }: { terminal: boolean }) {
+  const [font, setFont] = useState(FONTS[0]);
+  const [size, setSize] = useState<string>(terminal ? '13' : '12');
+  const [lineNumbers, setLineNumbers] = useState(true);
+  const [cursor, setCursor] = useState<'ブロック' | 'バー' | '下線'>('ブロック');
+  const [blink, setBlink] = useState(true);
+  return (
+    <Card title="表示">
+      <Row
+        first
+        title="フォント"
+        note="インストール済みの等幅フォントから選びます。"
+        control={
+          <select aria-label="フォント" value={font} style={{ width: 220, height: 28 }} onChange={(e) => setFont(e.target.value)}>
+            {FONTS.map((f) => <option key={f}>{f}</option>)}
+          </select>
+        }
+      />
+      <Row title="文字サイズ" control={<Segmented value={size} options={FONT_SIZES} onChange={setSize} />} />
+      {terminal ? (
+        <>
+          <Row title="カーソルの形" control={<Segmented value={cursor} options={['ブロック', 'バー', '下線'] as const} onChange={setCursor} />} />
+          <Row
+            last
+            title="カーソルを点滅"
+            note="シェルやアプリが形・点滅を指定したときはそちらが優先されます。"
+            control={<Switch on={blink} onClick={() => setBlink(!blink)} />}
+          />
+        </>
+      ) : (
+        <Row last title="行番号を表示" control={<Switch on={lineNumbers} onClick={() => setLineNumbers(!lineNumbers)} />} />
+      )}
+    </Card>
   );
 }
 
