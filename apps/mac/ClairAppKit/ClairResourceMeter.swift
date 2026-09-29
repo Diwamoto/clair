@@ -9,6 +9,7 @@ import SwiftUI
 struct ProcessSample: Equatable {
   var cpuSeconds: [pid_t: Double] = [:]
   var footprintBytes: [pid_t: UInt64] = [:]
+  var names: [pid_t: String] = [:]
 
   var totalFootprint: UInt64 { footprintBytes.values.reduce(0, +) }
 
@@ -25,6 +26,9 @@ struct ProcessSample: Equatable {
       guard ok == 0 else { continue }  // exited, or not ours to read
       sample.cpuSeconds[pid] = Double(info.ri_user_time + info.ri_system_time) * ticksToSeconds
       sample.footprintBytes[pid] = info.ri_phys_footprint
+      var name = [CChar](repeating: 0, count: 64)
+      proc_name(pid, &name, UInt32(name.count))
+      sample.names[pid] = String(cString: name)
     }
     return sample
   }
@@ -49,9 +53,19 @@ struct ProcessSample: Equatable {
   /// CPU percent of one core between two samples (over 100 on several cores, like Activity Monitor).
   /// A process born since `old` counts from zero; one that exited drops out.
   static func cpuPercent(from old: ProcessSample, to new: ProcessSample, interval: Double) -> Double {
-    guard interval > 0 else { return 0 }
-    let used = new.cpuSeconds.reduce(0.0) { $0 + max($1.value - (old.cpuSeconds[$1.key] ?? 0), 0) }
-    return used / interval * 100
+    perProcessCPU(from: old, to: new, interval: interval).values.reduce(0, +)
+  }
+
+  static func perProcessCPU(from old: ProcessSample, to new: ProcessSample, interval: Double) -> [pid_t: Double] {
+    guard interval > 0 else { return [:] }
+    return new.cpuSeconds.reduce(into: [:]) { $0[$1.key] = max($1.value - (old.cpuSeconds[$1.key] ?? 0), 0) / interval * 100 }
+  }
+
+  /// The `limit` heaviest processes: CPU first, memory breaks ties (idle processes sort by memory).
+  static func top(_ sample: ProcessSample, cpu: [pid_t: Double], limit: Int = 5) -> [(pid: pid_t, name: String, cpu: Double, bytes: UInt64)] {
+    sample.footprintBytes.map { (pid: $0.key, name: sample.names[$0.key] ?? "?", cpu: cpu[$0.key] ?? 0, bytes: $0.value) }
+      .sorted { ($0.cpu.rounded(), $0.bytes) > ($1.cpu.rounded(), $1.bytes) }
+      .prefix(limit).map { $0 }
   }
 }
 
@@ -60,6 +74,7 @@ struct ClairResourceMeter: View {
   private typealias C = DesignTokens.Color
   @State private var sample = ProcessSample()
   @State private var cpu: Double = 0
+  @State private var perProcess: [pid_t: Double] = [:]
   @State private var hovered = false
   /// Last two minutes of (cpu %, footprint bytes), oldest first.
   @State private var history: [(cpu: Double, bytes: UInt64)] = []
@@ -68,7 +83,7 @@ struct ClairResourceMeter: View {
   var body: some View {
     let memory = Self.bytes(sample.totalFootprint)
     HStack(spacing: 6) {
-      spark(history.map(\.cpu), tint: C.debugBlue).frame(width: 34, height: 12)
+      Image(systemName: "gauge.with.dots.needle.33percent").font(.system(size: 11))
       Text("CPU \(Int(cpu.rounded()))% · \(memory)")
     }
     .foregroundStyle(C.textQuaternary)
@@ -85,9 +100,17 @@ struct ClairResourceMeter: View {
         row("　アプリ本体", Self.bytes(app))
         row("　子プロセス", Self.bytes(sample.totalFootprint - app))
         row("プロセス数", "\(sample.footprintBytes.count)")
+        Divider().gridCellColumns(2)
+        GridRow { Text("上位プロセス").font(.system(size: 13, weight: .semibold)); Text("") }
+        ForEach(ProcessSample.top(sample, cpu: perProcess), id: \.pid) { p in
+          GridRow {
+            Text(p.pid == getpid() ? "Clair" : p.name).lineLimit(1).truncationMode(.middle).help("pid \(p.pid)")
+            Text(String(format: "%.0f%%", p.cpu) + " · " + Self.bytes(p.bytes)).gridColumnAlignment(.trailing)
+          }
+        }
       }
       .font(Typography.font(Typography.chrome)).monospacedDigit()
-      .frame(width: 240, alignment: .leading).padding(12)
+      .frame(width: 300, alignment: .leading).padding(12)
     }
     .accessibilityElement(children: .combine)
     .task {
@@ -96,7 +119,8 @@ struct ClairResourceMeter: View {
       while !Task.isCancelled {
         try? await Task.sleep(for: .seconds(interval))
         let next = await Task.detached(priority: .utility) { ProcessSample.current() }.value
-        cpu = ProcessSample.cpuPercent(from: sample, to: next, interval: interval)
+        perProcess = ProcessSample.perProcessCPU(from: sample, to: next, interval: interval)
+        cpu = perProcess.values.reduce(0, +)
         sample = next
         history = (history + [(cpu, next.totalFootprint)]).suffix(60)
       }
