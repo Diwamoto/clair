@@ -75,6 +75,8 @@ final class WorkbenchSearchTests: XCTestCase {
     XCTAssertEqual(w.relative(r + "/app/a.swift"), "a.swift")
     XCTAssertEqual(w.relative(r + "/docs/x.md"), "../docs/x.md")
     XCTAssertEqual(w.relative(r + "/app/.git/index"), ".git/index")
+    XCTAssertEqual(w.relative(r + "/app/.git/refs/heads/feature/x"), ".git/refs/heads/feature/x")
+    XCTAssertNil(w.relative(r + "/app/.git/refs/heads/main.lock"))
     XCTAssertNil(w.relative(r + "/app/.git/objects/ab"))
     XCTAssertNil(w.relative(r + "/app/.build/x"))
     XCTAssertNil(w.relative("/elsewhere/y"))

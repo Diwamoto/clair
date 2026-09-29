@@ -687,6 +687,8 @@ import Observation
     }
 
     private(set) var scanning = false
+    /// Bumped when a watched `.git/` file changes, so the Git view reloads even when the file list is unchanged (a branch switch).
+    private(set) var gitRevision = 0
     private var pendingScan: (
       paths: Set<String>, root: String, generation: Int, preserveDirty: Bool
     )?
@@ -723,6 +725,7 @@ import Observation
           {
             let changed = preserveDirty ? paths.subtracting(self.state.dirty) : paths
             self.state.applyDiskChange(changed, files: files)
+            if paths.contains(where: { FileWatcher.isGitState($0) }) { self.gitRevision += 1 }
             self.buffers.drop(changed)
             if let active = self.state.active, changed.contains(active) { self.state.editorContext = nil }
           } else if generation == self.scanGeneration, self.gitFilesystemMutationRoot == root {
@@ -2699,6 +2702,8 @@ import Observation
       .padding(.horizontal, 12).frame(height: ChromeBudget.statusBar)
       .background(C.chrome.overlay(ClairChannel.current == .dev ? Color.orange.opacity(0.14) : .clear))  // Dev is told apart at a glance (owner, 2026-09-27)
       .overlay(alignment: .top) { Rectangle().fill(C.surfaceActive).frame(height: 1) }
+      // Here, not on `body`: its modifier chain is at the type-checker's limit. The status bar is always mounted.
+      .onChange(of: store.gitRevision) { reloadChanges() }
       // Off the main actor, every 5 min while the toggle is on; turning it off cancels the loop.
       .task(id: st.toggles["hideQuota"] != true) {
         guard st.toggles["hideQuota"] != true else { quota = []; return }

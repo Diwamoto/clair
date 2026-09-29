@@ -138,14 +138,20 @@ public final class FileWatcher: @unchecked Sendable {
   }
 
   /// Root-relative path for an event, or nil when it is noise. Build output and `.git/` are ignored,
-  /// except `.git/index` and `.git/HEAD` so a commit/stage/checkout in a terminal recolors the tree.
+  /// except `.git/index`, `.git/HEAD` and refs so a commit/stage/checkout/fetch in a terminal refreshes Git state.
   /// Our own scans never write them: `git status` runs with `GIT_OPTIONAL_LOCKS=0`.
   /// ponytail: a linked worktree's index lives outside the root and is not watched; watch its gitdir if that matters.
   func relative(_ path: String) -> String? {
     guard let r = roots.first(where: { path.hasPrefix($0.path + "/") }) else { return nil }
     let inner = String(path.dropFirst(r.path.count + 1))
-    if inner == ".git/index" || inner == ".git/HEAD" { return r.prefix + inner }
+    if FileWatcher.isGitState(inner) { return r.prefix + inner }
     return WorkbenchFiles.isSkipped(inner) ? nil : r.prefix + inner
+  }
+
+  /// `.git/` files whose change moves the branch, index, or ahead/behind — never lock files.
+  public static func isGitState(_ inner: String) -> Bool {
+    inner == ".git/index" || inner == ".git/HEAD" || inner == ".git/packed-refs"
+      || (inner.hasPrefix(".git/refs/") && !inner.hasSuffix(".lock"))
   }
 
   deinit { if let s = stream { FSEventStreamStop(s); FSEventStreamInvalidate(s); FSEventStreamRelease(s) } }
