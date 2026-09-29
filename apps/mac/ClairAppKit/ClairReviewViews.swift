@@ -187,14 +187,18 @@
     @State private var collapsed: Set<String> = []
 
     /// Same geometry as the explorer's treeRow in ClairAppShell: inset, rounded 28px row, 12px indent per level.
-    private func treeRow<Content: View>(depth: Int, selected: Bool, action: @escaping () -> Void, @ViewBuilder _ content: () -> Content) -> some View {
-      Button(action: action) {
-        HStack(spacing: 10, content: content)
-          .padding(.leading, 8 + CGFloat(depth + 1) * 12).padding(.trailing, 8).frame(height: 28)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .background(selected ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
-          .contentShape(Rectangle())
-      }.buttonStyle(.hoverWash).padding(.horizontal, 8)
+    /// `trailing` sits over the row instead of inside the Button label, where the row's own click would swallow it.
+    private func treeRow<Content: View, Trailing: View>(depth: Int, selected: Bool, action: @escaping () -> Void, @ViewBuilder trailing: () -> Trailing = { EmptyView() }, @ViewBuilder _ content: () -> Content) -> some View {
+      ZStack(alignment: .trailing) {
+        Button(action: action) {
+          HStack(spacing: 10, content: content)
+            .padding(.leading, 8 + CGFloat(depth + 1) * 12).padding(.trailing, 8).frame(height: 28)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(selected ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
+            .contentShape(Rectangle())
+        }.buttonStyle(.hoverWash)
+        HStack(spacing: 10, content: trailing).padding(.trailing, 16)
+      }.padding(.horizontal, 8)
     }
 
     private var canCommit: Bool { !busy && changes.contains(where: \.staged) && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
@@ -286,11 +290,7 @@
           if !ids.contains(where: collapsed.contains) {
             let t = target(c), on = selected == t, name = c.path.split(separator: "/").last.map(String.init) ?? c.path
             let badge = c.untracked ? "U" : c.index == "A" || c.worktree == "A" ? "A" : c.index == "D" || c.worktree == "D" ? "D" : "M"
-            treeRow(depth: dirs.count, selected: on, action: { onSelect(t) }) {
-              Color.clear.frame(width: 10)  // chevron slot: a file lines up with its sibling folders
-              FileIcon.forPath(c.path).image(size: 10, ink: on ? C.textSecondary : C.textTertiary).frame(width: 16)
-              Text(name).font(.system(size: 12, weight: on ? .semibold : .regular)).foregroundStyle(on ? C.textPrimary : C.textSecondary).lineLimit(1)
-              Spacer(minLength: 0)
+            treeRow(depth: dirs.count, selected: on, action: { onSelect(t) }, trailing: {
               if hovered == t {
                 Button { onDiscard(c, t.staged) } label: {
                   Image(systemName: "arrow.uturn.backward").font(.system(size: 10, weight: .semibold)).foregroundStyle(C.textTertiary).frame(width: 18, height: 18)
@@ -300,6 +300,12 @@
                 }.buttonStyle(.hoverWash).disabled(busy).help(t.staged ? "ステージを取り消す" : "ステージに追加")
               }
               Text(badge).font(.system(size: 12, weight: .semibold)).foregroundStyle(badge == "A" || badge == "U" ? C.success : badge == "D" ? C.textTertiary : C.attention)
+                .allowsHitTesting(false)
+            }) {
+              Color.clear.frame(width: 10)  // chevron slot: a file lines up with its sibling folders
+              FileIcon.forPath(c.path).image(size: 10, ink: on ? C.textSecondary : C.textTertiary).frame(width: 16)
+              Text(name).font(.system(size: 12, weight: on ? .semibold : .regular)).foregroundStyle(on ? C.textPrimary : C.textSecondary).lineLimit(1)
+              Spacer(minLength: 0)
             }
             .onHover { hovered = $0 ? t : (hovered == t ? nil : hovered) }
             .clairContextMenu(menus) { menu(c, t.staged) }
