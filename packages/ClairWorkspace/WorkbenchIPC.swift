@@ -191,6 +191,12 @@ public final class WorkbenchIPCServer: @unchecked Sendable {
 public enum WorkbenchCLI {
   public static func parse(_ args: [String]) -> WorkbenchIPCRequest? {
     guard let first = args.first else { return nil }
+    if first == "preview" {
+      guard args.count == 2, !args[1].isEmpty else { return nil }
+      let path = args[1]
+      let absolute = path.hasPrefix("/") ? path : URL(fileURLWithPath: path, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath)).path
+      return WorkbenchIPCRequest(command: "file.preview", input: ["path": .string(absolute)], caller: caller)
+    }
     if first == "open" {
       guard args.count == 2 else { return nil }
       var parts = args[1].split(separator: ":", omittingEmptySubsequences: false).map(String.init)

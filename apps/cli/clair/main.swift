@@ -16,7 +16,7 @@ if CommandLine.arguments.dropFirst().first == "attach" { exit(runAttach(Array(Co
 if CommandLine.arguments.dropFirst().starts(with: ["daemon", "stop"]) { exit(runDaemonStop(Array(CommandLine.arguments.dropFirst(3)))) }
 if CommandLine.arguments.dropFirst().starts(with: ["daemon", "status"]) { exit(runDaemonStatus(Array(CommandLine.arguments.dropFirst(3)))) }
 guard var request = WorkbenchCLI.parse(Array(CommandLine.arguments.dropFirst())) else {
-  FileHandle.standardError.write(Data("usage: clair open <path[:line[:col]]> | clair <command-id> [key=value ...]\n".utf8))
+  FileHandle.standardError.write(Data("usage: clair open <path[:line[:col]]> | clair preview <html-path> | clair <command-id> [key=value ...]\n".utf8))
   exit(2)
 }
 // V16: `clair agent.wait key=<root#pane> [timeout=<s>]` polls agent.status until that delegated agent exits

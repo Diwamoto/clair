@@ -194,6 +194,7 @@ extension WorkbenchState {
   }
 
   mutating func openTab(_ path: String) {
+    if active != path { editorContext = nil }
     panesClosed = false
     tree.ensureEditorAtLeft()
     if !tabs.contains(path) { tabs.append(path) }
@@ -218,6 +219,7 @@ extension WorkbenchState {
     switch tab {
     case .file(let path):
       guard tabs.contains(path), let editor = tree.leaves.first(where: { $0.kind == .editor }) else { return }
+      if active != path { editorContext = nil }
       active = path
       activeDiff = nil
       tree.focus(editor.id)
@@ -271,6 +273,7 @@ extension WorkbenchState {
   /// initial disk/Git scan so its first frame is never held up; its file watcher fills the tree
   /// immediately afterwards on a utility queue.
   public mutating func switchProject(to p: WorkbenchProject, scanFiles: Bool = true) {
+    if project != p.name { editorContext = nil }
     if !project.isEmpty { layouts[project] = layout; filesCache[project] = files }
     project = p.name
     // A revisited Project shows its last tree at once; the GUI rescans in the background (a scan walks the disk and runs `git status`).

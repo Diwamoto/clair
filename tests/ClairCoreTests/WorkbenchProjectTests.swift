@@ -252,7 +252,7 @@ final class WorkbenchProjectTests: XCTestCase {
       XCTAssertEqual(r.execute("file.open", ["path": .string(bad)], state: &s).failure?.code, .preconditionFailed, bad)
     }
     XCTAssertEqual(r.execute("file.open", ["path": .string(a + "/f"), "line": .int(0)], state: &s).failure?.code, .preconditionFailed)
-    XCTAssertFalse(r.commands.first { $0.id == "file.open" }!.aiAvailable)
+    XCTAssertTrue(r.commands.first { $0.id == "file.open" }!.aiAvailable)
     XCTAssertTrue(s.projects.isEmpty)
   }
 

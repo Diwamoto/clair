@@ -53,6 +53,20 @@ final class WorkbenchMCPTests: XCTestCase {
     let opened = call("file.open", ["path": .string(file.path)], approve: false)
     XCTAssertEqual(opened.1, 0); XCTAssertEqual(opened.2, 1)
     XCTAssertEqual(gate("file.open", ["path": .string(file.path)]).ran, 0)
+    let html = FileManager.default.temporaryDirectory.appending(path: "clair-preview-\(UUID().uuidString).html")
+    FileManager.default.createFile(atPath: html.path, contents: Data("<h1>hi</h1>".utf8))
+    defer { try? FileManager.default.removeItem(at: html) }
+    let preview = call("file.preview", ["path": .string(html.path)], approve: false)
+    XCTAssertEqual(preview.1, 1); XCTAssertEqual(preview.2, 0)
+    XCTAssertEqual(call("file.preview", ["path": .string(html.path)], approve: true).2, 1)
+    XCTAssertEqual(gate("file.preview", ["path": .string(html.path)]).ran, 0)
+    var plainCLIAsked = 0
+    let plainCLI = MCPGate.handle(
+      WorkbenchIPCRequest(command: "file.preview", input: ["path": .string(html.path)]), registry: reg,
+      snapshot: { WorkbenchState() }, approve: { _, _, _ in plainCLIAsked += 1; return false },
+      run: { _, _ in XCTFail("preview ran without approval"); return .success(.ok) })
+    XCTAssertEqual(plainCLIAsked, 1)
+    XCTAssertEqual(plainCLI.failure?.code, .denied)
   }
 
   func testWriteAndDestructiveNeedApprovalAndDenialBlocks() {

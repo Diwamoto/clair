@@ -146,7 +146,7 @@ import Observation
         var req = req
         // V16: `parent` is whoever called, never what the client claims.
         if req.command.hasPrefix("agent.") { req.input["parent"] = req.caller.map(CommandArg.string) }
-        if req.via == .mcp || req.caller != nil {
+        if req.via == .mcp || req.caller != nil || req.command == "file.preview" {
           return MCPGate.handle(
             req, registry: CommandRegistry.workbench,
             snapshot: { DispatchQueue.main.sync { MainActor.assumeIsolated { store.state } } },
@@ -284,7 +284,7 @@ import Observation
           state.notices.markRead(project: state.project, pane: pane)
         }
         // `clair open` / Finder usually come while another app is in front: bring the file into view.
-        if id == "file.open" {
+        if id == "file.open" || id == "file.preview" {
           NSApp?.activate(ignoringOtherApps: true)
           if let w = NSApp?.windows.first(where: { $0.isMiniaturized && $0.title != "Pair a device" }) { w.deminiaturize(nil) }
         }
@@ -328,8 +328,8 @@ import Observation
           switch (cli, remove) {
           case (true, false): try ClairDaemonLauncher.installCommand()
           case (true, true): try ClairDaemonLauncher.uninstallCommand()
-          case (false, false): try ClairAgentSkill.install()
-          case (false, true): try ClairAgentSkill.uninstall()
+          case (false, false): try ClairSkills.install()
+          case (false, true): try ClairSkills.uninstall()
           }
           message = "\(what)を\(verb)しました。"
         } catch { message = "\(what)を\(verb)できません: \(error.localizedDescription)" }
@@ -2270,12 +2270,12 @@ import Observation
         }
         SettingsRow(
           title: "Agent skill をインストール",
-          note: integrationNotes["skill"] ?? (ClairAgentSkill.isInstalled()
+          note: integrationNotes["skill"] ?? (ClairSkills.isInstalled()
             ? "インストール済み(~/.claude/skills, ~/.agents/skills)。"
-            : "clair-agents skill を ~/.claude/skills と ~/.agents/skills に置き、Agentが子Agentを並列起動できるようにします。")
+            : "clair-agents / clair-preview skill を ~/.claude/skills と ~/.agents/skills に置きます。")
         ) {
-          Button(ClairAgentSkill.isInstalled() ? "再インストール" : "インストール") {
-            do { try ClairAgentSkill.install(); integrationNotes["skill"] = "インストールしました。" } catch {
+          Button(ClairSkills.isInstalled() ? "再インストール" : "インストール") {
+            do { try ClairSkills.install(); integrationNotes["skill"] = "インストールしました。" } catch {
               integrationNotes["skill"] = "インストールできません: \(error.localizedDescription)"
             }
           }

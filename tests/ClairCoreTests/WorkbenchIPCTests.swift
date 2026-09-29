@@ -86,6 +86,15 @@ final class WorkbenchIPCTests: XCTestCase {
     XCTAssertNil(WorkbenchCLI.parse(["pane.focus", "id"]))
   }
 
+  func testPreviewArgumentParsing() throws {
+    let cwd = FileManager.default.currentDirectoryPath
+    let preview = try XCTUnwrap(WorkbenchCLI.parse(["preview", "artifact.html"]))
+    XCTAssertEqual(preview.command, "file.preview")
+    XCTAssertEqual(preview.input, ["path": .string(cwd + "/artifact.html")])
+    XCTAssertNil(WorkbenchCLI.parse(["preview"]))
+    XCTAssertNil(WorkbenchCLI.parse(["preview", "a.html", "b.html"]))
+  }
+
   func testBlockedCallDoesNotHoldUpNextCall() throws {
     let url = URL(fileURLWithPath: "/tmp/clair-ipc-\(UUID().uuidString.prefix(8))/c.sock")
     let release = DispatchSemaphore(value: 0)

@@ -22,7 +22,7 @@ public enum MCPGate {
     }
     // V16: a CLI call from inside a Clair terminal may be an agent or the user. Non-AI commands are not
     // refused there (the user's own `clair open` keeps working) but always need approval in the GUI.
-    let terminal = req.via == nil && req.caller != nil
+    let terminal = req.via == nil && (req.caller != nil || req.command == "file.preview")
     guard d.aiAvailable || terminal else { return .failure(CommandError(.notAvailableToAI, "\(req.command) is not available to AI")) }
     let seen = snapshot()
     // `clair open` from a Clair terminal needs no approval (owner, 2026-09-28): it only shows a file. MCP still cannot call it.

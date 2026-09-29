@@ -719,6 +719,28 @@ extension CommandRegistry {
       s.openFile(WorkbenchProject.normalizedFile(i["path"]!.string!)!)
       return .ok
     },
+    // Terminal agents may request this with `clair preview`; the CLI gate asks before executing HTML/JS.
+    cmd("file.preview", "HTML をプレビュー", .additive, ai: false,
+        params: [CommandParam("path", .string)], palette: false,
+        preflight: { _, i throws(CommandError) in
+          let path = i["path"]!.string!
+          guard let file = WorkbenchProject.normalizedFile(path) else { throw CommandError(.preconditionFailed, "not a file \(path)") }
+          try require(file.lowercased().hasSuffix(".html") || file.lowercased().hasSuffix(".htm"), "HTML ファイルを指定してください")
+          return .additive
+        }) { s, i in
+      let path = WorkbenchProject.normalizedFile(i["path"]!.string!)!
+      s.openFile(path)
+      guard let active = s.active, let editor = s.tree.leaves.first(where: { $0.kind == .editor }) else { return .ok }
+      if let preview = s.tree.leaves.first(where: { $0.kind == .preview && s.previews[$0.id] == active }) {
+        if s.tree.maximized != nil { s.tree.toggleMaximize() }
+        s.tree.focus(preview.id)
+        return .pane(preview.id)
+      }
+      let id = s.tree.split(editor.id, .horizontal, kind: .preview)
+      s.previews[id] = active
+      s.tree.focus(id)
+      return .pane(id)
+    },
     // E17: the GUI reveals `navigation.current` after these succeed (the caret belongs to the editor).
     cmd("editor.navigateBack", "前の位置に戻る", .read, ai: false, shortcut: "⌃-",
         preflight: { s, _ throws(CommandError) in try require(s.navigation.canGoBack, "戻る位置がありません"); return .read }) { s, _ in

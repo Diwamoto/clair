@@ -400,6 +400,7 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   Project にも Git repository にも属さない ad-hoc file は Project を作らず、
   active Project のタブ列の末尾に開く(root からの相対パス `../…`、explorer には出さない)
 - Clair の terminal からの `clair open` は承認なしで実行し、Clair を前面に出す(MCP からは呼べない)
+- `clair preview <html-path>` は HTML file を開き、JavaScript 対応の preview pane を表示して Clair を前面に出す。CLI からの実行前に GUI 承認を求め、MCP には公開しない。`clair-preview` Agent skill は生成した HTML artifact を Clair で見せる方法を Claude / Codex / OpenCode に案内する
 - Clair.app は text file の document type を宣言し、macOS の「このアプリケーションで
   開く」/既定アプリに設定できる。Finder から開いた file は `clair open` と同じ経路を通る
 - 起動中 Clair を操作する CLI を提供する

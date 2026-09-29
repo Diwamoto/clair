@@ -91,4 +91,25 @@ final class MarkdownPreviewTests: XCTestCase {
     XCTAssertEqual(state.tree.leaves.filter { $0.kind == .preview }.count, 1)
     XCTAssertEqual(state.previews.values.first, "artifact.html")
   }
+
+  func testFilePreviewOpensHTMLAndFocusesOneBoundPane() throws {
+    let file = URL.temporaryDirectory.appending(path: "clair-preview-\(UUID().uuidString).html")
+    try "<h1>Artifact</h1>".write(to: file, atomically: true, encoding: .utf8)
+    defer { try? FileManager.default.removeItem(at: file) }
+    let registry = CommandRegistry.workbench
+    var state = WorkbenchState()
+    let input: CommandInput = ["path": .string(file.path)]
+    _ = try registry.execute("file.preview", input, state: &state).get()
+    XCTAssertEqual(state.tree.leaves.filter { $0.kind == .preview }.count, 1)
+    XCTAssertEqual(state.previews[state.tree.focused], state.active)
+    _ = try registry.execute("file.preview", input, state: &state).get()
+    XCTAssertEqual(state.tree.leaves.filter { $0.kind == .preview }.count, 1)
+    XCTAssertEqual(registry.execute("file.preview", ["path": .string("/tmp/a.txt")], state: &state).failure?.code, .preconditionFailed)
+    let target = URL.temporaryDirectory.appending(path: "clair-preview-\(UUID().uuidString).txt")
+    let link = URL.temporaryDirectory.appending(path: "clair-preview-\(UUID().uuidString).html")
+    try "plain".write(to: target, atomically: true, encoding: .utf8)
+    try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+    defer { try? FileManager.default.removeItem(at: target); try? FileManager.default.removeItem(at: link) }
+    XCTAssertEqual(registry.execute("file.preview", ["path": .string(link.path)], state: &state).failure?.code, .preconditionFailed)
+  }
 }
