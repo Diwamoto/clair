@@ -69,6 +69,12 @@ final class WorkbenchCommandTests: XCTestCase {
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".json")
     try s.save(to: url)
     XCTAssertEqual(WorkbenchState.restore(from: url, scanFiles: false)?.recent, s.recent)
+    // Open Recent reopens the same list.
+    XCTAssertEqual(try r.execute("palette.recent", state: &s).get(), .ok)
+    let recent = r.paletteItems(.recent, query: "", state: s)
+    XCTAssertEqual(recent.map(\.title), paths.dropLast().reversed())
+    _ = try r.execute(recent[1].id, recent[1].input, state: &s).get()
+    XCTAssertEqual(s.active, paths.first)
   }
 
   // Every setting is reachable from ⌘K without opening the settings window.

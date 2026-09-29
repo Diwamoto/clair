@@ -2774,18 +2774,18 @@ import Observation
               ForEach(Array(list.enumerated()), id: \.offset) { i, it in
                 let on = i == selection
                 HStack(spacing: 8) {
-                  if p == .files || p == .compare { FileIcon.forPath(it.title).image(size: 11, ink: C.textTertiary).frame(width: 14) }
+                  if p == .files || p == .compare || p == .recent { FileIcon.forPath(it.title).image(size: 11, ink: C.textTertiary).frame(width: 14) }
                   if p == .branches {
                     Group {
                       if it.id == "git.branchCreate" { Image(systemName: "plus").font(.system(size: 10)) }
                       else { GitBranchGlyph().stroke(style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round)).frame(width: 11, height: 11) }
                     }.foregroundStyle(C.textTertiary).frame(width: 14)
                   }
-                  Text(p == .files || p == .compare ? name(it.title) : it.title).font(.system(size: 12)).lineLimit(1)
+                  Text(p == .files || p == .compare || p == .recent ? name(it.title) : it.title).font(.system(size: 12)).lineLimit(1)
                     .foregroundStyle(on ? C.textPrimary : C.textSecondary)
                   if !it.detail.isEmpty { Text(it.detail).font(.system(size: 11)).lineLimit(1).foregroundStyle(C.textQuaternary) }
                   Spacer(minLength: 0)
-                  if p == .files || p == .compare {
+                  if p == .files || p == .compare || p == .recent {
                     Text(it.title).font(.system(size: 11)).lineLimit(1).truncationMode(.head).foregroundStyle(C.textQuaternary)
                   }
                   if p == .symbols || p == .references || p == .branches {

@@ -28,7 +28,7 @@ public struct EditorContext: Sendable, Codable, Equatable {
 }
 
 public struct WorkbenchState: Sendable, Codable, Equatable {
-  public enum Palette: String, Sendable, Codable { case commands, files, search, symbols, references, branches, compare }
+  public enum Palette: String, Sendable, Codable { case commands, files, search, symbols, references, branches, compare, recent }
 
   public static let sections = ["一般", "AIプロバイダー", "使用状況", "エディタ", "ターミナル", "モバイル", "アップデート"]
   public static let toggleKeys = ["restoreLayout", "confirmClose", "hideQuota", "preventSleepOnBattery", "formatOnSave", "showWhitespace", "softWrap", "terminalApprovals", "lineNumbers", "terminalCursorBlink"]
@@ -328,6 +328,11 @@ public struct CommandRegistry: Sendable {
         + settingItems(state).filter { $0.matches(q) }
     case .files:
       return QuickOpen.rank(query, state.files.filter { $0.status != "D" })
+        .map { PaletteItem(title: $0.path, hint: "", id: "tab.open", input: ["path": .string($0.path)]) }
+    case .recent:
+      // Reopen a recently opened file, newest first; files gone from the tree drop out.
+      let live = Set(state.files.filter { $0.status != "D" }.map(\.path))
+      return QuickOpen.rank(query, state.recent.filter { live.contains($0) && $0 != state.active }.map { WorkbenchFile(path: $0, status: nil) })
         .map { PaletteItem(title: $0.path, hint: "", id: "tab.open", input: ["path": .string($0.path)]) }
     case .compare:
       // VS Code's "Compare Active File With…": the picked file is the left side, the active file the right.
@@ -883,6 +888,7 @@ extension CommandRegistry {
         preflight: { s, _ throws(CommandError) in try require(s.active != nil, "no active file"); return .read }) { s, _ in
       s.palette = .compare; return .ok
     },
+    cmd("palette.recent", "Open Recent…（最近開いたファイル）", .read, ai: false) { s, _ in s.palette = .recent; return .ok },
     cmd("palette.close", "パレットを閉じる", .read, ai: false, palette: false) { s, _ in s.palette = nil; return .ok },
     // E12: language-server navigation. The registry only validates and opens the palette; the GUI asks the
     // server for the active file's caret (the answer is async and belongs to the editor, not to this state).

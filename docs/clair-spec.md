@@ -387,7 +387,7 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
 - editor / terminal / diff を同じ tab group へ置ける任意 split
 - pane の focus、移動、close、最大化、幅/高さ/全体均等
 - file tree、search、Git の sidebar と、pane へ開く補助 view。file tree は対象ファイルを件数で打ち切らずに表示する
-- Quick Open、全文検索・置換、file watcher
+- Quick Open、全文検索・置換、file watcher、⌘K「Open Recent…」(Project ごとに保存する最近開いたファイルを新しい順に開き直す。Compare With… の候補順も同じ記録を使う)
 - diff、stage/unstage、変更の破棄(ボタンと右クリック。「変更」は working tree のみ、「ステージ済み」は HEAD へ戻す、未追跡は削除。確認必須・AI 不可)、commit、branch/worktree の作成・切替
 - 任意の 2 ファイルの比較(file menu で比較対象を選び別ファイルと比較、または ⌘K「Compare With…」でアクティブファイルと選んだファイルを比較。候補は Project ごとに保存する最近開いたファイル順が先頭。diff tab、Git 不要)
 - commit graph(branch/merge の履歴を graph で表示し、commit から diff へ移動)
