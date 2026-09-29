@@ -28,6 +28,16 @@
   }
 
   @MainActor final class EditorBuffersTests: XCTestCase {
+    func testWindowRestartKeepsWorkbenchOwnerAndEditorBuffers() throws {
+      let store = ClairWorkbenchStore(persistAt: nil)
+      let buffers = store.buffers
+      let project = store.state.project
+      XCTAssertEqual(try store.run("window.restart").get(), .ok)
+      XCTAssertEqual(store.windowGeneration, 1)
+      XCTAssertTrue(store.buffers === buffers)
+      XCTAssertEqual(store.state.project, project)
+    }
+
     // The store seeds its first project from the launch directory; keep that off the (large) repo root.
     override func setUp() {
       super.setUp()

@@ -107,7 +107,7 @@ struct ClairMacApp: App {
 
   var body: some Scene {
     WindowGroup(ClairChannel.current == .dev ? "Clair Dev" : "Clair") {
-      ClairAppShell().ignoresSafeArea(.container, edges: .top)  // content runs under the (hidden) titlebar; no second band above ours
+      ClairWindowRoot().ignoresSafeArea(.container, edges: .top)  // content runs under the (hidden) titlebar; no second band above ours
     }
     .windowStyle(.hiddenTitleBar)  // U04: one chrome — the app titlebar hosts the real traffic lights
     .commands {

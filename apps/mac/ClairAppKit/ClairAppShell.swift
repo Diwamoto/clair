@@ -85,6 +85,7 @@ import Observation
     private var updateTask: Task<Void, Never>?
     private var sleepAssertion: IOPMAssertionID = 0
     private var persistenceTask: Task<Void, Never>?
+    public private(set) var windowGeneration = 0
 
     /// Map manually started CLI processes back to the terminal panes Clair already owns.
     func refreshDetectedAgents() async {
@@ -330,10 +331,57 @@ import Observation
         if id == "agent.launch" || id == "pane.close" || id == "agent.close"
           || (id == "settings.set" && input["key"] == .string("preventSleepOnBattery"))
         { refreshSleepAssertion() }
+        if id == "window.restart" { windowGeneration += 1 }
+        if id == "app.restart" { restartApp() }
         watchProject()
         persistState()
       }
       return r
+    }
+
+    private func restartApp() {
+      guard state.dirty.isEmpty, state.layouts.values.allSatisfy({ $0.dirty.isEmpty }) else {
+        let alert = NSAlert()
+        alert.messageText = "未保存の変更があります"
+        alert.informativeText = "変更を保存してからアプリを再起動してください。"
+        alert.runModal()
+        return
+      }
+      guard let executable = Bundle.main.executableURL else { return }
+      let launch: [String]
+      if ProcessInfo.processInfo.environment["CLAIR_DEV_SUPERVISED"] != nil {
+        launch = [executable.path]
+      } else if Bundle.main.bundleURL.pathExtension == "app" {
+        launch = ["/usr/bin/open", "-n", "-a", Bundle.main.bundleURL.path]
+      } else {
+        launch = [executable.path]
+      }
+      persistenceTask?.cancel()
+      do {
+        if let persistURL { try state.save(to: persistURL) }
+        let helper = Process()
+        helper.executableURL = URL(fileURLWithPath: "/bin/sh")
+        helper.arguments = ["-c", "while kill -0 \"$1\" 2>/dev/null; do sleep 0.1; done; shift; exec \"$@\"", "clair-restart", String(ProcessInfo.processInfo.processIdentifier)] + launch
+        helper.standardInput = FileHandle.nullDevice
+        helper.standardOutput = FileHandle.nullDevice
+        helper.standardError = FileHandle.nullDevice
+        try helper.run()
+        if let handoff = ProcessInfo.processInfo.environment["CLAIR_DEV_RESTART_PID_FILE"] {
+          do {
+            try String(helper.processIdentifier).write(toFile: handoff, atomically: true, encoding: .utf8)
+          } catch {
+            helper.terminate()
+            throw error
+          }
+        }
+        ClairDaemonLauncher.keepsSessionsOnQuit = true
+        NSApp.terminate(nil)
+      } catch {
+        let alert = NSAlert()
+        alert.messageText = "アプリを再起動できませんでした"
+        alert.informativeText = error.localizedDescription
+        alert.runModal()
+      }
     }
 
     /// ⌘K install rows: the result is an alert because the palette has already closed (the settings rows show it inline).
@@ -460,7 +508,7 @@ import Observation
         _ = run(state.active != nil ? "tab.close" : "pane.close")
         return
       }
-      guard id == "file.save" else { _ = run(id, input); return }
+      guard id == "file.save" else { _ = run(id, input, confirmed: id == "app.restart"); return }
       Task { await saveActiveFile() }
     }
 
@@ -811,6 +859,17 @@ import Observation
       let k = s.last!
       let arrows: [Character: KeyEquivalent] = ["→": .rightArrow, "←": .leftArrow, "↑": .upArrow, "↓": .downArrow]
       return KeyboardShortcut(arrows[k] ?? KeyEquivalent(Character(k.lowercased())), modifiers: m)
+    }
+  }
+
+  /// Keep the workbench owner alive while SwiftUI rebuilds this window's views.
+  public struct ClairWindowRoot: View {
+    @State private var store = ClairWorkbenchStore()
+
+    public init() {}
+
+    public var body: some View {
+      ClairAppShell(store: store).id(store.windowGeneration)
     }
   }
 

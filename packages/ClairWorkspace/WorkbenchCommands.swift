@@ -823,6 +823,8 @@ extension CommandRegistry {
       s.fileAssociations = WorkbenchState.parseAssociations(i["value"]!.string!); return .ok
     },
     cmd("sidebar.toggle", "サイドバーの表示切替", .read, ai: false, shortcut: "⌘B") { s, _ in s.sidebarHidden.toggle(); return .ok },
+    cmd("window.restart", "ウインドウを再起動", .write, ai: false) { s, _ in s.palette = nil; return .ok },
+    cmd("app.restart", "アプリを再起動", .external, ai: false) { s, _ in s.palette = nil; return .ok },
     cmd("palette.commands", "コマンドパレット", .read, ai: false, shortcut: "⌘K", palette: false) { s, _ in s.palette = .commands; return .ok },
     // VS Code habit: ⌘⇧P opens the same command palette as ⌘K.
     cmd("palette.commandsAlt", "コマンドパレット", .read, ai: false, shortcut: "⌘⇧P", palette: false) { s, _ in s.palette = .commands; return .ok },

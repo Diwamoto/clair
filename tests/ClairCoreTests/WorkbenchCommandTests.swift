@@ -6,6 +6,15 @@ import XCTest
 final class WorkbenchCommandTests: XCTestCase {
   let r = CommandRegistry.workbench
 
+  func testRestartChoicesAreSeparatePaletteCommands() throws {
+    var state = WorkbenchState()
+    state.palette = .commands
+    XCTAssertEqual(r.paletteItems(.commands, query: "再起動", state: state).map(\.id).filter { $0 == "window.restart" || $0 == "app.restart" }, ["window.restart", "app.restart"])
+    XCTAssertEqual(try r.execute("window.restart", state: &state).get(), .ok)
+    XCTAssertNil(state.palette)
+    XCTAssertEqual(r.execute("app.restart", state: &state), .failure(CommandError(.confirmationRequired, "app.restart is 外部")))
+  }
+
   func testPaletteAndHarnessProduceSameTransitionAndResult() {
     var viaPalette = WorkbenchState(), viaHarness = WorkbenchState()
     for (query, id) in [("右に分割", "pane.splitRight"), ("下に分割", "pane.splitDown"), ("均等", "pane.equalize"), ("閉じる", "pane.close")] {

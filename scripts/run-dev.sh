@@ -69,6 +69,9 @@ session_file="$sessions_dir/$$"
 touch "$session_file"
 # Tells the app not to stop the shared daemon on quit; this script owns its lifecycle.
 export CLAIR_DEV_SUPERVISED=1
+restart_pid_file="$(mktemp)"
+export CLAIR_DEV_RESTART_PID_FILE="$restart_pid_file"
+trap 'rm -f "$restart_pid_file"' EXIT
 
 # N11: same loopback remote port the app would pass (ClairDaemonLauncher.ensureRunning).
 daemon_args=(--directory "$dev_dir" --remote-port 47612)
@@ -128,13 +131,23 @@ launch_app
 # running (terminals survive); daemon-side changes need `make dev-daemon-restart`.
 # ponytail: mtime polling (no fswatch dependency); swap for fswatch if the 1s scan gets slow.
 stamp="$(mktemp)"
-trap 'rm -f "$stamp"' EXIT
+trap 'rm -f "$stamp" "$restart_pid_file"' EXIT
 watch_dirs=("$repo_root/apps" "$repo_root/packages")
 
 # The app exiting ends the session; the daemon exiting just gets it restarted. (`wait -n` needs
 # bash 4.3+; macOS ships bash 3.2, so poll instead.)
 tick=0
-while kill -0 "$app_pid" 2>/dev/null; do
+while true; do
+    if ! kill -0 "$app_pid" 2>/dev/null; then
+        # An in-app restart hands off the waiting helper's PID before the old app exits.
+        next_pid="$(cat "$restart_pid_file")"
+        if [[ -n "$next_pid" ]] && kill -0 "$next_pid" 2>/dev/null; then
+            app_pid="$next_pid"
+            : > "$restart_pid_file"
+            continue
+        fi
+        break
+    fi
     sleep 1
     (( ++tick % 3 == 0 )) && ensure_daemon
     if [[ -n "$(find "${watch_dirs[@]}" -name '*.swift' -newer "$stamp" -print -quit)" ]]; then
