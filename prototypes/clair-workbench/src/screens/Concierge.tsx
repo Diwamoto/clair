@@ -44,13 +44,13 @@ function ChildChip({ child, focused, onFocus }: { child: Child; focused: boolean
         alignItems: 'center',
         gap: space[2],
         width: '100%',
-        height: 28,
+        height: 32,
         padding: '0 8px',
         borderRadius: radius.control,
         border: `1px solid ${focused ? line.stronger : line.hairline}`,
         background: focused ? color.surfaceActive : wash.faint,
         color: color.textSecondary,
-        fontSize: fs.caption,
+        fontSize: fs.body,
       }}
     >
       <span style={{ width: 6, height: 6, borderRadius: radius.pill, background: STATE_COLOR[child.state], flexShrink: 0 }} />
@@ -93,17 +93,17 @@ export function ConciergePanel() {
       <div style={{ display: 'flex', alignItems: 'center', gap: space[2], height: 40, padding: '0 12px', borderBottom: `1px solid ${line.hairline}` }}>
         <IconClaude size={14} color={color.textSecondary} />
         <span style={{ color: color.textPrimary, fontWeight: 600 }}>コンシェルジュ</span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: color.textQuaternary, fontSize: fs.caption }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: color.textQuaternary, fontSize: fs.body }}>
           <span style={{ width: 6, height: 6, borderRadius: radius.pill, background: running ? color.success : color.textQuaternary }} />
           {running ? 'Claude Code · 実行中' : '未起動'}
         </span>
         <span style={{ flex: 1 }} />
         {running ? (
-          <button className="btn-secondary" title="コンシェルジュのターミナルを開く" style={{ height: 24, padding: '0 8px', borderRadius: radius.control, fontSize: fs.caption }}>
+          <button className="btn-secondary" title="コンシェルジュのターミナルを開く" style={{ height: 24, padding: '0 8px', borderRadius: radius.control, fontSize: fs.body }}>
             ターミナル
           </button>
         ) : (
-          <button className="btn-primary" onClick={() => setRunning(true)} style={{ height: 24, padding: '0 8px', borderRadius: radius.control, fontSize: fs.caption }}>
+          <button className="btn-primary" onClick={() => setRunning(true)} style={{ height: 24, padding: '0 8px', borderRadius: radius.control, fontSize: fs.body }}>
             起動
           </button>
         )}
@@ -111,7 +111,7 @@ export function ConciergePanel() {
 
       {/* tasks: children launched by the concierge, collapsible */}
       <div style={{ padding: '8px 12px', borderBottom: `1px solid ${line.hairline}` }}>
-        <button onClick={() => setTasksOpen((v) => !v)} style={{ display: 'flex', alignItems: 'center', gap: 4, width: '100%', color: color.textTertiary, fontSize: fs.caption }}>
+        <button onClick={() => setTasksOpen((v) => !v)} style={{ display: 'flex', alignItems: 'center', gap: 4, width: '100%', color: color.textTertiary, fontSize: fs.body }}>
           <IconChevron size={10} style={{ transform: tasksOpen ? 'rotate(90deg)' : undefined }} />
           担当中のタスク
           <span className="tnum" style={{ marginLeft: 'auto', color: color.textQuaternary }}>{active} 件実行中</span>
@@ -130,7 +130,7 @@ export function ConciergePanel() {
       {/* footer: per-Project instructions */}
       <button
         className="hoverable"
-        style={{ display: 'flex', alignItems: 'center', gap: space[2], height: 30, padding: '0 12px', borderTop: `1px solid ${line.hairline}`, color: color.textTertiary, fontSize: fs.caption }}
+        style={{ display: 'flex', alignItems: 'center', gap: space[2], height: 30, padding: '0 12px', borderTop: `1px solid ${line.hairline}`, color: color.textTertiary, fontSize: fs.body }}
       >
         <IconMarkdown size={12} />
         .clair/concierge.md を編集
@@ -198,7 +198,7 @@ export function ConciergeMain() {
                     borderRadius: radius.overlay,
                     background: m.from === 'user' ? wash.strong : undefined,
                     color: m.from === 'user' ? color.textPrimary : color.textSecondary,
-                    fontSize: fs.body,
+                    fontSize: fs.title,
                     lineHeight: 1.55,
                     maxWidth: m.from === 'user' ? '85%' : undefined,
                     marginLeft: m.from === 'user' ? 'auto' : undefined,
@@ -227,7 +227,7 @@ export function ConciergeMain() {
             }}
             rows={2}
             placeholder="コンシェルジュに頼む…"
-            style={{ flex: 1, minWidth: 0, resize: 'none', border: 0, outline: 'none', background: 'transparent', color: color.textPrimary, fontSize: fs.secondary }}
+            style={{ flex: 1, minWidth: 0, resize: 'none', border: 0, outline: 'none', background: 'transparent', color: color.textPrimary, fontSize: fs.title }}
           />
           <button
             onClick={send}

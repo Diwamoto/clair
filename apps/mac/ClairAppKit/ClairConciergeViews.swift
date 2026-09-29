@@ -6,6 +6,11 @@
 
   private typealias C = DesignTokens.Color
 
+  // The concierge is read like a conversation, not scanned like chrome: one step above the chrome scale.
+  private let chatFont = Font.system(size: 15)  // Tokens: title step (15)
+  private let rowFont = Font.system(size: 13)  // Tokens: body step (13)
+  private let rowStrong = Font.system(size: 13, weight: .semibold)
+
   // ADR-0020: the concierge's sidebar (itself, its children, its instructions) and its chat panel.
 
   private func statusLabel(_ s: AgentSession.Status) -> (String, Color) {
@@ -26,15 +31,15 @@
       let (text, color) = statusLabel(session.status)
       Button(action: open) {
         HStack(spacing: 8) {
-          Circle().fill(color).frame(width: 6, height: 6)
+          Circle().fill(color).frame(width: 7, height: 7)
           Image(systemName: "apple.terminal").font(.system(size: 11)).foregroundStyle(C.textTertiary)
           Text(title).lineLimit(1).foregroundStyle(C.textSecondary)
           Spacer(minLength: 0)
           Text(text).foregroundStyle(C.textQuaternary)
           Image(systemName: "arrow.right").font(.system(size: 10)).foregroundStyle(C.textQuaternary)
         }
-        .font(Typography.font(Typography.sidebar))
-        .padding(.horizontal, 8).frame(height: 28).contentShape(Rectangle())
+        .font(rowFont)
+        .padding(.horizontal, 10).frame(height: 32).contentShape(Rectangle())
         .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(C.divider.opacity(0.6), lineWidth: 1))
       }.buttonStyle(.hoverWash).help(tr("ペイン %@ へ移動", session.pane))
     }
@@ -53,9 +58,9 @@
     var body: some View {
       VStack(alignment: .leading, spacing: 0) {
         HStack(spacing: 8) {
-          Text(tr("コンシェルジュ")).font(Typography.font(Typography.sidebarStrong)).foregroundStyle(C.textPrimary)
+          Text(tr("コンシェルジュ")).font(rowStrong).foregroundStyle(C.textPrimary)
           Circle().fill(running ? C.success : C.textQuaternary).frame(width: 6, height: 6)
-          Text(running ? tr("Claude Code · 実行中") : tr("未起動")).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textQuaternary)
+          Text(running ? tr("Claude Code · 実行中") : tr("未起動")).font(rowFont).foregroundStyle(C.textQuaternary)
           Spacer(minLength: 0)
           if running {
             Button(showingChat ? tr("ターミナル") : tr("チャット"), action: toggleView).buttonStyle(.hoverWash)
@@ -63,7 +68,7 @@
           } else {
             Button(tr("起動"), action: start).buttonStyle(.hoverWash)
           }
-        }.padding(.horizontal, 12).frame(height: 40)
+        }.padding(.horizontal, 14).frame(height: 46)
         Divider()
         Button { tasksOpen.toggle() } label: {
           HStack(spacing: 4) {
@@ -71,12 +76,12 @@
             Text(tr("担当中のタスク"))
             Spacer(minLength: 0)
             Text(tr("%@ 件実行中", children.filter { !$0.session.status.isExited }.count)).foregroundStyle(C.textQuaternary)
-          }.font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary).contentShape(Rectangle())
+          }.font(rowFont).foregroundStyle(C.textTertiary).contentShape(Rectangle())
         }.buttonStyle(.plain).padding(.horizontal, 12).padding(.top, 10)
         if tasksOpen {
           VStack(spacing: 4) {
             if children.isEmpty {
-              Text(tr("まだありません")).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textQuaternary)
+              Text(tr("まだありません")).font(rowFont).foregroundStyle(C.textQuaternary)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             ForEach(children, id: \.session.id) { c in
@@ -87,8 +92,8 @@
         Divider()
         Button(action: editInstructions) {
           Label(tr("%@ を編集", Concierge.instructionsPath), systemImage: "doc.text")
-            .font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
-            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).frame(height: 30).contentShape(Rectangle())
+            .font(rowFont).foregroundStyle(C.textTertiary)
+            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 14).frame(height: 36).contentShape(Rectangle())
         }.buttonStyle(.hoverWash)
       }
     }
@@ -115,7 +120,7 @@
     var body: some View {
       VStack(spacing: 0) {
           ScrollView {
-            LazyVStack(alignment: .leading, spacing: 12) {
+            LazyVStack(alignment: .leading, spacing: 16) {
               if messages.isEmpty && pending == nil {
                 Text(tr("依頼を送ると、ここに会話が表示されます")).foregroundStyle(C.textQuaternary).frame(maxWidth: .infinity).padding(.top, 40)
               }
@@ -139,12 +144,12 @@
 
     private func bubble(_ role: String, _ body: String) -> some View {
       let text = Text((try? AttributedString(markdown: body, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(body))
-        .font(Typography.font(Typography.chrome)).textSelection(.enabled)
+        .font(chatFont).textSelection(.enabled)
       return Group {
         if role == "user" {
           HStack {
             Spacer(minLength: 60)
-            text.foregroundStyle(C.textPrimary).padding(.horizontal, 12).padding(.vertical, 8)
+            text.foregroundStyle(C.textPrimary).padding(.horizontal, 14).padding(.vertical, 10)
               .background(C.surfaceActive, in: RoundedRectangle(cornerRadius: 10))
           }
         } else {
@@ -156,14 +161,14 @@
     private var composer: some View {
       HStack(alignment: .bottom, spacing: 8) {
         TextField(tr("コンシェルジュに頼む…"), text: $draft, axis: .vertical)
-          .textFieldStyle(.plain).lineLimit(2...8).font(Typography.font(Typography.chrome))
-          .frame(maxWidth: .infinity, minHeight: 40, alignment: .topLeading)
+          .textFieldStyle(.plain).lineLimit(2...8).font(chatFont)
+          .frame(maxWidth: .infinity, minHeight: 48, alignment: .topLeading)
           .focused($focused)
           .onSubmit(send)
         let empty = draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         Button(action: send) {
-          Image(systemName: "arrow.up").font(.system(size: 12, weight: .bold)).foregroundStyle(C.canvas)
-            .frame(width: 26, height: 26).background(empty ? C.textQuaternary : C.textPrimary, in: Circle())
+          Image(systemName: "arrow.up").font(.system(size: 14, weight: .bold)).foregroundStyle(C.canvas)
+            .frame(width: 32, height: 32).background(empty ? C.textQuaternary : C.textPrimary, in: Circle())
         }.buttonStyle(.plain).disabled(empty).help(tr("送信")).accessibilityLabel(tr("送信"))
       }
       .padding(.leading, 12).padding(.trailing, 8).padding(.vertical, 10)
