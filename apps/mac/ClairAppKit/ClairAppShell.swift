@@ -976,7 +976,6 @@ import Observation
     @State private var reviewError: String?
     @State private var diff: DiffTarget?
     @State private var chat: AgentHistory?
-    @State private var conciergeChat = true
     @State private var loadedDiff: LoadedDiff?
     /// Left side of a two-file compare, picked from a file menu ("比較対象として選択").
     @State private var compareBase: String?
@@ -1072,6 +1071,8 @@ import Observation
         if st.palette == .search { searchSelection = 0; runSearch() }
       }
       .onChange(of: st.debugNavigationGeneration) { sidebarMode = "ladybug" }
+      // A file opened while the concierge chat covers the panes would land hidden behind it.
+      .onChange(of: st.active) { if sidebarMode == "concierge" { leaveConcierge() } }
       .onChange(of: store.debugSession?.frames.first) { _, frame in
         if sidebarMode == "ladybug", let frame { openDebugFrame(frame) }
       }
@@ -1375,7 +1376,6 @@ import Observation
           store.run("tab.activate", ["path": .string(path)])
         }
         if icon == "shield" { reloadChanges() }
-        if icon == "concierge" { conciergeChat = true }
         if icon == "ladybug" { store.run("debug.open") }
       }
     }
@@ -1589,25 +1589,27 @@ import Observation
 
     private var conciergeSidebar: some View {
       ConciergeSidebar(
-        running: st.concierge(in: st.project) != nil, showingChat: conciergeChat,
+        running: st.concierge(in: st.project) != nil,
         children: st.conciergeChildren(in: st.project), start: { startConcierge() },
-        toggleView: {
-          conciergeChat.toggle()
-          if !conciergeChat, let c = st.concierge(in: st.project) { store.run("pane.focus", ["id": .int(c.pane)]) }
+        openTerminal: {
+          if let c = st.concierge(in: st.project) { store.run("pane.focus", ["id": .int(c.pane)]) }
+          leaveConcierge()
         },
         focus: focusConciergeChild, editInstructions: editConciergeInstructions)
     }
 
     private func startConcierge(_ message: String? = nil) {
-      conciergeChat = true
       store.run("concierge.open", message.map { ["message": .string($0)] } ?? [:], confirmed: true)
     }
+
+    /// Leaving the concierge for a pane or file hands the sidebar back to the file tree.
+    private func leaveConcierge() { sidebarMode = "folder" }
 
     /// A child link shows the real terminal: leave the chat and focus that pane.
     private func focusConciergeChild(_ s: AgentSession) {
       if s.project != st.project { store.run("project.switch", ["name": .string(s.project)]) }
       store.run("pane.focus", ["id": .int(s.pane)])
-      conciergeChat = false
+      leaveConcierge()
     }
 
     private func editConciergeInstructions() {
@@ -1617,7 +1619,7 @@ import Observation
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? Data(tr("# コンシェルジュへの指示\n\nこの Project で守ってほしいことを書きます。次回の起動から反映されます。\n").utf8).write(to: url, options: .withoutOverwriting)
       }
-      conciergeChat = false
+      leaveConcierge()
       store.refreshProjectFiles()
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { store.run("tab.open", ["path": .string(Concierge.instructionsPath)]) }
     }
@@ -2360,7 +2362,7 @@ import Observation
       // terminal surfaces stay mounted and keep their scrollback.
       .overlay {
         if let chat { AgentChatView(history: chat, onResume: st.projects.first(where: { $0.path == chat.project }).map { p in { resume(chat, in: p.name) } }) { self.chat = nil }.id(chat.id).background(C.canvas) }
-        else if sidebarMode == "concierge", conciergeChat {
+        else if sidebarMode == "concierge" {
           let c = st.concierge(in: st.project)
           ConciergeChatView(session: c?.session, pane: c?.pane, children: st.conciergeChildren(in: st.project), focus: focusConciergeChild, start: { startConcierge($0) })
         }

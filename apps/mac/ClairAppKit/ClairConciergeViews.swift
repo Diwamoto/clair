@@ -47,10 +47,9 @@
 
   struct ConciergeSidebar: View {
     let running: Bool
-    let showingChat: Bool
     let children: [(session: AgentSession, launch: AgentLaunch)]
     let start: () -> Void
-    let toggleView: () -> Void
+    let openTerminal: () -> Void
     let focus: (AgentSession) -> Void
     let editInstructions: () -> Void
     @State private var tasksOpen = true
@@ -63,8 +62,7 @@
           Text(running ? tr("Claude Code · 実行中") : tr("未起動")).font(rowFont).foregroundStyle(C.textQuaternary)
           Spacer(minLength: 0)
           if running {
-            Button(showingChat ? tr("ターミナル") : tr("チャット"), action: toggleView).buttonStyle(.hoverWash)
-              .help(showingChat ? tr("コンシェルジュのターミナルを表示") : tr("チャットに戻る"))
+            Button(tr("ターミナル"), action: openTerminal).buttonStyle(.hoverWash).help(tr("コンシェルジュのターミナルを表示"))
           } else {
             Button(tr("起動"), action: start).buttonStyle(.hoverWash)
           }
