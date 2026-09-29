@@ -8,6 +8,12 @@ Claude Code では次を一度実行する（[公式の stdio MCP 登録方法](
 claude mcp add --scope user --transport stdio clair -- clair mcp serve
 ```
 
+Codex CLI では次を一度実行する。Codex app と CLI は同じ MCP 設定を使う（[OpenAI Docs](https://developers.openai.com/learn/docs-mcp)）。
+
+```sh
+codex mcp add clair -- clair mcp serve
+```
+
 ほかの MCP 対応 Agent には、command `clair`、args `["mcp", "serve"]` の stdio server として登録する。登録した Agent から次の tool を使える。
 
 - `editor.context`: 現在のファイル、1 始まりの行・0 始まりの UTF-16 桁、選択テキストを取得する。未選択時は位置だけ。選択が 16 KiB を超える場合はテキストを返さない。
