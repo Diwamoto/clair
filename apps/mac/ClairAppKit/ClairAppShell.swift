@@ -844,18 +844,41 @@ import Observation
     public init() {}
 
     public var body: some Commands {
-      CommandMenu("Clair") {
-        let state = store?.state ?? WorkbenchState()
-        ForEach(CommandRegistry.workbench.commands.filter { state.shortcut(for: $0) != nil }, id: \.id) { d in
-          Button(d.id == "pane.close" ? "タブまたはペインを閉じる" : d.title) { store?.performFromUI(d.id) }
-            .keyboardShortcut(Self.shortcut(state.shortcut(for: d)!))
-            .disabled(store == nil)
-        }
+      CommandGroup(replacing: .appSettings) { items(.settings) }
+      CommandGroup(after: .newItem) { items(.file) }
+      CommandGroup(after: .textEditing) { items(.edit) }
+      CommandGroup(after: .toolbar) { items(.view) }
+      CommandMenu("移動") {
+        items(.go)
         // Ctrl-Tab is the conventional tab cycle; unclaimed, AppKit only walks the focus ring over the tab buttons.
         Button("次のタブ") { store?.performFromUI("tab.next") }
           .keyboardShortcut(.tab, modifiers: .control).disabled(store == nil)
         Button("前のタブ") { store?.performFromUI("tab.previous") }
           .keyboardShortcut(.tab, modifiers: [.control, .shift]).disabled(store == nil)
+      }
+    }
+
+    enum Menu { case settings, file, edit, view, go }
+
+    /// Which standard menu a registry command lives in; anything unlisted falls into View.
+    static func menu(_ id: String) -> Menu {
+      if id == "settings.open" { return .settings }
+      if id.hasPrefix("file.") || id.hasPrefix("project.")
+        || ["window.restart", "app.restart", "tab.reopenClosed", "tab.close", "pane.close", "palette.recent", "palette.compare"].contains(id) { return .file }
+      if id.hasPrefix("editor.fold") || id.hasPrefix("editor.unfold")
+        || ["palette.find", "palette.search", "editor.format"].contains(id) { return .edit }
+      if id.hasPrefix("editor.navigate") || id.hasPrefix("pane.focus")
+        || ["editor.definition", "editor.references", "palette.files", "palette.symbols", "palette.references",
+            "tab.next", "tab.previous", "tab.activate"].contains(id) { return .go }
+      return .view
+    }
+
+    @ViewBuilder private func items(_ m: Menu) -> some View {
+      let state = store?.state ?? WorkbenchState()
+      ForEach(CommandRegistry.workbench.commands.filter { Self.menu($0.id) == m && state.shortcut(for: $0) != nil }, id: \.id) { d in
+        Button(d.id == "pane.close" ? "タブまたはペインを閉じる" : d.title) { store?.performFromUI(d.id) }
+          .keyboardShortcut(Self.shortcut(state.shortcut(for: d)!))
+          .disabled(store == nil)
       }
     }
 
