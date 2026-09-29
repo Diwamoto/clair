@@ -148,6 +148,24 @@ final class WorkbenchProjectTests: XCTestCase {
     XCTAssertEqual(m["tracked.txt"], "M"); XCTAssertEqual(m["new.txt"], "U"); XCTAssertEqual(m["renamed.txt"], "R")
   }
 
+  /// A submodule (or nested repo) is one `ls-files` entry; its files must still show.
+  func testScanIncludesSubmoduleFiles() throws {
+    let a = try folder("sm", ["sub/lib.txt", "top.txt"])
+    func git(_ dir: String, _ args: String...) throws {
+      let p = Process()
+      p.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+      p.arguments = ["-C", dir, "-c", "user.name=t", "-c", "user.email=t@t", "-c", "protocol.file.allow=always"] + args
+      p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
+      try p.run(); p.waitUntilExit()
+    }
+    try git(a + "/sub", "init", "-q"); try git(a + "/sub", "add", "."); try git(a + "/sub", "commit", "-q", "-m", "i")
+    try git(a, "init", "-q"); try git(a, "submodule", "add", "-q", a + "/sub", "mod")
+    try git(a, "add", "top.txt")
+    let paths = WorkbenchFiles.scan(a).map(\.path)
+    XCTAssertTrue(paths.contains("mod/lib.txt"), "\(paths)")
+    XCTAssertTrue(paths.contains("top.txt"))
+  }
+
   /// Gitignored files stay out of the tree.
   func testScanSkipsGitIgnoredFiles() throws {
     let a = try folder("gi", [".gitignore", "cache/big.bin", "src/main.swift"])

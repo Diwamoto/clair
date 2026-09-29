@@ -337,7 +337,7 @@ public enum WorkbenchFiles {
   /// Regular files under `root` (relative, sorted), never following symlinks, with Git status if `root` is a repo.
   public static func scan(_ root: String) -> [WorkbenchFile] {
     let base = URL(fileURLWithPath: root).resolvingSymlinksInPath()
-    let keys: [URLResourceKey] = [.isRegularFileKey, .isSymbolicLinkKey]
+    let keys: [URLResourceKey] = [.isRegularFileKey, .isSymbolicLinkKey, .isDirectoryKey]
     guard let e = FileManager.default.enumerator(at: base, includingPropertiesForKeys: keys, options: [.skipsPackageDescendants])
     else { return [] }
     // The enumerator yields realpath(3) paths (`/private/var/…`), which `resolvingSymlinksInPath` strips to `/var/…`.
@@ -345,8 +345,13 @@ public enum WorkbenchFiles {
     var paths: [String] = []
     // A Git repo lists tracked + untracked-but-not-ignored files, so a huge ignored cache cannot eat the cap.
     if FileManager.default.fileExists(atPath: root + "/.git"), case let r = WorkbenchGit.run(root, ["ls-files", "-co", "--exclude-standard", "-z"]), r.ok {
-      for rel in r.out.split(separator: "\0").map(String.init) where !isSkipped(rel) {
+      for raw in r.out.split(separator: "\0").map(String.init) where !isSkipped(raw) {
+        let rel = raw.hasSuffix("/") ? String(raw.dropLast()) : raw
         let v = try? base.appendingPathComponent(rel).resourceValues(forKeys: Set(keys))
+        if v?.isDirectory == true, v?.isSymbolicLink != true {  // submodule / nested repo: Git lists it as one entry
+          paths += scan(base.appendingPathComponent(rel).path).map { rel + "/" + $0.path }
+          continue
+        }
         guard v?.isRegularFile == true, v?.isSymbolicLink != true else { continue }  // also drops deleted rows; status re-adds them
         paths.append(rel)
       }
