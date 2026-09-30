@@ -52,7 +52,7 @@ cp "$bin/ClairMacApp" "$bin/ClairDaemon" "$bin/clair" "$app/Contents/MacOS/"
 # ponytail: SwiftPM's generated Bundle.module only looks at the .app root, so the resource bundles live
 # there and the bundle cannot be sealed by codesign. Move them to Contents/Resources (custom accessor
 # or an Xcode app target) when Developer ID signing/notarization is adopted.
-cp -R "$bin"/*.bundle "$app/"
+for bundle in "$bin"/*.bundle; do [[ -e "$bundle" ]] && cp -R "$bundle" "$app/"; done
 scripts/make-app-icon.sh "apps/mac/ClairMacApp/AppIcon.icon" "$app/Contents/Resources"
 cat >"$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
