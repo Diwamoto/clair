@@ -38,11 +38,17 @@
 
     /// Waits up to `waitMilliseconds` for output and hands it to `sink`. Returns false once the
     /// shell has exited and everything it wrote has been delivered.
+    ///
+    /// One slow reply (a busy or throttled daemon) must not end the pane: the read restarts from
+    /// the same cursor, so retrying loses nothing. A daemon that is gone fails to connect instead.
     public func pump(waitMilliseconds: Int = 500, _ sink: (Data) throws -> Void) throws -> Bool {
-      let response = try client.terminal(
-        .read(
-          sessionID: sessionID, epoch: epoch, offset: offset, waitMilliseconds: waitMilliseconds))
-      switch response {
+      let request = ClairDaemonTerminalRequest.read(
+        sessionID: sessionID, epoch: epoch, offset: offset, waitMilliseconds: waitMilliseconds)
+      var response: ClairDaemonTerminalResponse?
+      while response == nil {
+        do { response = try client.terminal(request) } catch ClairDaemonError.transportTimedOut {}
+      }
+      switch response! {
       case .output(let bytes, let newEpoch, let next, let isClosed):
         if !bytes.isEmpty { try sink(bytes) }
         epoch = newEpoch
@@ -62,8 +68,12 @@
       while !rest.isEmpty {
         let chunk = rest.prefix(Self.inputChunkBytes)
         rest = rest.dropFirst(chunk.count)
-        guard case .accepted = try client.terminal(.input(sessionID: sessionID, bytes: Data(chunk)))
-        else { throw ClairTerminalAttachError.rejected }
+        // Input is not idempotent, so a timed-out chunk is not resent: it counts as rejected
+        // (dropped with a bell) instead of ending the attachment.
+        let response: ClairDaemonTerminalResponse
+        do { response = try client.terminal(.input(sessionID: sessionID, bytes: Data(chunk))) }
+        catch ClairDaemonError.transportTimedOut { throw ClairTerminalAttachError.rejected }
+        guard case .accepted = response else { throw ClairTerminalAttachError.rejected }
       }
     }
 

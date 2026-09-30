@@ -70,6 +70,41 @@ import Testing
       await daemon.stop()
     }
 
+    /// One control request that times out (busy or throttled daemon) must not end `clair attach`:
+    /// the read is retried from the same cursor. The daemon's socket is briefly swapped for one
+    /// that accepts but never answers, so the first read times out after `controlTimeout`.
+    @Test func aTimedOutReadIsRetriedInsteadOfEndingTheAttachment() async throws {
+      try await withDaemon { daemon in
+        let attach = try daemon.attach(key: "pane")
+        #expect(try daemon.read(attach, until: "READY"))
+        let socket = daemon.client.paths.socketURL
+        let parked = daemon.directory.appending(path: "real.sock")
+        try FileManager.default.moveItem(at: socket, to: parked)
+        let stall = Darwin.socket(AF_UNIX, SOCK_STREAM, 0)
+        defer { Darwin.close(stall) }
+        var address = sockaddr_un()
+        address.sun_family = sa_family_t(AF_UNIX)
+        withUnsafeMutableBytes(of: &address.sun_path) { $0.copyBytes(from: Array(socket.path.utf8) + [0]) }
+        let bound = withUnsafePointer(to: &address) {
+          $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+            Darwin.bind(stall, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
+          }
+        }
+        #expect(bound == 0 && Darwin.listen(stall, 4) == 0 && Darwin.chmod(socket.path, 0o600) == 0)
+
+        let started = Date()
+        let reader = Task.detached { try attach.pump(waitMilliseconds: 0) { _ in } }
+        // The read is now parked in the stall socket's backlog; restore the daemon behind it.
+        try await Task.sleep(for: .seconds(1))
+        try FileManager.default.removeItem(at: socket)
+        try FileManager.default.moveItem(at: parked, to: socket)
+        #expect(try await reader.value)
+        #expect(Date().timeIntervalSince(started) >= ClairDaemonSocketSupport.controlTimeout)
+        try attach.send(Data("after\n".utf8))
+        #expect(try daemon.read(attach, until: "<after>"))
+      }
+    }
+
     /// Interactive shells ignore SIGTERM; closing a pane must still end its shell, or every closed
     /// pane leaks a shell and a pump thread until the daemon stops answering.
     @Test func closingAPaneEndsItsInteractiveShell() async throws {
