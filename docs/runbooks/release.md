@@ -12,6 +12,7 @@ Stable の `Clair.app` をこのリポジトリ(`Diwamoto/clair`、public)の Gi
   食い違うと失敗する。main への通常の push では配布しない。再実行は同じ tag を選んで `workflow_dispatch`。
 - **Runner**: GitHub hosted の `macos-26`(public repo なので無料)。libghostty(zig + Metal toolchain)は
   `actions/cache` に載せ、`config/ghostty-pin.json` か `scripts/ghostty.sh` が変わったときだけ再ビルドする。
+  タグの実行が保存したキャッシュは他のタグから読めないため、`ghostty-cache.yml` が main で温める。
 - **本体**: `scripts/release.sh`。CI には依存しないので、他の CI や手元の Mac からも同じ入力で実行できる。
   1. `swift build -c release` で `ClairMacApp`・`ClairDaemon`・`clair` をビルドし、`Clair.app` を組み立てる
      (3 つとも `Contents/MacOS`、SwiftPM の resource bundle は `.app` 直下)。

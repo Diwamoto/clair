@@ -3,6 +3,7 @@ name: Native smoke
 on:
   pull_request:
   push:
+    branches: ["**"] # not v* tags: the same commit already ran on main
   workflow_dispatch:
 
 permissions:

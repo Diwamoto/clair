@@ -1,0 +1,45 @@
+name: libghostty cache
+
+# Keeps the libghostty cache on main. A cache saved by a v* tag run is scoped to that tag, so
+# without this every release rebuilt libghostty; tag runs can read main's cache.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ghostty-cache
+  cancel-in-progress: false
+
+jobs:
+  warm:
+    runs-on: macos-26
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Look up libghostty
+        id: ghostty
+        uses: actions/cache/restore@v6
+        with:
+          path: packages/Vendor/ghostty
+          key: ghostty-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('config/ghostty-pin.json', 'scripts/ghostty.sh') }}
+          lookup-only: true
+
+      - name: Vendor libghostty
+        if: steps.ghostty.outputs.cache-hit != 'true'
+        run: |
+          xcodebuild -downloadComponent MetalToolchain
+          ./scripts/ghostty.sh vendor
+
+      - name: Save libghostty
+        if: steps.ghostty.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: packages/Vendor/ghostty
+          key: ${{ steps.ghostty.outputs.cache-primary-key }}

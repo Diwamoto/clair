@@ -85,8 +85,9 @@ in English.
    awk -v h="## [$v]" 'index($0, "## [") == 1 { f = (index($0, h) == 1); next } f' CHANGELOG.md
    ```
 
-   Run `make test`. Optionally, if you want to check the packaging too (it
-   needs libghostty vendored, a few minutes), run
+   Do not run `make test` locally: the release workflow runs it before it
+   publishes, and a failure there publishes nothing. Optionally, if you want
+   to check the packaging too (it needs libghostty vendored, a few minutes), run
    `CLAIR_UPDATE_PRIVATE_KEY="$(security find-generic-password -s clair-update-signing -w)" scripts/release.sh --dry-run`.
 
 7. **Commit.** Commit with explicit paths:

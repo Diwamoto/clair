@@ -98,7 +98,7 @@ fetch_and_verify() {
   fi
   mkdir -p "$(dirname "$dest")"
   printf 'vendor: fetching %s\n' "$url"
-  curl -fL --max-time 120 -o "$dest" "$url"
+  curl -fL --retry 3 --connect-timeout 30 --max-time 900 -o "$dest" "$url"
   local got_sha
   got_sha="$(shasum -a 256 "$dest" | awk '{print $1}')"
   if [[ "$got_sha" != "$expected_sha" ]]; then
