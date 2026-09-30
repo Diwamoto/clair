@@ -3037,11 +3037,11 @@ import Observation
     func updateNSView(_ nsView: Area, context: Context) {}
   }
 
-  /// Sits behind titlebar tabs/group chips so a press there drags the item, not the window (`TitlebarArea` underneath would).
+  /// Sits behind titlebar tabs/group chips so a press on their empty parts reaches the item, not `TitlebarArea`'s
+  /// performDrag underneath. The window server's own titlebar drag is stopped by AppDelegate's TitlebarDragShield.
   private struct NoWindowDrag: NSViewRepresentable {
-    final class Blocker: NSView { override var mouseDownCanMoveWindow: Bool { false } }
-    func makeNSView(context: Context) -> Blocker { Blocker() }
-    func updateNSView(_ nsView: Blocker, context: Context) {}
+    func makeNSView(context: Context) -> NSView { NSView() }
+    func updateNSView(_ nsView: NSView, context: Context) {}
   }
 
   /// A titlebar file tab. Selected and hover used to be two different

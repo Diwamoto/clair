@@ -55,6 +55,15 @@ import SwiftUI
     // The SwiftUI tab strip occupies the hidden titlebar. Let only TitlebarArea's explicit
     // performDrag move the window, so a tab drag cannot also move its window.
     w.isMovableByWindowBackground = false
+    // The window server drags from any titlebar point AppKit reports as movable, and it asks only the
+    // titlebar's own views: SwiftUI content there (tabs, chips, their NoWindowDrag) never counts. One
+    // click-through view makes the whole bar non-movable, leaving TitlebarArea's performDrag the only mover.
+    if w.styleMask.contains(.fullSizeContentView), let titlebar = close.superview,
+      !titlebar.subviews.contains(where: { $0 is TitlebarDragShield }) {
+      let shield = TitlebarDragShield(frame: titlebar.bounds)
+      shield.autoresizingMask = [.width, .height]
+      titlebar.addSubview(shield, positioned: .below, relativeTo: nil)
+    }
     let h = ChromeBudget.titlebar
     bar.setFrameSize(NSSize(width: bar.frame.width, height: h))
     bar.setFrameOrigin(NSPoint(x: 0, y: w.frame.height - h))
@@ -86,6 +95,12 @@ import SwiftUI
   func applicationWillTerminate(_ notification: Notification) {
     ClairDaemonLauncher.shutdown()
   }
+}
+
+/// Marks the titlebar non-movable for the window server while every click still reaches the SwiftUI chrome below.
+private final class TitlebarDragShield: NSView {
+  override var mouseDownCanMoveWindow: Bool { false }
+  override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 @main
