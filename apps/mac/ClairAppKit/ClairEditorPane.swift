@@ -535,14 +535,14 @@
           }
         }
         .font(.system(size: 14, design: .monospaced)).accessibilityHidden(true)
-        VStack(spacing: 8) {
+        VStack(spacing: 0) {
           ForEach(shortcuts, id: \.title) { s in
             Button(action: s.run) {
               HStack(spacing: 24) {
                 Text(s.title).frame(width: 150, alignment: .trailing)
                 Text(s.keys).frame(width: 60, alignment: .leading).foregroundStyle(C.textTertiary)
-              }.contentShape(Rectangle())
-            }.buttonStyle(.plain)
+              }.padding(.horizontal, 12).padding(.vertical, 4)
+            }.buttonStyle(.hoverWash)
           }
         }
         .font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary)

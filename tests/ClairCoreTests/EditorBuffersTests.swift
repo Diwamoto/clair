@@ -102,6 +102,18 @@
       XCTAssertEqual(store.state.tree.leaves.first?.kind, .editor)
     }
 
+    func testHomeRowThatOpensAPaneClosesTheEmptyEditor() throws {
+      let path = try root(["a.txt": Data("a".utf8)])
+      let store = ClairWorkbenchStore(persistAt: nil)
+      _ = try store.run("project.open", ["path": .string(path)]).get()
+      XCTAssertNil(store.state.active)
+      store.performFromHome("sidebar.toggle")  // opens no pane: the empty editor stays
+      XCTAssertEqual(store.state.tree.leaves.map(\.kind), [.editor])
+      store.performFromHome("terminal.show")
+      XCTAssertEqual(store.state.tree.leaves.map(\.kind), [.terminal])
+      XCTAssertEqual(store.state.tree.focused, store.state.tree.leaves.first?.id)
+    }
+
     func testEditSaveAndDiskDrop() throws {
       let r = try root(["a.txt": Data("hi".utf8)])
       let b = EditorBuffers()

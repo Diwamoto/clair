@@ -403,7 +403,7 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
 - editor / terminal / diff を同じ tab group へ置ける任意 split
 - pane の focus、移動、close、最大化、幅/高さ/全体均等
 - ファイルを開いていない空の editor は、コマンドとショートカットの一覧を表示し、
-  クリックでそのコマンドを実行する。⌘W は他の pane があれば空の editor を閉じ
+  クリックでそのコマンドを実行する(クリックで新しい pane が開いたら空の editor は閉じる)。⌘W は他の pane があれば空の editor を閉じ
   (ファイルを開くと左端に戻る)、空の editor だけなら ⌘Q と同じく確認付きで Clair を終了する
 - file tree、search、Git の sidebar と、pane へ開く補助 view。file tree は対象ファイルを件数で打ち切らずに表示する
 - Quick Open、全文検索・置換、file watcher、⌘K「Open Recent…」(Project ごとに保存する最近開いたファイルを新しい順に開き直す。Compare With… の候補順も同じ記録を使う)

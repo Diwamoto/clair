@@ -537,6 +537,18 @@ import Observation
       Task { await saveActiveFile() }
     }
 
+    /// A click on a home-screen row: when the command opens a new pane, the empty editor makes way for it.
+    func performFromHome(_ id: String) {
+      let before = Set(state.tree.leaves.map(\.id))
+      performFromUI(id)
+      guard state.active == nil, !state.panesClosed, state.tree.leaves.contains(where: { !before.contains($0.id) }),
+        let editor = state.tree.leaves.first(where: { $0.kind == .editor })?.id else { return }
+      let opened = state.tree.focused
+      _ = run("pane.focus", ["id": .int(editor)])
+      _ = run("pane.close")
+      _ = run("pane.focus", ["id": .int(opened)])
+    }
+
     /// Runs Git commands through the same typed registry as CLI/MCP without blocking SwiftUI.
     /// A click on an explicitly labelled Pull/Push control is the native confirmation for its
     /// external risk; non-UI callers still have to pass the registry confirmation gate.
@@ -2420,7 +2432,7 @@ import Observation
     private func homeShortcuts(_ st: WorkbenchState) -> [HomeView.Row] {
       ["terminal.show", "palette.files", "palette.commands", "sidebar.toggle", "pane.splitRight"].compactMap { id in
         CommandRegistry.workbench.commands.first { $0.id == id }.flatMap { d in
-          st.shortcut(for: d).map { (tr(d.title), $0, { [store] in store.performFromUI(id) }) }
+          st.shortcut(for: d).map { (tr(d.title), $0, { [store] in store.performFromHome(id) }) }
         }
       }
     }
