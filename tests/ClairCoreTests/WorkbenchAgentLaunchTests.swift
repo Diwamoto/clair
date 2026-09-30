@@ -11,6 +11,7 @@ final class WorkbenchAgentLaunchTests: XCTestCase {
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     var s = WorkbenchState()
     try r.execute("project.open", ["path": .string(dir.path)], state: &s).get()
+    s.tree = PaneTree()  // editor | agent / terminal: the layout these tests place into, not the single-editor default
     return (s, dir.path)
   }
 

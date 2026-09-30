@@ -102,6 +102,7 @@ final class WorkbenchCommandTests: XCTestCase {
 
   func testTabShortcutsCycleFilesAndTerminalsInTitlebarOrder() throws {
     var state = WorkbenchState()
+    state.tree = PaneTree()  // editor | agent / terminal: the layout these tests place into, not the single-editor default
     state.tabs = ["first.swift", "second.swift"]
     state.active = "first.swift"
     XCTAssertEqual(state.titlebarTabs, [.file("first.swift"), .file("second.swift"), .terminal(2), .terminal(3)])
@@ -184,6 +185,7 @@ final class WorkbenchCommandTests: XCTestCase {
 
   func testFocusingAPaneClearsDiffTabSelection() throws {
     var state = WorkbenchState()
+    state.tree = PaneTree()  // editor | agent / terminal: the layout these tests place into, not the single-editor default
     let diff = WorkbenchDiffTab(path: "first.swift", staged: false, untracked: false)
     state.openDiff(diff)
     XCTAssertEqual(state.selectedTitlebarTab, .diff(diff))
@@ -246,6 +248,7 @@ final class WorkbenchCommandTests: XCTestCase {
 
   func testClosingEditorReplacesItAndKeepsItLeftmost() throws {
     var s = WorkbenchState()
+    s.tree = PaneTree()  // editor | agent / terminal: the layout these tests place into, not the single-editor default
     let old = s.tree.focused
     try r.execute("pane.close", state: &s).get()
     XCTAssertFalse(s.panesClosed)
@@ -257,7 +260,8 @@ final class WorkbenchCommandTests: XCTestCase {
   }
 
   func testClosingTheLastFileLeavesOnlyOneEmptyEditor() throws {
-    var s = WorkbenchState()  // editor 1 | terminals, one open file
+    var s = WorkbenchState()
+    s.tree = PaneTree()  // editor 1 | terminals, one open file
     try r.execute("pane.splitRight", state: &s).get()
     XCTAssertEqual(s.tree.leaves.map(\.kind), [.editor, .editor, .terminal, .terminal])
     try r.execute("tab.close", state: &s).get()
@@ -279,6 +283,7 @@ final class WorkbenchCommandTests: XCTestCase {
 
   func testClosingEditorPreservesDirtyBuffer() {
     var s = WorkbenchState()
+    s.tree = PaneTree()  // editor | agent / terminal: the layout these tests place into, not the single-editor default
     XCTAssertEqual(r.preflight("pane.close", [:], s).success, .write)
     s.dirty.insert(s.active!)
     XCTAssertEqual(r.preflight("pane.close", [:], s).success, .write)
@@ -312,6 +317,7 @@ final class WorkbenchCommandTests: XCTestCase {
 
   func testReopenClosedTabs() throws {
     var s = WorkbenchState()
+    s.tree = PaneTree()  // editor | agent / terminal: the layout these tests place into, not the single-editor default
     let file = s.active!
     try r.execute("tab.close", state: &s).get()
     let terminal = s.tree.leaves.first { $0.kind == .terminal }!.id

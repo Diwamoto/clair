@@ -288,6 +288,7 @@ final class WorkbenchGitTests: XCTestCase {
   // V16: a child agent can get its own managed worktree without switching the shown Project.
   func testAgentLaunchInNewWorktreeKeepsProject() throws {
     var (s, root) = try repo()
+    s.tree = PaneTree()  // editor | agent / terminal: the layout these tests place into, not the single-editor default
     let shown = s.project
     guard case .text(let key) = try r.execute(
       "agent.launch", ["profile": .string("claude"), "branch": .string("agent/a"), "parent": .string(root + "#2")],

@@ -43,6 +43,7 @@ final class CommitGraphTests: XCTestCase {
     let r = CommandRegistry.workbench
     var s = WorkbenchState()
     s.openProject(WorkbenchProject(name: "g", path: root), scanFiles: false)
+    s.tree = PaneTree()  // editor | agent / terminal: the layout these tests place into, not the single-editor default
     XCTAssertThrowsError(try r.execute("git.graph", state: &s).get(), "no graph outside Git")
 
     for args in [["init", "-q", "-b", "main"], ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "one"],
