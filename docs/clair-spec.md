@@ -399,6 +399,9 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   情報から推定し、実際の請求額と区別して表示する。欠損分をゼロ扱いしない
 - editor / terminal / diff を同じ tab group へ置ける任意 split
 - pane の focus、移動、close、最大化、幅/高さ/全体均等
+- ファイルを開いていない空の editor は、コマンドとショートカットの一覧を表示し、
+  クリックでそのコマンドを実行する。⌘W は他の pane があれば空の editor を閉じ
+  (ファイルを開くと左端に戻る)、空の editor だけなら ⌘Q と同じく確認付きで Clair を終了する
 - file tree、search、Git の sidebar と、pane へ開く補助 view。file tree は対象ファイルを件数で打ち切らずに表示する
 - Quick Open、全文検索・置換、file watcher、⌘K「Open Recent…」(Project ごとに保存する最近開いたファイルを新しい順に開き直す。Compare With… の候補順も同じ記録を使う)
 - diff、stage/unstage、変更の破棄(ボタンと右クリック。「変更」は working tree のみ、「ステージ済み」は HEAD へ戻す、未追跡は削除。確認必須・AI 不可)、commit、branch/worktree の作成・切替

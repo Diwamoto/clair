@@ -480,6 +480,7 @@ extension CommandRegistry {
       return .ok
     },
     // The leftmost editor is replaced on close; open buffers remain available.
+    // With no file open and other panes beside it, the empty editor is removed; opening a file brings it back.
     cmd("pane.close", "ペインを閉じる", .write, shortcut: "⌘W",
         preflight: { s, _ throws(CommandError) in
           try require(!s.panesClosed, "no pane to close")
@@ -490,7 +491,7 @@ extension CommandRegistry {
       case .graph: s.recordClosed(.graph(s.tree.focused))
       default: break
       }
-      if s.tree.leaves.first?.id == s.tree.focused, s.tree.leaves.first?.kind == .editor {
+      if s.tree.leaves.first?.id == s.tree.focused, s.tree.leaves.first?.kind == .editor, s.active != nil || s.tree.leaves.count == 1 {
         s.tree.replaceFocusedEditor()
         return .ok
       }

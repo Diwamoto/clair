@@ -259,6 +259,23 @@ final class WorkbenchCommandTests: XCTestCase {
     XCTAssertEqual(r.execute("pane.swap", ["idA": .int(s.tree.focused), "idB": .int(2)], state: &s).failure?.code, .preconditionFailed)
   }
 
+  func testClosingEmptyEditorRemovesItOnlyBesideOtherPanes() throws {
+    var s = WorkbenchState()
+    s.tree = PaneTree()  // editor | terminals
+    let file = s.active!
+    try r.execute("tab.close", state: &s).get()
+    s.tree.focus(1)
+    try r.execute("pane.close", state: &s).get()
+    XCTAssertEqual(s.tree.leaves.map(\.kind), [.terminal, .terminal])
+    XCTAssertTrue(s.tree.isValid, "a restored layout keeps the terminals")
+    try r.execute("tab.open", ["path": .string(file)], state: &s).get()
+    XCTAssertEqual(s.tree.leaves.map(\.kind), [.editor, .terminal, .terminal])
+
+    s.tree = PaneTree(single: .editor); s.active = nil
+    try r.execute("pane.close", state: &s).get()
+    XCTAssertEqual(s.tree.leaves.map(\.kind), [.editor], "the only pane is never removed")
+  }
+
   func testClosingTheLastFileLeavesOnlyOneEmptyEditor() throws {
     var s = WorkbenchState()
     s.tree = PaneTree()  // editor 1 | terminals, one open file

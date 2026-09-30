@@ -521,7 +521,10 @@ import Observation
         _ = run("diff.close", input)
         return
       }
-      if id == "pane.close", state.panesClosed { _ = run("pane.open", ["kind": .string("editor")]); return }
+      // Nothing but the empty editor (or the home screen) left: ⌘W quits like ⌘Q, confirmation included.
+      if id == "pane.close", state.panesClosed || (state.active == nil && state.tree.leaves.map(\.kind) == [.editor]) {
+        NSApp.terminate(nil); return
+      }
       if id == "pane.close", state.tree.leaves.first?.id != state.tree.focused,
         state.tree.leaves.first(where: { $0.id == state.tree.focused })?.kind == .editor {
         _ = run("pane.close"); return  // a split editor: ⌘W closes the split, not the shared tab
@@ -2414,9 +2417,11 @@ import Observation
     ]
 
     /// Home screen rows (new Project, or every pane closed): commands with a bound key, in this order.
-    private func homeShortcuts(_ st: WorkbenchState) -> [(title: String, keys: String)] {
+    private func homeShortcuts(_ st: WorkbenchState) -> [HomeView.Row] {
       ["terminal.show", "palette.files", "palette.commands", "sidebar.toggle", "pane.splitRight"].compactMap { id in
-        CommandRegistry.workbench.commands.first { $0.id == id }.flatMap { d in st.shortcut(for: d).map { (tr(d.title), $0) } }
+        CommandRegistry.workbench.commands.first { $0.id == id }.flatMap { d in
+          st.shortcut(for: d).map { (tr(d.title), $0, { [store] in store.performFromUI(id) }) }
+        }
       }
     }
 

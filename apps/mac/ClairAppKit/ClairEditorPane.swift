@@ -406,7 +406,7 @@
     /// Preview pane id → the file it shows (`WorkbenchState.previews`).
     var previews: [Int: String] = [:]
     /// Shortcut rows for the home screen shown while no file is open; empty keeps the plain note.
-    var home: [(title: String, keys: String)] = []
+    var home: [HomeView.Row] = []
 
     var body: some View {
       if let path, let root {
@@ -502,7 +502,9 @@
 
   /// The first screen of a Project with no file open: the Clair mark in block characters over its command shortcuts, centred.
   struct HomeView: View {
-    let shortcuts: [(title: String, keys: String)]
+    /// A clickable command row: clicking runs it, the same as pressing `keys`.
+    typealias Row = (title: String, keys: String, run: () -> Void)
+    let shortcuts: [Row]
     // A/B/C pick the icon's three blues (TL / TR+BL / BR); the 24×11 grid follows the app icon's four rounded squares.
     private static let art = [
       "  AAAAAAAAAA   BBBBBBB", "  AAAAAAAAAA   BBBBBBB", "  AAAAAAAAAA   BBBBBBB",
@@ -522,10 +524,12 @@
         .font(.system(size: 14, design: .monospaced)).accessibilityHidden(true)
         VStack(spacing: 8) {
           ForEach(shortcuts, id: \.title) { s in
-            HStack(spacing: 24) {
-              Text(s.title).frame(width: 150, alignment: .trailing)
-              Text(s.keys).frame(width: 60, alignment: .leading).foregroundStyle(C.textTertiary)
-            }
+            Button(action: s.run) {
+              HStack(spacing: 24) {
+                Text(s.title).frame(width: 150, alignment: .trailing)
+                Text(s.keys).frame(width: 60, alignment: .leading).foregroundStyle(C.textTertiary)
+              }.contentShape(Rectangle())
+            }.buttonStyle(.plain)
           }
         }
         .font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary)

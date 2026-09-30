@@ -141,7 +141,8 @@ public struct PaneTree: Sendable, Equatable, Codable {
   /// False for a decoded tree that could crash or mislead the UI (restore degrades to the default layout).
   public var isValid: Bool {
     let ids = leaves.map(\.id)
-    return leaves.first?.kind == .editor && Set(ids).count == ids.count && ids.contains(focused) && (maximized.map(ids.contains) ?? true)
+    // An editor, when present, is leftmost; none at all is a closed empty editor (`pane.close`).
+    return (leaves.first?.kind == .editor || !leaves.contains { $0.kind == .editor }) && Set(ids).count == ids.count && ids.contains(focused) && (maximized.map(ids.contains) ?? true)
       && nextID > (ids.max() ?? 0)
   }
 
