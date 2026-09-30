@@ -6,6 +6,33 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-30
+
+### Added
+
+- **Concierge**: each Project has a concierge agent in the activity bar. Chat with it in a GUI chat view; sending a message starts it, and agents it launches show as links to their own panes.
+- **Language**: switch the app between English (default) and Japanese in Settings > General.
+- **Notification settings**: choose whether bells and exits notify you, whether notifications show while Clair is in front and whether they play a sound, and send a test notification.
+- **Resource meter**: hover the status bar to see Clair's CPU and memory with history sparklines and the top processes, labeled with their terminal, project and running command.
+- **Home screen**: a Project opens on a single editor, and a home screen with shortcuts shows when no file or pane is open.
+- **Terminal links**: Cmd-hover underlines links and Cmd-click opens http(s) links in the browser.
+- **Compare With…** in the command palette compares the active file with a picked file, recent files first.
+- **Open Recent…** in the command palette reopens recently opened files.
+- **Chat history**: past chats are grouped by date and project and paged by ten; resume a chat from any registered Project, or copy its resume command.
+
+### Changed
+
+- Command palette commands have English names, with the Japanese title shown beside them; search matches either.
+- Menu bar titles are in English, and Clair's commands are spread across the File, Edit, View, Go and Pane menus.
+- The agent sidebar shows the session title first with repo and branch below, provider avatars for live sessions, and a bell badge while an agent is waiting.
+
+### Fixed
+
+- The Git view now updates the branch and ahead/behind after a branch switch or fetch.
+- Closed panes no longer leave their shells running, which could make `clair attach` fail with a timeout.
+- Chat history no longer drops rows for projects that appear on several days.
+- Leaving the concierge returns the sidebar to the file tree.
+
 ## [0.6.0] - 2026-09-29
 
 ### Added
@@ -153,7 +180,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/Diwamoto/clair/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Diwamoto/clair/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Diwamoto/clair/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Diwamoto/clair/compare/v0.3.0...v0.4.0
