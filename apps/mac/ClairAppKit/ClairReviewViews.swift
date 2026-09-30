@@ -1169,7 +1169,7 @@
     let provider: AgentHistory.Provider
     let size: CGFloat
     var body: some View {
-      ProviderBrandIcon(provider: provider.rawValue, size: size * 0.55)
+      ProviderBrandIcon(provider: provider.rawValue, size: size * 0.8)
         .frame(width: size, height: size)
         .help(provider.rawValue)
     }
