@@ -991,6 +991,8 @@ import Observation
     @State private var quotaHovered = false
     @State private var noticesOpen = false
     @State private var collapsedGroups: Set<String> = []
+    @State private var groupDropTarget: String?
+    @State private var hoveredGroup: String?
     @State private var rootFolded = false
     @State private var menus = ClairMenuController()
     @State private var changes: [GitChange] = []
@@ -1204,16 +1206,18 @@ import Observation
       let selectedTab = active ? st.selectedTitlebarTab : nil
       let dirty = active ? st.dirty : (st.layouts[p.name]?.dirty ?? [])
       let folded = collapsedGroups.contains(p.name)
-      return HStack(spacing: 0) {
-        Button {
-          if !active { collapsedGroups.remove(p.name); store.run("project.switch", ["name": .string(p.name)]) }
-          else {
-            // Folding sucks the tabs back into the chip; unfolding pours them out of it.
-            withAnimation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.86)) {
-              if folded { collapsedGroups.remove(p.name) } else { collapsedGroups.insert(p.name) }
-            }
+      let activate = {
+        if !active { collapsedGroups.remove(p.name); store.run("project.switch", ["name": .string(p.name)]) }
+        else {
+          // Folding sucks the tabs back into the chip; unfolding pours them out of it.
+          withAnimation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.86)) {
+            if folded { collapsedGroups.remove(p.name) } else { collapsedGroups.insert(p.name) }
           }
-        } label: {
+        }
+      }
+      return HStack(spacing: 0) {
+        // Not a Button: a Button's press tracking swallows the drag, so the chip taps like a file tab does.
+        Group {
           // The chip carries its group colour as its own fill/border (mock
           // review feedback: a small dot beside the label read as an
           // afterthought), not a separate dot — active groups get the
@@ -1231,8 +1235,26 @@ import Observation
             }
           }
         }
-        .buttonStyle(.hoverWash).help(Self.groupHelp(p.displayName, active: active, folded: folded))
+        .overlay(hoveredGroup == p.name ? DesignTokens.Wash.selected : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
+        .contentShape(Rectangle())
+        .onHover { hoveredGroup = $0 ? p.name : hoveredGroup == p.name ? nil : hoveredGroup }
+        .onTapGesture(perform: activate)
+        .accessibilityElement(children: .combine).accessibilityAddTraits(.isButton).accessibilityAction(.default, activate)
+        .help(Self.groupHelp(p.displayName, active: active, folded: folded))
         .background(NoWindowDrag())
+        // Dropping a chip on another moves that Project's group into its place; the ring marks the drop target like a tab's.
+        .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(groupDropTarget == p.name ? L.ring : .clear, lineWidth: 1))
+        .onDrag { NSItemProvider(object: NSString(string: Self.groupDragPrefix + p.name)) }
+        .onDrop(of: [.text], isTargeted: Binding(
+          get: { groupDropTarget == p.name },
+          set: { groupDropTarget = $0 ? p.name : groupDropTarget == p.name ? nil : groupDropTarget })) { providers in
+          guard let provider = providers.first else { return false }
+          provider.loadObject(ofClass: NSString.self) { object, _ in
+            guard let id = (object as? NSString).map({ $0 as String }), id.hasPrefix(Self.groupDragPrefix) else { return }
+            Task { @MainActor in moveProject(String(id.dropFirst(Self.groupDragPrefix.count)), onto: p.name) }
+          }
+          return true
+        }
         .clairContextMenu(menus) { projectMenu(p, colorKey: colorKey, folded: folded) }
         if !folded {
           HStack(spacing: 4) {
@@ -1277,6 +1299,16 @@ import Observation
           .transition(reduceMotion ? .opacity : .scale(scale: 0.05, anchor: .leading).combined(with: .opacity))
         }
       }
+    }
+
+    /// Tabs drag their `dragID`; a group chip drags this prefix plus its Project name, so neither drop target takes the other.
+    static let groupDragPrefix = "project-group:"
+
+    /// Walks `project.move` one neighbour at a time until `name` sits where `target` was.
+    private func moveProject(_ name: String, onto target: String) {
+      guard let from = st.projects.firstIndex(where: { $0.name == name }),
+        let to = st.projects.firstIndex(where: { $0.name == target }) else { return }
+      for _ in 0..<abs(to - from) { store.run("project.move", ["name": .string(name), "offset": .int(to > from ? 1 : -1)]) }
     }
 
     private func diffInput(_ target: WorkbenchDiffTab) -> CommandInput {
@@ -3183,7 +3215,7 @@ import Observation
       .onDrop(of: [.text], isTargeted: $isDropTarget) { providers in
         guard let onMove, let provider = providers.first else { return false }
         provider.loadObject(ofClass: NSString.self) { object, _ in
-          guard let from = (object as? NSString).map({ $0 as String }) else { return }
+          guard let from = (object as? NSString).map({ $0 as String }), !from.hasPrefix(ClairAppShell.groupDragPrefix) else { return }
           Task { @MainActor in onMove(from) }
         }
         return true
