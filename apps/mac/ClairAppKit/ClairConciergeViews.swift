@@ -195,7 +195,7 @@
           let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
           if modified != seen {
             seen = modified
-            messages = await Task.detached { AgentHistoryReader.transcript(file: file, provider: .claude) }.value
+            messages = await Task.detached { AgentHistoryReader.transcript(file: file, provider: .claude).filter { $0.role != "thinking" } }.value
             if messages.last?.role == "user" || messages.contains(where: { $0.role == "user" && $0.text == pending }) { pending = nil }
           }
         }

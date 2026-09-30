@@ -191,6 +191,14 @@ public enum AgentHistoryReader {
           if type == "session_meta", let id = payload["id"] as? String { sessionID = id; cwd = payload["cwd"] as? String ?? cwd }
           if type == "turn_context" { codexModel = payload["model"] as? String ?? codexModel }
           if type == "token_usage_record" { codexUsage = payload["thread_token_usage"] as? [String: Any] ?? codexUsage }
+          // Reasoning summaries are the only readable part of Codex thinking; the chat shows them folded.
+          if full, type == "response_item", payload["type"] as? String == "reasoning" {
+            let text = (payload["summary"] as? [[String: Any]] ?? []).compactMap { $0["text"] as? String }.joined(separator: "\n\n")
+            let id = payload["id"] as? String ?? "\(file.path):\(messages.count)"
+            guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, seen.insert(id).inserted else { return }
+            messages.append(.init(id: id, role: "thinking", text: text, date: date))
+            return
+          }
           guard type == "response_item", let role = payload["role"] as? String,
                 role == "user" || role == "assistant" else { return }
           let parts = payload["content"] as? [[String: Any]] ?? []
@@ -216,19 +224,24 @@ public enum AgentHistoryReader {
           }
           let content = message["content"]
           var text: String
+          var thinking = ""
           if let value = content as? String { text = value }
           else if let parts = content as? [[String: Any]] {
             text = parts.filter { ($0["type"] as? String) == "text" }.compactMap { $0["text"] as? String }.joined(separator: "\n")
+            // Claude Code often stores thinking redacted (empty); only readable thinking reaches the chat.
+            if full { thinking = parts.filter { ($0["type"] as? String) == "thinking" }.compactMap { $0["thinking"] as? String }.joined(separator: "\n\n") }
           } else { text = "" }
           if type == "user" { text = formatUserText(text) ?? "" }
-          guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
           let id = row["uuid"] as? String ?? "\(file.path):\(messages.count)"
-          let item = AgentHistory.Message(id: id, role: type, text: text, date: date)
-          if let index = claudeMessageIndex[id] {
-            if text.count > messages[index].text.count { messages[index] = item }
-          } else {
-            claudeMessageIndex[id] = messages.count
-            messages.append(item)
+          for item in [AgentHistory.Message(id: id + "#thinking", role: "thinking", text: thinking, date: date),
+                       AgentHistory.Message(id: id, role: type, text: text, date: date)]
+          where !item.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if let index = claudeMessageIndex[item.id] {
+              if item.text.count > messages[index].text.count { messages[index] = item }
+            } else {
+              claudeMessageIndex[item.id] = messages.count
+              messages.append(item)
+            }
           }
         }
       }
@@ -345,14 +358,15 @@ public enum AgentHistoryReader {
     defer { sqlite3_close(db) }
     let sql = """
       SELECT s.id, s.title, s.time_updated, s.cost, m.id, m.time_created,
-             json_extract(m.data, '$.role'), group_concat(json_extract(p.data, '$.text'), char(10)), s.directory
+             json_extract(m.data, '$.role'), group_concat(json_extract(p.data, '$.text'), char(10)), s.directory,
+             json_extract(p.data, '$.type') AS kind
       FROM session s JOIN message m ON m.session_id = s.id
       JOIN part p ON p.message_id = m.id
-      WHERE json_extract(p.data, '$.type') = 'text'
+      WHERE kind IN ('text', 'reasoning')
         AND s.time_updated >= \(Int64((period?.start ?? .distantPast).timeIntervalSince1970 * 1000))
         AND s.time_updated < \(Int64((period?.end ?? .distantFuture).timeIntervalSince1970 * 1000))
-      GROUP BY m.id
-      ORDER BY s.time_updated DESC, m.time_created, p.id
+      GROUP BY m.id, kind
+      ORDER BY s.time_updated DESC, m.time_created, MIN(p.id)
       """
     var statement: OpaquePointer?
     guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK, let statement else { return [] }
@@ -368,7 +382,9 @@ public enum AgentHistoryReader {
       let updated = Date(timeIntervalSince1970: Double(sqlite3_column_int64(statement, 2)) / 1000)
       let cost = sqlite3_column_double(statement, 3)
       let created = Date(timeIntervalSince1970: Double(sqlite3_column_int64(statement, 5)) / 1000)
-      let message = AgentHistory.Message(id: String(cString: mid), role: String(cString: role), text: text, date: created)
+      let reasoning = sqlite3_column_text(statement, 9).map { String(cString: $0) } == "reasoning"
+      let message = AgentHistory.Message(id: String(cString: mid) + (reasoning ? "#thinking" : ""),
+                                         role: reasoning ? "thinking" : String(cString: role), text: text, date: created)
       let directory = sqlite3_column_text(statement, 8).map { String(cString: $0) }
       if sessions[id] == nil { sessions[id] = (title, updated, cost, [], directory) }
       sessions[id]!.3.append(message)

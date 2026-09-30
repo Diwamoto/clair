@@ -379,6 +379,9 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   root だけが対象になる
 - Agents 一覧は現在の agent terminal への移動と、3 provider の local chat history
   の閲覧を統合する。履歴行には provider が分かるラベルとアイコンを付ける。
+  provider が読める形で保存した thinking(Codex の reasoning summary、OpenCode の
+  reasoning、Claude Code の未 redact の thinking)はチャット内で「Thinking」の
+  折りたたみ行として既定で閉じて示す。
   チャットを開くと「ターミナルで再開」で、その provider の resume コマンド
   (`claude --resume` / `codex resume` / `opencode --session`)を新しい terminal で
   実行する。既存の agent launch と同じ承認境界を通り、cwd は Project root のため、

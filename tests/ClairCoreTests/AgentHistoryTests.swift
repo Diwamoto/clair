@@ -49,6 +49,31 @@ final class AgentHistoryTests: XCTestCase {
     XCTAssertEqual(AgentHistoryReader.transcript(of: list).map(\.text), full.messages.map(\.text))
   }
 
+  func testTranscriptKeepsReadableThinkingSeparateFromText() throws {
+    let home = URL.temporaryDirectory.appending(path: "clair-history-thinking-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: home) }
+    let claude = home.appending(path: ".claude/projects/p")
+    let codex = home.appending(path: ".codex/sessions/2026/09/24")
+    try FileManager.default.createDirectory(at: claude, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: codex, withIntermediateDirectories: true)
+    try [
+      #"{"type":"user","timestamp":"2026-09-24T02:00:00Z","sessionId":"s","uuid":"u1","message":{"content":"Go"}}"#,
+      #"{"type":"assistant","timestamp":"2026-09-24T02:00:01Z","sessionId":"s","uuid":"a1","message":{"content":[{"type":"thinking","thinking":"Plan it","signature":"x"},{"type":"text","text":"Done"}]}}"#,
+      #"{"type":"assistant","timestamp":"2026-09-24T02:00:02Z","sessionId":"s","uuid":"a2","message":{"content":[{"type":"thinking","thinking":"","signature":"redacted"}]}}"#,
+    ].joined(separator: "\n").write(to: claude.appending(path: "s.jsonl"), atomically: true, encoding: .utf8)
+    try [
+      #"{"type":"session_meta","timestamp":"2026-09-24T00:00:00Z","payload":{"id":"cx"}}"#,
+      #"{"type":"response_item","timestamp":"2026-09-24T01:00:00Z","payload":{"id":"p1","role":"user","content":[{"type":"input_text","text":"Fix"}]}}"#,
+      #"{"type":"response_item","timestamp":"2026-09-24T01:00:01Z","payload":{"type":"reasoning","id":"r1","summary":[{"type":"summary_text","text":"Look first"}],"encrypted_content":"x"}}"#,
+      #"{"type":"response_item","timestamp":"2026-09-24T01:00:02Z","payload":{"id":"a1","role":"assistant","content":[{"type":"output_text","text":"Fixed"}]}}"#,
+    ].joined(separator: "\n").write(to: codex.appending(path: "cx.jsonl"), atomically: true, encoding: .utf8)
+    let lists = AgentHistoryReader.load(home: home)
+    let transcript = { (p: AgentHistory.Provider) in lists.first { $0.provider == p }.map(AgentHistoryReader.transcript(of:))?.map { "\($0.role):\($0.text)" } }
+    XCTAssertEqual(transcript(.claude), ["user:Go", "thinking:Plan it", "assistant:Done"])
+    XCTAssertEqual(transcript(.codex), ["user:Fix", "thinking:Look first", "assistant:Fixed"])
+    XCTAssertFalse(lists.flatMap(\.messages).contains { $0.role == "thinking" }, "the list skim never carries thinking")
+  }
+
   func testBenchRealHome() throws {
     try XCTSkipUnless(ProcessInfo.processInfo.environment["CLAIR_HISTORY_BENCH"] != nil)
     let period = AgentHistoryStore.period(.recent)
