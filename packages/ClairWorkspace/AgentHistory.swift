@@ -39,6 +39,40 @@ public struct AgentHistory: Sendable, Identifiable {
   }
 
   public var promptCount: Int { messages.filter { $0.role == "user" }.count }
+
+  /// One row of the chat: a message, or the progress (narration and thinking) an agent run made before its reply.
+  public enum ChatItem: Sendable, Identifiable {
+    case message(Message)
+    case progress([Message])
+
+    public var id: String {
+      switch self { case .message(let m): m.id; case .progress(let steps): "progress:" + steps[0].id }
+    }
+    /// The message that dates and places the row.
+    public var anchor: Message {
+      switch self { case .message(let m): m; case .progress(let steps): steps[0] }
+    }
+  }
+
+  /// Providers record progress and the final reply the same way, so position decides: in each agent run
+  /// between user turns the last text is the reply and everything before it folds into one progress row.
+  public static func chatItems(_ messages: [Message]) -> [ChatItem] {
+    var items: [ChatItem] = [], run: [Message] = []
+    func flush() {
+      if let last = run.lastIndex(where: { $0.role != "thinking" }) {
+        var steps = run
+        let reply = steps.remove(at: last)
+        if !steps.isEmpty { items.append(.progress(steps)) }
+        items.append(.message(reply))
+      } else if !run.isEmpty { items.append(.progress(run)) }
+      run = []
+    }
+    for message in messages {
+      if message.role == "user" { flush(); items.append(.message(message)) } else { run.append(message) }
+    }
+    flush()
+    return items
+  }
 }
 
 /// ccedit's project list: one group per project (repo folder name), most recently active first.

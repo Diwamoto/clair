@@ -415,6 +415,7 @@ extension LocalizedStrings {
     "昨日": "Yesterday",
     "さらに表示（残り %@ 件）": "Show more (%@ left)",
     "依頼 %@ 件": "%@ prompts",
+    "途中経過 %@ 件": "%@ progress steps",
     "推定 %@": "Est. %@",
     "ターミナルで再開": "Resume in Terminal",
     "このチャットのディレクトリを Project に追加すると再開できます": "Add this chat's directory to a Project to resume it",

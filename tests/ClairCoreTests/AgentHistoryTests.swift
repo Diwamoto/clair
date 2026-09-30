@@ -74,6 +74,21 @@ final class AgentHistoryTests: XCTestCase {
     XCTAssertFalse(lists.flatMap(\.messages).contains { $0.role == "thinking" }, "the list skim never carries thinking")
   }
 
+  func testChatFoldsProgressBeforeEachRunsReply() {
+    let messages = ["user:Go", "thinking:t1", "assistant:Checking", "thinking:t2", "assistant:Done", "user:More", "thinking:t3", "user:Last", "assistant:Only"]
+      .enumerated().map { i, s in
+        let parts = s.split(separator: ":", maxSplits: 1).map(String.init)
+        return AgentHistory.Message(id: "\(i)", role: parts[0], text: parts[1], date: .distantPast)
+      }
+    let rows = AgentHistory.chatItems(messages).map { item -> String in
+      switch item {
+      case .message(let m): m.text
+      case .progress(let steps): "[" + steps.map(\.text).joined(separator: ",") + "]"
+      }
+    }
+    XCTAssertEqual(rows, ["Go", "[t1,Checking,t2]", "Done", "More", "[t3]", "Last", "Only"])
+  }
+
   func testBenchRealHome() throws {
     try XCTSkipUnless(ProcessInfo.processInfo.environment["CLAIR_HISTORY_BENCH"] != nil)
     let period = AgentHistoryStore.period(.recent)

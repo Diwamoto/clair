@@ -1212,19 +1212,20 @@
         }.padding(.horizontal, 14).padding(.vertical, 8).background(C.chromeRaised)
         ScrollView {
           LazyVStack(alignment: .leading, spacing: 0) {
-            let messages = transcript ?? []
+            let items = AgentHistory.chatItems(transcript ?? [])
             if transcript == nil {
               ProgressView().controlSize(.small).frame(maxWidth: .infinity).padding(24)
             }
-            ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
-              let previous = index > 0 ? messages[index - 1] : nil
-              let next = index + 1 < messages.count ? messages[index + 1] : nil
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+              let message = item.anchor
+              let previous = index > 0 ? items[index - 1].anchor : nil
+              let next = index + 1 < items.count ? items[index + 1].anchor : nil
               let newDay = previous.map { !Calendar.current.isDate($0.date, inSameDayAs: message.date) } ?? true
-              // Thinking sits on the agent's side, so it neither splits a run nor repeats the avatar.
+              // Progress sits on the agent's side, so it neither splits a run nor repeats the avatar.
               let side = { (m: AgentHistory.Message?) in m.map { $0.role == "user" } }
               if newDay { daySeparator(message.date).padding(.top, previous == nil ? 0 : 16).padding(.bottom, 12) }
-              if message.role == "thinking" {
-                ThinkingRow(text: message.text, provider: history.provider, showLabel: newDay || side(previous) != false).padding(.top, previous == nil || newDay ? 0 : side(previous) == false ? 5 : 16)
+              if case .progress(let steps) = item {
+                ProgressRow(steps: steps, provider: history.provider, showLabel: newDay || side(previous) != false).padding(.top, previous == nil || newDay ? 0 : side(previous) == false ? 5 : 16)
               } else if message.text.hasPrefix("[Skill loaded") {
                 systemPill(String(message.text.dropFirst().dropLast()).replacing("Skill loaded", with: tr("スキル読込")), icon: "wand.and.stars")
                   .padding(.top, previous == nil || newDay ? 0 : 8)
@@ -1265,9 +1266,9 @@
         .frame(maxWidth: .infinity)
     }
 
-    /// Provider thinking, folded under a "Thinking" disclosure; it is the provider's term, so it stays untranslated.
-    private struct ThinkingRow: View {
-      let text: String
+    /// An agent run's narration and thinking before its reply, folded by default.
+    private struct ProgressRow: View {
+      let steps: [AgentHistory.Message]
       let provider: AgentHistory.Provider
       let showLabel: Bool
       @State private var expanded = false
@@ -1279,13 +1280,22 @@
             Button { expanded.toggle() } label: {
               HStack(spacing: 4) {
                 Image(systemName: "chevron.right").rotationEffect(.degrees(expanded ? 90 : 0))
-                Text(verbatim: "Thinking")
+                Text(tr("途中経過 %@ 件", steps.count))
               }
             }.buttonStyle(.plain).font(Typography.font(Typography.micro)).foregroundStyle(C.textTertiary)
               .accessibilityValue(expanded ? tr("折りたたむ") : tr("続きを表示"))
             if expanded {
-              Text(text).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary).textSelection(.enabled)
-                .padding(.leading, 10).overlay(alignment: .leading) { Rectangle().fill(C.divider).frame(width: 2) }
+              VStack(alignment: .leading, spacing: 8) {
+                ForEach(steps) { step in
+                  VStack(alignment: .leading, spacing: 2) {
+                    // "Thinking" is the providers' own term, so it stays untranslated.
+                    if step.role == "thinking" { Text(verbatim: "Thinking").font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary) }
+                    Text((try? AttributedString(markdown: step.text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(step.text))
+                      .font(Typography.font(Typography.chrome))
+                      .foregroundStyle(step.role == "thinking" ? C.textTertiary : C.textSecondary).textSelection(.enabled)
+                  }
+                }
+              }.padding(.leading, 10).overlay(alignment: .leading) { Rectangle().fill(C.divider).frame(width: 2) }
             }
           }.frame(maxWidth: .infinity, alignment: .leading).padding(.top, showLabel ? 6 : 0)
         }.padding(.trailing, 40)
