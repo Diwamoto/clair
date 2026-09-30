@@ -128,7 +128,7 @@
   /// U05: open editor buffers of the active Project. Owned by the workbench store; the store drops a
   /// path when the disk changed under it (principle 8: the unsaved buffer is discarded, not merged).
   @MainActor @Observable public final class EditorBuffers {
-    public enum Load: @unchecked Sendable { case ready(EditorTransactionManager), failed(String) }
+    public enum Load: @unchecked Sendable { case ready(EditorTransactionManager), image(NSImage), failed(String) }
 
     private var loads: [String: Load] = [:]
     private var revisions: [String: Int] = [:]
@@ -377,6 +377,8 @@
       guard let data = FileManager.default.contents(atPath: full) else { return .failed(tr("ファイルを読み込めません。")) }
       guard data.count <= maxBytes else { return .failed(tr("%@ MiB を超えるファイルは開けません。", maxBytes >> 20)) }
       guard let text = String(data: data, encoding: .utf8), let buffer = try? TextBuffer(text) else {
+        // Text wins first, so SVG stays editable; only non-text bytes AppKit can decode show as an image.
+        if let image = NSImage(data: data) { return .image(image) }
         return .failed(tr("UTF-8 のテキストではないため開けません。"))
       }
       return .ready(EditorTransactionManager(buffer: buffer, selection: TextSelectionSet(cursor: UTF8Offset(0))))
@@ -443,6 +445,17 @@
                   .padding(8)
               }
             }
+          }
+        case .image(let image)?:
+          VStack(spacing: 0) {
+            breadcrumb(path)
+            // Fit down to the pane, never up past the image's own size.
+            Image(nsImage: image).resizable().scaledToFit()
+              .frame(maxWidth: image.size.width, maxHeight: image.size.height)
+              .accessibilityLabel(path.split(separator: "/").last.map(String.init) ?? path)
+              .padding(16)
+              .frame(maxWidth: .infinity, maxHeight: .infinity).background(C.canvas)
+              .contentShape(Rectangle()).onTapGesture { onFocus?() }
           }
         case .failed(let message)?: note(message)
         }

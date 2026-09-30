@@ -151,6 +151,19 @@
       for p in ["b.bin", "nope"] { if case .ready = b.load(p, root: r) { XCTFail(p) } }
     }
 
+    func testImagesOpenAsImagesAndSVGStaysText() throws {
+      let rep = NSBitmapImageRep(
+        bitmapDataPlanes: nil, pixelsWide: 3, pixelsHigh: 2, bitsPerSample: 8, samplesPerPixel: 4,
+        hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+      let png = try XCTUnwrap(rep.representation(using: .png, properties: [:]))
+      let r = try root(["a.png": png, "a.svg": Data("<svg xmlns=\"http://www.w3.org/2000/svg\"/>".utf8)])
+      let b = EditorBuffers()
+      guard case .image(let image) = b.load("a.png", root: r) else { return XCTFail("png") }
+      XCTAssertEqual(image.representations.first?.pixelsWide, 3)
+      XCTAssertFalse(b.isOpen("a.png"), "an image is never saved back as text")
+      guard case .ready = b.load("a.svg", root: r) else { return XCTFail("svg") }
+    }
+
     func testTenMiBPrefetchAndRapidSwitchingDoNotBlockTheMainActor() async throws {
       let exact = Data(repeating: Character("a").asciiValue!, count: EditorBuffers.maxBytes)
       let r = try root(["a.swift": exact, "b.swift": exact])
