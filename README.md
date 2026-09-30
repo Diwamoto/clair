@@ -20,9 +20,9 @@
 Clair は、エディタとターミナルと AI エージェントを行き来する毎日の開発を、
 **ひとつの Project workspace** にまとめる macOS ネイティブ IDE です。
 VS Code のような編集・検索・Git の統合と、Ghostty のターミナルを、
-Electron も WebView も使わずに Swift で組み上げています。
+Electron を使わず、Swift で組み上げています。
 
-AI エージェントは専用チャット UI に閉じ込めません。Claude Code、Codex、OpenCode を
+AI エージェントは専用チャット UI に閉じ込めません。Claude Code、Codex などを
 **普通のターミナル**として起動し、そのまま並べて、切り替えて、iPhone から様子を見られます。
 
 > [!NOTE]
@@ -49,7 +49,8 @@ curl -fsSL https://raw.githubusercontent.com/Diwamoto/clair/main/scripts/install
 - 日本語 IME、絵文字、マルチカーソル、矩形選択、折りたたみ、折り返し
 - tree-sitter による syntax highlight(Go、TypeScript/JavaScript、Python、Rust、Swift、Ruby、PHP、Java、Terraform、Shell、JSON、Markdown)
 - 言語サーバー連携: 診断、補完、⌘+click / F12 で定義へ移動、参照検索、シンボル検索、⌃- で戻る
-- Markdown のライブプレビュー(⌘⇧V)、行ごとの git blame
+- Markdown のライブプレビュー(⌘⇧V、Mermaid 図も描画)、HTML のプレビュー、CSV/TSV の表編集
+- 行ごとの git blame、ファイルのローカル履歴
 
 ### 🖥️ Ghostty のターミナル
 
@@ -61,10 +62,11 @@ curl -fsSL https://raw.githubusercontent.com/Diwamoto/clair/main/scripts/install
 
 ### 🤖 AI エージェントをターミナルのまま
 
-- Claude Code / Codex / OpenCode を Project root や専用 worktree で並べて起動
+- Claude Code / Codex / OpenCode / Gemini CLI / Cursor CLI / GitHub Copilot CLI / Aider を Project root や専用 worktree で並べて起動
+- Project ごとのコンシェルジュ: チャットで頼むと、子エージェントを起動して作業を振り分け
 - エージェントの完了・通知要求を拾って macOS 通知、Project ごとのバッジ
 - 「このファイルをレビュー」「この Project をレビュー」をワンクリックで依頼
-- エージェントの会話履歴を provider ごとに一覧、使用状況を日別に集計
+- 過去のチャットを日付と Project ごとに一覧し、どの Project からでも再開。使用状況は日別に集計
 
 ### 🌿 Git と worktree
 
@@ -72,6 +74,7 @@ curl -fsSL https://raw.githubusercontent.com/Diwamoto/clair/main/scripts/install
 
 - 変更一覧、stage / unstage、commit、pull / push、ブランチ切り替え
 - 行単位のレビューコメントと、エージェントからの修正提案の適用 / 却下
+- 横並び / インラインの diff、任意の 2 ファイルの比較
 - commit graph で branch と merge を辿り、commit からそのまま diff へ
 - 管理 worktree を作って別ブランチで並行作業し、merge commit で取り込み
 
@@ -80,6 +83,11 @@ curl -fsSL https://raw.githubusercontent.com/Diwamoto/clair/main/scripts/install
 - メニュー、⌘K のコマンドパレット、ショートカット、`clair` CLI、MCP が同じ型付きコマンドを実行
 - ショートカットは任意のコマンドに割り当て可能
 - エージェントから Clair を操作するときも、危険度に応じて GUI で承認
+
+### 🌐 その他
+
+- UI は英語と日本語を切り替え可能
+- ステータスバーで Clair の CPU・メモリと、各エージェントの利用枠を確認
 
 ### 📱 iPhone からエージェントを見守る(実験的)
 
@@ -102,6 +110,7 @@ Dev ビルドは Stable と別の bundle・別のデータ領域で動くので�
 ## ドキュメント
 
 - [仕様](docs/clair-spec.md) — 何を作るか、何を作らないか
+- [変更履歴](CHANGELOG.md)
 - [リリースと更新配信](docs/runbooks/release.md)
 - [ドキュメント案内](docs/README.md)
 

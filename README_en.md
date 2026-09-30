@@ -19,9 +19,9 @@
 
 Clair is a native macOS IDE that brings the daily back-and-forth between editor, terminal, and AI agents
 into **one project workspace**. It pairs a VS Code–style integrated editing, search, and Git experience
-with Ghostty's terminal, built in Swift with no Electron and no WebView.
+with Ghostty's terminal, built in Swift with no Electron.
 
-AI agents are not locked into a chat UI. Claude Code, Codex, and OpenCode run as **ordinary terminals** that you
+AI agents are not locked into a chat UI. Claude Code, Codex, and others run as **ordinary terminals** that you
 can tile, switch between, and keep an eye on from your iPhone.
 
 > [!NOTE]
@@ -48,7 +48,8 @@ After that, updates show up inside the app and apply with one click (signature-v
 - Japanese IME, emoji, multi-cursor, block selection, folding, soft wrap
 - tree-sitter syntax highlighting (Go, TypeScript/JavaScript, Python, Rust, Swift, Ruby, PHP, Java, Terraform, Shell, JSON, Markdown)
 - Language servers: diagnostics, completion, ⌘-click / F12 go to definition, references, symbols, ⌃- to go back
-- Live Markdown preview (⌘⇧V) and inline git blame
+- Live Markdown preview (⌘⇧V, with Mermaid diagrams), HTML preview, and a table editor for CSV/TSV
+- Inline git blame and local file history
 
 ### 🖥️ Ghostty's terminal
 
@@ -60,10 +61,11 @@ After that, updates show up inside the app and apply with one click (signature-v
 
 ### 🤖 AI agents, still terminals
 
-- Launch Claude Code / Codex / OpenCode side by side in the project root or a dedicated worktree
+- Launch Claude Code / Codex / OpenCode / Gemini CLI / Cursor CLI / GitHub Copilot CLI / Aider side by side in the project root or a dedicated worktree
+- A per-project concierge: ask it in a chat and it hands the work to child agents
 - Agent completions and notification requests become macOS notifications and per-project badges
 - One-click "review this file" / "review this project" requests
-- Browse agent chat history per provider and see daily usage
+- Browse past chats by date and project and resume them from any project; see daily usage
 
 ### 🌿 Git and worktrees
 
@@ -71,6 +73,7 @@ After that, updates show up inside the app and apply with one click (signature-v
 
 - Changes list, stage / unstage, commit, pull / push, branch switching
 - Line-level review comments, and apply or reject an agent's suggested fixes
+- Side-by-side or inline diffs, and compare any two files
 - A commit graph to follow branches and merges, straight from a commit to its diff
 - Create managed worktrees for parallel branches and adopt them with a merge commit
 
@@ -79,6 +82,11 @@ After that, updates show up inside the app and apply with one click (signature-v
 - Menus, the ⌘K command palette, shortcuts, the `clair` CLI, and MCP all run the same typed commands
 - Assign a shortcut to any command
 - When an agent drives Clair, risky operations still need approval in the GUI
+
+### 🌐 And more
+
+- English or Japanese UI
+- The status bar shows Clair's CPU and memory and each agent's usage limits
 
 ### 📱 Watch agents from your iPhone (experimental)
 
@@ -101,6 +109,7 @@ See `make help` for more commands and the [local verification runbook](docs/runb
 ## Documentation
 
 - [Spec](docs/clair-spec.md) — what Clair is and is not
+- [Changelog](CHANGELOG.md)
 - [Release and update distribution](docs/runbooks/release.md)
 - [Docs index](docs/README.md)
 
