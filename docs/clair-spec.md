@@ -360,6 +360,9 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
 - window を閉じても background service は継続し、明示的な Clair 終了で停止する
 - コマンドパレットからウインドウのみ、またはアプリ全体を再起動できる。ウインドウの再起動は editor buffer と daemon session を保持して表示を作り直す。アプリの再起動は未保存の editor 変更がある場合は実行せず、保存済み workspace と daemon session に再接続する
 - agent 実行中は電源接続時に idle sleep を抑止する(battery 時は設定)
+- `clair attach` は daemon の応答が control timeout を超えても pane を終了せず、同じ
+  cursor から read を再試行する。timeout した input は再送せず、拒否された input と同じく
+  bell を鳴らして破棄する
 
 ペアリングは一回限りの承認、端末鍵、challenge、権限 scope、明示的な revoke を
 持つ。LAN trust をそのまま採用せず、private route を前提にし、平文 WebSocket を
@@ -468,7 +471,11 @@ merge editor を持たない(2026-09-23 オーナー決定)。
   ([ADR-0009](decisions/0009-stable-github-update-distribution.md)、
   [release runbook](runbooks/release.md))。Apple Developer ID signing と notarization は
   一般配布が必要になるまで後続判断
-- app 内で update を表示し、click で download・reattach・restart する
+- app 内で update を表示し、click で download・reattach・restart する。download は
+  3 回まで試行する
+- terminal の切断・stall、update の失敗、Clair の crash は `[auto]` issue として
+  `Diwamoto/clair` に報告する。投稿は利用者自身の `gh` ログインで、push 権限がある
+  場合だけ行う([ADR-0021](decisions/0021-anomaly-reports-to-github-issues.md))
 - Stable から Clair source を開き、terminal/agent で Dev を build・起動して変更を
   確認できる
 

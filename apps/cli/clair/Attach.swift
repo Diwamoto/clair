@@ -67,7 +67,12 @@ func runAttach(_ args: [String]) -> Int32 {
       Thread.sleep(forTimeInterval: 0.1)
     }
   }
-  guard let attach = attached else { return fail("cannot attach: \(lastError.map { "\($0)" } ?? "unknown")") }
+  guard let attach = attached else {
+    let reason = lastError.map { "\($0)" } ?? "unknown"
+    return failAndReport(
+      "cannot attach: \(reason)",
+      "terminal: cannot attach (\(lastError.map(ClairIssueReporter.kind) ?? "unknown"))")
+  }
 
   var original = termios()
   let isTTY = tcgetattr(STDIN_FILENO, &original) == 0
@@ -95,7 +100,9 @@ func runAttach(_ args: [String]) -> Int32 {
       replayed = false
       open = try attach.pump(waitMilliseconds: 0) { replayed = true; try writeAll(STDOUT_FILENO, $0) }
     }
-  } catch { return fail("lost the daemon: \(error)") }
+  } catch {
+    return failAndReport("lost the daemon: \(error)", "terminal: lost the daemon (\(ClairIssueReporter.kind(of: error)))")
+  }
   if isTTY {
     Thread.sleep(forTimeInterval: 0.1)
     tcflush(STDIN_FILENO, TCIFLUSH)
@@ -125,8 +132,20 @@ func runAttach(_ args: [String]) -> Int32 {
 
   do {
     while open, try attach.pump({ try writeAll(STDOUT_FILENO, $0) }) {}
-  } catch { return fail("lost the daemon: \(error)") }
+  } catch {
+    return failAndReport("lost the daemon: \(error)", "terminal: lost the daemon (\(ClairIssueReporter.kind(of: error)))")
+  }
   return 0
+}
+
+/// Closing a pane or quitting Clair also cuts the daemon off, but then the surface hangs up and
+/// SIGHUP ends this process within the grace period, so only a pane left showing the error reports.
+// ponytail: a fixed 3 s grace; a surface slower than that to hang up files a false report (once a day).
+private func failAndReport(_ message: String, _ title: String) -> Int32 {
+  let status = fail(message)
+  Thread.sleep(forTimeInterval: 3)
+  ClairIssueReporter.report(title, "`clair attach` ended its pane: \(message)")
+  return status
 }
 
 func runDaemonStop(_ args: [String]) -> Int32 {

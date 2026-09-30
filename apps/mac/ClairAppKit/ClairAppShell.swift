@@ -1,5 +1,6 @@
 #if os(macOS)
   import ClairShared
+  import ClairDaemonKit
   import ClairDesignSystem
   import ClairEditorCore
   import ClairEditorLanguage
@@ -158,6 +159,13 @@ import Observation
         let queued = Self.pendingOpens
         Self.pendingOpens = []
         Self.open(files: queued)
+        // ADR-0021: crashes of the app, daemon or CLI since the last look, once per app process.
+        Task.detached(priority: .utility) {
+          while true {
+            ClairIssueReporter.reportNewCrashes()
+            try? await Task.sleep(for: .seconds(3600))
+          }
+        }
       }
       let server = WorkbenchIPCServer { req in
         var req = req
@@ -225,7 +233,12 @@ import Observation
         if let persistURL { try? state.save(to: persistURL) }
         ClairDaemonLauncher.keepsSessionsOnQuit = true
         NSApp.terminate(nil)
-      } catch { update = .failed("\(error)") }
+      } catch {
+        update = .failed("\(error)")
+        ClairIssueReporter.reportInBackground(
+          "update: install failed (\(ClairIssueReporter.kind(of: error)))",
+          "Installing \(u.version) over \(u.currentVersion) failed: \(error)\n\nArtifact: \(u.artifact.url)")
+      }
     }
 
     /// V09: block idle system sleep while agents run (AC power; battery only if opted in). Display may still sleep.

@@ -62,6 +62,31 @@ final class WorkbenchUpdateTests: XCTestCase {
     }
   }
 
+  /// A dropped download is retried; the retried file still has to match the signed hash.
+  func testDownloadIsRetriedThenStillHashChecked() async throws {
+    let app = URL(fileURLWithPath: "/tmp/clair-retry-\(UUID().uuidString)/Clair.app")
+    let cfg = ClairUpdateConfiguration(
+      channel: .stable, publicKeyBase64: sk.publicKey.rawRepresentation.base64EncodedString(), currentVersion: "1.0.0",
+      currentAppURL: app, installURL: app, dataURL: URL(fileURLWithPath: "/tmp/z"), architecture: "arm64")
+    let calls = Counter()
+    let flaky: ClairUpdater.Downloader = { _ in
+      guard await calls.next() == 3 else { throw URLError(.networkConnectionLost) }
+      let file = FileManager.default.temporaryDirectory.appending(path: "retry-\(UUID().uuidString).zip")
+      try Data("not the release".utf8).write(to: file)
+      return file
+    }
+    do { try await ClairUpdater.install(try update(manifest()), cfg, download: flaky); XCTFail() } catch {
+      XCTAssertEqual(error as? ClairUpdateError, .invalidHash)
+    }
+    let count = await calls.value
+    XCTAssertEqual(count, 3)
+  }
+
+  actor Counter {
+    var value = 0
+    func next() -> Int { value += 1; return value }
+  }
+
   func testChannelIdentitiesAllDiffer() {
     let s = ClairChannel.stable, d = ClairChannel.dev
     XCTAssertNotEqual(s.bundleIdentifier, d.bundleIdentifier)

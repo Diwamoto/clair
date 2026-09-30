@@ -168,7 +168,14 @@ public enum ClairUpdater {
     guard try u.manifest.makeUpdate(currentVersion: c.currentVersion, architecture: c.architecture, publicKey: try key(c)) == u else {
       throw ClairUpdateError.invalidManifest("update changed before install")
     }
-    let archive = try await download(u.artifact.url)
+    // Release assets redirect to a CDN that occasionally drops a connection; a retry usually lands.
+    var archive: URL?
+    for attempt in 1...3 where archive == nil {
+      do { archive = try await download(u.artifact.url) } catch where attempt < 3 {
+        try await Task.sleep(for: .seconds(2))
+      }
+    }
+    guard let archive else { throw ClairUpdateError.network("download returned nothing") }
     defer { try? FileManager.default.removeItem(at: archive) }
     guard try sha256(of: archive) == u.artifact.hash else { throw ClairUpdateError.invalidHash }
     let staged = try stage(archive, u, c)
@@ -184,14 +191,21 @@ public enum ClairUpdater {
 
   public static func fetch(_ url: URL) async throws -> Data {
     let (d, r) = try await URLSession.shared.data(from: url)
-    guard (r as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) == true else { throw ClairUpdateError.network("non-success status") }
+    try requireSuccess(r, url)
     return d
   }
 
   public static func fetchFile(_ url: URL) async throws -> URL {
     let (f, r) = try await URLSession.shared.download(from: url)
-    guard (r as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) == true else { throw ClairUpdateError.network("non-success status") }
+    try requireSuccess(r, url)
     return f
+  }
+
+  static func requireSuccess(_ response: URLResponse, _ url: URL) throws {
+    let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+    guard (200..<300).contains(status) else {
+      throw ClairUpdateError.network("HTTP \(status) from \(response.url ?? url)")
+    }
   }
 
   // MARK: install

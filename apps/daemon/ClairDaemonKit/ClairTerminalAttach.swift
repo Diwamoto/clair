@@ -45,8 +45,19 @@
       let request = ClairDaemonTerminalRequest.read(
         sessionID: sessionID, epoch: epoch, offset: offset, waitMilliseconds: waitMilliseconds)
       var response: ClairDaemonTerminalResponse?
+      var timeouts = 0
+      let started = Date()
       while response == nil {
-        do { response = try client.terminal(request) } catch ClairDaemonError.transportTimedOut {}
+        do { response = try client.terminal(request) } catch ClairDaemonError.transportTimedOut {
+          timeouts += 1
+        }
+      }
+      if timeouts > 0 {
+        // The cause of these stalls is still unknown; the report carries sleep/wake timing.
+        ClairIssueReporter.reportInBackground(
+          "terminal: a daemon reply took longer than the control timeout",
+          "`clair attach` waited \(Int(Date().timeIntervalSince(started))) s (\(timeouts) timed-out "
+            + "read request(s)) before the daemon answered. The pane recovered.")
       }
       switch response! {
       case .output(let bytes, let newEpoch, let next, let isClosed):
