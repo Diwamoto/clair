@@ -94,15 +94,15 @@ struct ProcessSample: Equatable {
     return (Array(strings.dropFirst().prefix(count)), Array(strings.dropFirst(1 + count)))
   }
 
-  /// CPU percent of one core between two samples (over 100 on several cores, like Activity Monitor).
+  /// Per-process CPU between two samples as a share of the whole machine (all `cores`), so the sum stays 0–100%
+  /// instead of Activity Monitor's per-core 100% that reaches 300% or more on a busy multi-core Mac.
   /// A process born since `old` counts from zero; one that exited drops out.
-  static func cpuPercent(from old: ProcessSample, to new: ProcessSample, interval: Double) -> Double {
-    perProcessCPU(from: old, to: new, interval: interval).values.reduce(0, +)
-  }
-
-  static func perProcessCPU(from old: ProcessSample, to new: ProcessSample, interval: Double) -> [pid_t: Double] {
-    guard interval > 0 else { return [:] }
-    return new.cpuSeconds.reduce(into: [:]) { $0[$1.key] = max($1.value - (old.cpuSeconds[$1.key] ?? 0), 0) / interval * 100 }
+  static func perProcessCPU(from old: ProcessSample, to new: ProcessSample, interval: Double,
+                            cores: Int = ProcessInfo.processInfo.activeProcessorCount) -> [pid_t: Double] {
+    guard interval > 0, cores > 0 else { return [:] }
+    return new.cpuSeconds.reduce(into: [:]) {
+      $0[$1.key] = max($1.value - (old.cpuSeconds[$1.key] ?? 0), 0) / interval / Double(cores) * 100
+    }
   }
 
   /// The `limit` heaviest processes: CPU first, memory breaks ties (idle processes sort by memory).
@@ -154,7 +154,7 @@ struct ClairResourceMeter: View {
               Text(p.pid == getpid() ? "Clair" : p.name).lineLimit(1).truncationMode(.middle)
               if let where_ = owner(p.pid) { Text(where_).foregroundStyle(C.textQuaternary).lineLimit(1).truncationMode(.middle) }
             }.help("pid \(p.pid)")
-            Text(String(format: "%.0f%%", p.cpu) + " · " + Self.bytes(p.bytes)).gridColumnAlignment(.trailing)
+            Text(String(format: "%.1f%%", p.cpu) + " · " + Self.bytes(p.bytes)).gridColumnAlignment(.trailing)
           }
         }
       }
