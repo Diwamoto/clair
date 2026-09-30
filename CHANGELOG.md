@@ -34,6 +34,7 @@ All notable changes to Clair are documented here. The format follows
 - Closed panes no longer leave their shells running, which could make `clair attach` fail with a timeout.
 - Chat history no longer drops rows for projects that appear on several days.
 - Leaving the concierge returns the sidebar to the file tree.
+- The app icon no longer shows a stray vertical line beside the prompt chevron.
 
 ## [0.6.0] - 2026-09-29
 
