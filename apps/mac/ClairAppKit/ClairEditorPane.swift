@@ -506,6 +506,15 @@
             .help(tr("分割を閉じる (⌘W)")).accessibilityLabel(tr("分割を閉じる"))
         }
       }.padding(.horizontal, 12).frame(height: 24).background(C.canvas)
+      .contextMenu {
+        if let root { Button(tr("フルパスをコピー")) { copy((root as NSString).appendingPathComponent(path)) } }
+        Button(tr("相対パスをコピー")) { copy(path) }
+      }
+    }
+
+    private func copy(_ s: String) {
+      NSPasteboard.general.clearContents()
+      NSPasteboard.general.setString(s, forType: .string)
     }
 
     private func note(_ s: String) -> some View {

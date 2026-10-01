@@ -263,6 +263,8 @@ extension LocalizedStrings {
     "ゴミ箱に移動": "Move to Trash",
     "Agent に送る": "Send to Agent",
     "パスをコピー": "Copy Path",
+    "フルパスをコピー": "Copy Full Path",
+    "相対パスをコピー": "Copy Relative Path",
     "Finder で表示": "Reveal in Finder",
     "デバッグを開始": "Start Debugging",
     "Go: 現在のファイル": "Go: Current File",
