@@ -405,13 +405,19 @@
     /// Parses `@@ -a,b +c,d @@` for `a` and `c`, then numbers old (context/removed) and new (context/added) lines.
     nonisolated static func rows(_ text: String) -> [Row] {
       let all = text.split(separator: "\n", omittingEmptySubsequences: false)
-      let body = all.drop { !$0.hasPrefix("@@") }
+      // A submodule diff (`--submodule=diff`) carries several files: keep each `diff --git` line as a file
+      // header and drop its index/---/+++ lines so they don't read as removed/added rows.
+      let multi = all.lazy.filter { $0.hasPrefix("diff --git ") }.count > 1
+      let body = all.drop { !$0.hasPrefix("@@") && !(multi && $0.hasPrefix("diff --git ")) }
       if body.isEmpty { return all.filter { $0.hasPrefix("Binary") }.map { Row(text: String($0), newLine: nil) } }
-      var n = 0, o = 0
+      var n = 0, o = 0, inHeader = false
       func start(_ l: Substring, _ sign: Character) -> Int {
         l.split(separator: " ").first { $0.first == sign }.flatMap { Int($0.dropFirst().split(separator: ",")[0]) } ?? 1
       }
-      return body.prefix(maxLines).map { l in
+      return body.prefix(maxLines).compactMap { l in
+        if l.hasPrefix("diff --git ") { inHeader = true; return Row(text: String(l), newLine: nil) }
+        if inHeader, !l.hasPrefix("@@") { return l.hasPrefix("Binary") ? Row(text: String(l), newLine: nil) : nil }
+        inHeader = false
         if l.hasPrefix("@@") {
           n = start(l, "+"); o = start(l, "-")
           return Row(text: String(l), newLine: nil)

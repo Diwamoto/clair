@@ -430,7 +430,7 @@ extension WorkbenchGit {
   public static func diff(_ root: String, _ path: String, staged: Bool, untracked: Bool = false, against: String? = nil, fullContext: Bool = false) -> String {
     let context = fullContext ? ["--unified=1000000"] : []
     let args = untracked || against != nil ? ["diff", "--no-index"] + context + ["--", against ?? "/dev/null", path]
-      : ["diff"] + (staged ? ["--cached"] : []) + context + ["--", path]
+      : ["diff", "--submodule=diff"] + (staged ? ["--cached"] : []) + context + ["--", path]  // a submodule shows its files, not "Subproject commit"
     // `--no-index` exits 1 when files differ, so read the output whatever the status.
     return run(root, args, merge: false).out
   }

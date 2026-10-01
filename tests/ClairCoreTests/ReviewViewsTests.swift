@@ -18,6 +18,14 @@
       XCTAssertEqual([st.added, st.removed], [2, 1])
     }
 
+    func testSubmoduleDiffKeepsFileHeadersAndDropsPatchMetadata() {
+      let d = "diff --git a/s/a b/s/a\nindex 1..2\n--- a/s/a\n+++ b/s/a\n@@ -1 +1 @@\n-x\n+y\n"
+        + "diff --git a/s/b b/s/b\nnew file mode 100644\n--- /dev/null\n+++ b/s/b\n@@ -0,0 +1 @@\n+z"
+      let r = DiffView.rows(d)
+      XCTAssertEqual(r.map(\.text), ["diff --git a/s/a b/s/a", "@@ -1 +1 @@", "-x", "+y", "diff --git a/s/b b/s/b", "@@ -0,0 +1 @@", "+z"])
+      XCTAssertEqual(r.map(\.newLine), [nil, nil, nil, 1, nil, nil, 1])
+    }
+
     func testDiffFoldsKeepThreeLinesAroundChanges() {
       let ctx = (1...10).map { " c\($0)" }.joined(separator: "\n")
       let f = DiffView.folds(DiffView.rows("@@ -1,11 +1,11 @@\n" + ctx + "\n-x\n+y"))
