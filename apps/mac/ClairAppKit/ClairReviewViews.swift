@@ -244,10 +244,8 @@
           }.padding(.horizontal, 12).padding(.vertical, 8)
         }
         if changes.isEmpty {
-          VStack(spacing: 4) {
-            Text(tr("変更はありません")).font(Typography.font(Typography.sidebarStrong)).foregroundStyle(C.textSecondary)
-            Text(tr("working tree はきれいです。")).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textQuaternary)
-          }.frame(maxWidth: .infinity).padding(16)
+          Text(tr("変更はありません")).font(Typography.font(Typography.sidebarStrong)).foregroundStyle(C.textSecondary)
+            .frame(maxWidth: .infinity).padding(16)
         } else {
           commitBox
           section(tr("ステージ済み"), changes.filter(\.staged)) { DiffTarget(path: $0.path, staged: true, untracked: false) }
