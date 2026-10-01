@@ -115,6 +115,9 @@ struct ClairMacApp: App {
     .commands {
       CommandGroup(replacing: .saveItem) {}  // drops File ▸ Close (⌘W); ⌘W closes the focused pane instead
       ClairCommandMenu()
+      CommandGroup(replacing: .help) {
+        Link(tr("チェンジログ"), destination: URL(string: "https://github.com/Diwamoto/clair/blob/main/CHANGELOG.md")!)
+      }
     }
     WindowGroup("Pair a device", id: "clair-pairing") {
       ClairPairingBootstrapView()

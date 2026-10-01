@@ -95,6 +95,7 @@ extension LocalizedStrings {
     "設定: %@を %@ にする": "Settings: set %1$@ to %2$@",
     "設定を開く: %@": "Open Settings: %@",
     "設定を閉じる": "Close Settings",
+    "チェンジログ": "Changelog",
     "設定を検索": "Search settings",
     "設定": "Settings",
 
