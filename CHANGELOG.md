@@ -6,6 +6,20 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-10-01
+
+### Added
+
+- The status bar shows the app version at its right end.
+- Help > Changelog opens the changelog on GitHub.
+
+### Fixed
+
+- Updates no longer fail with "Bad file descriptor" after Clair has been running for a while; background git calls leaked a file handle each.
+- Source Control shows a loading or could-not-load message instead of "No changes" while git status is pending or has failed.
+- Source Control no longer claims the working tree is clean when it has not checked.
+- A changed submodule shows its file diffs instead of its commit pointer.
+
 ## [0.8.0] - 2026-10-01
 
 ### Added
@@ -207,7 +221,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/Diwamoto/clair/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/Diwamoto/clair/compare/v0.7.2...v0.8.0
 [0.7.2]: https://github.com/Diwamoto/clair/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/Diwamoto/clair/compare/v0.6.0...v0.7.1
