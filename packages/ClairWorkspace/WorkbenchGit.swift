@@ -11,8 +11,12 @@ import Foundation
 #if os(macOS)
 extension Process {
   /// `waitUntilExit()` spins the current run loop, so on the main thread SwiftUI re-renders mid-wait — while a
-  /// `store.state` mutation that called us is still open — and traps on exclusive access. Poll instead.
-  func waitWithoutRunLoop() { while isRunning { usleep(2000) } }
+  /// `store.state` mutation that called us is still open — and traps on exclusive access. Poll there instead.
+  /// Off the main thread, polling alone leaks a pipe fd per process (Foundation only reclaims it when the launching
+  /// thread's run loop spins), until spawning fails with EBADF (#53) — so wait normally there.
+  func waitWithoutRunLoop() {
+    if Thread.isMainThread { while isRunning { usleep(2000) } } else { waitUntilExit() }
+  }
 
   /// Terminates the child if it outlives `seconds`, so a hung git (credential helper, network, index lock) cannot pin
   /// its caller forever. Arm before reading the pipe — `readDataToEndOfFile` only returns once the child exits.

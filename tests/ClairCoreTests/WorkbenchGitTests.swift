@@ -300,4 +300,13 @@ final class WorkbenchGitTests: XCTestCase {
     XCTAssertEqual(s.launches[Int(key.split(separator: "#").last!)!]?.cwd, wt.path)
     XCTAssertEqual(r.execute("agent.launch", ["profile": .string("claude"), "branch": .string("agent/a"), "parent": .string(root + "#2")], confirmed: true, state: &s).failure?.code, .preconditionFailed)
   }
+
+  /// #53: git calls from background threads leaked a pipe fd each until the updater could no longer spawn ditto.
+  func testBackgroundGitCallsDoNotLeakFileDescriptors() async {
+    func open() -> Int { (0..<4096).filter { fcntl(Int32($0), F_GETFD) != -1 }.count }
+    let before = open()
+    await Task.detached { for _ in 0..<100 { WorkbenchGit.run("/", ["--version"]) } }.value
+    try? await Task.sleep(for: .seconds(3))  // Foundation reclaims a waited process's fds asynchronously
+    XCTAssertLessThan(open() - before, 30)
+  }
 }
