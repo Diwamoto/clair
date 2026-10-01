@@ -6,6 +6,25 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-01
+
+### Added
+
+- Reorder Projects by dragging their chip in the titlebar.
+- Image files open read-only in an editor tab instead of showing an encoding error.
+- The empty editor's home-screen shortcuts run their command on click and highlight on hover; a command that opens a new pane replaces the empty editor.
+- ⌘W closes the empty editor when other panes sit beside it, or quits Clair (with the usual confirmation) when it is the only pane.
+- History chats fold an agent's progress narration and thinking into collapsed rows, showing only the final reply.
+- Clair can report crashes, terminal disconnects and failed updates as GitHub issues through your `gh` login (Stable builds only, at most once a day).
+
+### Fixed
+
+- Switching projects no longer shows the previous project's shell in a terminal pane.
+- Dragging a titlebar tab or Project chip no longer moves the window.
+- The CPU meter shows Clair's share of all cores (0–100%) instead of summed per-core percentages.
+- `clair attach` survives a slow daemon response instead of disconnecting.
+- Update downloads are retried and failures name the HTTP status.
+
 ## [0.7.2] - 2026-09-30
 
 ### Fixed
@@ -188,7 +207,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.7.2...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/Diwamoto/clair/compare/v0.7.2...v0.8.0
 [0.7.2]: https://github.com/Diwamoto/clair/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/Diwamoto/clair/compare/v0.6.0...v0.7.1
 [0.6.0]: https://github.com/Diwamoto/clair/compare/v0.5.0...v0.6.0
