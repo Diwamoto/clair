@@ -171,6 +171,8 @@
   /// Source-control sidebar: staged / changes / untracked sections with a stage toggle per row.
   struct ChangesList: View {
     let changes: [GitChange]
+    /// nil while `git status` is loading, false when it failed: neither may claim "no changes".
+    let loaded: Bool?
     let selected: DiffTarget?
     let onSelect: (DiffTarget) -> Void
     let onToggle: (GitChange, _ staged: Bool) -> Void
@@ -244,7 +246,7 @@
           }.padding(.horizontal, 12).padding(.vertical, 8)
         }
         if changes.isEmpty {
-          Text(tr("変更はありません")).font(Typography.font(Typography.sidebarStrong)).foregroundStyle(C.textSecondary)
+          Text(loaded == true ? tr("変更はありません") : loaded == false ? tr("変更を取得できませんでした") : tr("変更を読み込み中…")).font(Typography.font(Typography.sidebarStrong)).foregroundStyle(C.textSecondary)
             .frame(maxWidth: .infinity).padding(16)
         } else {
           commitBox

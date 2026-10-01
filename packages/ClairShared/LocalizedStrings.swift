@@ -340,6 +340,8 @@ extension LocalizedStrings {
     "適用できません。": "Cannot apply.",
     "コミットメッセージ": "Commit message",
     "変更はありません": "No changes",
+    "変更を取得できませんでした": "Could not load changes",
+    "変更を読み込み中…": "Loading changes…",
     "ステージ済み": "Staged",
     "変更": "Changes",
     "未追跡": "Untracked",

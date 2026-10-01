@@ -996,6 +996,8 @@ import Observation
     @State private var rootFolded = false
     @State private var menus = ClairMenuController()
     @State private var changes: [GitChange] = []
+    /// nil until the first `git status` for the active root lands; false when it failed.
+    @State private var changesLoaded: Bool?
     @State private var branch: String?
     @State private var branches: [String] = []
     @State private var sync: (behind: Int, ahead: Int)?
@@ -1695,7 +1697,7 @@ import Observation
     private var changesList: some View {
       VStack(alignment: .leading, spacing: 0) {
         if st.isRepo { ChangesList(
-          changes: changes, selected: diff, onSelect: { openDiff($0) },
+          changes: changes, loaded: changesLoaded, selected: diff, onSelect: { openDiff($0) },
           onToggle: { change, stage in
             runGit(
               [(stage ? "git.stage" : "git.unstage", ["path": .string(change.path)])],
@@ -1800,19 +1802,19 @@ import Observation
     private func reloadChanges() {
       changesTask?.cancel()
       guard let root = store.activeRoot else {
-        changes = []; branch = nil; branches = []; sync = nil; diff = nil
+        changes = []; changesLoaded = nil; branch = nil; branches = []; sync = nil; diff = nil
         return
       }
       changesTask = Task {
         try? await Task.sleep(for: .milliseconds(40))
         guard !Task.isCancelled else { return }
-        async let loadedChanges = Task.detached(priority: .utility) { WorkbenchGit.changes(root) }.value
+        async let loadedChanges = Task.detached(priority: .utility) { WorkbenchGit.statusChanges(root) }.value
         async let loadedBranch = Task.detached(priority: .utility) { WorkbenchGit.currentBranch(root) }.value
         async let loadedBranches = Task.detached(priority: .utility) { WorkbenchGit.branches(root) }.value
         async let loadedSync = Task.detached(priority: .utility) { WorkbenchGit.aheadBehind(root) }.value
         let snapshot = await (loadedChanges, loadedBranch, loadedBranches, loadedSync)
         guard !Task.isCancelled, store.activeRoot == root else { return }
-        changes = snapshot.0; branch = snapshot.1; branches = snapshot.2; sync = snapshot.3
+        changes = snapshot.0 ?? []; changesLoaded = snapshot.0 != nil; branch = snapshot.1; branches = snapshot.2; sync = snapshot.3
         for target in st.diffTabs where !changes.contains(where: { $0.path == target.path }) {
           store.run("diff.close", diffInput(target))
         }

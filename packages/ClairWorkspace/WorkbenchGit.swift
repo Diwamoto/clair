@@ -410,9 +410,12 @@ public struct GitChange: Sendable, Equatable {
 
 extension WorkbenchGit {
   /// `git status` as staged/unstaged/untracked entries. Empty for a non-repo.
-  public static func changes(_ root: String) -> [GitChange] {
+  public static func changes(_ root: String) -> [GitChange] { statusChanges(root) ?? [] }
+
+  /// Like `changes`, but nil when `git status` failed, so a caller can tell "unknown" from "no changes".
+  public static func statusChanges(_ root: String) -> [GitChange]? {
     let r = run(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all"])
-    guard r.ok else { return [] }
+    guard r.ok else { return nil }
     var out: [GitChange] = []
     var parts = r.out.split(separator: "\0", omittingEmptySubsequences: true).map(String.init).makeIterator()
     while let e = parts.next(), e.count > 3 {

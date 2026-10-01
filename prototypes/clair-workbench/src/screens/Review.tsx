@@ -136,9 +136,6 @@ function NoChanges() {
     >
       <IconShieldCheck size={24} color={color.divider} />
       <span style={{ fontSize: fs.body, fontWeight: 600, color: color.textSecondary }}>変更はありません</span>
-      <span style={{ fontSize: fs.secondary, color: color.textQuaternary, textAlign: 'center', maxWidth: 220, lineHeight: '15px' }}>
-        working tree はきれいです。
-      </span>
     </div>
   );
 }
