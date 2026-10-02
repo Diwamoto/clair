@@ -268,10 +268,16 @@ extension WorkbenchState {
   }
 
   mutating func cycleTab(_ direction: Int) {
-    let all = titlebarTabs
+    // Every Project's tabs in titlebar order, so cycling past a group's edge switches Project.
+    let all = projects.flatMap { p in
+      (p.name == project ? titlebarTabs : layouts[p.name]?.titlebarTabs ?? []).map { (p, $0) }
+    }
     guard !all.isEmpty else { return }
-    let current = selectedTitlebarTab.flatMap { all.firstIndex(of: $0) } ?? 0
-    selectTab(all[(current + direction + all.count) % all.count])
+    let current = all.firstIndex { $0.0.name == project && $0.1 == selectedTitlebarTab }
+      ?? all.firstIndex { $0.0.name == project } ?? 0
+    let (target, tab) = all[(current + direction + all.count) % all.count]
+    if target.name != project { switchProject(to: target, scanFiles: false) }
+    selectTab(tab)
   }
 
   /// Stashes the current Project's layout and loads the target's layout. The GUI can skip the

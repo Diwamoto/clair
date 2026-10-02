@@ -137,6 +137,26 @@ final class WorkbenchCommandTests: XCTestCase {
     XCTAssertEqual(state.tree.focused, 1)
   }
 
+  func testTabCycleCrossesProjectGroups() throws {
+    var state = WorkbenchState()
+    state.projects = [WorkbenchProject(name: "A", path: "/a"), WorkbenchProject(name: "B", path: "/b")]
+    state.project = "A"
+    state.tabs = ["a.swift"]
+    state.active = "a.swift"
+    var b = ProjectLayout()
+    b.tabs = ["b1.swift", "b2.swift"]
+    b.active = "b2.swift"
+    state.layouts["B"] = b
+    _ = try r.execute("tab.next", state: &state).get()
+    XCTAssertEqual(state.project, "B")
+    XCTAssertEqual(state.active, "b1.swift")
+    _ = try r.execute("tab.previous", state: &state).get()
+    XCTAssertEqual(state.project, "A")
+    _ = try r.execute("tab.previous", state: &state).get()
+    XCTAssertEqual(state.project, "B")
+    XCTAssertEqual(state.active, "b2.swift")
+  }
+
   func testDiffIsOrderedSelectableAndClosableLikeOtherTabs() throws {
     var state = WorkbenchState()
     state.projects = [WorkbenchProject(name: "Sample", path: "/tmp")]
