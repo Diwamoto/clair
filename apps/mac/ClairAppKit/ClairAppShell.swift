@@ -782,8 +782,16 @@ import Observation
     }
 
     /// Only facts from an agent running in a Clair terminal can produce a macOS notification.
+    private var lastAgentNotification: (key: String, body: String, at: Date)?
+
     public func facts(pane: Int, bells: Int, exit: Int?, notification: (title: String, body: String)?) {
       guard let agent = state.agentLaunch(in: state.project, pane: pane) else { return }
+      // Agents may emit the same desktop notification over both OSC 9 and OSC 777.
+      if exit == nil, let notification {
+        let key = NotificationLog.paneKey(state.project, pane)
+        if let last = lastAgentNotification, last.key == key, last.body == notification.body, Date().timeIntervalSince(last.at) < 2 { return }
+        lastAgentNotification = (key, notification.body, Date())
+      }
       let agentName = AgentProfile.named(agent.profile)?.title ?? agent.profile
       let oscTitle = state.paneTitles[NotificationLog.paneKey(state.project, pane)]
       let sessionTitle = oscTitle.flatMap { $0.isEmpty || $0 == (agent.cwd as NSString).lastPathComponent ? nil : $0 } ?? tr("%@ · ターミナル %@", agentName, pane)
