@@ -2028,4 +2028,321 @@ enum HighlightQueries {
       (identifier) @type.builtin
       (#any-of? @type.builtin "bool" "string" "number" "object" "tuple" "list" "map" "set" "any"))))
 """#
+
+  static let html = #"""
+(tag_name) @tag
+(erroneous_end_tag_name) @tag.error
+(doctype) @constant
+(attribute_name) @attribute
+(attribute_value) @string
+(comment) @comment
+
+[
+  "<"
+  ">"
+  "</"
+  "/>"
+] @punctuation.bracket
+"""#
+
+  static let yaml = #"""
+(boolean_scalar) @boolean
+
+(null_scalar) @constant.builtin
+
+[
+  (double_quote_scalar)
+  (single_quote_scalar)
+  (block_scalar)
+  (string_scalar)
+] @string
+
+[
+  (integer_scalar)
+  (float_scalar)
+] @number
+
+(comment) @comment
+
+[
+  (anchor_name)
+  (alias_name)
+] @label
+
+(tag) @type
+
+[
+  (yaml_directive)
+  (tag_directive)
+  (reserved_directive)
+] @attribute
+
+(block_mapping_pair
+  key: (flow_node
+    [
+      (double_quote_scalar)
+      (single_quote_scalar)
+    ] @property))
+
+(block_mapping_pair
+  key: (flow_node
+    (plain_scalar
+      (string_scalar) @property)))
+
+(flow_mapping
+  (_
+    key: (flow_node
+      [
+        (double_quote_scalar)
+        (single_quote_scalar)
+      ] @property)))
+
+(flow_mapping
+  (_
+    key: (flow_node
+      (plain_scalar
+        (string_scalar) @property))))
+
+[
+  ","
+  "-"
+  ":"
+  ">"
+  "?"
+  "|"
+] @punctuation.delimiter
+
+[
+  "["
+  "]"
+  "{"
+  "}"
+] @punctuation.bracket
+
+[
+  "*"
+  "&"
+  "---"
+  "..."
+] @punctuation.special
+"""#
+
+  static let css = #"""
+(comment) @comment
+
+(tag_name) @tag
+(nesting_selector) @tag
+(universal_selector) @tag
+
+"~" @operator
+">" @operator
+"+" @operator
+"-" @operator
+"*" @operator
+"/" @operator
+"=" @operator
+"^=" @operator
+"|=" @operator
+"~=" @operator
+"$=" @operator
+"*=" @operator
+
+"and" @operator
+"or" @operator
+"not" @operator
+"only" @operator
+
+(attribute_selector (plain_value) @string)
+
+((property_name) @variable
+ (#match? @variable "^--"))
+((plain_value) @variable
+ (#match? @variable "^--"))
+
+(class_name) @property
+(id_name) @property
+(namespace_name) @property
+(property_name) @property
+(feature_name) @property
+
+(pseudo_element_selector (tag_name) @attribute)
+(pseudo_class_selector (class_name) @attribute)
+(attribute_name) @attribute
+
+(function_name) @function
+
+"@media" @keyword
+"@import" @keyword
+"@charset" @keyword
+"@namespace" @keyword
+"@supports" @keyword
+"@keyframes" @keyword
+(at_keyword) @keyword
+(to) @keyword
+(from) @keyword
+(important) @keyword
+
+(string_value) @string
+(color_value) @string.special
+
+(integer_value) @number
+(float_value) @number
+(unit) @type
+
+[
+  "#"
+  ","
+  "."
+  ":"
+  "::"
+  ";"
+] @punctuation.delimiter
+
+[
+  "{"
+  ")"
+  "("
+  "}"
+] @punctuation.bracket
+"""#
+
+  static let toml = #"""
+; Properties
+;-----------
+
+(bare_key) @type
+
+(quoted_key) @string
+
+(pair
+  (bare_key) @property)
+
+(pair
+  (dotted_key
+    (bare_key) @property))
+
+; Literals
+;---------
+
+(boolean) @boolean
+
+(comment) @comment
+
+(string) @string
+
+[
+  (integer)
+  (float)
+] @number
+
+[
+  (offset_date_time)
+  (local_date_time)
+  (local_date)
+  (local_time)
+] @string.special
+
+; Punctuation
+;------------
+
+[
+  "."
+  ","
+] @punctuation.delimiter
+
+"=" @operator
+
+[
+  "["
+  "]"
+  "[["
+  "]]"
+  "{"
+  "}"
+] @punctuation.bracket
+"""#
+
+  static let c = #"""
+(identifier) @variable
+
+((identifier) @constant
+ (#match? @constant "^[A-Z][A-Z\\d_]*$"))
+
+"break" @keyword
+"case" @keyword
+"const" @keyword
+"continue" @keyword
+"default" @keyword
+"do" @keyword
+"else" @keyword
+"enum" @keyword
+"extern" @keyword
+"for" @keyword
+"if" @keyword
+"inline" @keyword
+"return" @keyword
+"sizeof" @keyword
+"static" @keyword
+"struct" @keyword
+"switch" @keyword
+"typedef" @keyword
+"union" @keyword
+"volatile" @keyword
+"while" @keyword
+
+"#define" @keyword
+"#elif" @keyword
+"#else" @keyword
+"#endif" @keyword
+"#if" @keyword
+"#ifdef" @keyword
+"#ifndef" @keyword
+"#include" @keyword
+(preproc_directive) @keyword
+
+"--" @operator
+"-" @operator
+"-=" @operator
+"->" @operator
+"=" @operator
+"!=" @operator
+"*" @operator
+"&" @operator
+"&&" @operator
+"+" @operator
+"++" @operator
+"+=" @operator
+"<" @operator
+"==" @operator
+">" @operator
+"||" @operator
+
+"." @delimiter
+";" @delimiter
+
+(string_literal) @string
+(system_lib_string) @string
+
+(null) @constant
+(number_literal) @number
+(char_literal) @number
+
+(field_identifier) @property
+(statement_identifier) @label
+(type_identifier) @type
+(primitive_type) @type
+(sized_type_specifier) @type
+
+(call_expression
+  function: (identifier) @function)
+(call_expression
+  function: (field_expression
+    field: (field_identifier) @function))
+(function_declarator
+  declarator: (identifier) @function)
+(preproc_function_def
+  name: (identifier) @function.special)
+
+(comment) @comment
+"""#
 }
