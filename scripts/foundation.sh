@@ -65,8 +65,14 @@ test_integration_packages() {
   # thread on them. Swift Testing otherwise runs suites concurrently on the cooperative
   # pool (one thread per core); on a 3-core CI runner the blocked tests filled the pool and
   # the async bridges they wait on never ran, hanging the job. --num-workers did not cap it.
-  swift test --package-path "$core_package" --no-parallel \
-    --filter ClairCoreIntegrationTests
+  # One process per suite, listed by `swift test list` so none is missed: a test process prints its results only when
+  # it exits, so one run of everything that hangs would leave no trace of the suite it hung in.
+  local suites suite
+  suites="$(swift test --package-path "$core_package" list | grep '^ClairCoreIntegrationTests[./]' | sed 's#/.*##' | sort -u)"
+  for suite in $suites; do
+    printf '== %s\n' "$suite"
+    swift test --package-path "$core_package" --skip-build --no-parallel --filter "^${suite//./\\.}/"
+  done
 }
 
 check_package() {
