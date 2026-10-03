@@ -535,7 +535,8 @@ cutover 条件には含めないが、この順で追う。
 
 1. **Go editor support**: generic LSP 基盤を gopls で第一級にする。補完、診断、
    定義ジャンプ、参照検索、rename、code action、format、symbol 検索。Swift/Rust を
-   第一級にすることは約束に含めない。
+   第一級にすることは約束に含めない。(2026-10-03: hover、引数のヒント、rename、code action、format、
+   ファイル内シンボル、問題の一覧を generic LSP で全言語に実装。§5.11)
 2. **Debugger**: DAP を共通基盤とし、Go/Delve を最初の第一級 debugger にする。
 3. **Mobile branch review**: branch 全体の diff review、merge 承認、対応 agent の
    structured prompt/interrupt。

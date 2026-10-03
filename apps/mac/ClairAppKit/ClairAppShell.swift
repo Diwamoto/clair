@@ -217,7 +217,8 @@ import Observation
         }
       }
       state.dropProposalTabs()
-      if Self.main === self { startClaudeIDE() }
+      // Only the running app announces itself to Claude Code; a test's store must not write ~/.claude/ide.
+      if Self.main === self, persistURL != nil, Bundle.main.bundleURL.pathExtension == "app" { startClaudeIDE() }
     }
 
     isolated deinit { ipc?.stop(); updateTask?.cancel(); persistenceTask?.cancel(); releaseSleepAssertion() }
