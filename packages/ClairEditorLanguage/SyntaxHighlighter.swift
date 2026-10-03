@@ -21,6 +21,8 @@ enum CaptureMapping {
     if language == .json, first == "constant" { return .special }
     // HCL attribute names and object keys: `variable.*` is One Dark red.
     if language == .terraform, nameComponents == ["variable", "member"] { return .tag }
+    // YAML / TOML mapping keys: One Dark paints them red, like JSON keys.
+    if language == .yaml || language == .toml, first == "property" { return .tag }
     switch first {
     case "keyword": return .keyword
     // JSON object keys, Markdown headings/markers, JSX tags: One Dark red.
@@ -194,6 +196,13 @@ public final class SyntaxHighlighter {
               "method_declaration", "namespace_definition", "if_statement", "for_statement",
               "foreach_statement", "while_statement", "do_statement", "switch_statement", "try_statement"].contains(type)
     case .terraform: return ["block", "object", "for_object_expr", "for_tuple_expr"].contains(type)
+    case .html: return ["element", "script_element", "style_element"].contains(type)
+    case .yaml: return ["block_mapping_pair", "block_sequence_item", "flow_mapping", "flow_sequence"].contains(type)
+    case .css: return ["block", "rule_set", "media_statement", "keyframe_block_list"].contains(type)
+    case .toml: return ["table", "table_array_element", "inline_table", "array"].contains(type)
+    case .c:
+      return ["compound_statement", "struct_specifier", "enum_specifier", "union_specifier",
+              "initializer_list", "preproc_if", "preproc_ifdef"].contains(type)
     }
   }
 
