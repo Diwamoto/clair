@@ -269,7 +269,10 @@ extension WorkbenchState {
 
   mutating func cycleTab(_ direction: Int) {
     // Every Project's tabs in titlebar order, so cycling past a group's edge switches Project.
-    let all = projects.flatMap { p in
+    // The shown layout always takes part, even before its Project is registered.
+    var groups = projects
+    if !groups.contains(where: { $0.name == project }) { groups.insert(WorkbenchProject(name: project, path: ""), at: 0) }
+    let all = groups.flatMap { p in
       (p.name == project ? titlebarTabs : layouts[p.name]?.titlebarTabs ?? []).map { (p, $0) }
     }
     guard !all.isEmpty else { return }
@@ -285,7 +288,9 @@ extension WorkbenchState {
   /// immediately afterwards on a utility queue.
   public mutating func switchProject(to p: WorkbenchProject, scanFiles: Bool = true) {
     if project != p.name { editorContext = nil }
-    if !project.isEmpty { layouts[project] = layout; filesCache[project] = files }
+    // A tree that was never scanned (switched away before the deferred scan landed) is not a cache: reconciling the
+    // tabs against it on return would close every tab.
+    if !project.isEmpty { layouts[project] = layout; if !files.isEmpty { filesCache[project] = files } }
     project = p.name
     // A revisited Project shows its last tree at once; the GUI rescans in the background (a scan walks the disk and runs `git status`).
     let cached = filesCache[p.name]
