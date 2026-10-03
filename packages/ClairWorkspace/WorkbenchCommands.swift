@@ -879,6 +879,8 @@ extension CommandRegistry {
     cmd("skill.install", "Agent skill をインストール", .write, ai: false) { _, _ in .ok },
     cmd("cli.uninstall", "clair コマンドをアンインストール", .write, ai: false) { _, _ in .ok },
     cmd("skill.uninstall", "Agent skill をアンインストール", .write, ai: false) { _, _ in .ok },
+    cmd("claudeEditor.install", "Claude Code の Ctrl+G で Clair を使う", .write, ai: false) { _, _ in .ok },
+    cmd("claudeEditor.uninstall", "Claude Code の Ctrl+G で Clair を使わない", .write, ai: false) { _, _ in .ok },
     cmd("settings.close", "設定を閉じる", .read) { s, _ in s.settingsOpen = false; return .ok },
     cmd("settings.set", "設定を変更", .write, ai: false,
         params: [CommandParam("key", .string, allowed: WorkbenchState.toggleKeys), CommandParam("value", .bool)]) { s, i in

@@ -355,8 +355,8 @@ import Observation
           buffers.reveal(p, line: to.line, column: to.column)
         }
         if id.hasPrefix("debug.") { runDebugCommand(id, input) }
-        if ["cli.install", "skill.install", "cli.uninstall", "skill.uninstall"].contains(id) {
-          Self.install(cli: id.hasPrefix("cli."), remove: id.hasSuffix("uninstall"))
+        if ["cli.install", "skill.install", "cli.uninstall", "skill.uninstall", "claudeEditor.install", "claudeEditor.uninstall"].contains(id) {
+          Self.install(String(id.prefix { $0 != "." }), remove: id.hasSuffix("uninstall"))
         }
         if let view = state.active.flatMap(buffers.view) {
           switch id {
@@ -449,16 +449,19 @@ import Observation
     }
 
     /// ⌘K install rows: the result is an alert because the palette has already closed (the settings rows show it inline).
-    private static func install(cli: Bool, remove: Bool) {
+    private static func install(_ kind: String, remove: Bool) {
       Task.detached {
-        let what = cli ? tr("clair コマンド") : "Agent skill", verb = remove ? tr("アンインストール") : tr("インストール")
+        let what = kind == "cli" ? tr("clair コマンド") : kind == "skill" ? "Agent skill" : tr("Ctrl+G の editor 設定")
+        let verb = remove ? tr("アンインストール") : tr("インストール")
         let message: String
         do {
-          switch (cli, remove) {
-          case (true, false): try ClairDaemonLauncher.installCommand()
-          case (true, true): try ClairDaemonLauncher.uninstallCommand()
-          case (false, false): try ClairSkills.install()
-          case (false, true): try ClairSkills.uninstall()
+          switch (kind, remove) {
+          case ("cli", false): try ClairDaemonLauncher.installCommand()
+          case ("cli", true): try ClairDaemonLauncher.uninstallCommand()
+          case ("skill", false): try ClairSkills.install()
+          case ("skill", true): try ClairSkills.uninstall()
+          case (_, false): try ClairClaudeEditor.install()
+          case (_, true): try ClairClaudeEditor.uninstall()
           }
           message = tr("%@を%@しました。", what, verb)
         } catch { message = tr("%@を%@できません: %@", what, verb, error.localizedDescription) }
@@ -2835,6 +2838,20 @@ import Observation
             do { try ClairSkills.install(); integrationNotes["skill"] = tr("インストールしました。") } catch {
               integrationNotes["skill"] = tr("インストールできません: %@", error.localizedDescription)
             }
+          }
+        }
+        SettingsRow(
+          title: tr("Claude Code の Ctrl+G で Clair を使う"),
+          note: integrationNotes["editor"] ?? (ClairClaudeEditor.isInstalled()
+            ? tr("設定済み(~/.claude/settings.json の env.VISUAL)。タブを閉じると Claude に戻ります。")
+            : tr("~/.claude/settings.json の env.VISUAL に「%@」を設定します。", ClairClaudeEditor.command))
+        ) {
+          let installed = ClairClaudeEditor.isInstalled()
+          Button(installed ? tr("アンインストール") : tr("インストール")) {
+            do {
+              if installed { try ClairClaudeEditor.uninstall() } else { try ClairClaudeEditor.install() }
+              integrationNotes["editor"] = installed ? tr("アンインストールしました。") : tr("インストールしました。Claude Code を再起動すると有効になります。")
+            } catch { integrationNotes["editor"] = tr("インストールできません: %@", error.localizedDescription) }
           }
         }
       }

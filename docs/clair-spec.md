@@ -449,7 +449,9 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   Project にも Git repository にも属さない ad-hoc file は Project を作らず、
   active Project のタブ列の末尾に開く(root からの相対パス `../…`、explorer には出さない)
 - `clair open --wait <path>` は開いたあと、その file のタブがどの open Project からも
-  閉じられるまで終了しない(`$VISUAL` / git の editor 用。Claude Code の Ctrl+G など)
+  閉じられるまで終了しない(`$VISUAL` / git の editor 用。Claude Code の Ctrl+G など)。
+  設定の「連携」と palette から `~/.claude/settings.json` の `env.VISUAL` に設定・解除できる。
+  他の値が入っていれば上書きせず、読めない settings.json は書き換えない
 - Clair の terminal からの `clair open` は承認なしで実行し、Clair を前面に出す。MCP の `file.open` は既に開いている Project 内の file だけを開け、Project を新規作成できない
 - MCP の `editor.context` は現在の editor file と選択範囲の位置、明示的に選択された text(最大 16 KiB)を返す。選択内容は workspace に保存しない
 - agent 向けの IDE context(すべて AI 可、承認なし)。対象 file は開いている Project 内の既存 file に限り(絶対 path か active Project からの相対 path、`..` 不可)、それ以外は拒否する
