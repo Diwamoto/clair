@@ -77,7 +77,9 @@ check_package() {
 check_sources() {
   # grep, not rg: CI runners do not ship ripgrep, and `if rg` on a missing binary silently passed.
   # Match real v1 dependencies (a WebKit editor, libvterm calls), not prose that names them.
-  if grep -rnE --include='*.swift' \
+  # ClairHTMLPreview.swift is the HTML preview pane, which spec §5.11 / ADR-0018 allow to use WebKit
+  # (never the editor's input or rendering path).
+  if grep -rnE --include='*.swift' --exclude='ClairHTMLPreview.swift' \
     '^[[:space:]]*import (WebKit|ClairTextKit)$|WKWebView\(|vterm_[a-z_]+\(' \
     "$repo_root/packages" "$repo_root/apps" "$repo_root/Package.swift"; then
     printf 'foundation: v1 runtime dependency found in packages.\n' >&2
