@@ -11,6 +11,17 @@ All notable changes to Clair are documented here. The format follows
 - Agents can read the editor's diagnostics (`editor.diagnostics`) and review comments (`review.threads`) through MCP or the `clair` command.
 - Agents can post review comments (`review.comment`) and change suggestions (`review.suggest`) that show on the diff; suggestions can span several lines and carry a reason.
 - "Review this file / Project" asks the agent to post its findings as review comments; Claude Code runs it with only those Clair commands allowed.
+- Hover information: rest the pointer on a word (or run Show Hover) to see the language server's description.
+- Parameter hints while typing a call.
+- Rename Symbol (F2) across the workspace, and Quick Fix (⌘.) for the language server's code actions.
+- Format Document uses the language server, and format on save works for every language whose server formats.
+- Go to Symbol in File (⌘⇧O) and Show Problems (⌘⇧M).
+- Completions expand snippets and apply auto-imports in the same undo step.
+- Language servers for C, Ruby, Java, PHP, Terraform, shell, JSON, HTML, CSS, YAML, TOML and Markdown, used when installed.
+
+### Fixed
+
+- Cycling tabs works before any Project is registered, and switching away from a Project before its file tree loaded no longer closes its tabs on return.
 
 ## [0.8.2] - 2026-10-01
 

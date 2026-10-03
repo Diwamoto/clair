@@ -295,6 +295,17 @@ macOS の `NSTextInputClient` は行ローカルの UTF-16 空間で答える(�
 - HTML / HTM のプレビュー(preview と同じボタン・⌘⇧V で開き、未保存 buffer の内容と JavaScript の動作を表示)。相対パスの local file 参照はプレビュー対象ファイルと同じフォルダ内のみ解決できる(`..` や symlink でそのフォルダの外へは出られない)。プレビュー内でのページ遷移は許可しない。JavaScript とリモートリソースはネットワーク通信できる。WebView は非永続のデータストアを使う。明示的にクリックした http/https/mailto リンクは既定のアプリで開く。WebView は editor の入力・描画経路に使用しない
 - 画像の表示(UTF-8 テキストでなく NSImage が読めるファイルは editor tab で読み取り専用に表示し、pane より大きければ縮小、拡大はしない。SVG はテキストとして開く)
 - 定義ジャンプの直接操作(⌘+click、F12、前後の位置へ戻る/進む)
+- 言語機能(2026-10-03 オーナー依頼「LSP をめっちゃ強化」)。すべて generic LSP 経由で、server のない言語では出さない
+  - 言語ごとの既定 server: gopls / typescript-language-server / pyright / rust-analyzer / sourcekit-lsp / clangd / ruby-lsp / jdtls / intelephense / terraform-ls / bash-language-server / vscode-{json,html,css}-language-server / yaml-language-server / taplo / marksman。PATH にないものは状態表示だけで動かない
+  - hover: 修飾キーなしで単語の上に 450 ms 止めると補完と同じ見た目の popup に表示。`editor.hover` でキャレット位置
+  - 引数のヒント: server の trigger 文字(`(` `,` 等)で開き、呼び出しの中にいる間は編集・移動に追従、Esc で閉じる
+  - 補完: snippet は展開して最初の stop を選択(Tab での stop 移動はしない)。auto-import 等の追加編集は同じ 1 undo 単位で適用
+  - rename(F2 / `editor.rename`): prepareRename の範囲に入力欄を出し、確定で workspace 全体の編集を適用する
+  - クイックフィックス(⌘. / `editor.codeAction`): 選択範囲かキャレットの code action を一覧し、選ぶと編集と server command を実行する
+  - server からの編集(rename、code action、`workspace/applyEdit`)は、active Project で開いている buffer へは未保存の 1 transaction として、それ以外のファイルへは disk へ直接書く。file の作成・改名・削除を含む編集は適用しない
+  - 整形(`editor.format`)は server の formatting、なければ JSON の内蔵 formatter。保存時に整形は server の結果を受け取ってから再保存する
+  - ファイル内のシンボル(⌘⇧O)と問題の一覧(⌘⇧M、開いている文書の診断を重要度順)を参照一覧と同じ palette に出す
+  - 保存時に `didSave` を送る
 
 見た目の基本として次を持つ(2026-09-26 オーナー決定)。
 
@@ -306,6 +317,7 @@ macOS の `NSTextInputClient` は行ローカルの UTF-16 空間で答える(�
 - フォントと表示(2026-09-29 オーナー依頼): 設定 › エディタ・ターミナルの「表示」で、それぞれフォント(インストール済みの等幅フォント、既定はシステム等幅)と文字サイズ(既定はエディタ 12・ターミナル 13)を選べる。エディタは行番号の表示、ターミナルはカーソルの形(ブロック / バー / 下線)と点滅を切り替えられる。変更は開いている editor と実行中の terminal へ再起動なしで反映する。未インストールになったフォントはシステム等幅で表示する
 
 minimap、AI inline 補完(2026-09-27 オーナー決定)、VS Code extension 互換、独自 plugin runtime は対象外。
+inlay hint と semantic token は未対応(editor の描画に inline の仮想テキストを持たないため)。
 
 ## 6. AI review
 

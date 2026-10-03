@@ -10,7 +10,7 @@
     /// The real result of an agent-context command the registry accepted; nil for every other command.
     func answerAgentContext(_ id: String, _ input: CommandInput) -> Result<CommandResult, CommandError>? {
       switch id {
-      case "editor.diagnostics": return scope(input).map { CommandResult.diagnostics(diagnostics(in: $0.root, path: $0.path)) }
+      case "editor.diagnostics": return scope(input).map { CommandResult.diagnostics(agentDiagnostics(in: $0.root, path: $0.path)) }
       case "review.threads":
         return scope(input).map { s in CommandResult.reviewThreads(reviews.list(root: s.root, path: s.path) { self.lines(root: s.root, $0) }) }
       case "review.comment", "review.suggest": return postReview(id, input)
@@ -28,7 +28,7 @@
 
     /// Diagnostics of the documents open on a language server under `root`, on the revision the user sees.
     /// Only the active Project has editor buffers, so another Project has none to report.
-    private func diagnostics(in root: String, path: String?) -> [WorkbenchDiagnostic] {
+    func agentDiagnostics(in root: String, path: String?) -> [WorkbenchDiagnostic] {
       guard root == activeRoot else { return [] }
       let paths = path.map { [$0] } ?? buffers.language.diagnostics.keys.compactMap { abs in
         abs.hasPrefix(root + "/") ? String(abs.dropFirst(root.count + 1)) : nil

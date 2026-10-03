@@ -198,6 +198,7 @@ import Observation
       Task.detached(priority: .utility) { _ = ClairUpdater.markStartupSuccess(config) }
       startAutomaticUpdateChecks()
       watchProject(refresh: true)
+      buffers.language.onWorkspaceEdit = { [weak self] in self?.applyWorkspaceEdit($0) ?? false }
     }
 
     isolated deinit { ipc?.stop(); updateTask?.cancel(); persistenceTask?.cancel(); releaseSleepAssertion() }
@@ -284,13 +285,17 @@ import Observation
       }
       // `file.save` from any caller (⌘S, CLI, MCP) writes the buffer first; a failed write keeps the dirty marker.
       if id == "file.save", let p = state.active, let root = activeRoot, buffers.isOpen(p) {
-        if state.toggles["formatOnSave"] == true { formatBuffer(p) }
+        let formatting = state.toggles["formatOnSave"] == true && !savingFormatted.contains(p)
+        if formatting { formatBuffer(p) }
         do {
           try buffers.save(p, root: root)
         } catch {
           let e = CommandError(.preconditionFailed, tr("保存できません: %@", error.localizedDescription))
           lastError = e; return .failure(e)
         }
+        buffers.language.save(root + "/" + p, root: root)
+        // A language server formats asynchronously: save what it returns as a second write.
+        if formatting, !DocumentFormatter.supports(p) { formatWithServer(p, root: root, thenSave: true) }
       }
       let closing =
         id == "pane.close" ? Self.terminalKey(root: activeRoot ?? state.project, pane: state.tree.focused)
@@ -342,7 +347,19 @@ import Observation
           default: break
           }
         }
-        if id == "editor.format", let p = state.active { formatBuffer(p) }
+        if id == "editor.format", let p = state.active {
+          if DocumentFormatter.supports(p) { formatBuffer(p) } else if let root = activeRoot { formatWithServer(p, root: root, thenSave: false) }
+        }
+        if let p = state.active, let features = buffers.features(p) {
+          switch id {
+          case "editor.hover": features.hoverAtCaret()
+          case "editor.rename": features.rename()
+          case "editor.codeAction": features.codeActions()
+          default: break
+          }
+        }
+        if id == "editor.fileSymbols" { showFileSymbols() }
+        if id == "editor.problems" { showProblems() }
         if let closing { ClairDaemonLauncher.closeSession(key: closing); ClairGhosttySurfaceView.discard(key: closing) }  // T09: closing a pane ends its shell; closing a window does not
         if id == "agent.launch" || id == "pane.close" || id == "agent.close"
           || (id == "settings.set" && input["key"] == .string("preventSleepOnBattery"))
@@ -648,6 +665,108 @@ import Observation
     /// own edit path, the way `ClairMarkdownPreview`'s table commit does: `buffers.refresh` rebuilds
     /// the on-screen surface from the buffer afterward. No-op for an unsupported format, or one already
     /// formatted (so it never manufactures a no-op undo step or a spurious dirty mark).
+    /// Paths whose server-formatted text is being saved, so that save does not format again.
+    private var savingFormatted: Set<String> = []
+
+    /// `textDocument/formatting` into the buffer as one undo unit (through the view when it is live, so the server and
+    /// highlighting see it like typing). With `thenSave` (format on save) a changed buffer is saved again.
+    private func formatWithServer(_ path: String, root: String, thenSave: Bool) {
+      guard EditorLanguageID.detect(path: path)?.languageServer != nil else {
+        if !thenSave { languageNotice = tr("このファイルの言語サーバーはありません") }
+        return
+      }
+      let tab = Int(state.choices["tabWidth"] ?? "") ?? 4
+      Task {
+        guard let (edits, snapshot) = await buffers.language.format(root + "/" + path, root: root, tabSize: tab, insertSpaces: true) else {
+          if !thenSave { languageNotice = tr("言語サーバーはこのファイルを整形できません") }
+          return
+        }
+        guard !edits.isEmpty, activeRoot == root, case .ready(let m)? = buffers.peek(path), m.buffer.snapshot.revision == snapshot.revision
+        else { return }
+        commit(edits, to: path, manager: m, label: tr("ドキュメントの整形"))
+        guard thenSave, state.active == path else { return }
+        savingFormatted.insert(path)
+        _ = run("file.save")
+        savingFormatted.remove(path)
+      }
+    }
+
+    /// One transaction on an open buffer: through its live view (undo, server, highlight, split mirrors), else straight
+    /// into the buffer with the surface rebuilt from it.
+    private func commit(_ edits: [TextEdit], to path: String, manager m: EditorTransactionManager, label: String? = nil) {
+      if let view = buffers.view(path), view.snapshot.revision == m.buffer.snapshot.revision, let typed = view.onCommitEdits {
+        typed(edits)
+        return
+      }
+      guard (try? m.apply(edits, label: label)) != nil else { return }
+      buffers.refresh(path)
+      edited(path)
+    }
+
+    /// Applies a language server's workspace edit (rename, a code action): open buffers of the active Project take it
+    /// as an unsaved transaction; every other file is rewritten on disk (the watcher then refreshes the tree).
+    /// All-or-nothing per file; false when any file could not take its edits.
+    func applyWorkspaceEdit(_ edit: LanguageServerWorkspaceEdit) -> Bool {
+      guard !edit.unsupported else { return false }
+      var ok = true
+      for (absolute, changes) in edit.files where !changes.isEmpty {
+        if let root = activeRoot, absolute.hasPrefix(root + "/") {
+          let rel = String(absolute.dropFirst(root.count + 1))
+          if case .ready(let m)? = buffers.peek(rel) {
+            guard let edits = LanguageServerTextEdit.editorEdits(changes, in: m.buffer.snapshot) else { ok = false; continue }
+            commit(edits, to: rel, manager: m)
+            continue
+          }
+        }
+        guard let text = try? String(contentsOfFile: absolute, encoding: .utf8),
+          let updated = LanguageServerTextEdit.apply(changes, to: text),
+          (try? updated.write(toFile: absolute, atomically: true, encoding: .utf8)) != nil
+        else { ok = false; continue }
+      }
+      return ok
+    }
+
+    /// ⌘⇧O: the active file's symbols in the list palette.
+    private func showFileSymbols() {
+      guard let rel = state.active, let root = activeRoot else { return }
+      guard EditorLanguageID.detect(path: rel)?.languageServer != nil else {
+        languageNotice = tr("このファイルの言語サーバーはありません")
+        return
+      }
+      Task {
+        let symbols = await buffers.language.documentSymbols(root + "/" + rel, root: root)
+        guard activeRoot == root, state.active == rel else { return }
+        guard !symbols.isEmpty else { languageNotice = tr("シンボルが見つかりません"); return }
+        languageNotice = nil
+        languageItems = symbols.map {
+          PaletteItem(
+            title: String(repeating: "  ", count: min($0.depth, 6)) + $0.name, hint: "\(rel):\($0.line + 1)", id: "file.open",
+            input: ["path": .string(root + "/" + rel), "line": .int($0.line + 1), "column": .int($0.character)], detail: $0.detail ?? "")
+        }
+        run("palette.references")
+      }
+    }
+
+    /// ⌘⇧M: every diagnostic of the active Project's open documents, errors first.
+    private func showProblems() {
+      guard let root = activeRoot else { return }
+      let order = ["error": 0, "warning": 1, "information": 2, "hint": 3]
+      let all = agentDiagnostics(in: root, path: nil).sorted {
+        (order[$0.severity] ?? 4, $0.path, $0.line) < (order[$1.severity] ?? 4, $1.path, $1.line)
+      }
+      guard !all.isEmpty else { languageNotice = tr("問題はありません"); return }
+      languageNotice = nil
+      let mark = ["error": "✕", "warning": "⚠︎", "information": "ⓘ", "hint": "·"]
+      languageItems = all.prefix(500).map { d in
+        let rel = d.path.hasPrefix(root + "/") ? String(d.path.dropFirst(root.count + 1)) : d.path
+        return PaletteItem(
+          title: "\(mark[d.severity] ?? "·") \(d.message.split(separator: "\n").first.map(String.init) ?? d.message)",
+          hint: "\(rel):\(d.line)", id: "file.open",
+          input: ["path": .string(d.path), "line": .int(d.line), "column": .int(d.column)])
+      }
+      run("palette.references")
+    }
+
     private func formatBuffer(_ path: String) {
       guard case .ready(let m)? = buffers.peek(path) else { return }
       let old = m.buffer.snapshot
@@ -924,9 +1043,9 @@ import Observation
       if id.hasPrefix("file.") || id.hasPrefix("project.")
         || ["window.restart", "app.restart", "tab.reopenClosed", "tab.close", "pane.close", "palette.recent", "palette.compare"].contains(id) { return .file }
       if id.hasPrefix("editor.fold") || id.hasPrefix("editor.unfold")
-        || ["palette.find", "palette.search", "editor.format"].contains(id) { return .edit }
+        || ["palette.find", "palette.search", "editor.format", "editor.codeAction", "editor.rename"].contains(id) { return .edit }
       if id.hasPrefix("editor.navigate") || id.hasPrefix("pane.focus")
-        || ["editor.definition", "editor.references", "palette.files", "palette.symbols", "palette.references",
+        || ["editor.definition", "editor.references", "palette.files", "palette.symbols", "palette.references", "editor.fileSymbols", "editor.problems",
             "tab.next", "tab.previous", "tab.activate"].contains(id) { return .go }
       return .view
     }
@@ -944,6 +1063,8 @@ import Observation
       "editor.markdownPreview": "Open Preview", "editor.definition": "Go to Definition",
       "editor.references": "Find References", "editor.navigateBack": "Go Back", "editor.navigateForward": "Go Forward",
       "palette.files": "Go to File…", "palette.symbols": "Go to Symbol…", "palette.references": "Find References…",
+      "editor.codeAction": "Quick Fix…", "editor.rename": "Rename Symbol", "editor.fileSymbols": "Go to Symbol in File…",
+      "editor.problems": "Show Problems", "editor.hover": "Show Hover",
       "tab.next": "Next Tab", "tab.previous": "Previous Tab", "pane.focusNext": "Focus Next Pane",
       "pane.focusPrevious": "Focus Previous Pane",
     ]
@@ -2959,9 +3080,9 @@ import Observation
         }
         guard !q.isEmpty, !branches.contains(q) else { return rows }
         return rows + [PaletteItem(title: tr("新しいブランチを作成: %@", q), hint: "", id: "git.branchCreate", input: ["name": .string(q)])]
-      case .references:
+      case .references:  // references, file symbols and problems: match the location or the name
         let q = query.lowercased()
-        return store.languageItems.filter { q.isEmpty || $0.hint.lowercased().contains(q) }
+        return store.languageItems.filter { q.isEmpty || $0.hint.lowercased().contains(q) || $0.title.lowercased().contains(q) }
       default: return store.registry.paletteItems(p, query: query, state: st)
       }
     }

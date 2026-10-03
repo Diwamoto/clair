@@ -954,12 +954,23 @@ extension CommandRegistry {
     },
     cmd("editor.references", "参照を検索", .read, ai: false, shortcut: "⌃⌘R",
         preflight: { s, _ throws(CommandError) in try require(s.active != nil, tr("ファイルが開かれていません")); return .read }) { _, _ in .ok },
-    // No LSP-backed `format` yet (spec §14 roadmap item), so this only covers formats with no server
-    // dependency (JSON via `DocumentFormatter`). The GUI performs the actual buffer edit, like editor.fold.
+    // The language server's `textDocument/formatting`, else a server-free formatter (JSON via `DocumentFormatter`).
+    // The GUI performs the actual buffer edit, like editor.fold.
     cmd("editor.format", "ドキュメントを整形", .write, ai: false, shortcut: "⌃⌥F",
         preflight: { s, _ throws(CommandError) in
-          try require(s.active.map(DocumentFormatter.supports) == true, tr("対応していないファイル形式です")); return .write
+          try require(s.active.map(DocumentFormatter.mayFormat) == true, tr("対応していないファイル形式です")); return .write
         }) { _, _ in .ok },
+    // Language features at the active editor's caret; like editor.definition the registry validates and the GUI asks
+    // the language server and shows the result on the view.
+    cmd("editor.hover", "ホバー情報を表示", .read, ai: false,
+        preflight: { s, _ throws(CommandError) in try require(s.active != nil, tr("ファイルが開かれていません")); return .read }) { _, _ in .ok },
+    cmd("editor.rename", "シンボルの名前を変更", .read, ai: false,
+        preflight: { s, _ throws(CommandError) in try require(s.active != nil, tr("ファイルが開かれていません")); return .read }) { _, _ in .ok },
+    cmd("editor.codeAction", "クイックフィックス…", .read, ai: false, shortcut: "⌘.",
+        preflight: { s, _ throws(CommandError) in try require(s.active != nil, tr("ファイルが開かれていません")); return .read }) { _, _ in .ok },
+    cmd("editor.fileSymbols", "ファイル内のシンボルへ移動", .read, ai: false, shortcut: "⌘⇧O",
+        preflight: { s, _ throws(CommandError) in try require(s.active != nil, tr("ファイルが開かれていません")); return .read }) { _, _ in .ok },
+    cmd("editor.problems", "問題の一覧", .read, ai: false, shortcut: "⌘⇧M") { _, _ in .ok },
     // V08. Reading history is `state.snapshot`; mute changes what the user is told, so ai: false.
     cmd("notice.markRead", "通知を既読にする", .write, params: [CommandParam("project", .string, required: false)]) { s, i in
       s.notices.markRead(project: i["project"]?.string); return .ok

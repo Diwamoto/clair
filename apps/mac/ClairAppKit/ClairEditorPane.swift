@@ -302,6 +302,12 @@
     /// The live editor view of `path`, for commands that act on its caret (fold/unfold).
     func view(_ path: String) -> ClairEditorView? { views[path]?.view }
 
+    /// The language features (hover, rename, code actions, signature help) of `path`'s live view.
+    private var featureControllers: [String: WeakFeatures] = [:]
+    private struct WeakFeatures { weak var controller: LanguageFeatures? }
+    func attachFeatures(_ path: String, _ controller: LanguageFeatures) { featureControllers[path] = WeakFeatures(controller: controller) }
+    func features(_ path: String) -> LanguageFeatures? { featureControllers[path]?.controller }
+
     func attachFolds(_ path: String, view: ClairEditorView) {
       views[path] = WeakView(view: view)
       if let saved = savedFolds[path], saved.revision == view.snapshot.revision { view.folds = saved.folds }
@@ -618,6 +624,7 @@
     final class Coordinator {
       var nonce = 0
       var completion: CompletionController?
+      var features: LanguageFeatures?
       var wasFocused = false
     }
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -649,8 +656,16 @@
       let completion = CompletionController(language: buffers.language, path: root + "/" + path, root: root)
       completion.view = view
       context.coordinator.completion = completion
-      view.keyInterceptor = { [weak completion] in completion?.handle($0) ?? false }
-      view.onCommitEdits = { [weak view, manager, onEdit, buffers, path, root, weak completion] edits in
+      let features = LanguageFeatures(language: buffers.language, path: root + "/" + path, root: root)
+      features.view = view
+      context.coordinator.features = features
+      buffers.attachFeatures(path, features)
+      view.keyInterceptor = { [weak completion, weak features] event in
+        if features?.handle(event) == true { return true }
+        return completion?.handle(event) ?? false
+      }
+      view.onPointerOffset = { [weak features] in features?.pointer(at: $0) }
+      view.onCommitEdits = { [weak view, manager, onEdit, buffers, path, root, weak completion, weak features] edits in
         guard let view else { return }
         let old = manager.buffer.snapshot
         guard let new = try? manager.apply(edits) else { return }
@@ -662,12 +677,13 @@
         // E12: the server sees the same incremental edit, in order, then the list refilters.
         buffers.language.change(root + "/" + path, root: root, edits: edits, old: old, new: new)
         completion?.didEdit(edits)
+        features?.didEdit(edits)
         // E11: background differential reparse; never blocks this closure,
         // never touches `manager` (INV-REV-002 — see `updateHighlights`'s
         // doc comment).
         buffers.updateHighlights(path, edits: edits, oldSnapshot: old, newSnapshot: new)
       }
-      let replay: (Bool) -> Void = { [weak view, manager, onEdit, onCaret, buffers, path, root, weak completion] redo in
+      let replay: (Bool) -> Void = { [weak view, manager, onEdit, onCaret, buffers, path, root, weak completion, weak features] redo in
         guard let view else { return }
         let old = manager.buffer.snapshot
         guard let new = try? (redo ? manager.redo() : manager.undo()) else { return }
@@ -680,12 +696,13 @@
         onCaret(manager.selection)
         buffers.language.change(root + "/" + path, root: root, edits: edits, old: old, new: new)
         completion?.didEdit(edits)
+        features?.didEdit(edits)
         buffers.updateHighlights(path, edits: edits, oldSnapshot: old, newSnapshot: new)
       }
       view.onUndo = { replay(false) }
       view.onRedo = { replay(true) }
-      view.onSelectionChange = { [weak manager, onCaret, weak completion] in
-        manager?.setSelection($0); onCaret($0); completion?.didMoveCaret()
+      view.onSelectionChange = { [weak manager, onCaret, weak completion, weak features] in
+        manager?.setSelection($0); onCaret($0); completion?.didMoveCaret(); features?.didMoveCaret()
       }
       if let onDefinition {
         view.onGoToDefinition = onDefinition

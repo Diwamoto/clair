@@ -51,6 +51,9 @@ import ClairEditorCore
     public var onDefinitionHover: ((TextUTF8Range?) -> Void)?
     /// ⌘-click on the link (after the caret moved there) and F12.
     public var onGoToDefinition: (() -> Void)?
+    /// The text offset under a pointer moving with no modifier held (nil off text or when it leaves the view),
+    /// for the host's hover information. Reported on every move; the host debounces.
+    public var onPointerOffset: ((UTF8Offset?) -> Void)?
     var highlightIndex = EditorSpanIndex<EditorHighlightSpan>([], range: \.range)
     var diagnosticIndex = EditorSpanIndex<EditorDiagnosticSpan>([], range: \.range)
     public var tokenColors: [EditorTokenKind: NSColor] = [:] {
