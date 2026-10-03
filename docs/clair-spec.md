@@ -295,6 +295,17 @@ macOS の `NSTextInputClient` は行ローカルの UTF-16 空間で答える(�
 - HTML / HTM のプレビュー(preview と同じボタン・⌘⇧V で開き、未保存 buffer の内容と JavaScript の動作を表示)。相対パスの local file 参照はプレビュー対象ファイルと同じフォルダ内のみ解決できる(`..` や symlink でそのフォルダの外へは出られない)。プレビュー内でのページ遷移は許可しない。JavaScript とリモートリソースはネットワーク通信できる。WebView は非永続のデータストアを使う。明示的にクリックした http/https/mailto リンクは既定のアプリで開く。WebView は editor の入力・描画経路に使用しない
 - 画像の表示(UTF-8 テキストでなく NSImage が読めるファイルは editor tab で読み取り専用に表示し、pane より大きければ縮小、拡大はしない。SVG はテキストとして開く)
 - 定義ジャンプの直接操作(⌘+click、F12、前後の位置へ戻る/進む)
+- 言語機能(2026-10-03 オーナー依頼「LSP をめっちゃ強化」)。すべて generic LSP 経由で、server のない言語では出さない
+  - 言語ごとの既定 server: gopls / typescript-language-server / pyright / rust-analyzer / sourcekit-lsp / clangd / ruby-lsp / jdtls / intelephense / terraform-ls / bash-language-server / vscode-{json,html,css}-language-server / yaml-language-server / taplo / marksman。PATH にないものは状態表示だけで動かない
+  - hover: 修飾キーなしで単語の上に 450 ms 止めると補完と同じ見た目の popup に表示。`editor.hover` でキャレット位置
+  - 引数のヒント: server の trigger 文字(`(` `,` 等)で開き、呼び出しの中にいる間は編集・移動に追従、Esc で閉じる
+  - 補完: snippet は展開して最初の stop を選択(Tab での stop 移動はしない)。auto-import 等の追加編集は同じ 1 undo 単位で適用
+  - rename(F2 / `editor.rename`): prepareRename の範囲に入力欄を出し、確定で workspace 全体の編集を適用する
+  - クイックフィックス(⌘. / `editor.codeAction`): 選択範囲かキャレットの code action を一覧し、選ぶと編集と server command を実行する
+  - server からの編集(rename、code action、`workspace/applyEdit`)は、active Project で開いている buffer へは未保存の 1 transaction として、それ以外のファイルへは disk へ直接書く。file の作成・改名・削除を含む編集は適用しない
+  - 整形(`editor.format`)は server の formatting、なければ JSON の内蔵 formatter。保存時に整形は server の結果を受け取ってから再保存する
+  - ファイル内のシンボル(⌘⇧O)と問題の一覧(⌘⇧M、開いている文書の診断を重要度順)を参照一覧と同じ palette に出す
+  - 保存時に `didSave` を送る
 
 見た目の基本として次を持つ(2026-09-26 オーナー決定)。
 
@@ -306,6 +317,7 @@ macOS の `NSTextInputClient` は行ローカルの UTF-16 空間で答える(�
 - フォントと表示(2026-09-29 オーナー依頼): 設定 › エディタ・ターミナルの「表示」で、それぞれフォント(インストール済みの等幅フォント、既定はシステム等幅)と文字サイズ(既定はエディタ 12・ターミナル 13)を選べる。エディタは行番号の表示、ターミナルはカーソルの形(ブロック / バー / 下線)と点滅を切り替えられる。変更は開いている editor と実行中の terminal へ再起動なしで反映する。未インストールになったフォントはシステム等幅で表示する
 
 minimap、AI inline 補完(2026-09-27 オーナー決定)、VS Code extension 互換、独自 plugin runtime は対象外。
+inlay hint と semantic token は未対応(editor の描画に inline の仮想テキストを持たないため)。
 
 ## 6. AI review
 
@@ -319,6 +331,10 @@ Project の root で agent を起動する。
 報告することを含める。結果は起動した terminal に表示する。未保存の editor
 buffer が対象に含まれる場合は保存を促し、ディスクと異なる内容を黙って渡さない。
 この操作は既存の agent launch と同じ Project / session / 承認境界を通る。
+依頼には `clair review.comment` / `review.suggest` で指摘を Clair へ返す手順も含め、
+Claude Code にはその 3 コマンド(`review.comment` / `review.suggest` / `review.threads`)
+だけを `--allowedTools` で許可して起動する。返せない provider や失敗時は terminal の
+報告だけが残る。
 
 review コメントは行番号や画面上の吹き出しとして保存しない。anchor は最低限
 次を持つ。
@@ -414,7 +430,9 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
 - branch review は base に対する全差分を、commit 済みと未 commit/untracked に
   分けて表示する
 - adoption 前に clean commit を要求し、採用は merge commit で行う
-- conflict は merge editor または対象 worktree の agent で解決する
+- conflict は merge editor または対象 worktree の agent で解決する。merge editor は Git が unmerged と報告するファイルの editor 上部の競合バーで、caret の位置(またはその次)の競合ブロックを「現在 / 取り込み / 両方」で置き換える(各 1 undo 単位)。前後の競合へ移動でき、「Agent で解決」は Project の agent に依頼文を入力し、競合が無くなると「解決済みにする」(保存して `git add`)が押せる。`worktree.adopt` が競合で中止したときは `worktree.mergeBase` で base を worktree に取り込んで同じ方法で解決する
+- diff の変更ブロック単位で stage / unstage できる(`git.stagePatch`。1 ファイルの 1 hunk の patch を `git apply --cached --recount` で index に当てる)
+- agent への指示ファイル(Project root の `AGENTS.md` / `CLAUDE.md`、`~/.claude/CLAUDE.md`)を palette から開き、無ければ雛形で作る
 - worktree/branch の削除は個別に確認する
 - Git なし Project では Git 機能を出さない
 
@@ -432,9 +450,15 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   active Project のタブ列の末尾に開く(root からの相対パス `../…`、explorer には出さない)
 - Clair の terminal からの `clair open` は承認なしで実行し、Clair を前面に出す。MCP の `file.open` は既に開いている Project 内の file だけを開け、Project を新規作成できない
 - MCP の `editor.context` は現在の editor file と選択範囲の位置、明示的に選択された text(最大 16 KiB)を返す。選択内容は workspace に保存しない
+- agent 向けの IDE context(すべて AI 可、承認なし)。対象 file は開いている Project 内の既存 file に限り(絶対 path か active Project からの相対 path、`..` 不可)、それ以外は拒否する
+  - `editor.diagnostics [path]`(read): language server が開いている文書(Clair の editor で開いた file)の診断を、1 始まりの行・0 始まりの UTF-16 桁・severity・message で返す。active Project の文書だけで、編集後は表示中と同じ rebase 済みの位置を返す
+  - `review.threads [path]`(read): review thread を現在の file 上の行・stale・状態・コメントで返す
+  - `review.comment path line [endLine] body`(additive): agent 作者の review thread を追加する。file は変更しない
+  - `review.suggest path line [endLine] replacement [body]`(additive): 行 line..endLine を置き換える提案を追加する。active Project の editor buffer の revision に束縛し、適用は利用者が diff で行う(1 undo 単位、未保存)。他の Project の file は拒否する
 - `clair preview <html-path>` は HTML file を開き、JavaScript 対応の preview pane を表示して Clair を前面に出す。CLI からの実行前に GUI 承認を求め、MCP には公開しない。`clair-preview` Agent skill は生成した HTML artifact を Clair で見せる方法を Claude / Codex / OpenCode に案内する
 - Clair.app は text file の document type を宣言し、macOS の「このアプリケーションで
   開く」/既定アプリに設定できる。Finder から開いた file は `clair open` と同じ経路を通る
+- Claude Code の IDE 連携([ADR-0022](decisions/0022-claude-code-ide-integration.md)): Clair は 127.0.0.1 の WebSocket と `~/.claude/ide/<port>.lock` で Claude Code の IDE として振る舞い、Clair の terminal に `CLAUDE_CODE_SSE_PORT` を渡す。選択範囲・開いているファイル・診断を答え、`openDiff` の提案は「提案」diff タブで承認 / 却下するまで応答を保留する(承認すると Claude Code がファイルを書く)。開いている Project の外のファイルの提案は Claude Code 自身の承認に任せる。選択の変化を通知し、⌥⌘K で選択範囲を接続中の Claude Code の入力へ渡す
 - 起動中 Clair を操作する CLI を提供する
 - `clair mcp serve` の stdio adapter で AI 向け command を公開する
 - Clair の terminal 内の agent は CLI/MCP で子 agent を起動(prompt・worktree 指定)、状態確認、完了待ち、出力回収、pane の close ができる。子 agent 起動と worktree 作成は AI に公開するが `external` risk として GUI 承認を必須にする。terminal 内から来た CLI 呼び出しも AI 経由として同じ gate を通す
@@ -511,7 +535,8 @@ cutover 条件には含めないが、この順で追う。
 
 1. **Go editor support**: generic LSP 基盤を gopls で第一級にする。補完、診断、
    定義ジャンプ、参照検索、rename、code action、format、symbol 検索。Swift/Rust を
-   第一級にすることは約束に含めない。
+   第一級にすることは約束に含めない。(2026-10-03: hover、引数のヒント、rename、code action、format、
+   ファイル内シンボル、問題の一覧を generic LSP で全言語に実装。§5.11)
 2. **Debugger**: DAP を共通基盤とし、Go/Delve を最初の第一級 debugger にする。
 3. **Mobile branch review**: branch 全体の diff review、merge 承認、対応 agent の
    structured prompt/interrupt。

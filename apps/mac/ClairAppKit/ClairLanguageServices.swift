@@ -27,6 +27,8 @@
     @ObservationIgnored private var sinks: [String: (TextRevision, [EditorDiagnosticSpan]) -> Void] = [:]
     /// Where servers are looked up; nil = the login-shell PATH (resolved off the main thread on first use).
     @ObservationIgnored private let searchPath: String?
+    /// Applies an edit a server asked for (`workspace/applyEdit`, e.g. a code action's command); true when applied.
+    @ObservationIgnored var onWorkspaceEdit: ((LanguageServerWorkspaceEdit) -> Bool)?
 
     init(searchPath: String? = nil) { self.searchPath = searchPath }
 
@@ -59,7 +61,8 @@
         onDiagnostics: { [weak self] path, revision, spans in
           Task { @MainActor in self?.deliver(path, revision, spans) }
         },
-        onStatus: { [weak self] s in Task { @MainActor in self?.status[key] = s } })
+        onStatus: { [weak self] s in Task { @MainActor in self?.status[key] = s } },
+        onApplyEdit: { [weak self] edit in await MainActor.run { self?.onWorkspaceEdit?(edit) ?? false } })
       clients[key] = client
       return client
     }
@@ -126,6 +129,55 @@
 
     func triggerCharacters(_ path: String, root: String) async -> Set<String> {
       await ask(path, root: root) { await $0.triggerCharacters } ?? []
+    }
+
+    func signatureTriggerCharacters(_ path: String, root: String) async -> Set<String> {
+      await ask(path, root: root) { await $0.signatureTriggerCharacters } ?? []
+    }
+
+    func hover(_ path: String, root: String, at offset: UTF8Offset) async -> String? {
+      await ask(path, root: root) { await $0.hover(path: path, at: offset) }
+    }
+
+    func signatureHelp(_ path: String, root: String, at offset: UTF8Offset) async -> LanguageServerSignature? {
+      await ask(path, root: root) { await $0.signatureHelp(path: path, at: offset) }
+    }
+
+    func prepareRename(_ path: String, root: String, at offset: UTF8Offset, fallback: TextUTF8Range?) async -> (range: TextUTF8Range, placeholder: String)? {
+      await ask(path, root: root) { await $0.prepareRename(path: path, at: offset, fallback: fallback) }
+    }
+
+    func rename(_ path: String, root: String, at offset: UTF8Offset, to name: String) async -> LanguageServerWorkspaceEdit? {
+      await ask(path, root: root) { await $0.rename(path: path, at: offset, to: name) }
+    }
+
+    func codeActions(_ path: String, root: String, range: TextUTF8Range) async -> [LanguageServerCodeAction] {
+      await ask(path, root: root) { await $0.codeActions(path: path, range: range) } ?? []
+    }
+
+    func run(_ action: LanguageServerCodeAction, path: String, root: String) async {
+      _ = await ask(path, root: root) { client -> Bool? in await client.run(action); return true }
+    }
+
+    /// nil when no server formats `path` (the caller falls back to `DocumentFormatter`).
+    func format(_ path: String, root: String, tabSize: Int, insertSpaces: Bool) async -> (edits: [TextEdit], snapshot: TextSnapshot)? {
+      await ask(path, root: root) { client in
+        guard await client.formats else { return nil }
+        return await client.format(path: path, tabSize: tabSize, insertSpaces: insertSpaces)
+      }
+    }
+
+    func documentSymbols(_ path: String, root: String) async -> [LanguageServerDocumentSymbol] {
+      await ask(path, root: root) { await $0.documentSymbols(path: path) } ?? []
+    }
+
+    func save(_ path: String, root: String) {
+      feed(path, root: root) { await $0.save(path: path) }
+    }
+
+    /// Every diagnostic currently published, by absolute path (for the problems list).
+    var allDiagnostics: [(path: String, revision: TextRevision, spans: [EditorDiagnosticSpan])] {
+      diagnostics.map { ($0.key, $0.value.revision, $0.value.spans) }.sorted { $0.path < $1.path }
     }
 
     /// `workspace/symbol` across every server already running for `root`.
