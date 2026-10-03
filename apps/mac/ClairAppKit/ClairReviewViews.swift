@@ -387,6 +387,8 @@
     var commentable = true
     /// The commit view pins its own per-file header instead.
     var showsHeader = true
+    /// Stages one change block (unstages it in a staged diff): the block's patch and whether to apply it in reverse.
+    var onStageBlock: ((_ patch: String, _ reverse: Bool) -> Void)? = nil
     @State private var composing: Int?
     @State private var draft = ""
     @State private var suggesting = false
@@ -415,6 +417,8 @@
       let added: Int
       let removed: Int
       let hunks: [Int]
+      /// Change blocks (runs of added/removed rows) by their first row, for staging one block.
+      var blocks: [Int: Range<Int>] = [:]
       let visibleLines: Set<Int>
       /// Per row: the start index of the folded unchanged run it belongs to (nil = always shown).
       let fold: [Int?]
@@ -439,9 +443,11 @@
     nonisolated static func model(_ text: String) -> Model {
       let parsed = rows(text)
       let counts = stats(parsed)
+      let blocks = GitPatch.blocks(parsed.map { DiffLine(text: $0.text, oldLine: $0.oldLine, newLine: $0.newLine) })
       return Model(
         text: text, rows: parsed, added: counts.added, removed: counts.removed,
         hunks: parsed.indices.filter { parsed[$0].text.hasPrefix("@@") },
+        blocks: Dictionary(uniqueKeysWithValues: blocks.map { ($0.lowerBound, $0) }),
         visibleLines: Set(parsed.compactMap(\.newLine)), fold: folds(parsed))
     }
 
@@ -592,6 +598,16 @@
                     }.buttonStyle(.plain).help(tr("折りたたまれた行を展開"))
                   }
                   if shown(p.id) {
+                    if let onStageBlock, let block = model.blocks[p.id] {
+                      Button {
+                        let lines = rows.map { DiffLine(text: $0.text, oldLine: $0.oldLine, newLine: $0.newLine) }
+                        onStageBlock(GitPatch.patch(path: target.path, rows: lines, block: block), target.staged)
+                      } label: {
+                        Label(target.staged ? tr("このブロックのステージを解除") : tr("このブロックをステージ"), systemImage: target.staged ? "minus" : "plus")
+                          .font(Typography.font(Typography.micro)).foregroundStyle(C.textTertiary)
+                          .padding(.leading, 56).frame(height: 18)
+                      }.buttonStyle(.hoverWash)
+                    }
                     pairRow(p, half: half, width: viewport.size.width).id(p.id)
                     if let n = r.newLine {
                       ForEach(threads[n] ?? []) { thread($0) }

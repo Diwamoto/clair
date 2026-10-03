@@ -208,6 +208,14 @@ import Observation
       watchProject(refresh: true)
       buffers.language.onWorkspaceEdit = { [weak self] in self?.applyWorkspaceEdit($0) ?? false }
       buffers.onAskAgent = { [weak self] in self?.askAgent($0) }
+      buffers.onMarkResolved = { [weak self] path in
+        guard let self else { return }
+        Task {
+          guard await self.saveFile(path) else { return }
+          self.run("git.stage", ["path": .string(path)])
+          self.gitRevision += 1
+        }
+      }
       state.dropProposalTabs()
       if Self.main === self { startClaudeIDE() }
     }
@@ -494,7 +502,7 @@ import Observation
     /// Rows of the symbols / references palette (filled from the language server, not the registry).
     private(set) var languageItems: [PaletteItem] = []
     /// A one-line result of the last navigation ("定義が見つかりません" …), shown in the status bar.
-    private(set) var languageNotice: String?
+    var languageNotice: String?
 
     private func item(_ l: LanguageServerLocation, root: String) -> PaletteItem {
       let shown = l.path.hasPrefix(root + "/") ? String(l.path.dropFirst(root.count + 1)) : l.path
@@ -2006,7 +2014,9 @@ import Observation
         let snapshot = await (loadedChanges, loadedBranch, loadedBranches, loadedSync)
         guard !Task.isCancelled, store.activeRoot == root else { return }
         changes = snapshot.0 ?? []; changesLoaded = snapshot.0 != nil; branch = snapshot.1; branches = snapshot.2; sync = snapshot.3
-        for target in st.diffTabs where !changes.contains(where: { $0.path == target.path }) {
+        store.buffers.conflictedPaths = Set(changes.filter(\.conflicted).map(\.path))
+        // A proposal (ADR-0022) is about a file that need not have changed yet; it stays until answered.
+        for target in st.diffTabs where target.proposal == nil && !changes.contains(where: { $0.path == target.path }) {
           store.run("diff.close", diffInput(target))
         }
         if diff != nil { loadDiff() }
@@ -2601,7 +2611,13 @@ import Observation
             onSave: d.staged ? nil : {
               Task { if await store.saveFile(d.path) { loadDiff(clear: false) } }
             },
-            isDirty: st.dirty.contains(d.path))
+            isDirty: st.dirty.contains(d.path),
+            onStageBlock: d.untracked || d.against != nil ? nil : { patch, reverse in
+              if case .success(.text(let message)) = store.run("git.stagePatch", ["patch": .string(patch), "reverse": .bool(reverse)]) {
+                store.languageNotice = message
+              }
+              reloadChanges()
+            })
           .id(d)
           }
         } else if diff != nil {

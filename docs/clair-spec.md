@@ -430,7 +430,9 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
 - branch review は base に対する全差分を、commit 済みと未 commit/untracked に
   分けて表示する
 - adoption 前に clean commit を要求し、採用は merge commit で行う
-- conflict は merge editor または対象 worktree の agent で解決する
+- conflict は merge editor または対象 worktree の agent で解決する。merge editor は Git が unmerged と報告するファイルの editor 上部の競合バーで、caret の位置(またはその次)の競合ブロックを「現在 / 取り込み / 両方」で置き換える(各 1 undo 単位)。前後の競合へ移動でき、「Agent で解決」は Project の agent に依頼文を入力し、競合が無くなると「解決済みにする」(保存して `git add`)が押せる。`worktree.adopt` が競合で中止したときは `worktree.mergeBase` で base を worktree に取り込んで同じ方法で解決する
+- diff の変更ブロック単位で stage / unstage できる(`git.stagePatch`。1 ファイルの 1 hunk の patch を `git apply --cached --recount` で index に当てる)
+- agent への指示ファイル(Project root の `AGENTS.md` / `CLAUDE.md`、`~/.claude/CLAUDE.md`)を palette から開き、無ければ雛形で作る
 - worktree/branch の削除は個別に確認する
 - Git なし Project では Git 機能を出さない
 

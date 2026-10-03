@@ -308,6 +308,21 @@
     func attachFeatures(_ path: String, _ controller: LanguageFeatures) { featureControllers[path] = WeakFeatures(controller: controller) }
     /// Types a request into the active Project's agent; set by the workbench store.
     @ObservationIgnored var onAskAgent: ((String) -> Void)?
+    /// Files Git reports as unmerged in the active Project; their editors show the conflict bar.
+    var conflictedPaths: Set<String> = []
+    /// Saves a conflicted file and stages it (`git add`), marking it resolved; set by the workbench store.
+    @ObservationIgnored var onMarkResolved: ((String) -> Void)?
+    @ObservationIgnored private var conflictCache: [String: (revision: TextRevision, conflicts: [MergeConflict])] = [:]
+
+    /// The conflict blocks of an open conflicted file, parsed once per revision.
+    func conflicts(_ path: String) -> [MergeConflict] {
+      guard conflictedPaths.contains(path), case .ready(let m)? = loads[path] else { return [] }
+      let snapshot = m.buffer.snapshot
+      if let cached = conflictCache[path], cached.revision == snapshot.revision { return cached.conflicts }
+      let found = MergeConflict.parse(snapshot.string())
+      conflictCache[path] = (snapshot.revision, found)
+      return found
+    }
     func features(_ path: String) -> LanguageFeatures? { featureControllers[path]?.controller }
 
     func attachFolds(_ path: String, view: ClairEditorView) {
@@ -430,6 +445,10 @@
         case .ready(let m)?:
           VStack(spacing: 0) {
             breadcrumb(path)
+            if buffers.conflictedPaths.contains(path) {
+              let _ = buffers.edits[path]  // re-read the conflicts after every edit
+              ConflictBar(buffers: buffers, path: path, conflicts: buffers.conflicts(path))
+            }
             ZStack(alignment: .topTrailing) {
               EditorSurface(
                 manager: m, buffers: buffers, root: root, path: path, softWrap: softWrap, style: style, focused: focused,
@@ -760,6 +779,77 @@
       guard let r = reveal, r.nonce != context.coordinator.nonce, let view = scroll.documentView as? ClairEditorView else { return }
       context.coordinator.nonce = r.nonce
       DispatchQueue.main.async { view.reveal(line: r.line - 1, utf16Column: r.column) }  // after the new view is laid out and in a window
+    }
+  }
+
+  /// Above a conflicted file's editor: how many conflict blocks remain, a way to step through them, and the choices
+  /// for the block at (or after) the caret. Each choice is one undoable edit; "解決済みにする" saves and stages the file.
+  struct ConflictBar: View {
+    let buffers: EditorBuffers
+    let path: String
+    let conflicts: [MergeConflict]
+
+    /// The block the caret is in, else the next one below it, else the first.
+    private var current: Int? {
+      guard !conflicts.isEmpty else { return nil }
+      let line = (buffers.caret[path]?.line ?? 1) - 1
+      return conflicts.firstIndex { $0.endLine >= line } ?? 0
+    }
+
+    var body: some View {
+      HStack(spacing: 8) {
+        Image(systemName: "arrow.triangle.merge").font(.system(size: 11)).foregroundStyle(C.attention)
+        if conflicts.isEmpty {
+          Text(tr("競合はすべて解決されました")).foregroundStyle(C.textSecondary)
+        } else {
+          Text(tr("競合 %@ 件", conflicts.count)).foregroundStyle(C.textSecondary)
+          ForEach([-1, 1], id: \.self) { d in
+            Button { step(d) } label: { Image(systemName: d < 0 ? "chevron.up" : "chevron.down") }
+              .buttonStyle(.hoverWash).foregroundStyle(C.textTertiary).help(d < 0 ? tr("前の競合") : tr("次の競合"))
+          }
+          if let i = current {
+            let c = conflicts[i]
+            Button(c.oursLabel.isEmpty ? tr("現在の変更") : tr("現在 (%@)", c.oursLabel)) { resolve(c, .ours) }.buttonStyle(.hoverWash)
+            Button(c.theirsLabel.isEmpty ? tr("取り込む変更") : tr("取り込み (%@)", c.theirsLabel)) { resolve(c, .theirs) }.buttonStyle(.hoverWash)
+            Button(tr("両方")) { resolve(c, .both) }.buttonStyle(.hoverWash)
+          }
+        }
+        Spacer(minLength: 8)
+        if !conflicts.isEmpty {
+          Button(tr("Agent で解決")) { buffers.onAskAgent?(tr("@%@ の merge conflict を解決してください。", path)) }
+            .buttonStyle(.hoverWash).foregroundStyle(C.textSecondary)
+        }
+        Button(tr("解決済みにする")) { buffers.onMarkResolved?(path) }
+          .buttonStyle(.hoverWash).foregroundStyle(conflicts.isEmpty ? C.textPrimary : C.textQuaternary)
+          .disabled(!conflicts.isEmpty).help(tr("保存して git add します"))
+      }
+      .font(Typography.font(Typography.chrome)).lineLimit(1)
+      .padding(.horizontal, 12).frame(height: 30)
+      .background(C.attention.opacity(0.08))
+      .overlay(alignment: .bottom) { Rectangle().fill(DesignTokens.Line.hairline).frame(height: 1) }
+      .accessibilityElement(children: .contain).accessibilityLabel(tr("マージ競合"))
+    }
+
+    private func step(_ d: Int) {
+      guard let i = current, let view = buffers.view(path) else { return }
+      let line = (buffers.caret[path]?.line ?? 1) - 1
+      let inside = conflicts[i].startLine <= line && line <= conflicts[i].endLine
+      let next = d > 0 ? (inside ? i + 1 : i) : i - 1
+      let target = conflicts[(next % conflicts.count + conflicts.count) % conflicts.count]
+      view.reveal(line: target.startLine, utf16Column: 0)
+      view.window?.makeFirstResponder(view)
+    }
+
+    /// Replaces the block's lines (markers included) with the chosen side; an empty choice also drops the line break.
+    private func resolve(_ c: MergeConflict, _ choice: MergeConflict.Choice) {
+      guard let view = buffers.view(path), let first = try? view.snapshot.line(at: TextLineIndex(c.startLine)),
+        let last = try? view.snapshot.line(at: TextLineIndex(c.endLine))
+      else { return }
+      let lines = c.resolution(choice)
+      let range = lines.isEmpty
+        ? TextUTF8Range(first.contentRange.lowerBound, last.terminatorRange.upperBound)
+        : TextUTF8Range(first.contentRange.lowerBound, last.contentRange.upperBound)
+      view.onCommitEdits?([TextEdit(range: range, replacement: lines.joined(separator: "\n"))])
     }
   }
 #endif

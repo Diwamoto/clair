@@ -1062,7 +1062,7 @@ extension CommandRegistry {
     cmd("debug.stop", "デバッグを終了", .write, ai: false,
         preflight: { s, _ throws(CommandError) in try require(!["idle", "ended"].contains(s.debugPhase), tr("終了する session がありません")); return .write }) { _, _ in .ok },
     cmd("state.snapshot", "状態を取得", .read, palette: false) { s, _ in .snapshot(s) },
-  ] + gitCommands + agentContextCommands
+  ] + gitCommands + agentContextCommands + mergeCommands
 
   private static func shortcutSet(_ known: [CommandDescriptor]) -> Command {
     // V11. Only commands runnable without arguments can hold a shortcut. "" unassigns. ai: false — keys are the user's.

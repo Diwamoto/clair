@@ -18,6 +18,11 @@ All notable changes to Clair are documented here. The format follows
 - Go to Symbol in File (⌘⇧O) and Show Problems (⌘⇧M).
 - Completions expand snippets and apply auto-imports in the same undo step.
 - Language servers for C, Ruby, Java, PHP, Terraform, shell, JSON, HTML, CSS, YAML, TOML and Markdown, used when installed.
+- Merge conflicts: a conflicted file's editor shows a conflict bar to take the current, incoming or both sides block by block, step between conflicts, ask the agent to resolve them, and mark the file resolved.
+- Stage or unstage a single change block from the diff.
+- Merge Base Branch brings the base into a managed worktree whose adoption conflicted.
+- "Fix with Agent" in the quick-fix list, Send Selection to Agent, and Ask Agent About Terminal Selection.
+- Edit AGENTS.md / CLAUDE.md (Project or user) from the command palette; missing files start from a template.
 - Claude Code started in a Clair terminal connects to Clair as its IDE: it sees your selection, open files and diagnostics, and its proposed edits open as a diff tab you accept or reject. ⌥⌘K sends the selection to Claude Code.
 
 ### Fixed
