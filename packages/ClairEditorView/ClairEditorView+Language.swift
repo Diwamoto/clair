@@ -26,11 +26,32 @@ import ClairEditorCore
       if toolTip != message { toolTip = message }
       updateDefinitionHover(at: point, flags: event.modifierFlags)
       hoveredBreakpointLine = breakpointSlot(at: point)
+      if let onPointerOffset {
+        let plain = event.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty
+        onPointerOffset(plain && bounds.contains(point) ? hitTestOffset(at: point) : nil)
+      }
     }
 
     public override func mouseExited(with event: NSEvent) {
       super.mouseExited(with: event)
       hoveredBreakpointLine = nil
+      onPointerOffset?(nil)
+    }
+
+    /// The word around `offset` (AppKit's double-click rule), for hover and rename.
+    public func word(at offset: UTF8Offset) -> TextUTF8Range? { wordRange(at: offset) }
+
+    /// The caret rect for `offset`, in this view's (flipped) coordinates.
+    public func rect(for offset: UTF8Offset) -> NSRect? { caretRect(for: offset) }
+
+    /// Selects `range` (a caret when empty), as if the user had: the host is told through `onSelectionChange`.
+    public func select(_ range: TextUTF8Range) {
+      guard range.lowerBound.value <= range.upperBound.value, range.upperBound.value <= snapshot.utf8Count,
+        let set = try? TextSelectionSet([TextSelection(anchor: range.lowerBound, head: range.upperBound)])
+      else { return }
+      selection = set
+      onSelectionChange?(selection)
+      needsDisplay = true
     }
 
     public override func flagsChanged(with event: NSEvent) {

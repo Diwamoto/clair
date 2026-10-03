@@ -1,12 +1,23 @@
 import Foundation
 
-/// Whole-document formatters that don't need a language server. Only JSON today; general source
-/// formatting is future work behind the generic LSP `format` request (docs/clair-spec.md §14 roadmap
-/// item "Go editor support"), which JSON — having no server — will never go through.
+/// Whole-document formatters that don't need a language server. Only JSON; source files go through the
+/// language server's `textDocument/formatting` (the GUI falls back to this when the server cannot format).
 public enum DocumentFormatter {
   public static func supports(_ path: String) -> Bool {
     (path as NSString).pathExtension.lowercased() == "json"
   }
+
+  /// Files `editor.format` is offered for: JSON here, or a language whose server may format it (the GUI asks the
+  /// server and reports when it cannot).
+  // ponytail: mirrors the extensions of `EditorLanguageID` that have a formatting-capable server; keep in step.
+  public static func mayFormat(_ path: String) -> Bool {
+    supports(path) || serverFormatted.contains((path as NSString).pathExtension.lowercased())
+  }
+
+  static let serverFormatted: Set<String> = [
+    "go", "ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "rs", "swift", "c", "h", "rb", "java", "php", "tf", "tfvars", "hcl",
+    "sh", "bash", "zsh", "html", "htm", "css", "yaml", "yml", "toml",
+  ]
 
   /// nil when `path` isn't a supported format or `text` isn't valid JSON.
   public static func format(_ path: String, _ text: String) -> String? {

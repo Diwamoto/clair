@@ -65,8 +65,14 @@ test_integration_packages() {
   # thread on them. Swift Testing otherwise runs suites concurrently on the cooperative
   # pool (one thread per core); on a 3-core CI runner the blocked tests filled the pool and
   # the async bridges they wait on never ran, hanging the job. --num-workers did not cap it.
-  swift test --package-path "$core_package" --no-parallel \
-    --filter ClairCoreIntegrationTests
+  # One process per suite, listed by `swift test list` so none is missed: a test process prints its results only when
+  # it exits, so one run of everything that hangs would leave no trace of the suite it hung in.
+  local suites suite
+  suites="$(swift test --package-path "$core_package" list | grep '^ClairCoreIntegrationTests[./]' | sed 's#/.*##' | sort -u)"
+  for suite in $suites; do
+    printf '== %s\n' "$suite"
+    swift test --package-path "$core_package" --skip-build --no-parallel --filter "^${suite//./\\.}/"
+  done
 }
 
 check_package() {
@@ -77,7 +83,9 @@ check_package() {
 check_sources() {
   # grep, not rg: CI runners do not ship ripgrep, and `if rg` on a missing binary silently passed.
   # Match real v1 dependencies (a WebKit editor, libvterm calls), not prose that names them.
-  if grep -rnE --include='*.swift' \
+  # ClairHTMLPreview.swift is the HTML preview pane, which spec §5.11 / ADR-0018 allow to use WebKit
+  # (never the editor's input or rendering path).
+  if grep -rnE --include='*.swift' --exclude='ClairHTMLPreview.swift' \
     '^[[:space:]]*import (WebKit|ClairTextKit)$|WKWebView\(|vterm_[a-z_]+\(' \
     "$repo_root/packages" "$repo_root/apps" "$repo_root/Package.swift"; then
     printf 'foundation: v1 runtime dependency found in packages.\n' >&2

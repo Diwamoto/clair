@@ -49,12 +49,18 @@ final class DocumentFormatterTests: XCTestCase {
     XCTAssertEqual(DocumentFormatter.format("a.json", "{\"a\":1}"), "{\n  \"a\": 1\n}\n")
   }
 
-  func testFormatCommandRequiresAnOpenSupportedFile() throws {
+  func testFormatCommandRequiresAnOpenFormattableFile() throws {
     var s = WorkbenchState()
+    s.tabs = []; s.active = nil
     XCTAssertThrowsError(try CommandRegistry.workbench.execute("editor.format", state: &s).get())
     s.tabs = ["notes.md"]; s.active = "notes.md"
     XCTAssertThrowsError(try CommandRegistry.workbench.execute("editor.format", state: &s).get())
     s.tabs.append("data.json"); s.active = "data.json"
     XCTAssertNoThrow(try CommandRegistry.workbench.execute("editor.format", state: &s).get())
+    // Source files go to their language server, which the GUI asks.
+    s.tabs.append("main.go"); s.active = "main.go"
+    XCTAssertNoThrow(try CommandRegistry.workbench.execute("editor.format", state: &s).get())
+    XCTAssertTrue(DocumentFormatter.mayFormat("a/b.swift"))
+    XCTAssertFalse(DocumentFormatter.mayFormat("a/b.md"))
   }
 }

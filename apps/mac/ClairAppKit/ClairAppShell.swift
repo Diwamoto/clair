@@ -67,8 +67,13 @@ import Observation
         path: URL(fileURLWithPath: root).appending(path: path).standardizedFileURL.path,
         startLine: start.line.value + 1, startColumn: start.column.value,
         endLine: end.line.value + 1, endColumn: end.column.value, selectedText: text)
+      broadcastSelection()
     }
     let reviews = ReviewStore()
+    /// ADR-0022: the socket Claude Code connects to, and the proposed edits waiting for the user (by proposal path).
+    let claudeIDE = ClaudeIDEServer()
+    var proposals: [String: ClaudeProposal] = [:]
+    var selectionBroadcast: Task<Void, Never>?
     /// V13: a managed worktree is a separate Project and keeps its own debug session.
     private var debugSessions: [String: ClairDebugSession] = [:]
     var debugSession: ClairDebugSession? { activeRoot.flatMap { debugSessions[$0] } }
@@ -130,6 +135,9 @@ import Observation
     /// The first window's store: Finder / `open -a` requests (the app as the default editor) land here.
     private static weak var main: ClairWorkbenchStore?
     private static var pendingOpens: [String] = []
+
+    /// ADR-0022: Clair is quitting; Claude Code must stop finding it.
+    public static func stopClaudeIDE() { main?.stopClaudeIDE() }
 
     /// `application(_:open:)`: each file opens like `clair open path`. Before the first window exists, queued.
     public static func open(files: [String]) {
@@ -198,6 +206,19 @@ import Observation
       Task.detached(priority: .utility) { _ = ClairUpdater.markStartupSuccess(config) }
       startAutomaticUpdateChecks()
       watchProject(refresh: true)
+      buffers.language.onWorkspaceEdit = { [weak self] in self?.applyWorkspaceEdit($0) ?? false }
+      buffers.onAskAgent = { [weak self] in self?.askAgent($0) }
+      buffers.onMarkResolved = { [weak self] path in
+        guard let self else { return }
+        Task {
+          guard await self.saveFile(path) else { return }
+          self.run("git.stage", ["path": .string(path)])
+          self.gitRevision += 1
+        }
+      }
+      state.dropProposalTabs()
+      // Only the running app announces itself to Claude Code; a test's store must not write ~/.claude/ide.
+      if Self.main === self, persistURL != nil, Bundle.main.bundleURL.pathExtension == "app" { startClaudeIDE() }
     }
 
     isolated deinit { ipc?.stop(); updateTask?.cancel(); persistenceTask?.cancel(); releaseSleepAssertion() }
@@ -284,13 +305,17 @@ import Observation
       }
       // `file.save` from any caller (⌘S, CLI, MCP) writes the buffer first; a failed write keeps the dirty marker.
       if id == "file.save", let p = state.active, let root = activeRoot, buffers.isOpen(p) {
-        if state.toggles["formatOnSave"] == true { formatBuffer(p) }
+        let formatting = state.toggles["formatOnSave"] == true && !savingFormatted.contains(p)
+        if formatting { formatBuffer(p) }
         do {
           try buffers.save(p, root: root)
         } catch {
           let e = CommandError(.preconditionFailed, tr("保存できません: %@", error.localizedDescription))
           lastError = e; return .failure(e)
         }
+        buffers.language.save(root + "/" + p, root: root)
+        // A language server formats asynchronously: save what it returns as a second write.
+        if formatting, !DocumentFormatter.supports(p) { formatWithServer(p, root: root, thenSave: true) }
       }
       let closing =
         id == "pane.close" ? Self.terminalKey(root: activeRoot ?? state.project, pane: state.tree.focused)
@@ -342,7 +367,25 @@ import Observation
           default: break
           }
         }
-        if id == "editor.format", let p = state.active { formatBuffer(p) }
+        if id == "editor.format", let p = state.active {
+          if DocumentFormatter.supports(p) { formatBuffer(p) } else if let root = activeRoot { formatWithServer(p, root: root, thenSave: false) }
+        }
+        if let p = state.active, let features = buffers.features(p) {
+          switch id {
+          case "editor.hover": features.hoverAtCaret()
+          case "editor.rename": features.rename()
+          case "editor.codeAction": features.codeActions()
+          default: break
+          }
+        }
+        if id == "editor.fileSymbols" { showFileSymbols() }
+        if id == "editor.problems" { showProblems() }
+        if id == "agent.mention" { mentionSelectionToClaude() }
+        if id == "agent.ask" { askAgentAboutSelection() }
+        if id == "terminal.askAgent" { askAgentAboutTerminalSelection() }
+        // Closing a proposal's tab answers Claude Code's waiting openDiff as rejected (ADR-0022).
+        if id == "diff.close", case .string(let proposal)? = input["proposal"], proposals[proposal] != nil { closeProposal(proposal) }
+        if id.hasPrefix("project.") { refreshClaudeLock() }
         if let closing { ClairDaemonLauncher.closeSession(key: closing); ClairGhosttySurfaceView.discard(key: closing) }  // T09: closing a pane ends its shell; closing a window does not
         if id == "agent.launch" || id == "pane.close" || id == "agent.close"
           || (id == "settings.set" && input["key"] == .string("preventSleepOnBattery"))
@@ -351,6 +394,11 @@ import Observation
         if id == "app.restart" { restartApp() }
         watchProject()
         persistState()
+      }
+      // Agent-context commands: the registry validated the call; the answer comes from the GUI's live state.
+      if case .success = r, let answer = answerAgentContext(id, input) {
+        if case .failure(let e) = answer { lastError = e }
+        return answer
       }
       return r
     }
@@ -455,7 +503,7 @@ import Observation
     /// Rows of the symbols / references palette (filled from the language server, not the registry).
     private(set) var languageItems: [PaletteItem] = []
     /// A one-line result of the last navigation ("定義が見つかりません" …), shown in the status bar.
-    private(set) var languageNotice: String?
+    var languageNotice: String?
 
     private func item(_ l: LanguageServerLocation, root: String) -> PaletteItem {
       let shown = l.path.hasPrefix(root + "/") ? String(l.path.dropFirst(root.count + 1)) : l.path
@@ -518,6 +566,7 @@ import Observation
       if id == "pane.close", let target = state.activeDiff {
         var input: CommandInput = ["path": .string(target.path), "staged": .bool(target.staged), "untracked": .bool(target.untracked)]
         if let against = target.against { input["against"] = .string(against) }
+        if let proposal = target.proposal { input["proposal"] = .string(proposal) }
         _ = run("diff.close", input)
         return
       }
@@ -643,6 +692,141 @@ import Observation
     /// own edit path, the way `ClairMarkdownPreview`'s table commit does: `buffers.refresh` rebuilds
     /// the on-screen surface from the buffer afterward. No-op for an unsupported format, or one already
     /// formatted (so it never manufactures a no-op undo step or a spurious dirty mark).
+    /// Paths whose server-formatted text is being saved, so that save does not format again.
+    private var savingFormatted: Set<String> = []
+
+    /// `textDocument/formatting` into the buffer as one undo unit (through the view when it is live, so the server and
+    /// highlighting see it like typing). With `thenSave` (format on save) a changed buffer is saved again.
+    private func formatWithServer(_ path: String, root: String, thenSave: Bool) {
+      guard EditorLanguageID.detect(path: path)?.languageServer != nil else {
+        if !thenSave { languageNotice = tr("このファイルの言語サーバーはありません") }
+        return
+      }
+      let tab = Int(state.choices["tabWidth"] ?? "") ?? 4
+      Task {
+        guard let (edits, snapshot) = await buffers.language.format(root + "/" + path, root: root, tabSize: tab, insertSpaces: true) else {
+          if !thenSave { languageNotice = tr("言語サーバーはこのファイルを整形できません") }
+          return
+        }
+        guard !edits.isEmpty, activeRoot == root, case .ready(let m)? = buffers.peek(path), m.buffer.snapshot.revision == snapshot.revision
+        else { return }
+        commit(edits, to: path, manager: m, label: tr("ドキュメントの整形"))
+        guard thenSave, state.active == path else { return }
+        savingFormatted.insert(path)
+        _ = run("file.save")
+        savingFormatted.remove(path)
+      }
+    }
+
+    /// One transaction on an open buffer: through its live view (undo, server, highlight, split mirrors), else straight
+    /// into the buffer with the surface rebuilt from it.
+    private func commit(_ edits: [TextEdit], to path: String, manager m: EditorTransactionManager, label: String? = nil) {
+      if let view = buffers.view(path), view.snapshot.revision == m.buffer.snapshot.revision, let typed = view.onCommitEdits {
+        typed(edits)
+        return
+      }
+      guard (try? m.apply(edits, label: label)) != nil else { return }
+      buffers.refresh(path)
+      edited(path)
+    }
+
+    /// Applies a language server's workspace edit (rename, a code action): open buffers of the active Project take it
+    /// as an unsaved transaction; every other file is rewritten on disk (the watcher then refreshes the tree).
+    /// All-or-nothing per file; false when any file could not take its edits.
+    func applyWorkspaceEdit(_ edit: LanguageServerWorkspaceEdit) -> Bool {
+      guard !edit.unsupported else { return false }
+      var ok = true
+      for (absolute, changes) in edit.files where !changes.isEmpty {
+        if let root = activeRoot, absolute.hasPrefix(root + "/") {
+          let rel = String(absolute.dropFirst(root.count + 1))
+          if case .ready(let m)? = buffers.peek(rel) {
+            guard let edits = LanguageServerTextEdit.editorEdits(changes, in: m.buffer.snapshot) else { ok = false; continue }
+            commit(edits, to: rel, manager: m)
+            continue
+          }
+        }
+        guard let text = try? String(contentsOfFile: absolute, encoding: .utf8),
+          let updated = LanguageServerTextEdit.apply(changes, to: text),
+          (try? updated.write(toFile: absolute, atomically: true, encoding: .utf8)) != nil
+        else { ok = false; continue }
+      }
+      return ok
+    }
+
+    /// Types `text` into this Project's running agent terminal and focuses it. No Return: the user reviews and sends.
+    /// Without a running agent the request goes to the clipboard instead.
+    func askAgent(_ text: String, exceptPane: Int? = nil) {
+      let agents = state.agentSessions.filter { $0.project == state.project && !$0.status.isExited }
+      guard let agent = agents.first(where: { $0.pane != exceptPane }) ?? agents.first,
+        ClairGhosttySurfaceView.send(text, toPane: agent.pane)
+      else {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        languageNotice = tr("実行中の Agent がありません。依頼文をコピーしました")
+        return
+      }
+      languageNotice = nil
+      run("pane.focus", ["id": .int(agent.pane)])
+    }
+
+    /// `agent.ask`: the editor selection as an `@file#Lstart-end` reference (the whole file without a selection).
+    private func askAgentAboutSelection() {
+      guard let rel = state.active else { return }
+      guard let c = state.editorContext, c.selectedText != nil else { return askAgent("@\(rel) ") }
+      askAgent(c.startLine == c.endLine ? "@\(rel)#L\(c.startLine) " : "@\(rel)#L\(c.startLine)-\(c.endLine) ")
+    }
+
+    /// `terminal.askAgent`: the focused terminal's selected output, pasted (bracketed) into another agent.
+    private func askAgentAboutTerminalSelection() {
+      let pane = state.tree.focused
+      guard let text = ClairGhosttySurfaceView.selectedText(inPane: pane) else {
+        languageNotice = tr("ターミナルで範囲を選択してください")
+        return
+      }
+      askAgent("\u{1b}[200~" + tr("次のターミナル出力について調べてください:") + "\n" + text + "\u{1b}[201~", exceptPane: pane)
+    }
+
+    /// ⌘⇧O: the active file's symbols in the list palette.
+    private func showFileSymbols() {
+      guard let rel = state.active, let root = activeRoot else { return }
+      guard EditorLanguageID.detect(path: rel)?.languageServer != nil else {
+        languageNotice = tr("このファイルの言語サーバーはありません")
+        return
+      }
+      Task {
+        let symbols = await buffers.language.documentSymbols(root + "/" + rel, root: root)
+        guard activeRoot == root, state.active == rel else { return }
+        guard !symbols.isEmpty else { languageNotice = tr("シンボルが見つかりません"); return }
+        languageNotice = nil
+        languageItems = symbols.map {
+          PaletteItem(
+            title: String(repeating: "  ", count: min($0.depth, 6)) + $0.name, hint: "\(rel):\($0.line + 1)", id: "file.open",
+            input: ["path": .string(root + "/" + rel), "line": .int($0.line + 1), "column": .int($0.character)], detail: $0.detail ?? "")
+        }
+        run("palette.references")
+      }
+    }
+
+    /// ⌘⇧M: every diagnostic of the active Project's open documents, errors first.
+    private func showProblems() {
+      guard let root = activeRoot else { return }
+      let order = ["error": 0, "warning": 1, "information": 2, "hint": 3]
+      let all = agentDiagnostics(in: root, path: nil).sorted {
+        (order[$0.severity] ?? 4, $0.path, $0.line) < (order[$1.severity] ?? 4, $1.path, $1.line)
+      }
+      guard !all.isEmpty else { languageNotice = tr("問題はありません"); return }
+      languageNotice = nil
+      let mark = ["error": "✕", "warning": "⚠︎", "information": "ⓘ", "hint": "·"]
+      languageItems = all.prefix(500).map { d in
+        let rel = d.path.hasPrefix(root + "/") ? String(d.path.dropFirst(root.count + 1)) : d.path
+        return PaletteItem(
+          title: "\(mark[d.severity] ?? "·") \(d.message.split(separator: "\n").first.map(String.init) ?? d.message)",
+          hint: "\(rel):\(d.line)", id: "file.open",
+          input: ["path": .string(d.path), "line": .int(d.line), "column": .int(d.column)])
+      }
+      run("palette.references")
+    }
+
     private func formatBuffer(_ path: String) {
       guard case .ready(let m)? = buffers.peek(path) else { return }
       let old = m.buffer.snapshot
@@ -919,9 +1103,9 @@ import Observation
       if id.hasPrefix("file.") || id.hasPrefix("project.")
         || ["window.restart", "app.restart", "tab.reopenClosed", "tab.close", "pane.close", "palette.recent", "palette.compare"].contains(id) { return .file }
       if id.hasPrefix("editor.fold") || id.hasPrefix("editor.unfold")
-        || ["palette.find", "palette.search", "editor.format"].contains(id) { return .edit }
+        || ["palette.find", "palette.search", "editor.format", "editor.codeAction", "editor.rename"].contains(id) { return .edit }
       if id.hasPrefix("editor.navigate") || id.hasPrefix("pane.focus")
-        || ["editor.definition", "editor.references", "palette.files", "palette.symbols", "palette.references",
+        || ["editor.definition", "editor.references", "palette.files", "palette.symbols", "palette.references", "editor.fileSymbols", "editor.problems",
             "tab.next", "tab.previous", "tab.activate"].contains(id) { return .go }
       return .view
     }
@@ -939,6 +1123,8 @@ import Observation
       "editor.markdownPreview": "Open Preview", "editor.definition": "Go to Definition",
       "editor.references": "Find References", "editor.navigateBack": "Go Back", "editor.navigateForward": "Go Forward",
       "palette.files": "Go to File…", "palette.symbols": "Go to Symbol…", "palette.references": "Find References…",
+      "editor.codeAction": "Quick Fix…", "editor.rename": "Rename Symbol", "editor.fileSymbols": "Go to Symbol in File…",
+      "editor.problems": "Show Problems", "editor.hover": "Show Hover", "agent.mention": "Send Selection to Claude Code",
       "tab.next": "Next Tab", "tab.previous": "Previous Tab", "pane.focusNext": "Focus Next Pane",
       "pane.focusPrevious": "Focus Previous Pane",
     ]
@@ -1117,18 +1303,18 @@ import Observation
         if sidebarMode == "ladybug", let frame { openDebugFrame(frame) }
       }
       .onChange(of: st.project) {
-        diff = st.activeDiff.map { DiffTarget(path: $0.path, staged: $0.staged, untracked: $0.untracked, against: $0.against) }
+        diff = st.activeDiff.map { DiffTarget(path: $0.path, staged: $0.staged, untracked: $0.untracked, against: $0.against, proposal: $0.proposal) }
         loadedDiff = nil; gitMessage = nil; gitFailed = false
         rebuildExplorer(); reloadChanges()
       }
       .onChange(of: st.files) { rebuildExplorer(); reloadChanges() }
       .onChange(of: st.expanded) { rebuildVisibleExplorer() }
       .onChange(of: st.activeDiff) {
-        diff = st.activeDiff.map { DiffTarget(path: $0.path, staged: $0.staged, untracked: $0.untracked, against: $0.against) }
+        diff = st.activeDiff.map { DiffTarget(path: $0.path, staged: $0.staged, untracked: $0.untracked, against: $0.against, proposal: $0.proposal) }
       }
       .onChange(of: diff) { loadDiff() }
       .onAppear {
-        diff = st.activeDiff.map { DiffTarget(path: $0.path, staged: $0.staged, untracked: $0.untracked, against: $0.against) }
+        diff = st.activeDiff.map { DiffTarget(path: $0.path, staged: $0.staged, untracked: $0.untracked, against: $0.against, proposal: $0.proposal) }
         rebuildExplorer(); reloadChanges()
       }
       .task {
@@ -1292,7 +1478,10 @@ import Observation
                 .help(title)
               case .diff(let target):
                 FileTabButton(
-                  path: tab.dragID, name: target.against.map { tr("比較: %@ ↔ %@", name($0), name(target.path)) } ?? tr("差分: %@", name(target.path)), selected: selectedTab == tab, dirty: false,
+                  path: tab.dragID,
+                  name: target.proposal != nil ? tr("提案: %@", name(target.path))
+                    : target.against.map { tr("比較: %@ ↔ %@", name($0), name(target.path)) } ?? tr("差分: %@", name(target.path)),
+                  selected: selectedTab == tab, dirty: false,
                   onActivate: {
                     if !active { store.run("project.switch", ["name": .string(p.name)]) }
                     store.run("diff.activate", diffInput(target))
@@ -1324,6 +1513,7 @@ import Observation
     private func diffInput(_ target: WorkbenchDiffTab) -> CommandInput {
       var input: CommandInput = ["path": .string(target.path), "staged": .bool(target.staged), "untracked": .bool(target.untracked)]
       if let against = target.against { input["against"] = .string(against) }
+      if let proposal = target.proposal { input["proposal"] = .string(proposal) }
       return input
     }
 
@@ -1768,7 +1958,9 @@ import Observation
       case .project:
         guard st.dirty.isEmpty else { return }
       }
-      let input: CommandInput = ["profile": .string(provider), "prompt": .string(AgentReviewRequest.prompt(for: target))]
+      let input: CommandInput = [
+        "profile": .string(provider), "prompt": .string(AgentReviewRequest.prompt(for: target)), "review": .bool(true),
+      ]
       // The labelled button is the user's approval for launching this external tool.
       switch store.run("agent.launch", input, confirmed: true) {
       case .success(.pane(let pane)):
@@ -1823,7 +2015,9 @@ import Observation
         let snapshot = await (loadedChanges, loadedBranch, loadedBranches, loadedSync)
         guard !Task.isCancelled, store.activeRoot == root else { return }
         changes = snapshot.0 ?? []; changesLoaded = snapshot.0 != nil; branch = snapshot.1; branches = snapshot.2; sync = snapshot.3
-        for target in st.diffTabs where !changes.contains(where: { $0.path == target.path }) {
+        store.buffers.conflictedPaths = Set(changes.filter(\.conflicted).map(\.path))
+        // A proposal (ADR-0022) is about a file that need not have changed yet; it stays until answered.
+        for target in st.diffTabs where target.proposal == nil && !changes.contains(where: { $0.path == target.path }) {
           store.run("diff.close", diffInput(target))
         }
         if diff != nil { loadDiff() }
@@ -2352,7 +2546,9 @@ import Observation
       guard let target = diff, let root = store.activeRoot else { return }
       diffTask = Task {
         async let rendered = Task.detached(priority: .userInitiated) {
-          DiffView.model(WorkbenchGit.diff(root, target.path, staged: target.staged, untracked: target.untracked, against: target.against, fullContext: true))
+          DiffView.model(
+            target.proposal.map { WorkbenchGit.proposalDiff(root, target.path, proposal: $0) }
+              ?? WorkbenchGit.diff(root, target.path, staged: target.staged, untracked: target.untracked, against: target.against, fullContext: true))
         }.value
         async let lines = Task.detached(priority: .utility) {
           (try? String(contentsOfFile: root + "/" + target.path, encoding: .utf8))?
@@ -2372,6 +2568,16 @@ import Observation
         {
           let fileLines = loaded.fileLines
           let buffer: EditorTransactionManager? = { if case .ready(let m)? = store.buffers.peek(d.path) { m } else { nil } }()
+          if let proposal = d.proposal {
+            ProposalBar(
+              path: d.path, onAccept: { store.resolveProposal(proposal, accept: true) },
+              onReject: { store.resolveProposal(proposal, accept: false) })
+            DiffView(
+              target: d, model: loaded.model, threads: [:], suggestions: [], onComment: { _, _, _ in }, onSuggest: { _, _ in },
+              onResolve: { _ in }, onApply: { _ in nil }, onReject: { _ in }, onSend: nil, onClose: { closeDiff() }, editor: nil,
+              onSave: nil, isDirty: false, label: tr("Claude の提案"), commentable: false)
+            .id(d)
+          } else {
           DiffView(
             target: d, model: loaded.model,
             threads: store.reviews.threads(root: root, d.path, in: fileLines),
@@ -2406,8 +2612,15 @@ import Observation
             onSave: d.staged ? nil : {
               Task { if await store.saveFile(d.path) { loadDiff(clear: false) } }
             },
-            isDirty: st.dirty.contains(d.path))
+            isDirty: st.dirty.contains(d.path),
+            onStageBlock: d.untracked || d.against != nil ? nil : { patch, reverse in
+              if case .success(.text(let message)) = store.run("git.stagePatch", ["patch": .string(patch), "reverse": .bool(reverse)]) {
+                store.languageNotice = message
+              }
+              reloadChanges()
+            })
           .id(d)
+          }
         } else if diff != nil {
           ProgressView { Text(tr("差分を読み込み中…")) }.frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if st.panesClosed {
@@ -2952,9 +3165,9 @@ import Observation
         }
         guard !q.isEmpty, !branches.contains(q) else { return rows }
         return rows + [PaletteItem(title: tr("新しいブランチを作成: %@", q), hint: "", id: "git.branchCreate", input: ["name": .string(q)])]
-      case .references:
+      case .references:  // references, file symbols and problems: match the location or the name
         let q = query.lowercased()
-        return store.languageItems.filter { q.isEmpty || $0.hint.lowercased().contains(q) }
+        return store.languageItems.filter { q.isEmpty || $0.hint.lowercased().contains(q) || $0.title.lowercased().contains(q) }
       default: return store.registry.paletteItems(p, query: query, state: st)
       }
     }

@@ -702,6 +702,14 @@ import Foundation
       v.sendText(text); return true
     }
 
+    /// The selected text of the terminal in `pane`, nil without a selection.
+    public static func selectedText(inPane pane: Int) -> String? {
+      guard let v = byPane[pane]?.view, let surface = v.ghosttySurface, (try? surface.hasSelection()) == true,
+        let text = try? surface.readSelection(), !text.isEmpty
+      else { return nil }
+      return text
+    }
+
     /// What the pane shows right now, for the header drag preview. libghostty draws into its own Metal
     /// layer, which `cacheDisplay` can't read, so this grabs the composited pixels of our own window.
     // ponytail: CGWindowListCreateImage is deprecated (macOS 14); move to ScreenCaptureKit when it is removed.

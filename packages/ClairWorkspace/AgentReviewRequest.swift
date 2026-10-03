@@ -18,5 +18,15 @@ public enum AgentReviewRequest {
     return tr("%@\nコードを変更せず、正しさ・データ損失・セキュリティ・回帰の問題を探してください。", scope)
       + tr("指摘は重要度順に、ファイルと行、再現条件、理由を具体的に報告してください。")
       + tr("問題が見つからなければ、その旨と確認した範囲を報告してください。")
+      + "\n\n" + postBack
   }
+
+  /// How the reviewer hands findings to Clair's review threads (spec §6). Commands, not prose, so it is not translated.
+  static let postBack = """
+    Also post each finding to Clair so it appears on the diff, using the `clair` command (absolute paths):
+      clair review.comment path="$PWD/<file>" line=<n> [endLine=<m>] body="<severity: problem, condition, reason>"
+    When a concrete fix is short, propose it instead (it replaces lines line..endLine; the user applies it):
+      clair review.suggest path="$PWD/<file>" line=<n> [endLine=<m>] replacement="<new text>" body="<reason>"
+    If `clair` is unavailable or fails, keep the findings in your text report only.
+    """
 }

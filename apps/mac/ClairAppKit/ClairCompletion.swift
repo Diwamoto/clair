@@ -124,7 +124,24 @@
         if source?.revision == view.snapshot.revision { upper = UTF8Offset(max(caret.value, range.upperBound.value)) }
       }
       dismiss()
-      view.onCommitEdits?([TextEdit(range: TextUTF8Range(lower, upper), replacement: item.text)])
+      let expansion = item.isSnippet ? LanguageServerSnippet.expand(item.text) : nil
+      let main = TextEdit(range: TextUTF8Range(lower, upper), replacement: expansion?.text ?? item.text)
+      // An auto-import rides the same transaction (one undo unit), but only on the snapshot its positions were computed on.
+      var edits = [main]
+      if !item.additionalEdits.isEmpty, source?.revision == view.snapshot.revision,
+        let extra = LanguageServerTextEdit.editorEdits(item.additionalEdits, in: view.snapshot),
+        extra.allSatisfy({ $0.range.upperBound.value <= lower.value || $0.range.lowerBound.value >= upper.value })
+      {
+        edits = (extra + [main]).sorted { $0.range.lowerBound.value < $1.range.lowerBound.value }
+      }
+      view.onCommitEdits?(edits)
+      // Place the caret on the snippet's first stop. Text inserted above it by an auto-import shifts it.
+      if let expansion {
+        let shift = edits.filter { $0.range.upperBound.value <= lower.value && $0 != main }
+          .reduce(0) { $0 + $1.replacement.utf8.count - ($1.range.upperBound.value - $1.range.lowerBound.value) }
+        let start = lower.value + shift
+        view.select(TextUTF8Range(UTF8Offset(start + expansion.selection.lowerBound), UTF8Offset(start + expansion.selection.upperBound)))
+      }
     }
 
     func dismiss() {

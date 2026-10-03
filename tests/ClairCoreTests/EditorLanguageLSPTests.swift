@@ -153,19 +153,26 @@ final class EditorLanguageLSPTests: XCTestCase {
     XCTAssertEqual(gone.range.lowerBound, gone.range.upperBound)
   }
 
-  func testInitializeParamsAdvertiseVersionedDiagnosticsAndPlainCompletion() throws {
+  func testInitializeParamsAdvertiseTheLanguageFeaturesClairImplements() throws {
     let params = LanguageServerClient.initializeParams(root: URL(fileURLWithPath: "/tmp/a b"))
     XCTAssertEqual(params.rootUri, "file:///tmp/a%20b")
     XCTAssertEqual(params.workspaceFolders?.first?.name, "a b")
     XCTAssertEqual(params.capabilities.textDocument?.publishDiagnostics?.versionSupport, true)
-    XCTAssertEqual(params.capabilities.textDocument?.completion?.completionItem?.snippetSupport, false)
+    XCTAssertEqual(params.capabilities.textDocument?.completion?.completionItem?.snippetSupport, true)
     XCTAssertEqual(params.capabilities.workspace?.configuration, true)
+    XCTAssertEqual(params.capabilities.workspace?.applyEdit, true)
+    XCTAssertEqual(params.capabilities.textDocument?.rename?.prepareSupport, true)
+    XCTAssertEqual(params.capabilities.textDocument?.synchronization?.didSave, true)
+    XCTAssertEqual(params.capabilities.textDocument?.documentSymbol?.hierarchicalDocumentSymbolSupport, true)
+    XCTAssertNotNil(params.capabilities.textDocument?.codeAction?.codeActionLiteralSupport)
+    XCTAssertNotNil(params.capabilities.textDocument?.hover)
     XCTAssertEqual(LanguageServerClient.path(LanguageServerClient.uri("/tmp/a b/main.go")), "/tmp/a b/main.go")
   }
 
-  func testGoIsTheFirstClassServerAndPlainTextHasNone() {
+  func testEveryLanguageHasAServerAndGoIsFirstClass() {
     XCTAssertEqual(EditorLanguageID.go.languageServer?.executable, "gopls")
-    XCTAssertNil(EditorLanguageID.markdown.languageServer)
+    for id in EditorLanguageID.allCases { XCTAssertNotNil(id.languageServer, id.rawValue) }
+    XCTAssertEqual(EditorLanguageID.shell.lspLanguageID, "shellscript")
     XCTAssertNil(LanguageServerCommand(executable: "clair-no-such-server").resolve(path: "/usr/bin:/bin"))
   }
 }

@@ -230,6 +230,8 @@ public enum CommandResult: Sendable, Codable, Equatable {
   case text(String)
   case editorContext(EditorContext)
   case review(GitReview)
+  case diagnostics([WorkbenchDiagnostic])
+  case reviewThreads([WorkbenchReviewThread])
 }
 
 public struct CommandError: Error, Sendable, Codable, Equatable {
@@ -522,6 +524,7 @@ extension CommandRegistry {
           CommandParam("prompt", .string, required: false), CommandParam("branch", .string, required: false),
           CommandParam("direction", .string, required: false, allowed: ["right", "down"]),
           CommandParam("parent", .string, required: false), CommandParam("resume", .string, required: false),
+          CommandParam("review", .bool, required: false),
         ], palette: false,
         preflight: { s, i throws(CommandError) in
           try require(i["resume"]?.string.map(AgentProfile.isSessionID) ?? true, "invalid session id")
@@ -541,7 +544,7 @@ extension CommandRegistry {
       }
       let launch = AgentLaunch(
         profile: i["profile"]!.string!, cwd: cwd, prompt: i["prompt"]?.string.flatMap { $0.isEmpty ? nil : $0 },
-        parent: i["parent"]?.string, resume: i["resume"]?.string)
+        parent: i["parent"]?.string, resume: i["resume"]?.string, review: i["review"]?.bool == true)
       let axis: PaneTree.Axis = i["direction"]?.string == "down" ? .vertical : .horizontal
       let pane = s.withLayout(home.project.name) { l in
         let id = home.pane.map { l.tree.split($0, axis, kind: .terminal) } ?? { l.tree.splitFocused(.vertical, kind: .terminal); return l.tree.focused }()
@@ -610,30 +613,32 @@ extension CommandRegistry {
     cmd("tab.previous", "前のタブ", .read, shortcut: "⌃⌘←") { s, _ in s.cycleTab(-1); return .ok },
     cmd("diff.open", "差分を開く", .read,
         params: [CommandParam("path", .string), CommandParam("staged", .bool), CommandParam("untracked", .bool),
-                 CommandParam("against", .string, required: false)],
+                 CommandParam("against", .string, required: false), CommandParam("proposal", .string, required: false)],
         palette: false,
         preflight: { s, i throws(CommandError) in
           for path in [i["path"]!.string!] + [i["against"]?.string].compactMap({ $0 }) {
             try require(!path.isEmpty && !path.hasPrefix("/") && !path.split(separator: "/").contains(".."), "invalid diff path")
           }
+          // A proposal's text only ever lives in Clair's own proposal folder (ADR-0022).
+          if let proposal = i["proposal"]?.string { try require(ClaudeIDE.isProposal(proposal), "invalid proposal path") }
           try require(s.projects.contains { $0.name == s.project }, "no active Project")
           return .read
         }) { s, i in
-      s.openDiff(WorkbenchDiffTab(path: i["path"]!.string!, staged: i["staged"]!.bool!, untracked: i["untracked"]!.bool!, against: i["against"]?.string))
+      s.openDiff(WorkbenchDiffTab.from(i))
       return .ok
     },
     cmd("diff.activate", "差分タブを切り替え", .read,
         params: [CommandParam("path", .string), CommandParam("staged", .bool), CommandParam("untracked", .bool),
-                 CommandParam("against", .string, required: false)],
+                 CommandParam("against", .string, required: false), CommandParam("proposal", .string, required: false)],
         palette: false) { s, i in
-      s.selectTab(.diff(WorkbenchDiffTab(path: i["path"]!.string!, staged: i["staged"]!.bool!, untracked: i["untracked"]!.bool!, against: i["against"]?.string)))
+      s.selectTab(.diff(WorkbenchDiffTab.from(i)))
       return .ok
     },
     cmd("diff.close", "差分タブを閉じる", .write,
         params: [CommandParam("path", .string), CommandParam("staged", .bool), CommandParam("untracked", .bool),
-                 CommandParam("against", .string, required: false)],
+                 CommandParam("against", .string, required: false), CommandParam("proposal", .string, required: false)],
         palette: false) { s, i in
-      let target = WorkbenchDiffTab(path: i["path"]!.string!, staged: i["staged"]!.bool!, untracked: i["untracked"]!.bool!, against: i["against"]?.string)
+      let target = WorkbenchDiffTab.from(i)
       if s.diffTabs.contains(target) { s.recordClosed(.diff(target)) }
       s.closeDiff(target)
       return .ok
@@ -951,11 +956,32 @@ extension CommandRegistry {
     },
     cmd("editor.references", "参照を検索", .read, ai: false, shortcut: "⌃⌘R",
         preflight: { s, _ throws(CommandError) in try require(s.active != nil, tr("ファイルが開かれていません")); return .read }) { _, _ in .ok },
-    // No LSP-backed `format` yet (spec §14 roadmap item), so this only covers formats with no server
-    // dependency (JSON via `DocumentFormatter`). The GUI performs the actual buffer edit, like editor.fold.
+    // The language server's `textDocument/formatting`, else a server-free formatter (JSON via `DocumentFormatter`).
+    // The GUI performs the actual buffer edit, like editor.fold.
     cmd("editor.format", "ドキュメントを整形", .write, ai: false, shortcut: "⌃⌥F",
         preflight: { s, _ throws(CommandError) in
-          try require(s.active.map(DocumentFormatter.supports) == true, tr("対応していないファイル形式です")); return .write
+          try require(s.active.map(DocumentFormatter.mayFormat) == true, tr("対応していないファイル形式です")); return .write
+        }) { _, _ in .ok },
+    // Language features at the active editor's caret; like editor.definition the registry validates and the GUI asks
+    // the language server and shows the result on the view.
+    cmd("editor.hover", "ホバー情報を表示", .read, ai: false,
+        preflight: { s, _ throws(CommandError) in try require(s.active != nil, tr("ファイルが開かれていません")); return .read }) { _, _ in .ok },
+    cmd("editor.rename", "シンボルの名前を変更", .read, ai: false,
+        preflight: { s, _ throws(CommandError) in try require(s.active != nil, tr("ファイルが開かれていません")); return .read }) { _, _ in .ok },
+    cmd("editor.codeAction", "クイックフィックス…", .read, ai: false, shortcut: "⌘.",
+        preflight: { s, _ throws(CommandError) in try require(s.active != nil, tr("ファイルが開かれていません")); return .read }) { _, _ in .ok },
+    cmd("editor.fileSymbols", "ファイル内のシンボルへ移動", .read, ai: false, shortcut: "⌘⇧O",
+        preflight: { s, _ throws(CommandError) in try require(s.active != nil, tr("ファイルが開かれていません")); return .read }) { _, _ in .ok },
+    cmd("editor.problems", "問題の一覧", .read, ai: false, shortcut: "⌘⇧M") { _, _ in .ok },
+    // ADR-0022: puts the selection (or the file) into every connected Claude Code's prompt. The GUI sends it.
+    cmd("agent.mention", "選択範囲を Claude Code に送る", .read, ai: false, shortcut: "⌥⌘K",
+        preflight: { s, _ throws(CommandError) in try require(s.active != nil, tr("ファイルが開かれていません")); return .read }) { _, _ in .ok },
+    // Typed into the Project's running agent terminal without Return; the user reviews and sends.
+    cmd("agent.ask", "選択範囲を Agent に送る", .read, ai: false,
+        preflight: { s, _ throws(CommandError) in try require(s.active != nil, tr("ファイルが開かれていません")); return .read }) { _, _ in .ok },
+    cmd("terminal.askAgent", "ターミナルの選択範囲を Agent に聞く", .read, ai: false,
+        preflight: { s, _ throws(CommandError) in
+          try require(s.tree.leaves.first { $0.id == s.tree.focused }?.kind == .terminal, tr("ターミナルを選択してください")); return .read
         }) { _, _ in .ok },
     // V08. Reading history is `state.snapshot`; mute changes what the user is told, so ai: false.
     cmd("notice.markRead", "通知を既読にする", .write, params: [CommandParam("project", .string, required: false)]) { s, i in
@@ -1036,7 +1062,7 @@ extension CommandRegistry {
     cmd("debug.stop", "デバッグを終了", .write, ai: false,
         preflight: { s, _ throws(CommandError) in try require(!["idle", "ended"].contains(s.debugPhase), tr("終了する session がありません")); return .write }) { _, _ in .ok },
     cmd("state.snapshot", "状態を取得", .read, palette: false) { s, _ in .snapshot(s) },
-  ] + gitCommands
+  ] + gitCommands + agentContextCommands + mergeCommands
 
   private static func shortcutSet(_ known: [CommandDescriptor]) -> Command {
     // V11. Only commands runnable without arguments can hold a shortcut. "" unassigns. ai: false — keys are the user's.
