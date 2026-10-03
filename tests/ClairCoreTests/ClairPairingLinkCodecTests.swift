@@ -53,11 +53,12 @@ struct ClairPairingLinkCodecTests {
   @Test func n09RejectsTamperedPayloadBytesRatherThanProducingAWrongLink() throws {
     let link = try makeLink()
     let code = try ClairPairingLinkCodec.encode(link)
-    // Flip one character deep in the payload, keeping it syntactically
-    // plausible base64url, to prove tampering fails decode rather than
-    // silently producing a different, still-"valid" pairing link.
+    // Flip one payload character, keeping it syntactically plausible base64url, to prove tampering fails decode
+    // rather than silently producing a different, still-"valid" pairing link. The first one encodes the JSON's
+    // opening brace: a character near the end could land in a random field's digits (the secret, the expiry) and
+    // still decode, which made this test fail now and then.
     var mutated = Array(code)
-    let flipIndex = mutated.count - 3
+    let flipIndex = ClairPairingLinkCodec.prefix.count
     mutated[flipIndex] = mutated[flipIndex] == "A" ? "B" : "A"
     #expect(throws: ClairTransportError.invalidPairingLink) {
       try ClairPairingLinkCodec.decode(String(mutated))
