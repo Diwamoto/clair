@@ -172,6 +172,11 @@ let clairTargets: [Target] = [
       "ClairEditorLanguageJava",
       "ClairEditorLanguagePHP",
       "ClairEditorLanguageTerraform",
+      "ClairEditorLanguageHTML",
+      "ClairEditorLanguageYAML",
+      "ClairEditorLanguageCSS",
+      "ClairEditorLanguageTOML",
+      "ClairEditorLanguageC",
       .product(name: "SwiftTreeSitter", package: "SwiftTreeSitter"),
       .product(name: "TreeSitter", package: "tree-sitter"),
       .product(name: "LanguageServerProtocol", package: "LanguageServerProtocol"),
@@ -245,6 +250,31 @@ let clairTargets: [Target] = [
   ),
   .target(
     name: "ClairEditorLanguageTerraform", path: "packages/ClairEditorLanguageTerraform",
+    publicHeadersPath: "include",
+    cSettings: [.headerSearchPath("src")]
+  ),
+  .target(
+    name: "ClairEditorLanguageHTML", path: "packages/ClairEditorLanguageHTML",
+    publicHeadersPath: "include",
+    cSettings: [.headerSearchPath("src")]
+  ),
+  .target(
+    name: "ClairEditorLanguageYAML", path: "packages/ClairEditorLanguageYAML",
+    publicHeadersPath: "include",
+    cSettings: [.headerSearchPath("src")]
+  ),
+  .target(
+    name: "ClairEditorLanguageCSS", path: "packages/ClairEditorLanguageCSS",
+    publicHeadersPath: "include",
+    cSettings: [.headerSearchPath("src")]
+  ),
+  .target(
+    name: "ClairEditorLanguageTOML", path: "packages/ClairEditorLanguageTOML",
+    publicHeadersPath: "include",
+    cSettings: [.headerSearchPath("src")]
+  ),
+  .target(
+    name: "ClairEditorLanguageC", path: "packages/ClairEditorLanguageC",
     publicHeadersPath: "include",
     cSettings: [.headerSearchPath("src")]
   ),

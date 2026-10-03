@@ -1,4 +1,7 @@
+import ClairEditorLanguageC
+import ClairEditorLanguageCSS
 import ClairEditorLanguageGo
+import ClairEditorLanguageHTML
 import ClairEditorLanguageJava
 import ClairEditorLanguageJSON
 import ClairEditorLanguageJavaScript
@@ -9,15 +12,18 @@ import ClairEditorLanguageRuby
 import ClairEditorLanguageRust
 import ClairEditorLanguageShell
 import ClairEditorLanguageSwift
+import ClairEditorLanguageTOML
 import ClairEditorLanguageTerraform
 import ClairEditorLanguageTypeScript
+import ClairEditorLanguageYAML
 import Foundation
 import SwiftTreeSitter
 
 /// E11 §5.11: the languages a real Clair user opens daily. Detected from the
 /// file's extension (or, for shell, its shebang) — see `detect(path:contents:)`.
 public enum EditorLanguageID: String, Sendable, CaseIterable {
-  case swift, go, typescript, javascript, python, json, markdown, rust, shell, ruby, java, php, terraform
+  case swift, go, typescript, javascript, python, json, markdown, rust, shell, ruby, java, php, terraform,
+    html, yaml, css, toml, c
 
   /// The grammar + query pair for this language, built once and cached
   /// (`Query` compilation is expensive — E05's `SyntaxParser` doc comment on
@@ -64,6 +70,11 @@ public enum EditorLanguageID: String, Sendable, CaseIterable {
     case "java": return .java
     case "php": return .php
     case "tf", "tfvars", "hcl": return .terraform
+    case "html", "htm", "xhtml": return .html
+    case "yaml", "yml": return .yaml
+    case "css": return .css
+    case "toml": return .toml
+    case "c", "h": return .c
     case "":
       // No extension: only shell identifies itself this way, via shebang.
       if let shebangLine, shebangLine.hasPrefix("#!"), shebangLine.contains("sh") {
@@ -133,6 +144,16 @@ public struct EditorGrammar: Sendable {
     case .terraform:
       return EditorGrammar(
         language: Language(tree_sitter_terraform()), queryText: HighlightQueries.terraform)
+    case .html:
+      return EditorGrammar(language: Language(tree_sitter_html()), queryText: HighlightQueries.html)
+    case .yaml:
+      return EditorGrammar(language: Language(tree_sitter_yaml()), queryText: HighlightQueries.yaml)
+    case .css:
+      return EditorGrammar(language: Language(tree_sitter_css()), queryText: HighlightQueries.css)
+    case .toml:
+      return EditorGrammar(language: Language(tree_sitter_toml()), queryText: HighlightQueries.toml)
+    case .c:
+      return EditorGrammar(language: Language(tree_sitter_c()), queryText: HighlightQueries.c)
     }
   }
 }
