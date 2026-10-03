@@ -30,7 +30,8 @@ public struct MergeConflict: Sendable, Equatable {
 
   /// Every complete conflict block of `text`, in order. A block missing its `=======` or `>>>>>>>` is not reported.
   public static func parse(_ text: String) -> [MergeConflict] {
-    let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map { $0.hasSuffix("\r") ? String($0.dropLast()) : String($0) }
+    // `\r\n` is one Character, so split on newline Characters rather than on "\n" (the editor counts lines the same way).
+    let lines = text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).map(String.init)
     var out: [MergeConflict] = []
     var i = 0
     func label(_ line: String) -> String { String(line.dropFirst(7)).trimmingCharacters(in: .whitespaces) }
