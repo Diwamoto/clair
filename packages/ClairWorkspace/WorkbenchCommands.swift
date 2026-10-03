@@ -230,6 +230,8 @@ public enum CommandResult: Sendable, Codable, Equatable {
   case text(String)
   case editorContext(EditorContext)
   case review(GitReview)
+  case diagnostics([WorkbenchDiagnostic])
+  case reviewThreads([WorkbenchReviewThread])
 }
 
 public struct CommandError: Error, Sendable, Codable, Equatable {
@@ -522,6 +524,7 @@ extension CommandRegistry {
           CommandParam("prompt", .string, required: false), CommandParam("branch", .string, required: false),
           CommandParam("direction", .string, required: false, allowed: ["right", "down"]),
           CommandParam("parent", .string, required: false), CommandParam("resume", .string, required: false),
+          CommandParam("review", .bool, required: false),
         ], palette: false,
         preflight: { s, i throws(CommandError) in
           try require(i["resume"]?.string.map(AgentProfile.isSessionID) ?? true, "invalid session id")
@@ -541,7 +544,7 @@ extension CommandRegistry {
       }
       let launch = AgentLaunch(
         profile: i["profile"]!.string!, cwd: cwd, prompt: i["prompt"]?.string.flatMap { $0.isEmpty ? nil : $0 },
-        parent: i["parent"]?.string, resume: i["resume"]?.string)
+        parent: i["parent"]?.string, resume: i["resume"]?.string, review: i["review"]?.bool == true)
       let axis: PaneTree.Axis = i["direction"]?.string == "down" ? .vertical : .horizontal
       let pane = s.withLayout(home.project.name) { l in
         let id = home.pane.map { l.tree.split($0, axis, kind: .terminal) } ?? { l.tree.splitFocused(.vertical, kind: .terminal); return l.tree.focused }()
@@ -1036,7 +1039,7 @@ extension CommandRegistry {
     cmd("debug.stop", "デバッグを終了", .write, ai: false,
         preflight: { s, _ throws(CommandError) in try require(!["idle", "ended"].contains(s.debugPhase), tr("終了する session がありません")); return .write }) { _, _ in .ok },
     cmd("state.snapshot", "状態を取得", .read, palette: false) { s, _ in .snapshot(s) },
-  ] + gitCommands
+  ] + gitCommands + agentContextCommands
 
   private static func shortcutSet(_ known: [CommandDescriptor]) -> Command {
     // V11. Only commands runnable without arguments can hold a shortcut. "" unassigns. ai: false — keys are the user's.

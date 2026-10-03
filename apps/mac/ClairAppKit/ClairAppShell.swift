@@ -352,6 +352,11 @@ import Observation
         watchProject()
         persistState()
       }
+      // Agent-context commands: the registry validated the call; the answer comes from the GUI's live state.
+      if case .success = r, let answer = answerAgentContext(id, input) {
+        if case .failure(let e) = answer { lastError = e }
+        return answer
+      }
       return r
     }
 
@@ -1768,7 +1773,9 @@ import Observation
       case .project:
         guard st.dirty.isEmpty else { return }
       }
-      let input: CommandInput = ["profile": .string(provider), "prompt": .string(AgentReviewRequest.prompt(for: target))]
+      let input: CommandInput = [
+        "profile": .string(provider), "prompt": .string(AgentReviewRequest.prompt(for: target)), "review": .bool(true),
+      ]
       // The labelled button is the user's approval for launching this external tool.
       switch store.run("agent.launch", input, confirmed: true) {
       case .success(.pane(let pane)):

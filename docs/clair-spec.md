@@ -319,6 +319,10 @@ Project の root で agent を起動する。
 報告することを含める。結果は起動した terminal に表示する。未保存の editor
 buffer が対象に含まれる場合は保存を促し、ディスクと異なる内容を黙って渡さない。
 この操作は既存の agent launch と同じ Project / session / 承認境界を通る。
+依頼には `clair review.comment` / `review.suggest` で指摘を Clair へ返す手順も含め、
+Claude Code にはその 3 コマンド(`review.comment` / `review.suggest` / `review.threads`)
+だけを `--allowedTools` で許可して起動する。返せない provider や失敗時は terminal の
+報告だけが残る。
 
 review コメントは行番号や画面上の吹き出しとして保存しない。anchor は最低限
 次を持つ。
@@ -432,6 +436,11 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   active Project のタブ列の末尾に開く(root からの相対パス `../…`、explorer には出さない)
 - Clair の terminal からの `clair open` は承認なしで実行し、Clair を前面に出す。MCP の `file.open` は既に開いている Project 内の file だけを開け、Project を新規作成できない
 - MCP の `editor.context` は現在の editor file と選択範囲の位置、明示的に選択された text(最大 16 KiB)を返す。選択内容は workspace に保存しない
+- agent 向けの IDE context(すべて AI 可、承認なし)。対象 file は開いている Project 内の既存 file に限り(絶対 path か active Project からの相対 path、`..` 不可)、それ以外は拒否する
+  - `editor.diagnostics [path]`(read): language server が開いている文書(Clair の editor で開いた file)の診断を、1 始まりの行・0 始まりの UTF-16 桁・severity・message で返す。active Project の文書だけで、編集後は表示中と同じ rebase 済みの位置を返す
+  - `review.threads [path]`(read): review thread を現在の file 上の行・stale・状態・コメントで返す
+  - `review.comment path line [endLine] body`(additive): agent 作者の review thread を追加する。file は変更しない
+  - `review.suggest path line [endLine] replacement [body]`(additive): 行 line..endLine を置き換える提案を追加する。active Project の editor buffer の revision に束縛し、適用は利用者が diff で行う(1 undo 単位、未保存)。他の Project の file は拒否する
 - `clair preview <html-path>` は HTML file を開き、JavaScript 対応の preview pane を表示して Clair を前面に出す。CLI からの実行前に GUI 承認を求め、MCP には公開しない。`clair-preview` Agent skill は生成した HTML artifact を Clair で見せる方法を Claude / Codex / OpenCode に案内する
 - Clair.app は text file の document type を宣言し、macOS の「このアプリケーションで
   開く」/既定アプリに設定できる。Finder から開いた file は `clair open` と同じ経路を通る

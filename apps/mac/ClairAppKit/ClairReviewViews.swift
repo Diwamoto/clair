@@ -22,6 +22,8 @@
   /// A suggestion as the diff shows it. `stale`: the buffer changed since it was made, so it can no longer apply.
   struct PlacedSuggestion: Identifiable {
     let line: Int
+    /// Last replaced line; equals `line` for a one-line proposal.
+    var endLine: Int? = nil
     let suggestion: ReviewSuggestion
     let stale: Bool
     var id: UUID { suggestion.id }
@@ -38,11 +40,14 @@
     private var lines: [UUID: Int] = [:]
     private var texts: [UUID: String] = [:]
     private var suggestionLines: [UUID: Int] = [:]
+    private var suggestionEnds: [UUID: Int] = [:]
     private(set) var version = 0
     private let file: URL?
     private let asynchronousPersistence: Bool
     private let persistenceQueue = DispatchQueue(label: "com.diwamoto.clair.review-save", qos: .utility)
     static let you = ReviewAuthor(displayName: "あなた", kind: .human)
+    /// The author of a thread or suggestion an agent posted through `review.comment` / `review.suggest`.
+    static let agent = ReviewAuthor(displayName: "Agent", kind: .agent)
 
     convenience init() {
       self.init(persistingAt: URL.applicationSupportDirectory.appending(path: "Clair/reviews.json"), asynchronously: true)
@@ -114,15 +119,41 @@
       return out
     }
 
-    func add(root: String, path: String, line: Int, text: String? = nil, body: String, snapshot: TextSnapshot) {
-      guard !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-        let l = try? snapshot.line(at: TextLineIndex(line - 1))
-      else { return }
+    /// Returns false (and adds nothing) for a blank body or a line past the end of `snapshot`.
+    @discardableResult
+    func add(
+      root: String, path: String, line: Int, endLine: Int? = nil, text: String? = nil, body: String,
+      author: ReviewAuthor? = nil, snapshot: TextSnapshot
+    ) -> Bool {
+      guard !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, let range = Self.range(line, endLine, in: snapshot)
+      else { return false }
       let k = key(root, path), m = managers[k] ?? ReviewThreadManager()
       managers[k] = m
-      let id = m.addThread(author: Self.you, body: body, anchor: ReviewAnchor(range: l.contentRange)).id
+      let id = m.addThread(author: author ?? Self.you, body: body, anchor: ReviewAnchor(range: range)).id
       lines[id] = line; texts[id] = text
       version += 1; save()
+      return true
+    }
+
+    /// Lines `line...endLine` (1-based) of `snapshot` without the last terminator; nil past the end.
+    static func range(_ line: Int, _ endLine: Int?, in snapshot: TextSnapshot) -> TextUTF8Range? {
+      guard line >= 1, let first = try? snapshot.line(at: TextLineIndex(line - 1)),
+        let last = try? snapshot.line(at: TextLineIndex(max(line, endLine ?? line) - 1))
+      else { return nil }
+      return TextUTF8Range(first.contentRange.lowerBound, last.contentRange.upperBound)
+    }
+
+    /// Every thread of `root` (or only `path`'s) as an agent reads it, placed in the current files.
+    func list(root: String, path: String? = nil, file: (String) -> [String]?) -> [WorkbenchReviewThread] {
+      let prefix = root + "\0"
+      let paths = path.map { [$0] } ?? managers.keys.filter { $0.hasPrefix(prefix) }.map { String($0.dropFirst(prefix.count)) }.sorted()
+      return paths.flatMap { p in
+        placed(root, p, in: file(p)).sorted { $0.line < $1.line }.map { x in
+          WorkbenchReviewThread(
+            id: x.thread.id.uuidString, path: p, line: x.line, stale: x.stale, state: x.thread.state == .open ? "open" : "resolved",
+            comments: x.thread.comments.filter { $0.state == .visible }.map { .init(author: $0.author.displayName, body: $0.body) })
+        }
+      }
     }
 
     /// Open threads as a prompt for an agent: one `path:line` heading per thread, comments beneath. Nil when nothing is open.
@@ -140,20 +171,30 @@
 
     // MARK: suggestions
 
-    /// A one-line replacement proposal on `line`, bound to the buffer's current revision.
-    func suggest(root: String, path: String, line: Int, replacement: String, snapshot: TextSnapshot) {
-      guard let l = try? snapshot.line(at: TextLineIndex(line - 1)) else { return }
+    /// A replacement proposal for lines `line...endLine` (one line by default), bound to the buffer's current revision.
+    /// Returns false (and adds nothing) for a line past the end of `snapshot`.
+    @discardableResult
+    func suggest(
+      root: String, path: String, line: Int, endLine: Int? = nil, replacement: String, description: String? = nil, snapshot: TextSnapshot
+    ) -> Bool {
+      guard let range = Self.range(line, endLine, in: snapshot) else { return false }
       let k = key(root, path), m = managers[k] ?? ReviewThreadManager()
       managers[k] = m
       let s = m.addSuggestion(
-        hunks: [ReviewSuggestionHunk(anchor: ReviewAnchor(range: l.contentRange), replacement: replacement)], baseRevision: snapshot.revision)
-      suggestionLines[s.id] = line; version += 1
+        hunks: [ReviewSuggestionHunk(anchor: ReviewAnchor(range: range), replacement: replacement)], description: description,
+        baseRevision: snapshot.revision)
+      suggestionLines[s.id] = line
+      if let endLine, endLine > line { suggestionEnds[s.id] = endLine }
+      version += 1
+      return true
     }
 
     func suggestions(root: String, _ path: String, current: TextRevision?) -> [PlacedSuggestion] {
       _ = version
       return (managers[key(root, path)]?.suggestions ?? []).compactMap { s in
-        suggestionLines[s.id].map { PlacedSuggestion(line: $0, suggestion: s, stale: s.state == .pending && s.baseRevision != current) }
+        suggestionLines[s.id].map {
+          PlacedSuggestion(line: $0, endLine: suggestionEnds[s.id], suggestion: s, stale: s.state == .pending && s.baseRevision != current)
+        }
       }
     }
 
@@ -668,7 +709,11 @@
     private func suggestion(_ p: PlacedSuggestion) -> some View {
       let pending = p.suggestion.state == .pending
       return VStack(alignment: .leading, spacing: 4) {
-        Text(tr("提案 · %@ 行目", p.line)).font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary)
+        Text(p.endLine.map { tr("提案 · %@–%@ 行目", p.line, $0) } ?? tr("提案 · %@ 行目", p.line))
+          .font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary)
+        if let reason = p.suggestion.description {
+          Text(reason).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary)
+        }
         Text("+ " + p.replacement).font(.system(size: 12, design: .monospaced)).foregroundStyle(C.code)
           .padding(.horizontal, 6).frame(maxWidth: .infinity, alignment: .leading).background(C.success.opacity(0.12))
         if pending {

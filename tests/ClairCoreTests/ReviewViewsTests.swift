@@ -3,6 +3,7 @@
 
   @testable import ClairAppKit
   @testable import ClairEditorCore
+  import ClairEditorView
   @testable import ClairReview
   @testable import ClairWorkspace
 
@@ -135,6 +136,45 @@
       let q = try XCTUnwrap(s.suggestions(root: "/r", "g", current: m2.buffer.snapshot.revision).first)
       XCTAssertTrue(q.stale)
       XCTAssertNotNil(s.apply(root: "/r", path: "g", id: q.id, in: m2))
+    }
+
+    func testAgentThreadsSpanLinesAndListForAgents() throws {
+      let s = ReviewStore(file: nil), snap = try TextBuffer("a\nbb\nc").snapshot
+      XCTAssertFalse(s.add(root: "/r", path: "f", line: 4, body: "x", snapshot: snap))
+      XCTAssertTrue(s.add(root: "/r", path: "f", line: 2, endLine: 3, text: "bb", body: "racy", author: ReviewStore.agent, snapshot: snap))
+      s.add(root: "/r", path: "g", line: 1, body: "mine", snapshot: snap)
+      let t = try XCTUnwrap(s.threads(root: "/r", "f")[2]?.first)
+      XCTAssertEqual(t.anchor?.range, TextUTF8Range(UTF8Offset(2), UTF8Offset(6)))  // "bb\nc"
+      XCTAssertEqual(t.comments.first?.author.kind, .agent)
+      let all = s.list(root: "/r") { $0 == "f" ? ["x", "a", "bb", "c"] : nil }
+      XCTAssertEqual(all.map(\.path), ["f", "g"])
+      XCTAssertEqual(all[0].line, 3)  // followed its line in the current file
+      XCTAssertEqual(all[0].comments, [.init(author: "Agent", body: "racy")])
+      XCTAssertEqual(s.list(root: "/r", path: "g") { _ in nil }.map(\.comments.first?.body), ["mine"])
+      XCTAssertTrue(s.list(root: "/other") { _ in nil }.isEmpty)
+    }
+
+    func testMultiLineSuggestionReplacesItsRange() throws {
+      let s = ReviewStore(file: nil)
+      let m = EditorTransactionManager(buffer: try TextBuffer("a\nb\nc\nd"), selection: TextSelectionSet(cursor: UTF8Offset(0)))
+      XCTAssertFalse(s.suggest(root: "/r", path: "f", line: 5, replacement: "x", snapshot: m.buffer.snapshot))
+      XCTAssertTrue(s.suggest(root: "/r", path: "f", line: 2, endLine: 3, replacement: "B", description: "merge", snapshot: m.buffer.snapshot))
+      let p = try XCTUnwrap(s.suggestions(root: "/r", "f", current: m.buffer.snapshot.revision).first)
+      XCTAssertEqual(p.endLine, 3); XCTAssertEqual(p.suggestion.description, "merge")
+      XCTAssertNil(s.apply(root: "/r", path: "f", id: p.id, in: m))
+      XCTAssertEqual(m.buffer.snapshot.string(), "a\nB\nd")
+    }
+
+    func testDiagnosticsReportOneBasedLinesAndUTF16Columns() throws {
+      let snap = try TextBuffer("let a = 1\n  é = x\n").snapshot
+      let spans = [
+        EditorDiagnosticSpan(range: TextUTF8Range(UTF8Offset(15), UTF8Offset(16)), severity: .warning, message: "w"),
+        EditorDiagnosticSpan(range: TextUTF8Range(UTF8Offset(4), UTF8Offset(5)), severity: .error, message: "e"),
+      ]
+      let d = ClairWorkbenchStore.diagnostics(spans, in: snap, path: "/r/f.go")
+      XCTAssertEqual(d.map(\.message), ["e", "w"])
+      XCTAssertEqual(d[0], WorkbenchDiagnostic(path: "/r/f.go", line: 1, column: 4, endLine: 1, endColumn: 5, severity: "error", message: "e"))
+      XCTAssertEqual([d[1].line, d[1].column, d[1].endColumn], [2, 4, 5])  // é is 2 UTF-8 bytes, 1 UTF-16 unit
     }
 
     func testLargeDiffModelIsBounded() {

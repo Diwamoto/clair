@@ -18,9 +18,15 @@ public struct AgentProfile: Sendable, Equatable {
   public let batch: String
   /// Command prefix that takes a provider session id as its last argument and reopens that chat.
   public var resume: String? = nil
+  /// `batch` for a read-only review that may post its findings back to Clair (`clair review.*`, spec §6).
+  /// nil: the plain `batch`, whose agent reports in the terminal only.
+  public var reviewBatch: String? = nil
 
   public static let all = [
-    AgentProfile(id: "claude", title: "Claude Code", command: "claude", batch: "claude -p", resume: "claude --resume"),
+    AgentProfile(
+      id: "claude", title: "Claude Code", command: "claude", batch: "claude -p", resume: "claude --resume",
+      // `-p` denies tools that would ask; allow exactly the Clair review commands (and only those).
+      reviewBatch: "claude --allowedTools 'Bash(clair review.comment:*)' 'Bash(clair review.suggest:*)' 'Bash(clair review.threads:*)' -p"),
     AgentProfile(id: "codex", title: "Codex", command: "codex", batch: "codex exec", resume: "codex resume"),
     AgentProfile(id: "opencode", title: "OpenCode", command: "opencode", batch: "opencode run", resume: "opencode --session"),
     // agent registry: added alongside the original three so users can switch to them; behaviour
@@ -51,9 +57,15 @@ public struct AgentLaunch: Sendable, Codable, Equatable {
   public var concierge: String?
   /// The request typed before the concierge was running; handed to it as its first message.
   public var opening: String?
-  public init(profile: String, cwd: String, prompt: String? = nil, parent: String? = nil, resume: String? = nil, concierge: String? = nil, opening: String? = nil) {
+  /// A read-only review run: uses the profile's `reviewBatch` so it can post findings with `clair review.*`.
+  public var review: Bool?
+  public init(
+    profile: String, cwd: String, prompt: String? = nil, parent: String? = nil, resume: String? = nil, concierge: String? = nil,
+    opening: String? = nil, review: Bool = false
+  ) {
     self.profile = profile; self.cwd = cwd; self.prompt = prompt; self.parent = parent; self.resume = resume; self.concierge = concierge
     self.opening = opening
+    self.review = review ? true : nil
     run = prompt == nil ? nil : UUID().uuidString.lowercased()
   }
   public var command: String {
@@ -64,7 +76,8 @@ public struct AgentLaunch: Sendable, Codable, Equatable {
     // `script` keeps a TTY for the agent while recording it, and exits with the agent's status.
     // Wrapped in /bin/sh so the user's login shell (zsh, fish, …) only sees one quoted argument.
     let r = AgentRun(id: run), q = AgentRun.quote
-    let inner = "mkdir -p \(q(AgentRun.directory.path)); script -q \(q(r.log.path)) \(p.batch) \(q(prompt)); echo $? > \(q(r.exit.path))"
+    let batch = review == true ? p.reviewBatch ?? p.batch : p.batch
+    let inner = "mkdir -p \(q(AgentRun.directory.path)); script -q \(q(r.log.path)) \(batch) \(q(prompt)); echo $? > \(q(r.exit.path))"
     return "/bin/sh -c \(q(inner))"
   }
 }

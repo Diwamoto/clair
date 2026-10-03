@@ -6,6 +6,12 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Agents can read the editor's diagnostics (`editor.diagnostics`) and review comments (`review.threads`) through MCP or the `clair` command.
+- Agents can post review comments (`review.comment`) and change suggestions (`review.suggest`) that show on the diff; suggestions can span several lines and carry a reason.
+- "Review this file / Project" asks the agent to post its findings as review comments; Claude Code runs it with only those Clair commands allowed.
+
 ## [0.8.2] - 2026-10-01
 
 ### Added
