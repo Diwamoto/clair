@@ -510,7 +510,7 @@ public actor LanguageServerClient {
       !help.signatures.isEmpty
     else { return nil }
     let signature = help.signatures[min(max(help.activeSignature ?? 0, 0), help.signatures.count - 1)]
-    let index = signature.activeParameter.map(Int.init) ?? help.activeParameter ?? 0
+    let index = signature.activeParameter.map { Int($0) } ?? help.activeParameter ?? 0
     var active: Range<Int>?
     if let parameters = signature.parameters, parameters.indices.contains(index) {
       switch parameters[index].label {
