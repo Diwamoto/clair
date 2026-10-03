@@ -93,6 +93,7 @@ import SwiftUI
 
   /// Spec §7: closing a window keeps the daemon; an explicit Clair quit stops it and its shells.
   func applicationWillTerminate(_ notification: Notification) {
+    ClairWorkbenchStore.stopClaudeIDE()
     ClairDaemonLauncher.shutdown()
   }
 }

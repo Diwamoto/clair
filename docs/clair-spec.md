@@ -456,6 +456,7 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
 - `clair preview <html-path>` は HTML file を開き、JavaScript 対応の preview pane を表示して Clair を前面に出す。CLI からの実行前に GUI 承認を求め、MCP には公開しない。`clair-preview` Agent skill は生成した HTML artifact を Clair で見せる方法を Claude / Codex / OpenCode に案内する
 - Clair.app は text file の document type を宣言し、macOS の「このアプリケーションで
   開く」/既定アプリに設定できる。Finder から開いた file は `clair open` と同じ経路を通る
+- Claude Code の IDE 連携([ADR-0022](decisions/0022-claude-code-ide-integration.md)): Clair は 127.0.0.1 の WebSocket と `~/.claude/ide/<port>.lock` で Claude Code の IDE として振る舞い、Clair の terminal に `CLAUDE_CODE_SSE_PORT` を渡す。選択範囲・開いているファイル・診断を答え、`openDiff` の提案は「提案」diff タブで承認 / 却下するまで応答を保留する(承認すると Claude Code がファイルを書く)。開いている Project の外のファイルの提案は Claude Code 自身の承認に任せる。選択の変化を通知し、⌥⌘K で選択範囲を接続中の Claude Code の入力へ渡す
 - 起動中 Clair を操作する CLI を提供する
 - `clair mcp serve` の stdio adapter で AI 向け command を公開する
 - Clair の terminal 内の agent は CLI/MCP で子 agent を起動(prompt・worktree 指定)、状態確認、完了待ち、出力回収、pane の close ができる。子 agent 起動と worktree 作成は AI に公開するが `external` risk として GUI 承認を必須にする。terminal 内から来た CLI 呼び出しも AI 経由として同じ gate を通す

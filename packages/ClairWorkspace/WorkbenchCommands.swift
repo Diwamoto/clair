@@ -613,30 +613,32 @@ extension CommandRegistry {
     cmd("tab.previous", "前のタブ", .read, shortcut: "⌃⌘←") { s, _ in s.cycleTab(-1); return .ok },
     cmd("diff.open", "差分を開く", .read,
         params: [CommandParam("path", .string), CommandParam("staged", .bool), CommandParam("untracked", .bool),
-                 CommandParam("against", .string, required: false)],
+                 CommandParam("against", .string, required: false), CommandParam("proposal", .string, required: false)],
         palette: false,
         preflight: { s, i throws(CommandError) in
           for path in [i["path"]!.string!] + [i["against"]?.string].compactMap({ $0 }) {
             try require(!path.isEmpty && !path.hasPrefix("/") && !path.split(separator: "/").contains(".."), "invalid diff path")
           }
+          // A proposal's text only ever lives in Clair's own proposal folder (ADR-0022).
+          if let proposal = i["proposal"]?.string { try require(ClaudeIDE.isProposal(proposal), "invalid proposal path") }
           try require(s.projects.contains { $0.name == s.project }, "no active Project")
           return .read
         }) { s, i in
-      s.openDiff(WorkbenchDiffTab(path: i["path"]!.string!, staged: i["staged"]!.bool!, untracked: i["untracked"]!.bool!, against: i["against"]?.string))
+      s.openDiff(WorkbenchDiffTab.from(i))
       return .ok
     },
     cmd("diff.activate", "差分タブを切り替え", .read,
         params: [CommandParam("path", .string), CommandParam("staged", .bool), CommandParam("untracked", .bool),
-                 CommandParam("against", .string, required: false)],
+                 CommandParam("against", .string, required: false), CommandParam("proposal", .string, required: false)],
         palette: false) { s, i in
-      s.selectTab(.diff(WorkbenchDiffTab(path: i["path"]!.string!, staged: i["staged"]!.bool!, untracked: i["untracked"]!.bool!, against: i["against"]?.string)))
+      s.selectTab(.diff(WorkbenchDiffTab.from(i)))
       return .ok
     },
     cmd("diff.close", "差分タブを閉じる", .write,
         params: [CommandParam("path", .string), CommandParam("staged", .bool), CommandParam("untracked", .bool),
-                 CommandParam("against", .string, required: false)],
+                 CommandParam("against", .string, required: false), CommandParam("proposal", .string, required: false)],
         palette: false) { s, i in
-      let target = WorkbenchDiffTab(path: i["path"]!.string!, staged: i["staged"]!.bool!, untracked: i["untracked"]!.bool!, against: i["against"]?.string)
+      let target = WorkbenchDiffTab.from(i)
       if s.diffTabs.contains(target) { s.recordClosed(.diff(target)) }
       s.closeDiff(target)
       return .ok
@@ -971,6 +973,16 @@ extension CommandRegistry {
     cmd("editor.fileSymbols", "ファイル内のシンボルへ移動", .read, ai: false, shortcut: "⌘⇧O",
         preflight: { s, _ throws(CommandError) in try require(s.active != nil, tr("ファイルが開かれていません")); return .read }) { _, _ in .ok },
     cmd("editor.problems", "問題の一覧", .read, ai: false, shortcut: "⌘⇧M") { _, _ in .ok },
+    // ADR-0022: puts the selection (or the file) into every connected Claude Code's prompt. The GUI sends it.
+    cmd("agent.mention", "選択範囲を Claude Code に送る", .read, ai: false, shortcut: "⌥⌘K",
+        preflight: { s, _ throws(CommandError) in try require(s.active != nil, tr("ファイルが開かれていません")); return .read }) { _, _ in .ok },
+    // Typed into the Project's running agent terminal without Return; the user reviews and sends.
+    cmd("agent.ask", "選択範囲を Agent に送る", .read, ai: false,
+        preflight: { s, _ throws(CommandError) in try require(s.active != nil, tr("ファイルが開かれていません")); return .read }) { _, _ in .ok },
+    cmd("terminal.askAgent", "ターミナルの選択範囲を Agent に聞く", .read, ai: false,
+        preflight: { s, _ throws(CommandError) in
+          try require(s.tree.leaves.first { $0.id == s.tree.focused }?.kind == .terminal, tr("ターミナルを選択してください")); return .read
+        }) { _, _ in .ok },
     // V08. Reading history is `state.snapshot`; mute changes what the user is told, so ai: false.
     cmd("notice.markRead", "通知を既読にする", .write, params: [CommandParam("project", .string, required: false)]) { s, i in
       s.notices.markRead(project: i["project"]?.string); return .ok

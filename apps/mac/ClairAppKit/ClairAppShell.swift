@@ -67,8 +67,13 @@ import Observation
         path: URL(fileURLWithPath: root).appending(path: path).standardizedFileURL.path,
         startLine: start.line.value + 1, startColumn: start.column.value,
         endLine: end.line.value + 1, endColumn: end.column.value, selectedText: text)
+      broadcastSelection()
     }
     let reviews = ReviewStore()
+    /// ADR-0022: the socket Claude Code connects to, and the proposed edits waiting for the user (by proposal path).
+    let claudeIDE = ClaudeIDEServer()
+    var proposals: [String: ClaudeProposal] = [:]
+    var selectionBroadcast: Task<Void, Never>?
     /// V13: a managed worktree is a separate Project and keeps its own debug session.
     private var debugSessions: [String: ClairDebugSession] = [:]
     var debugSession: ClairDebugSession? { activeRoot.flatMap { debugSessions[$0] } }
@@ -130,6 +135,9 @@ import Observation
     /// The first window's store: Finder / `open -a` requests (the app as the default editor) land here.
     private static weak var main: ClairWorkbenchStore?
     private static var pendingOpens: [String] = []
+
+    /// ADR-0022: Clair is quitting; Claude Code must stop finding it.
+    public static func stopClaudeIDE() { main?.stopClaudeIDE() }
 
     /// `application(_:open:)`: each file opens like `clair open path`. Before the first window exists, queued.
     public static func open(files: [String]) {
@@ -199,6 +207,9 @@ import Observation
       startAutomaticUpdateChecks()
       watchProject(refresh: true)
       buffers.language.onWorkspaceEdit = { [weak self] in self?.applyWorkspaceEdit($0) ?? false }
+      buffers.onAskAgent = { [weak self] in self?.askAgent($0) }
+      state.dropProposalTabs()
+      if Self.main === self { startClaudeIDE() }
     }
 
     isolated deinit { ipc?.stop(); updateTask?.cancel(); persistenceTask?.cancel(); releaseSleepAssertion() }
@@ -360,6 +371,12 @@ import Observation
         }
         if id == "editor.fileSymbols" { showFileSymbols() }
         if id == "editor.problems" { showProblems() }
+        if id == "agent.mention" { mentionSelectionToClaude() }
+        if id == "agent.ask" { askAgentAboutSelection() }
+        if id == "terminal.askAgent" { askAgentAboutTerminalSelection() }
+        // Closing a proposal's tab answers Claude Code's waiting openDiff as rejected (ADR-0022).
+        if id == "diff.close", case .string(let proposal)? = input["proposal"], proposals[proposal] != nil { closeProposal(proposal) }
+        if id.hasPrefix("project.") { refreshClaudeLock() }
         if let closing { ClairDaemonLauncher.closeSession(key: closing); ClairGhosttySurfaceView.discard(key: closing) }  // T09: closing a pane ends its shell; closing a window does not
         if id == "agent.launch" || id == "pane.close" || id == "agent.close"
           || (id == "settings.set" && input["key"] == .string("preventSleepOnBattery"))
@@ -540,6 +557,7 @@ import Observation
       if id == "pane.close", let target = state.activeDiff {
         var input: CommandInput = ["path": .string(target.path), "staged": .bool(target.staged), "untracked": .bool(target.untracked)]
         if let against = target.against { input["against"] = .string(against) }
+        if let proposal = target.proposal { input["proposal"] = .string(proposal) }
         _ = run("diff.close", input)
         return
       }
@@ -724,6 +742,39 @@ import Observation
         else { ok = false; continue }
       }
       return ok
+    }
+
+    /// Types `text` into this Project's running agent terminal and focuses it. No Return: the user reviews and sends.
+    /// Without a running agent the request goes to the clipboard instead.
+    func askAgent(_ text: String, exceptPane: Int? = nil) {
+      let agents = state.agentSessions.filter { $0.project == state.project && !$0.status.isExited }
+      guard let agent = agents.first(where: { $0.pane != exceptPane }) ?? agents.first,
+        ClairGhosttySurfaceView.send(text, toPane: agent.pane)
+      else {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        languageNotice = tr("実行中の Agent がありません。依頼文をコピーしました")
+        return
+      }
+      languageNotice = nil
+      run("pane.focus", ["id": .int(agent.pane)])
+    }
+
+    /// `agent.ask`: the editor selection as an `@file#Lstart-end` reference (the whole file without a selection).
+    private func askAgentAboutSelection() {
+      guard let rel = state.active else { return }
+      guard let c = state.editorContext, c.selectedText != nil else { return askAgent("@\(rel) ") }
+      askAgent(c.startLine == c.endLine ? "@\(rel)#L\(c.startLine) " : "@\(rel)#L\(c.startLine)-\(c.endLine) ")
+    }
+
+    /// `terminal.askAgent`: the focused terminal's selected output, pasted (bracketed) into another agent.
+    private func askAgentAboutTerminalSelection() {
+      let pane = state.tree.focused
+      guard let text = ClairGhosttySurfaceView.selectedText(inPane: pane) else {
+        languageNotice = tr("ターミナルで範囲を選択してください")
+        return
+      }
+      askAgent("\u{1b}[200~" + tr("次のターミナル出力について調べてください:") + "\n" + text + "\u{1b}[201~", exceptPane: pane)
     }
 
     /// ⌘⇧O: the active file's symbols in the list palette.
@@ -1064,7 +1115,7 @@ import Observation
       "editor.references": "Find References", "editor.navigateBack": "Go Back", "editor.navigateForward": "Go Forward",
       "palette.files": "Go to File…", "palette.symbols": "Go to Symbol…", "palette.references": "Find References…",
       "editor.codeAction": "Quick Fix…", "editor.rename": "Rename Symbol", "editor.fileSymbols": "Go to Symbol in File…",
-      "editor.problems": "Show Problems", "editor.hover": "Show Hover",
+      "editor.problems": "Show Problems", "editor.hover": "Show Hover", "agent.mention": "Send Selection to Claude Code",
       "tab.next": "Next Tab", "tab.previous": "Previous Tab", "pane.focusNext": "Focus Next Pane",
       "pane.focusPrevious": "Focus Previous Pane",
     ]
@@ -1243,18 +1294,18 @@ import Observation
         if sidebarMode == "ladybug", let frame { openDebugFrame(frame) }
       }
       .onChange(of: st.project) {
-        diff = st.activeDiff.map { DiffTarget(path: $0.path, staged: $0.staged, untracked: $0.untracked, against: $0.against) }
+        diff = st.activeDiff.map { DiffTarget(path: $0.path, staged: $0.staged, untracked: $0.untracked, against: $0.against, proposal: $0.proposal) }
         loadedDiff = nil; gitMessage = nil; gitFailed = false
         rebuildExplorer(); reloadChanges()
       }
       .onChange(of: st.files) { rebuildExplorer(); reloadChanges() }
       .onChange(of: st.expanded) { rebuildVisibleExplorer() }
       .onChange(of: st.activeDiff) {
-        diff = st.activeDiff.map { DiffTarget(path: $0.path, staged: $0.staged, untracked: $0.untracked, against: $0.against) }
+        diff = st.activeDiff.map { DiffTarget(path: $0.path, staged: $0.staged, untracked: $0.untracked, against: $0.against, proposal: $0.proposal) }
       }
       .onChange(of: diff) { loadDiff() }
       .onAppear {
-        diff = st.activeDiff.map { DiffTarget(path: $0.path, staged: $0.staged, untracked: $0.untracked, against: $0.against) }
+        diff = st.activeDiff.map { DiffTarget(path: $0.path, staged: $0.staged, untracked: $0.untracked, against: $0.against, proposal: $0.proposal) }
         rebuildExplorer(); reloadChanges()
       }
       .task {
@@ -1418,7 +1469,10 @@ import Observation
                 .help(title)
               case .diff(let target):
                 FileTabButton(
-                  path: tab.dragID, name: target.against.map { tr("比較: %@ ↔ %@", name($0), name(target.path)) } ?? tr("差分: %@", name(target.path)), selected: selectedTab == tab, dirty: false,
+                  path: tab.dragID,
+                  name: target.proposal != nil ? tr("提案: %@", name(target.path))
+                    : target.against.map { tr("比較: %@ ↔ %@", name($0), name(target.path)) } ?? tr("差分: %@", name(target.path)),
+                  selected: selectedTab == tab, dirty: false,
                   onActivate: {
                     if !active { store.run("project.switch", ["name": .string(p.name)]) }
                     store.run("diff.activate", diffInput(target))
@@ -1450,6 +1504,7 @@ import Observation
     private func diffInput(_ target: WorkbenchDiffTab) -> CommandInput {
       var input: CommandInput = ["path": .string(target.path), "staged": .bool(target.staged), "untracked": .bool(target.untracked)]
       if let against = target.against { input["against"] = .string(against) }
+      if let proposal = target.proposal { input["proposal"] = .string(proposal) }
       return input
     }
 
@@ -2480,7 +2535,9 @@ import Observation
       guard let target = diff, let root = store.activeRoot else { return }
       diffTask = Task {
         async let rendered = Task.detached(priority: .userInitiated) {
-          DiffView.model(WorkbenchGit.diff(root, target.path, staged: target.staged, untracked: target.untracked, against: target.against, fullContext: true))
+          DiffView.model(
+            target.proposal.map { WorkbenchGit.proposalDiff(root, target.path, proposal: $0) }
+              ?? WorkbenchGit.diff(root, target.path, staged: target.staged, untracked: target.untracked, against: target.against, fullContext: true))
         }.value
         async let lines = Task.detached(priority: .utility) {
           (try? String(contentsOfFile: root + "/" + target.path, encoding: .utf8))?
@@ -2500,6 +2557,16 @@ import Observation
         {
           let fileLines = loaded.fileLines
           let buffer: EditorTransactionManager? = { if case .ready(let m)? = store.buffers.peek(d.path) { m } else { nil } }()
+          if let proposal = d.proposal {
+            ProposalBar(
+              path: d.path, onAccept: { store.resolveProposal(proposal, accept: true) },
+              onReject: { store.resolveProposal(proposal, accept: false) })
+            DiffView(
+              target: d, model: loaded.model, threads: [:], suggestions: [], onComment: { _, _, _ in }, onSuggest: { _, _ in },
+              onResolve: { _ in }, onApply: { _ in nil }, onReject: { _ in }, onSend: nil, onClose: { closeDiff() }, editor: nil,
+              onSave: nil, isDirty: false, label: tr("Claude の提案"), commentable: false)
+            .id(d)
+          } else {
           DiffView(
             target: d, model: loaded.model,
             threads: store.reviews.threads(root: root, d.path, in: fileLines),
@@ -2536,6 +2603,7 @@ import Observation
             },
             isDirty: st.dirty.contains(d.path))
           .id(d)
+          }
         } else if diff != nil {
           ProgressView { Text(tr("差分を読み込み中…")) }.frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if st.panesClosed {

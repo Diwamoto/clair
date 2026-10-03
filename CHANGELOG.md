@@ -18,6 +18,7 @@ All notable changes to Clair are documented here. The format follows
 - Go to Symbol in File (⌘⇧O) and Show Problems (⌘⇧M).
 - Completions expand snippets and apply auto-imports in the same undo step.
 - Language servers for C, Ruby, Java, PHP, Terraform, shell, JSON, HTML, CSS, YAML, TOML and Markdown, used when installed.
+- Claude Code started in a Clair terminal connects to Clair as its IDE: it sees your selection, open files and diagnostics, and its proposed edits open as a diff tab you accept or reject. ⌥⌘K sends the selection to Claude Code.
 
 ### Fixed
 

@@ -43,6 +43,8 @@
     public static let forwardedEnvironment: Set<String> = [
       "TERM", "TERMINFO", "COLORTERM", "TERM_PROGRAM", "TERM_PROGRAM_VERSION",
       "GHOSTTY_RESOURCES_DIR",
+      // ADR-0022: Claude Code started in a Clair shell connects to Clair's IDE socket by itself.
+      "CLAUDE_CODE_SSE_PORT", "ENABLE_IDE_INTEGRATION", "FORCE_CODE_TERMINAL",
     ]
     static let maximumWaitMilliseconds = 2_000
     static let maximumKeyBytes = 1_024

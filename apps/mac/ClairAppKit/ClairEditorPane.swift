@@ -303,9 +303,11 @@
     func view(_ path: String) -> ClairEditorView? { views[path]?.view }
 
     /// The language features (hover, rename, code actions, signature help) of `path`'s live view.
-    private var featureControllers: [String: WeakFeatures] = [:]
+    @ObservationIgnored private var featureControllers: [String: WeakFeatures] = [:]
     private struct WeakFeatures { weak var controller: LanguageFeatures? }
     func attachFeatures(_ path: String, _ controller: LanguageFeatures) { featureControllers[path] = WeakFeatures(controller: controller) }
+    /// Types a request into the active Project's agent; set by the workbench store.
+    @ObservationIgnored var onAskAgent: ((String) -> Void)?
     func features(_ path: String) -> LanguageFeatures? { featureControllers[path]?.controller }
 
     func attachFolds(_ path: String, view: ClairEditorView) {
@@ -656,7 +658,8 @@
       let completion = CompletionController(language: buffers.language, path: root + "/" + path, root: root)
       completion.view = view
       context.coordinator.completion = completion
-      let features = LanguageFeatures(language: buffers.language, path: root + "/" + path, root: root)
+      let features = LanguageFeatures(
+        language: buffers.language, path: root + "/" + path, root: root, askAgent: { [buffers] in buffers.onAskAgent?($0) })
       features.view = view
       context.coordinator.features = features
       buffers.attachFeatures(path, features)

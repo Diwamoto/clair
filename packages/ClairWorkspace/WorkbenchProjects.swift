@@ -6,9 +6,12 @@ public struct WorkbenchDiffTab: Sendable, Codable, Hashable {
   public let untracked: Bool
   /// Set for a two-file compare: `against` (left) → `path` (right), no Git involved.
   public let against: String?
+  /// ADR-0022: an edit Claude Code proposes for `path`, as the absolute path of its proposed text under
+  /// `ClaudeIDE.proposalDirectory`. The tab shows `path` (left) → the proposal (right) until the user accepts or rejects.
+  public var proposal: String? = nil
 
-  public init(path: String, staged: Bool, untracked: Bool, against: String? = nil) {
-    self.path = path; self.staged = staged; self.untracked = untracked; self.against = against
+  public init(path: String, staged: Bool, untracked: Bool, against: String? = nil, proposal: String? = nil) {
+    self.path = path; self.staged = staged; self.untracked = untracked; self.against = against; self.proposal = proposal
   }
 }
 

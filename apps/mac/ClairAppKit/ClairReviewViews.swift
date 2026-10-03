@@ -17,6 +17,8 @@
     let staged: Bool
     let untracked: Bool
     var against: String? = nil
+    /// ADR-0022: Claude Code's proposed text for `path` (`WorkbenchDiffTab.proposal`).
+    var proposal: String? = nil
   }
 
   /// A suggestion as the diff shows it. `stale`: the buffer changed since it was made, so it can no longer apply.

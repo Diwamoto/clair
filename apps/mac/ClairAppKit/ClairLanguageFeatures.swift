@@ -41,14 +41,19 @@
     @ObservationIgnored private var signatureTriggers: Set<String> = []
     @ObservationIgnored private var renaming: (range: TextUTF8Range, offset: UTF8Offset, revision: TextRevision)?
     @ObservationIgnored private var messageTask: Task<Void, Never>?
+    /// Hands a request to this Project's agent (the action list's "Agent で直す" row).
+    @ObservationIgnored private let askAgent: (String) -> Void
+    /// The request the action list offers to send to an agent: the diagnostics at the caret's line, if any.
+    private(set) var agentPrompt: String?
 
     /// The pointer must rest this long before hover information is asked for.
     static let hoverDelay: Duration = .milliseconds(450)
 
-    init(language: LanguageServices, path: String, root: String) {
+    init(language: LanguageServices, path: String, root: String, askAgent: @escaping (String) -> Void = { _ in }) {
       self.language = language
       self.path = path
       self.root = root
+      self.askAgent = askAgent
       Task { [weak self] in self?.signatureTriggers = await language.signatureTriggerCharacters(path, root: root) }
     }
 
@@ -64,7 +69,7 @@
       case .actions(let actions):
         guard mods.isEmpty else { return false }
         switch event.keyCode {
-        case 125: selected = min(selected + 1, actions.count - 1)
+        case 125: selected = min(selected + 1, actions.count - (agentPrompt == nil ? 1 : 0))
         case 126: selected = max(selected - 1, 0)
         case 36, 76, 48: choose(selected)
         case 53: close()
@@ -163,22 +168,44 @@
 
     // MARK: code actions
 
-    /// Quick fixes and refactorings for the selection, or the caret (`editor.codeAction`, ⌘.).
+    /// Quick fixes and refactorings for the selection, or the caret (`editor.codeAction`, ⌘.). Diagnostics on the caret's
+    /// line add a last row that hands them to the Project's agent.
     func codeActions() {
       guard let view, let range = view.selection.selections.last?.range else { return }
       close()
       let revision = view.snapshot.revision
+      let prompt = diagnosticPrompt(view, at: range.lowerBound)
       Task { [weak self] in
         guard let self else { return }
         let actions = await self.language.codeActions(self.path, root: self.root, range: range)
         guard let view = self.view, view.snapshot.revision == revision else { return }
-        guard !actions.isEmpty else { return self.message(tr("利用できるアクションはありません")) }
+        guard !actions.isEmpty || prompt != nil else { return self.message(tr("利用できるアクションはありません")) }
+        self.agentPrompt = prompt
         self.selected = 0
         self.show(.actions(actions), at: range.lowerBound)
       }
     }
 
+    /// `path:line: message …` for the diagnostics on `offset`'s line, as one line an agent prompt can take.
+    private func diagnosticPrompt(_ view: ClairEditorView, at offset: UTF8Offset) -> String? {
+      guard let position = try? view.snapshot.position(at: offset, columnUnit: UTF16Unit.self, rounding: .down),
+        let line = try? view.snapshot.line(at: position.line)
+      else { return nil }
+      let hits = view.diagnostics.filter {
+        $0.range.lowerBound.value <= line.contentRange.upperBound.value && $0.range.upperBound.value >= line.contentRange.lowerBound.value
+          && !$0.message.isEmpty
+      }
+      guard !hits.isEmpty else { return nil }
+      let rel = path.hasPrefix(root + "/") ? String(path.dropFirst(root.count + 1)) : path
+      let messages = hits.map { $0.message.replacingOccurrences(of: "\n", with: " ") }.joined(separator: " / ")
+      return tr("@%@ の %@ 行目の問題を直してください: %@", rel, position.line.value + 1, messages)
+    }
+
     func choose(_ index: Int) {
+      if case .actions(let actions) = popup, index == actions.count, let prompt = agentPrompt {
+        close()
+        return askAgent(prompt)
+      }
       guard case .actions(let actions) = popup, actions.indices.contains(index) else { return close() }
       let action = actions[index]
       close()
@@ -279,7 +306,8 @@
         let docLines = s.documentation.map { min($0.split(separator: "\n").count, 4) } ?? 0
         return CGSize(width: min(max(CGFloat(s.label.count) * 7.3 + 24, 160), 560), height: 30 + CGFloat(docLines) * 16)
       case .actions(let actions):
-        return CGSize(width: 380, height: min(CGFloat(actions.count) * row + 8, 8 * row + 8))
+        let rows = CGFloat(actions.count + 1)  // room for the "Agent で直す" row when there is one
+        return CGSize(width: 380, height: min(rows * row + 8, 8 * row + 8))
       case .rename: return CGSize(width: 280, height: 36)
       }
     }
@@ -335,6 +363,20 @@
                 Image(systemName: action.kind?.hasPrefix("quickfix") == true ? "wrench.adjustable" : "lightbulb")
                   .font(.system(size: 10)).foregroundStyle(C.textTertiary).frame(width: 14)
                 Text(action.title).font(.system(size: 12)).lineLimit(1)
+                  .foregroundStyle(i == features.selected ? C.textPrimary : C.textSecondary)
+                Spacer(minLength: 0)
+              }
+              .padding(.horizontal, 8).frame(height: Self.row)
+              .background(i == features.selected ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
+              .contentShape(Rectangle())
+              .onTapGesture { features.choose(i) }
+              .id(i)
+            }
+            if features.agentPrompt != nil {
+              let i = actions.count
+              HStack(spacing: 8) {
+                Image(systemName: "sparkles").font(.system(size: 10)).foregroundStyle(C.textTertiary).frame(width: 14)
+                Text(tr("Agent で直す")).font(.system(size: 12)).lineLimit(1)
                   .foregroundStyle(i == features.selected ? C.textPrimary : C.textSecondary)
                 Spacer(minLength: 0)
               }
