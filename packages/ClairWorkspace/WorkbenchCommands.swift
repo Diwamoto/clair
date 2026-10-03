@@ -818,6 +818,9 @@ extension CommandRegistry {
       s.openFile(WorkbenchProject.normalizedFile(i["path"]!.string!)!)
       return .ok
     },
+    cmd("file.isOpen", "ファイルがタブで開いているか", .read, params: [CommandParam("path", .string)], palette: false) { s, i in
+      .text(WorkbenchProject.normalizedFile(i["path"]!.string!).map { s.isOpen($0) ? "open" : "closed" } ?? "closed")
+    },
     // Terminal agents may request this with `clair preview`; the CLI gate asks before executing HTML/JS.
     cmd("file.preview", "HTML をプレビュー", .additive, ai: false,
         params: [CommandParam("path", .string)], palette: false,

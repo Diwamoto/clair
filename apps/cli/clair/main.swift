@@ -15,8 +15,12 @@ if CommandLine.arguments.dropFirst().starts(with: ["mcp", "serve"]) {
 if CommandLine.arguments.dropFirst().first == "attach" { exit(runAttach(Array(CommandLine.arguments.dropFirst(2)))) }
 if CommandLine.arguments.dropFirst().starts(with: ["daemon", "stop"]) { exit(runDaemonStop(Array(CommandLine.arguments.dropFirst(3)))) }
 if CommandLine.arguments.dropFirst().starts(with: ["daemon", "status"]) { exit(runDaemonStatus(Array(CommandLine.arguments.dropFirst(3)))) }
-guard var request = WorkbenchCLI.parse(Array(CommandLine.arguments.dropFirst())) else {
-  FileHandle.standardError.write(Data("usage: clair open <path[:line[:col]]> | clair preview <html-path> | clair <command-id> [key=value ...]\n".utf8))
+// `clair open --wait <path>` ($VISUAL / git editor): returns once that file has no tab in any open Project.
+var args = Array(CommandLine.arguments.dropFirst())
+let wait = args.first == "open" && args.count == 3 && args[1] == "--wait"
+if wait { args.remove(at: 1) }
+guard var request = WorkbenchCLI.parse(args) else {
+  FileHandle.standardError.write(Data("usage: clair open [--wait] <path[:line[:col]]> | clair preview <html-path> | clair <command-id> [key=value ...]\n".utf8))
   exit(2)
 }
 // V16: `clair agent.wait key=<root#pane> [timeout=<s>]` polls agent.status until that delegated agent exits
@@ -40,7 +44,11 @@ do {
   let encoder = JSONEncoder()
   encoder.outputFormatting = [.sortedKeys]
   print(String(decoding: try encoder.encode(reply), as: UTF8.self))
-  exit(reply.error == nil ? 0 : 1)
+  guard wait, reply.error == nil else { exit(reply.error == nil ? 0 : 1) }
+  let check = WorkbenchIPCRequest(command: "file.isOpen", input: ["path": request.input["path"]!], caller: request.caller)
+  // ponytail: 0.5 s polling like agent.wait; a GUI push on tab close if latency or IPC load matters.
+  while case .text("open")? = try WorkbenchIPC.call(check).result { Thread.sleep(forTimeInterval: 0.5) }
+  exit(0)
 } catch {
   FileHandle.standardError.write(Data("clair: \((error as? WorkbenchIPCError) == .notRunning ? "Clair is not running" : "\(error)")\n".utf8))
   exit(3)

@@ -201,6 +201,14 @@ extension WorkbenchState {
     openTab(rel)
   }
 
+  /// `clair open --wait`: whether any open Project still has a tab on `file` (absolute, normalized).
+  func isOpen(_ file: String) -> Bool {
+    projects.contains { p in
+      let tabs = p.name == project ? tabs : layouts[p.name]?.tabs ?? []
+      return tabs.contains { URL(fileURLWithPath: $0, relativeTo: URL(fileURLWithPath: p.path, isDirectory: true)).standardizedFileURL.path == file }
+    }
+  }
+
   mutating func openTab(_ path: String) {
     if active != path { editorContext = nil }
     panesClosed = false

@@ -228,6 +228,20 @@ final class WorkbenchProjectTests: XCTestCase {
     XCTAssertEqual(s.expanded, ["a"], "opening a folder leaves its subfolders closed")
   }
 
+  // `clair open --wait` polls file.isOpen: any open Project's tab counts, ad-hoc `../` tabs included.
+  func testFileIsOpenAcrossProjectsAndAdHocTabs() throws {
+    let a = try folder("wa", ["x.txt"]), b = try folder("wb", ["y.txt"]), loose = try folder("wloose", ["t.md"])
+    var s = WorkbenchState()
+    open(a, &s)
+    r.execute("file.open", ["path": .string(a + "/x.txt")], state: &s)
+    r.execute("file.open", ["path": .string(loose + "/t.md")], state: &s)  // ad-hoc tab in wa
+    open(b, &s)  // switching away keeps wa's tabs open
+    let isOpen = { (p: String, s: inout WorkbenchState) in self.r.execute("file.isOpen", ["path": .string(p)], state: &s).success }
+    XCTAssertEqual(isOpen(a + "/x.txt", &s), .text("open"))
+    XCTAssertEqual(isOpen(loose + "/t.md", &s), .text("open"))
+    XCTAssertEqual(isOpen(b + "/y.txt", &s), .text("closed"))
+  }
+
   // V11 `clair open`: the owning open Project wins (deepest root), else a Git root, else an ad-hoc tab.
   func testFileOpenResolvesOwnerThenGitRootThenFolder() throws {
     let outer = try folder("outer", ["a.txt", "inner/b.txt"]), inner = outer + "/inner"
