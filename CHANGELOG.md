@@ -6,6 +6,28 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-04
+
+### Added
+
+- Claude Code can connect to Clair as its IDE: it opens files, reads your selection, open editors and diagnostics, and shows proposed edits as a diff you accept or reject.
+- Settings can install Clair as Claude Code's Ctrl+G editor, and `clair open --wait` blocks until the file's tab closes.
+- Hand work to the agent: "Fix with Agent" in quick fixes, send the selection or a file reference to the running agent, and paste a terminal selection into it.
+- Agents can read diagnostics and post review comments and multi-line suggestions on your files.
+- Language-server hover, parameter hints, rename (F2), quick fixes (⌘.), formatting (including format on save), Go to Symbol in File (⌘⇧O) and Show Problems (⌘⇧M), with servers for many more languages.
+- Syntax highlighting for HTML, YAML, CSS, TOML and C.
+- A conflict bar for conflicted files: take ours, theirs or both per block, step between blocks, and mark resolved.
+- Stage or unstage a single change block from the diff.
+- Merge the base branch into a worktree to resolve conflicts there.
+- Open or create AGENTS.md and CLAUDE.md instruction files from commands.
+- Tab cycling moves across project groups and switches project.
+
+### Fixed
+
+- Conflicts in files with CRLF line endings are now detected.
+- Tab cycling and open tabs survive switching between projects that were not yet scanned.
+- A single pane no longer sends duplicate agent notifications.
+
 ### Added
 
 - Agents can read the editor's diagnostics (`editor.diagnostics`) and review comments (`review.threads`) through MCP or the `clair` command.
@@ -250,7 +272,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.8.2...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/Diwamoto/clair/compare/v0.8.2...v0.9.0
 [0.8.2]: https://github.com/Diwamoto/clair/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/Diwamoto/clair/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/Diwamoto/clair/compare/v0.7.2...v0.8.0
