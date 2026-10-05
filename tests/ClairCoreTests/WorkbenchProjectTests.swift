@@ -69,6 +69,18 @@ final class WorkbenchProjectTests: XCTestCase {
     XCTAssertEqual(r.execute("project.switch", ["name": .string("zzz")], state: &s).failure?.code, .preconditionFailed)
   }
 
+  // `project.list`: the names every other project.* command takes, and which one is active.
+  func testListGivesNamesPathsAndActive() throws {
+    var s = WorkbenchState()
+    let a = try folder("a", ["one.txt"]), b = try folder("b", ["two.txt"])
+    open(a, &s); open(b, &s)
+    _ = try r.execute("project.rename", ["name": .string("a"), "label": .string("API")], state: &s).get()
+    XCTAssertTrue(r.commands.first { $0.id == "project.list" }!.aiAvailable)
+    guard case .projects(let active, let list) = try r.execute("project.list", state: &s).get() else { return XCTFail() }
+    XCTAssertEqual(active, "b")
+    XCTAssertEqual(list.map(\.name), ["a", "b"]); XCTAssertEqual(list.map(\.path), [a, b]); XCTAssertEqual(list[0].label, "API")
+  }
+
   func testPersistRoundTripAndDegradation() throws {
     let a = try folder("a", ["one.txt", "two.txt"]), b = try folder("b", ["x"])
     var s = WorkbenchState()

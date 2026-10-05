@@ -77,6 +77,12 @@ import Observation
     /// V13: a managed worktree is a separate Project and keeps its own debug session.
     private var debugSessions: [String: ClairDebugSession] = [:]
     var debugSession: ClairDebugSession? { activeRoot.flatMap { debugSessions[$0] } }
+    /// The registry's debug.* preflights read `state.debugPhase`; refresh it from the live session first.
+    /// The IPC gate preflights on its own snapshot, so it calls this too (a stale phase refused `clair debug.continue`).
+    func syncDebugPhase() {
+      let phase = debugSession?.phaseName ?? "idle"
+      if state.debugPhase != phase { state.debugPhase = phase }
+    }
     private func debugger() -> ClairDebugSession? {
       guard let project = state.projects.first(where: { $0.name == state.project }) else { return nil }
       if let existing = debugSessions[project.path] { return existing }
@@ -176,17 +182,23 @@ import Observation
         }
       }
       let server = WorkbenchIPCServer { req in
-        var req = req
-        // V16: `parent` is whoever called, never what the client claims.
-        if req.command.hasPrefix("agent.") { req.input["parent"] = req.caller.map(CommandArg.string) }
+        let req = req.callerAsParent()
         if req.via == .mcp || req.caller != nil || req.command == "file.preview" {
           return MCPGate.handle(
             req, registry: CommandRegistry.workbench,
-            snapshot: { DispatchQueue.main.sync { MainActor.assumeIsolated { store.state } } },
+            snapshot: {
+              DispatchQueue.main.sync {
+                MainActor.assumeIsolated {
+                  if req.command.hasPrefix("debug.") { store.syncDebugPhase() }
+                  return store.state
+                }
+              }
+            },
             approve: { store.approve($0, $1, $2, caller: req.caller) },
             run: { recheck, confirmed in
               DispatchQueue.main.sync {
                 MainActor.assumeIsolated {
+                  if req.command.hasPrefix("debug.") { store.syncDebugPhase() }
                   if let e = recheck(store.state) { return .failure(e) }
                   return store.run(req.command, req.input, confirmed: confirmed)
                 }
@@ -292,17 +304,7 @@ import Observation
     @discardableResult
     public func run(_ id: String, _ input: CommandInput = [:], confirmed: Bool = false) -> Result<CommandResult, CommandError> {
       let previousEditor = (state.project, state.active)
-      if id.hasPrefix("debug.") {
-        state.debugPhase = switch debugSession?.phase {
-        case .idle, nil: "idle"
-        case .starting: "starting"
-        case .configuring: "configuring"
-        case .running: "running"
-        case .stopped: "stopped"
-        case .ended: "ended"
-        case .failed: "failed"
-        }
-      }
+      if id.hasPrefix("debug.") { syncDebugPhase() }
       // `file.save` from any caller (⌘S, CLI, MCP) writes the buffer first; a failed write keeps the dirty marker.
       if id == "file.save", let p = state.active, let root = activeRoot, buffers.isOpen(p) {
         let formatting = state.toggles["formatOnSave"] == true && !savingFormatted.contains(p)

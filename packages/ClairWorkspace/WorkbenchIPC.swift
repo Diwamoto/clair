@@ -1,3 +1,4 @@
+import ClairShared
 import Darwin
 import Foundation
 
@@ -212,8 +213,38 @@ public enum WorkbenchCLI {
       guard let eq = a.firstIndex(of: "="), eq != a.startIndex else { return nil }
       let (k, v) = (String(a[..<eq]), String(a[a.index(after: eq)...]))
       input[k] = v == "true" ? .bool(true) : v == "false" ? .bool(false) : Int(v).map(CommandArg.int) ?? Double(v).map(CommandArg.double) ?? .string(v)
+      if pathArguments.contains("\(first) \(k)"), !v.hasPrefix("/") {
+        input[k] = .string(URL(fileURLWithPath: v, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath)).standardizedFileURL.path)
+      }
     }
     return WorkbenchIPCRequest(command: first, input: input, caller: caller)
+  }
+
+  /// `command key` pairs the GUI reads as file-system paths. The GUI's cwd is not the caller's, so a relative
+  /// one is resolved here (`clair project.open path=.`). Project-relative paths (tab.open, review.*) are left alone.
+  static let pathArguments: Set<String> = [
+    "project.open path", "project.addFolder path", "project.removeFolder path",
+    "file.open path", "file.isOpen path", "file.preview path", "debug.breakpoint path",
+  ]
+
+  /// `clair help [prefix]`: every registry command a `clair <command-id>` call can name, with its arguments.
+  public static func help(_ prefix: String = "", registry: CommandRegistry = .workbench) -> String {
+    let rows = registry.commands.filter { $0.id.hasPrefix(prefix) }.sorted { $0.id < $1.id }.map { d -> String in
+      let params = d.params.map { p -> String in
+        let arg = "\(p.name)=\(p.allowed?.joined(separator: "|") ?? "<\(p.kind.rawValue)>")"
+        return p.required ? arg : "[\(arg)]"
+      }
+      let risk = ["read", "additive", "write", "destructive", "external"][d.risk.rawValue]
+      return ([d.id] + params).joined(separator: " ") + "\n    \(tr(d.title)) — \(risk)\(d.aiAvailable ? "" : ", user-only")"
+    }
+    return """
+      usage: clair open [--wait] <path[:line[:col]]> | clair preview <html-path> | clair <command-id> [key=value ...]
+             clair agent.wait key=<root#pane> [timeout=<s>] | clair mcp serve | clair daemon stop|status | clair help [prefix]
+      Every call prints one JSON reply; exit 0 ok, 1 command error, 2 usage, 3 Clair not running.
+      user-only: not offered to MCP; from a Clair terminal it waits for your approval in Clair.
+
+
+      """ + rows.joined(separator: "\n")
   }
 
   static var caller: String? { ProcessInfo.processInfo.environment["CLAIR_TERMINAL_KEY"].flatMap { $0.isEmpty ? nil : $0 } }

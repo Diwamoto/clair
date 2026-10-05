@@ -232,6 +232,9 @@ public enum CommandResult: Sendable, Codable, Equatable {
   case review(GitReview)
   case diagnostics([WorkbenchDiagnostic])
   case reviewThreads([WorkbenchReviewThread])
+  case projects(active: String, projects: [WorkbenchProject])
+  case agents([WorkbenchAgent])
+  case debug(WorkbenchDebugStatus)
 }
 
 public struct CommandError: Error, Sendable, Codable, Equatable {
@@ -578,6 +581,8 @@ extension CommandRegistry {
       s.withLayout(t.project) { l in l.tree.close(t.pane); l.launches[t.pane] = nil }
       return .ok
     },
+    // Every agent terminal in every Project (launched or detected), so a CLI caller can find a key without the GUI.
+    cmd("agent.list", "エージェント一覧", .read, palette: false) { s, _ in .agents(s.agentList) },
     // ADR-0020: focus the Project's concierge, starting it if needed. GUI-only (ai: false): an agent
     // must not spawn a concierge; it launches children through agent.launch instead.
     cmd("concierge.open", "コンシェルジュを開く", .external, ai: false,
@@ -701,6 +706,8 @@ extension CommandRegistry {
         preflight: { s, _ throws(CommandError) in try require(s.active != nil, "no active file"); return .write }) { s, _ in
       s.dirty.remove(s.active!); return .ok  // ponytail: dirty flag only; real buffer write lands with V04/V05 file binding.
     },
+    // The `name` every other project.* command takes (the folder name, not the shown label), and the active one.
+    cmd("project.list", "プロジェクト一覧", .read, palette: false) { s, _ in .projects(active: s.project, projects: s.projects) },
     cmd("project.switch", "プロジェクトを切り替え", .read, params: [CommandParam("name", .string)],
         preflight: { s, i throws(CommandError) in
           try require(s.projects.contains { $0.name == i["name"]!.string! }, "no project \(i["name"]!)"); return .read
@@ -1066,6 +1073,8 @@ extension CommandRegistry {
         preflight: { s, _ throws(CommandError) in try require(!["idle", "ended"].contains(s.debugPhase), tr("再起動する session がありません")); return .external }) { _, _ in .ok },
     cmd("debug.stop", "デバッグを終了", .write, ai: false,
         preflight: { s, _ throws(CommandError) in try require(!["idle", "ended"].contains(s.debugPhase), tr("終了する session がありません")); return .write }) { _, _ in .ok },
+    // The GUI answers from its live session; ai: false like every debug.* (variables can hold the debuggee's data).
+    cmd("debug.status", "デバッグの状態", .read, ai: false, palette: false) { s, _ in .debug(WorkbenchDebugStatus(phase: s.debugPhase)) },
     cmd("state.snapshot", "状態を取得", .read, palette: false) { s, _ in .snapshot(s) },
   ] + gitCommands + agentContextCommands + mergeCommands
 

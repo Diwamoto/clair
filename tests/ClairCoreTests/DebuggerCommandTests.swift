@@ -27,6 +27,16 @@ import ClairWorkspace
     #expect(commands.execute("debug.breakpoint", ["path": .string(file.path), "line": .int(0)], state: &state) == .failure(CommandError(.preconditionFailed, "Line must be 1 or greater")))
   }
 
+  // The registry answers with the phase only; the GUI fills threads, frames and variables from its live session.
+  @Test func statusIsReadOnlyAndUserOnly() throws {
+    var state = WorkbenchState()
+    state.debugPhase = "stopped"
+    let commands = CommandRegistry.workbench
+    #expect(commands.commands.first { $0.id == "debug.status" }?.aiAvailable == false)
+    #expect(commands.preflight("debug.status", [:], state) == .success(.read))
+    #expect(commands.execute("debug.status", state: &state) == .success(.debug(WorkbenchDebugStatus(phase: "stopped"))))
+  }
+
   @Test func navigationCommandChangesGeneration() throws {
     var state = WorkbenchState()
     let before = state.debugNavigationGeneration
