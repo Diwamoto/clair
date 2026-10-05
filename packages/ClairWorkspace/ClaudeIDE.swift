@@ -69,6 +69,12 @@ public enum ClaudeIDE {
     return zip(a, b).reduce(UInt8(0)) { $0 | ($1.0 ^ $1.1) } == 0
   }
 
+  /// The WebSocket subprotocol to accept. Claude Code offers `mcp` and never finishes opening a socket whose upgrade
+  /// does not select it (the native build waits out its 30 s connect timeout; the npm build fails at once).
+  public static func subprotocol(offered: [String]) -> String? {
+    offered.contains("mcp") ? "mcp" : nil
+  }
+
   // MARK: tools
 
   private static func object(_ properties: [String: [String: Any]], required: [String] = []) -> [String: Any] {
