@@ -141,8 +141,7 @@ public struct PaneTree: Sendable, Equatable, Codable {
   /// False for a decoded tree that could crash or mislead the UI (restore degrades to the default layout).
   public var isValid: Bool {
     let ids = leaves.map(\.id)
-    // An editor, when present, is leftmost; none at all is a closed empty editor (`pane.close`).
-    return (leaves.first?.kind == .editor || !leaves.contains { $0.kind == .editor }) && Set(ids).count == ids.count && ids.contains(focused) && (maximized.map(ids.contains) ?? true)
+    return Self.anchored(leaves) && Set(ids).count == ids.count && ids.contains(focused) && (maximized.map(ids.contains) ?? true)
       && nextID > (ids.max() ?? 0)
   }
 
@@ -184,13 +183,14 @@ public struct PaneTree: Sendable, Equatable, Codable {
     let all = leaves
     guard let kindA = all.first(where: { $0.id == idA })?.kind, let kindB = all.first(where: { $0.id == idB })?.kind
     else { return }
-    guard !(all.first?.id == idA && kindB != .editor), !(all.first?.id == idB && kindA != .editor) else { return }
-    root = Self.map(root) { n in
+    let swapped = Self.map(root) { n in
       guard case .leaf(let id, _) = n else { return nil }
       if id == idA { return .leaf(id: idA, kind: kindB) }
       if id == idB { return .leaf(id: idB, kind: kindA) }
       return nil
     }
+    guard Self.anchored(Self.leaves(swapped)) else { return }
+    root = swapped
   }
 
   public enum Edge: String, Sendable, CaseIterable { case left, right, top, bottom }
@@ -208,10 +208,16 @@ public struct PaneTree: Sendable, Equatable, Codable {
       guard case .leaf(let i, _) = n, i == target else { return nil }
       return .split(axis: axis, ratio: 0.5, first: before ? moved : n, second: before ? n : moved)
     }
-    guard Self.leaves(candidate).first?.kind == .editor else { return }
+    guard Self.anchored(Self.leaves(candidate)) else { return }
     root = candidate
     focused = id
     maximized = nil
+  }
+
+  /// An editor, when present, is leftmost; none at all is a closed empty editor (`pane.close`),
+  /// and then terminals move freely.
+  private static func anchored(_ leaves: [(id: Int, kind: PaneKind)]) -> Bool {
+    leaves.first?.kind == .editor || !leaves.contains { $0.kind == .editor }
   }
 
   private static func clamp(_ r: Double) -> Double { min(max(r, ratioRange.lowerBound), ratioRange.upperBound) }

@@ -34,6 +34,17 @@ final class PaneTreeTests: XCTestCase {
     XCTAssertTrue(t.isValid)
   }
 
+  /// With the empty editor closed (⌘W), the header handle still moves terminals, leftmost included.
+  func testMoveLeafWithoutAnEditor() {
+    var t = PaneTree()
+    t.focus(1); t.closeFocused()  // terminal 2 | terminal 3
+    t.splitFocused(.vertical)  // (2 / 4) | 3
+    t.moveLeaf(4, to: 2, .left)
+    XCTAssertEqual(t.leaves.map(\.id), [4, 2, 3])
+    XCTAssertEqual(t.focused, 4)
+    XCTAssertTrue(t.isValid)
+  }
+
   func testCloseKeepsSiblingAndLastPaneSurvives() {
     var t = PaneTree()
     t.focus(2); t.closeFocused()
