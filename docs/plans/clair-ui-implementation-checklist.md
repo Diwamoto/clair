@@ -74,9 +74,16 @@ ui-monospace, "JetBrains Mono", Menlo, monospace`）の2種類のみ。
 
 ### 2.4 Chrome budget
 
-`chrome = { titlebar: 48, activityBarWidth: 44, statusBar: 26 }`。縦 chrome 予算は
+`chrome = { cell: 48, cellControl: 38, titlebar: 48, activityBarWidth: 48, statusBar: 26 }`。縦 chrome 予算は
 titlebar 48 + status bar 26 = **74px** で全画面共通（editor breadcrumb は意図的な例外、
 2.7参照）。
+
+> **2026-10-05 amendment（cell）**: titlebar の高さと Activity Bar の幅は同じ
+> **1 セル = 48px**（`chrome.cell`）。中に置く選択可能な部品 — タイトルバーの tab と
+> レールのアイコン — も同じ **38px の箱**（`chrome.cellControl`、上下左右 5px の余白）に
+> 揃える。レールは 44→48、アイコンは 32×40（モック）/ 36×36 → 38×38 になった。
+> モバイルの tab bar 78 はホームインジケータ分を含む別勘定でこの対象外。
+> 旧記述の「44 はモバイルのタッチ寸法に合わせた」は根拠でなくなった。
 
 > **2026-09-20 amendment（re-freeze）**: U01 freeze 時点の `sidebarStrip: 34`
 > （sidebar panel 内、横アイコン列）は、その後の workbench 敵対的UIレビューにより
@@ -124,7 +131,7 @@ titlebar 48 + status bar 26 = **74px** で全画面共通（editor breadcrumb �
 
 ## 3. Screen/state 一覧（Mac IDE、`#/ide`）
 
-AppShell（`chrome.tsx` の `AppShell`）は titlebar 48px + activity bar 44px（縦、
+AppShell（`chrome.tsx` の `AppShell`）は titlebar 48px + activity bar 48px（縦、
 titlebar〜status bar 間で全高）+ sidebar 242px（panel のみ）+ main + status bar 26px
 の構成で一度だけ組み立てられ、画面遷移では **activity bar は常にマウントされたまま、
 panel と main だけ** が差し替わる（2.4 の2026-09-20 amendment 参照）。全画面共通で、

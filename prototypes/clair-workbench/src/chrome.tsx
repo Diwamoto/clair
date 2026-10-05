@@ -11,7 +11,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSPropert
 import { targetRing, useContextMenu } from './contextMenu';
 import { files, projectTabs, type FileKind } from './data';
 import { fileMenu, projectMenu, sessionTabMenu, standInTabMenu } from './menus';
-import { color, fs, groupColor, line, mono, radius, space, wash, withAlpha, type GroupColorKey } from './tokens';
+import { chrome, color, fs, groupColor, line, mono, radius, space, wash, withAlpha, type GroupColorKey } from './tokens';
 import {
   IconBranch,
   IconBug,
@@ -211,7 +211,7 @@ function Tab({
         // `background` entirely (not 'transparent'): an inline value of any
         // kind outranks the .hoverable:hover rule and silently kills hover.
         background: active ? wash.selected : undefined,
-        height: 38,
+        height: chrome.cellControl,
         alignSelf: 'center',
         overflow: 'hidden',
       }}
@@ -546,7 +546,7 @@ export function AppTitlebar({ extra }: { extra?: ReactNode }) {
   return (
     <div
       style={{
-        height: 48,
+        height: chrome.titlebar,
         flexShrink: 0,
         display: 'flex',
         // Tabs are centred in the bar now that the selected one is a filled
@@ -714,8 +714,10 @@ export function SourceControlModeTabs() {
 // width the way the old 34px horizontal strip did. Icons grew 16->18px now
 // that there's headroom for them; 44px matches the touch/device sizing the
 // Mobile artboards already use elsewhere in Tokens.
-const ACTIVITY_BAR_WIDTH = 44;
-const NAV_ITEM_HEIGHT = 40;
+// The rail is one `chrome.cell` wide — the titlebar's height — and its icons are
+// `chrome.cellControl` squares, the same box a tab is.
+const ACTIVITY_BAR_WIDTH = chrome.activityBarWidth;
+const NAV_ITEM_HEIGHT = chrome.cellControl;
 const NAV_GAP = space[1];
 
 function ActivityBar() {
@@ -779,7 +781,7 @@ function ActivityBar() {
           return (
             <Act
               key={item.id}
-              width={32}
+              width={chrome.cellControl}
               height={NAV_ITEM_HEIGHT}
               title={item.label}
               active={active === item.id}

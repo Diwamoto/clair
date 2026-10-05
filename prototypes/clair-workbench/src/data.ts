@@ -154,7 +154,6 @@ const workspaceChrome = `import SwiftUI
 /// bar. Panes never add a header row of their own.
 struct WorkspaceChrome: View {
   static let titlebarHeight: CGFloat = 48
-  static let sidebarStripHeight: CGFloat = 34
   static let statusBarHeight: CGFloat = 26
 }
 `;

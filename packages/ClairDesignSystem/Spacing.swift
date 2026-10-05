@@ -20,12 +20,18 @@ public enum Spacing {
 /// (checklist §2.7) and is not modeled here — that is a screen-level
 /// concern for `U04`/`U05`, not a token.
 public enum ChromeBudget {
-  public static let titlebar: CGFloat = 48
+  /// Shared module of the two chrome strips: the titlebar's height and the
+  /// activity bar's width are one cell, and the selectable control inside
+  /// either (a tab, a rail icon) is one `cellControl` box with the same 5pt
+  /// inset (checklist §2.4).
+  public static let cell: CGFloat = 48
+  public static let cellControl: CGFloat = 38
+  public static let titlebar: CGFloat = cell
   /// Left vertical nav strip — was a horizontal row nested at the top of
   /// the sidebar panel (`sidebarStrip`, now unused); it sits outside the
   /// panel as its own full-height column instead (checklist §2.4,
   /// 2026-09-20 amendment).
-  public static let activityBarWidth: CGFloat = 44
+  public static let activityBarWidth: CGFloat = cell
   public static let statusBar: CGFloat = 26
 }
 

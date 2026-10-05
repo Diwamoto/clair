@@ -3351,7 +3351,7 @@ import Observation
           }
         }
           .foregroundStyle(on ? C.chromeInk : C.chromeInkMuted)
-          .frame(width: 36, height: 36)
+          .frame(width: ChromeBudget.cellControl, height: ChromeBudget.cellControl)
           .background(on ? W.selected : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
           .opacity(enabled ? 1 : 0.35)
       }
@@ -3446,7 +3446,7 @@ import Observation
         .opacity((selected || isHovered) ? 1 : 0)
         .allowsHitTesting(selected || isHovered)
       }
-      .padding(.horizontal, 8).frame(width: 200, height: 38)
+      .padding(.horizontal, 8).frame(width: 200, height: ChromeBudget.cellControl)
       .background(selected ? W.selected : isHovered ? W.soft : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
       .background(NoWindowDrag())
       .contentShape(Rectangle())

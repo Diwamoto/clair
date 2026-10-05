@@ -163,7 +163,12 @@ export const radius = { control: 4, card: 6, overlay: 10, pill: 999, device: 44 
 export const space = [2, 4, 8, 12, 16, 24] as const;
 
 // CHROME BUDGET — the vertical px before code. titlebar 48 + status bar 26.
-export const chrome = { titlebar: 48, sidebarStrip: 34, statusBar: 26 } as const;
+// `cell` is the shared module of the two chrome strips: the titlebar's height
+// and the activity bar's width are both one cell, and the selectable control
+// inside either (a tab, a rail icon) is one `cellControl` square-ish box, so the
+// two read as the same part with the same inset (5px).
+const cell = 48;
+export const chrome = { cell, cellControl: 38, titlebar: cell, activityBarWidth: cell, statusBar: 26 } as const;
 
 export const sans = "-apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', sans-serif";
 export const mono = "'SF Mono', ui-monospace, Menlo, 'Hiragino Sans', monospace";
