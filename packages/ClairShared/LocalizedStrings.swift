@@ -194,6 +194,7 @@ extension LocalizedStrings {
     "再起動": "Restart",
     "破棄して続行": "Discard and Continue",
     "フォルダを開く": "Open Folder",
+    "フォルダを選んでプロジェクトを開く": "Open Project…",
     "ファイル、シンボル": "Files, symbols",
     "%@ タブグループを展開": "Expand the %@ tab group",
     "%@ タブグループを折りたたむ": "Collapse the %@ tab group",

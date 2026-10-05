@@ -382,6 +382,7 @@ import Observation
         }
         if id == "editor.fileSymbols" { showFileSymbols() }
         if id == "editor.problems" { showProblems() }
+        if id == "project.choose" { chooseProject() }
         if id == "agent.mention" { mentionSelectionToClaude() }
         if id == "agent.ask" { askAgentAboutSelection() }
         if id == "terminal.askAgent" { askAgentAboutTerminalSelection() }
@@ -812,6 +813,13 @@ import Observation
       }
     }
 
+    /// ⌘⇧N / the titlebar "+": pick any folder and open it as a Project.
+    private func chooseProject() {
+      let panel = NSOpenPanel()
+      panel.canChooseFiles = false; panel.canChooseDirectories = true
+      if panel.runModal() == .OK, let url = panel.url { run("project.open", ["path": .string(url.path)]) }
+    }
+
     /// ⌘⇧M: every diagnostic of the active Project's open documents, errors first.
     private func showProblems() {
       guard let root = activeRoot else { return }
@@ -1118,7 +1126,7 @@ import Observation
     /// Menu-bar titles follow macOS English menus; the palette keeps the registry's titles.
     static let titles: [String: String] = [
       "settings.open": "Settings…", "file.save": "Save", "tab.reopenClosed": "Reopen Closed Tab",
-      "pane.close": "Close Tab or Pane", "palette.recent": "Open Recent…", "palette.compare": "Compare With…",
+      "project.choose": "Open Project…", "pane.close": "Close Tab or Pane", "palette.recent": "Open Recent…", "palette.compare": "Compare With…",
       "window.restart": "Restart Window", "app.restart": "Restart App",
       "palette.find": "Find", "palette.search": "Find in Project", "editor.format": "Format Document",
       "editor.fold": "Fold", "editor.unfold": "Unfold", "editor.foldAll": "Fold All", "editor.unfoldAll": "Unfold All",
@@ -1358,7 +1366,7 @@ import Observation
                 if i > 0 { Rectangle().fill(Color(white: 0.95, opacity: 0.09)).frame(width: 1, height: 22).padding(.horizontal, 4) }
                 projectGroup(p, colorKey: p.color.flatMap { DesignTokens.GroupColor.resolve($0) == nil ? nil : $0 } ?? projectColors[i % projectColors.count].rawValue)
               }
-              Button(action: openFolder) { Image(systemName: "plus").font(.system(size: 13)).foregroundStyle(C.chromeInk).frame(width: 30, height: 30) }
+              Button { store.run("project.choose") } label: { Image(systemName: "plus").font(.system(size: 13)).foregroundStyle(C.chromeInk).frame(width: 30, height: 30) }
                 .buttonStyle(.hoverWash).help(tr("フォルダを開く"))
             }
             .frame(minWidth: g.size.width, minHeight: g.size.height, alignment: .leading)
@@ -1605,12 +1613,6 @@ import Observation
       } else if project == st.project {
         store.refreshProjectFiles()
       }
-    }
-
-    private func openFolder() {
-      let panel = NSOpenPanel()
-      panel.canChooseFiles = false; panel.canChooseDirectories = true
-      if panel.runModal() == .OK, let url = panel.url { store.run("project.open", ["path": .string(url.path)]) }
     }
 
     // MARK: activity bar + sidebar

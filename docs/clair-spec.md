@@ -445,6 +445,8 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
 - 設定画面にある各設定(toggle・選択肢・section)と `clair` コマンド / Agent skill の
   インストール・アンインストールは palette からも実行できる
 - shortcut は任意 command へユーザーが割り当てられる
+- ⌘⇧N(`project.choose`、File ▸ Open Project…)で folder picker を開き、選んだ任意の folder を
+  `project.open` で Project として開く。titlebar の「+」も同じ
 - `clair open path:line:column` は path を所有する open Project の active pane へ
   file を開く。該当 Project がなければ Git root を新規 Project として開く。どの
   Project にも Git repository にも属さない ad-hoc file は Project を作らず、

@@ -811,6 +811,8 @@ extension CommandRegistry {
       let path = WorkbenchProject.normalized(i["path"]!.string!)!
       s.openProject(WorkbenchProject(name: URL(fileURLWithPath: path).lastPathComponent, path: path)); return .ok
     },
+    // ⌘⇧N: the GUI shows the folder picker and answers with `project.open` (ClairWorkbenchStore.run); nothing to change here.
+    cmd("project.choose", "フォルダを選んでプロジェクトを開く", .read, ai: false, shortcut: "⌘⇧N") { _, _ in .ok },
     // MCP may navigate only within a Project already open in Clair. The user's CLI keeps its wider file-open behavior.
     cmd("file.open", "パスからファイルを開く", .additive,
         params: [CommandParam("path", .string), CommandParam("line", .int, required: false), CommandParam("column", .int, required: false)],

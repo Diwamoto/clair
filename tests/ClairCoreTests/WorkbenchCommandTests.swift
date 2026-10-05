@@ -91,6 +91,13 @@ final class WorkbenchCommandTests: XCTestCase {
     XCTAssertEqual(WorkbenchState.settingTitles.keys.sorted(), (WorkbenchState.toggleKeys + WorkbenchState.choiceOptions.keys).sorted())
   }
 
+  func testChooseProjectHasCmdShiftNAndIsHiddenFromAgents() throws {
+    let d = try XCTUnwrap(r.commands.first { $0.id == "project.choose" })
+    XCTAssertEqual(d.shortcut, "⌘⇧N")
+    XCTAssertFalse(d.aiAvailable)  // opening a folder widens what is readable; the picker is the user's
+    XCTAssertEqual(r.commands.filter { $0.shortcut == "⌘⇧N" }.count, 1)
+  }
+
   func testProjectSearchIsACommandWithTheAdvertisedShortcut() throws {
     var state = WorkbenchState()
     XCTAssertEqual(r.commands.first { $0.id == "palette.search" }?.shortcut, "⌘⇧F")
