@@ -103,6 +103,7 @@ extension LocalizedStrings {
     "設定を開く: %@": "Open Settings: %@",
     "設定を閉じる": "Close Settings",
     "チェンジログ": "Changelog",
+    "GitHub の CHANGELOG.md をブラウザで開きます。": "Opens CHANGELOG.md on GitHub in your browser.", "ブラウザで開く": "Open in Browser",
     "設定を検索": "Search settings",
     "設定": "Settings",
 

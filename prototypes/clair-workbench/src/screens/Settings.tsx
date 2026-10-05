@@ -474,7 +474,21 @@ export function SettingsMain() {
                   />
                 </Card>
                 <Card title="バージョン">
-                  <Row first last title="現在のバージョン" note={`Clair 2.0.0 · 最新`} control={<span />} />
+                  <Row first title="現在のバージョン" note={`Clair 2.0.0 · 最新`} control={<span />} />
+                  <Row
+                    last
+                    title="チェンジログ"
+                    note="GitHub の CHANGELOG.md をブラウザで開きます。"
+                    control={
+                      <button
+                        className="btn-secondary"
+                        onClick={() => window.open('https://github.com/Diwamoto/clair/blob/main/CHANGELOG.md', '_blank')}
+                        style={{ minHeight: 26, padding: '0 8px', borderRadius: radius.control, fontSize: fs.caption }}
+                      >
+                        ブラウザで開く
+                      </button>
+                    }
+                  />
                 </Card>
               </>
             ) : (

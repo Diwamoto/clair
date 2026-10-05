@@ -2880,6 +2880,9 @@ import Observation
         if c.channel != .dev {
           SettingsRow(title: tr("更新を確認")) { Button(tr("確認")) { Task { await store.checkForUpdate(manual: true) } } }
         }
+        SettingsRow(title: tr("チェンジログ"), note: tr("GitHub の CHANGELOG.md をブラウザで開きます。")) {
+          Button(tr("ブラウザで開く")) { NSWorkspace.shared.open(ClairUpdateConfiguration.changelogURL) }
+        }
       }
     }
 

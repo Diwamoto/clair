@@ -115,6 +115,7 @@ public struct ClairUpdate: Equatable, Sendable {
 
 public struct ClairUpdateConfiguration: Sendable {
   public static let manifestURL = URL(string: "https://github.com/Diwamoto/clair/releases/latest/download/latest.json")!
+  public static let changelogURL = URL(string: "https://github.com/Diwamoto/clair/blob/main/CHANGELOG.md")!
 
   public let channel: ClairChannel
   public let publicKeyBase64: String?
