@@ -146,6 +146,32 @@ final class WorkbenchAgentLaunchTests: XCTestCase {
     XCTAssertEqual(try r.execute("agent.output", ["key": .string(key)], state: &s).get(), .text("did: say 'hi'"))
   }
 
+  // `agent.list`: every agent terminal with the key agent.status/output/close take; a run's exit file decides its status.
+  func testListShowsKeysAndRecordedExit() throws {
+    var (s, root) = try opened()
+    let parent = WorkbenchState.terminalKey(root, 2)
+    guard case .pane(let plain) = try r.execute("agent.launch", ["profile": .string("codex")], confirmed: true, state: &s).get(),
+      case .text(let key) = try r.execute(
+        "agent.launch", ["profile": .string("claude"), "prompt": .string("x"), "parent": .string(parent)], confirmed: true, state: &s
+      ).get()
+    else { return XCTFail() }
+    XCTAssertEqual(r.commands.first { $0.id == "agent.list" }?.aiAvailable, true)
+    XCTAssertEqual(try r.preflight("agent.list", [:], s).get(), .read)
+    guard case .agents(let rows) = try r.execute("agent.list", state: &s).get() else { return XCTFail() }
+    XCTAssertEqual(rows.map(\.key).sorted(), [WorkbenchState.terminalKey(root, plain), key].sorted())
+    let child = try XCTUnwrap(rows.first { $0.key == key })
+    XCTAssertEqual(child.profile, "claude"); XCTAssertEqual(child.parent, parent); XCTAssertEqual(child.status, "running")
+    XCTAssertTrue(child.delegated)
+    XCTAssertEqual(rows.first { $0.key != key }?.delegated, false)
+    let run = try XCTUnwrap(s.delegated(key).run)
+    let exit = AgentRun.directory.appending(path: "\(run).exit")
+    try FileManager.default.createDirectory(at: AgentRun.directory, withIntermediateDirectories: true)
+    try "3\n".write(to: exit, atomically: true, encoding: .utf8)
+    defer { try? FileManager.default.removeItem(at: exit) }
+    guard case .agents(let after) = try r.execute("agent.list", state: &s).get() else { return XCTFail() }
+    XCTAssertEqual(after.first { $0.key == key }.map { [$0.status, "\($0.exitCode ?? -1)"] }, ["exited", "3"])
+  }
+
   // Closing your own finished child is free; a running one or someone else's needs approval.
   func testCloseRiskAndPlacement() throws {
     var (s, root) = try opened()

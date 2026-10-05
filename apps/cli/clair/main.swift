@@ -15,12 +15,17 @@ if CommandLine.arguments.dropFirst().starts(with: ["mcp", "serve"]) {
 if CommandLine.arguments.dropFirst().first == "attach" { exit(runAttach(Array(CommandLine.arguments.dropFirst(2)))) }
 if CommandLine.arguments.dropFirst().starts(with: ["daemon", "stop"]) { exit(runDaemonStop(Array(CommandLine.arguments.dropFirst(3)))) }
 if CommandLine.arguments.dropFirst().starts(with: ["daemon", "status"]) { exit(runDaemonStatus(Array(CommandLine.arguments.dropFirst(3)))) }
+// `clair help [prefix]` lists the registry this binary was built with; it needs no running GUI.
+if let first = CommandLine.arguments.dropFirst().first, ["help", "--help", "-h"].contains(first), CommandLine.arguments.count <= 3 {
+  print(WorkbenchCLI.help(CommandLine.arguments.count == 3 ? CommandLine.arguments[2] : ""))
+  exit(0)
+}
 // `clair open --wait <path>` ($VISUAL / git editor): returns once that file has no tab in any open Project.
 var args = Array(CommandLine.arguments.dropFirst())
 let wait = args.first == "open" && args.count == 3 && args[1] == "--wait"
 if wait { args.remove(at: 1) }
 guard var request = WorkbenchCLI.parse(args) else {
-  FileHandle.standardError.write(Data("usage: clair open [--wait] <path[:line[:col]]> | clair preview <html-path> | clair <command-id> [key=value ...]\n".utf8))
+  FileHandle.standardError.write(Data("usage: clair open [--wait] <path[:line[:col]]> | clair preview <html-path> | clair <command-id> [key=value ...]\n       clair help [prefix] lists the commands\n".utf8))
   exit(2)
 }
 // V16: `clair agent.wait key=<root#pane> [timeout=<s>]` polls agent.status until that delegated agent exits

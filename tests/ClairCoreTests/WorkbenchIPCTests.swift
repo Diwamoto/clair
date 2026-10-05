@@ -86,6 +86,39 @@ final class WorkbenchIPCTests: XCTestCase {
     XCTAssertNil(WorkbenchCLI.parse(["pane.focus", "id"]))
   }
 
+  // The GUI's cwd is not the caller's: path arguments it reads from disk are made absolute here, project-relative ones are not.
+  func testRelativePathArgumentsResolveAgainstCallerCwd() throws {
+    let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).standardizedFileURL.path
+    XCTAssertEqual(WorkbenchCLI.parse(["project.open", "path=."])?.input, ["path": .string(cwd)])
+    XCTAssertEqual(WorkbenchCLI.parse(["debug.breakpoint", "path=a/../b.go", "line=3"])?.input, ["path": .string(cwd + "/b.go"), "line": .int(3)])
+    XCTAssertEqual(WorkbenchCLI.parse(["project.addFolder", "name=x", "path=/abs"])?.input, ["name": .string("x"), "path": .string("/abs")])
+    XCTAssertEqual(WorkbenchCLI.parse(["tab.open", "path=a/b.swift"])?.input, ["path": .string("a/b.swift")])
+  }
+
+  // From a Clair terminal, agent.status / output / list must not get a `parent` they would refuse as unknown.
+  func testCallerBecomesParentOnlyWhereTaken() {
+    let launch = WorkbenchIPCRequest(command: "agent.launch", input: ["parent": .string("/fake#1")], caller: "/r#2").callerAsParent()
+    XCTAssertEqual(launch.input["parent"], .string("/r#2"))
+    XCTAssertNil(WorkbenchIPCRequest(command: "agent.launch", input: ["parent": .string("/fake#1")]).callerAsParent().input["parent"])
+    for id in ["agent.status", "agent.output", "agent.list"] {
+      let req = WorkbenchIPCRequest(command: id, input: ["key": .string("/r#3")], caller: "/r#2").callerAsParent()
+      XCTAssertEqual(req.input, ["key": .string("/r#3")], id)
+    }
+    XCTAssertEqual(WorkbenchIPCRequest(command: "tab.open", input: ["parent": .string("x")], caller: "/r#2").callerAsParent().input["parent"], .string("x"))
+  }
+
+  func testHelpListsCommandsWithArguments() {
+    let all = WorkbenchCLI.help()
+    XCTAssertTrue(all.hasPrefix("usage: clair open"))
+    for id in CommandRegistry.workbench.commands.map(\.id) { XCTAssertTrue(all.contains("\n\(id)"), id) }
+    let projects = WorkbenchCLI.help("project.")
+    XCTAssertTrue(projects.contains("\nproject.list\n"))
+    XCTAssertTrue(projects.contains("\nproject.rename name=<string> label=<string>\n"))
+    XCTAssertTrue(projects.contains("— write, user-only"))
+    XCTAssertFalse(projects.contains("\nagent."))
+    XCTAssertTrue(WorkbenchCLI.help("agent.launch").contains("[direction=right|down]"))
+  }
+
   func testPreviewArgumentParsing() throws {
     let cwd = FileManager.default.currentDirectoryPath
     let preview = try XCTUnwrap(WorkbenchCLI.parse(["preview", "artifact.html"]))

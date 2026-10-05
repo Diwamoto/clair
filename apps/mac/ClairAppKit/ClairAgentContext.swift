@@ -14,6 +14,7 @@
       case "review.threads":
         return scope(input).map { s in CommandResult.reviewThreads(reviews.list(root: s.root, path: s.path) { self.lines(root: s.root, $0) }) }
       case "review.comment", "review.suggest": return postReview(id, input)
+      case "debug.status": return .success(.debug(debugSession?.status ?? WorkbenchDebugStatus(phase: "idle")))
       default: return nil
       }
     }

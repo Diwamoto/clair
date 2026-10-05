@@ -384,4 +384,39 @@ import Observation
     ((try? JSONSerialization.jsonObject(with: data)) as? [String: Any])?["body"] as? [String: Any] ?? [:]
   }
 }
+
+extension ClairDebugSession {
+  /// The `debugPhase` word for `phase` (the registry's preflights and `debug.status` use it).
+  var phaseName: String {
+    switch phase {
+    case .idle: "idle"
+    case .starting: "starting"
+    case .configuring: "configuring"
+    case .running: "running"
+    case .stopped: "stopped"
+    case .ended: "ended"
+    case .failed: "failed"
+    }
+  }
+
+  /// `debug.status`: what the Run and Debug panel shows.
+  var status: WorkbenchDebugStatus {
+    var s = WorkbenchDebugStatus(phase: phaseName)
+    if case .failed(let message) = phase { s.error = message }
+    s.stoppedReason = stoppedReason
+    s.threads = threads.map { WorkbenchDebugStatus.Thread(id: $0.id, name: $0.name) }
+    s.selectedThread = selectedThread
+    s.frames = frames.map { WorkbenchDebugStatus.Frame(id: $0.id, name: $0.name, path: $0.path, line: $0.line) }
+    s.selectedFrame = selectedFrame
+    s.variables = variables.map { WorkbenchDebugStatus.Variable(id: $0.id, name: $0.name, value: $0.value, depth: $0.depth, expandable: $0.reference > 0) }
+    s.breakpoints = breakpoints.keys.sorted().flatMap { path in
+      (breakpoints[path] ?? []).sorted().map { line in
+        let adapter = breakpointStatus[path]?[line]
+        return WorkbenchDebugStatus.Breakpoint(path: path, line: adapter?.line ?? line, verified: adapter?.verified, message: adapter?.message)
+      }
+    }
+    s.console = Array(console.suffix(50))
+    return s
+  }
+}
 #endif

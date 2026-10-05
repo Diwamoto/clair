@@ -122,6 +122,25 @@ public struct AgentSession: Sendable, Equatable, Identifiable {
   public var activity: String? = nil
 }
 
+/// One row of `agent.list`. `key` (`root#pane`) is what agent.status / output / wait / close take for a delegated run.
+public struct WorkbenchAgent: Sendable, Codable, Equatable {
+  public let key: String
+  public let project: String
+  public let pane: Int
+  public let profile: String
+  public let cwd: String
+  /// `running` / `attention` (rang the bell, unread) / `exited`
+  public let status: String
+  public let exitCode: Int?
+  /// The terminal's window title, if the agent set one.
+  public let activity: String?
+  /// Started with a prompt through agent.launch (its output and exit are recorded).
+  public let delegated: Bool
+  /// Terminal key of the agent that launched this one.
+  public let parent: String?
+  public let concierge: Bool
+}
+
 extension WorkbenchState {
   /// Same key the GUI uses for the daemon shell behind a terminal pane (`ClairWorkbenchStore.terminalKey`).
   public static func terminalKey(_ root: String, _ pane: Int) -> String { "\(root)#\(pane)" }
@@ -189,6 +208,25 @@ extension WorkbenchState {
         return AgentSession(project: p, pane: pane, title: AgentProfile.named(l.profile)?.title ?? l.profile, cwd: l.cwd, status: status,
           activity: paneTitles[NotificationLog.paneKey(p, pane)].flatMap { $0.isEmpty ? nil : $0 })
       }
+    }
+  }
+
+  /// `agent.list`: the session list (every Project) with what a caller needs to act on each row.
+  /// A delegated run's own exit file outranks the notice log, as in `agent.status`.
+  public var agentList: [WorkbenchAgent] {
+    agentSessions.compactMap { s in
+      guard let root = projects.first(where: { $0.name == s.project })?.path, let l = agentLaunch(in: s.project, pane: s.pane) else { return nil }
+      var status = "running", exitCode: Int? = nil
+      let recorded = l.run.flatMap { AgentRun(id: $0).exitCode }.map { AgentSession.Status.exited($0) }
+      switch recorded ?? s.status {
+      case .running: break
+      case .attention: status = "attention"
+      case .exited(let code): status = "exited"; exitCode = code
+      }
+      return WorkbenchAgent(
+        key: Self.terminalKey(root, s.pane), project: s.project, pane: s.pane, profile: l.profile, cwd: s.cwd,
+        status: status, exitCode: exitCode, activity: s.activity, delegated: l.run != nil, parent: l.parent,
+        concierge: l.concierge != nil)
     }
   }
 
