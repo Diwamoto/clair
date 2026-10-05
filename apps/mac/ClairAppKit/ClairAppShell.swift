@@ -1329,6 +1329,8 @@ import Observation
         }
       }
       .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ClairCloseFocusedPaneShortcut"))) { _ in
+        // An open history chat covers the panes, so ⌘W closes it first, like its ✕ button.
+        if chat != nil { chat = nil; return }
         store.performFromUI("pane.close")
       }
       .focusedSceneValue(\.clairWorkbench, store)

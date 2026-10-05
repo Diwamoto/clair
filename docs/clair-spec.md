@@ -406,7 +406,8 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   実行する。既存の agent launch と同じ承認境界を通り、cwd は Project root のため、
   チャットの directory が登録済みの別 Project ならその Project に切り替えてから
   実行し、どの Project でもないときは無効にする。再開コマンド
-  (`cd <directory> && <resume コマンド>`)は常にコピーできる
+  (`cd <directory> && <resume コマンド>`)は常にコピーできる。開いているチャットは
+  ⌘W で閉じる(pane や window は閉じない)
 - activity bar の「コンシェルジュ」は Project ごとに一つのコンシェルジュ agent を
   sidebar に出す([ADR-0020](decisions/0020-concierge-agent.md))。本体は既定 Agent を
   通常の agent launch と同じく raw PTY で起動し、GUI はその session の公式 transcript を
