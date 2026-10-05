@@ -21,7 +21,8 @@ Claude Code は VS Code / JetBrains / Neovim 向けに「IDE 連携」を持ち�
 
 - `~/.claude/ide/<port>.lock`(`CLAUDE_CONFIG_DIR` があればその下)に pid、workspaceFolders、
   ideName、`transport: "ws"`、authToken を書く
-- `127.0.0.1:<port>` の WebSocket で、upgrade の `x-claude-code-ide-authorization` ヘッダを token と照合する
+- `127.0.0.1:<port>` の WebSocket で、upgrade の `x-claude-code-ide-authorization` ヘッダを token と照合する。
+  Claude Code は subprotocol `mcp` を要求し、upgrade 応答がそれを選ばない socket では接続を完了しない
 - その上で MCP(JSON-RPC 2.0)を話し、`openFile` / `openDiff` / `getCurrentSelection` /
   `getLatestSelection` / `getOpenEditors` / `getWorkspaceFolders` / `getDiagnostics` /
   `checkDocumentDirty` / `saveDocument` / `close_tab` / `closeAllDiffTabs` に答える

@@ -41,6 +41,13 @@ import XCTest
     XCTAssertFalse(ClaudeIDE.tokenMatches("", ""))
   }
 
+  func testUpgradeSelectsTheMCPSubprotocolClaudeCodeOffers() {
+    XCTAssertEqual(ClaudeIDE.subprotocol(offered: ["mcp"]), "mcp")
+    XCTAssertEqual(ClaudeIDE.subprotocol(offered: ["other", "mcp"]), "mcp")
+    XCTAssertNil(ClaudeIDE.subprotocol(offered: []))
+    XCTAssertNil(ClaudeIDE.subprotocol(offered: ["other"]))
+  }
+
   private func object(_ text: String) throws -> [String: Any] {
     try XCTUnwrap(JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
   }

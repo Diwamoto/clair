@@ -24,9 +24,10 @@
       let token = self.token
       let ws = NWProtocolWebSocket.Options()
       ws.autoReplyPing = true
-      ws.setClientRequestHandler(DispatchQueue.main) { _, headers in
+      ws.setClientRequestHandler(DispatchQueue.main) { subprotocols, headers in
         let ok = headers.contains { $0.name.lowercased() == "x-claude-code-ide-authorization" && ClaudeIDE.tokenMatches($0.value, token) }
-        return NWProtocolWebSocket.Response(status: ok ? .accept : .reject, subprotocol: nil)
+        guard ok else { return NWProtocolWebSocket.Response(status: .reject, subprotocol: nil) }
+        return NWProtocolWebSocket.Response(status: .accept, subprotocol: ClaudeIDE.subprotocol(offered: subprotocols))
       }
       let params = NWParameters.tcp
       params.defaultProtocolStack.applicationProtocols.insert(ws, at: 0)
