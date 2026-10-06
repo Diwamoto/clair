@@ -4,10 +4,11 @@ import { RouteLink } from '../App';
 import { AGENT_PROFILES } from '../data';
 import { IconCloseThin } from '../icons';
 import { useWorkbench } from '../store';
+import { UsageSection } from './Usage';
 
 import { color, fs, line, radius, space } from '../tokens';
 
-const SECTIONS = ['一般', 'AIプロバイダー', 'エディタ', 'ターミナル', 'モバイル', 'アップデート'];
+const SECTIONS = ['一般', 'AIプロバイダー', '使用状況', 'エディタ', 'ターミナル', 'モバイル', 'アップデート'];
 
 /** A short, closed set of values — segmented rather than a Switch because
  * there are more than two states. Same lightness-only emphasis rule: the
@@ -270,7 +271,9 @@ export function SettingsMain() {
             <p className="prose" style={{ margin: '8px 0 24px', color: color.textTertiary, fontSize: fs.secondary, lineHeight: 1.6 }}>
               {section === '一般'
                 ? 'ワークスペースの基本動作とアプリ全体の表示を設定します。'
-                : `${section} の設定です。`}
+                : section === '使用状況'
+                  ? '依頼・追記と推定費用の集計'
+                  : `${section} の設定です。`}
             </p>
 
             {section === '一般' ? (
@@ -337,6 +340,8 @@ export function SettingsMain() {
                   />
                 </Card>
               </>
+            ) : section === '使用状況' ? (
+              <UsageSection />
             ) : section === 'モバイル' ? (
               <Card title="モバイル">
                 <Row

@@ -189,6 +189,101 @@ final class AgentHistoryTests: XCTestCase {
     XCTAssertEqual(summary.sessionsWithoutCost, 0)
   }
 
+  func testTurnsRunFromEachPromptToItsLastReply() {
+    let t = Date(timeIntervalSince1970: 1_000_000)
+    let turns = AgentHistoryReader.turns([
+      (false, t),  // before any prompt: ignored
+      (true, t + 10), (false, t + 20), (false, t + 70),
+      (true, t + 100),  // unanswered: dropped
+      (true, t + 200), (false, t + 230),
+    ])
+    XCTAssertEqual(turns, [DateInterval(start: t + 10, end: t + 70), DateInterval(start: t + 200, end: t + 230)])
+  }
+
+  func testClaudeListParseKeepsTurnsAndModelCosts() throws {
+    let home = URL.temporaryDirectory.appending(path: "clair-usage-turns-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: home) }
+    let project = home.appending(path: ".claude/projects/p")
+    try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+    let usage = #"{"input_tokens":1000,"output_tokens":200,"cache_read_input_tokens":100,"cache_creation":{"ephemeral_5m_input_tokens":50,"ephemeral_1h_input_tokens":0}}"#
+    let rows = [
+      #"{"type":"user","timestamp":"2026-09-24T02:00:00Z","sessionId":"s","uuid":"u1","message":{"content":"First"}}"#,
+      #"{"type":"assistant","timestamp":"2026-09-24T02:00:05Z","sessionId":"s","uuid":"a1","message":{"model":"claude-sonnet-5","id":"m1","content":[{"type":"tool_use","id":"t1","input":{}}],"usage":\#(usage)}}"#,
+      #"{"type":"user","timestamp":"2026-09-24T02:00:06Z","sessionId":"s","uuid":"r1","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"x"}]}}"#,
+      #"{"type":"assistant","timestamp":"2026-09-24T02:00:30Z","sessionId":"s","uuid":"a2","message":{"model":"claude-sonnet-5","id":"m2","content":[{"type":"text","text":"Done"}],"usage":\#(usage)}}"#,
+      #"{"type":"user","timestamp":"2026-09-24T02:10:00Z","sessionId":"s","uuid":"u2","message":{"content":"Second"}}"#,
+      #"{"type":"assistant","timestamp":"2026-09-24T02:11:00Z","sessionId":"s","uuid":"a3","message":{"model":"claude-x","id":"m3","content":[{"type":"text","text":"Ok"}],"usage":\#(usage)}}"#,
+    ]
+    try rows.joined(separator: "\n").write(to: project.appending(path: "s.jsonl"), atomically: true, encoding: .utf8)
+    let item = try XCTUnwrap(AgentHistoryReader.load(home: home).first)
+    let start = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-09-24T02:00:00Z"))
+    XCTAssertEqual(item.turns, [DateInterval(start: start, duration: 30), DateInterval(start: start + 600, duration: 60)])
+    XCTAssertNil(item.estimatedUSD)  // one model has no known price
+    XCTAssertEqual(item.models.first { $0.name == "claude-sonnet-5" }?.usd ?? 0, 0.00829, accuracy: 0.000001)
+    XCTAssertEqual(item.models.first { $0.name == "claude-x" }, AgentHistory.ModelCost(name: "claude-x", usd: nil))
+  }
+
+  func testUsageSummaryStreaksHoursWaitsAndConcurrency() throws {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "UTC")!
+    let now = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-10-06T12:00:00Z"))
+    let today = calendar.startOfDay(for: now)
+    func prompt(_ day: Int, _ hour: Double) -> AgentHistory.Message {
+      .init(id: UUID().uuidString, role: "user", text: "p", date: today.addingTimeInterval(Double(day) * 86_400 + hour * 3600))
+    }
+    var a = AgentHistory(id: "Claude Code:a", provider: .claude, title: "a", date: now,
+                         messages: [prompt(0, 9), prompt(-1, 9), prompt(-2, 21), prompt(-5, 21)], estimatedUSD: 2)
+    a.turns = [DateInterval(start: today + 9 * 3600, duration: 40), DateInterval(start: today + 10 * 3600, duration: 3 * 3600)]
+    var b = AgentHistory(id: "Codex:b", provider: .codex, title: "b", date: now, messages: [prompt(-1, 21)], estimatedUSD: nil)
+    b.turns = [DateInterval(start: today + 11 * 3600, duration: 600)]
+    let summary = AgentUsageSummary(histories: [a, b], calendar: calendar)
+
+    XCTAssertEqual(summary.streak(now: now, calendar: calendar), 3)
+    XCTAssertEqual(summary.longestStreak(calendar: calendar), 3)
+    XCTAssertEqual(summary.busiestHours(since: today - 90 * 86_400, calendar: calendar), [21, 9])
+
+    let waits = summary.waits(in: DateInterval(start: today, end: now))
+    XCTAssertEqual(waits.map(\.seconds).sorted(), [40, 600, AgentUsageSummary.waitCap])
+    XCTAssertEqual(AgentUsageSummary.median(waits.map(\.seconds)), 600)
+    XCTAssertEqual(AgentUsageSummary.histogram(waits), [0, 0, 1, 0, 0, 0, 1, 1])
+
+    let steps = summary.concurrency(in: DateInterval(start: today, end: now))
+    XCTAssertEqual(steps.map(\.running).max(), 2)
+    XCTAssertEqual(AgentUsageSummary.seconds(steps, atLeast: 2, until: now), 600)
+  }
+
+  func testUsageSummaryMonthsAndRankings() throws {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "UTC")!
+    let formatter = ISO8601DateFormatter()
+    let now = try XCTUnwrap(formatter.date(from: "2026-10-03T12:00:00Z"))
+    func chat(_ id: String, _ provider: AgentHistory.Provider, _ date: String, usd: Double?, models: [AgentHistory.ModelCost]) throws -> AgentHistory {
+      let at = try XCTUnwrap(formatter.date(from: date))
+      var history = AgentHistory(id: id, provider: provider, title: id, date: at,
+                                 messages: [.init(id: id, role: "user", text: id, date: at)], estimatedUSD: usd)
+      history.models = models
+      return history
+    }
+    let summary = AgentUsageSummary(histories: [
+      try chat("a", .claude, "2026-10-01T10:00:00Z", usd: 3, models: [.init(name: "claude-opus-5-5", usd: 3)]),
+      try chat("b", .claude, "2026-10-03T10:00:00Z", usd: 1, models: [.init(name: "claude-sonnet-5", usd: 1)]),
+      try chat("c", .codex, "2026-10-02T10:00:00Z", usd: nil, models: [.init(name: "gpt-x", usd: nil)]),
+      try chat("d", .claude, "2026-09-02T10:00:00Z", usd: 5, models: [.init(name: "claude-opus-5-5", usd: 5)]),
+    ], calendar: calendar)
+
+    XCTAssertEqual(summary.cumulative(month: now, cost: false, now: now, calendar: calendar), [1, 2, 3])
+    XCTAssertEqual(summary.cumulative(month: now, cost: true, now: now, calendar: calendar), [3, 3, 4])
+    XCTAssertEqual(summary.cumulative(month: now - 30 * 86_400, cost: true, now: now, calendar: calendar).count, 30)
+    XCTAssertEqual(summary.sessionsWithoutCost(month: now, calendar: calendar), 1)
+
+    let models = summary.models(since: nil)
+    XCTAssertEqual(models.map(\.name), ["claude-opus-5-5", "claude-sonnet-5", "gpt-x"])
+    XCTAssertEqual(models[0].usd, 8)
+    XCTAssertEqual(models[0].sessions, 2)
+    XCTAssertNil(models[2].usd)
+    XCTAssertEqual(summary.costliestSessions(since: now - 7 * 86_400, limit: 5).map(\.id), ["a", "b"])
+  }
+
   func testResumeCommandCdsIntoRecordedDirectory() {
     let chat = AgentHistory(id: "Claude Code:abc-1", provider: .claude, title: "t", date: .now, messages: [],
                             estimatedUSD: nil, project: "/tmp/it's")

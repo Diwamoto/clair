@@ -104,6 +104,21 @@ public enum WorkbenchGit {
   public static func currentBranch(_ root: String) -> String? {
     let r = run(root, ["rev-parse", "--abbrev-ref", "HEAD"]); return r.ok && r.out != "HEAD" ? r.out : nil
   }
+  /// The configured user's commits per local day on any local branch since `start`, merges excluded (設定 › 使用状況).
+  /// nil when `root` is not a Git repository. Without a configured `user.email`, every author counts.
+  public static func dailyCommits(_ root: String, since start: Date, calendar: Calendar = .current) -> [Date: Int]? {
+    guard run(root, ["rev-parse", "--git-dir"]).ok else { return nil }
+    let email = run(root, ["config", "user.email"]).out.trimmingCharacters(in: .whitespacesAndNewlines)
+    var args = ["log", "--branches", "--no-merges", "--since=\(ISO8601DateFormatter().string(from: start))", "--format=%ct"]
+    if !email.isEmpty { args += ["--fixed-strings", "--author=\(email)"] }
+    var counts: [Date: Int] = [:]
+    for line in lines(root, args) {
+      guard let seconds = TimeInterval(line) else { continue }
+      counts[calendar.startOfDay(for: Date(timeIntervalSince1970: seconds)), default: 0] += 1
+    }
+    return counts
+  }
+
   /// Repository folder name, the same for every worktree of one repo.
   public static func repoName(_ root: String) -> String? {
     let r = run(root, ["rev-parse", "--path-format=absolute", "--git-common-dir"])
