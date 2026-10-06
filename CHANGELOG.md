@@ -6,6 +6,15 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-06
+
+### Changed
+
+- Settings > Usage is now a dashboard: today and the last 7 days against the previous week, your streak and busiest hour, a one-year activity calendar you can filter by agent, prompts by weekday and hour, and this month against last month (prompts or estimated cost).
+- Settings > Usage shows how long you wait for AI replies and how many agents ran at once, today or as a 7-day average by hour.
+- Settings > Usage compares a Project's prompts with your own commits over the last 30 days.
+- Settings > Usage ranks usage by agent and by model, and lists your costliest sessions of the last 30 days with a Resume button. Models without a known price show as unknown and are kept out of totals.
+
 ## [0.10.2] - 2026-10-05
 
 ### Changed
@@ -293,7 +302,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.10.2...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/Diwamoto/clair/compare/v0.10.2...v0.11.0
 [0.10.2]: https://github.com/Diwamoto/clair/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/Diwamoto/clair/compare/v0.9.0...v0.10.1
 [0.9.0]: https://github.com/Diwamoto/clair/compare/v0.8.2...v0.9.0
