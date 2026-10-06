@@ -26,6 +26,15 @@ public struct AgentHistory: Sendable, Identifiable {
   public var project: String? = nil
   /// Provider file to re-read for the full transcript; nil when `messages` is already complete.
   public var source: URL? = nil
+  /// Each answered prompt, from the prompt to the last reply before the next one (usage: wait time, concurrency).
+  public var turns: [DateInterval] = []
+  /// API-equivalent cost per model; `usd` is nil for a model with no known price.
+  public var models: [ModelCost] = []
+
+  public struct ModelCost: Sendable, Equatable {
+    public let name: String
+    public let usd: Double?
+  }
 
   /// Provider-native session id, the argument of the provider's resume command.
   public var sessionID: String { String(id.dropFirst(provider.rawValue.count + 1)) }
@@ -124,8 +133,10 @@ public struct AgentUsageSummary: Sendable {
   public let providers: [AgentProviderUsage]
   public let estimatedUSD: Double
   public let sessionsWithoutCost: Int
+  public let histories: [AgentHistory]
 
   public init(histories: [AgentHistory], calendar: Calendar = .current) {
+    self.histories = histories
     var counts: [Date: Int] = [:]
     var providerCounts: [Date: [AgentHistory.Provider: Int]] = [:]
     for history in histories {
@@ -153,6 +164,206 @@ public struct AgentUsageSummary: Sendable {
 
   public func usage(on day: Date, calendar: Calendar = .current) -> AgentUsageDay? {
     days.first { calendar.isDate($0.date, inSameDayAs: day) }
+  }
+
+  /// Days in a row with a prompt, ending today — or yesterday while today has none yet.
+  public func streak(now: Date = .now, calendar: Calendar = .current) -> Int {
+    let active = Set(days.map(\.date))
+    var day = calendar.startOfDay(for: now)
+    if !active.contains(day) { day = calendar.date(byAdding: .day, value: -1, to: day) ?? day }
+    var count = 0
+    while active.contains(day) {
+      count += 1
+      guard let previous = calendar.date(byAdding: .day, value: -1, to: day) else { break }
+      day = previous
+    }
+    return count
+  }
+
+  public func longestStreak(calendar: Calendar = .current) -> Int {
+    var best = 0
+    var run = 0
+    var previous: Date?
+    for day in days {
+      run = previous.flatMap { calendar.date(byAdding: .day, value: 1, to: $0) } == day.date ? run + 1 : 1
+      best = max(best, run)
+      previous = day.date
+    }
+    return best
+  }
+
+  /// Prompts since `start` by weekday (0 = Sunday) and hour, in the calendar's time zone.
+  public func weekdayHours(since start: Date, calendar: Calendar = .current) -> [[Int]] {
+    var grid = Array(repeating: Array(repeating: 0, count: 24), count: 7)
+    for history in histories {
+      for message in history.messages where message.role == "user" && message.date >= start {
+        let parts = calendar.dateComponents([.weekday, .hour], from: message.date)
+        guard let weekday = parts.weekday, let hour = parts.hour else { continue }
+        grid[weekday - 1][hour] += 1
+      }
+    }
+    return grid
+  }
+
+  /// Hours of the day ordered by prompt count, busiest first; hours with no prompt are left out.
+  public func busiestHours(since start: Date, calendar: Calendar = .current) -> [Int] {
+    let grid = weekdayHours(since: start, calendar: calendar)
+    let totals = (0..<24).map { hour in grid.reduce(0) { $0 + $1[hour] } }
+    return (0..<24).filter { totals[$0] > 0 }.sorted { totals[$0] > totals[$1] }
+  }
+
+  // MARK: Waiting and concurrency
+
+  /// Longer waits are counted as this long: the prompt was probably left while the user stepped away.
+  public static let waitCap: TimeInterval = 30 * 60
+  /// Exclusive upper bounds of the wait histogram bins, in seconds; the last bin holds the rest, capped waits included.
+  public static let waitBins: [TimeInterval] = [10, 30, 60, 120, 300, 600, 1800]
+
+  public struct Wait: Sendable, Equatable {
+    public let provider: AgentHistory.Provider
+    public let seconds: TimeInterval
+  }
+
+  /// Answered prompts sent within `interval`, each capped at `waitCap`.
+  public func waits(in interval: DateInterval) -> [Wait] {
+    histories.flatMap { history in
+      history.turns.filter { interval.contains($0.start) }
+        .map { Wait(provider: history.provider, seconds: min($0.duration, Self.waitCap)) }
+    }
+  }
+
+  public static func median(_ values: [TimeInterval]) -> TimeInterval? {
+    guard !values.isEmpty else { return nil }
+    let sorted = values.sorted()
+    let middle = sorted.count / 2
+    return sorted.count.isMultiple(of: 2) ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle]
+  }
+
+  /// Counts per bin of `waitBins` (plus one overflow bin).
+  public static func histogram(_ waits: [Wait]) -> [Int] {
+    var bins = Array(repeating: 0, count: waitBins.count + 1)
+    for wait in waits { bins[waitBins.firstIndex { wait.seconds < $0 } ?? waitBins.count] += 1 }
+    return bins
+  }
+
+  public struct Step: Sendable, Equatable {
+    public let date: Date
+    public let running: Int
+  }
+
+  /// How many agents were between a prompt and its last reply, as steps across `interval`.
+  public func concurrency(in interval: DateInterval) -> [Step] {
+    var deltas: [(Date, Int)] = []
+    for turn in histories.flatMap(\.turns) {
+      guard let clipped = turn.intersection(with: interval), clipped.duration > 0 else { continue }
+      deltas.append((clipped.start, 1))
+      deltas.append((clipped.end, -1))
+    }
+    // An end and a start at the same instant do not overlap.
+    deltas.sort { $0.0 != $1.0 ? $0.0 < $1.0 : $0.1 < $1.1 }
+    var steps = [Step(date: interval.start, running: 0)]
+    var running = 0
+    for (date, delta) in deltas {
+      running += delta
+      if steps.last?.date == date { steps.removeLast() }
+      steps.append(Step(date: date, running: running))
+    }
+    return steps
+  }
+
+  /// Seconds within the steps during which at least `count` agents ran.
+  public static func seconds(_ steps: [Step], atLeast count: Int, until end: Date) -> TimeInterval {
+    zip(steps, steps.dropFirst().map(\.date) + [end]).reduce(0) { total, pair in
+      pair.0.running >= count ? total + max(0, pair.1.timeIntervalSince(pair.0.date)) : total
+    }
+  }
+
+  /// Average number of running agents per hour of the day over the `dayCount` days ending at `now`.
+  public func averageConcurrencyByHour(dayCount: Int, now: Date = .now, calendar: Calendar = .current) -> [Double] {
+    var seconds = Array(repeating: 0.0, count: 24)
+    let today = calendar.startOfDay(for: now)
+    for offset in 0..<dayCount {
+      guard let day = calendar.date(byAdding: .day, value: -offset, to: today) else { continue }
+      for hour in 0..<24 {
+        guard let start = calendar.date(byAdding: .hour, value: hour, to: day), start < now,
+              let end = calendar.date(byAdding: .hour, value: 1, to: start) else { continue }
+        let window = DateInterval(start: start, end: min(end, now))
+        for turn in histories.flatMap(\.turns) {
+          if let overlap = turn.intersection(with: window) { seconds[hour] += overlap.duration }
+        }
+      }
+    }
+    return seconds.map { $0 / 3600 / Double(max(dayCount, 1)) }
+  }
+
+  // MARK: Months and rankings
+
+  /// Running total for each day of the month containing `month`, up to `now` for the current month.
+  /// `cost` totals estimated USD by each chat's last day; chats without a cost are left out.
+  public func cumulative(month: Date, cost: Bool, now: Date = .now, calendar: Calendar = .current) -> [Double] {
+    guard let interval = calendar.dateInterval(of: .month, for: month) else { return [] }
+    var perDay: [Date: Double] = [:]
+    if cost {
+      for history in histories where interval.contains(history.date) {
+        if let usd = history.estimatedUSD { perDay[calendar.startOfDay(for: history.date), default: 0] += usd }
+      }
+    } else {
+      for day in days where interval.contains(day.date) { perDay[day.date] = Double(day.prompts) }
+    }
+    var result: [Double] = []
+    var total = 0.0
+    var day = interval.start
+    while day < interval.end && day <= now {
+      total += perDay[day] ?? 0
+      result.append(total)
+      guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
+      day = next
+    }
+    return result
+  }
+
+  public func sessionsWithoutCost(month: Date, calendar: Calendar = .current) -> Int {
+    guard let interval = calendar.dateInterval(of: .month, for: month) else { return 0 }
+    return histories.filter { interval.contains($0.date) && $0.estimatedUSD == nil }.count
+  }
+
+  public struct ModelUsage: Sendable, Equatable, Identifiable {
+    public let name: String
+    public let provider: AgentHistory.Provider
+    public let sessions: Int
+    /// nil when no session using the model had a known price.
+    public let usd: Double?
+    public var id: String { "\(provider.rawValue):\(name)" }
+  }
+
+  /// Models used by chats active since `start` (all time when nil): priced ones by cost, then unpriced by sessions.
+  public func models(since start: Date?) -> [ModelUsage] {
+    var rows: [String: (provider: AgentHistory.Provider, name: String, sessions: Int, usd: Double?)] = [:]
+    for history in histories where start.map({ history.date >= $0 }) ?? true {
+      for model in history.models {
+        let key = "\(history.provider.rawValue):\(model.name)"
+        var row = rows[key] ?? (provider: history.provider, name: model.name, sessions: 0, usd: nil)
+        row.sessions += 1
+        if let usd = model.usd { row.usd = (row.usd ?? 0) + usd }
+        rows[key] = row
+      }
+    }
+    return rows.values.map { ModelUsage(name: $0.name, provider: $0.provider, sessions: $0.sessions, usd: $0.usd) }
+      .sorted { lhs, rhs in
+        switch (lhs.usd, rhs.usd) {
+        case let (a?, b?): return a != b ? a > b : lhs.name < rhs.name
+        case (.some, nil): return true
+        case (nil, .some): return false
+        case (nil, nil): return lhs.sessions != rhs.sessions ? lhs.sessions > rhs.sessions : lhs.name < rhs.name
+        }
+      }
+  }
+
+  /// Chats active since `start` with the highest known cost.
+  public func costliestSessions(since start: Date, limit: Int) -> [AgentHistory] {
+    Array(histories.filter { $0.date >= start && $0.estimatedUSD != nil }
+      .sorted { ($0.estimatedUSD ?? 0) > ($1.estimatedUSD ?? 0) }
+      .prefix(limit))
   }
 }
 
@@ -201,6 +412,9 @@ public enum AgentHistoryReader {
       var codexUsage: [String: Any]?
       var claudeMessageCosts: [String: Double] = [:]
       var claudeUnknownModel = false
+      var claudeMessageModels: [String: String] = [:]
+      var claudeUnpricedModels: Set<String> = []
+      var turnEvents: [(user: Bool, date: Date)] = []
       var sessionID = file.deletingPathExtension().lastPathComponent
       var cwd: String?
       var seen: Set<String> = []
@@ -222,6 +436,7 @@ public enum AgentHistoryReader {
         let timestamp = row["timestamp"] as? String ?? ""
         let date = fractionalDate.date(from: timestamp) ?? plainDate.date(from: timestamp) ?? .distantPast
         if provider == .codex {
+          if type == "response_item", payload["role"] as? String != "user" { turnEvents.append((false, date)) }
           if type == "session_meta", let id = payload["id"] as? String { sessionID = id; cwd = payload["cwd"] as? String ?? cwd }
           if type == "turn_context" { codexModel = payload["model"] as? String ?? codexModel }
           if type == "token_usage_record" { codexUsage = payload["thread_token_usage"] as? [String: Any] ?? codexUsage }
@@ -241,19 +456,24 @@ public enum AgentHistoryReader {
           let id = payload["id"] as? String ?? "\(file.path):\(messages.count)"
           guard seen.insert(id).inserted else { return }
           messages.append(.init(id: id, role: role, text: text, date: date))
+          if role == "user" { turnEvents.append((true, date)) }
         } else {
           if type == "cost-state" { cost = row["totalCostUSD"] as? Double; return }
           guard type == "user" || type == "assistant", row["isSidechain"] as? Bool != true else { return }
+          if type == "assistant" { turnEvents.append((false, date)) }
           if let id = row["sessionId"] as? String { sessionID = id }
           cwd = cwd ?? row["cwd"] as? String
           let message = row["message"] as? [String: Any] ?? [:]
           if type == "assistant", let usage = message["usage"] as? [String: Any] {
-            if let estimated = claudeEstimatedCost(model: message["model"] as? String ?? "", usage: usage) {
+            let model = message["model"] as? String ?? ""
+            if let estimated = claudeEstimatedCost(model: model, usage: usage) {
               let key = message["id"] as? String ?? row["uuid"] as? String ?? "\(file.path):\(claudeMessageCosts.count)"
               claudeMessageCosts[key] = max(estimated, claudeMessageCosts[key] ?? 0)
+              claudeMessageModels[key] = model
             } else if ["input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"]
               .contains(where: { ((usage[$0] as? NSNumber)?.doubleValue ?? 0) > 0 }) {
               claudeUnknownModel = true
+              claudeUnpricedModels.insert(model.isEmpty ? "?" : model)
             }
           }
           let content = message["content"]
@@ -275,6 +495,7 @@ public enum AgentHistoryReader {
             } else {
               claudeMessageIndex[item.id] = messages.count
               messages.append(item)
+              if item.role == "user" { turnEvents.append((true, date)) }
             }
           }
         }
@@ -289,11 +510,42 @@ public enum AgentHistoryReader {
       } else if provider == .claude, cost == nil, !claudeMessageCosts.isEmpty, !claudeUnknownModel {
         cost = claudeMessageCosts.values.reduce(0, +)
       }
+      var models: [AgentHistory.ModelCost] = []
+      if provider == .codex, let model = codexModel {
+        models = [AgentHistory.ModelCost(name: model, usd: cost)]
+      } else if provider == .claude {
+        var byModel: [String: Double] = [:]
+        for (key, usd) in claudeMessageCosts { byModel[claudeMessageModels[key] ?? "?", default: 0] += usd }
+        models = byModel.map { AgentHistory.ModelCost(name: $0.key, usd: $0.value) }
+          + claudeUnpricedModels.subtracting(byModel.keys).map { AgentHistory.ModelCost(name: $0, usd: nil) }
+      }
       let title = messages.first { $0.role == "user" && !$0.text.hasPrefix("[Skill loaded") }?.text
         .split(whereSeparator: \.isWhitespace).joined(separator: " ") ?? tr("チャット")
       return AgentHistory(id: "\(provider.rawValue):\(sessionID)", provider: provider,
                           title: String(title.prefix(100)), date: messages.last?.date ?? .distantPast,
-                          messages: messages, estimatedUSD: cost, project: cwd, source: full ? nil : file)
+                          messages: messages, estimatedUSD: cost, project: cwd, source: full ? nil : file,
+                          turns: turns(turnEvents), models: models)
+  }
+
+  /// Pairs each prompt with the last provider activity before the next prompt. Unanswered prompts are dropped.
+  static func turns(_ events: [(user: Bool, date: Date)]) -> [DateInterval] {
+    var result: [DateInterval] = []
+    var start: Date?
+    var end: Date?
+    func close() {
+      if let start, let end, end > start { result.append(DateInterval(start: start, end: end)) }
+    }
+    for event in events where event.date != .distantPast {
+      if event.user {
+        close()
+        start = event.date
+        end = nil
+      } else if let start, event.date >= start {
+        end = event.date
+      }
+    }
+    close()
+    return result
   }
 
   /// Port of ccedit's `format_command_text` + `is_clear_artifact`: Claude Code wraps slash commands,
@@ -393,7 +645,7 @@ public enum AgentHistoryReader {
     let sql = """
       SELECT s.id, s.title, s.time_updated, s.cost, m.id, m.time_created,
              json_extract(m.data, '$.role'), group_concat(json_extract(p.data, '$.text'), char(10)), s.directory,
-             json_extract(p.data, '$.type') AS kind
+             json_extract(p.data, '$.type') AS kind, json_extract(m.data, '$.modelID')
       FROM session s JOIN message m ON m.session_id = s.id
       JOIN part p ON p.message_id = m.id
       WHERE kind IN ('text', 'reasoning')
@@ -406,6 +658,7 @@ public enum AgentHistoryReader {
     guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK, let statement else { return [] }
     defer { sqlite3_finalize(statement) }
     var sessions: [String: (String, Date, Double, [AgentHistory.Message], String?)] = [:]
+    var sessionModels: [String: String] = [:]
     while sqlite3_step(statement) == SQLITE_ROW {
       guard let sid = sqlite3_column_text(statement, 0), let mid = sqlite3_column_text(statement, 4),
             let role = sqlite3_column_text(statement, 6), let body = sqlite3_column_text(statement, 7) else { continue }
@@ -421,11 +674,15 @@ public enum AgentHistoryReader {
                                          role: reasoning ? "thinking" : String(cString: role), text: text, date: created)
       let directory = sqlite3_column_text(statement, 8).map { String(cString: $0) }
       if sessions[id] == nil { sessions[id] = (title, updated, cost, [], directory) }
+      if let model = sqlite3_column_text(statement, 10) { sessionModels[id] = String(cString: model) }
       sessions[id]!.3.append(message)
     }
     return sessions.map { id, item in
+      // ponytail: OpenCode reports one cost per session, so it all goes to the session's last model.
       AgentHistory(id: "OpenCode:\(id)", provider: .opencode, title: item.0,
-                   date: item.1, messages: item.3, estimatedUSD: item.2, project: item.4)
+                   date: item.1, messages: item.3, estimatedUSD: item.2, project: item.4,
+                   turns: AgentHistoryReader.turns(item.3.map { (user: $0.role == "user", date: $0.date) }),
+                   models: [.init(name: sessionModels[id] ?? "OpenCode", usd: item.2)])
     }
   }
 }

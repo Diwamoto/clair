@@ -2709,7 +2709,11 @@ import Observation
             .padding(.bottom, 16)
           switch st.section {
           case "使用状況":
-            AgentUsageView()
+            AgentUsageView(projects: st.projects, activeProject: st.project) { history in
+              guard let project = st.projects.first(where: { $0.path == history.project }) else { return }
+              store.run("settings.close")
+              resume(history, in: project.name)
+            }
           case "一般":
             SettingsCard(title: tr("ワークスペース")) {
               switchRow(tr("前回のレイアウトを復元"), "restoreLayout", note: tr("Projectごとのファイル、ターミナル、分割位置を再開します。"))

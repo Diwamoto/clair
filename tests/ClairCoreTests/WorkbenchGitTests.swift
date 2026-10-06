@@ -21,6 +21,26 @@ final class WorkbenchGitTests: XCTestCase {
     return (s, dir.path)
   }
 
+  func testDailyCommitsCountsTheUsersOwnNonMergeCommits() throws {
+    let dir = URL.temporaryDirectory.appending(path: "clair-usage-\(UUID().uuidString)").resolvingSymlinksInPath()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    XCTAssertNil(WorkbenchGit.dailyCommits(dir.path, since: .distantPast))
+    sh(dir.path, "init", "-b", "main")
+    WorkbenchGit.run(dir.path, ["config", "user.email", "me+clair@example.com"])
+    WorkbenchGit.run(dir.path, ["config", "user.name", "me"])
+    WorkbenchGit.run(dir.path, ["commit", "--allow-empty", "-m", "mine 1"])
+    WorkbenchGit.run(dir.path, ["commit", "--allow-empty", "-m", "mine 2"])
+    WorkbenchGit.run(dir.path, ["-c", "user.email=other@example.com", "commit", "--allow-empty", "-m", "theirs"])
+    WorkbenchGit.run(dir.path, ["switch", "-c", "side"])
+    WorkbenchGit.run(dir.path, ["commit", "--allow-empty", "-m", "mine on side"])
+    WorkbenchGit.run(dir.path, ["switch", "main"])
+    WorkbenchGit.run(dir.path, ["merge", "--no-ff", "-m", "merge side", "side"])
+    let counts = try XCTUnwrap(WorkbenchGit.dailyCommits(dir.path, since: Date().addingTimeInterval(-3600)))
+    XCTAssertEqual(counts.values.reduce(0, +), 3)
+    XCTAssertEqual(counts.keys.first, Calendar.current.startOfDay(for: .now))
+  }
+
   func testWaitWithoutRunLoopReturnsStatus() throws {
     let p = Process()
     p.executableURL = URL(fileURLWithPath: "/usr/bin/false")
