@@ -6,14 +6,53 @@
     {
       "layers": [
         {
+          "glass": true,
+          "image-name": "agent.svg",
+          "name": "agent"
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      }
+    },
+    {
+      "layers": [
+        {
           "glass": false,
-          "image-name": "glyph.svg",
-          "name": "glyph"
+          "image-name": "code.svg",
+          "name": "code"
+        },
+        {
+          "glass": false,
+          "image-name": "terminal.svg",
+          "name": "terminal"
         }
       ],
       "shadow": {
         "kind": "none",
         "opacity": 0
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      }
+    },
+    {
+      "layers": [
+        {
+          "glass": true,
+          "image-name": "panes.svg",
+          "name": "panes"
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
       },
       "translucency": {
         "enabled": false,
