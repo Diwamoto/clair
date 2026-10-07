@@ -163,11 +163,10 @@ extension WorkbenchState {
   static let shortcutModifiers = ["⌃", "⌥", "⌘", "⇧"]  // canonical order; matches the registry defaults
   static let shortcutKeys = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789,./;'[]-=+`\\→←↑↓")
 
-  /// ⌘= / ⌘-: the next editor font size in `choiceOptions`, clamped at either end.
+  /// ⌘= / ⌘-: one point up or down, within 1...100 (the settings segments stay presets inside that range).
   mutating func stepEditorFontSize(_ delta: Int) {
-    let sizes = Self.choiceOptions["editorFontSize"]!
-    let i = sizes.firstIndex(of: choices["editorFontSize"] ?? "") ?? 1
-    choices["editorFontSize"] = sizes[min(max(i + delta, 0), sizes.count - 1)]
+    let size = Int(choices["editorFontSize"] ?? "") ?? 12
+    choices["editorFontSize"] = String(min(max(size + delta, 1), 100))
   }
 
   /// `⇧⌘d` → `⌘⇧D`. nil unless it is one key plus at least one of ⌃⌥⌘ (a bare or shift-only key would eat typing).
