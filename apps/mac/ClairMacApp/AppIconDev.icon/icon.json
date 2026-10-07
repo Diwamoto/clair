@@ -29,25 +29,43 @@
         }
       ],
       "shadow": {
-        "kind": "neutral",
+        "kind": "layer-color",
         "opacity": 0.5
       },
       "translucency": {
         "enabled": false,
         "value": 0
-      }
+      },
+      "specular": false,
+      "lighting": "individual"
     },
     {
       "layers": [
         {
           "glass": false,
           "image-name": "code.svg",
-          "name": "code"
+          "name": "code",
+          "fill-specializations": [
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "srgb:1.00000,1.00000,1.00000,1.00000"
+              }
+            }
+          ]
         },
         {
           "glass": false,
           "image-name": "terminal.svg",
-          "name": "terminal"
+          "name": "terminal",
+          "fill-specializations": [
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "srgb:1.00000,1.00000,1.00000,1.00000"
+              }
+            }
+          ]
         }
       ],
       "shadow": {
@@ -69,12 +87,13 @@
       ],
       "shadow": {
         "kind": "neutral",
-        "opacity": 0.5
+        "opacity": 0.35
       },
       "translucency": {
-        "enabled": false,
-        "value": 0
-      }
+        "enabled": true,
+        "value": 0.15
+      },
+      "specular": true
     }
   ],
   "supported-platforms": {
