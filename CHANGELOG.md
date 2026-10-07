@@ -6,6 +6,22 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-07
+
+### Added
+
+- Zoom the editor font with ⌘= and ⌘-, one point at a time between 1 and 100.
+- Reload the window with ⌘R.
+- User prompts in the history viewer have a copy button.
+
+### Changed
+
+- New app icon showing editor, agent and terminal panes, tuned for Liquid Glass.
+
+### Fixed
+
+- Terminal text no longer shows at double or half size after moving between Retina and non-Retina displays.
+
 ## [0.11.0] - 2026-10-06
 
 ### Changed
@@ -302,7 +318,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/Diwamoto/clair/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/Diwamoto/clair/compare/v0.10.2...v0.11.0
 [0.10.2]: https://github.com/Diwamoto/clair/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/Diwamoto/clair/compare/v0.9.0...v0.10.1
