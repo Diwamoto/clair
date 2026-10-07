@@ -1393,7 +1393,14 @@
             VStack(alignment: .trailing, spacing: 4) {
               body.foregroundStyle(.white).padding(.horizontal, 14).padding(.vertical, 9)
                 .background(C.debugBlue, in: UnevenRoundedRectangle(topLeadingRadius: 16, bottomLeadingRadius: 16, bottomTrailingRadius: 16, topTrailingRadius: 5))
-              if long || showTime { HStack(spacing: 8) { if long { more }; if showTime { time } } }
+              HStack(spacing: 8) {
+                if long { more }; if showTime { time }
+                Button {
+                  NSPasteboard.general.clearContents(); NSPasteboard.general.setString(message.text, forType: .string)
+                } label: { Image(systemName: "doc.on.doc") }
+                  .buttonStyle(.plain).font(Typography.font(Typography.micro)).foregroundStyle(C.textTertiary)
+                  .help(tr("プロンプトをコピー")).accessibilityLabel(tr("プロンプトをコピー"))
+              }
             }.containerRelativeFrame(.horizontal, alignment: .trailing) { width, _ in width * 0.72 }
           }
         } else {
