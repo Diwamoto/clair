@@ -161,7 +161,14 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
 
 extension WorkbenchState {
   static let shortcutModifiers = ["⌃", "⌥", "⌘", "⇧"]  // canonical order; matches the registry defaults
-  static let shortcutKeys = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789,./;'[]-=`\\→←↑↓")
+  static let shortcutKeys = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789,./;'[]-=+`\\→←↑↓")
+
+  /// ⌘= / ⌘-: the next editor font size in `choiceOptions`, clamped at either end.
+  mutating func stepEditorFontSize(_ delta: Int) {
+    let sizes = Self.choiceOptions["editorFontSize"]!
+    let i = sizes.firstIndex(of: choices["editorFontSize"] ?? "") ?? 1
+    choices["editorFontSize"] = sizes[min(max(i + delta, 0), sizes.count - 1)]
+  }
 
   /// `⇧⌘d` → `⌘⇧D`. nil unless it is one key plus at least one of ⌃⌥⌘ (a bare or shift-only key would eat typing).
   public static func canonicalShortcut(_ raw: String) -> String? {
@@ -917,7 +924,11 @@ extension CommandRegistry {
       s.fileAssociations = WorkbenchState.parseAssociations(i["value"]!.string!); return .ok
     },
     cmd("sidebar.toggle", "サイドバーの表示切替", .read, ai: false, shortcut: "⌘B") { s, _ in s.sidebarHidden.toggle(); return .ok },
-    cmd("window.restart", "ウインドウを再起動", .write, ai: false) { s, _ in s.palette = nil; return .ok },
+    cmd("editor.zoomIn", "文字を大きく", .read, ai: false, shortcut: "⌘=") { s, _ in s.stepEditorFontSize(1); return .ok },
+    // ⌘+ for layouts where + is its own key (JIS), like palette.commandsAlt.
+    cmd("editor.zoomInAlt", "文字を大きく", .read, ai: false, shortcut: "⌘+", palette: false) { s, _ in s.stepEditorFontSize(1); return .ok },
+    cmd("editor.zoomOut", "文字を小さく", .read, ai: false, shortcut: "⌘-") { s, _ in s.stepEditorFontSize(-1); return .ok },
+    cmd("window.restart", "ウインドウを再起動", .write, ai: false, shortcut: "⌘R") { s, _ in s.palette = nil; return .ok },
     cmd("app.restart", "アプリを再起動", .external, ai: false) { s, _ in s.palette = nil; return .ok },
     cmd("palette.commands", "コマンドパレット", .read, ai: false, shortcut: "⌘K", palette: false) { s, _ in s.palette = .commands; return .ok },
     // VS Code habit: ⌘⇧P opens the same command palette as ⌘K.

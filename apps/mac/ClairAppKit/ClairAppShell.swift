@@ -1127,7 +1127,7 @@ import Observation
     static let titles: [String: String] = [
       "settings.open": "Settings…", "file.save": "Save", "tab.reopenClosed": "Reopen Closed Tab",
       "project.choose": "Open Project…", "pane.close": "Close Tab or Pane", "palette.recent": "Open Recent…", "palette.compare": "Compare With…",
-      "window.restart": "Restart Window", "app.restart": "Restart App",
+      "window.restart": "Restart Window", "editor.zoomIn": "Zoom In", "editor.zoomInAlt": "Zoom In", "editor.zoomOut": "Zoom Out", "app.restart": "Restart App",
       "palette.find": "Find", "palette.search": "Find in Project", "editor.format": "Format Document",
       "editor.fold": "Fold", "editor.unfold": "Unfold", "editor.foldAll": "Fold All", "editor.unfoldAll": "Unfold All",
       "sidebar.toggle": "Toggle Sidebar", "palette.commands": "Command Palette", "palette.commandsAlt": "Command Palette",

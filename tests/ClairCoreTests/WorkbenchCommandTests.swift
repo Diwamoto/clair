@@ -107,6 +107,18 @@ final class WorkbenchCommandTests: XCTestCase {
     XCTAssertNil(state.palette)
   }
 
+  func testZoomStepsEditorFontSizeWithinChoicesAndReloadIsCommandR() throws {
+    var state = WorkbenchState()
+    XCTAssertEqual(r.commands.first { $0.id == "window.restart" }?.shortcut, "⌘R")
+    _ = try r.execute("editor.zoomIn", state: &state).get()
+    XCTAssertEqual(state.choices["editorFontSize"], "13")
+    for _ in 0..<10 { _ = try r.execute("editor.zoomInAlt", state: &state).get() }
+    XCTAssertEqual(state.choices["editorFontSize"], "18")
+    for _ in 0..<10 { _ = try r.execute("editor.zoomOut", state: &state).get() }
+    XCTAssertEqual(state.choices["editorFontSize"], "11")
+    XCTAssertEqual(WorkbenchState.canonicalShortcut("⌘+"), "⌘+")
+  }
+
   func testTabShortcutsCycleFilesAndTerminalsInTitlebarOrder() throws {
     var state = WorkbenchState()
     state.tree = PaneTree()  // editor | agent / terminal: the layout these tests place into, not the single-editor default

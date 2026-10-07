@@ -314,7 +314,7 @@ macOS の `NSTextInputClient` は行ローカルの UTF-16 空間で答える(�
 - 括弧の色分け(2026-09-29 オーナー決定): `()` `[]` `{}` を入れ子の深さで 3 色循環させる(VS Code の bracket pair colorization と同じ色)。文字列・コメント内の括弧は対象外、対応の取れない括弧はエラー色。tree-sitter の構文木から求めるので grammar のある言語だけ
 - 言語ごとのファイルアイコン: file tree、editor tab、検索結果、quick open で拡張子・既知ファイル名から言語アイコンを出す。未知の種類は汎用アイコン
 - 拡張子の言語: 設定 › エディタ「拡張子の言語」(拡張子と言語セレクトの行リスト、＋で追加) が組み込みの拡張子判定より優先される。既定は `tpl=terraform`。未知の言語名は無視して組み込み判定へ落ちる
-- フォントと表示(2026-09-29 オーナー依頼): 設定 › エディタ・ターミナルの「表示」で、それぞれフォント(インストール済みの等幅フォント、既定はシステム等幅)と文字サイズ(既定はエディタ 12・ターミナル 13)を選べる。エディタは行番号の表示、ターミナルはカーソルの形(ブロック / バー / 下線)と点滅を切り替えられる。変更は開いている editor と実行中の terminal へ再起動なしで反映する。未インストールになったフォントはシステム等幅で表示する
+- フォントと表示(2026-09-29 オーナー依頼): 設定 › エディタ・ターミナルの「表示」で、それぞれフォント(インストール済みの等幅フォント、既定はシステム等幅)と文字サイズ(既定はエディタ 12・ターミナル 13)を選べる。エディタは行番号の表示、ターミナルはカーソルの形(ブロック / バー / 下線)と点滅を切り替えられる。変更は開いている editor と実行中の terminal へ再起動なしで反映する。エディタの文字サイズは ⌘= / ⌘+ と ⌘- でも選択肢を 1 段ずつ上下できる(2026-10-07 オーナー依頼)。未インストールになったフォントはシステム等幅で表示する
 
 minimap、AI inline 補完(2026-09-27 オーナー決定)、VS Code extension 互換、独自 plugin runtime は対象外。
 inlay hint と semantic token は未対応(editor の描画に inline の仮想テキストを持たないため)。
@@ -375,7 +375,7 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
 - raw replay は alternate screen、サイズ、scrollback を考慮する
 - update 再起動中も PTY/session を維持し、新 process へ reattach する
 - window を閉じても background service は継続し、明示的な Clair 終了で停止する
-- コマンドパレットからウインドウのみ、またはアプリ全体を再起動できる。ウインドウの再起動は editor buffer と daemon session を保持して表示を作り直す。アプリの再起動は未保存の editor 変更がある場合は実行せず、保存済み workspace と daemon session に再接続する
+- コマンドパレットからウインドウのみ、またはアプリ全体を再起動できる。ウインドウの再起動(既定 ⌘R)は editor buffer と daemon session を保持して表示を作り直す。アプリの再起動は未保存の editor 変更がある場合は実行せず、保存済み workspace と daemon session に再接続する
 - agent 実行中は電源接続時に idle sleep を抑止する(battery 時は設定)
 - `clair attach` は daemon の応答が control timeout を超えても pane を終了せず、同じ
   cursor から read を再試行する。timeout した input は再送せず、拒否された input と同じく
