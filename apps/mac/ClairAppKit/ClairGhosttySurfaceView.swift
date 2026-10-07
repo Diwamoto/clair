@@ -162,6 +162,12 @@ import Foundation
       metrics = ClairGhosttyCellMetrics.measuring(font: font, contentScale: scale)
       if let ghosttySurface {
         let pixelSize = convertToBacking(bounds.size)
+        // libghostty draws `pixelSize` pixels into this layer; without matching `contentsScale` a surface
+        // made on a 1x display shows 2x-large on Retina (and tiny the other way). Ghostty's own view does this.
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer?.contentsScale = CGFloat(scale)
+        CATransaction.commit()
         do {
           try ghosttySurface.setContentScale(x: scale, y: scale)
           try ghosttySurface.setSize(
