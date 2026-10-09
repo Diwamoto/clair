@@ -133,10 +133,16 @@ final class EditorLineRenderer {
     let start = min(max(rawStart, bounds.lowerBound), bounds.upperBound)
     let end = min(max(rawEnd, start), bounds.upperBound)
     let spliceRange = NSRange(location: start, length: end - start)
-    attributed.replaceCharacters(in: spliceRange, with: composition.text)
-    attributed.addAttribute(
-      .underlineStyle, value: NSUnderlineStyle.single.rawValue,
-      range: NSRange(location: start, length: (composition.text as NSString).length))
+    // Explicit attributes: a plain-String splice inherits from a neighbour,
+    // and an empty line (or column 0) has none, so the text drew black.
+    attributed.replaceCharacters(
+      in: spliceRange,
+      with: NSAttributedString(
+        string: composition.text,
+        attributes: [
+          .font: font, .foregroundColor: baseColor,
+          .underlineStyle: NSUnderlineStyle.single.rawValue,
+        ]))
     return (textLine, CTLineCreateWithAttributedString(attributed))
   }
 }

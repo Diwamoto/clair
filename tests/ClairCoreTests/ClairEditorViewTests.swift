@@ -6,6 +6,18 @@
   @testable import ClairEditorView
 
   final class EditorViewGeometryTests: XCTestCase {
+    func testCompositionOnEmptyLineKeepsBaseColor() throws {
+      let renderer = EditorLineRenderer(font: .monospacedSystemFont(ofSize: 13, weight: .regular))
+      let snapshot = try TextBuffer("").snapshot
+      let composition = EditorComposition(
+        replacedRange: TextUTF8Range(UTF8Offset(0), UTF8Offset(0)), text: "にほん",
+        selectedRangeInText: NSRange(location: 3, length: 0))
+      let built = try renderer.composedLine(at: TextLineIndex(0), in: snapshot, composition: composition)
+      let runs = CTLineGetGlyphRuns(built.ctLine) as! [CTRun]
+      let attrs = CTRunGetAttributes(runs[0]) as! [NSAttributedString.Key: Any]
+      XCTAssertNotNil(attrs[.foregroundColor])
+    }
+
     func testVisibleLineRangeCoversOnlyIntersectingLines() {
       let range = EditorViewGeometry.visibleLineRange(
         visibleRect: CGRect(x: 0, y: 100, width: 400, height: 50), lineHeight: 20, lineCount: 1000)
