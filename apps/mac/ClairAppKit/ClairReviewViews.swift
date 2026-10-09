@@ -987,11 +987,14 @@
   struct SessionList: View {
     let sessions: [AgentSession]
     let current: String
+    /// Titlebar order; running agents are grouped under these.
+    var projects: [WorkbenchProject] = []
     let open: (AgentSession) -> Void
     let openHistory: (AgentHistory) -> Void
     @State private var histories: [AgentHistory] = []
     @State private var historyLoading = true
     @State private var expandedGroups: Set<String> = []
+    @State private var collapsedProjects: Set<String> = []
     /// Rows shown per list (days, a day's projects, a project's chats); "show more" adds a page.
     @State private var shown: [String: Int] = [:]
     private static let page = 10
@@ -1027,9 +1030,47 @@
         Text(tr("起動中のエージェントはありません")).font(Typography.font(Typography.sidebarStrong)).foregroundStyle(C.textSecondary)
           .frame(maxWidth: .infinity).padding(16)
       }
-      ForEach(sessions) { s in
+      ForEach(sessionGroups, id: \.project) { group in
+        projectHeader(group.project, group.sessions)
+        if !collapsedProjects.contains(group.project) {
+          ForEach(group.sessions) { s in sessionRow(s) }
+        }
+      }
+      historySection
+    }
+
+    /// Running agents by Project, in titlebar order (a Project no longer open goes last).
+    private var sessionGroups: [(project: String, sessions: [AgentSession])] {
+      let order = Dictionary(projects.enumerated().map { ($1.name, $0) }, uniquingKeysWith: { a, _ in a })
+      return Dictionary(grouping: sessions, by: \.project)
+        .sorted { (order[$0.key] ?? .max, $0.key) < (order[$1.key] ?? .max, $1.key) }
+        .map { ($0.key, $0.value) }
+    }
+
+    private func projectHeader(_ project: String, _ sessions: [AgentSession]) -> some View {
+      let collapsed = collapsedProjects.contains(project)
+      let waiting = sessions.filter { $0.status == .attention }.count
+      return Button {
+        if collapsed { collapsedProjects.remove(project) } else { collapsedProjects.insert(project) }
+      } label: {
+        HStack(spacing: 6) {
+          Image(systemName: collapsed ? "chevron.right" : "chevron.down").frame(width: 14)
+          Text(projects.first { $0.name == project }?.displayName ?? project)
+            .font(Typography.font(Typography.sidebarStrong)).lineLimit(1)
+            .foregroundStyle(project == current ? C.textPrimary : C.textSecondary)
+          Spacer(minLength: 0)
+          if waiting > 0 {
+            Image(systemName: "bell.badge.fill").font(.system(size: 11)).foregroundStyle(C.attention)
+              .help(tr("入力待ち %@ 件", waiting)).accessibilityLabel(tr("入力待ち %@ 件", waiting))
+          }
+          Text("\(sessions.count)").font(Typography.font(Typography.sidebarMicro)).monospacedDigit().foregroundStyle(C.textQuaternary)
+        }.foregroundStyle(C.textSecondary).padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 2).contentShape(Rectangle())
+      }.buttonStyle(.hoverWash)
+    }
+
+    private func sessionRow(_ s: AgentSession) -> some View {
         let (text, color) = label(s)
-        Button { open(s) } label: {
+        return Button { open(s) } label: {
           HStack(alignment: .top, spacing: 8) {
             if let provider = AgentHistory.Provider(rawValue: s.title) {
               // Same avatar as past chats; the status dot rides its corner.
@@ -1054,9 +1095,11 @@
                 .help(text).accessibilityLabel(text)
             }
           }
-          .padding(.horizontal, 20).padding(.vertical, 4).contentShape(Rectangle())
+          .padding(.leading, 34).padding(.trailing, 20).padding(.vertical, 4).contentShape(Rectangle())
         }.buttonStyle(.hoverWash)
-      }
+    }
+
+    @ViewBuilder private var historySection: some View {
       HStack {
         Text(tr("過去のチャット")).font(Typography.font(Typography.sidebarStrong)).foregroundStyle(C.textTertiary)
         Spacer()

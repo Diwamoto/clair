@@ -1903,7 +1903,7 @@ import Observation
     }
 
     private var sessionList: some View {
-      SessionList(sessions: st.agentSessions, current: st.project) { s in
+      SessionList(sessions: st.agentSessions, current: st.project, projects: st.projects) { s in
         if s.project != st.project { store.run("project.switch", ["name": .string(s.project)]) }
         store.run("pane.focus", ["id": .int(s.pane)])
       } openHistory: { historyTabs[$0.id] = $0; store.run("history.open", ["id": .string($0.id)]) }

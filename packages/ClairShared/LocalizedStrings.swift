@@ -17,7 +17,7 @@ extension LocalizedStrings {
     // Find bar (⌘F)
     "置換の切り替え": "Toggle Replace", "大文字と小文字を区別": "Match Case", "前を検索 (⇧Return)": "Previous Match (⇧Return)",
     "次を検索 (Return)": "Next Match (Return)", "前を検索": "Previous Match", "次を検索": "Next Match",
-    "閉じる (Esc)": "Close (Esc)", "結果なし": "No results",
+    "閉じる (Esc)": "Close (Esc)", "結果なし": "No results", "入力待ち %@ 件": "%@ waiting for input",
     // Sections and settings
     "一般": "General", "AIプロバイダー": "AI Providers", "使用状況": "Usage", "エディタ": "Editor",
     "ターミナル": "Terminal", "モバイル": "Mobile", "アップデート": "Updates",
