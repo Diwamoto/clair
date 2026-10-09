@@ -520,6 +520,9 @@ merge editor を持たない(2026-09-23 オーナー決定)。
 
 - Clair Stable と Clair Dev を別 bundle ID、別 settings 領域で並行起動する
   ([ADR-0008](decisions/0008-stable-dev-runtime-identity.md))
+- Clair RC は main の HEAD を `rc` prerelease として配布する第 3 の channel。別 bundle ID・
+  別 data 領域・RC アイコンを持ち、`rc` feed からだけ更新する。clair-task の完了時にオーナーが選んだときだけ
+  RC workflow を起動する([ADR-0023](decisions/0023-rc-channel.md))
 - `VERSION` を変更した main への push で、GitHub Actions が Stable artifact を
   build・署名し、`Diwamoto/clair` の GitHub Release へ発行する
   ([ADR-0009](decisions/0009-stable-github-update-distribution.md)、

@@ -237,7 +237,7 @@ import Observation
 
     /// ADR-0009: 5 s after launch, then hourly. Never applies on its own.
     private func startAutomaticUpdateChecks() {
-      guard updateConfig.channel == .stable, updateConfig.publicKeyBase64 != nil, updateConfig.isInstalled else { return }
+      guard updateConfig.channel.hasUpdateFeed, updateConfig.publicKeyBase64 != nil, updateConfig.isInstalled else { return }
       updateTask = Task { [weak self] in
         try? await Task.sleep(for: .seconds(5))
         while !Task.isCancelled {

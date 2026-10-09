@@ -49,6 +49,15 @@ fork からの pull request には secret が渡らないので、release は ta
 手元で配布物だけ作るには `CLAIR_UPDATE_PRIVATE_KEY="$(security find-generic-password -s clair-update-signing -w)" scripts/release.sh --dry-run`
 を使う(`.build/release/` に出力され、tag も publish もしない)。
 
+## RC
+
+main の HEAD を `Clair RC` として別の Mac で試すための channel([ADR-0023](../decisions/0023-rc-channel.md))。
+
+- 起動: `gh workflow run rc.yml --ref main`(clair-task の完了時にオーナーが選ぶと skill が行う)。
+  `scripts/release.sh --rc` が `Clair RC.app`(version `VERSION.<commit 数>`)を作り、tag `rc` の prerelease を作り直す。
+- 初回インストール: `curl -fsSL https://raw.githubusercontent.com/Diwamoto/clair/main/scripts/install.sh | CLAIR_CHANNEL=rc sh`。
+  以降はアプリ内 updater が `releases/download/rc/latest.json` を見て更新する。
+
 ## 初回インストール
 
 `scripts/install.sh` を使う。最新 Release の `latest.json` から arm64 の zip を取り、sha256 を確かめて
@@ -75,4 +84,4 @@ Release と tag を消してから再実行する。
 ## 対象外と今後
 
 Developer ID 署名と notarization(Gatekeeper 警告をなくす)、resource bundle の `Contents/Resources` への移動
-(bundle 全体の codesign)、x86_64 / universal、複数 channel は扱わない。
+(bundle 全体の codesign)、x86_64 / universal は扱わない。

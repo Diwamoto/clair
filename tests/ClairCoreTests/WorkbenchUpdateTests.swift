@@ -29,6 +29,7 @@ final class WorkbenchUpdateTests: XCTestCase {
   func testRejections() {
     XCTAssertEqual(code(manifest(tamper: true)), .invalidSignature)  // hash swapped after signing
     XCTAssertEqual(code(manifest(channel: .dev)), .unsupportedChannel("dev"))
+    XCTAssertEqual(code(manifest(channel: .rc)), .unsupportedChannel("rc"))  // an RC manifest never updates Stable
     XCTAssertEqual(code(manifest(), current: "2.0.0"), .notNewer(current: "2.0.0", available: "2.0.0"))
     XCTAssertEqual(code(manifest(), current: "10.0.0"), .notNewer(current: "10.0.0", available: "2.0.0"))  // numeric, not lexical
     XCTAssertEqual(code(manifest(arch: "x86_64")), .unsupportedArchitecture("arm64"))
@@ -87,12 +88,20 @@ final class WorkbenchUpdateTests: XCTestCase {
     func next() -> Int { value += 1; return value }
   }
 
+  func testRCAcceptsOnlyRCManifests() throws {
+    let rc = manifest(channel: .rc, version: "0.5.0.120")
+    XCTAssertEqual(try rc.makeUpdate(currentVersion: "0.5.0.119", architecture: "arm64", publicKey: sk.publicKey, channel: .rc).version, "0.5.0.120")
+    XCTAssertThrowsError(try manifest().makeUpdate(currentVersion: "1.0.0", architecture: "arm64", publicKey: sk.publicKey, channel: .rc))
+  }
+
   func testChannelIdentitiesAllDiffer() {
     let s = ClairChannel.stable, d = ClairChannel.dev
     XCTAssertNotEqual(s.bundleIdentifier, d.bundleIdentifier)
     XCTAssertNotEqual(s.displayName, d.displayName)
     XCTAssertNotEqual(s.dataURL, d.dataURL)
     XCTAssertEqual(d.bundleIdentifier, "com.diwamoto.clair.dev")
+    XCTAssertEqual(Set(ClairChannel.allCases.map(\.bundleIdentifier)).count, 3)
+    XCTAssertEqual(Set(ClairChannel.allCases.map(\.dataURL)).count, 3)
   }
 
   func testLegacyWorkspaceMovesOnceAndNeverOverwrites() throws {

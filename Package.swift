@@ -490,7 +490,7 @@ let clairTargets: [Target] = [
     name: "ClairMacApp",
     dependencies: ["ClairAppKit"],
     path: "apps/mac/ClairMacApp",
-    exclude: ["AppIcon.icon", "AppIconDev.icon", "Resources/AppIcon.png"]),
+    exclude: ["AppIcon.icon", "AppIconDev.icon", "AppIconRC.icon", "Resources/AppIcon.png"]),
   .executableTarget(
     name: "ClairMobileApp",
     dependencies: ["ClairMobileKit", "ClairTerminalView"],

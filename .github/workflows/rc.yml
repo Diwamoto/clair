@@ -1,0 +1,53 @@
+name: RC
+
+# Builds "Clair RC" from main and replaces the rolling `rc` prerelease that installed RC apps poll
+# (docs/runbooks/release.md). Kicked by hand or by the clair-task skill: `gh workflow run rc.yml --ref main`.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write # replace the rc tag and prerelease
+
+concurrency:
+  group: rc
+  cancel-in-progress: true # only the newest main matters
+
+jobs:
+  rc:
+    runs-on: macos-26
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # the RC version counts commits
+
+      - name: Restore libghostty
+        id: ghostty
+        uses: actions/cache/restore@v6
+        with:
+          path: packages/Vendor/ghostty
+          key: ghostty-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('config/ghostty-pin.json', 'scripts/ghostty.sh') }}
+
+      - name: Vendor libghostty
+        if: steps.ghostty.outputs.cache-hit != 'true'
+        run: |
+          xcodebuild -downloadComponent MetalToolchain
+          ./scripts/ghostty.sh vendor
+
+      - name: Save libghostty
+        if: steps.ghostty.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: packages/Vendor/ghostty
+          key: ${{ steps.ghostty.outputs.cache-primary-key }}
+
+      - name: Test
+        run: make test
+
+      - name: Build, sign and publish
+        env:
+          CLAIR_UPDATE_PRIVATE_KEY: ${{ secrets.CLAIR_UPDATE_PRIVATE_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/release.sh --rc

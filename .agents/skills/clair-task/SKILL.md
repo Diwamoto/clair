@@ -86,6 +86,13 @@ operation, or deletion of user work — ask first for each.
    the commands and results), what was not verified and why, any judgement
    call you made, and the commit SHA. For an issue, draft the comment or
    close note and ask before posting it. State that nothing was pushed.
+7. **Offer RC.** Ask (AskUserQuestion) whether to publish this to RC
+   ([ADR-0023](../../../docs/decisions/0023-rc-channel.md)). Only on an
+   explicit yes: check that the branch is `main` and
+   `git fetch origin main && git status -sb` shows it can fast-forward, then
+   `git push origin main` (only commits; never force, never someone else's
+   uncommitted work) and `gh workflow run rc.yml --ref main`. Report the run
+   URL from `gh run list --workflow rc.yml -L 1`. On no, stop at the commit.
 
 ## User gates
 
@@ -98,7 +105,7 @@ Ask before:
 - Apple Team ID, certificates, APNs keys, signing, device registration,
   TestFlight, or another account-side action;
 - pushing, opening/updating a PR or issue, publishing, deploying, or
-  accepting ongoing cost;
+  accepting ongoing cost (the step 7 RC question is that ask);
 - deleting or overwriting user data, rewriting shared history, or discarding
   unattributed work.
 

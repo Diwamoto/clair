@@ -17,6 +17,9 @@ struct UpdateManifest: Encodable {
   let version: String
 }
 
+// Feed channel the manifest is signed for: "stable" (default) or "rc" (scripts/release.sh --rc).
+let channel = ProcessInfo.processInfo.environment["CLAIR_UPDATE_CHANNEL"] ?? "stable"
+
 struct ArtifactInput {
   let architecture: String
   let url: URL
@@ -198,7 +201,7 @@ func signedPayload(
   let value =
     [
       "clair-update-v1",
-      "stable",
+      channel,
       version,
       "macos",
       artifact.architecture,
@@ -210,6 +213,7 @@ func signedPayload(
 
 func run() throws {
   let arguments = try Arguments(commandLineArguments: Array(CommandLine.arguments.dropFirst()))
+  guard ["stable", "rc"].contains(channel) else { throw ManifestError.invalidArgument("unknown channel \(channel)") }
   guard let privateKeyData = Data(base64Encoded: arguments.privateKeyBase64) else {
     throw ManifestError.invalidKey("private key is not base64")
   }
@@ -249,7 +253,7 @@ func run() throws {
 
   let manifest = UpdateManifest(
     artifacts: updateArtifacts,
-    channel: "stable",
+    channel: channel,
     notes: arguments.notes,
     schemaVersion: 1,
     version: arguments.version
@@ -258,7 +262,7 @@ func run() throws {
   encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
   let data = try encoder.encode(manifest)
   try data.write(to: arguments.outputURL, options: [.atomic])
-  print("Generated \(arguments.outputURL.path) for Stable v\(arguments.version).")
+  print("Generated \(arguments.outputURL.path) for \(channel) v\(arguments.version).")
 }
 
 do {

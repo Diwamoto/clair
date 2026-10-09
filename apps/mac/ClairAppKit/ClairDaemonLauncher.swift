@@ -32,8 +32,8 @@ import Foundation
       guard let daemon = binary("ClairDaemon") else { return false }
       let process = Process()
       process.executableURL = daemon
-      // N11: loopback-only remote listener; Stable and Dev each own a port so both can run.
-      let remotePort = ClairChannel.current == .dev ? "47612" : "47611"
+      // N11: loopback-only remote listener; each channel owns a port so all of them can run.
+      let remotePort = ["stable": "47611", "dev": "47612", "rc": "47613"][ClairChannel.current.rawValue]!
       process.arguments = ["--directory", paths.directoryURL.path, "--remote-port", remotePort]
       process.standardInput = FileHandle.nullDevice
       process.standardOutput = FileHandle.nullDevice

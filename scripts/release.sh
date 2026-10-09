@@ -8,31 +8,47 @@
 #   GH_TOKEN                  token that can push tags and create releases on Diwamoto/clair
 #
 # `--dry-run` builds, smoke-launches, packages and signs into .build/release without tagging or publishing.
+# `--rc` builds "Clair RC" from HEAD instead (version VERSION.<commit count>) and replaces the rolling
+# `rc` prerelease that installed RC apps poll; it never touches the Stable `--latest` release.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 repo="Diwamoto/clair"
-publish=1
-[[ "${1:-}" == "--dry-run" ]] && publish=0
+publish=1 channel=stable
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run) publish=0 ;;
+    --rc) channel=rc ;;
+    *) printf 'release: unknown option %s\n' "$arg" >&2; exit 2 ;;
+  esac
+done
 
 die() { printf 'release: %s\n' "$*" >&2; exit 1; }
 
 version="$(tr -d '[:space:]' <VERSION)"
 [[ "$version" =~ ^[0-9]+(\.[0-9]+){0,3}$ ]] || die "VERSION must be <major>[.<minor>[.<patch>[.<rev>]]], got '$version'"
-tag="v$version"
-# A tag-triggered run must build the commit whose VERSION matches the tag.
-[[ "${GITHUB_REF_TYPE:-}" != tag || "${GITHUB_REF_NAME:-}" == "$tag" ]] ||
-  die "tag ${GITHUB_REF_NAME:-} does not match VERSION ($tag)"
-if ((publish)) && gh release view "$tag" --repo "$repo" >/dev/null 2>&1; then
-  printf 'release: %s is already published on %s; bump VERSION to release again\n' "$tag" "$repo"
-  exit 0
+if [[ "$channel" == rc ]]; then
+  # The commit count on main only grows, so every RC is newer than the last one (needs full history).
+  [[ "$version" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]] || die "an RC needs a VERSION of at most three parts, got '$version'"
+  version="$version.$(git rev-list --count HEAD)"
+  tag="rc" name="Clair RC" bundle_id="com.diwamoto.clair.rc" icon="AppIconRC"
+  notes="RC $version from $(git rev-parse --short HEAD): $(git log -1 --format=%s)"
+else
+  tag="v$version" name="Clair" bundle_id="com.diwamoto.clair" icon="AppIcon"
+  # A tag-triggered run must build the commit whose VERSION matches the tag.
+  [[ "${GITHUB_REF_TYPE:-}" != tag || "${GITHUB_REF_NAME:-}" == "$tag" ]] ||
+    die "tag ${GITHUB_REF_NAME:-} does not match VERSION ($tag)"
+  if ((publish)) && gh release view "$tag" --repo "$repo" >/dev/null 2>&1; then
+    printf 'release: %s is already published on %s; bump VERSION to release again\n' "$tag" "$repo"
+    exit 0
+  fi
+  # Release notes are the CHANGELOG.md section for this version (Keep a Changelog; written by the clair-release skill).
+  notes="$(awk -v h="## [$version]" 'index($0, "## [") == 1 { f = (index($0, h) == 1); next } f' CHANGELOG.md)"
+  [[ -n "${notes//[[:space:]]/}" ]] || die "CHANGELOG.md has no '## [$version]' section"
 fi
 [[ -n "${CLAIR_UPDATE_PRIVATE_KEY:-}" ]] || die "CLAIR_UPDATE_PRIVATE_KEY is not set"
 public_key="$(tr -d '[:space:]' <config/update-public-key)"
-# Release notes are the CHANGELOG.md section for this version (Keep a Changelog; written by the clair-release skill).
-notes="$(awk -v h="## [$version]" 'index($0, "## [") == 1 { f = (index($0, h) == 1); next } f' CHANGELOG.md)"
-[[ -n "${notes//[[:space:]]/}" ]] || die "CHANGELOG.md has no '## [$version]' section"
 [[ -f packages/Vendor/ghostty/GhosttyKit.xcframework/Info.plist ]] ||
   die "libghostty is not vendored (run scripts/ghostty.sh vendor); a release without it has no terminal"
 
@@ -44,7 +60,7 @@ done
 bin="$(swift build -c release --package-path "$pkg" --show-bin-path)"
 
 out="$repo_root/.build/release"
-app="$out/Clair.app"
+app="$out/$name.app"
 rm -rf "$out"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 # ClairDaemonLauncher finds the daemon and `clair` next to the app executable.
@@ -53,17 +69,17 @@ cp "$bin/ClairMacApp" "$bin/ClairDaemon" "$bin/clair" "$app/Contents/MacOS/"
 # there and the bundle cannot be sealed by codesign. Move them to Contents/Resources (custom accessor
 # or an Xcode app target) when Developer ID signing/notarization is adopted.
 for bundle in "$bin"/*.bundle; do [[ -e "$bundle" ]] && cp -R "$bundle" "$app/"; done
-scripts/make-app-icon.sh "apps/mac/ClairMacApp/AppIcon.icon" "$app/Contents/Resources"
+scripts/make-app-icon.sh "apps/mac/ClairMacApp/$icon.icon" "$app/Contents/Resources"
 cat >"$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
   <key>CFBundleExecutable</key><string>ClairMacApp</string>
-  <key>CFBundleIdentifier</key><string>com.diwamoto.clair</string>
-  <key>CFBundleName</key><string>Clair</string>
-  <key>CFBundleIconFile</key><string>AppIcon</string>
-  <key>CFBundleIconName</key><string>AppIcon</string>
+  <key>CFBundleIdentifier</key><string>${bundle_id}</string>
+  <key>CFBundleName</key><string>${name}</string>
+  <key>CFBundleIconFile</key><string>${icon}</string>
+  <key>CFBundleIconName</key><string>${icon}</string>
   <key>CFBundleDocumentTypes</key>
   <array><dict>
     <key>CFBundleTypeName</key><string>Text</string>
@@ -91,24 +107,32 @@ codesign --force --deep --sign - "$app"
 # Throwaway HOME so it never touches the host's Stable workspace, daemon or update state.
 smoke_home="$(mktemp -d)"
 trap 'rm -rf "$smoke_home"' EXIT
-first_frame="$(CLAIR_STARTUP_TRACE=exit CLAIR_STARTUP_TIMEOUT=60 CLAIR_CHANNEL=stable HOME="$smoke_home" \
+first_frame="$(CLAIR_STARTUP_TRACE=exit CLAIR_STARTUP_TIMEOUT=60 CLAIR_CHANNEL="$channel" HOME="$smoke_home" \
   "$app/Contents/MacOS/ClairMacApp" 2>/dev/null | sed -n 's/^clair\.startup\.first_frame_ms=//p' | tail -n 1)" || true
 [[ -n "$first_frame" ]] || die "the packaged app did not reach a first frame"
 printf 'release: smoke launch reached first frame in %s ms\n' "$first_frame"
 
-asset="Clair-${version}-macos-arm64.zip"
+asset="${name// /-}-${version}-macos-arm64.zip"
 ditto -c -k --sequesterRsrc --keepParent "$app" "$out/$asset"
-xcrun swift scripts/generate-update-manifest.swift \
+CLAIR_UPDATE_CHANNEL="$channel" xcrun swift scripts/generate-update-manifest.swift \
   --version "$version" \
   --private-key-env CLAIR_UPDATE_PRIVATE_KEY \
   --public-key "$public_key" \
   --output "$out/latest.json" \
-  --notes "Clair ${version}" \
+  --notes "${name} ${version}" \
   --artifact arm64 "https://github.com/${repo}/releases/download/${tag}/${asset}" "$out/$asset"
 printf 'release: packaged %s and latest.json in %s\n' "$asset" "$out"
 ((publish)) || exit 0
 
 commit="$(git rev-parse HEAD)"
+if [[ "$channel" == rc ]]; then
+  # One rolling prerelease: replace the previous RC (and its tag) with this commit's build.
+  gh release delete rc --repo "$repo" --cleanup-tag --yes 2>/dev/null || true
+  gh release create rc "$out/$asset" "$out/latest.json" --repo "$repo" --target "$commit" \
+    --notes "$notes" --title "$name $version" --prerelease --latest=false
+  printf 'release: published https://github.com/%s/releases/tag/rc\n' "$repo"
+  exit 0
+fi
 if ! git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
   git tag "$tag" "$commit"
   git push origin "refs/tags/$tag"

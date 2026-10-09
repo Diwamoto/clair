@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 
-// V09: ADR-0008 Stable/Dev identity and ADR-0009 GitHub Release + Ed25519 signed update (scripts/release.sh).
+// V09: ADR-0008 Stable/Dev/RC identity and ADR-0009 GitHub Release + Ed25519 signed update (scripts/release.sh).
 // Ported from the v1 updater (apple/ClairApp/ClairUpdate.swift) with the same manifest and signed
 // payload, so scripts/generate-update-manifest.swift and the release workflow stay valid.
 // Apply only works from an installed `/Applications/<Name>.app`; a SwiftPM binary reports `.notInstalled`.
@@ -9,17 +9,32 @@ import Foundation
 // running, so restored panes reattach by key (`ClairDaemonLauncher.keepsSessionsOnQuit`).
 
 public enum ClairChannel: String, Sendable, Codable, CaseIterable {
-  case stable, dev
+  /// RC: a prerelease build of main for trying changes on another Mac (`.github/workflows/rc.yml`).
+  case stable, dev, rc
 
-  public var bundleIdentifier: String { self == .stable ? "com.diwamoto.clair" : "com.diwamoto.clair.dev" }
-  public var displayName: String { self == .stable ? "Clair" : "Clair Dev" }
-  /// Own directory per channel so Dev can never touch Stable's workspace, socket or update state.
-  public var dataDirectoryName: String { self == .stable ? "Clair" : "Clair Dev" }
+  public var bundleIdentifier: String {
+    switch self {
+    case .stable: "com.diwamoto.clair"
+    case .dev: "com.diwamoto.clair.dev"
+    case .rc: "com.diwamoto.clair.rc"
+    }
+  }
+  public var displayName: String {
+    switch self {
+    case .stable: "Clair"
+    case .dev: "Clair Dev"
+    case .rc: "Clair RC"
+    }
+  }
+  /// Own directory per channel so Dev/RC can never touch Stable's workspace, socket or update state.
+  public var dataDirectoryName: String { displayName }
+  /// Whether the channel has a signed update feed (Dev is local-only).
+  public var hasUpdateFeed: Bool { self != .dev }
 
   /// `CLAIR_CHANNEL` (set by `make dev`), else the bundle id, else Stable.
   public static var current: Self {
     if let e = ProcessInfo.processInfo.environment["CLAIR_CHANNEL"], let c = Self(rawValue: e) { return c }
-    return Bundle.main.bundleIdentifier == Self.dev.bundleIdentifier ? .dev : .stable
+    return allCases.first { $0.bundleIdentifier == Bundle.main.bundleIdentifier } ?? .stable
   }
 
   public var dataURL: URL { URL.applicationSupportDirectory.appending(path: dataDirectoryName) }
@@ -86,9 +101,11 @@ public struct ClairUpdateManifest: Codable, Equatable, Sendable {
   }
 
   /// Validates schema, channel, version order, architecture, URL, hash shape and signature (in that order).
-  func makeUpdate(currentVersion: String, architecture: String, publicKey: Curve25519.Signing.PublicKey) throws -> ClairUpdate {
+  func makeUpdate(
+    currentVersion: String, architecture: String, publicKey: Curve25519.Signing.PublicKey, channel expected: ClairChannel = .stable
+  ) throws -> ClairUpdate {
     guard schemaVersion == 1 else { throw ClairUpdateError.invalidManifest("unsupported schema \(schemaVersion)") }
-    guard channel == .stable else { throw ClairUpdateError.unsupportedChannel(channel.rawValue) }
+    guard channel == expected, channel.hasUpdateFeed else { throw ClairUpdateError.unsupportedChannel(channel.rawValue) }
     let cur = try ClairVersion(currentVersion), new = try ClairVersion(version)
     guard cur < new else { throw ClairUpdateError.notNewer(current: cur.raw, available: new.raw) }
     guard let a = artifacts.first(where: { $0.platform == "macos" && $0.architecture == architecture }) else {
@@ -115,6 +132,8 @@ public struct ClairUpdate: Equatable, Sendable {
 
 public struct ClairUpdateConfiguration: Sendable {
   public static let manifestURL = URL(string: "https://github.com/Diwamoto/clair/releases/latest/download/latest.json")!
+  /// RC lives on one rolling prerelease tagged `rc` (scripts/release.sh --rc).
+  public static let rcManifestURL = URL(string: "https://github.com/Diwamoto/clair/releases/download/rc/latest.json")!
   public static let changelogURL = URL(string: "https://github.com/Diwamoto/clair/blob/main/CHANGELOG.md")!
 
   public let channel: ClairChannel
@@ -136,7 +155,7 @@ public struct ClairUpdateConfiguration: Sendable {
       let arch = "x86_64"
     #endif
     return Self(
-      channel: channel, publicKeyBase64: channel == .stable ? s("ClairUpdatePublicKey") : nil,
+      channel: channel, publicKeyBase64: channel.hasUpdateFeed ? s("ClairUpdatePublicKey") : nil,
       currentVersion: s("CFBundleShortVersionString") ?? "0.0.0", currentAppURL: bundle.bundleURL,
       installURL: URL(fileURLWithPath: "/Applications/\(channel.displayName).app"), dataURL: channel.dataURL, architecture: arch)
   }
@@ -147,7 +166,7 @@ public enum ClairUpdater {
   public typealias Downloader = @Sendable (URL) async throws -> URL
 
   static func key(_ c: ClairUpdateConfiguration) throws -> Curve25519.Signing.PublicKey {
-    guard c.channel == .stable else { throw ClairUpdateError.unavailable("Dev builds do not use the Stable update feed") }
+    guard c.channel.hasUpdateFeed else { throw ClairUpdateError.unavailable("Dev builds do not use the Stable update feed") }
     guard let b64 = c.publicKeyBase64 else { throw ClairUpdateError.unavailable("updater public key is not configured") }
     guard let raw = Data(base64Encoded: b64), let k = try? Curve25519.Signing.PublicKey(rawRepresentation: raw) else {
       throw ClairUpdateError.invalidManifest("embedded public key is not Ed25519")
@@ -157,8 +176,9 @@ public enum ClairUpdater {
 
   public static func check(_ c: ClairUpdateConfiguration, load: Loader = fetch) async throws -> ClairUpdate {
     let k = try key(c)
-    let m = try JSONDecoder().decode(ClairUpdateManifest.self, from: try await load(ClairUpdateConfiguration.manifestURL))
-    return try m.makeUpdate(currentVersion: c.currentVersion, architecture: c.architecture, publicKey: k)
+    let url = c.channel == .rc ? ClairUpdateConfiguration.rcManifestURL : ClairUpdateConfiguration.manifestURL
+    let m = try JSONDecoder().decode(ClairUpdateManifest.self, from: try await load(url))
+    return try m.makeUpdate(currentVersion: c.currentVersion, architecture: c.architecture, publicKey: k, channel: c.channel)
   }
 
   /// Download → SHA-256 → stage (bundle id/version checked) → detached helper swaps the app with backup and rolls back
@@ -166,7 +186,7 @@ public enum ClairUpdater {
   public static func install(_ u: ClairUpdate, _ c: ClairUpdateConfiguration, download: Downloader = fetchFile) async throws {
     guard c.isInstalled else { throw ClairUpdateError.installFailed("must be installed at \(c.installURL.path)") }
     // Re-validate: the manifest the user saw must still verify.
-    guard try u.manifest.makeUpdate(currentVersion: c.currentVersion, architecture: c.architecture, publicKey: try key(c)) == u else {
+    guard try u.manifest.makeUpdate(currentVersion: c.currentVersion, architecture: c.architecture, publicKey: try key(c), channel: c.channel) == u else {
       throw ClairUpdateError.invalidManifest("update changed before install")
     }
     // Release assets redirect to a CDN that occasionally drops a connection; a retry usually lands.
