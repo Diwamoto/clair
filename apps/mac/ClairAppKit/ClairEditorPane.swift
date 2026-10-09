@@ -132,6 +132,15 @@
 
     private var loads: [String: Load] = [:]
     private var revisions: [String: Int] = [:]
+    /// ⌘F / ⌥⌘F: the open find bar. `nonce` changes on every request so a repeat ⌘F refocuses the field.
+    struct FindRequest: Equatable { let path: String; var seed: String?; var replace: Bool; var nonce: Int }
+    var find: FindRequest?
+    func showFind(_ path: String, replace: Bool) {
+      let seed = view(path).flatMap { v in
+        v.selection.selections.first.flatMap { $0.isEmpty ? nil : try? v.snapshot.text(in: $0.range) }
+      }.flatMap { $0.contains("\n") ? nil : $0 }
+      find = FindRequest(path: path, seed: seed, replace: replace, nonce: (find?.nonce ?? 0) + 1)
+    }
     /// 1-based caret of each open file (status bar Ln/Col); grapheme columns.
     private(set) var caret: [String: (line: Int, col: Int)] = [:]
     private(set) var blame: [String: [EditorBlame]] = [:]
@@ -468,7 +477,9 @@
               // file doesn't flash from colorless to colored — never shown
               // again after this file's first parse, incremental updates on
               // keystroke are fast enough (BUDGET-OP-100) to need nothing.
-              if buffers.highlightsLoading.contains(path) {
+              if focused, let request = buffers.find, request.path == path {
+                EditorFindBar(buffers: buffers, path: path, request: request)
+              } else if buffers.highlightsLoading.contains(path) {
                 ProgressView().controlSize(.small).padding(8)
               } else if focused, let onPreview, MarkdownPreview.isMarkdown(path) || TableFile.separator(path) != nil || path.lowercased().hasSuffix(".html") || path.lowercased().hasSuffix(".htm") {
                 Button(action: onPreview) { Image(systemName: "eye") }

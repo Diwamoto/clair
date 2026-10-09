@@ -233,6 +233,19 @@ public final class GhosttyAppHandle {
     #endif
   }
 
+  /// Ghostty's search state after `tick()`: match count and selected match (0-based), nil when unknown.
+  /// nil overall when neither changed since the last call.
+  public func takeSearch() -> (total: Int?, selected: Int?)? {
+    #if CLAIR_GHOSTTY_VENDORED
+      guard isValid else { return nil }
+      var total: Int64 = -1, selected: Int64 = -1
+      guard clair_ghostty_app_take_search(raw, &total, &selected) else { return nil }
+      return (total < 0 ? nil : Int(total), selected < 0 ? nil : Int(selected))
+    #else
+      return nil
+    #endif
+  }
+
   #if CLAIR_GHOSTTY_VENDORED
     /// Shared config-marshalling between `withSurface` and `retainSurface`:
     /// only the free-on-return-vs-caller-owns policy differs between them.
@@ -556,6 +569,20 @@ public final class GhosttySurfaceHandle {
       clair_ghostty_surface_set_content_scale(raw, x, y)
     #else
       throw GhosttyError.runtimeUnavailable
+    #endif
+  }
+
+  // MARK: - Search
+
+  /// Runs a Ghostty binding action by name: `search:<needle>`, `navigate_search:next|previous`, `end_search`.
+  @discardableResult
+  public func bindingAction(_ action: String) -> Bool {
+    guard isValid else { return false }
+    #if CLAIR_GHOSTTY_VENDORED
+      var action = action
+      return action.withUTF8 { clair_ghostty_surface_binding_action(raw, $0.baseAddress.map { UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self) }, UInt($0.count)) }
+    #else
+      return false
     #endif
   }
 

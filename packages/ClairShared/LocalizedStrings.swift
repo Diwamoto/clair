@@ -14,6 +14,10 @@ extension LocalizedStrings {
     "コンシェルジュに頼む…": "Ask the concierge…",
     "# コンシェルジュへの指示\n\nこの Project で守ってほしいことを書きます。次回の起動から反映されます。\n":
       "# Concierge instructions\n\nWrite what the concierge should follow in this Project. Applies from its next start.\n",
+    // Find bar (⌘F)
+    "置換の切り替え": "Toggle Replace", "大文字と小文字を区別": "Match Case", "前を検索 (⇧Return)": "Previous Match (⇧Return)",
+    "次を検索 (Return)": "Next Match (Return)", "前を検索": "Previous Match", "次を検索": "Next Match",
+    "閉じる (Esc)": "Close (Esc)", "結果なし": "No results",
     // Sections and settings
     "一般": "General", "AIプロバイダー": "AI Providers", "使用状況": "Usage", "エディタ": "Editor",
     "ターミナル": "Terminal", "モバイル": "Mobile", "アップデート": "Updates",

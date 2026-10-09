@@ -434,6 +434,7 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   クリックでそのコマンドを実行する(クリックで新しい pane が開いたら空の editor は閉じる)。⌘W は他の pane があれば空の editor を閉じ
   (ファイルを開くと左端に戻る)、空の editor だけなら ⌘Q と同じく確認付きで Clair を終了する
 - file tree、search、Git の sidebar と、pane へ開く補助 view。file tree は対象ファイルを件数で打ち切らずに表示する。gitignore 対象のファイルは暗いグレー(`textQuaternary`)で表示し、検索・quick open には出さない(中身が 1000 件を超える ignored フォルダはビルドキャッシュとみなして出さない)
+- ⌘F はフォーカス中の pane を検索する。editor は開いているファイル内の検索・置換バー(⌥⌘F で置換行を開く。大文字小文字・正規表現、Return / ⇧Return で次 / 前、「すべて置換」は 1 undo 単位)、terminal は scrollback を含む出力の検索(一致の強調と件数は Ghostty が行う)。それ以外の pane では Project 全体の検索を開く。ファイル内のシンボルは ⌘⇧O、ワークスペースのシンボルは ⌘T
 - Quick Open、全文検索・置換、file watcher、⌘K「Open Recent…」(Project ごとに保存する最近開いたファイルを新しい順に開き直す。Compare With… の候補順も同じ記録を使う)
 - diff、stage/unstage、変更の破棄(ボタンと右クリック。「変更」は working tree のみ、「ステージ済み」は HEAD へ戻す、未追跡は削除。確認必須・AI 不可)、commit、branch/worktree の作成・切替
 - 任意の 2 ファイルの比較(file menu で比較対象を選び別ファイルと比較、または ⌘K「Compare With…」でアクティブファイルと選んだファイルを比較。候補は Project ごとに保存する最近開いたファイル順が先頭。diff tab、Git 不要)

@@ -37,6 +37,15 @@ import ClairEditorCore
         needsDisplay = true
       }
     }
+    /// ⌘F: every match of the find bar's query, filled behind the text. Cleared on edit (the host re-searches).
+    public var findMatches: [TextUTF8Range] = [] {
+      didSet {
+        findIndex = EditorSpanIndex(findMatches, range: { $0 })
+        needsDisplay = true
+      }
+    }
+    public var findMatchColor: NSColor = .findHighlightColor.withAlphaComponent(0.35) { didSet { needsDisplay = true } }
+    var findIndex = EditorSpanIndex<TextUTF8Range>([], range: { $0 })
     /// E17: the word under a ⌘-hovering pointer (`onDefinitionHover` reports it) and, once the host has
     /// confirmed a definition for exactly that word, the underlined link that ⌘-click follows.
     public internal(set) var definitionHover: TextUTF8Range?
@@ -249,6 +258,7 @@ import ClairEditorCore
       }
       definitionHover = nil
       definitionLink = nil
+      if !findMatches.isEmpty { findMatches = [] }
       self.snapshot = newSnapshot
       updateWraps(sorted, old: oldSnapshot)
       mapFolds(through: sorted, old: oldSnapshot)
@@ -493,7 +503,10 @@ import ClairEditorCore
             context.setFillColor(debugLineColor.cgColor)
             context.fill(CGRect(x: 0, y: seg.top, width: bounds.width, height: lineHeight))
           }
-          if !isComposingLine { drawSelections(seg, context: context) }
+          if !isComposingLine {
+            drawFindMatches(seg, context: context)
+            drawSelections(seg, context: context)
+          }
           drawText(seg, context: context)
           if seg.isFirst, gutterWidth > 0 {
             if showsLineNumbers { drawLineNumber(index, top: seg.top, context: context) }
@@ -583,6 +596,25 @@ import ClairEditorCore
       let lower = max(local.lowerBound, seg.start)
       let upper = min(local.upperBound, seg.end)
       return lower < upper ? lower..<upper : nil
+    }
+
+    private func drawFindMatches(_ seg: EditorRowSegment, context: CGContext) {
+      let line = seg.textLine.contentRange
+      let matches = findIndex.overlapping(TextUTF8Range(line.lowerBound, UTF8Offset(line.upperBound.value + 1)))
+      guard !matches.isEmpty else { return }
+      context.setFillColor(findMatchColor.cgColor)
+      for range in matches {
+        guard let local = clip(range, to: seg) else { continue }
+        context.fill(CGRect(x: textInset + seg.x(local.lowerBound), y: seg.top, width: seg.x(local.upperBound) - seg.x(local.lowerBound), height: lineHeight))
+      }
+    }
+
+    /// Selects `range` and scrolls it into view without taking focus (the find bar keeps typing).
+    public func reveal(_ range: TextUTF8Range) {
+      guard let line = try? snapshot.position(at: range.lowerBound, columnUnit: UTF8Unit.self).line else { return }
+      select(range)  // opens a fold around it first
+      syncFrameSize()
+      scrollToVisible(NSRect(x: 0, y: rowTop(line.value) - 3 * lineHeight, width: 1, height: 7 * lineHeight))
     }
 
     private func drawSelections(_ seg: EditorRowSegment, context: CGContext) {

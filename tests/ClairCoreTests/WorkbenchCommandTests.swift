@@ -107,6 +107,32 @@ final class WorkbenchCommandTests: XCTestCase {
     XCTAssertNil(state.palette)
   }
 
+  func testFindBelongsToTheFocusedEditorOrTerminalElseSearchesTheProject() throws {
+    var state = WorkbenchState()
+    XCTAssertEqual(r.commands.first { $0.id == "palette.find" }?.shortcut, "⌘F")
+    XCTAssertEqual(r.commands.first { $0.id == "editor.replace" }?.shortcut, "⌥⌘F")
+    XCTAssertEqual(r.commands.first { $0.id == "editor.fileSymbols" }?.shortcut, "⌘⇧O")
+    // A focused editor with a file: the GUI opens its find bar, no palette.
+    XCTAssertTrue(state.findTargetsFocusedPane)
+    _ = try r.execute("palette.find", state: &state).get()
+    XCTAssertNil(state.palette)
+    // A focused terminal: same.
+    let editor = state.tree.focused
+    state.tree.focus(state.tree.split(editor, .horizontal, kind: .terminal))
+    XCTAssertEqual(state.tree.leaves.first { $0.id == state.tree.focused }?.kind, .terminal)
+    _ = try r.execute("palette.find", state: &state).get()
+    XCTAssertNil(state.palette)
+    // A preview pane has no find of its own.
+    state.tree.focus(state.tree.split(state.tree.focused, .horizontal, kind: .preview))
+    _ = try r.execute("palette.find", state: &state).get()
+    XCTAssertEqual(state.palette, .search)
+    // No file in the editor: falls back to the Project search.
+    var empty = WorkbenchState()
+    empty.active = nil
+    _ = try r.execute("palette.find", state: &empty).get()
+    XCTAssertEqual(empty.palette, .search)
+  }
+
   func testZoomStepsEditorFontSizeWithinChoicesAndReloadIsCommandR() throws {
     var state = WorkbenchState()
     XCTAssertEqual(r.commands.first { $0.id == "window.restart" }?.shortcut, "⌘R")

@@ -104,6 +104,9 @@ typedef struct {
   char notification_title[512];
   char notification_body[4096];
   char open_url[2048];  // latest cmd-clicked link; empty = none
+  bool search_changed;
+  int64_t search_total;     // -1 = unknown
+  int64_t search_selected;  // -1 = none
 } clair_ghostty_app_events_record;
 
 static bool clair_ghostty_action_cb(
@@ -124,6 +127,12 @@ static bool clair_ghostty_action_cb(
     const char *t = action.action.set_title.title;
     snprintf(rec->title, sizeof(rec->title), "%s", t ? t : "");
     rec->title_changed = true;
+  } else if (action.tag == GHOSTTY_ACTION_SEARCH_TOTAL) {
+    rec->search_total = (int64_t)action.action.search_total.total;
+    rec->search_changed = true;
+  } else if (action.tag == GHOSTTY_ACTION_SEARCH_SELECTED) {
+    rec->search_selected = (int64_t)action.action.search_selected.selected;
+    rec->search_changed = true;
   } else if (action.tag == GHOSTTY_ACTION_SHOW_CHILD_EXITED)
     rec->exit_code = (int64_t)action.action.child_exited.exit_code;
   else if (action.tag == GHOSTTY_ACTION_OPEN_URL) {
@@ -142,6 +151,8 @@ clair_ghostty_app_t clair_ghostty_app_new(clair_ghostty_config_t config) {
   clair_ghostty_app_events_record *rec = calloc(1, sizeof(*rec));
   if (!rec) return NULL;
   rec->exit_code = -1;
+  rec->search_total = -1;
+  rec->search_selected = -1;
   runtime_config.userdata = rec;
   runtime_config.supports_selection_clipboard = false;
   runtime_config.wakeup_cb = clair_ghostty_wakeup_cb;
@@ -170,6 +181,15 @@ void clair_ghostty_app_take_events(clair_ghostty_app_t app, clair_ghostty_app_ev
     rec->bells = 0; rec->title_changed = false; rec->notification_changed = false;
     rec->open_url[0] = 0;
   }
+}
+
+bool clair_ghostty_app_take_search(clair_ghostty_app_t app, int64_t *total, int64_t *selected) {
+  clair_ghostty_app_events_record *rec = ghostty_app_userdata((ghostty_app_t)app);
+  if (!rec || !rec->search_changed) return false;
+  *total = rec->search_total;
+  *selected = rec->search_selected;
+  rec->search_changed = false;
+  return true;
 }
 
 void clair_ghostty_app_free(clair_ghostty_app_t app) {
@@ -310,6 +330,10 @@ bool clair_ghostty_surface_read_selection(
   return ok;
 }
 #endif // CLAIR_GHOSTTY_VENDORED
+
+bool clair_ghostty_surface_binding_action(clair_ghostty_surface_t surface, const char *action, uintptr_t len) {
+  return ghostty_surface_binding_action((ghostty_surface_t)surface, action, len);
+}
 
 int clair_ghostty_abi_is_vendored(void) {
 #if defined(CLAIR_GHOSTTY_VENDORED)

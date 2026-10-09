@@ -420,6 +420,10 @@ import Foundation
         }
       }
       if e.bells > 0 || exit != nil { onFacts?(e.bells, exit, e.notification) }
+      if let found = ghosttyApp.takeSearch(), let pane, TerminalFind.shared.open[pane] != nil {
+        TerminalFind.shared.open[pane]?.total = found.total
+        TerminalFind.shared.open[pane]?.selected = found.selected
+      }
       if redraw { needsDisplay = true }
     }
 
@@ -735,7 +739,17 @@ import Foundation
     /// ponytail: pane ids are per-Project; only the visible Project's tree is mounted, so a flat map is enough.
     nonisolated(unsafe) private static var byPane: [Int: Weak] = [:]
     private struct Weak { weak var view: ClairGhosttySurfaceView? }
-    static func register(_ v: ClairGhosttySurfaceView, pane: Int) { byPane[pane] = Weak(view: v) }
+    static func register(_ v: ClairGhosttySurfaceView, pane: Int) { byPane[pane] = Weak(view: v); v.pane = pane }
+    private var pane: Int?
+
+    /// ⌘F: runs a Ghostty search action (`search:<needle>`, `navigate_search:…`, `end_search`) on `pane`'s surface.
+    static func searchAction(_ action: String, pane: Int) {
+      byPane[pane]?.view?.ghosttySurface?.bindingAction(action)
+    }
+    static func focus(pane: Int) {
+      guard let v = byPane[pane]?.view else { return }
+      v.window?.makeFirstResponder(v)
+    }
     @discardableResult public static func send(_ text: String, toPane pane: Int) -> Bool {
       guard let v = byPane[pane]?.view else { return false }
       v.sendText(text); return true

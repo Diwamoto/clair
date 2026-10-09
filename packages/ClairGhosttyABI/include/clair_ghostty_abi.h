@@ -513,6 +513,9 @@ typedef struct {
   char open_url[2048];  // drained on read; a cmd-clicked link, empty = none
 } clair_ghostty_app_events_s;
 void clair_ghostty_app_take_events(clair_ghostty_app_t app, clair_ghostty_app_events_s *out);
+// Terminal search (⌘F): Ghostty's match count and selected match (0-based), each -1 when unknown.
+// Returns false when neither changed since the last call.
+bool clair_ghostty_app_take_search(clair_ghostty_app_t app, int64_t *total, int64_t *selected);
 clair_ghostty_surface_config_s clair_ghostty_surface_config_new(void);
 clair_ghostty_surface_t clair_ghostty_surface_new(
     clair_ghostty_app_t app, const clair_ghostty_surface_config_s *config);
@@ -551,6 +554,8 @@ void clair_ghostty_surface_set_content_scale(
 bool clair_ghostty_surface_has_selection(clair_ghostty_surface_t surface);
 bool clair_ghostty_surface_read_selection(
     clair_ghostty_surface_t surface, clair_ghostty_text_s *out_text);
+// Runs a Ghostty keybinding action by name (e.g. "search:foo", "navigate_search:next", "end_search").
+bool clair_ghostty_surface_binding_action(clair_ghostty_surface_t surface, const char *action, uintptr_t len);
 
 #endif // CLAIR_GHOSTTY_VENDORED
 

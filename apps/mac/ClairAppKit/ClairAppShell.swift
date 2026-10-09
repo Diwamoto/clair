@@ -380,6 +380,14 @@ import Observation
           default: break
           }
         }
+        if (id == "palette.find" && state.findTargetsFocusedPane) || id == "editor.replace" {
+          let pane = state.tree.focused
+          if state.tree.leaves.first(where: { $0.id == pane })?.kind == .terminal {
+            TerminalFind.shared.show(pane: pane, seed: ClairGhosttySurfaceView.selectedText(inPane: pane))
+          } else if let p = state.active {
+            buffers.showFind(p, replace: id == "editor.replace")
+          }
+        }
         if id == "editor.fileSymbols" { showFileSymbols() }
         if id == "editor.problems" { showProblems() }
         if id == "project.choose" { chooseProject() }
@@ -1116,7 +1124,7 @@ import Observation
       if id.hasPrefix("file.") || id.hasPrefix("project.")
         || ["window.restart", "app.restart", "tab.reopenClosed", "tab.close", "pane.close", "palette.recent", "palette.compare"].contains(id) { return .file }
       if id.hasPrefix("editor.fold") || id.hasPrefix("editor.unfold")
-        || ["palette.find", "palette.search", "editor.format", "editor.codeAction", "editor.rename"].contains(id) { return .edit }
+        || ["palette.find", "editor.replace", "palette.search", "editor.format", "editor.codeAction", "editor.rename"].contains(id) { return .edit }
       if id.hasPrefix("editor.navigate") || id.hasPrefix("pane.focus")
         || ["editor.definition", "editor.references", "palette.files", "palette.symbols", "palette.references", "editor.fileSymbols", "editor.problems",
             "tab.next", "tab.previous", "tab.activate"].contains(id) { return .go }
@@ -1128,7 +1136,7 @@ import Observation
       "settings.open": "Settings…", "file.save": "Save", "tab.reopenClosed": "Reopen Closed Tab",
       "project.choose": "Open Project…", "pane.close": "Close Tab or Pane", "palette.recent": "Open Recent…", "palette.compare": "Compare With…",
       "window.restart": "Restart Window", "editor.zoomIn": "Zoom In", "editor.zoomInAlt": "Zoom In", "editor.zoomOut": "Zoom Out", "app.restart": "Restart App",
-      "palette.find": "Find", "palette.search": "Find in Project", "editor.format": "Format Document",
+      "palette.find": "Find", "editor.replace": "Replace", "palette.search": "Find in Project", "editor.format": "Format Document",
       "editor.fold": "Fold", "editor.unfold": "Unfold", "editor.foldAll": "Fold All", "editor.unfoldAll": "Unfold All",
       "sidebar.toggle": "Toggle Sidebar", "palette.commands": "Command Palette", "palette.commandsAlt": "Command Palette",
       "pane.splitRight": "Split Right", "pane.splitDown": "Split Down", "pane.maximize": "Maximize Pane",
@@ -3710,6 +3718,7 @@ import Observation
             else { editor.inPane(focused: id == focused, onFocus: { if id != focused { onFocus(id) } },
               // Split editors have no pane header; the leftmost one is anchored (`pane.close` replaces it).
               onClose: leftmost ? nil : { run("pane.focus", ["id": .int(id)]); run("pane.close", [:]) }) }
+            if kind == .terminal { TerminalFindBar(pane: id).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing) }
             if let from = dragging, from != id {
               PaneDropZones { edge in
                 run("pane.move", ["id": .int(from), "target": .int(id), "edge": .string(edge.rawValue)])

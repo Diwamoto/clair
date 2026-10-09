@@ -82,6 +82,15 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   /// Last scanned tree per Project; not persisted, only makes switching back instant.
   var filesCache: [String: [WorkbenchFile]] = [:]
   public var tree = PaneTree(single: .editor)
+  /// ⌘F belongs to the focused pane: a terminal, or an editor showing a file (not a chat tab or the home screen).
+  public var findTargetsFocusedPane: Bool {
+    guard !panesClosed else { return false }
+    switch tree.leaves.first(where: { $0.id == tree.focused })?.kind {
+    case .terminal: return true
+    case .editor: return active.map { AgentHistory.id(tab: $0) == nil } ?? false
+    default: return false
+    }
+  }
   /// Every pane was closed (⌘W on the last one): the shell shows the empty panel instead of `tree`. Transient.
   public var panesClosed = false
   public var tabs: [String] = ["apple/ClairApp/ContentView.swift"]
@@ -939,8 +948,14 @@ extension CommandRegistry {
     cmd("palette.commandsAlt", "コマンドパレット", .read, ai: false, shortcut: "⌘⇧P", palette: false) { s, _ in s.palette = .commands; return .ok },
     cmd("palette.files", "ファイルへ移動", .read, ai: false, shortcut: "⌘P", palette: false) { s, _ in s.palette = .files; return .ok },
     cmd("palette.search", "Project を検索", .read, ai: false, shortcut: "⌘⇧F", palette: false) { s, _ in s.palette = .search; return .ok },
-    // ponytail: ⌘F opens the same search panel; a per-file find bar replaces this when the editor grows one.
-    cmd("palette.find", "検索", .read, ai: false, shortcut: "⌘F", palette: false) { s, _ in s.palette = .search; return .ok },
+    // ⌘F searches the focused pane: the GUI opens the editor's find bar or the terminal's search. Any other
+    // pane kind falls back to the Project search panel.
+    cmd("palette.find", "検索", .read, ai: false, shortcut: "⌘F", palette: false) { s, _ in
+      if !s.findTargetsFocusedPane { s.palette = .search }
+      return .ok
+    },
+    cmd("editor.replace", "置換", .read, ai: false, shortcut: "⌥⌘F",
+        preflight: { s, _ throws(CommandError) in try require(s.active != nil, tr("ファイルが開かれていません")); return .read }) { _, _ in .ok },
     cmd("palette.compare", "Compare With…（アクティブファイルと比較）", .read, ai: false,
         preflight: { s, _ throws(CommandError) in try require(s.active != nil, "no active file"); return .read }) { s, _ in
       s.palette = .compare; return .ok
