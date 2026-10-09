@@ -28,7 +28,7 @@ public enum ClairClaudeEditor {
   }
 
   /// A missing file is `{}`; an unreadable one throws so it is never overwritten.
-  private static func read(_ home: URL) throws -> [String: Any] {
+  static func read(_ home: URL) throws -> [String: Any] {
     guard let data = FileManager.default.contents(atPath: settings(home: home).path) else { return [:] }
     guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
       throw NSError(domain: "ClairClaudeEditor", code: 2, userInfo: [NSLocalizedDescriptionKey: "settings.json を読めません"])
@@ -36,7 +36,7 @@ public enum ClairClaudeEditor {
     return json
   }
 
-  private static func write(_ json: [String: Any], _ home: URL) throws {
+  static func write(_ json: [String: Any], _ home: URL) throws {
     let url = settings(home: home)
     try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]).write(to: url, options: .atomic)

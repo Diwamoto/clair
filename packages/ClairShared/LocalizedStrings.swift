@@ -18,6 +18,15 @@ extension LocalizedStrings {
     "置換の切り替え": "Toggle Replace", "大文字と小文字を区別": "Match Case", "前を検索 (⇧Return)": "Previous Match (⇧Return)",
     "次を検索 (Return)": "Next Match (Return)", "前を検索": "Previous Match", "次を検索": "Next Match",
     "閉じる (Esc)": "Close (Esc)", "結果なし": "No results", "入力待ち %@ 件": "%@ waiting for input",
+    // Agent states (agent.report)
+    "承認・回答待ち": "Waiting for approval", "完了（未確認）": "Done (unseen)", "待機中": "Idle",
+    "Claude Code の状態通知": "Claude Code status hooks",
+    "Claude Code の状態を Clair に知らせる": "Report Claude Code status to Clair",
+    "Claude Code の状態を Clair に知らせない": "Stop reporting Claude Code status to Clair",
+    "設定済み(~/.claude/settings.json の hooks)。作業中・入力待ち・完了を Agents 一覧に示します。":
+      "Installed (hooks in ~/.claude/settings.json). The Agents list shows working, waiting, and done.",
+    "~/.claude/settings.json に hooks を追加し、作業中・入力待ち・完了を Agents 一覧に示します。既存の hooks は残します。":
+      "Adds hooks to ~/.claude/settings.json so the Agents list shows working, waiting, and done. Your own hooks are kept.",
     // Sections and settings
     "一般": "General", "AIプロバイダー": "AI Providers", "使用状況": "Usage", "エディタ": "Editor",
     "ターミナル": "Terminal", "モバイル": "Mobile", "アップデート": "Updates",

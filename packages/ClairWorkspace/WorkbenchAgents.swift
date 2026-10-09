@@ -107,9 +107,19 @@ public struct AgentRun: Sendable {
 }
 
 /// U06: one row of the session list, derived from facts only (launch + bell/exit notices).
+/// What the agent itself reported through its official hooks (`agent.report`, `ClairClaudeHooks`).
+public struct AgentReport: Sendable, Codable, Equatable {
+  public enum State: String, Sendable, Codable, CaseIterable { case working, blocked, done }
+  public var state: State
+  /// A `done` turns `idle` once the user focuses the pane.
+  public var seen = false
+}
+
 public struct AgentSession: Sendable, Equatable, Identifiable {
+  /// `running`: working, or nothing reported. `attention`: an unread bell from an agent without hooks.
+  /// `blocked` / `done` / `idle` come only from the agent's own report.
   public enum Status: Sendable, Equatable {
-    case running, attention, exited(Int?)
+    case running, attention, blocked, done, idle, exited(Int?)
     public var isExited: Bool { if case .exited = self { true } else { false } }
   }
   public var id: String { NotificationLog.paneKey(project, pane) }
@@ -129,7 +139,8 @@ public struct WorkbenchAgent: Sendable, Codable, Equatable {
   public let pane: Int
   public let profile: String
   public let cwd: String
-  /// `running` / `attention` (rang the bell, unread) / `exited`
+  /// `running` / `attention` (rang the bell, unread) / `blocked` (waits on a permission or question) /
+  /// `done` (finished a turn, not yet looked at) / `idle` (done and looked at) / `exited`
   public let status: String
   public let exitCode: Int?
   /// The terminal's window title, if the agent set one.
@@ -202,8 +213,16 @@ extension WorkbenchState {
       ls.sorted { $0.key < $1.key }.map { pane, l in
         let mine = notices.items.filter { $0.project == p && $0.pane == pane }  // newest first
         let discovered = detectedLaunches[p]?[pane] != nil && (p == project ? launches[pane] : layouts[p]?.launches[pane]) == nil
+        let reported: AgentSession.Status? = agentReports[NotificationLog.paneKey(p, pane)].map {
+          switch $0.state {
+          case .working: .running
+          case .blocked: .blocked
+          case .done: $0.seen ? .idle : .done
+          }
+        }
         let status: AgentSession.Status =
           (discovered ? nil : mine.first { $0.kind == .exited }.map { .exited($0.exitCode) })
+            ?? reported
             ?? (mine.contains { $0.kind == .bell && !$0.read } ? .attention : .running)
         return AgentSession(project: p, pane: pane, title: AgentProfile.named(l.profile)?.title ?? l.profile, cwd: l.cwd, status: status,
           activity: paneTitles[NotificationLog.paneKey(p, pane)].flatMap { $0.isEmpty ? nil : $0 })
@@ -221,6 +240,9 @@ extension WorkbenchState {
       switch recorded ?? s.status {
       case .running: break
       case .attention: status = "attention"
+      case .blocked: status = "blocked"
+      case .done: status = "done"
+      case .idle: status = "idle"
       case .exited(let code): status = "exited"; exitCode = code
       }
       return WorkbenchAgent(

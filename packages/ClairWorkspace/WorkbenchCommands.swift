@@ -127,6 +127,8 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var detectedLaunches: [String: [Int: AgentLaunch]] = [:]
   /// Latest OSC 0/2 window title per `NotificationLog.paneKey`, as Ghostty shows in its tab. Transient.
   public var paneTitles: [String: String] = [:]
+  /// `project#pane` → the agent's own last report (`agent.report`).
+  public var agentReports: [String: AgentReport] = [:]
   public var notices = NotificationLog()
   public var settingsOpen = false
   /// Transient UI navigation request. The sidebar selection itself belongs to the app shell.
@@ -460,6 +462,7 @@ extension CommandRegistry {
         }) { s, i in
       s.tree.focus(i["id"]!.int!)
       s.activeDiff = nil
+      s.agentReports[NotificationLog.paneKey(s.project, i["id"]!.int!)]?.seen = true
       return .ok
     },
     cmd("pane.maximize", "ペインを最大化", .read, shortcut: "⌃⌘M") { s, _ in s.tree.toggleMaximize(); return .ok },
@@ -600,6 +603,19 @@ extension CommandRegistry {
     },
     // Every agent terminal in every Project (launched or detected), so a CLI caller can find a key without the GUI.
     cmd("agent.list", "エージェント一覧", .read, palette: false) { s, _ in .agents(s.agentList) },
+    // An agent's official hooks say what it is doing (`ClairClaudeHooks`); `parent` is the calling terminal,
+    // filled from CLAIR_TERMINAL_KEY by the IPC layer. Display state only, so it needs no approval.
+    cmd("agent.report", "エージェントの状態を報告", .read,
+        params: [CommandParam("state", .string, allowed: AgentReport.State.allCases.map(\.rawValue)), CommandParam("parent", .string, required: false)],
+        palette: false,
+        preflight: { s, i throws(CommandError) in
+          try require(i["parent"]?.string.flatMap(s.terminal) != nil, "agent.report runs only inside a Clair terminal")
+          return .read
+        }) { s, i in
+      let t = s.terminal(i["parent"]!.string!)!
+      s.agentReports[NotificationLog.paneKey(t.project, t.pane)] = AgentReport(state: AgentReport.State(rawValue: i["state"]!.string!)!)
+      return .ok
+    },
     // ADR-0020: focus the Project's concierge, starting it if needed. GUI-only (ai: false): an agent
     // must not spawn a concierge; it launches children through agent.launch instead.
     cmd("concierge.open", "コンシェルジュを開く", .external, ai: false,
@@ -910,6 +926,8 @@ extension CommandRegistry {
     cmd("skill.uninstall", "Agent skill をアンインストール", .write, ai: false) { _, _ in .ok },
     cmd("claudeEditor.install", "Claude Code の Ctrl+G で Clair を使う", .write, ai: false) { _, _ in .ok },
     cmd("claudeEditor.uninstall", "Claude Code の Ctrl+G で Clair を使わない", .write, ai: false) { _, _ in .ok },
+    cmd("claudeHooks.install", "Claude Code の状態を Clair に知らせる", .write, ai: false) { _, _ in .ok },
+    cmd("claudeHooks.uninstall", "Claude Code の状態を Clair に知らせない", .write, ai: false) { _, _ in .ok },
     cmd("settings.close", "設定を閉じる", .read) { s, _ in s.settingsOpen = false; return .ok },
     cmd("settings.set", "設定を変更", .write, ai: false,
         params: [CommandParam("key", .string, allowed: WorkbenchState.toggleKeys), CommandParam("value", .bool)]) { s, i in

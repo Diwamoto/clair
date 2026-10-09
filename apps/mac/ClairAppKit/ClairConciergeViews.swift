@@ -17,6 +17,9 @@
     switch s {
     case .running: (tr("実行中"), C.success)
     case .attention: (tr("入力待ち"), C.attention)
+    case .blocked: (tr("承認・回答待ち"), C.attention)
+    case .done: (tr("完了"), C.success)
+    case .idle: (tr("待機中"), C.textQuaternary)
     case .exited(let c): (tr("終了 %@", c.map(String.init) ?? "?"), c == 0 ? C.textQuaternary : C.danger)
     }
   }

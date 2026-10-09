@@ -1007,6 +1007,9 @@
       switch s.status {
       case .running: (tr("実行中"), C.textTertiary)
       case .attention: (tr("入力待ち（ベル）"), C.attention)
+      case .blocked: (tr("承認・回答待ち"), C.attention)
+      case .done: (tr("完了（未確認）"), C.success)
+      case .idle: (tr("待機中"), C.textQuaternary)
       case .exited(let c): (c == 0 ? tr("正常終了") : tr("異常終了 (exit %@)", c ?? -1), C.textQuaternary)
       }
     }
@@ -1049,7 +1052,7 @@
 
     private func projectHeader(_ project: String, _ sessions: [AgentSession]) -> some View {
       let collapsed = collapsedProjects.contains(project)
-      let waiting = sessions.filter { $0.status == .attention }.count
+      let waiting = sessions.filter { $0.status == .attention || $0.status == .blocked }.count
       return Button {
         if collapsed { collapsedProjects.remove(project) } else { collapsedProjects.insert(project) }
       } label: {
@@ -1085,14 +1088,17 @@
             VStack(alignment: .leading, spacing: 2) {
               // The session title leads; the provider name is already the avatar.
               Text(s.activity ?? s.title).font(Typography.font(Typography.sidebarStrong)).foregroundStyle(C.textPrimary).lineLimit(1)
-              Text(([gitLabels[s.cwd] ?? URL(fileURLWithPath: s.cwd).lastPathComponent] + (s.status.isExited ? [text] : [])).joined(separator: " · "))
+              Text(([gitLabels[s.cwd] ?? URL(fileURLWithPath: s.cwd).lastPathComponent] + (s.status == .running ? [] : [text])).joined(separator: " · "))
                 .font(Typography.font(Typography.sidebar)).foregroundStyle(C.textQuaternary).lineLimit(1)
             }
             Spacer(minLength: 0)
-            if s.status == .attention {
+            if s.status == .attention || s.status == .blocked {
               Image(systemName: "bell.badge.fill").font(.system(size: 13)).foregroundStyle(C.attention)
                 .symbolEffect(.pulse).padding(.top, 5)
                 .help(text).accessibilityLabel(text)
+            } else if s.status == .done {
+              Image(systemName: "checkmark.circle.fill").font(.system(size: 13)).foregroundStyle(C.success)
+                .padding(.top, 5).help(text).accessibilityLabel(text)
             }
           }
           .padding(.leading, 34).padding(.trailing, 20).padding(.vertical, 4).contentShape(Rectangle())

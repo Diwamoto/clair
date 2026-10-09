@@ -357,7 +357,7 @@ import Observation
           buffers.reveal(p, line: to.line, column: to.column)
         }
         if id.hasPrefix("debug.") { runDebugCommand(id, input) }
-        if ["cli.install", "skill.install", "cli.uninstall", "skill.uninstall", "claudeEditor.install", "claudeEditor.uninstall"].contains(id) {
+        if ["cli.install", "skill.install", "cli.uninstall", "skill.uninstall", "claudeEditor.install", "claudeEditor.uninstall", "claudeHooks.install", "claudeHooks.uninstall"].contains(id) {
           Self.install(String(id.prefix { $0 != "." }), remove: id.hasSuffix("uninstall"))
         }
         if let view = state.active.flatMap(buffers.view) {
@@ -462,7 +462,7 @@ import Observation
     /// ⌘K install rows: the result is an alert because the palette has already closed (the settings rows show it inline).
     private static func install(_ kind: String, remove: Bool) {
       Task.detached {
-        let what = kind == "cli" ? tr("clair コマンド") : kind == "skill" ? "Agent skill" : tr("Ctrl+G の editor 設定")
+        let what = kind == "cli" ? tr("clair コマンド") : kind == "skill" ? "Agent skill" : kind == "claudeHooks" ? tr("Claude Code の状態通知") : tr("Ctrl+G の editor 設定")
         let verb = remove ? tr("アンインストール") : tr("インストール")
         let message: String
         do {
@@ -471,6 +471,8 @@ import Observation
           case ("cli", true): try ClairDaemonLauncher.uninstallCommand()
           case ("skill", false): try ClairSkills.install()
           case ("skill", true): try ClairSkills.uninstall()
+          case ("claudeHooks", false): try ClairClaudeHooks.install()
+          case ("claudeHooks", true): try ClairClaudeHooks.uninstall()
           case (_, false): try ClairClaudeEditor.install()
           case (_, true): try ClairClaudeEditor.uninstall()
           }
@@ -2883,6 +2885,20 @@ import Observation
               if installed { try ClairClaudeEditor.uninstall() } else { try ClairClaudeEditor.install() }
               integrationNotes["editor"] = installed ? tr("アンインストールしました。") : tr("インストールしました。Claude Code を再起動すると有効になります。")
             } catch { integrationNotes["editor"] = tr("インストールできません: %@", error.localizedDescription) }
+          }
+        }
+        SettingsRow(
+          title: tr("Claude Code の状態を Clair に知らせる"),
+          note: integrationNotes["hooks"] ?? (ClairClaudeHooks.isInstalled()
+            ? tr("設定済み(~/.claude/settings.json の hooks)。作業中・入力待ち・完了を Agents 一覧に示します。")
+            : tr("~/.claude/settings.json に hooks を追加し、作業中・入力待ち・完了を Agents 一覧に示します。既存の hooks は残します。"))
+        ) {
+          let installed = ClairClaudeHooks.isInstalled()
+          Button(installed ? tr("アンインストール") : tr("インストール")) {
+            do {
+              if installed { try ClairClaudeHooks.uninstall() } else { try ClairClaudeHooks.install() }
+              integrationNotes["hooks"] = installed ? tr("アンインストールしました。") : tr("インストールしました。Claude Code を再起動すると有効になります。")
+            } catch { integrationNotes["hooks"] = tr("インストールできません: %@", error.localizedDescription) }
           }
         }
       }

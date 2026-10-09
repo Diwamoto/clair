@@ -193,3 +193,63 @@ final class WorkbenchAgentLaunchTests: XCTestCase {
     XCTAssertNil(s.terminal(key))
   }
 }
+
+/// An agent's own hooks report working / blocked / done through `agent.report`.
+final class AgentReportTests: XCTestCase {
+  let r = CommandRegistry.workbench
+
+  func testReportDrivesStatusAndFocusTurnsDoneIdle() throws {
+    let (base, root) = try WorkbenchAgentLaunchTests().opened()
+    var s = base
+    guard case .pane(let pane) = try r.execute("agent.launch", ["profile": .string("claude")], confirmed: true, state: &s).get() else { return XCTFail() }
+    let key = WorkbenchState.terminalKey(root, pane)
+    XCTAssertEqual(r.commands.first { $0.id == "agent.report" }?.aiAvailable, true)
+    // The IPC layer fills `parent` from the caller's terminal; without one there is nothing to report on.
+    XCTAssertEqual(r.execute("agent.report", ["state": .string("done")], state: &s).failure?.code, .preconditionFailed)
+    XCTAssertEqual(r.execute("agent.report", ["state": .string("sleeping"), "parent": .string(key)], state: &s).failure?.code, .invalidInput)
+    func status() -> String? { s.agentList.first { $0.pane == pane }?.status }
+    XCTAssertEqual(status(), "running")
+    try r.execute("agent.report", ["state": .string("blocked"), "parent": .string(key)], state: &s).get()
+    XCTAssertEqual(status(), "blocked")
+    // A bell from the same turn does not override the agent's own report.
+    s.notices.record(project: s.project, pane: pane, kind: .bell)
+    try r.execute("agent.report", ["state": .string("done"), "parent": .string(key)], state: &s).get()
+    XCTAssertEqual(status(), "done")
+    try r.execute("pane.focus", ["id": .int(pane)], state: &s).get()
+    XCTAssertEqual(status(), "idle")
+    try r.execute("agent.report", ["state": .string("working"), "parent": .string(key)], state: &s).get()
+    XCTAssertEqual(status(), "running")
+    // Exit outranks any report.
+    s.notices.record(project: s.project, pane: pane, kind: .exited, exitCode: 0)
+    XCTAssertEqual(status(), "exited")
+  }
+
+  func testCallerBecomesTheReportingTerminal() {
+    let req = WorkbenchIPCRequest(command: "agent.report", input: ["state": .string("done"), "parent": .string("/x#9")], caller: "/p#2")
+    XCTAssertEqual(req.callerAsParent().input["parent"], .string("/p#2"))
+  }
+}
+
+final class ClairClaudeHooksTests: XCTestCase {
+  func testInstallAddsOurHooksBesideTheUsersAndUninstallRemovesOnlyOurs() throws {
+    let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let url = ClairClaudeEditor.settings(home: home)
+    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Data(#"{"model":"opus","hooks":{"Stop":[{"hooks":[{"type":"command","command":"say done"}]}]}}"#.utf8).write(to: url)
+    XCTAssertFalse(ClairClaudeHooks.isInstalled(home: home))
+    try ClairClaudeHooks.install(home: home)
+    try ClairClaudeHooks.install(home: home)  // reinstall replaces, never duplicates
+    XCTAssertTrue(ClairClaudeHooks.isInstalled(home: home))
+    var json = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
+    var hooks = json["hooks"] as! [String: [[String: Any]]]
+    XCTAssertEqual(hooks["Stop"]?.count, 2)
+    XCTAssertEqual(hooks["Notification"]?.first?["matcher"] as? String, "permission_prompt|elicitation_dialog")
+    XCTAssertTrue(((hooks["Stop"]?.last?["hooks"] as? [[String: Any]])?.first?["command"] as? String)?.contains("$CLAIR_TERMINAL_KEY") == true)
+    try ClairClaudeHooks.uninstall(home: home)
+    json = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
+    hooks = json["hooks"] as! [String: [[String: Any]]]
+    XCTAssertEqual(Array(hooks.keys), ["Stop"])
+    XCTAssertEqual((hooks["Stop"]?.first?["hooks"] as? [[String: Any]])?.first?["command"] as? String, "say done")
+    XCTAssertEqual(json["model"] as? String, "opus")
+  }
+}
