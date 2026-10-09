@@ -178,14 +178,17 @@ final class WorkbenchProjectTests: XCTestCase {
     XCTAssertTrue(paths.contains("top.txt"))
   }
 
-  /// Gitignored files stay out of the tree.
-  func testScanSkipsGitIgnoredFiles() throws {
-    let a = try folder("gi", [".gitignore", "cache/big.bin", "src/main.swift"])
-    try Data("cache/\n".utf8).write(to: URL(fileURLWithPath: a + "/.gitignore"))
+  /// Gitignored files are listed with status `!`; an ignored folder over the cap (a build cache) is left out whole.
+  func testScanMarksGitIgnoredFiles() throws {
+    let big = (0...WorkbenchFiles.ignoredFolderCap).map { "huge/f\($0)" }
+    let a = try folder("gi", [".gitignore", "cache/big.bin", "src/main.swift", "src/.env"] + big)
+    try Data("cache/\n.env\nhuge/\n".utf8).write(to: URL(fileURLWithPath: a + "/.gitignore"))
     let p = Process()
     p.executableURL = URL(fileURLWithPath: "/usr/bin/git"); p.arguments = ["-C", a, "init", "-q"]
     try p.run(); p.waitUntilExit()
-    XCTAssertEqual(WorkbenchFiles.scan(a).map(\.path), ["src/main.swift", ".gitignore"])
+    let files = WorkbenchFiles.scan(a)
+    XCTAssertEqual(files.map(\.path), ["cache/big.bin", "src/.env", "src/main.swift", ".gitignore"])
+    XCTAssertEqual(files.map(\.status), ["!", "!", "U", "U"])
   }
 
   func testTreeOrderFoldersFirstThenNames() {

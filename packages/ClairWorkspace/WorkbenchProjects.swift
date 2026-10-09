@@ -372,7 +372,7 @@ public enum WorkbenchFiles {
     else { return [] }
     // The enumerator yields realpath(3) paths (`/private/var/…`), which `resolvingSymlinksInPath` strips to `/var/…`.
     let prefix = (realpath(base.path, nil).map { p in defer { free(p) }; return String(cString: p) } ?? base.path).count + 1
-    var paths: [String] = []
+    var paths: [String] = [], ignored: Set<String> = []
     // A Git repo lists tracked + untracked-but-not-ignored files, so a huge ignored cache cannot eat the cap.
     if FileManager.default.fileExists(atPath: root + "/.git"), case let r = WorkbenchGit.run(root, ["ls-files", "-co", "--exclude-standard", "-z"]), r.ok {
       for raw in r.out.split(separator: "\0").map(String.init) where !isSkipped(raw) {
@@ -385,6 +385,8 @@ public enum WorkbenchFiles {
         guard v?.isRegularFile == true, v?.isSymbolicLink != true else { continue }  // also drops deleted rows; status re-adds them
         paths.append(rel)
       }
+      ignored = ignoredFiles(base)
+      paths += ignored
     } else {
       for case let u as URL in e {
         if skipped.contains(u.lastPathComponent) { e.skipDescendants(); continue }
@@ -395,7 +397,34 @@ public enum WorkbenchFiles {
     }
     let status = gitStatus(root)
     paths += status.compactMap { $0.value == "D" ? $0.key : nil }  // deleted files: kept so folders can turn red; hidden from explorer and quick open
-    return paths.sorted(by: treeOrder).map { WorkbenchFile(path: $0, status: status[$0]) }
+    return paths.sorted(by: treeOrder).map { WorkbenchFile(path: $0, status: status[$0] ?? (ignored.contains($0) ? "!" : nil)) }
+  }
+
+  /// Gitignored files (status `!`): the explorer shows them dimmed, search and quick open leave them out.
+  /// ponytail: an ignored folder over `ignoredFolderCap` files (a build cache) is left out whole; lazy-load it on expand if that bites.
+  static let ignoredFolderCap = 1000
+  static func ignoredFiles(_ base: URL) -> Set<String> {
+    let r = WorkbenchGit.run(base.path, ["ls-files", "-o", "-i", "--exclude-standard", "--directory", "-z"])
+    guard r.ok else { return [] }
+    var out = Set<String>()
+    for raw in r.out.split(separator: "\0").map(String.init) where !isSkipped(raw) {
+      let url = base.appendingPathComponent(raw)
+      guard raw.hasSuffix("/") else {
+        let v = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+        if v?.isRegularFile == true, v?.isSymbolicLink != true { out.insert(raw) }
+        continue
+      }
+      guard let e = FileManager.default.enumerator(atPath: url.path) else { continue }
+      var inner: [String] = []
+      while let rel = e.nextObject() as? String {
+        if skipped.contains((rel as NSString).lastPathComponent) { e.skipDescendants(); continue }
+        guard e.fileAttributes?[.type] as? FileAttributeType == .typeRegular else { continue }  // lstat: symlinks are skipped
+        inner.append(raw + rel)
+        if inner.count > ignoredFolderCap { break }
+      }
+      if inner.count <= ignoredFolderCap { out.formUnion(inner) }
+    }
+    return out
   }
 
   /// Explorer order: in every directory, folders before files, each by name (case-insensitive, raw name breaks ties).

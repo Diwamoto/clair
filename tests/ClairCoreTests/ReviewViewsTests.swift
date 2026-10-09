@@ -64,6 +64,13 @@
       XCTAssertFalse(ClairAppShell.explorerRows(for: files).contains { $0.id == "a/b/gone.swift" })
     }
 
+    func testIgnoredRowsAreDimmedAndNotChanges() {
+      let files = [("a/x.swift", nil), ("a/.env", "!"), ("dist/b/out.js", "!")].map { WorkbenchFile(path: $0.0, status: $0.1) }
+      let rows = Dictionary(uniqueKeysWithValues: ClairAppShell.explorerRows(for: files).map { ($0.id, $0.ignored) })
+      XCTAssertEqual(rows, ["a": false, "a/x.swift": false, "a/.env": true, "dist": true, "dist/b": true, "dist/b/out.js": true])
+      XCTAssertTrue(ClairAppShell.changeRanks(files, dirty: []).isEmpty)
+    }
+
     func testAddedFolderIsOneTopLevelRow() {
       let files = ["main.go", "../../x/docs/a/b.md"].map { WorkbenchFile(path: $0, status: nil) }
       let rows = ClairAppShell.explorerRows(for: files, roots: ["../../x/docs"])

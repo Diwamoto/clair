@@ -1752,7 +1752,7 @@ import Observation
         if !replacing { hits = []; searchMessage = ""; searching = false }
         return
       }
-      let (files, pattern) = (st.files, searchPattern)
+      let (files, pattern) = (st.files.filter { $0.status != "!" }, searchPattern)
       searching = true; searchMessage = tr("検索中…")
       searchTask = Task {
         // ponytail: 250 ms debounce for typing; the cancel above is what keeps stale results out.
@@ -1794,7 +1794,7 @@ import Observation
 
     private func runReplace() {
       guard !replacing, let root = store.activeRoot, !hits.isEmpty else { return }
-      let (files, pattern, r) = (st.files, searchPattern, replaceText)
+      let (files, pattern, r) = (st.files.filter { $0.status != "!" }, searchPattern, replaceText)
       searchTask?.cancel(); searching = false; replacing = true; searchMessage = tr("置換中…")
       replaceTask = Task {
         let result = await Task.detached(priority: .userInitiated) { Result { try ProjectSearch.replace(root: root, files: files, pattern, with: r) } }.value
@@ -2045,6 +2045,8 @@ import Observation
       let label: String
       let depth: Int
       let file: WorkbenchFile?
+      /// Gitignored: a file with status `!`, or a folder holding nothing else. Drawn dimmed.
+      var ignored = false
     }
 
     nonisolated static func visibleExplorerRows(_ rows: [ExplorerRow], expanded: Set<String>) -> [ExplorerRow] {
@@ -2060,7 +2062,7 @@ import Observation
     nonisolated static func changeRanks(_ files: [WorkbenchFile], dirty: Set<String>) -> [String: Int] {
       var out: [String: Int] = [:]
       for f in files {
-        var rank = switch f.status { case nil: 0; case "A", "U", "?": 1; case "D": 3; default: 2 }
+        var rank = switch f.status { case nil, "!": 0; case "A", "U", "?": 1; case "D": 3; default: 2 }
         if dirty.contains(f.path) { rank = max(rank, 2) }
         guard rank > 0 else { continue }
         var path = f.path[...]
@@ -2103,7 +2105,7 @@ import Observation
                 treeRow(depth: r.depth, selected: on, action: { store.run("tab.open", ["path": .string(f.path)]) }) {
                   Color.clear.frame(width: 10)  // chevron slot: a file lines up with its sibling folders
                   FileIcon.forPath(f.path).image(size: 10, ink: on ? C.textSecondary : C.textTertiary).frame(width: 16)
-                  Text(r.label).font(.system(size: 13, weight: on ? .semibold : .regular)).foregroundStyle(Self.changeColor(ranks[f.path]) ?? (on ? C.textPrimary : C.textSecondary)).lineLimit(1)
+                  Text(r.label).font(.system(size: 13, weight: on ? .semibold : .regular)).foregroundStyle(Self.changeColor(ranks[f.path]) ?? (r.ignored ? C.textQuaternary : on ? C.textPrimary : C.textSecondary)).lineLimit(1)
                   Spacer(minLength: 0)
                   if let tint = Self.changeColor(ranks[f.path]) {
                     Text(st.dirty.contains(f.path) ? "M" : f.status ?? "M").font(.system(size: 12, weight: .semibold)).foregroundStyle(tint)
@@ -2115,7 +2117,7 @@ import Observation
                 treeRow(depth: r.depth, selected: false, action: { store.run("explorer.toggle", ["path": .string(r.id)]) }) {
                   chevron(open: open)
                   FileIcon.folder(open: open).image(size: 11, ink: C.textTertiary).frame(width: 16)
-                  Text(r.label).font(.system(size: 13)).foregroundStyle(Self.changeColor(ranks[r.id]) ?? C.textSecondary).lineLimit(1)
+                  Text(r.label).font(.system(size: 13)).foregroundStyle(Self.changeColor(ranks[r.id]) ?? (r.ignored ? C.textQuaternary : C.textSecondary)).lineLimit(1)
                   Spacer(minLength: 0)
                   if let tint = Self.changeColor(ranks[r.id]) { Circle().fill(tint).frame(width: 6, height: 6) }
                 }
@@ -2174,7 +2176,7 @@ import Observation
     /// `roots`: added folders' relative prefixes (`../docs`); each is one top-level row named after the folder.
     nonisolated static func explorerRows(for files: [WorkbenchFile], roots: [String] = []) -> [ExplorerRow] {
       var out: [ExplorerRow] = []
-      var seen = Set<String>()
+      var seen = Set<String>(), live = Set<String>()  // live: folders holding a file that is not ignored
       out.reserveCapacity(files.count * 2)
       for file in files where file.status != "D" {  // deleted files only tint their folders (changeRanks)
         guard !Task.isCancelled else { return [] }
@@ -2186,10 +2188,12 @@ import Observation
           for depth in 0..<(parts.count - 1) {
             let id = parts[0...depth].joined(separator: "/")
             if seen.insert(id).inserted { out.append(ExplorerRow(id: id, label: (parts[depth] as NSString).lastPathComponent, depth: depth + 1, file: nil)) }
+            if file.status != "!" { live.insert(id) }
           }
         }
-        out.append(ExplorerRow(id: file.path, label: name, depth: parts.count, file: file))
+        out.append(ExplorerRow(id: file.path, label: name, depth: parts.count, file: file, ignored: file.status == "!"))
       }
+      for i in out.indices where out[i].file == nil { out[i].ignored = !live.contains(out[i].id) }
       return out
     }
 

@@ -85,7 +85,7 @@ export function ExplorerPanel() {
                 className="hoverable"
                 onClick={() => wb.toggleFolder(node.id)}
                 onContextMenu={(event) => menu(event, (w) => folderMenu(w, node.id, node.name, false), node.id)}
-                style={{ ...row(false), color: color.textSecondary }}
+                style={{ ...row(false), color: node.ignored ? color.textQuaternary : color.textSecondary }}
               >
                 {chevron(open)}
                 <IconFolder size={12} color={color.textTertiary} />

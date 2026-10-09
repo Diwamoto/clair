@@ -138,7 +138,7 @@ function useWorkbenchState() {
   const [contents, setContents] = useState<Record<string, string>>(() =>
     Object.fromEntries(files.map((f) => [f.path, f.content])),
   );
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set(['clair/crates']));
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set(['clair/crates', 'clair/dist']));
 
   const [layout, setLayout] = useState<PaneNode>(initialLayout);
   const [focusedPane, setFocusedPane] = useState<string>(() => firstLeaf(layout).id);

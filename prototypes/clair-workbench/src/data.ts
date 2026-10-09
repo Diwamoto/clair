@@ -212,7 +212,7 @@ export const files: MockFile[] = [
 
 export type TreeNode =
   | { type: 'project'; name: string; depth: 0; id: string }
-  | { type: 'folder'; name: string; depth: number; id: string; parent: string }
+  | { type: 'folder'; name: string; depth: number; id: string; parent: string; ignored?: true }
   | { type: 'file'; name: string; depth: number; id: string; parent: string; path: string };
 
 // The tree the Main artboard draws, in its own order.
@@ -270,6 +270,8 @@ export const tree: TreeNode[] = [
     parent: 'clair/docs',
     path: 'docs/architecture/pane-layout.md',
   },
+  // Gitignored: listed, but in textQuaternary so it reads as not part of the project.
+  { type: 'folder', name: 'dist', depth: 1, id: 'clair/dist', parent: 'clair', ignored: true },
   { type: 'project', name: 'clair-docs', depth: 0, id: 'clair-docs' },
   { type: 'folder', name: 'site', depth: 1, id: 'clair-docs/site', parent: 'clair-docs' },
   { type: 'file', name: 'index.md', depth: 2, id: 'f6', parent: 'clair-docs/site', path: 'clair-docs/site/index.md' },

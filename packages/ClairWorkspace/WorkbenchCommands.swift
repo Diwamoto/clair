@@ -344,7 +344,7 @@ public struct CommandRegistry: Sendable {
           .filter { $0.matches(q) }
         + settingItems(state).filter { $0.matches(q) }
     case .files:
-      return QuickOpen.rank(query, state.files.filter { $0.status != "D" })
+      return QuickOpen.rank(query, state.files.filter { $0.status != "D" && $0.status != "!" })
         .map { PaletteItem(title: $0.path, hint: "", id: "tab.open", input: ["path": .string($0.path)]) }
     case .recent:
       // Reopen a recently opened file, newest first; files gone from the tree drop out.
