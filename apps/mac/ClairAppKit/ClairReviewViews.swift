@@ -344,7 +344,7 @@
                   Text(t.staged ? "−" : "+").font(Typography.font(Typography.title)).foregroundStyle(C.textTertiary).frame(width: 18, height: 18)
                 }.buttonStyle(.hoverWash).disabled(busy).help(t.staged ? tr("ステージを取り消す") : tr("ステージに追加"))
               }
-              Text(badge).font(.system(size: 12, weight: .semibold)).foregroundStyle(badge == "A" || badge == "U" ? C.success : badge == "D" ? C.textTertiary : C.attention)
+              Text(badge).font(.system(size: 12, weight: .semibold)).foregroundStyle(badge == "A" || badge == "U" ? C.success : badge == "D" ? C.danger : C.attention)
                 .allowsHitTesting(false)
             }) {
               Color.clear.frame(width: 10)  // chevron slot: a file lines up with its sibling folders
