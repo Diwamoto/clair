@@ -59,6 +59,10 @@ public struct AgentLaunch: Sendable, Codable, Equatable {
   public var opening: String?
   /// A read-only review run: uses the profile's `reviewBatch` so it can post findings with `clair review.*`.
   public var review: Bool?
+  /// The provider session the agent last reported (`agent.report session=`). Not part of `command`: changing
+  /// the command would make the daemon replace a live shell. `resumeReportedAgents` turns it into `resume`
+  /// only when the shell is gone.
+  public var session: String?
   public init(
     profile: String, cwd: String, prompt: String? = nil, parent: String? = nil, resume: String? = nil, concierge: String? = nil,
     opening: String? = nil, review: Bool = false
@@ -249,6 +253,23 @@ extension WorkbenchState {
         key: Self.terminalKey(root, s.pane), project: s.project, pane: s.pane, profile: l.profile, cwd: s.cwd,
         status: status, exitCode: exitCode, activity: s.activity, delegated: l.run != nil, parent: l.parent,
         concierge: l.concierge != nil)
+    }
+  }
+
+  /// After the daemon lost its shells (Mac restart, Clair quit), an agent pane reopens the conversation its
+  /// agent last reported instead of a fresh one. `live(key)` says a shell still runs for `root#pane`: those
+  /// keep their command, since a changed command replaces the live shell. Delegated runs and the concierge
+  /// keep their own commands.
+  public mutating func resumeReportedAgents(live: (String) -> Bool) {
+    for p in projects {
+      withLayout(p.name) { layout in
+        for (pane, l) in layout.launches {
+          guard let session = l.session, l.resume != session, l.run == nil, l.concierge == nil,
+            AgentProfile.named(l.profile)?.resume != nil, !live(Self.terminalKey(p.path, pane))
+          else { continue }
+          layout.launches[pane]?.resume = session
+        }
+      }
     }
   }
 

@@ -29,7 +29,10 @@ Clair は agent TUI の screen scraping を対象外にしている(仕様 §2-3
   `permission_prompt|elicitation_dialog` → blocked、`Stop` → done。Clair の terminal の外では何もしない。
 - 状態の優先順位は exit > 自己申告 > 未読のベル > running。done は pane に focus すると idle になる。
   `agent.list` の status に `blocked` / `done` / `idle` を足す(既存の値は変えない)。
-- 報告は workspace に保存しない。
+- 状態の報告は workspace に保存しない。報告に付いた provider の session id(`session=`、hooks が stdin の
+  `session_id` から渡す)は agent の launch に記録して保存する。起動時、daemon に shell が残っていない agent pane
+  だけ、その id で `resume` コマンドを使って会話を開き直す。daemon は command が変わると live shell を作り直すため、
+  shell が生きている pane の command は変えない(daemon が応答するのに問い合わせが失敗した pane も変えない)。
 
 ## Consequences
 

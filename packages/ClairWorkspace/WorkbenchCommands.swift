@@ -606,7 +606,10 @@ extension CommandRegistry {
     // An agent's official hooks say what it is doing (`ClairClaudeHooks`); `parent` is the calling terminal,
     // filled from CLAIR_TERMINAL_KEY by the IPC layer. Display state only, so it needs no approval.
     cmd("agent.report", "エージェントの状態を報告", .read,
-        params: [CommandParam("state", .string, allowed: AgentReport.State.allCases.map(\.rawValue)), CommandParam("parent", .string, required: false)],
+        params: [
+          CommandParam("state", .string, allowed: AgentReport.State.allCases.map(\.rawValue)),
+          CommandParam("session", .string, required: false), CommandParam("parent", .string, required: false),
+        ],
         palette: false,
         preflight: { s, i throws(CommandError) in
           try require(i["parent"]?.string.flatMap(s.terminal) != nil, "agent.report runs only inside a Clair terminal")
@@ -614,6 +617,10 @@ extension CommandRegistry {
         }) { s, i in
       let t = s.terminal(i["parent"]!.string!)!
       s.agentReports[NotificationLog.paneKey(t.project, t.pane)] = AgentReport(state: AgentReport.State(rawValue: i["state"]!.string!)!)
+      // The provider session to reopen after a restart; an empty or odd id (hook could not read it) is ignored.
+      if let session = i["session"]?.string, AgentProfile.isSessionID(session) {
+        s.withLayout(t.project) { $0.launches[t.pane]?.session = session }
+      }
       return .ok
     },
     // ADR-0020: focus the Project's concierge, starting it if needed. GUI-only (ai: false): an agent

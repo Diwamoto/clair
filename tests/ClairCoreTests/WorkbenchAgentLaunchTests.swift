@@ -224,6 +224,24 @@ final class AgentReportTests: XCTestCase {
     XCTAssertEqual(status(), "exited")
   }
 
+  func testReportedSessionResumesOnlyWhereTheShellIsGone() throws {
+    let (base, root) = try WorkbenchAgentLaunchTests().opened()
+    var s = base
+    guard case .pane(let a) = try r.execute("agent.launch", ["profile": .string("claude")], confirmed: true, state: &s).get(),
+      case .pane(let b) = try r.execute("agent.launch", ["profile": .string("claude")], confirmed: true, state: &s).get()
+    else { return XCTFail() }
+    let id = "8f0c2c1e-aa11-4b3c-9d2e-123456789abc"
+    try r.execute("agent.report", ["state": .string("done"), "session": .string(id), "parent": .string(WorkbenchState.terminalKey(root, a))], state: &s).get()
+    try r.execute("agent.report", ["state": .string("done"), "session": .string(id), "parent": .string(WorkbenchState.terminalKey(root, b))], state: &s).get()
+    // A hook that could not read the id sends it empty: the report still counts, the session is kept.
+    try r.execute("agent.report", ["state": .string("working"), "session": .string(""), "parent": .string(WorkbenchState.terminalKey(root, b))], state: &s).get()
+    XCTAssertEqual(s.launches[a]?.session, id)
+    XCTAssertEqual(s.launches[a]?.command, "claude")  // never changes under a live shell
+    s.resumeReportedAgents(live: { $0 == WorkbenchState.terminalKey(root, b) })
+    XCTAssertEqual(s.launches[a]?.command, "claude --resume \(id)")
+    XCTAssertEqual(s.launches[b]?.command, "claude")
+  }
+
   func testCallerBecomesTheReportingTerminal() {
     let req = WorkbenchIPCRequest(command: "agent.report", input: ["state": .string("done"), "parent": .string("/x#9")], caller: "/p#2")
     XCTAssertEqual(req.callerAsParent().input["parent"], .string("/p#2"))

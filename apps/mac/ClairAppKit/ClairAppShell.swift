@@ -162,7 +162,10 @@ import Observation
     ) {
       persistURL = url
       self.scanFiles = scanFiles
-      if let url, let restored = WorkbenchState.restore(from: url, scanFiles: false) { state = restored }
+      if let url, let restored = WorkbenchState.restore(from: url, scanFiles: false) {
+        state = restored
+        state.resumeReportedAgents(live: ClairDaemonLauncher.hasLiveShell)
+      }
       if state.projects.isEmpty {
         let root = Self.seedRoot
         state.openProject(WorkbenchProject(name: URL(fileURLWithPath: root).lastPathComponent, path: root), scanFiles: false)

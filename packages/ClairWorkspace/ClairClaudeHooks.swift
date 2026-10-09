@@ -5,8 +5,10 @@ import Foundation
 /// `~/.claude/settings.json` next to the user's own hooks; outside a Clair terminal the command does nothing.
 public enum ClairClaudeHooks {
   static let marker = "clair agent.report"
+  /// The hook's stdin is Claude Code's JSON; its `session_id` lets Clair reopen the conversation after a restart.
   static func command(_ state: String) -> String {
-    "[ -n \"$CLAIR_TERMINAL_KEY\" ] && command -v clair >/dev/null && \(marker) state=\(state) >/dev/null 2>&1; true"
+    let session = #"$(sed -n 's/.*"session_id" *: *"\([A-Za-z0-9_-]*\)".*/\1/p' | head -n 1)"#
+    return "[ -n \"$CLAIR_TERMINAL_KEY\" ] && command -v clair >/dev/null && \(marker) state=\(state) session=\"\(session)\" >/dev/null 2>&1; true"
   }
   /// event → (matcher, state). `Notification` fires for other reasons too (idle, auth); only dialogs block.
   static let events: [(event: String, matcher: String?, state: String)] = [

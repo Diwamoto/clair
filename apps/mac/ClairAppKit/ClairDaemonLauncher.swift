@@ -57,6 +57,15 @@ import Foundation
       return parts.map(shellQuote).joined(separator: " ")
     }
 
+    /// Whether the daemon still runs a shell for `key`. Without a daemon nothing runs; when the daemon answers
+    /// but this query fails, it says yes, so a caller never swaps the command under a live shell.
+    static func hasLiveShell(key: String) -> Bool {
+      let client = client
+      guard (try? client.health()) != nil else { return false }
+      guard case .processID(let pid)? = try? client.terminal(.processID(key: key)) else { return true }
+      return pid != nil
+    }
+
     /// The user closed the pane: end that shell. Best effort; the daemon may already be gone.
     public static func closeSession(key: String) {
       _ = try? client.terminal(.close(key: key))
