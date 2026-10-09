@@ -350,6 +350,34 @@ import Foundation
     public var onFacts: ((_ bells: Int, _ exitCode: Int?, _ notification: (title: String, body: String)?) -> Void)?
     /// The terminal's window title (OSC 0/2), e.g. what Claude Code is working on.
     public var onTitle: ((String) -> Void)?
+    /// A cmd-clicked file path: absolute path, 1-based line and 0-based column when the link named them.
+    public var onOpenFile: ((_ path: String, _ line: Int?, _ column: Int?) -> Void)?
+
+    /// Resolves a cmd-clicked link (`file://…`, `/abs`, `~/x`, `rel/x.swift:12:3`) to an existing
+    /// regular file. Ghostty columns are 1-based; the editor's are 0-based.
+    /// ponytail: relative paths resolve against the pane's launch cwd, not the shell's live cwd
+    /// after `cd` — track OSC 7 if that bites.
+    static func fileTarget(_ link: String, cwd: String) -> (path: String, line: Int?, column: Int?)? {
+      var text = link
+      // `foo.swift:12` parses as scheme "foo.swift", so only an explicit file:// is a URL here.
+      if link.lowercased().hasPrefix("file://") {
+        guard let url = URL(string: link) else { return nil }
+        text = url.path
+      } else if link.range(of: "^[A-Za-z][A-Za-z0-9+.-]*://", options: .regularExpression) != nil {
+        return nil
+      }
+      var numbers: [Int] = []
+      while numbers.count < 2, let colon = text.lastIndex(of: ":"), let n = Int(text[text.index(after: colon)...]), n >= 1 {
+        numbers.insert(n, at: 0)
+        text = String(text[..<colon])
+      }
+      let expanded = (text as NSString).expandingTildeInPath
+      let path = (expanded.hasPrefix("/") ? expanded : (cwd as NSString).appendingPathComponent(expanded) as String)
+      let standardized = (path as NSString).standardizingPath
+      var isDir: ObjCBool = false
+      guard FileManager.default.fileExists(atPath: standardized, isDirectory: &isDir), !isDir.boolValue else { return nil }
+      return (standardized, numbers.first, numbers.count > 1 ? numbers[1] - 1 : nil)
+    }
     private var exitReported = false
     private var ghosttyFocused: Bool?
 
@@ -382,9 +410,14 @@ import Foundation
       let exit = exitReported ? nil : e.exitCode
       if exit != nil { exitReported = true }
       if let title = e.title { onTitle?(title) }
-      // Only web links: a cmd-click must not launch local files or custom schemes.
-      if let s = e.openURL, let url = URL(string: s), ["http", "https"].contains(url.scheme?.lowercased()) {
-        NSWorkspace.shared.open(url)
+      // Web links go to the browser; file paths open in Clair's editor. Nothing else is
+      // launched: a cmd-click must not run local files or custom schemes.
+      if let s = e.openURL {
+        if let url = URL(string: s), ["http", "https"].contains(url.scheme?.lowercased()) {
+          NSWorkspace.shared.open(url)
+        } else if let t = Self.fileTarget(s, cwd: launch?.cwd ?? FileManager.default.homeDirectoryForCurrentUser.path) {
+          onOpenFile?(t.path, t.line, t.column)
+        }
       }
       if e.bells > 0 || exit != nil { onFacts?(e.bells, exit, e.notification) }
       if redraw { needsDisplay = true }
@@ -888,6 +921,7 @@ import Foundation
     let launch: (command: String, cwd: String)?
     let onFacts: ((Int, Int?, (title: String, body: String)?) -> Void)?
     let onTitle: ((String) -> Void)?
+    let onOpenFile: ((String, Int?, Int?) -> Void)?
     let pane: Int?
     /// `sessionKey` names the daemon-owned shell this surface attaches to (same key = same session).
     let sessionKey: String
@@ -895,8 +929,10 @@ import Foundation
     let onFocus: (() -> Void)?
     public init(
       launch: (command: String, cwd: String)? = nil, pane: Int? = nil, sessionKey: String, focused: Bool = false,
-      onFocus: (() -> Void)? = nil, onFacts: ((Int, Int?, (title: String, body: String)?) -> Void)? = nil, onTitle: ((String) -> Void)? = nil
+      onFocus: (() -> Void)? = nil, onFacts: ((Int, Int?, (title: String, body: String)?) -> Void)? = nil, onTitle: ((String) -> Void)? = nil,
+      onOpenFile: ((String, Int?, Int?) -> Void)? = nil
     ) {
+      self.onOpenFile = onOpenFile
       self.launch = launch; self.pane = pane; self.sessionKey = sessionKey; self.onFacts = onFacts; self.onTitle = onTitle
       self.focused = focused; self.onFocus = onFocus
     }
@@ -913,6 +949,7 @@ import Foundation
       }()
       v.onFacts = onFacts
       v.onTitle = onTitle
+      v.onOpenFile = onOpenFile
       v.onFocus = onFocus
       v.wantsFocus = focused
       if let pane { ClairGhosttySurfaceView.register(v, pane: pane) }
@@ -922,6 +959,7 @@ import Foundation
     public func updateNSView(_ nsView: ClairGhosttySurfaceView, context: Context) {
       nsView.onFacts = onFacts
       nsView.onTitle = onTitle
+      nsView.onOpenFile = onOpenFile
       nsView.onFocus = onFocus
       nsView.wantsFocus = focused
     }
