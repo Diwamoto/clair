@@ -48,7 +48,8 @@ do {
   let reply = try WorkbenchIPC.call(request, timeout: 90)  // may wait on a GUI approval card (60 s)
   let encoder = JSONEncoder()
   encoder.outputFormatting = [.sortedKeys]
-  print(String(decoding: try encoder.encode(reply), as: UTF8.self))
+  // As $VISUAL (Ctrl+G in Claude) stdout lands in the caller's terminal, so `--wait` prints only errors.
+  if !wait || reply.error != nil { print(String(decoding: try encoder.encode(reply), as: UTF8.self)) }
   guard wait, reply.error == nil else { exit(reply.error == nil ? 0 : 1) }
   let check = WorkbenchIPCRequest(command: "file.isOpen", input: ["path": request.input["path"]!], caller: request.caller)
   // ponytail: 0.5 s polling like agent.wait; a GUI push on tab close if latency or IPC load matters.
