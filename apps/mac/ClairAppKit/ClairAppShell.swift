@@ -1401,13 +1401,13 @@ import Observation
       }.buttonStyle(.hoverWash).help(help)
     }
 
-    private static func groupHelp(_ name: String, active: Bool, folded: Bool) -> String {
-      guard active else { return tr("%@ に切り替え", name) }
+    private static func groupHelp(_ name: String, switches: Bool, folded: Bool) -> String {
+      guard !switches else { return tr("%@ に切り替え", name) }
       return folded ? tr("%@ タブグループを展開", name) : tr("%@ タブグループを折りたたむ", name)
     }
 
-    /// An inactive group's chip switches to that Project (editor, terminals and sidebar follow `st.project`);
-    /// the active group's chip toggles its tab strip (GUI-local).
+    /// A chip toggles its group's tab strip (GUI-local), active or not — opening one of its tabs switches Project.
+    /// An inactive group with no tabs has nothing to fold, so its chip switches to that Project instead.
     private func projectGroup(_ p: WorkbenchProject, colorKey: String) -> some View {
       let color = DesignTokens.GroupColor.resolve(colorKey) ?? DesignTokens.GroupColor.gray.color
       let active = st.project == p.name
@@ -1416,8 +1416,9 @@ import Observation
       let selectedTab = active ? st.selectedTitlebarTab : nil
       let dirty = active ? st.dirty : (st.layouts[p.name]?.dirty ?? [])
       let folded = store.state.collapsedGroups.contains(p.name)
+      let switches = !active && tabs.isEmpty
       let activate = {
-        if !active { store.state.collapsedGroups.remove(p.name); store.run("project.switch", ["name": .string(p.name)]) }
+        if switches { store.state.collapsedGroups.remove(p.name); store.run("project.switch", ["name": .string(p.name)]) }
         else {
           // Folding sucks the tabs back into the chip; unfolding pours them out of it.
           withAnimation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.86)) {
@@ -1450,7 +1451,7 @@ import Observation
         .onHover { hoveredGroup = $0 ? p.name : hoveredGroup == p.name ? nil : hoveredGroup }
         .onTapGesture(perform: activate)
         .accessibilityElement(children: .combine).accessibilityAddTraits(.isButton).accessibilityAction(.default, activate)
-        .help(Self.groupHelp(p.displayName, active: active, folded: folded))
+        .help(Self.groupHelp(p.displayName, switches: switches, folded: folded))
         .background(NoWindowDrag())
         // Dropping a chip on another moves that Project's group into its place; the ring marks the drop target like a tab's.
         .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(groupDropTarget == p.name ? L.ring : .clear, lineWidth: 1))
