@@ -401,13 +401,15 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   reasoning、Claude Code の未 redact の thinking)は「途中経過 N 件」の折りたたみ
   行へまとめて既定で閉じる。provider は途中発言と返答を区別して保存しないため、
   位置(次の依頼の直前の最後のテキスト)で返答を決める。
+  チャットは左端のエディタにファイルと並ぶタブとして開き(複数開ける)、本文は
+  エディタのフォントサイズ(⌘= / ⌘-)に合わせて表示する。
   チャットを開くと「ターミナルで再開」で、その provider の resume コマンド
   (`claude --resume` / `codex resume` / `opencode --session`)を新しい terminal で
   実行する。既存の agent launch と同じ承認境界を通り、cwd は Project root のため、
   チャットの directory が登録済みの別 Project ならその Project に切り替えてから
   実行し、どの Project でもないときは無効にする。再開コマンド
-  (`cd <directory> && <resume コマンド>`)は常にコピーできる。開いているチャットは
-  ⌘W で閉じる(pane や window は閉じない)
+  (`cd <directory> && <resume コマンド>`)は常にコピーできる。チャットのタブは
+  ファイルタブと同じく ⌘W で閉じ、⌘⇧T で開き直せる
 - activity bar の「コンシェルジュ」は Project ごとに一つのコンシェルジュ agent を
   sidebar に出す([ADR-0020](decisions/0020-concierge-agent.md))。本体は既定 Agent を
   通常の agent launch と同じく raw PTY で起動し、GUI はその session の公式 transcript を

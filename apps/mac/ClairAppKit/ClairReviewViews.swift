@@ -1248,9 +1248,10 @@
   /// left bubbles whose avatar shows once per run, opening at the latest message; and very long turns start collapsed.
   struct AgentChatView: View {
     let history: AgentHistory
+    /// Body text size; follows the editor font size (⌘=/⌘-) so long chats stay readable.
+    let fontSize: CGFloat
     /// nil when the chat cannot be resumed here (its directory is not a registered Project).
     let onResume: (() -> Void)?
-    let onClose: () -> Void
     @State private var transcript: [AgentHistory.Message]?
 
     var body: some View {
@@ -1258,7 +1259,7 @@
         HStack(spacing: 10) {
           ProviderAvatar(provider: history.provider, size: 28)
           VStack(alignment: .leading, spacing: 4) {
-            Text(history.title).font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textPrimary).lineLimit(1)
+            Text(history.title).font(.system(size: fontSize, weight: .semibold)).foregroundStyle(C.textPrimary).lineLimit(1)
             HStack(spacing: 5) {
               chip(history.provider.rawValue, tint: history.provider.tint)
               if let project = history.project { chip(URL(filePath: project).lastPathComponent, tint: projectTint(URL(filePath: project).lastPathComponent)) }
@@ -1277,7 +1278,6 @@
             } label: { Image(systemName: "doc.on.doc").foregroundStyle(C.chromeInk) }
               .buttonStyle(.hoverWash).help(tr("再開コマンドをコピー: %@", command)).accessibilityLabel(tr("再開コマンドをコピー"))
           }
-          Button(action: onClose) { Image(systemName: "xmark").foregroundStyle(C.chromeInk) }.buttonStyle(.hoverWash).help(tr("閉じる"))
         }.padding(.horizontal, 14).padding(.vertical, 8).background(C.chromeRaised)
         ScrollView {
           LazyVStack(alignment: .leading, spacing: 0) {
@@ -1294,12 +1294,12 @@
               let side = { (m: AgentHistory.Message?) in m.map { $0.role == "user" } }
               if newDay { daySeparator(message.date).padding(.top, previous == nil ? 0 : 16).padding(.bottom, 12) }
               if case .progress(let steps) = item {
-                ProgressRow(steps: steps, provider: history.provider, showLabel: newDay || side(previous) != false).padding(.top, previous == nil || newDay ? 0 : side(previous) == false ? 5 : 16)
+                ProgressRow(steps: steps, provider: history.provider, fontSize: fontSize, showLabel: newDay || side(previous) != false).padding(.top, previous == nil || newDay ? 0 : side(previous) == false ? 5 : 16)
               } else if message.text.hasPrefix("[Skill loaded") {
                 systemPill(String(message.text.dropFirst().dropLast()).replacing("Skill loaded", with: tr("スキル読込")), icon: "wand.and.stars")
                   .padding(.top, previous == nil || newDay ? 0 : 8)
               } else {
-              Bubble(message: message, provider: history.provider,
+              Bubble(message: message, provider: history.provider, fontSize: fontSize,
                      showLabel: message.role != "user" && (newDay || side(previous) != false),
                      showTime: side(next) != side(message))
                 .padding(.top, previous == nil || newDay ? 0 : side(previous) == side(message) ? 5 : 16)
@@ -1312,7 +1312,7 @@
     }
 
     private func systemPill(_ text: String, icon: String) -> some View {
-      Label(text, systemImage: icon).font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textTertiary)
+      Label(text, systemImage: icon).font(.system(size: fontSize - 2)).foregroundStyle(C.textTertiary)
         .padding(.horizontal, 10).padding(.vertical, 3).background(C.surfaceActive.opacity(0.7), in: Capsule())
         .frame(maxWidth: .infinity)
     }
@@ -1321,7 +1321,7 @@
       HStack(spacing: 4) {
         if let tint { Circle().fill(tint).frame(width: 6, height: 6) }
         Text(text).lineLimit(1)
-      }.font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textTertiary)
+      }.font(.system(size: fontSize - 2)).foregroundStyle(C.textTertiary)
         .padding(.horizontal, 7).padding(.vertical, 2)
         .background(C.canvas, in: RoundedRectangle(cornerRadius: 4))
         .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(C.divider.opacity(0.6), lineWidth: 1))
@@ -1330,7 +1330,7 @@
     /// LINE-style centred day pill between turns from different days.
     private func daySeparator(_ date: Date) -> some View {
       Text(date.formatted(.dateTime.month().day().weekday(.abbreviated)))
-        .font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textTertiary)
+        .font(.system(size: fontSize - 2)).foregroundStyle(C.textTertiary)
         .padding(.horizontal, 10).padding(.vertical, 3).background(C.surfaceActive.opacity(0.7), in: Capsule())
         .frame(maxWidth: .infinity)
     }
@@ -1339,6 +1339,7 @@
     private struct ProgressRow: View {
       let steps: [AgentHistory.Message]
       let provider: AgentHistory.Provider
+      let fontSize: CGFloat
       let showLabel: Bool
       @State private var expanded = false
 
@@ -1351,16 +1352,16 @@
                 Image(systemName: "chevron.right").rotationEffect(.degrees(expanded ? 90 : 0))
                 Text(tr("途中経過 %@ 件", steps.count))
               }
-            }.buttonStyle(.plain).font(Typography.font(Typography.micro)).foregroundStyle(C.textTertiary)
+            }.buttonStyle(.plain).font(.system(size: fontSize - 3)).foregroundStyle(C.textTertiary)
               .accessibilityValue(expanded ? tr("折りたたむ") : tr("続きを表示"))
             if expanded {
               VStack(alignment: .leading, spacing: 8) {
                 ForEach(steps) { step in
                   VStack(alignment: .leading, spacing: 2) {
                     // "Thinking" is the providers' own term, so it stays untranslated.
-                    if step.role == "thinking" { Text(verbatim: "Thinking").font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary) }
+                    if step.role == "thinking" { Text(verbatim: "Thinking").font(.system(size: fontSize - 3)).foregroundStyle(C.textQuaternary) }
                     Text((try? AttributedString(markdown: step.text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(step.text))
-                      .font(Typography.font(Typography.chrome))
+                      .font(.system(size: fontSize))
                       .foregroundStyle(step.role == "thinking" ? C.textTertiary : C.textSecondary).textSelection(.enabled)
                   }
                 }
@@ -1374,6 +1375,7 @@
     private struct Bubble: View {
       let message: AgentHistory.Message
       let provider: AgentHistory.Provider
+      let fontSize: CGFloat
       let showLabel: Bool
       let showTime: Bool
       @State private var expanded = false
@@ -1382,11 +1384,11 @@
         let long = message.text.count > 1500
         let text = long && !expanded ? String(message.text.prefix(1500)) + "…" : message.text
         let body = Text((try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(text))
-          .font(Typography.font(Typography.chrome)).foregroundStyle(C.textPrimary).textSelection(.enabled)
+          .font(.system(size: fontSize)).foregroundStyle(C.textPrimary).textSelection(.enabled)
         let more = Button(expanded ? tr("折りたたむ") : tr("続きを表示")) { expanded.toggle() }
-          .buttonStyle(.plain).font(Typography.font(Typography.micro)).foregroundStyle(C.textTertiary)
+          .buttonStyle(.plain).font(.system(size: fontSize - 3)).foregroundStyle(C.textTertiary)
         let time = Text(message.date.formatted(date: .omitted, time: .shortened))
-          .font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary)
+          .font(.system(size: fontSize - 3)).foregroundStyle(C.textQuaternary)
         if message.role == "user" {
           HStack {
             Spacer(minLength: 0)
@@ -1398,7 +1400,7 @@
                 Button {
                   NSPasteboard.general.clearContents(); NSPasteboard.general.setString(message.text, forType: .string)
                 } label: { Image(systemName: "doc.on.doc") }
-                  .buttonStyle(.plain).font(Typography.font(Typography.micro)).foregroundStyle(C.textTertiary)
+                  .buttonStyle(.plain).font(.system(size: fontSize - 3)).foregroundStyle(C.textTertiary)
                   .help(tr("プロンプトをコピー")).accessibilityLabel(tr("プロンプトをコピー"))
               }
             }.containerRelativeFrame(.horizontal, alignment: .trailing) { width, _ in width * 0.72 }

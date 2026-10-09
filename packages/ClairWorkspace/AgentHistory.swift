@@ -47,6 +47,12 @@ public struct AgentHistory: Sendable, Identifiable {
     return project.map { "cd \(AgentRun.quote($0)) && \(resume)" } ?? resume
   }
 
+  /// Editor tab path for this chat: history chats open as tabs beside files in the leftmost editor.
+  public var tabPath: String { Self.tabPrefix + id }
+  public static let tabPrefix = "agent-history:"
+  /// The chat id an editor tab path names, or nil for a file tab.
+  public static func id(tab path: String) -> String? { path.hasPrefix(tabPrefix) ? String(path.dropFirst(tabPrefix.count)) : nil }
+
   public var promptCount: Int { messages.filter { $0.role == "user" }.count }
 
   /// One row of the chat: a message, or the progress (narration and thinking) an agent run made before its reply.
@@ -715,6 +721,12 @@ public actor AgentHistoryStore {
   public func refresh(_ part: Part) async -> [AgentHistory] {
     cached[part] = nil
     return await load(part)
+  }
+
+  /// The chat a restored history tab names, searching recent chats before the archive.
+  public func find(_ id: String) async -> AgentHistory? {
+    if let hit = await load(.recent).first(where: { $0.id == id }) { return hit }
+    return await load(.archive).first { $0.id == id }
   }
 
   public func transcript(_ history: AgentHistory) async -> [AgentHistory.Message] {

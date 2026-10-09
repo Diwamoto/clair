@@ -1213,7 +1213,8 @@ import Observation
     @State private var gitFailed = false
     @State private var reviewError: String?
     @State private var diff: DiffTarget?
-    @State private var chat: AgentHistory?
+    /// History chats opened as editor tabs, by id; a restored tab looks its chat up on first show.
+    @State private var historyTabs: [String: AgentHistory] = [:]
     @State private var loadedDiff: LoadedDiff?
     /// Left side of a two-file compare, picked from a file menu ("比較対象として選択").
     @State private var compareBase: String?
@@ -1336,8 +1337,6 @@ import Observation
         }
       }
       .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ClairCloseFocusedPaneShortcut"))) { _ in
-        // An open history chat covers the panes, so ⌘W closes it first, like its ✕ button.
-        if chat != nil { chat = nil; return }
         store.performFromUI("pane.close")
       }
       .focusedSceneValue(\.clairWorkbench, store)
@@ -1549,17 +1548,20 @@ import Observation
     }
 
     private func fileTab(_ path: String, projectActive: Bool, project: String, selected: Bool, dirty: Bool) -> some View {
-      FileTabButton(
-        path: WorkbenchTab.file(path).dragID, name: name(path), selected: selected, dirty: dirty,
+      let historyID = AgentHistory.id(tab: path)
+      let chat = historyID.flatMap { historyTabs[$0] }
+      return FileTabButton(
+        path: WorkbenchTab.file(path).dragID, name: historyID == nil ? name(path) : chat?.title ?? tr("チャット履歴"), selected: selected, dirty: dirty,
         onActivate: {
           if !projectActive { store.run("project.switch", ["name": .string(project)]) }
           store.run("tab.activate", ["path": .string(path)])
         },
         onClose: { store.run("tab.close", ["path": .string(path)]) },
         // Reorder within the active group only; other groups' tabs live in saved layouts.
+        icon: historyID == nil ? nil : "bubble.left.and.bubble.right", providerIcon: chat?.provider.rawValue,
         onMove: projectActive ? { from in store.run("tab.reorder", ["source": .string(from), "target": .string(WorkbenchTab.file(path).dragID)]) } : nil
       )
-      .clairContextMenu(menus) { projectActive ? fileMenu(path, tab: true) : ClairMenuSpec(entries: []) }
+      .clairContextMenu(menus) { projectActive && historyID == nil ? fileMenu(path, tab: true) : ClairMenuSpec(entries: []) }
     }
 
     /// Mock `projectMenu`: colour in place, switch/fold/rename, order, mute, close.
@@ -1640,7 +1642,6 @@ import Observation
       return ActivityBarButton(icon: icon, on: sidebarMode == icon && !st.settingsOpen, enabled: true) {
         sidebarMode = icon
         if st.sidebarHidden { store.run("sidebar.toggle") }  // any activity-bar click brings the ⌘B-hidden sidebar back
-        if icon != "terminal" { chat = nil }
         if icon == "folder", st.activeDiff != nil, let path = st.active {
           store.run("tab.activate", ["path": .string(path)])
         }
@@ -1897,8 +1898,7 @@ import Observation
       SessionList(sessions: st.agentSessions, current: st.project) { s in
         if s.project != st.project { store.run("project.switch", ["name": .string(s.project)]) }
         store.run("pane.focus", ["id": .int(s.pane)])
-        chat = nil
-      } openHistory: { chat = $0 }
+      } openHistory: { historyTabs[$0.id] = $0; store.run("history.open", ["id": .string($0.id)]) }
     }
 
     private var changesList: some View {
@@ -1950,9 +1950,9 @@ import Observation
       // The button is the user's approval, as with review launches.
       switch store.run("agent.launch", ["profile": .string(profile.id), "resume": .string(history.sessionID)], confirmed: true) {
       case .success(.pane(let pane)):
-        reviewError = nil; chat = nil; sidebarMode = "terminal"
+        reviewError = nil; sidebarMode = "terminal"
         store.run("pane.focus", ["id": .int(pane)])
-      case .success: reviewError = nil; chat = nil; sidebarMode = "terminal"
+      case .success: reviewError = nil; sidebarMode = "terminal"
       case .failure(let error): reviewError = error.message
       }
     }
@@ -2650,14 +2650,23 @@ import Observation
       .overlay(alignment: .top) {
         if debugControlsVisible { debugToolbar.padding(.top, 12) }
       }
-      // Chat history covers the panes instead of replacing them, so the
-      // terminal surfaces stay mounted and keep their scrollback.
       .overlay {
-        if let chat { AgentChatView(history: chat, onResume: st.projects.first(where: { $0.path == chat.project }).map { p in { resume(chat, in: p.name) } }) { self.chat = nil }.id(chat.id).background(C.canvas) }
-        else if sidebarMode == "concierge" {
+        if sidebarMode == "concierge" {
           let c = st.concierge(in: st.project)
           ConciergeChatView(session: c?.session, pane: c?.pane, children: st.conciergeChildren(in: st.project), focus: focusConciergeChild, start: { startConcierge($0) })
         }
+      }
+    }
+
+    /// A history chat tab in the editor; a restored tab finds its chat before showing it.
+    @ViewBuilder private func historyTab(_ id: String) -> some View {
+      if let chat = historyTabs[id] {
+        AgentChatView(history: chat, fontSize: editorStyle.size + 2,
+          onResume: st.projects.first(where: { $0.path == chat.project }).map { p in { resume(chat, in: p.name) } })
+          .id(chat.id)
+      } else {
+        ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity).background(C.canvas)
+          .task(id: id) { if let found = await AgentHistoryStore.shared.find(id) { historyTabs[id] = found } }
       }
     }
 
@@ -2677,7 +2686,7 @@ import Observation
         onDefinition: { store.run("editor.definition") },
         onPreview: { store.run("editor.markdownPreview") },
         onEdit: { store.edited($0) }, onCaret: { store.editorSelectionChanged($0, $1, in: $2) }, previews: st.previews,
-        home: homeShortcuts(st))
+        home: homeShortcuts(st), history: { AnyView(historyTab($0)) })
     }
 
     /// Requested breakpoints of the active file; the adapter's line wins once it answers.

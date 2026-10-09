@@ -615,6 +615,9 @@ extension CommandRegistry {
         }) { s, i in
       s.openTab(i["path"]!.string!); return .ok
     },
+    cmd("history.open", "チャット履歴をタブで開く", .read, params: [CommandParam("id", .string)], palette: false) { s, i in
+      s.openTab(AgentHistory.tabPrefix + i["id"]!.string!); return .ok
+    },
     cmd("tab.activate", "タブを切り替え", .read, params: [CommandParam("path", .string)],
         preflight: { s, i throws(CommandError) in
           try require(s.tabs.contains(i["path"]!.string!), "no tab \(i["path"]!)"); return .read
@@ -666,7 +669,7 @@ extension CommandRegistry {
         s.panesClosed = false
         switch tab {
         case .file(let path):
-          guard s.files.contains(where: { $0.path == path && $0.status != "D" }) else { continue }
+          guard AgentHistory.id(tab: path) != nil || s.files.contains(where: { $0.path == path && $0.status != "D" }) else { continue }
           s.openTab(path)
         case .diff(let target): s.openDiff(target)
         case .terminal: s.tree.splitFocused(.horizontal, kind: .terminal)

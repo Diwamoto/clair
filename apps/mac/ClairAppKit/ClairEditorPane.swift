@@ -432,9 +432,13 @@
     var previews: [Int: String] = [:]
     /// Shortcut rows for the home screen shown while no file is open; empty keeps the plain note.
     var home: [HomeView.Row] = []
+    /// Renders a history chat tab (`AgentHistory.tabPath`) by chat id.
+    var history: ((String) -> AnyView)? = nil
 
     var body: some View {
-      if let path, let root {
+      if let path, let id = AgentHistory.id(tab: path), let history {
+        history(id)
+      } else if let path, let root {
         switch buffers.peek(path) {
         case nil:
           // Instant feedback while the file is read and roped in the background.
