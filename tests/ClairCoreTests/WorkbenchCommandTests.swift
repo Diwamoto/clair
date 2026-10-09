@@ -176,6 +176,20 @@ final class WorkbenchCommandTests: XCTestCase {
     XCTAssertEqual(state.active, "b2.swift")
   }
 
+  func testTabCycleSkipsFoldedGroups() throws {
+    var state = WorkbenchState()
+    state.projects = ["A", "B", "C"].map { WorkbenchProject(name: $0, path: "/" + $0) }
+    state.project = "A"
+    state.tabs = ["a.swift"]
+    state.active = "a.swift"
+    for name in ["B", "C"] { var l = ProjectLayout(); l.tabs = [name + ".swift"]; l.active = l.tabs[0]; state.layouts[name] = l }
+    state.collapsedGroups = ["B"]
+    _ = try r.execute("tab.next", state: &state).get()
+    XCTAssertEqual(state.project, "C")
+    _ = try r.execute("tab.previous", state: &state).get()
+    XCTAssertEqual(state.project, "A")
+  }
+
   func testDiffIsOrderedSelectableAndClosableLikeOtherTabs() throws {
     var state = WorkbenchState()
     state.projects = [WorkbenchProject(name: "Sample", path: "/tmp")]

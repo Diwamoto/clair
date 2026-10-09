@@ -101,6 +101,8 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var dirty: Set<String> = []
   /// Explorer folders the user opened; every other folder starts closed, including ones that appear later.
   public var expanded: Set<String> = []
+  /// Project groups whose tab strip is folded into the chip; tab cycling skips their tabs. Transient.
+  public var collapsedGroups: Set<String> = []
   public var launches: [Int: AgentLaunch] = [:]
   /// ⌘⇧T history, newest last, capped at `closedLimit`. Terminals reopen as fresh shells. Transient.
   public struct ClosedTab: Sendable, Codable, Equatable { public let project: String, tab: WorkbenchTab }

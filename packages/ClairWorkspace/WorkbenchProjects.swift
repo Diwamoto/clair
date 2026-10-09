@@ -289,7 +289,10 @@ extension WorkbenchState {
     guard !all.isEmpty else { return }
     let current = all.firstIndex { $0.0.name == project && $0.1 == selectedTitlebarTab }
       ?? all.firstIndex { $0.0.name == project } ?? 0
-    let (target, tab) = all[(current + direction + all.count) % all.count]
+    // A folded group's tabs are skipped; with every group folded there is nothing to cycle to.
+    guard let step = (1...all.count).first(where: { !collapsedGroups.contains(all[(current + direction * $0 + all.count * $0) % all.count].0.name) })
+    else { return }
+    let (target, tab) = all[(current + direction * step + all.count * step) % all.count]
     if target.name != project { switchProject(to: target, scanFiles: false) }
     selectTab(tab)
   }

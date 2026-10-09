@@ -1197,7 +1197,6 @@ import Observation
     @State private var quota: [ProviderQuota] = []
     @State private var quotaHovered = false
     @State private var noticesOpen = false
-    @State private var collapsedGroups: Set<String> = []
     @State private var groupDropTarget: String?
     @State private var hoveredGroup: String?
     @State private var rootFolded = false
@@ -1416,13 +1415,13 @@ import Observation
       let orderedTabs = tabs
       let selectedTab = active ? st.selectedTitlebarTab : nil
       let dirty = active ? st.dirty : (st.layouts[p.name]?.dirty ?? [])
-      let folded = collapsedGroups.contains(p.name)
+      let folded = store.state.collapsedGroups.contains(p.name)
       let activate = {
-        if !active { collapsedGroups.remove(p.name); store.run("project.switch", ["name": .string(p.name)]) }
+        if !active { store.state.collapsedGroups.remove(p.name); store.run("project.switch", ["name": .string(p.name)]) }
         else {
           // Folding sucks the tabs back into the chip; unfolding pours them out of it.
           withAnimation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.86)) {
-            if folded { collapsedGroups.remove(p.name) } else { collapsedGroups.insert(p.name) }
+            if folded { store.state.collapsedGroups.remove(p.name) } else { store.state.collapsedGroups.insert(p.name) }
           }
         }
       }
@@ -1572,7 +1571,7 @@ import Observation
         .separator,
         .item(tr("このProjectに切り替え"), disabled: st.project == p.name) { store.run("project.switch", ["name": name]) },
         .item(folded ? tr("グループを展開") : tr("グループを折りたたむ")) {
-          if folded { collapsedGroups.remove(p.name) } else { collapsedGroups.insert(p.name) }
+          if folded { store.state.collapsedGroups.remove(p.name) } else { store.state.collapsedGroups.insert(p.name) }
         },
         .item(tr("フォルダを追加…")) { addFolder(to: p.name) },
         .item(tr("Project名を変更…")) {
