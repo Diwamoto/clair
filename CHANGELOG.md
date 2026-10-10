@@ -6,6 +6,29 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-11
+
+### Added
+
+- ⌘F searches the focused pane: the editor gets a find & replace bar (case and regex toggles, ⌥⌘F for replace), and a terminal searches its scrollback.
+- ⌘-click a file path in the terminal to open it in the editor.
+- The Agents list groups running agents by Project.
+- Agents show when they are working, blocked on a question, or done, reported by their own hooks; install the Claude Code hooks from Settings > Integrations.
+- Agent panes reopen their last conversation after a restart when their shell is gone.
+- The Explorer shows gitignored files dimmed instead of hiding them.
+- Clair RC: a separate app built from the latest main, for trying changes before a release.
+
+### Changed
+
+- History chats open as editor tabs beside your files and follow the editor font size.
+- Inactive project groups fold from their chip, and Ctrl+Tab skips folded groups.
+
+### Fixed
+
+- `clair open --wait` no longer prints JSON into the terminal when used as `$VISUAL`.
+- Text typed with an IME at the start of a line keeps its color.
+- Deleted files are tinted red in Source Control.
+
 ## [0.12.0] - 2026-10-07
 
 ### Added
@@ -318,7 +341,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/Diwamoto/clair/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/Diwamoto/clair/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/Diwamoto/clair/compare/v0.10.2...v0.11.0
 [0.10.2]: https://github.com/Diwamoto/clair/compare/v0.10.1...v0.10.2
