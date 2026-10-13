@@ -321,20 +321,20 @@ inlay hint と semantic token は未対応(editor の描画に inline の仮想�
 
 ## 6. AI review
 
-Mac の「変更を確認」には、現在のファイルをレビューする操作と Project 全体を
-レビューする操作を置く。利用者が `AgentProfile` registry に登録された agent
-（既定は Claude Code / Codex / OpenCode。設定で切り替え可能で、registry に
-追加すれば他の CLI agent も選べる）を選び、明示的に開始したときだけ、その
-Project の root で agent を起動する。
-ファイル対象は選択中の差分ファイル、なければ開いているファイルとする。
-依頼には対象、読み取り専用のレビューであること、問題箇所のファイル・行・理由を
-報告することを含める。結果は起動した terminal に表示する。未保存の editor
-buffer が対象に含まれる場合は保存を促し、ディスクと異なる内容を黙って渡さない。
-この操作は既存の agent launch と同じ Project / session / 承認境界を通る。
-依頼には `clair review.comment` / `review.suggest` で指摘を Clair へ返す手順も含め、
-Claude Code にはその 3 コマンド(`review.comment` / `review.suggest` / `review.threads`)
-だけを `--allowedTools` で許可して起動する。返せない provider や失敗時は terminal の
-報告だけが残る。
+Explorer の「このファイルをレビュー」「このフォルダをレビュー」「この Project を
+レビュー」は、まずレビュー画面を開く。対象はファイルならその 1 つ、フォルダなら
+配下の全ファイル、Project なら全ファイル(git ignore 済みを除く)。利用者は各
+ファイルの全行にコメントを付けられる(差分の有無に関係しない)。画面の「送信先」
+で `AgentProfile` registry の agent(既定は Claude Code / Codex / OpenCode)を
+選ぶと、対象ファイルの未解決コメントを `<root>/.clair/reviews/<日時>.json`
+(`review.threads` と同じ形。フォルダの `.gitignore` で変更として出ない)に保存し、
+その Project の root で agent を起動して「この JSON を読んで全コメントに対応して」
+と依頼する。送ったコメントは resolved になる。未保存の editor buffer を含む対象
+ではメニューを無効にし、ディスクと異なる内容を黙って渡さない。この操作は既存の
+agent launch と同じ Project / session / 承認境界を通る。
+
+agent 側から指摘を返す経路として `clair review.comment` / `review.suggest` /
+`review.threads` を残す。
 
 review コメントは行番号や画面上の吹き出しとして保存しない。anchor は最低限
 次を持つ。

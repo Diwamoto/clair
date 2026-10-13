@@ -1268,6 +1268,9 @@ import Observation
     @State private var gitMessage: String?
     @State private var gitFailed = false
     @State private var reviewError: String?
+    /// The user's own review (spec §6): the files it covers and the one shown. GUI-local, gone on restart.
+    @State private var review: ReviewSession?
+    @State private var reviewFile: ReviewFile?
     @State private var diff: DiffTarget?
     /// History chats opened as editor tabs, by id; a restored tab looks its chat up on first show.
     @State private var historyTabs: [String: AgentHistory] = [:]
@@ -1372,6 +1375,7 @@ import Observation
         if sidebarMode == "ladybug", let frame { openDebugFrame(frame) }
       }
       .onChange(of: st.project) {
+        review = nil
         diff = st.activeDiff.map { DiffTarget(path: $0.path, staged: $0.staged, untracked: $0.untracked, against: $0.against, proposal: $0.proposal) }
         loadedDiff = nil; gitMessage = nil; gitFailed = false
         rebuildExplorer(); reloadChanges()
@@ -1992,11 +1996,13 @@ import Observation
       }
     }
 
-    /// "〜をレビュー ›" submenu: one item per agent profile; picking one launches the review.
+    /// "〜をレビュー": opens the review screen on the target's files; the agent is picked when sending.
     private func reviewMenu(_ title: String, _ target: AgentReviewRequest.Target, disabled: Bool) -> ClairMenuEntry {
-      .item(title, disabled: disabled, submenu: AgentProfile.all.map { profile in
-        .item(profile.title) { startReview(target, provider: profile.id) }
-      })
+      .item(title, disabled: disabled) {
+        let files = AgentReviewRequest.files(target, in: st.files.filter { $0.status != "!" }.map(\.path))
+        reviewFile = nil
+        review = ReviewSession(title: title, files: files, selected: files.first)
+      }
     }
 
     private func resume(_ history: AgentHistory, in project: String) {
@@ -2013,28 +2019,108 @@ import Observation
       }
     }
 
-    private func startReview(_ target: AgentReviewRequest.Target, provider: String) {
-      guard store.activeRoot != nil, AgentProfile.named(provider) != nil else { return }
-      switch target {
-      case .file(let path):
-        guard st.files.contains(where: { $0.path == path }), !st.dirty.contains(path) else { return }
-      case .folder(let path):
-        guard !st.dirty.contains(where: { $0.hasPrefix(path + "/") }) else { return }
-      case .project:
-        guard st.dirty.isEmpty else { return }
-      }
-      let input: CommandInput = [
-        "profile": .string(provider), "prompt": .string(AgentReviewRequest.prompt(for: target)), "review": .bool(true),
-      ]
+    /// Open threads of the review's files, placed in the files on disk.
+    private func reviewThreads(_ r: ReviewSession, _ root: String, placed: Bool) -> [WorkbenchReviewThread] {
+      let files = Set(r.files)
+      return store.reviews.list(root: root) { p in placed ? Self.lines(root + "/" + p) : nil }
+        .filter { files.contains($0.path) && $0.state == "open" }
+    }
+
+    nonisolated private static func lines(_ path: String) -> [String]? {
+      guard var l = (try? String(contentsOfFile: path, encoding: .utf8))?.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+      else { return nil }
+      if l.last == "" { l.removeLast() }
+      return l
+    }
+
+    /// Saves the open comments as JSON in the Project and asks `provider` to address them (spec §6).
+    private func sendReview(_ r: ReviewSession, provider: String) {
+      guard let root = store.activeRoot, AgentProfile.named(provider) != nil else { return }
+      let threads = reviewThreads(r, root, placed: true)
+      guard !threads.isEmpty else { return }
+      let file: String
+      do { file = try AgentReviewRequest.write(threads, root: root) } catch { reviewError = error.localizedDescription; return }
+      let input: CommandInput = ["profile": .string(provider), "prompt": .string(AgentReviewRequest.prompt(file: file))]
       // The labelled button is the user's approval for launching this external tool.
       switch store.run("agent.launch", input, confirmed: true) {
-      case .success(.pane(let pane)):
-        reviewError = nil; diff = nil; sidebarMode = "terminal"
-        store.run("pane.focus", ["id": .int(pane)])
-      case .success:
-        reviewError = nil; diff = nil; sidebarMode = "terminal"
+      case .success(let result):
+        // Handed off: the comments now live in the JSON the agent reads.
+        for t in threads { if let id = UUID(uuidString: t.id) { store.reviews.resolve(root: root, path: t.path, id: id) } }
+        reviewError = nil; review = nil; sidebarMode = "terminal"
+        if case .pane(let pane) = result { store.run("pane.focus", ["id": .int(pane)]) }
       case .failure(let error): reviewError = error.message
       }
+    }
+
+    @ViewBuilder private func reviewScreen(_ r: ReviewSession, root: String) -> some View {
+      let open = reviewThreads(r, root, placed: false)
+      VStack(spacing: 0) {
+        HStack(spacing: 8) {
+          Text(r.title).font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textPrimary)
+          Text(tr("%@ 件のコメント", open.count)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+          Spacer()
+          Menu {
+            ForEach(AgentProfile.all, id: \.id) { p in Button(p.title) { sendReview(r, provider: p.id) } }
+          } label: { Text(tr("送信先")).font(Typography.font(Typography.chrome)) }
+            .menuStyle(.borderlessButton).fixedSize().disabled(open.isEmpty)
+            .help(tr("コメントを JSON に保存し、選んだ agent に対応を依頼する"))
+          Button { review = nil } label: { Image(systemName: "xmark").foregroundStyle(C.chromeInk) }.buttonStyle(.hoverWash)
+        }.padding(.horizontal, 16).frame(height: 30).background(C.canvas)
+          .overlay(alignment: .bottom) { Rectangle().fill(L.hairline).frame(height: 1) }
+        HStack(spacing: 0) {
+          if r.files.count > 1 {
+            let counts = Dictionary(grouping: open, by: \.path).mapValues(\.count)
+            ScrollView {
+              LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(r.files, id: \.self) { p in
+                  Button { reviewFile = nil; review?.selected = p } label: {
+                    HStack {
+                      Text(p).lineLimit(1).truncationMode(.head)
+                        .foregroundStyle(p == r.selected ? C.textPrimary : C.textSecondary)
+                      Spacer(minLength: 4)
+                      if let n = counts[p] { Text("\(n)").foregroundStyle(C.textTertiary) }
+                    }.font(Typography.font(Typography.chrome)).padding(.horizontal, 10).frame(height: 24).contentShape(Rectangle())
+                  }.buttonStyle(.hoverWash)
+                }
+              }
+            }.frame(width: 260).background(C.surface)
+            Rectangle().fill(L.hairline).frame(width: 1)
+          }
+          Group {
+            if let path = r.selected, let f = reviewFile, f.path == path {
+              if let lines = f.lines {
+                let buffer: EditorTransactionManager? = { if case .ready(let m)? = store.buffers.peek(path) { m } else { nil } }()
+                DiffView(
+                  target: DiffTarget(path: path, staged: false, untracked: false), model: DiffView.whole(lines),
+                  threads: store.reviews.threads(root: root, path, in: lines), suggestions: [],
+                  onComment: { n, text, body in
+                    if let m = buffer { store.reviews.add(root: root, path: path, line: n, text: text, body: body, snapshot: m.buffer.snapshot) }
+                  },
+                  onSuggest: { _, _ in }, onResolve: { store.reviews.resolve(root: root, path: path, id: $0) },
+                  onApply: { _ in nil }, onReject: { _ in }, onSend: nil, onClose: { review = nil }, editor: nil, onSave: nil,
+                  isDirty: false, label: tr("行をクリックしてコメント"), suggestable: false)
+                .id(path)
+              } else {
+                Text(tr("テキストとして読めないファイルです。")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+                  .frame(maxWidth: .infinity, maxHeight: .infinity)
+              }
+            } else if r.selected == nil {
+              Text(tr("対象のファイルがありません。")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+              ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+          }
+          .task(id: r.selected) {
+            guard let path = r.selected else { return }
+            let lines = await Task.detached(priority: .userInitiated) { Self.lines(root + "/" + path) }.value
+            // Comments anchor to the editor buffer's snapshot, as in the diff.
+            if lines != nil { await store.buffers.prefetch(path, root: root) }
+            guard !Task.isCancelled, review?.selected == path else { return }
+            reviewFile = ReviewFile(path: path, lines: lines)
+          }
+        }
+      }.background(C.canvas)
     }
 
     private func discard(_ change: GitChange, _ staged: Bool) {
@@ -2610,6 +2696,18 @@ import Observation
       let fileLines: [String]?
     }
 
+    struct ReviewSession: Equatable {
+      let title: String
+      let files: [String]
+      var selected: String?
+    }
+
+    struct ReviewFile: Equatable {
+      let path: String
+      /// nil: not readable as UTF-8 text.
+      let lines: [String]?
+    }
+
     private func loadDiff(clear: Bool = true) {
       diffTask?.cancel(); if clear { loadedDiff = nil }
       guard let target = diff, let root = store.activeRoot else { return }
@@ -2632,7 +2730,9 @@ import Observation
 
     private var main: some View {
       VStack(spacing: 0) {
-        if let d = diff, let root = store.activeRoot, let loaded = loadedDiff,
+        if let r = review, let root = store.activeRoot {
+          reviewScreen(r, root: root)
+        } else if let d = diff, let root = store.activeRoot, let loaded = loadedDiff,
           loaded.target == d, loaded.root == root
         {
           let fileLines = loaded.fileLines

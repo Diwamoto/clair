@@ -700,9 +700,16 @@ extension LocalizedStrings {
     "補完候補": "Completions",
 
     // Agent review request
-    "%@\nコードを変更せず、正しさ・データ損失・セキュリティ・回帰の問題を探してください。": "%@\nWithout changing code, look for correctness, data-loss, security, and regression problems.",
-    "指摘は重要度順に、ファイルと行、再現条件、理由を具体的に報告してください。": "Report findings by severity, with the file and line, how to reproduce, and why.",
-    "問題が見つからなければ、その旨と確認した範囲を報告してください。": "If you find nothing, say so and report what you checked.",
+    "`%@` にレビューコメントがあります。": "Review comments are in `%@`.",
+    "各要素の path と line（1 始まり）が対象箇所、comments が指摘です。stale が true のものはコメント後に行が変わっています。": " Each entry's path and line (1-based) mark the spot and comments hold the feedback; stale: true means the line changed after the comment.",
+    "すべてのコメントに対応してコードを修正し、最後に各コメントへの対応内容を報告してください。": " Address every comment in the code, then report what you did for each.",
+    "レビュー": "Review",
+    "%@ 件のコメント": "%@ comments",
+    "送信先": "Send to",
+    "コメントを JSON に保存し、選んだ agent に対応を依頼する": "Save the comments as JSON and ask the chosen agent to address them",
+    "テキストとして読めないファイルです。": "This file can't be read as text.",
+    "対象のファイルがありません。": "No files to review.",
+    "行をクリックしてコメント": "Click a line to comment",
 
     // CLI install, colors, app lifecycle, misc
     "clair 実行ファイルがアプリ内に見つかりません。": "The clair executable is missing from the app.",
@@ -756,9 +763,6 @@ extension LocalizedStrings {
     "デバッガーに接続できませんでした": "Could not connect to the debugger",
     "デバッガーの応答がありません: %@": "No response from the debugger: %@",
     "終了コード: %@": "Exit code: %@",
-    "Project 内のファイル `%@` をレビューしてください。": "Review the file `%@` in the Project.",
-    "Project 内のフォルダ `%@/` 配下をレビューしてください。": "Review everything under the folder `%@/` in the Project.",
-    "この Project 全体をレビューしてください。変更中のファイルだけでなく、関連する実装も確認してください。": "Review this whole Project. Check the related implementation, not only the files being changed.",
     "正常終了": "Exited",
     "異常終了 (exit %@)": "Failed (exit %@)",
   ]

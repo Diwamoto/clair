@@ -1,7 +1,8 @@
 import ClairShared
+import Foundation
 
-/// A review request is a read-only task for an existing agent launch profile.
-/// The GUI chooses the target from the active Project; the agent runs in that Project root.
+/// A review is the user's own line comments on a file, a folder or the Project (spec §6), handed to an agent
+/// as a JSON file it reads and addresses. The GUI picks the target; the agent runs in the Project root.
 public enum AgentReviewRequest {
   public enum Target: Equatable, Sendable {
     case file(String)
@@ -9,24 +10,34 @@ public enum AgentReviewRequest {
     case project
   }
 
-  public static func prompt(for target: Target) -> String {
-    let scope: String = switch target {
-    case .file(let path): tr("Project 内のファイル `%@` をレビューしてください。", path)
-    case .folder(let path): tr("Project 内のフォルダ `%@/` 配下をレビューしてください。", path)
-    case .project: tr("この Project 全体をレビューしてください。変更中のファイルだけでなく、関連する実装も確認してください。")
+  /// The Project-relative files a target covers, sorted.
+  public static func files(_ target: Target, in all: [String]) -> [String] {
+    switch target {
+    case .file(let path): all.contains(path) ? [path] : []
+    case .folder(let path): all.filter { $0.hasPrefix(path + "/") }.sorted()
+    case .project: all.sorted()
     }
-    return tr("%@\nコードを変更せず、正しさ・データ損失・セキュリティ・回帰の問題を探してください。", scope)
-      + tr("指摘は重要度順に、ファイルと行、再現条件、理由を具体的に報告してください。")
-      + tr("問題が見つからなければ、その旨と確認した範囲を報告してください。")
-      + "\n\n" + postBack
   }
 
-  /// How the reviewer hands findings to Clair's review threads (spec §6). Commands, not prose, so it is not translated.
-  static let postBack = """
-    Also post each finding to Clair so it appears on the diff, using the `clair` command (absolute paths):
-      clair review.comment path="$PWD/<file>" line=<n> [endLine=<m>] body="<severity: problem, condition, reason>"
-    When a concrete fix is short, propose it instead (it replaces lines line..endLine; the user applies it):
-      clair review.suggest path="$PWD/<file>" line=<n> [endLine=<m>] replacement="<new text>" body="<reason>"
-    If `clair` is unavailable or fails, keep the findings in your text report only.
-    """
+  /// Writes the open threads to `<root>/.clair/reviews/<stamp>.json` and returns that Project-relative path.
+  /// The folder carries its own `.gitignore` so review files never show up as changes.
+  public static func write(_ threads: [WorkbenchReviewThread], root: String, now: Date = Date()) throws -> String {
+    let dir = URL(fileURLWithPath: root).appending(path: ".clair/reviews")
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    try Data("*\n".utf8).write(to: dir.appending(path: ".gitignore"))
+    let f = DateFormatter()
+    f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyyMMdd-HHmmss"
+    let name = ".clair/reviews/\(f.string(from: now)).json"
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+    try encoder.encode(threads).write(to: URL(fileURLWithPath: root).appending(path: name), options: .atomic)
+    return name
+  }
+
+  /// The agent's task: read the review file and address every comment.
+  public static func prompt(file: String) -> String {
+    tr("`%@` にレビューコメントがあります。", file)
+      + tr("各要素の path と line（1 始まり）が対象箇所、comments が指摘です。stale が true のものはコメント後に行が変わっています。")
+      + tr("すべてのコメントに対応してコードを修正し、最後に各コメントへの対応内容を報告してください。")
+  }
 }

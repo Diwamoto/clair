@@ -85,6 +85,23 @@ final class WorkbenchAgentContextTests: XCTestCase {
     // A provider without a review form runs its plain batch.
     let codex = AgentLaunch(profile: "codex", cwd: "/x", prompt: "p", review: true).command
     XCTAssertTrue(codex.contains("codex exec")); XCTAssertFalse(codex.contains("allowedTools"))
-    XCTAssertTrue(AgentReviewRequest.prompt(for: .project).contains("clair review.comment"))
+  }
+
+  func testReviewCoversTargetFilesAndWritesIgnoredJSON() throws {
+    let all = ["b.swift", "src/x.swift", "src/a/y.swift", "srcz.swift"]
+    XCTAssertEqual(AgentReviewRequest.files(.file("b.swift"), in: all), ["b.swift"])
+    XCTAssertEqual(AgentReviewRequest.files(.file("gone"), in: all), [])
+    XCTAssertEqual(AgentReviewRequest.files(.folder("src"), in: all), ["src/a/y.swift", "src/x.swift"])
+    XCTAssertEqual(AgentReviewRequest.files(.project, in: all).count, 4)
+
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString).path
+    defer { try? FileManager.default.removeItem(atPath: root) }
+    let t = WorkbenchReviewThread(id: "1", path: "src/x.swift", line: 3, stale: false, state: "open", comments: [.init(author: "あなた", body: "fix")])
+    let file = try AgentReviewRequest.write([t], root: root, now: Date(timeIntervalSince1970: 0))
+    XCTAssertTrue(file.hasPrefix(".clair/reviews/") && file.hasSuffix(".json"))
+    let back = try JSONDecoder().decode([WorkbenchReviewThread].self, from: Data(contentsOf: URL(fileURLWithPath: root + "/" + file)))
+    XCTAssertEqual(back, [t])
+    XCTAssertEqual(try String(contentsOfFile: root + "/.clair/reviews/.gitignore", encoding: .utf8), "*\n")
+    XCTAssertTrue(AgentReviewRequest.prompt(file: file).contains(file))
   }
 }
