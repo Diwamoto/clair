@@ -113,7 +113,8 @@
     /// Starts the concierge with `message` as its first request (the one undecided thing is decided on send).
     let start: (String) -> Void
     @State private var messages: [AgentHistory.Message] = []
-    @State private var draft = ""
+    /// Kept across leaving and reopening the chat (the view is rebuilt each time).
+    @SceneStorage("concierge.draft") private var draft = ""
     /// Shown until the transcript catches up with what was just sent.
     @State private var pending: String?
     @FocusState private var focused: Bool
@@ -178,14 +179,14 @@
       .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(focused ? C.textTertiary : C.divider, lineWidth: 1))
     }
 
-    /// Types the text into the concierge PTY, then Return on its own write so the TUI reads it as a submit, not a pasted newline.
+    /// Types the text into the concierge PTY, then a real Return key press so the TUI reads it as a submit, not a pasted newline.
     private func send() {
       let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
       guard !text.isEmpty else { return }
       guard let pane else { draft = ""; pending = text; return start(text) }
       guard ClairGhosttySurfaceView.send(text, toPane: pane) else { return }
       draft = ""; pending = text
-      DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { ClairGhosttySurfaceView.send("\r", toPane: pane) }
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { ClairGhosttySurfaceView.pressReturn(inPane: pane) }
     }
 
     /// Re-reads the transcript whenever the session file changes.

@@ -755,6 +755,16 @@ import Foundation
       v.sendText(text); return true
     }
 
+    /// Presses Return in `pane`. Text input is Ghostty's paste path, so a "\r" sent as text lands inside the
+    /// bracketed paste as a newline; a TUI only reads a submit from a real key event.
+    @discardableResult public static func pressReturn(inPane pane: Int) -> Bool {
+      guard let surface = byPane[pane]?.view?.ghosttySurface else { return false }
+      for action in [GhosttyKeyAction.press, .release] {
+        _ = try? surface.sendKey(GhosttyKeyEvent(action: action, mods: [], keyCode: 36, text: nil))  // kVK_Return
+      }
+      return true
+    }
+
     /// The selected text of the terminal in `pane`, nil without a selection.
     public static func selectedText(inPane pane: Int) -> String? {
       guard let v = byPane[pane]?.view, let surface = v.ghosttySurface, (try? surface.hasSelection()) == true,
