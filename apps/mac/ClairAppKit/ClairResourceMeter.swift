@@ -129,11 +129,12 @@ struct ClairResourceMeter: View {
   var body: some View {
     let memory = Self.bytes(sample.totalFootprint)
     HStack(spacing: 6) {
-      Image(systemName: "gauge.with.dots.needle.33percent").font(.system(size: 11))
+      Image(systemName: "gauge.with.dots.needle.33percent").font(.system(size: 12))
       Text("CPU \(Int(cpu.rounded()))% · \(memory)")
     }
-    .foregroundStyle(C.textQuaternary)
-    .contentShape(Rectangle())
+    .font(.system(size: 12)).monospacedDigit()  // same step as the quota meter beside it
+    .foregroundStyle(C.textTertiary)
+    .footerItem()
     .onHover { hovered = $0 }
     .popover(isPresented: $hovered, arrowEdge: .top) {
       let app = sample.footprintBytes[getpid()] ?? 0

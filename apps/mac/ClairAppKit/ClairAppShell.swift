@@ -43,6 +43,14 @@ import Observation
     static var hoverWash: HoverWashStyle { HoverWashStyle() }
   }
 
+  extension View {
+    /// One status-bar item: hit and hover area runs the bar's full height and a few points either side,
+    /// so a popover or tooltip does not need the pointer on the glyphs themselves.
+    func footerItem() -> some View {
+      padding(.horizontal, 5).frame(maxHeight: .infinity).contentShape(Rectangle())
+    }
+  }
+
   /// V01: the GUI process owns `WorkbenchState` (ADR-0007 state owner). Every
   /// mutation goes through `CommandRegistry.workbench`; a destructive effective
   /// risk parks the call in `pending` until the native confirmation approves it.
@@ -3050,16 +3058,17 @@ import Observation
       return HStack(spacing: 6) {
         if let top {
           let tint = stale ? C.textQuaternary : quotaTint(top.window.usedPercent)
-          quotaProviderIcon(top.provider)
-          Text("\(top.provider) \(top.window.label)").foregroundStyle(C.textQuaternary)
-          Capsule().fill(L.strong).frame(width: 34, height: 4)
-            .overlay(alignment: .leading) { Capsule().fill(tint).frame(width: 34 * min(max(1 - top.window.usedPercent / 100, 0), 1)) }
+          quotaProviderIcon(top.provider, size: 17)
+          Text("\(top.provider) \(top.window.label)").foregroundStyle(C.textTertiary)
+          Capsule().fill(L.strong).frame(width: 48, height: 5)
+            .overlay(alignment: .leading) { Capsule().fill(tint).frame(width: 48 * min(max(1 - top.window.usedPercent / 100, 0), 1)) }
           Text(tr("残り%@%", top.window.remainingPercent)).fontWeight(.semibold).foregroundStyle(tint)
         } else {
           Text(quota.isEmpty ? tr("利用枠を取得中…") : tr("利用枠 —")).foregroundStyle(C.textQuaternary)
         }
       }
-      .contentShape(Rectangle())
+      .font(.system(size: 12)).monospacedDigit()  // one step above the bar's 11pt: the number the owner reads most (2026-10-13)
+      .footerItem()
       .onHover { quotaHovered = $0 }
       .popover(isPresented: $quotaHovered, arrowEdge: .top) {
         VStack(alignment: .leading, spacing: 12) {
@@ -3136,7 +3145,7 @@ import Observation
         HStack(spacing: 3) {
           Image(systemName: unread > 0 ? "bell.badge" : "bell").font(.system(size: 11))
           if unread > 0 { Text("\(unread)").foregroundStyle(C.attention) }
-        }.frame(minHeight: 18)
+        }.footerItem()
       }
       .buttonStyle(.hoverWash).help(tr("通知")).accessibilityLabel(unread > 0 ? tr("通知 未読 %@ 件", unread) : tr("通知"))
       .popover(isPresented: $noticesOpen, arrowEdge: .top) {
@@ -3189,9 +3198,10 @@ import Observation
       let agents = st.agentSessions.filter { $0.project == st.project && !$0.status.isExited }
       let waiting = agents.filter { $0.status == .attention }.count
       let caret = st.active.flatMap { store.buffers.caret[$0] }
-      return HStack(spacing: 12) {
+      // Items pad themselves (`footerItem`), so 2 + 5 + 5 keeps the old 12pt gap with hover areas almost touching.
+      return HStack(spacing: 2) {
         if st.settingsOpen {
-          Text(tr("設定 · %@", tr(st.section)))
+          Text(tr("設定 · %@", tr(st.section))).footerItem()
         } else {
           if let branch {
             Button { store.run("git.branches") } label: {
@@ -3199,7 +3209,7 @@ import Observation
                 GitBranchGlyph().stroke(style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round))
                   .frame(width: 11, height: 11)
                 Text(branch)
-              }.padding(.horizontal, 6).frame(minHeight: 18)
+              }.footerItem()
             }
             .buttonStyle(.hoverWash).fixedSize().disabled(gitOperation != nil).help(tr("ブランチを切り替え / 作成"))
           }
@@ -3209,7 +3219,7 @@ import Observation
               HStack(spacing: 3) {
                 Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 10))
                 if let sync, sync.behind + sync.ahead > 0 { Text("\(sync.behind)↓ \(sync.ahead)↑") }
-              }.frame(minHeight: 18)
+              }.footerItem()
             }.buttonStyle(.hoverWash).disabled(gitOperation != nil).help(sync.map { tr("%@ の同期: pull %@ 件 / push %@ 件\nクリックで Pull → Push", branch ?? "", $0.behind, $0.ahead) } ?? tr("同期 (Pull → Push)"))
             if let gitOperation { ProgressView().controlSize(.small).help(tr("%@中", gitOperation)) }
             // Failures only: a success toast is noise here (owner, 2026-09-24); the Git panel still shows it.
@@ -3220,12 +3230,13 @@ import Observation
               }
               .foregroundStyle(C.attention)
               .frame(maxWidth: 260, alignment: .leading)
+              .footerItem()
               .help(gitMessage)
             }
           }
-          if !st.dirty.isEmpty { Text(tr("未保存 %@", st.dirty.count)).foregroundStyle(C.attention) }
-          if let caret { Text("Ln \(caret.line), Col \(caret.col)") }
-          languageStatus
+          if !st.dirty.isEmpty { Text(tr("未保存 %@", st.dirty.count)).foregroundStyle(C.attention).footerItem() }
+          if let caret { Text("Ln \(caret.line), Col \(caret.col)").footerItem() }
+          Group { languageStatus }.footerItem()
         }
         Spacer()
         ClairResourceMeter { terminalTabTitle($0, $1) }  // same name as the terminal's tab
@@ -3234,13 +3245,13 @@ import Observation
           HStack(spacing: 5) {
             if waiting > 0 { Circle().fill(C.attention).frame(width: 6, height: 6) }
             Text(tr("%@ セッション", agents.count) + (waiting > 0 ? tr(" · 入力待ち %@", waiting) : ""))
-          }
+          }.footerItem()
         }.buttonStyle(.hoverWash)
         noticeButton
-        Text("v" + (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"))
+        Text("v" + (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev")).footerItem()
       }
       .font(Typography.font(Typography.chrome)).monospacedDigit().foregroundStyle(C.textTertiary)
-      .padding(.horizontal, 12).frame(height: ChromeBudget.statusBar)
+      .padding(.horizontal, 7).frame(height: ChromeBudget.statusBar)
       .background(C.chrome.overlay(ClairChannel.current == .dev ? Color.orange.opacity(0.14) : .clear))  // Dev is told apart at a glance (owner, 2026-09-27)
       .overlay(alignment: .top) { Rectangle().fill(C.surfaceActive).frame(height: 1) }
       // Here, not on `body`: its modifier chain is at the type-checker's limit. The status bar is always mounted.
