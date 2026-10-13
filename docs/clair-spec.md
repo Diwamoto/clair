@@ -374,7 +374,7 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   持つ構成は仕様違反とする
 - raw replay は alternate screen、サイズ、scrollback を考慮する
 - update 再起動中も PTY/session を維持し、新 process へ reattach する
-- window を閉じても background service は継続し、明示的な Clair 終了で停止する
+- window を閉じても background service は継続し、明示的な Clair 終了で停止する。window を閉じて開き直しても editor の未保存 buffer と preview の対象ファイルは残る(preview の対象は workspace に保存し、再起動後も復元する)
 - コマンドパレットからウインドウのみ、またはアプリ全体を再起動できる。ウインドウの再起動(既定 ⌘R)は editor buffer と daemon session を保持して表示を作り直す。アプリの再起動は未保存の editor 変更がある場合は実行せず、保存済み workspace と daemon session に再接続する
 - terminal の ⌘クリックは http/https を既定のブラウザで、既存ファイルのパス(`file://`、絶対、`~/`、pane の起動 cwd からの相対。`:行:列` 付き可)を Clair の editor で開く。それ以外の scheme や local file の実行は行わない
 - agent 実行中は電源接続時に idle sleep を抑止する(battery 時は設定)

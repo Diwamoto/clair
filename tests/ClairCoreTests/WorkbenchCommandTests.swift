@@ -248,9 +248,12 @@ final class WorkbenchCommandTests: XCTestCase {
     let diff = WorkbenchDiffTab(path: "changed.swift", staged: false, untracked: false)
     state.openDiff(diff)
     state.moveTab(.diff(diff), to: .terminal(2))
+    let preview = state.tree.split(state.tree.focused, .horizontal, kind: .preview)
+    state.previews = [preview: "README.md"]
     try state.save(to: snapshot)
     let restored = try XCTUnwrap(WorkbenchState.restore(from: snapshot, scanFiles: false))
     XCTAssertEqual(restored.activeDiff, diff)
+    XCTAssertEqual(restored.previews, [preview: "README.md"])
     XCTAssertEqual(restored.titlebarTabs, state.titlebarTabs)
 
     // Old persisted layouts omit every diff field; decoding must supply empty defaults.
@@ -258,8 +261,10 @@ final class WorkbenchCommandTests: XCTestCase {
     oldLayout.removeValue(forKey: "diffTabs")
     oldLayout.removeValue(forKey: "activeDiff")
     oldLayout.removeValue(forKey: "tabOrder")
+    oldLayout.removeValue(forKey: "previews")
     let decoded = try JSONDecoder().decode(ProjectLayout.self, from: JSONSerialization.data(withJSONObject: oldLayout))
     XCTAssertTrue(decoded.diffTabs.isEmpty)
+    XCTAssertTrue(decoded.previews.isEmpty)
   }
 
   func testFocusingAPaneClearsDiffTabSelection() throws {

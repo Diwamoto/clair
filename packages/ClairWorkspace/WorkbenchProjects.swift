@@ -117,12 +117,11 @@ public struct ProjectLayout: Sendable, Codable, Equatable {
   public var recent: [String] = []
   /// V07: live agent terminals by pane id. Never persisted — restore must not silently respawn agents.
   public var launches: [Int: AgentLaunch] = [:]
-  /// Preview pane id → bound file. Not persisted: a restored preview follows the active file.
-  // ponytail: persist with the layout if losing the binding on relaunch matters.
+  /// Preview pane id → bound file, persisted so a restored preview keeps showing its own file.
   public var previews: [Int: String] = [:]
   /// Every pane closed in this Project only; not persisted (restore reopens the layout).
   public var panesClosed = false
-  private enum CodingKeys: String, CodingKey { case tree, tabs, active, dirty, expanded, diffTabs, activeDiff, tabOrder, recent }
+  private enum CodingKeys: String, CodingKey { case tree, tabs, active, dirty, expanded, diffTabs, activeDiff, tabOrder, recent, previews }
 
   public init() {}
 
@@ -156,6 +155,7 @@ public struct ProjectLayout: Sendable, Codable, Equatable {
     activeDiff = try c.decodeIfPresent(WorkbenchDiffTab.self, forKey: .activeDiff)
     tabOrder = try c.decodeIfPresent([WorkbenchTab].self, forKey: .tabOrder) ?? []
     recent = try c.decodeIfPresent([String].self, forKey: .recent) ?? []
+    previews = try c.decodeIfPresent([Int: String].self, forKey: .previews) ?? [:]
   }
 }
 

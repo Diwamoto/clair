@@ -1178,12 +1178,20 @@ import Observation
 
   /// Keep the workbench owner alive while SwiftUI rebuilds this window's views.
   public struct ClairWindowRoot: View {
-    @State private var store = ClairWorkbenchStore()
+    /// A closed window's store. The next window takes it back, so a window close keeps unsaved buffers,
+    /// preview bindings and the IPC socket the way `window.restart` does (spec §7).
+    @MainActor private static var parked: ClairWorkbenchStore?
+    @State private var store: ClairWorkbenchStore = MainActor.assumeIsolated {
+      defer { parked = nil }
+      return parked ?? ClairWorkbenchStore()
+    }
 
     public init() {}
 
     public var body: some View {
       ClairAppShell(store: store).id(store.windowGeneration)
+        .onAppear { if Self.parked === store { Self.parked = nil } }  // `window.restart` disappears and reappears
+        .onDisappear { Self.parked = store }
     }
   }
 
