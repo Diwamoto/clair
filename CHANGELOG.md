@@ -6,6 +6,13 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-10-13
+
+### Changed
+
+- The status bar's AI usage and Clair CPU/memory meters are larger and easier to read.
+- Status bar items respond to hover and clicks across the bar's full height, not only on their text.
+
 ## [0.14.0] - 2026-10-13
 
 ### Added
@@ -359,7 +366,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.14.1...HEAD
+[0.14.1]: https://github.com/Diwamoto/clair/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/Diwamoto/clair/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/Diwamoto/clair/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/Diwamoto/clair/compare/v0.11.0...v0.12.0
