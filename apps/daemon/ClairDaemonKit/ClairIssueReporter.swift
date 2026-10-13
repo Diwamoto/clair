@@ -11,7 +11,7 @@
     public static let repository = "Diwamoto/clair"
     static let quietPeriod: TimeInterval = 24 * 3600
     static let crashScanKey = "crash-scan"
-    static let crashProcesses = ["ClairMacApp", "ClairDaemon", "clair"]
+    public static let crashProcesses = ["ClairMacApp", "ClairDaemon", "clair"]
 
     /// Only the installed Stable app (and the daemon/CLI inside it) reports; Dev, `make dev`,
     /// tests and SwiftPM binaries never do.
@@ -73,7 +73,7 @@
     }
 
     /// An `.ips` file is a one-line JSON header followed by the JSON report.
-    static func crashSummary(ips: String) -> (title: String, details: String)? {
+    public static func crashSummary(ips: String) -> (title: String, details: String)? {
       let parts = ips.split(separator: "\n", maxSplits: 1)
       guard parts.count == 2,
         let header = try? JSONSerialization.jsonObject(with: Data(parts[0].utf8)) as? [String: Any],
@@ -174,7 +174,7 @@
     }
 
     /// Output of a successful run (trimmed), nil when it fails to start or exits non-zero.
-    static func run(_ executable: URL, _ arguments: [String], input: String? = nil) -> String? {
+    public static func run(_ executable: URL, _ arguments: [String], input: String? = nil) -> String? {
       let process = Process()
       process.executableURL = executable
       process.arguments = arguments

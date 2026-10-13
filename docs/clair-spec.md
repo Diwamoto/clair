@@ -538,6 +538,10 @@ merge editor を持たない(2026-09-23 オーナー決定)。
 - terminal の切断・stall、update の失敗、Clair の crash は `[auto]` issue として
   `Diwamoto/clair` に報告する。投稿は利用者自身の `gh` ログインで、push 権限がある
   場合だけ行う([ADR-0021](decisions/0021-anomaly-reports-to-github-issues.md))
+- AppKit がイベント処理中に握りつぶした例外(crash report が出ず、window だけ消える)は
+  data directory の `exceptions.log` に残す。command「前回のクラッシュを調査」
+  (`app.investigateCrash`)は、その例外・最新の crash report・異常報告の履歴・直近 2 時間の
+  system log の error を `crash-investigation.md` にまとめ、既定の Agent に調査させる
 - Stable から Clair source を開き、terminal/agent で Dev を build・起動して変更を
   確認できる
 

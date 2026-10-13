@@ -8,6 +8,26 @@ import SwiftUI
 /// A bare executable (`make dev`, `swift run`) is not a bundled app, so macOS starts it as a background process:
 /// no Dock icon, no key window, and clicks never bring the window forward. Opt in to being a regular app.
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
+  func applicationWillFinishLaunching(_ notification: Notification) {
+    Self.recordReportedExceptions()
+  }
+
+  /// AppKit catches an exception raised while handling an event, logs it as `<private>` and carries on, often
+  /// without the window it was drawing, and macOS writes no crash report. Keep it for "前回のクラッシュを調査".
+  /// SwiftUI runs its own NSApplication subclass and ignores NSPrincipalClass, so wrap the base implementation.
+  private static func recordReportedExceptions() {
+    let selector = #selector(NSApplication.reportException(_:))
+    guard let method = class_getInstanceMethod(NSApplication.self, selector) else { return }
+    typealias Report = @convention(c) (NSApplication, Selector, NSException) -> Void
+    let original = unsafeBitCast(method_getImplementation(method), to: Report.self)
+    let wrapped: @convention(block) (NSApplication, NSException) -> Void = { app, exception in
+      ClairCrashInvestigation.recordException(
+        name: exception.name.rawValue, reason: exception.reason, stack: exception.callStackSymbols)
+      original(app, selector, exception)
+    }
+    method_setImplementation(method, imp_implementationWithBlock(wrapped))
+  }
+
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSApp.setActivationPolicy(.regular)
     // `make dev` relaunches on every rebuild; CLAIR_NO_ACTIVATE keeps it from stealing focus each time.

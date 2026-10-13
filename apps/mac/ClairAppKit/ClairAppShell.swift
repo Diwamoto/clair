@@ -406,6 +406,7 @@ import Observation
         { refreshSleepAssertion() }
         if id == "window.restart" { windowGeneration += 1 }
         if id == "app.restart" { restartApp() }
+        if id == "app.investigateCrash" { investigateCrash() }
         watchProject()
         persistState()
       }
@@ -415,6 +416,24 @@ import Observation
         return answer
       }
       return r
+    }
+
+    /// Collects the crash/anomaly report off main, then hands it to the default agent in a new pane.
+    private func investigateCrash() {
+      languageNotice = tr("クラッシュ情報を集めています…")
+      Task {
+        let path = await Task.detached(priority: .userInitiated) { () -> String? in
+          let url = ClairChannel.current.dataURL.appending(path: "crash-investigation.md")
+          return (try? ClairCrashInvestigation.report().write(to: url, atomically: true, encoding: .utf8)) == nil ? nil : url.path
+        }.value
+        guard let path else { languageNotice = tr("クラッシュ情報を書き出せませんでした"); return }
+        languageNotice = nil
+        let profile = AgentProfile.named(state.choices["defaultAgent"] ?? "")?.id ?? "claude"
+        // The palette pick is the user's approval, as with review launches.
+        if case .failure(let e) = run(
+          "agent.launch", ["profile": .string(profile), "prompt": .string(ClairCrashInvestigation.prompt(report: path))], confirmed: true)
+        { languageNotice = e.message }
+      }
     }
 
     private func restartApp() {
@@ -601,7 +620,7 @@ import Observation
         _ = run(state.active != nil ? "tab.close" : "pane.close")
         return
       }
-      guard id == "file.save" else { _ = run(id, input, confirmed: id == "app.restart"); return }
+      guard id == "file.save" else { _ = run(id, input, confirmed: ["app.restart", "app.investigateCrash"].contains(id)); return }
       Task { await saveActiveFile() }
     }
 
@@ -1127,7 +1146,7 @@ import Observation
     static func menu(_ id: String) -> Menu {
       if id == "settings.open" { return .settings }
       if id.hasPrefix("file.") || id.hasPrefix("project.")
-        || ["window.restart", "app.restart", "tab.reopenClosed", "tab.close", "pane.close", "palette.recent", "palette.compare"].contains(id) { return .file }
+        || ["window.restart", "app.restart", "app.investigateCrash", "tab.reopenClosed", "tab.close", "pane.close", "palette.recent", "palette.compare"].contains(id) { return .file }
       if id.hasPrefix("editor.fold") || id.hasPrefix("editor.unfold")
         || ["palette.find", "editor.replace", "palette.search", "editor.format", "editor.codeAction", "editor.rename"].contains(id) { return .edit }
       if id.hasPrefix("editor.navigate") || id.hasPrefix("pane.focus")
@@ -1140,7 +1159,7 @@ import Observation
     static let titles: [String: String] = [
       "settings.open": "Settings…", "file.save": "Save", "tab.reopenClosed": "Reopen Closed Tab",
       "project.choose": "Open Project…", "pane.close": "Close Tab or Pane", "palette.recent": "Open Recent…", "palette.compare": "Compare With…",
-      "window.restart": "Restart Window", "editor.zoomIn": "Zoom In", "editor.zoomInAlt": "Zoom In", "editor.zoomOut": "Zoom Out", "app.restart": "Restart App",
+      "window.restart": "Restart Window", "editor.zoomIn": "Zoom In", "editor.zoomInAlt": "Zoom In", "editor.zoomOut": "Zoom Out", "app.restart": "Restart App", "app.investigateCrash": "Investigate Last Crash",
       "palette.find": "Find", "editor.replace": "Replace", "palette.search": "Find in Project", "editor.format": "Format Document",
       "editor.fold": "Fold", "editor.unfold": "Unfold", "editor.foldAll": "Fold All", "editor.unfoldAll": "Unfold All",
       "sidebar.toggle": "Toggle Sidebar", "palette.commands": "Command Palette", "palette.commandsAlt": "Command Palette",

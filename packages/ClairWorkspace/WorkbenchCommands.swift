@@ -968,6 +968,7 @@ extension CommandRegistry {
     cmd("editor.zoomOut", "文字を小さく", .read, ai: false, shortcut: "⌘-") { s, _ in s.stepEditorFontSize(-1); return .ok },
     cmd("window.restart", "ウインドウを再起動", .write, ai: false, shortcut: "⌘R") { s, _ in s.palette = nil; return .ok },
     cmd("app.restart", "アプリを再起動", .external, ai: false) { s, _ in s.palette = nil; return .ok },
+    cmd("app.investigateCrash", "前回のクラッシュを調査", .external, ai: false) { s, _ in s.palette = nil; return .ok },
     cmd("palette.commands", "コマンドパレット", .read, ai: false, shortcut: "⌘K", palette: false) { s, _ in s.palette = .commands; return .ok },
     // VS Code habit: ⌘⇧P opens the same command palette as ⌘K.
     cmd("palette.commandsAlt", "コマンドパレット", .read, ai: false, shortcut: "⌘⇧P", palette: false) { s, _ in s.palette = .commands; return .ok },
