@@ -713,6 +713,7 @@ extension LocalizedStrings {
     "レビューを閉じる（コメントは残ります）": "Close the review (comments are kept)",
     "行が変更されたため位置を特定できないコメント": "Comments whose line has changed",
     "ファイルが長いため %@ 行で打ち切りました。": "The file is long, so it was cut at %@ lines.",
+    "%@ 行目にコメント": "Comment on line %@",
 
     // CLI install, colors, app lifecycle, misc
     "clair 実行ファイルがアプリ内に見つかりません。": "The clair executable is missing from the app.",

@@ -19,9 +19,11 @@
     let style: EditorStyle
     let onComment: (Int, _ lineText: String, _ body: String) -> Void
     let onResolve: (UUID) -> Void
+    /// The clicked line: highlighted, with the composer (or, once it closes, a "+" that reopens it) under it.
+    @State private var selected: Int?
     @State private var composing: Int?
     @State private var draft = ""
-    @State private var hovered: Int?
+    @FocusState private var field: Bool
 
     nonisolated static let maxLines = 5000
 
@@ -66,18 +68,17 @@
           ForEach(highlighted.indices, id: \.self) { i in
             let n = i + 1
             HStack(spacing: 0) {
-              Text("\(n)").font(font).foregroundStyle(composing == n ? C.textSecondary : C.lineNumber)
+              Text("\(n)").font(font).foregroundStyle(selected == n ? C.textSecondary : C.lineNumber)
                 .padding(.trailing, 8).frame(width: gutter, alignment: .trailing)
               Text(highlighted[i]).font(font).foregroundStyle(C.code).fixedSize().padding(.leading, 12).padding(.trailing, 24)
             }
             .frame(maxWidth: .infinity, minHeight: style.lineHeight, maxHeight: style.lineHeight, alignment: .leading)
-            .background(composing == n ? C.surfaceActive : hovered == n ? C.surfaceHover : .clear)
+            .background(selected == n ? C.surfaceActive : .clear)
             .contentShape(Rectangle())
-            .onHover { hovered = $0 ? n : (hovered == n ? nil : hovered) }
-            .onTapGesture { composing = composing == n ? nil : n; draft = "" }
-            .help(tr("クリックしてコメント"))
+            // A click opens the composer; clicking its line again folds it back to the "+".
+            .onTapGesture { if composing == n { composing = nil } else { selected = n; composing = n; draft = "" } }
+            if composing == n { composer(n) } else if selected == n { addButton(n, indent: gutter + 12) }
             ForEach(threads[n] ?? []) { thread($0) }
-            if composing == n { composer(n) }
           }
           if lines.count > Self.maxLines {
             Text(tr("ファイルが長いため %@ 行で打ち切りました。", Self.maxLines)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).padding(12)
@@ -102,6 +103,19 @@
       .padding(.leading, 28).padding(.vertical, 4)
     }
 
+    private func addButton(_ n: Int, indent: CGFloat) -> some View {
+      Button { composing = n; draft = "" } label: {
+        HStack(spacing: 4) {
+          Image(systemName: "plus").font(.system(size: 10, weight: .bold))
+          Text(tr("コメント")).font(Typography.font(Typography.chrome))
+        }
+        .foregroundStyle(C.textSecondary).padding(.horizontal, 8).frame(height: 22)
+        .background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.control))
+      }
+      .buttonStyle(.hoverWash).accessibilityLabel(tr("%@ 行目にコメント", n))
+      .padding(.leading, indent).padding(.vertical, 3)
+    }
+
     private func composer(_ n: Int) -> some View {
       let submit = {
         if n <= lines.count { onComment(n, lines[n - 1], draft) }
@@ -109,7 +123,8 @@
       }
       return HStack(spacing: 8) {
         TextField(tr("コメント"), text: $draft).textFieldStyle(.plain).font(Typography.font(Typography.chrome)).frame(width: 360)
-          .onSubmit(submit)
+          .focused($field).onSubmit(submit)
+          .task { await focusField { field = true } }
         Button(tr("追加"), action: submit).buttonStyle(.hoverWash).foregroundStyle(C.textSecondary)
         Button(tr("キャンセル")) { composing = nil }.buttonStyle(.hoverWash).foregroundStyle(C.textTertiary)
       }
