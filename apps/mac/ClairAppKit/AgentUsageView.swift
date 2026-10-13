@@ -68,7 +68,7 @@ struct AgentUsageView: View {
           }) {
             ActivityCalendar(days: figures?.days ?? [:], provider: AgentHistory.Provider(rawValue: calendarFilter))
           }
-          UsageCard(title: tr("曜日 × 時間帯"), note: tr("直近 90 日 · 円の大きさ = 依頼数")) { punchcard }
+          UsageCard(title: tr("曜日 × 時間帯"), note: tr("直近 90 日")) { punchcard }
           UsageCard(title: tr("今月と先月"), accessory: {
             SettingsSegmented(options: ["依頼・追記", "推定費用"], value: monthMode) { monthMode = $0 }
           }) { monthComparison }
@@ -155,35 +155,86 @@ struct AgentUsageView: View {
     return calendar
   }()
 
-  private struct PunchPoint: Identifiable {
-    let day: Int
+  /// Same five lightness steps as the activity calendar above, so a cell's darkness means the same count in both.
+  private static func heatLevel(_ count: Int) -> Int {
+    switch count {
+    case 0: 0
+    case 1...3: 1
+    case 4...7: 2
+    case 8...12: 3
+    default: 4
+    }
+  }
+
+  private static func heatFill(_ level: Int) -> Color {
+    level == 0 ? C.surfaceActive : C.textSecondary.opacity([0, 0.25, 0.45, 0.7, 0.95][level])
+  }
+
+  private struct HourTotal: Identifiable {
     let hour: Int
     let count: Int
-    var id: Int { day * 24 + hour }
+    var id: Int { hour }
   }
 
   private var punchcard: some View {
     let grid = figures?.weekdayHours ?? Array(repeating: Array(repeating: 0, count: 24), count: 7)
-    let peak = max(grid.flatMap { $0 }.max() ?? 0, 1)
+    let totals = (0..<24).map { hour in grid.reduce(0) { $0 + $1[hour] } }
     let names = Self.weekdays
-    let points = (0..<7).flatMap { day in (0..<24).map { PunchPoint(day: day, hour: $0, count: grid[day][$0]) } }
-    return Chart(points) { point in
-      PointMark(x: .value(tr("時"), Double(point.hour)), y: .value(tr("曜日"), names[point.day]))
-        .symbolSize(point.count == 0 ? 4 : 16 + 300 * Double(point.count) / Double(peak))
-        .foregroundStyle(point.count == 0 ? C.divider : C.textSecondary)
-        .accessibilityValue(tr("%@ 件", point.count))
-    }
-    .chartXScale(domain: -0.5...23.5)
-    .chartYScale(domain: names)
-    .chartXAxis {
-      AxisMarks(values: [0.0, 6, 12, 18, 23]) { value in
-        AxisValueLabel { Text(tr("%@時", Int(value.as(Double.self) ?? 0))).font(.system(size: 11)).foregroundStyle(C.textTertiary) }
+    let labeledHours = [0, 6, 12, 18, 23]
+    return VStack(alignment: .leading, spacing: 12) {
+      Chart((0..<24).map { HourTotal(hour: $0, count: totals[$0]) }) { point in
+        BarMark(x: .value(tr("時"), point.hour), y: .value(tr("件"), point.count))
+          .foregroundStyle(C.textSecondary).cornerRadius(2)
       }
+      .chartXScale(domain: -0.6...23.9)
+      .chartXAxis {
+        AxisMarks(values: labeledHours) { value in
+          AxisValueLabel { Text(tr("%@時", value.as(Int.self) ?? 0)).font(.system(size: 11)).foregroundStyle(C.textTertiary) }
+        }
+      }
+      .chartYAxis {
+        AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { _ in
+          AxisGridLine().foregroundStyle(L.hairlineSoft)
+          AxisValueLabel().font(.system(size: 11)).foregroundStyle(C.textTertiary)
+        }
+      }
+      .frame(height: 90)
+      Grid(horizontalSpacing: 2, verticalSpacing: 2) {
+        ForEach(0..<7, id: \.self) { day in
+          GridRow {
+            // Labels overflow their narrow cells (e.g. "Sun") instead of wrapping or truncating.
+            Color.clear.frame(width: 12, height: 10)
+              .overlay(alignment: .trailing) { Text(names[day]).font(.system(size: 10)).foregroundStyle(C.textTertiary).fixedSize() }
+            ForEach(0..<24, id: \.self) { hour in
+              RoundedRectangle(cornerRadius: 2)
+                .fill(Self.heatFill(Self.heatLevel(grid[day][hour])))
+                .frame(width: 10, height: 10)
+                .help(tr("%@ %@時台: %@ 件", names[day], hour, grid[day][hour]))
+                .accessibilityLabel(tr("%@ %@時台: %@ 件", names[day], hour, grid[day][hour]))
+            }
+          }
+        }
+        GridRow {
+          Color.clear.frame(width: 12, height: 1)
+          ForEach(0..<24, id: \.self) { hour in
+            Color.clear.frame(width: 10, height: 12)
+              .overlay {
+                if labeledHours.contains(hour) {
+                  Text("\(hour)").font(.system(size: 9)).foregroundStyle(C.textTertiary).fixedSize()
+                }
+              }
+          }
+        }
+      }
+      HStack(spacing: 4) {
+        Text(tr("棒は時間帯ごとの合計"))
+        Spacer()
+        Text(tr("少"))
+        ForEach(0..<5, id: \.self) { RoundedRectangle(cornerRadius: 2).fill(Self.heatFill($0)).frame(width: 10, height: 10) }
+        Text(tr("多"))
+      }
+      .font(.system(size: 13)).foregroundStyle(C.textTertiary)
     }
-    .chartYAxis {
-      AxisMarks(position: .leading) { _ in AxisValueLabel().font(.system(size: 11)).foregroundStyle(C.textTertiary) }
-    }
-    .frame(height: 190)
   }
 
   // MARK: ④ 今月と先月

@@ -177,34 +177,79 @@ function Calendar() {
 function Punchcard() {
   const prof = [0.1, 0.05, 0.02, 0, 0, 0, 0.02, 0.1, 0.3, 0.6, 1, 0.85, 0.4, 0.6, 0.85, 0.8, 0.75, 0.6, 0.35, 0.45, 0.7, 1.1, 0.9, 0.4];
   const weekday = [0.35, 1, 1.1, 1, 1.05, 0.9, 0.45];
-  const L = 28;
-  const cw = 26;
-  const ch = 20;
+  const days = '日月火水木金土'.split('');
+  const grid = days.map((_, r) => prof.map((p) => Math.round(p * weekday[r] * 26)));
+  const totals = prof.map((_, h) => grid.reduce((s, row) => s + row[h], 0));
+  const labeled = [0, 6, 12, 18, 23];
+  const W = 600;
+  const H = 64;
+  const bw = W / 24;
+  const max = Math.ceil(Math.max(...totals) / 20) * 20;
   return (
-    <Section title="曜日 × 時間帯" aside={<Note>直近 90 日 · 円の大きさ = 依頼数</Note>}>
-      <svg width="100%" viewBox={`0 0 ${L + 24 * cw} ${7 * ch + 22}`} role="img" aria-label="曜日と時間帯ごとの依頼数">
-        {'日月火水木金土'.split('').map((n, r) => (
-          <g key={n}>
-            <text x={L - 10} y={r * ch + ch / 2 + 4} textAnchor="end" style={axis}>
-              {n}
+    <Section title="曜日 × 時間帯" aside={<Note>直近 90 日</Note>}>
+      <svg width="100%" viewBox={`0 0 ${W + 40} ${H + 26}`} role="img" aria-label="時間帯ごとの依頼数の合計">
+        {[0, max / 2, max].map((v) => (
+          <g key={v}>
+            <line x1={40} x2={40 + W} y1={4 + H - (v / max) * H} y2={4 + H - (v / max) * H} stroke={line.hairlineSoft} />
+            <text x={34} y={8 + H - (v / max) * H} textAnchor="end" style={axis}>
+              {v}
             </text>
-            {prof.map((p, h) => {
-              const v = Math.round(p * weekday[r] * 26);
-              const rad = v ? Math.max(2, Math.sqrt(v / 30) * 8.5) : 1.5;
-              return (
-                <circle key={h} cx={L + h * cw + cw / 2} cy={r * ch + ch / 2} r={rad} fill={v ? color.textSecondary : color.divider} fillOpacity={v ? 0.85 : 1}>
-                  <title>{`${n}曜 ${h}時台: ${v} 件`}</title>
-                </circle>
-              );
-            })}
           </g>
         ))}
-        {[0, 6, 12, 18, 23].map((h) => (
-          <text key={h} x={L + h * cw + cw / 2} y={7 * ch + 16} textAnchor="middle" style={axis}>
+        {totals.map((v, h) =>
+          v ? (
+            <rect key={h} x={40 + h * bw + 2} y={4 + H - (v / max) * H} width={bw - 4} height={(v / max) * H} rx={2} fill={color.textSecondary}>
+              <title>{`${h}時台: ${v} 件`}</title>
+            </rect>
+          ) : null,
+        )}
+        <line x1={40} x2={40 + W} y1={4 + H} y2={4 + H} stroke={line.strong} />
+        {labeled.map((h) => (
+          <text key={h} x={40 + (h + 0.5) * bw} y={H + 22} textAnchor="middle" style={axis}>
             {h}時
           </text>
         ))}
       </svg>
+      <div style={{ display: 'flex', gap: 4, marginTop: space[2] }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {days.map((n) => (
+            <span key={n} style={{ width: 12, height: 10, fontSize: 10, lineHeight: '10px', textAlign: 'right', color: color.textTertiary }}>
+              {n}
+            </span>
+          ))}
+          <span style={{ height: 12 }} />
+        </div>
+        <div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(24, 10px)', gap: 2 }}>
+            {grid.flatMap((row, r) =>
+              row.map((v, h) => (
+                <div
+                  key={`${r}-${h}`}
+                  title={`${days[r]}曜 ${h}時台: ${v} 件`}
+                  style={{ width: 10, height: 10, borderRadius: 2, background: levelFill(level(v)) }}
+                />
+              )),
+            )}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(24, 10px)', gap: 2, marginTop: 2 }}>
+            {prof.map((_, h) => (
+              <span key={h} style={{ width: 10, fontSize: 9, height: 12, textAlign: 'center', color: color.textTertiary }}>
+                {labeled.includes(h) ? h : ''}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: space[2] }}>
+        <Note>棒は時間帯ごとの合計</Note>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+          <Note>少</Note>
+          {[0, 1, 2, 3, 4].map((l) => (
+            <div key={l} style={{ width: 10, height: 10, borderRadius: 2, background: levelFill(l) }} />
+          ))}
+          <Note>多</Note>
+        </div>
+      </div>
     </Section>
   );
 }
