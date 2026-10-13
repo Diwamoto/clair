@@ -112,6 +112,12 @@
   private let pad: CGFloat = 4
   private let margin: CGFloat = 8
 
+  /// The submenu a root row opened, with that row's frame in `.global` space.
+  private struct SubOpen: Equatable {
+    let index: Int
+    let row: CGRect
+  }
+
   private struct MenuLayer: View {
     let open: ClairMenuController.Open
     let close: () -> Void
@@ -119,6 +125,8 @@
     @State private var shown = false
     @FocusState private var focused: Bool
     @State private var active: Int?
+    @State private var sub: SubOpen?
+    @State private var subSize: CGSize?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -133,7 +141,7 @@
           // Catches the dismissing click so it never lands underneath; a right-click also just closes.
           Color.clear.contentShape(Rectangle()).onTapGesture(perform: close)
             .overlay(RightClickCatcher { _ in close() })
-          MenuPanel(spec: open.spec, active: $active, close: close)
+          MenuPanel(spec: open.spec, active: $active, sub: $sub, close: close)
             .fixedSize()
             .onGeometryChange(for: CGSize.self, of: { $0.size }) { size = $0 }
             .scaleEffect(shown || reduceMotion ? 1 : 0.97, anchor: UnitPoint(x: flipX ? 1 : 0, y: flipY ? 1 : 0))
@@ -141,6 +149,20 @@
             .offset(x: left, y: top)
             .focusable().focusEffectDisabled().focused($focused)
             .onKeyPress(phases: .down) { key in handle(key) }
+          // Drawn above the whole root panel (not as a row overlay, which later rows painted over).
+          // Like the mock's placeSub: shares the panel's right edge, flips left when there is no room,
+          // and lines its first row up with the row that opened it.
+          if let s = sub, case .item(let it) = open.spec.entries[s.index], let entries = it.submenu {
+            let sw = subSize?.width ?? 0, sh = subSize?.height ?? 0
+            let right = left + w - 1
+            let subLeft = right + sw > geo.size.width - margin ? left - sw + 1 : right
+            let subTop = min(max(s.row.minY - origin.y - pad - 1, margin), geo.size.height - sh - margin)
+            SubPanel(entries: entries, close: close)
+              .onGeometryChange(for: CGSize.self, of: { $0.size }) { subSize = $0 }
+              .opacity(subSize == nil ? 0 : 1)
+              .offset(x: subLeft, y: subTop)
+              .id(s.index)
+          }
         }
       }
       .onAppear {
@@ -172,8 +194,9 @@
   private struct MenuPanel: View {
     let spec: ClairMenuSpec
     @Binding var active: Int?
+    @Binding var sub: SubOpen?
     let close: () -> Void
-    @State private var sub: Int?
+    @State private var rows: [Int: CGRect] = [:]
 
     var body: some View {
       VStack(alignment: .leading, spacing: 0) {
@@ -231,18 +254,11 @@
         guard !it.disabled, it.submenu == nil else { return }
         close(); it.run()
       }
-      // The submenu shares the row's edge and lines its first row up with this one.
-      .overlay(alignment: .topTrailing) {
-        if sub == i, let entries = it.submenu, !it.disabled {
-          SubPanel(entries: entries, close: close)
-            .alignmentGuide(.trailing) { $0[.leading] }
-            .offset(x: pad + 1, y: -pad - 1)
-        }
-      }
+      .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { rows[i] = $0 }
       .onHover { inside in
         guard inside else { return }
         active = it.disabled ? nil : i
-        sub = it.submenu == nil ? nil : i
+        sub = it.submenu == nil || it.disabled ? nil : rows[i].map { SubOpen(index: i, row: $0) }
       }
     }
   }
@@ -251,7 +267,7 @@
     let entries: [ClairMenuEntry]
     let close: () -> Void
     @State private var active: Int?
-    var body: some View { MenuPanel(spec: ClairMenuSpec(entries: entries), active: $active, close: close).fixedSize() }
+    var body: some View { MenuPanel(spec: ClairMenuSpec(entries: entries), active: $active, sub: .constant(nil), close: close).fixedSize() }
   }
 
   /// Same overlay material as the menu, centred, over a light scrim.
