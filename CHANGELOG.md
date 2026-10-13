@@ -6,6 +6,24 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-13
+
+### Added
+
+- "Investigate Last Crash" gathers recent crash reports, swallowed errors and logs into one report and hands it to an agent.
+
+### Changed
+
+- The command palette's selection glides between rows and the list resizes smoothly as you type.
+- Settings' usage card shows hourly bars and a weekday × hour heatmap instead of circles.
+
+### Fixed
+
+- Opening a new terminal (split, Project switch) no longer crashes Clair.
+- Messages sent from the concierge chat are submitted instead of left as a newline, and the draft survives leaving the chat.
+- Closing and reopening the window keeps unsaved editor buffers and preview bindings.
+- Context menu submenus open beside the menu instead of under its rows.
+
 ## [0.13.0] - 2026-10-11
 
 ### Added
@@ -341,7 +359,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/Diwamoto/clair/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/Diwamoto/clair/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/Diwamoto/clair/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/Diwamoto/clair/compare/v0.10.2...v0.11.0
