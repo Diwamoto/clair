@@ -6,6 +6,12 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-13
+
+### Changed
+
+- "Review This File", "Review This Folder" and "Review This Project" now open a review screen where you can comment on any line of every file in scope, then pick an agent (Claude Code, Codex or OpenCode) to send the comments to. The comments are saved as a JSON file in the project and the agent is asked to address each one.
+
 ## [0.14.1] - 2026-10-13
 
 ### Changed
@@ -366,7 +372,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.14.1...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/Diwamoto/clair/compare/v0.14.1...v0.15.0
 [0.14.1]: https://github.com/Diwamoto/clair/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/Diwamoto/clair/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/Diwamoto/clair/compare/v0.12.0...v0.13.0
