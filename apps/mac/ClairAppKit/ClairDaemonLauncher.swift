@@ -41,16 +41,22 @@ import Foundation
       return (try? process.run()) != nil
     }
 
+    /// Variables the next shells get, prefixed onto `clair attach` with `/usr/bin/env` (the daemon forwards the
+    /// attach client's environment). Never `setenv` after `ghostty_init`: libghostty caches `environ` and
+    /// crashes reading it once a new key reallocs the array (#63).
+    @MainActor public static var shellEnvironment: [String: String] = [:]
+
     /// The command a Ghostty surface runs for one pane. Fails closed with a visible message when
     /// the daemon binaries are missing, instead of silently falling back to a GUI-owned shell.
-    public static func attachCommand(key: String, cwd: String, command: String?) -> String {
+    @MainActor public static func attachCommand(key: String, cwd: String, command: String?) -> String {
       guard let clair = binary("clair") else {
         return "echo 'Clair: the clair executable was not found next to the app (set CLAIR_BIN_DIR).'; exit 1"
       }
       // The daemon may have died since launch; without this every new pane fails with
       // `controlSocketMissing` until the app restarts. `clair attach` retries for ~5 s meanwhile.
       Task.detached(priority: .userInitiated) { ensureRunning() }
-      var parts = [
+      var parts = shellEnvironment.isEmpty ? [] : ["/usr/bin/env"] + shellEnvironment.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }
+      parts += [
         clair.path, "attach", "--key", key, "--cwd", cwd, "--directory", paths.directoryURL.path,
       ]
       if let command, !command.isEmpty { parts += ["--command", command] }

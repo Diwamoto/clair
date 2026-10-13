@@ -35,10 +35,10 @@
       }
       claudeIDE.onReady = { [weak self] port in
         UserDefaults.standard.set(Int(port), forKey: Self.portKey)
-        // Shells started from here on inherit these through `clair attach` (the daemon forwards them).
-        setenv("CLAUDE_CODE_SSE_PORT", String(port), 1)
-        setenv("ENABLE_IDE_INTEGRATION", "true", 1)
-        setenv("FORCE_CODE_TERMINAL", "true", 1)
+        // Shells started from here on get these through `clair attach` (the daemon forwards them). Not setenv: #63.
+        ClairDaemonLauncher.shellEnvironment = [
+          "CLAUDE_CODE_SSE_PORT": String(port), "ENABLE_IDE_INTEGRATION": "true", "FORCE_CODE_TERMINAL": "true",
+        ]
         self?.refreshClaudeLock()
       }
       let saved = UserDefaults.standard.integer(forKey: Self.portKey)
