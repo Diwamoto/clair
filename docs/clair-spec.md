@@ -323,10 +323,16 @@ inlay hint と semantic token は未対応(editor の描画に inline の仮想�
 
 Explorer の「このファイルをレビュー」「このフォルダをレビュー」「この Project を
 レビュー」は、まずレビュー画面を開く。対象はファイルならその 1 つ、フォルダなら
-配下の全ファイル、Project なら全ファイル(git ignore 済みを除く)。利用者は各
-ファイルの全行にコメントを付けられる(差分の有無に関係しない)。画面の「送信先」
-で `AgentProfile` registry の agent(既定は Claude Code / Codex / OpenCode)を
-選ぶと、対象ファイルの未解決コメントを `<root>/.clair/reviews/<日時>.json`
+配下の全ファイル、Project なら全ファイル(git ignore 済みを除く)。画面は左に
+Explorer と同じ階層ツリー(対象ファイルだけ。フォルダは開閉でき、ファイルには
+コメント数)、右に差分ではない単一のエディタ表示(editor と同じフォントと
+シンタックスハイライト、行番号は 1 列)を置き、閉じる操作はヘッダーの 1 つだけ。
+差分ビューとは別の画面で、hunk・左右比較・提案は持たない。利用者は各ファイルの
+全行にコメントを付けられる(差分の有無に関係しない)。画面に出すのは利用者自身の
+未解決コメントだけで、agent が `review.comment` で返した指摘は差分ビューに残る。
+右下に浮かぶ「送信先」ボタンのメニューで `AgentProfile` registry の agent(既定は
+Claude Code / Codex / OpenCode)を選ぶと、対象ファイルの利用者の未解決コメントを
+`<root>/.clair/reviews/<日時>.json`
 (`review.threads` と同じ形。フォルダの `.gitignore` で変更として出ない)に保存し、
 その Project の root で agent を起動して「この JSON を読んで全コメントに対応して」
 と依頼する。送ったコメントは resolved になる。未保存の editor buffer を含む対象

@@ -710,6 +710,9 @@ extension LocalizedStrings {
     "テキストとして読めないファイルです。": "This file can't be read as text.",
     "対象のファイルがありません。": "No files to review.",
     "行をクリックしてコメント": "Click a line to comment",
+    "レビューを閉じる（コメントは残ります）": "Close the review (comments are kept)",
+    "行が変更されたため位置を特定できないコメント": "Comments whose line has changed",
+    "ファイルが長いため %@ 行で打ち切りました。": "The file is long, so it was cut at %@ lines.",
 
     // CLI install, colors, app lifecycle, misc
     "clair 実行ファイルがアプリ内に見つかりません。": "The clair executable is missing from the app.",

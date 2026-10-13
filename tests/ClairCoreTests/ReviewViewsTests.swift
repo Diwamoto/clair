@@ -19,6 +19,19 @@
       XCTAssertEqual([st.added, st.removed], [2, 1])
     }
 
+    func testReviewHighlightColoursTokensOnTheirOwnLines() {
+      // A multi-byte line before the token: spans are UTF-8 offsets, mapped per line.
+      let lines = ["// あいう", "let x = \"s\""]
+      let h = CodeReviewView.highlight(lines, path: "a.swift")
+      XCTAssertEqual(h.map { String($0.characters) }, lines)
+      let colored = { (i: Int) in h[i].runs.filter { $0.foregroundColor != nil }.map { String(h[i][$0.range].characters) } }
+      XCTAssertEqual(colored(0), ["// あいう"])
+      XCTAssertTrue(colored(1).contains("let"))
+      XCTAssertTrue(colored(1).joined().hasSuffix("\"s\""), "\(colored(1))")
+      // No grammar: plain lines, no colour.
+      XCTAssertTrue(CodeReviewView.highlight(["x"], path: "a.unknownext")[0].runs.allSatisfy { $0.foregroundColor == nil })
+    }
+
     func testSubmoduleDiffKeepsFileHeadersAndDropsPatchMetadata() {
       let d = "diff --git a/s/a b/s/a\nindex 1..2\n--- a/s/a\n+++ b/s/a\n@@ -1 +1 @@\n-x\n+y\n"
         + "diff --git a/s/b b/s/b\nnew file mode 100644\n--- /dev/null\n+++ b/s/b\n@@ -0,0 +1 @@\n+z"

@@ -4,6 +4,7 @@
   import ClairDesignSystem
   import ClairEditorCore
   import ClairEditorLanguage
+  import ClairReview
   import ClairWorkspace
   import IOKit.pwr_mgt
 import IOKit.ps
@@ -1271,6 +1272,7 @@ import Observation
     /// The user's own review (spec §6): the files it covers and the one shown. GUI-local, gone on restart.
     @State private var review: ReviewSession?
     @State private var reviewFile: ReviewFile?
+    @State private var sendFrame: CGRect = .zero
     @State private var diff: DiffTarget?
     /// History chats opened as editor tabs, by id; a restored tab looks its chat up on first show.
     @State private var historyTabs: [String: AgentHistory] = [:]
@@ -1998,11 +2000,21 @@ import Observation
 
     /// "〜をレビュー": opens the review screen on the target's files; the agent is picked when sending.
     private func reviewMenu(_ title: String, _ target: AgentReviewRequest.Target, disabled: Bool) -> ClairMenuEntry {
-      .item(title, disabled: disabled) {
-        let files = AgentReviewRequest.files(target, in: st.files.filter { $0.status != "!" }.map(\.path))
-        reviewFile = nil
-        review = ReviewSession(title: title, files: files, selected: files.first)
-      }
+      .item(title, disabled: disabled) { openReview(target) }
+    }
+
+    private func openReview(_ target: AgentReviewRequest.Target) {
+      let all = st.files.filter { $0.status != "!" }
+      let files = AgentReviewRequest.files(target, in: all.map(\.path))
+      let covered = Set(files)
+      // The explorer's own tree (same rows, same order), cut down to the reviewed files.
+      let rows = Self.explorerRows(for: all.filter { covered.contains($0.path) }, roots: currentProject?.folderPrefixes ?? [])
+      let folders = rows.filter { $0.file == nil }.map(\.id)
+      // A small tree opens fully; a large one opens only down to the first file.
+      let expanded = folders.count <= 50 ? Set(folders) : Set(folders.filter { files.first?.hasPrefix($0 + "/") == true })
+      let name: String = switch target { case .file(let p): p; case .folder(let p): p + "/"; case .project: st.project }
+      reviewFile = nil
+      review = ReviewSession(title: name, files: files, rows: rows, expanded: expanded, selected: files.first)
     }
 
     private func resume(_ history: AgentHistory, in project: String) {
@@ -2019,11 +2031,14 @@ import Observation
       }
     }
 
-    /// Open threads of the review's files, placed in the files on disk.
+    /// The review screen shows and sends only the user's own open comments; agent findings stay in the diff.
+    nonisolated static func ownOpen(_ t: ReviewThread) -> Bool { t.state == .open && t.comments.first?.author.kind != .agent }
+
+    /// The user's open threads in the review's files, placed in the files on disk.
     private func reviewThreads(_ r: ReviewSession, _ root: String, placed: Bool) -> [WorkbenchReviewThread] {
       let files = Set(r.files)
-      return store.reviews.list(root: root) { p in placed ? Self.lines(root + "/" + p) : nil }
-        .filter { files.contains($0.path) && $0.state == "open" }
+      return store.reviews.list(root: root, where: Self.ownOpen) { p in placed ? Self.lines(root + "/" + p) : nil }
+        .filter { files.contains($0.path) }
     }
 
     nonisolated private static func lines(_ path: String) -> [String]? {
@@ -2055,50 +2070,34 @@ import Observation
     @ViewBuilder private func reviewScreen(_ r: ReviewSession, root: String) -> some View {
       let open = reviewThreads(r, root, placed: false)
       VStack(spacing: 0) {
+        // The screen's only close: the editor below has no header of its own.
         HStack(spacing: 8) {
-          Text(r.title).font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textPrimary)
+          Text(tr("レビュー")).font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textPrimary)
+          Text(r.selected ?? r.title).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary).lineLimit(1).truncationMode(.head)
           Text(tr("%@ 件のコメント", open.count)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
           Spacer()
-          Menu {
-            ForEach(AgentProfile.all, id: \.id) { p in Button(p.title) { sendReview(r, provider: p.id) } }
-          } label: { Text(tr("送信先")).font(Typography.font(Typography.chrome)) }
-            .menuStyle(.borderlessButton).fixedSize().disabled(open.isEmpty)
-            .help(tr("コメントを JSON に保存し、選んだ agent に対応を依頼する"))
           Button { review = nil } label: { Image(systemName: "xmark").foregroundStyle(C.chromeInk) }.buttonStyle(.hoverWash)
+            .help(tr("レビューを閉じる（コメントは残ります）"))
         }.padding(.horizontal, 16).frame(height: 30).background(C.canvas)
           .overlay(alignment: .bottom) { Rectangle().fill(L.hairline).frame(height: 1) }
         HStack(spacing: 0) {
           if r.files.count > 1 {
-            let counts = Dictionary(grouping: open, by: \.path).mapValues(\.count)
-            ScrollView {
-              LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(r.files, id: \.self) { p in
-                  Button { reviewFile = nil; review?.selected = p } label: {
-                    HStack {
-                      Text(p).lineLimit(1).truncationMode(.head)
-                        .foregroundStyle(p == r.selected ? C.textPrimary : C.textSecondary)
-                      Spacer(minLength: 4)
-                      if let n = counts[p] { Text("\(n)").foregroundStyle(C.textTertiary) }
-                    }.font(Typography.font(Typography.chrome)).padding(.horizontal, 10).frame(height: 24).contentShape(Rectangle())
-                  }.buttonStyle(.hoverWash)
-                }
-              }
-            }.frame(width: 260).background(C.surface)
+            reviewTree(r, counts: Dictionary(grouping: open, by: \.path).mapValues(\.count))
+              .frame(width: 260).background(C.surface)
             Rectangle().fill(L.hairline).frame(width: 1)
           }
           Group {
             if let path = r.selected, let f = reviewFile, f.path == path {
               if let lines = f.lines {
                 let buffer: EditorTransactionManager? = { if case .ready(let m)? = store.buffers.peek(path) { m } else { nil } }()
-                DiffView(
-                  target: DiffTarget(path: path, staged: false, untracked: false), model: DiffView.whole(lines),
-                  threads: store.reviews.threads(root: root, path, in: lines), suggestions: [],
+                CodeReviewView(
+                  lines: lines, highlighted: f.highlighted,
+                  threads: store.reviews.threads(root: root, path, in: lines).mapValues { $0.filter(Self.ownOpen) }.filter { !$0.value.isEmpty },
+                  style: editorStyle,
                   onComment: { n, text, body in
                     if let m = buffer { store.reviews.add(root: root, path: path, line: n, text: text, body: body, snapshot: m.buffer.snapshot) }
                   },
-                  onSuggest: { _, _ in }, onResolve: { store.reviews.resolve(root: root, path: path, id: $0) },
-                  onApply: { _ in nil }, onReject: { _ in }, onSend: nil, onClose: { review = nil }, editor: nil, onSave: nil,
-                  isDirty: false, label: tr("行をクリックしてコメント"), suggestable: false)
+                  onResolve: { store.reviews.resolve(root: root, path: path, id: $0) })
                 .id(path)
               } else {
                 Text(tr("テキストとして読めないファイルです。")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
@@ -2111,16 +2110,76 @@ import Observation
               ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
           }
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .overlay(alignment: .bottomTrailing) { sendButton(r, count: open.count).padding(16) }
           .task(id: r.selected) {
             guard let path = r.selected else { return }
-            let lines = await Task.detached(priority: .userInitiated) { Self.lines(root + "/" + path) }.value
+            let (lines, highlighted) = await Task.detached(priority: .userInitiated) {
+              let lines = Self.lines(root + "/" + path)
+              return (lines, lines.map { CodeReviewView.highlight($0, path: path) } ?? [])
+            }.value
             // Comments anchor to the editor buffer's snapshot, as in the diff.
             if lines != nil { await store.buffers.prefetch(path, root: root) }
             guard !Task.isCancelled, review?.selected == path else { return }
-            reviewFile = ReviewFile(path: path, lines: lines)
+            reviewFile = ReviewFile(path: path, lines: lines, highlighted: highlighted)
           }
         }
       }.background(C.canvas)
+    }
+
+    /// The reviewed files as the explorer draws them: folders fold, files show their comment count.
+    private func reviewTree(_ r: ReviewSession, counts: [String: Int]) -> some View {
+      ScrollView {
+        LazyVStack(alignment: .leading, spacing: 0) {
+          ForEach(Self.visibleExplorerRows(r.rows, expanded: r.expanded)) { row in
+            if let f = row.file {
+              let on = r.selected == f.path
+              treeRow(depth: row.depth - 1, selected: on, action: { reviewFile = nil; review?.selected = f.path }) {
+                Color.clear.frame(width: 10)
+                FileIcon.forPath(f.path).image(size: 10, ink: on ? C.textSecondary : C.textTertiary).frame(width: 16)
+                Text(row.label).font(.system(size: 13, weight: on ? .semibold : .regular)).foregroundStyle(on ? C.textPrimary : C.textSecondary).lineLimit(1)
+                Spacer(minLength: 0)
+                if let n = counts[f.path] {
+                  Text("\(n)").font(.system(size: 11, weight: .semibold)).foregroundStyle(C.textSecondary)
+                    .padding(.horizontal, 5).frame(minWidth: 16, minHeight: 16).background(C.surfaceActive, in: Capsule())
+                }
+              }
+            } else {
+              let open = r.expanded.contains(row.id)
+              treeRow(depth: row.depth - 1, selected: false, action: {
+                if open { review?.expanded.remove(row.id) } else { review?.expanded.insert(row.id) }
+              }) {
+                chevron(open: open)
+                FileIcon.folder(open: open).image(size: 11, ink: C.textTertiary).frame(width: 16)
+                Text(row.label).font(.system(size: 13)).foregroundStyle(C.textSecondary).lineLimit(1)
+                Spacer(minLength: 0)
+              }
+            }
+          }
+        }.padding(.vertical, 4).clairScroller()
+      }
+    }
+
+    /// Floating, bottom-right: saves the comments as JSON and hands them to the agent picked from its menu.
+    private func sendButton(_ r: ReviewSession, count: Int) -> some View {
+      Button {
+        menus.open(ClairMenuSpec(title: tr("送信先"), entries: AgentProfile.all.map { p in .item(p.title) { sendReview(r, provider: p.id) } }),
+          at: CGPoint(x: sendFrame.maxX, y: sendFrame.minY - 4))
+      } label: {
+        HStack(spacing: 6) {
+          Image(systemName: "paperplane.fill").font(.system(size: 11))
+          Text(tr("送信先")).font(.system(size: 12, weight: .semibold))
+          if count > 0 { Text("\(count)").font(.system(size: 11, weight: .semibold)).monospacedDigit() }
+          Image(systemName: "chevron.up").font(.system(size: 8, weight: .semibold))
+        }
+        .foregroundStyle(C.canvas).padding(.horizontal, 14).frame(height: 32)
+        .background(count > 0 ? C.textSecondary : C.textQuaternary, in: Capsule())
+        .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
+        .contentShape(Capsule())
+      }
+      .buttonStyle(.plain).disabled(count == 0)
+      .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { sendFrame = $0 }
+      .help(count > 0 ? tr("コメントを JSON に保存し、選んだ agent に対応を依頼する") : tr("行をクリックしてコメント"))
     }
 
     private func discard(_ change: GitChange, _ staged: Bool) {
@@ -2697,8 +2756,12 @@ import Observation
     }
 
     struct ReviewSession: Equatable {
+      /// What is reviewed: the file, `folder/`, or the Project name.
       let title: String
       let files: [String]
+      /// Explorer-style tree of `files`; `expanded` is its own fold state, apart from the explorer's.
+      let rows: [ExplorerRow]
+      var expanded: Set<String>
       var selected: String?
     }
 
@@ -2706,6 +2769,7 @@ import Observation
       let path: String
       /// nil: not readable as UTF-8 text.
       let lines: [String]?
+      let highlighted: [AttributedString]
     }
 
     private func loadDiff(clear: Bool = true) {

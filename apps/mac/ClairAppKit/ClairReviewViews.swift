@@ -146,11 +146,13 @@
     }
 
     /// Every thread of `root` (or only `path`'s) as an agent reads it, placed in the current files.
-    func list(root: String, path: String? = nil, file: (String) -> [String]?) -> [WorkbenchReviewThread] {
+    func list(
+      root: String, path: String? = nil, where include: (ReviewThread) -> Bool = { _ in true }, file: (String) -> [String]?
+    ) -> [WorkbenchReviewThread] {
       let prefix = root + "\0"
       let paths = path.map { [$0] } ?? managers.keys.filter { $0.hasPrefix(prefix) }.map { String($0.dropFirst(prefix.count)) }.sorted()
       return paths.flatMap { p in
-        placed(root, p, in: file(p)).sorted { $0.line < $1.line }.map { x in
+        placed(root, p, in: file(p)).filter { include($0.thread) }.sorted { $0.line < $1.line }.map { x in
           WorkbenchReviewThread(
             id: x.thread.id.uuidString, path: p, line: x.line, stale: x.stale, state: x.thread.state == .open ? "open" : "resolved",
             comments: x.thread.comments.filter { $0.state == .visible }.map { .init(author: $0.author.displayName, body: $0.body) })
@@ -385,8 +387,6 @@
     var label: String? = nil
     /// A historical diff has nowhere to anchor review comments.
     var commentable = true
-    /// The user's own review sends comments only, so it hides "提案にする".
-    var suggestable = true
     /// The commit view pins its own per-file header instead.
     var showsHeader = true
     /// Stages one change block (unstages it in a staged diff): the block's patch and whether to apply it in reverse.
@@ -451,14 +451,6 @@
         hunks: parsed.indices.filter { parsed[$0].text.hasPrefix("@@") },
         blocks: Dictionary(uniqueKeysWithValues: blocks.map { ($0.lowerBound, $0) }),
         visibleLines: Set(parsed.compactMap(\.newLine)), fold: folds(parsed))
-    }
-
-    /// Every line of a file as unfolded context rows, so a review can comment on any line (spec §6).
-    nonisolated static func whole(_ lines: [String]) -> Model {
-      let rows = lines.prefix(maxLines).enumerated().map { Row(text: " " + $1, newLine: $0 + 1) }
-      return Model(
-        text: lines.joined(separator: "\n"), rows: rows, added: 0, removed: 0, hunks: [],
-        visibleLines: Set(rows.compactMap(\.newLine)), fold: rows.map { _ in nil })
     }
 
     /// Parses `@@ -a,b +c,d @@` for `a` and `c`, then numbers old (context/removed) and new (context/added) lines.
@@ -769,10 +761,8 @@
         TextField(suggesting ? tr("この行の置換後") : tr("コメント"), text: $draft).textFieldStyle(.plain).font(Typography.font(Typography.chrome)).frame(width: 360)
           .onSubmit(submit)
         Button(suggesting ? tr("提案する") : tr("追加"), action: submit).buttonStyle(.hoverWash).foregroundStyle(C.textSecondary)
-        if suggestable {
-          Button(suggesting ? tr("コメントに戻す") : tr("提案にする")) { suggesting.toggle(); draft = suggesting ? text : "" }
-            .buttonStyle(.hoverWash).foregroundStyle(C.textTertiary)
-        }
+        Button(suggesting ? tr("コメントに戻す") : tr("提案にする")) { suggesting.toggle(); draft = suggesting ? text : "" }
+          .buttonStyle(.hoverWash).foregroundStyle(C.textTertiary)
         Button(tr("キャンセル")) { composing = nil }.buttonStyle(.hoverWash).foregroundStyle(C.textTertiary)
       }
       .padding(8).background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.card)).padding(.leading, 28).padding(.vertical, 4)
