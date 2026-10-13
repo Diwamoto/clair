@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { commands, files } from '../data';
 import { IconClaude, IconMarkdown, IconSearch } from '../icons';
+import { animate, shouldGlide, SMOOTH, SNAPPY, tween, useReducedMotion } from '../spring';
 import { useWorkbench } from '../store';
 import { color, fs, line, mono, radius, space, wash } from '../tokens';
 
@@ -201,12 +202,26 @@ function Keycaps({ shortcut, on }: { shortcut: string; on: boolean }) {
 
 /* ── command palette / quick open ─────────────────────────────────────── */
 
+const PALETTE_ROW = 32;
+
 export function CommandPalette() {
   const wb = useWorkbench();
   const isCommand = wb.overlay === 'command';
   const [query, setQuery] = useState('');
   const [index, setIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const reduced = useReducedMotion();
+  const listRef = useRef<HTMLDivElement>(null);
+  const highlightRef = useRef<HTMLDivElement>(null);
+  // What moved the selection last: the keyboard slides (70ms), the pointer
+  // springs, a fresh query snaps — arc's command palette does the same.
+  const cause = useRef<'key' | 'pointer' | 'filter'>('filter');
+  const hl = useRef({ y: 0, shown: false });
+  const moveAnim = useRef<() => void>(() => {});
+  const fadeAnim = useRef<() => void>(() => {});
+  const heightAnim = useRef<() => void>(() => {});
+  const prevKeys = useRef<string[]>([]);
+  const lastPointer = useRef({ x: -1, y: -1 });
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -220,7 +235,112 @@ export function CommandPalette() {
       .map((f) => ({ key: f.path, title: f.name, sub: f.path, shortcut: '', danger: false }));
   }, [isCommand, query]);
 
-  useEffect(() => setIndex(0), [query, isCommand]);
+  // Render-phase reset, the way arc's palette does it: a new query or mode
+  // snaps the selection back to the top instead of animating there.
+  const seen = useRef(query + '|' + isCommand);
+  if (seen.current !== query + '|' + isCommand) {
+    seen.current = query + '|' + isCommand;
+    cause.current = 'filter';
+    if (index !== 0) setIndex(0);
+  }
+  const sel = Math.min(index, Math.max(rows.length - 1, 0));
+
+  // One highlight follows the selection: a spring behind the pointer, a 70ms
+  // slide behind the arrow keys, a snap on a fresh query. It fades in when it
+  // first appears and out when the list empties (arc's palette, same shape).
+  useLayoutEffect(() => {
+    const el = highlightRef.current;
+    if (!el) return;
+    const paint = (v: number) => {
+      hl.current.y = v;
+      el.style.transform = `translateY(${v}px)`;
+    };
+    const paintOpacity = (v: number) => {
+      el.style.opacity = String(v);
+    };
+    moveAnim.current();
+    fadeAnim.current();
+    if (rows.length === 0) {
+      hl.current.shown = false;
+      if (reduced) paintOpacity(0);
+      else fadeAnim.current = animate(1, 0, tween(0.1), paintOpacity);
+      return;
+    }
+    const top = sel * PALETTE_ROW;
+    const appear = !hl.current.shown;
+    if (appear || reduced || cause.current === 'filter') paint(top);
+    else moveAnim.current = animate(hl.current.y, top, cause.current === 'pointer' ? SNAPPY : tween(0.07), paint);
+    if (appear) {
+      hl.current.shown = true;
+      if (reduced) paintOpacity(1);
+      else fadeAnim.current = animate(0, 1, tween(0.08), paintOpacity);
+    }
+  }, [sel, rows.length, reduced]);
+
+  // The results frame follows the list height, so filtering closes or opens
+  // the gap instead of snapping (arc: spring smooth). Capped at 46vh, where
+  // the list takes over as a scroller.
+  useLayoutEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const content = (rows.length === 0 ? PALETTE_ROW * 2 : rows.length * PALETTE_ROW) + 8;
+    const target = Math.min(content, window.innerHeight * 0.46);
+    const from = el.style.height ? parseFloat(el.style.height) : target;
+    heightAnim.current();
+    if (reduced) {
+      el.style.height = `${target}px`;
+      el.style.overflowY = '';
+      return;
+    }
+    el.style.overflowY = 'clip';
+    heightAnim.current = animate(from, target, SMOOTH, (v) => {
+      el.style.height = `${v}px`;
+    }, () => {
+      el.style.overflowY = '';
+    });
+  }, [rows.length, reduced]);
+
+  // Rows that survive a filter close their gaps with a glide (arc's smooth
+  // spring; fixed-height rows, so the old place is just index arithmetic). A
+  // long jump — the first letters into a long list — snaps instead.
+  useLayoutEffect(() => {
+    const prev = prevKeys.current;
+    const keys = rows.map((r) => r.key);
+    prevKeys.current = keys;
+    const box = listRef.current;
+    if (!box || reduced || !shouldGlide(prev, keys)) return;
+    const before = new Map(prev.map((k, i) => [k, i]));
+    box.querySelectorAll<HTMLElement>('[data-row]').forEach((el) => {
+      const from = before.get(el.dataset.row!);
+      const to = Number(el.dataset.index);
+      if (from === undefined || from === to) return;
+      const start = (from - to) * PALETTE_ROW;
+      el.style.transform = `translateY(${start}px)`;
+      animate(start, 0, SMOOTH, (v) => {
+        el.style.transform = `translateY(${v}px)`;
+      });
+    });
+  }, [rows, reduced]);
+
+  // Keep the keyboard-selected row in view; a pointer selection already is.
+  useEffect(() => {
+    if (cause.current !== 'key') return;
+    listRef.current?.querySelector(`[data-index="${sel}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [sel]);
+
+  // A fresh query starts from the top.
+  useEffect(() => {
+    listRef.current?.scrollTo({ top: 0 });
+  }, [query]);
+
+  useEffect(
+    () => () => {
+      moveAnim.current();
+      fadeAnim.current();
+      heightAnim.current();
+    },
+    [],
+  );
 
   const commit = (i: number) => {
     const row = rows[i];
@@ -230,12 +350,19 @@ export function CommandPalette() {
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
+    cause.current = 'key';
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       setIndex((i) => Math.min(rows.length - 1, i + 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setIndex((i) => Math.max(0, i - 1));
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      setIndex(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      setIndex(Math.max(rows.length - 1, 0));
     } else if (e.key === 'Enter') {
       e.preventDefault();
       commit(index);
@@ -252,54 +379,98 @@ export function CommandPalette() {
           inputRef={inputRef}
           onKeyDown={onKeyDown}
         />
-        <div className="scroll" style={{ padding: '0 8px 8px 8px', minHeight: 322, maxHeight: '46vh' }}>
-          {rows.map((row, i) => {
-            const on = i === index;
-            return (
-              <button
-                key={row.key}
-                title={row.key}
-                // Pointer movement, not entry: keyboard navigation scrolls rows
-                // under a still pointer and must not hand the highlight back.
-                onMouseMove={() => index !== i && setIndex(i)}
-                onClick={() => commit(i)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: space[2],
-                  width: '100%',
-                  height: 32,
-                  padding: '0 8px',
-                  borderRadius: radius.control,
-                  background: on ? color.surfaceActive : 'transparent',
-                }}
-              >
-                <span
+        <div
+          ref={listRef}
+          className="scroll"
+          style={{ position: 'relative', padding: '0 8px 8px 8px', maxHeight: '46vh' }}
+        >
+          <div
+            ref={highlightRef}
+            aria-hidden
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 8,
+              right: 8,
+              height: PALETTE_ROW,
+              borderRadius: radius.control,
+              background: color.surfaceActive,
+              opacity: 0,
+              pointerEvents: 'none',
+            }}
+          />
+          {rows.length === 0 ? (
+            <div
+              style={{
+                height: PALETTE_ROW * 2,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: fs.secondary,
+                color: color.textQuaternary,
+              }}
+            >
+              {isCommand ? '一致するコマンドがありません' : '一致するファイルがありません'}
+            </div>
+          ) : (
+            rows.map((row, i) => {
+              const on = i === sel;
+              return (
+                <button
+                  key={row.key}
+                  data-row={row.key}
+                  data-index={i}
+                  title={row.key}
+                  // Pointer movement, not entry: keyboard navigation scrolls
+                  // rows under a still pointer and must not hand the highlight
+                  // back. Browsers also send synthetic moves while the list
+                  // scrolls; same coordinates mean the pointer never moved.
+                  onMouseMove={(e) => {
+                    if (e.clientX === lastPointer.current.x && e.clientY === lastPointer.current.y) return;
+                    lastPointer.current = { x: e.clientX, y: e.clientY };
+                    cause.current = 'pointer';
+                    if (index !== i) setIndex(i);
+                  }}
+                  onClick={() => commit(i)}
                   style={{
-                    fontSize: fs.secondary,
-                    color: row.danger ? color.danger : on ? color.textPrimary : color.textSecondary,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    flex: 1,
-                    textAlign: 'left',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: space[2],
+                    width: '100%',
+                    height: PALETTE_ROW,
+                    padding: '0 8px',
+                    borderRadius: radius.control,
+                    background: 'transparent',
+                    position: 'relative',
                   }}
                 >
-                  {row.title}
-                </span>
-                {isCommand ? (
-                  <Keycaps shortcut={row.shortcut} on={on} />
-                ) : (
                   <span
-                    className="cl"
-                    style={{ fontSize: fs.caption, color: color.textQuaternary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}
+                    style={{
+                      fontSize: fs.secondary,
+                      color: row.danger ? color.danger : on ? color.textPrimary : color.textSecondary,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      flex: 1,
+                      textAlign: 'left',
+                    }}
                   >
-                    {row.sub}
+                    {row.title}
                   </span>
-                )}
-              </button>
-            );
-          })}
+                  {isCommand ? (
+                    <Keycaps shortcut={row.shortcut} on={on} />
+                  ) : (
+                    <span
+                      className="cl"
+                      style={{ fontSize: fs.caption, color: color.textQuaternary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}
+                    >
+                      {row.sub}
+                    </span>
+                  )}
+                </button>
+              );
+            })
+          )}
         </div>
         <div
           style={{

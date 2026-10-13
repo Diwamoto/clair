@@ -1207,6 +1207,14 @@ import Observation
     @State private var query = ""
     @FocusState private var paletteFocused: Bool
     @State private var selection = 0
+    /// The palette highlight's visual row, driven separately from `selection`
+    /// so each input — keys, pointer, a fresh query — gets its own motion
+    /// (arc's command palette: 70ms slide, spring, snap respectively).
+    @State private var paletteHighlight = 0
+    /// Measured height of the palette's list; the frame follows it on a
+    /// spring instead of snapping while filtering.
+    @State private var paletteContentHeight: CGFloat = 322
+    @State private var paletteMeasured = false
     // U05: sidebar mode + source-control view. GUI-local (no command); the stage buttons go through git.stage/unstage.
     @State private var sidebarMode = "folder"
     @AppStorage("clair.sidebarWidth") private var sidebarWidth = 242.0
@@ -1327,7 +1335,7 @@ import Observation
       .onChange(of: st.fileAssociations, initial: true) { _, v in EditorLanguageID.associations = v }
       .onChange(of: terminalStyle, initial: true) { _, v in ClairGhosttySurfaceView.style = v }
       .onChange(of: st.palette) {
-        query = ""; selection = 0
+        query = ""; selection = 0; paletteHighlight = 0; paletteMeasured = false
         if st.palette == .search { searchSelection = 0; runSearch() }
       }
       .onChange(of: st.debugNavigationGeneration) { sidebarMode = "ladybug" }
@@ -3231,11 +3239,16 @@ import Observation
 
     // MARK: palette (⌘K commands, ⌘P files)
 
-    private func items(_ p: WorkbenchState.Palette) -> [PaletteItem] {
+    private func items(_ p: WorkbenchState.Palette) -> [PaletteItem] { paletteItems(p, query: query) }
+
+    /// `items` with the query as a parameter, so the palette's glide rule can
+    /// compare the visible list against what a keystroke *would* show before
+    /// the state actually changes.
+    private func paletteItems(_ p: WorkbenchState.Palette, query q0: String) -> [PaletteItem] {
       switch p {
       case .symbols: return store.languageItems
       case .branches:
-        let q = query.trimmingCharacters(in: .whitespaces)
+        let q = q0.trimmingCharacters(in: .whitespaces)
         let rows = branches.filter { q.isEmpty || $0.lowercased().contains(q.lowercased()) }.map {
           // The checked-out branch just closes the palette (switching to it would be a no-op that can still fail on dirty buffers).
           $0 == branch ? PaletteItem(title: $0, hint: tr("現在"), id: "palette.close", input: [:])
@@ -3244,9 +3257,9 @@ import Observation
         guard !q.isEmpty, !branches.contains(q) else { return rows }
         return rows + [PaletteItem(title: tr("新しいブランチを作成: %@", q), hint: "", id: "git.branchCreate", input: ["name": .string(q)])]
       case .references:  // references, file symbols and problems: match the location or the name
-        let q = query.lowercased()
+        let q = q0.lowercased()
         return store.languageItems.filter { q.isEmpty || $0.hint.lowercased().contains(q) || $0.title.lowercased().contains(q) }
-      default: return store.registry.paletteItems(p, query: query, state: st)
+      default: return store.registry.paletteItems(p, query: q0, state: st)
       }
     }
 
@@ -3259,14 +3272,23 @@ import Observation
         VStack(spacing: 0) {
           HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").font(.system(size: 14)).foregroundStyle(C.textQuaternary)
-            TextField("", text: $query)
+            TextField("", text: Binding(get: { query }, set: { v in
+              // arc's GLIDE_ROWS rule: surviving rows close their gaps with a
+              // glide when every one lands within a viewport of its old place;
+              // a long jump snaps like a search-result list. Decided before the
+              // mutation, so the change carries the right transaction.
+              let glide = PaletteGlide.shouldGlide(previous: items(p).map(\.paletteKey), current: paletteItems(p, query: v).map(\.paletteKey))
+              withAnimation(reduceMotion ? nil : glide ? .spring(duration: 0.4, bounce: 0) : nil) { query = v }
+              // A fresh query snaps the highlight back to the top.
+              selection = 0
+              paletteHighlight = 0
+            }))
               .focused($paletteFocused).task(id: p) { await focusField { paletteFocused = true } }
               .textFieldStyle(.plain).font(.system(size: 13)).foregroundStyle(C.textPrimary)
               .onSubmit { run(list) }
-              .onKeyPress(.downArrow) { selection = min(selection + 1, max(list.count - 1, 0)); return .handled }
-              .onKeyPress(.upArrow) { selection = max(selection - 1, 0); return .handled }
+              .onKeyPress(.downArrow) { moveSelection(min(selection + 1, max(list.count - 1, 0))); return .handled }
+              .onKeyPress(.upArrow) { moveSelection(max(selection - 1, 0)); return .handled }
               .onKeyPress(.escape) { store.run("palette.close"); return .handled }
-              .onChange(of: query) { selection = 0 }
             Text(tr("%@ 件", list.count)).font(.system(size: 11)).foregroundStyle(C.textQuaternary)
           }
           // ⌘T: ask the language servers as the query changes (debounced; a newer query cancels this one).
@@ -3282,8 +3304,20 @@ import Observation
           .contentShape(Rectangle()).onTapGesture { paletteFocused = true }
           .padding(12)
           ScrollViewReader { proxy in ScrollView {
-            LazyVStack(spacing: 0) {
-              ForEach(Array(list.enumerated()), id: \.offset) { i, it in
+            ZStack(alignment: .topLeading) {
+              // One highlight follows the selection (arc's command palette):
+              // it springs behind the pointer, slides in 70ms behind the arrow
+              // keys, snaps to the top on a fresh query, and fades out when the
+              // list empties. Rows are a fixed 32px, so its place is arithmetic.
+              RoundedRectangle(cornerRadius: Radius.control)
+                .fill(C.surfaceActive)
+                .frame(height: 32)
+                .padding(.horizontal, 8)
+                .offset(y: CGFloat(min(paletteHighlight, max(list.count - 1, 0))) * 32)
+                .opacity(list.isEmpty ? 0 : 1)
+                .animation(reduceMotion ? nil : .easeOut(duration: list.isEmpty ? 0.1 : 0.08), value: list.isEmpty)
+              LazyVStack(spacing: 0) {
+                ForEach(Array(list.enumerated()), id: \.element.paletteKey) { i, it in
                 let on = i == selection
                 HStack(spacing: 8) {
                   if p == .files || p == .compare || p == .recent { FileIcon.forPath(it.title).image(size: 11, ink: C.textTertiary).frame(width: 14) }
@@ -3311,14 +3345,33 @@ import Observation
                   } }
                 }
                 .padding(.horizontal, 8).frame(height: 32)
-                .background(on ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
                 .contentShape(Rectangle())
-                .onHover { if $0 { selection = i } }
+                .onHover { over in
+                  guard over, i != selection else { return }
+                  selection = i
+                  withAnimation(reduceMotion ? nil : .spring(duration: 0.26, bounce: 0.12)) { paletteHighlight = i }
+                }
                 .onTapGesture { selection = i; run(list) }
-                .id(i)
+                }
+              }.padding(.horizontal, 8).padding(.bottom, 8)
+            }
+            .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { h in
+              // The frame follows the list height on arc's smooth spring, so
+              // filtering closes the gap instead of snapping. The first
+              // measurement just lands — animating it would fight the 90ms open.
+              if paletteMeasured { paletteContentHeight = h }
+              else {
+                paletteMeasured = true
+                var t = Transaction(); t.disablesAnimations = true
+                withTransaction(t) { paletteContentHeight = h }
               }
-            }.padding(.horizontal, 8).padding(.bottom, 8)
-          }.onChange(of: selection) { proxy.scrollTo(selection) } }.frame(minHeight: 322, maxHeight: 420)
+            }
+          }.onChange(of: selection) {
+            guard list.indices.contains(selection) else { return }
+            proxy.scrollTo(list[selection].paletteKey)
+          } }
+          .frame(height: min(max(paletteContentHeight, 40), 420))
+          .animation(reduceMotion ? nil : .spring(duration: 0.4, bounce: 0), value: min(max(paletteContentHeight, 40), 420))
           HStack(spacing: 8) {
             ForEach([(tr("コマンド"), WorkbenchState.Palette.commands), (tr("ファイルへ移動"), .files)], id: \.1) { label, mode in
               Button { store.run(mode == .commands ? "palette.commands" : "palette.files") } label: {
@@ -3337,6 +3390,13 @@ import Observation
         .overlay(RoundedRectangle(cornerRadius: Radius.overlay).stroke(L.strong))
         .transition(.scale(scale: 0.97).combined(with: .opacity))
       }
+    }
+
+    /// Keyboard moves slide the palette highlight to the row in 70ms (arc's
+    /// command palette); the pointer's spring lives in the row's `onHover`.
+    private func moveSelection(_ next: Int) {
+      selection = next
+      withAnimation(reduceMotion ? nil : .timingCurve(0.16, 1, 0.3, 1, duration: 0.07)) { paletteHighlight = next }
     }
 
     private func run(_ list: [PaletteItem]) {
