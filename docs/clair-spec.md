@@ -334,8 +334,11 @@ Explorer と同じ階層ツリー(対象ファイルだけ。フォルダは開�
 Claude Code / Codex / OpenCode)を選ぶと、対象ファイルの利用者の未解決コメントを
 `<root>/.clair/reviews/<日時>.json`
 (`review.threads` と同じ形。フォルダの `.gitignore` で変更として出ない)に保存し、
-その Project の root で agent を起動して「この JSON を読んで全コメントに対応して」
-と依頼する。送ったコメントは resolved になる。未保存の editor buffer を含む対象
+その Project の root で agent を対話モードで起動し、「この JSON を読んで全コメントに
+対応して」を最初のメッセージとして送る(batch 実行ではないので、対応後も agent は
+terminal に残り会話を続けられる。`agent.launch` の `opening` = profile の `open` 形式。
+最初のメッセージを渡す対話形式を持たない CLI はメニューに出さない)。送ったコメントは
+resolved になる。未保存の editor buffer を含む対象
 ではメニューを無効にし、ディスクと異なる内容を黙って渡さない。この操作は既存の
 agent launch と同じ Project / session / 承認境界を通る。
 

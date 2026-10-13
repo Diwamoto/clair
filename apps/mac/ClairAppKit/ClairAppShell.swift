@@ -2055,7 +2055,8 @@ import Observation
       guard !threads.isEmpty else { return }
       let file: String
       do { file = try AgentReviewRequest.write(threads, root: root) } catch { reviewError = error.localizedDescription; return }
-      let input: CommandInput = ["profile": .string(provider), "prompt": .string(AgentReviewRequest.prompt(file: file))]
+      // Interactive with the request as its first message: the agent stays open in its terminal afterwards.
+      let input: CommandInput = ["profile": .string(provider), "opening": .string(AgentReviewRequest.prompt(file: file))]
       // The labelled button is the user's approval for launching this external tool.
       switch store.run("agent.launch", input, confirmed: true) {
       case .success(let result):
@@ -2163,7 +2164,7 @@ import Observation
     /// Floating, bottom-right: saves the comments as JSON and hands them to the agent picked from its menu.
     private func sendButton(_ r: ReviewSession, count: Int) -> some View {
       Button {
-        menus.open(ClairMenuSpec(title: tr("送信先"), entries: AgentProfile.all.map { p in .item(p.title) { sendReview(r, provider: p.id) } }),
+        menus.open(ClairMenuSpec(title: tr("送信先"), entries: AgentProfile.all.filter { $0.open != nil }.map { p in .item(p.title) { sendReview(r, provider: p.id) } }),
           at: CGPoint(x: sendFrame.maxX, y: sendFrame.minY - 4))
       } label: {
         HStack(spacing: 6) {

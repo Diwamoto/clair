@@ -48,6 +48,21 @@ final class WorkbenchAgentLaunchTests: XCTestCase {
     XCTAssertTrue(s.launches.isEmpty)
   }
 
+  func testOpeningStartsTheInteractiveAgentWithItsFirstMessage() throws {
+    // Stays open (no batch `-p`, no AgentRun), and the message is one quoted argument.
+    XCTAssertEqual(AgentLaunch(profile: "claude", cwd: "/x", opening: "read `a.json`; it's done").command, #"claude 'read `a.json`; it'\''s done'"#)
+    XCTAssertEqual(AgentLaunch(profile: "opencode", cwd: "/x", opening: "go").command, "opencode --prompt 'go'")
+    XCTAssertNil(AgentLaunch(profile: "claude", cwd: "/x", opening: "go").run)
+    var (s, _) = try opened()
+    let a = try r.execute("agent.launch", ["profile": .string("codex"), "opening": .string("go")], confirmed: true, state: &s).get()
+    guard case .pane(let id) = a else { return XCTFail() }
+    XCTAssertEqual(s.launches[id]?.command, "codex 'go'")
+    // A CLI without an interactive first-message form, or both prompt and opening: refused before any pane.
+    XCTAssertEqual(r.execute("agent.launch", ["profile": .string("aider"), "opening": .string("go")], confirmed: true, state: &s).failure?.code, .preconditionFailed)
+    XCTAssertEqual(r.execute("agent.launch", ["profile": .string("claude"), "opening": .string("a"), "prompt": .string("b")], confirmed: true, state: &s).failure?.code, .preconditionFailed)
+    XCTAssertEqual(s.launches.count, 1)
+  }
+
   func testLaunchesAreNotPersisted() throws {
     var (s, _) = try opened()
     try r.execute("agent.launch", ["profile": .string("opencode")], confirmed: true, state: &s).get()

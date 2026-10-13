@@ -21,19 +21,23 @@ public struct AgentProfile: Sendable, Equatable {
   /// `batch` for a read-only review that may post its findings back to Clair (`clair review.*`, spec §6).
   /// nil: the plain `batch`, whose agent reports in the terminal only.
   public var reviewBatch: String? = nil
+  /// Interactive form that takes a first message as its last argument, submits it and stays open.
+  /// nil: the CLI has none, so it cannot be opened with a message.
+  public var open: String? = nil
 
   public static let all = [
     AgentProfile(
       id: "claude", title: "Claude Code", command: "claude", batch: "claude -p", resume: "claude --resume",
       // `-p` denies tools that would ask; allow exactly the Clair review commands (and only those).
-      reviewBatch: "claude --allowedTools 'Bash(clair review.comment:*)' 'Bash(clair review.suggest:*)' 'Bash(clair review.threads:*)' -p"),
-    AgentProfile(id: "codex", title: "Codex", command: "codex", batch: "codex exec", resume: "codex resume"),
-    AgentProfile(id: "opencode", title: "OpenCode", command: "opencode", batch: "opencode run", resume: "opencode --session"),
+      reviewBatch: "claude --allowedTools 'Bash(clair review.comment:*)' 'Bash(clair review.suggest:*)' 'Bash(clair review.threads:*)' -p",
+      open: "claude"),
+    AgentProfile(id: "codex", title: "Codex", command: "codex", batch: "codex exec", resume: "codex resume", open: "codex"),
+    AgentProfile(id: "opencode", title: "OpenCode", command: "opencode", batch: "opencode run", resume: "opencode --session", open: "opencode --prompt"),
     // agent registry: added alongside the original three so users can switch to them; behaviour
     // of claude/codex/opencode above is unchanged.
-    AgentProfile(id: "gemini", title: "Gemini CLI", command: "gemini", batch: "gemini -p"),
-    AgentProfile(id: "cursor-agent", title: "Cursor CLI", command: "cursor-agent", batch: "cursor-agent -p"),
-    AgentProfile(id: "copilot", title: "GitHub Copilot CLI", command: "copilot", batch: "copilot -p"),
+    AgentProfile(id: "gemini", title: "Gemini CLI", command: "gemini", batch: "gemini -p", open: "gemini -i"),
+    AgentProfile(id: "cursor-agent", title: "Cursor CLI", command: "cursor-agent", batch: "cursor-agent -p", open: "cursor-agent"),
+    AgentProfile(id: "copilot", title: "GitHub Copilot CLI", command: "copilot", batch: "copilot -p", open: "copilot -i"),
     AgentProfile(id: "aider", title: "Aider", command: "aider", batch: "aider --yes --message"),
   ]
 
@@ -55,7 +59,8 @@ public struct AgentLaunch: Sendable, Codable, Equatable {
   public var resume: String?
   /// ADR-0020: the fixed Claude Code session id of a Project's concierge.
   public var concierge: String?
-  /// The request typed before the concierge was running; handed to it as its first message.
+  /// First message of an interactive agent (the profile's `open` form); for a concierge, the request typed
+  /// before it was running. Unlike `prompt`, the agent stays open in its terminal afterwards.
   public var opening: String?
   /// A read-only review run: uses the profile's `reviewBatch` so it can post findings with `clair review.*`.
   public var review: Bool?
@@ -76,6 +81,7 @@ public struct AgentLaunch: Sendable, Codable, Equatable {
     guard let p = AgentProfile.named(profile) else { return "" }
     if let concierge, AgentProfile.isSessionID(concierge) { return Concierge.command(session: concierge, root: cwd, opening: opening) }
     if let resume, let prefix = p.resume, AgentProfile.isSessionID(resume) { return "\(prefix) \(resume)" }
+    if prompt == nil, let opening, let open = p.open { return "\(open) \(AgentRun.quote(opening))" }
     guard let prompt, let run else { return p.command }
     // `script` keeps a TTY for the agent while recording it, and exits with the agent's status.
     // Wrapped in /bin/sh so the user's login shell (zsh, fish, …) only sees one quoted argument.
