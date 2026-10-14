@@ -157,7 +157,9 @@ import ClairEditorCore
     func syncFrameSize() {
       let availableWidth = superview?.bounds.width ?? bounds.width
       let width = max(knownContentWidth, availableWidth)
-      let height = CGFloat(snapshot.lineCount) * lineHeight
+      // Scroll past end: the last line can scroll up to the top of the viewport.
+      let availableHeight = superview?.bounds.height ?? 0
+      let height = CGFloat(snapshot.lineCount) * lineHeight + max(0, availableHeight - lineHeight)
       let newSize = CGSize(width: width, height: height)
       guard newSize != frame.size else { return }
       frame.size = newSize

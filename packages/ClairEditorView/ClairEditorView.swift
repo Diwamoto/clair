@@ -325,7 +325,9 @@ import ClairEditorCore
       let clipWidth = enclosingScrollView?.contentView.bounds.width ?? bounds.width
       if softWrap, currentWrapColumns() != wrapColumns { recomputeWraps() }
       let width = softWrap ? clipWidth : max(knownContentWidth, clipWidth)
-      let height = CGFloat(rowMap.rowCount) * lineHeight
+      // Scroll past end: the last line can scroll up to the top of the viewport.
+      let clipHeight = enclosingScrollView?.contentView.bounds.height ?? 0
+      let height = CGFloat(rowMap.rowCount) * lineHeight + max(0, clipHeight - lineHeight)
       let newSize = NSSize(width: width, height: height)
       guard newSize != frame.size else { return }
       setFrameSize(newSize)
