@@ -6,6 +6,22 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-10-14
+
+### Added
+
+- "Open in Browser" in the Explorer's file context menu.
+
+### Changed
+
+- ⌘= and ⌘- change the terminal font size together with the editor's.
+- The review screen lists the reviewed files as a folding tree with comment counts and shows the selected file with the editor's font and syntax colours. "Send to" is a floating button at the bottom right, and only your own open comments are sent.
+- Click a line on the review screen to comment on it; a "+" button under the line reopens the comment field.
+
+### Fixed
+
+- Sending a review to an agent starts it interactively, so you can watch it work and it stays open afterwards, instead of a blank terminal that ended with "process exited".
+
 ## [0.15.0] - 2026-10-13
 
 ### Changed
@@ -372,7 +388,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.15.1...HEAD
+[0.15.1]: https://github.com/Diwamoto/clair/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/Diwamoto/clair/compare/v0.14.1...v0.15.0
 [0.14.1]: https://github.com/Diwamoto/clair/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/Diwamoto/clair/compare/v0.13.0...v0.14.0
