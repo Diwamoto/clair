@@ -755,6 +755,10 @@
       }
       view.onTopLineChange = { [buffers, path] in buffers.scrolled(path, to: $0) }
       scroll.documentView = view
+      // A rebuild (format on save, an external refresh) keeps the scroll position instead of jumping to the top.
+      if let top = buffers.topLine[path], top > 0 {
+        DispatchQueue.main.async { [weak view] in view?.scroll(toTopLine: top) }
+      }
       // E11: kick off this file's initial background highlight parse once,
       // when its `ClairEditorView` is first created.
       buffers.startHighlighting(path, manager: manager, view: view)

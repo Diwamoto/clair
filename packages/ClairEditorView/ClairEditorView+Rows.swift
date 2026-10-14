@@ -36,6 +36,13 @@ import ClairEditorCore
 
     func rowTop(_ line: Int) -> CGFloat { CGFloat(rowMap.row(of: line)) * lineHeight }
 
+    /// Scrolls so `line` (0-based) is the first visible line, without moving the caret — restores a rebuilt view.
+    public func scroll(toTopLine line: Int) {
+      guard let clip = enclosingScrollView?.contentView else { return }
+      clip.scroll(to: clip.constrainBoundsRect(NSRect(origin: NSPoint(x: clip.bounds.minX, y: rowTop(line)), size: clip.bounds.size)).origin)
+      enclosingScrollView?.reflectScrolledClipView(clip)
+    }
+
     /// Where the rows of `textLine` start (local UTF-16), `[0]` when unwrapped.
     ///
     /// ponytail: a wrapped line is still measured whole (like its `CTLine`), once
