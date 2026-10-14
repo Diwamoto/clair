@@ -1294,7 +1294,14 @@ func h04MapsMissingAndNonExecutableOpenCodeBinariesToTypedErrors() async throws 
     #expect(childGone)
 
     reapBarrier.release()
-    let exited = try await startTask.value
+    _ = try await startTask.value
+    // start returns .running when the waiter thread, not the start thread,
+    // observed the leader exit first; the exit lands asynchronously then.
+    var exited = try await runtime.session(sessionID: sessionID)
+    for _ in 0..<300 where exited.lifecycle != .exited {
+      try await Task.sleep(nanoseconds: 10_000_000)
+      exited = try await runtime.session(sessionID: sessionID)
+    }
     #expect(exited.lifecycle == .exited)
     #expect(exited.exit?.reason == .normal)
     #expect(exited.processID == nil)
@@ -1416,7 +1423,12 @@ func h04MapsMissingAndNonExecutableOpenCodeBinariesToTypedErrors() async throws 
     }
     #expect(childGone)
 
-    let failed = try await runtime.session(sessionID: sessionID)
+    // The descendant dies at the group kill, before the leader reap publishes.
+    var failed = try await runtime.session(sessionID: sessionID)
+    for _ in 0..<300 where failed.lifecycle != .failed {
+      try await Task.sleep(nanoseconds: 10_000_000)
+      failed = try await runtime.session(sessionID: sessionID)
+    }
     #expect(failed.lifecycle == .failed)
     #expect(failed.processID == nil)
   }

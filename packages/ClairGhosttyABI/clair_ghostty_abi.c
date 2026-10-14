@@ -329,11 +329,11 @@ bool clair_ghostty_surface_read_selection(
   }
   return ok;
 }
-#endif // CLAIR_GHOSTTY_VENDORED
 
 bool clair_ghostty_surface_binding_action(clair_ghostty_surface_t surface, const char *action, uintptr_t len) {
   return ghostty_surface_binding_action((ghostty_surface_t)surface, action, len);
 }
+#endif // CLAIR_GHOSTTY_VENDORED
 
 int clair_ghostty_abi_is_vendored(void) {
 #if defined(CLAIR_GHOSTTY_VENDORED)
