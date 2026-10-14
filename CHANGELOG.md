@@ -6,6 +6,16 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-14
+
+### Added
+
+- The editor scrolls past the end of the file, so the last line can reach the top of the view.
+
+### Fixed
+
+- Saving a file (including format on save) keeps the editor's scroll position instead of jumping to the first line.
+
 ## [0.15.1] - 2026-10-14
 
 ### Added
@@ -388,7 +398,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.15.1...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/Diwamoto/clair/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/Diwamoto/clair/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/Diwamoto/clair/compare/v0.14.1...v0.15.0
 [0.14.1]: https://github.com/Diwamoto/clair/compare/v0.14.0...v0.14.1
