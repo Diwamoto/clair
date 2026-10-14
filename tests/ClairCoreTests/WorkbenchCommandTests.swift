@@ -138,10 +138,12 @@ final class WorkbenchCommandTests: XCTestCase {
     XCTAssertEqual(r.commands.first { $0.id == "window.restart" }?.shortcut, "⌘R")
     _ = try r.execute("editor.zoomIn", state: &state).get()
     XCTAssertEqual(state.choices["editorFontSize"], "13")
+    XCTAssertEqual(state.choices["terminalFontSize"], "14")
     for _ in 0..<100 { _ = try r.execute("editor.zoomInAlt", state: &state).get() }
     XCTAssertEqual(state.choices["editorFontSize"], "100")
     for _ in 0..<200 { _ = try r.execute("editor.zoomOut", state: &state).get() }
     XCTAssertEqual(state.choices["editorFontSize"], "1")
+    XCTAssertEqual(state.choices["terminalFontSize"], "1")
     XCTAssertEqual(WorkbenchState.canonicalShortcut("⌘+"), "⌘+")
   }
 
