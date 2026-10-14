@@ -1059,47 +1059,25 @@ func h04MapsMissingAndNonExecutableOpenCodeBinariesToTypedErrors() async throws 
 
   @Test
   func h04ClosedStandardInputStillStartsKeeperAndReleasesAllOwnedResources() async throws {
-    let markerURL = FileManager.default.temporaryDirectory
-      .appendingPathComponent("clair-h04-closed-stdin-" + UUID().uuidString)
-    let scratchURL = FileManager.default.temporaryDirectory
-      .appendingPathComponent("clair-h04-closed-stdin-scratch-" + UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: markerURL) }
-    defer { try? FileManager.default.removeItem(at: scratchURL) }
-    let packageURL = URL(fileURLWithPath: #filePath)
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-    try FileManager.default.createDirectory(
-      at: scratchURL,
-      withIntermediateDirectories: true
-    )
-    let probe = Process()
-    probe.executableURL = URL(fileURLWithPath: "/bin/sh")
-    probe.arguments = [
-      "-c",
-      "exec 0<&-; exec /usr/bin/env swift test --package-path \"$1\" "
-        + "--scratch-path \"$2\" --filter h04ClosedStandardInputProbe --no-parallel",
-      "clair-h04-closed-stdin",
-      packageURL.path,
-      scratchURL.path,
-    ]
-    var environment = ProcessInfo.processInfo.environment
-    environment["CLAIR_H04_CLOSED_STDIN_PROBE"] = "1"
-    environment["CLAIR_H04_CLOSED_STDIN_MARKER"] = markerURL.path
-    probe.environment = environment
-    probe.standardOutput = FileHandle.standardOutput
-    probe.standardError = FileHandle.standardError
-    try probe.run()
-    probe.waitUntilExit()
-    #expect(probe.terminationStatus == 0)
-    #expect(FileManager.default.fileExists(atPath: markerURL.path))
+    // ponytail: closes this process's fd 0 instead of re-running a nested
+    // `swift test`, which rebuilt the whole package (150-240 s on CI) and left
+    // the runner too loaded for the next cleanup test. Safe because the
+    // integration lane runs one serialized suite per process; a parallel run
+    // of other suites could grab fd 0 in this window. Move to a dedicated
+    // helper executable if that lane ever goes parallel.
+    let savedStandardInput = dup(STDIN_FILENO)
+    try #require(savedStandardInput >= 0)
+    close(STDIN_FILENO)
+    defer {
+      dup2(savedStandardInput, STDIN_FILENO)
+      close(savedStandardInput)
+    }
+    try await h04StartAndStopWithClosedStandardInput()
+    // Whatever took fd 0's slot was released with the runtime.
+    #expect(fcntl(STDIN_FILENO, F_GETFD) == -1)
   }
 
-  @Test
-  func h04ClosedStandardInputProbe() async throws {
-    guard ProcessInfo.processInfo.environment["CLAIR_H04_CLOSED_STDIN_PROBE"] == "1" else {
-      return
-    }
+  private func h04StartAndStopWithClosedStandardInput() async throws {
     let fixture = try H04WorkspaceFixture()
     defer { fixture.remove() }
     let lifecycle = H04ProcessLifecycleInstrumentation()
@@ -1133,9 +1111,6 @@ func h04MapsMissingAndNonExecutableOpenCodeBinariesToTypedErrors() async throws 
     #expect(stopped.lifecycle == .stopped)
     #expect(stopped.processID == nil)
     #expect(lifecycle.snapshot().keeperReapCount == 1)
-    if let markerPath = ProcessInfo.processInfo.environment["CLAIR_H04_CLOSED_STDIN_MARKER"] {
-      try Data("passed".utf8).write(to: URL(fileURLWithPath: markerPath))
-    }
   }
 
   @Test
