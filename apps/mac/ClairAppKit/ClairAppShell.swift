@@ -2539,6 +2539,11 @@ import Observation
         .item(tr("Finder で表示"), disabled: full == nil) {
           full.map { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: $0)]) }
         },
+        // Images, HTML, PDF etc. go to the default browser rather than each type's default app.
+        .item(tr("ブラウザで開く"), disabled: full == nil) {
+          guard let full, let browser = NSWorkspace.shared.urlForApplication(toOpen: URL(string: "https:")!) else { return }
+          NSWorkspace.shared.open([URL(fileURLWithPath: full)], withApplicationAt: browser, configuration: NSWorkspace.OpenConfiguration())
+        },
       ]
     }
     // MARK: V13 Debug (Workbench Debug screen, with VS Code style run configuration)
