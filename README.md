@@ -47,8 +47,9 @@ curl -fsSL https://raw.githubusercontent.com/Diwamoto/clair/main/scripts/install
 
 - rope ベースのバッファで 10 MiB 級のファイルも一瞬で開いて編集
 - 日本語 IME、絵文字、マルチカーソル、矩形選択、折りたたみ、折り返し
-- tree-sitter による syntax highlight(Go、TypeScript/JavaScript、Python、Rust、Swift、Ruby、PHP、Java、Terraform、Shell、JSON、Markdown)
-- 言語サーバー連携: 診断、補完、⌘+click / F12 で定義へ移動、参照検索、シンボル検索、⌃- で戻る
+- tree-sitter による syntax highlight(Go、TypeScript/JavaScript、Python、Rust、Swift、Ruby、PHP、Java、C、Terraform、Shell、JSON、YAML、TOML、HTML、CSS、Markdown)
+- 言語サーバー連携: 診断、補完、hover、引数ヒント、⌘+click / F12 で定義へ移動、参照検索、リネーム(F2)、Quick Fix(⌘.)、フォーマット(保存時も)、シンボル検索(⌘⇧O)、問題一覧(⌘⇧M)、⌃- で戻る
+- ⌘F で検索・置換(大文字小文字 / 正規表現、⌥⌘F で置換)、⌘= / ⌘- でフォントサイズ変更
 - Markdown のライブプレビュー(⌘⇧V、Mermaid 図も描画)、HTML のプレビュー、CSV/TSV の表編集
 - 行ごとの git blame、ファイルのローカル履歴
 
@@ -59,14 +60,19 @@ curl -fsSL https://raw.githubusercontent.com/Diwamoto/clair/main/scripts/install
 - [libghostty](https://github.com/ghostty-org/ghostty) による GPU 描画のターミナル
 - ペインを自由に分割・移動・最大化。editor / terminal / preview / commit graph を同じ画面に
 - shell は常駐 daemon が持つので、ウィンドウを閉じてもアップデートで再起動しても、作業中のセッションはそのまま
+- ⌘F でスクロールバックを検索、⌘+click でファイルパスをエディタで、URL をブラウザで開く
 
 ### 🤖 AI エージェントをターミナルのまま
 
 - Claude Code / Codex / OpenCode / Gemini CLI / Cursor CLI / GitHub Copilot CLI / Aider を Project root や専用 worktree で並べて起動
 - Project ごとのコンシェルジュ: チャットで頼むと、子エージェントを起動して作業を振り分け
-- エージェントの完了・通知要求を拾って macOS 通知、Project ごとのバッジ
-- 「このファイルをレビュー」「この Project をレビュー」をワンクリックで依頼
-- 過去のチャットを日付と Project ごとに一覧し、どの Project からでも再開。使用状況は日別に集計
+- エージェントの「作業中 / 質問待ち / 完了」を hook から拾って一覧に表示し、macOS 通知と Project ごとのバッジで知らせる
+- Claude Code は Clair を IDE として接続: 選択範囲・開いているファイル・診断を読み、変更提案は diff タブで承認 / 却下。Clair を Ctrl+G のエディタにも設定可能
+- 「Fix with Agent」、選択範囲やターミナルの出力をエージェントに送る
+- ファイル / フォルダ / Project のレビュー画面で任意の行にコメントし、まとめてエージェントに渡して対応させる
+- 「Investigate Last Crash」でクラッシュレポートとログを集めてエージェントに調査を依頼
+- 過去のチャットを日付と Project ごとに一覧し、エディタのタブで開いてどの Project からでも再開。再起動後もエージェントのペインは直前の会話を再開
+- 使用状況ダッシュボード: 日別・時間帯別の利用、エージェント / モデル別の内訳、推定コスト
 
 ### 🌿 Git と worktree
 
@@ -74,9 +80,11 @@ curl -fsSL https://raw.githubusercontent.com/Diwamoto/clair/main/scripts/install
 
 - 変更一覧、stage / unstage、commit、pull / push、ブランチ切り替え
 - 行単位のレビューコメントと、エージェントからの修正提案の適用 / 却下
+- diff から変更ブロック単位で stage / unstage
+- コンフリクトしたファイルはブロックごとに ours / theirs / 両方を選んで解決、エージェントにも任せられる
 - 横並び / インラインの diff、任意の 2 ファイルの比較
 - commit graph で branch と merge を辿り、commit からそのまま diff へ
-- 管理 worktree を作って別ブランチで並行作業し、merge commit で取り込み
+- 管理 worktree を作って別ブランチで並行作業し、merge commit で取り込み。衝突したら base を worktree に merge して解決
 
 ### 🔌 すべての操作をコマンドに
 
@@ -88,6 +96,7 @@ curl -fsSL https://raw.githubusercontent.com/Diwamoto/clair/main/scripts/install
 
 - UI は英語と日本語を切り替え可能
 - ステータスバーで Clair の CPU・メモリと、各エージェントの利用枠を確認
+- main の最新を試せる別アプリ Clair RC
 
 ### 📱 iPhone からエージェントを見守る(実験的)
 

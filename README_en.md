@@ -46,8 +46,9 @@ After that, updates show up inside the app and apply with one click (signature-v
 
 - A rope-based buffer that opens and edits 10 MiB files instantly
 - Japanese IME, emoji, multi-cursor, block selection, folding, soft wrap
-- tree-sitter syntax highlighting (Go, TypeScript/JavaScript, Python, Rust, Swift, Ruby, PHP, Java, Terraform, Shell, JSON, Markdown)
-- Language servers: diagnostics, completion, ⌘-click / F12 go to definition, references, symbols, ⌃- to go back
+- tree-sitter syntax highlighting (Go, TypeScript/JavaScript, Python, Rust, Swift, Ruby, PHP, Java, C, Terraform, Shell, JSON, YAML, TOML, HTML, CSS, Markdown)
+- Language servers: diagnostics, completion, hover, parameter hints, ⌘-click / F12 go to definition, references, rename (F2), quick fixes (⌘.), formatting (also on save), symbols (⌘⇧O), problems (⌘⇧M), ⌃- to go back
+- ⌘F find & replace (case and regex toggles, ⌥⌘F to replace), ⌘= / ⌘- to change the font size
 - Live Markdown preview (⌘⇧V, with Mermaid diagrams), HTML preview, and a table editor for CSV/TSV
 - Inline git blame and local file history
 
@@ -58,14 +59,19 @@ After that, updates show up inside the app and apply with one click (signature-v
 - GPU-rendered terminal powered by [libghostty](https://github.com/ghostty-org/ghostty)
 - Split, move, and maximize panes freely; put editor, terminal, preview, and commit graph side by side
 - Shells live in a background daemon, so sessions survive closing the window and restarting for an update
+- ⌘F searches the scrollback; ⌘-click opens file paths in the editor and URLs in the browser
 
 ### 🤖 AI agents, still terminals
 
 - Launch Claude Code / Codex / OpenCode / Gemini CLI / Cursor CLI / GitHub Copilot CLI / Aider side by side in the project root or a dedicated worktree
 - A per-project concierge: ask it in a chat and it hands the work to child agents
-- Agent completions and notification requests become macOS notifications and per-project badges
-- One-click "review this file" / "review this project" requests
-- Browse past chats by date and project and resume them from any project; see daily usage
+- Agents report working / waiting on a question / done through their hooks, shown in the agent list, as macOS notifications, and as per-project badges
+- Claude Code connects to Clair as its IDE: it reads your selection, open files, and diagnostics, and its proposed edits open as a diff you accept or reject. Clair can also be its Ctrl+G editor
+- "Fix with Agent", and send a selection or terminal output to the agent
+- A review screen for a file, folder, or project: comment on any line, then hand all comments to an agent to address
+- "Investigate Last Crash" gathers crash reports and logs and hands them to an agent
+- Browse past chats by date and project, open them as editor tabs, and resume them from any project; agent panes reopen their last conversation after a restart
+- A usage dashboard: activity by day and hour, breakdowns by agent and model, and estimated cost
 
 ### 🌿 Git and worktrees
 
@@ -73,9 +79,11 @@ After that, updates show up inside the app and apply with one click (signature-v
 
 - Changes list, stage / unstage, commit, pull / push, branch switching
 - Line-level review comments, and apply or reject an agent's suggested fixes
+- Stage or unstage a single change block from the diff
+- Resolve conflicts block by block (ours / theirs / both), or hand them to an agent
 - Side-by-side or inline diffs, and compare any two files
 - A commit graph to follow branches and merges, straight from a commit to its diff
-- Create managed worktrees for parallel branches and adopt them with a merge commit
+- Create managed worktrees for parallel branches and adopt them with a merge commit; on conflict, merge the base into the worktree and resolve it there
 
 ### 🔌 Every action is a command
 
@@ -87,6 +95,7 @@ After that, updates show up inside the app and apply with one click (signature-v
 
 - English or Japanese UI
 - The status bar shows Clair's CPU and memory and each agent's usage limits
+- Clair RC, a separate app built from the latest main
 
 ### 📱 Watch agents from your iPhone (experimental)
 
