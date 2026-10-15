@@ -103,6 +103,11 @@ final class EditorLineRenderer {
       let color = colorOverrides[span.kind] ?? span.kind.defaultColor
       attributed.addAttribute(.foregroundColor, value: color, range: NSRange(local))
     }
+    for range in suspiciousCharacterRanges(in: text) {
+      attributed.addAttributes(
+        [.underlineStyle: NSUnderlineStyle.thick.rawValue, NSAttributedString.Key(kCTUnderlineColorAttributeName as String): PlatformColor.systemRed.cgColor],
+        range: NSRange(range, in: text))
+    }
     return CTLineCreateWithAttributedString(attributed)
   }
 
@@ -145,4 +150,44 @@ final class EditorLineRenderer {
         ]))
     return (textLine, CTLineCreateWithAttributedString(attributed))
   }
+}
+
+/// Characters a font draws like ASCII but that are not (homoglyph phishing,
+/// Trojan Source): invisible / bidi-control scalars anywhere, and Cyrillic,
+/// Greek, Armenian or fullwidth letters inside a word that also has ASCII
+/// letters (`аma` with Cyrillic а). No font can tell them apart — they are
+/// drawn identically on purpose — so the editor underlines them instead.
+// ponytail: an all-Cyrillic lookalike word (`аре`) is not flagged, so Russian
+// or Greek prose stays clean; add Unicode's confusables table if that bites.
+func suspiciousCharacterRanges(in text: String) -> [Range<String.Index>] {
+  func invisible(_ v: UInt32) -> Bool {
+    v == 0xAD || (0x200B...0x200F).contains(v) || (0x202A...0x202E).contains(v)
+      || (0x2060...0x2064).contains(v) || (0x2066...0x2069).contains(v) || v == 0xFEFF
+  }
+  func lookalike(_ v: UInt32) -> Bool {
+    (0x370...0x58F).contains(v) || (0xFF21...0xFF3A).contains(v) || (0xFF41...0xFF5A).contains(v)
+  }
+  var result: [Range<String.Index>] = []
+  var word: [Range<String.Index>] = []
+  var hasASCII = false
+  func flush() {
+    if hasASCII { result += word }
+    word = []
+    hasASCII = false
+  }
+  var i = text.startIndex
+  while i < text.endIndex {
+    let next = text.unicodeScalars.index(after: i)
+    let s = text.unicodeScalars[i]
+    if invisible(s.value) {
+      result.append(i..<next)
+    } else if s.isASCII ? (s.properties.isAlphabetic || ("0"..."9").contains(s)) : s.properties.isAlphabetic {
+      if s.isASCII { hasASCII = true } else if lookalike(s.value) { word.append(i..<next) }
+    } else {
+      flush()
+    }
+    i = next
+  }
+  flush()
+  return result
 }
