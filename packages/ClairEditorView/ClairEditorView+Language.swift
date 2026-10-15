@@ -22,7 +22,7 @@ import ClairEditorCore
     public override func mouseMoved(with event: NSEvent) {
       super.mouseMoved(with: event)
       let point = convert(event.locationInWindow, from: nil)
-      let message = diagnosticMessage(at: point)
+      let message = diagnosticMessage(at: point) ?? suspiciousCharacterName(at: point)
       if toolTip != message { toolTip = message }
       updateDefinitionHover(at: point, flags: event.modifierFlags)
       hoveredBreakpointLine = breakpointSlot(at: point)
@@ -85,6 +85,24 @@ import ClairEditorCore
           && !$0.message.isEmpty
       }
       return hits.isEmpty ? nil : hits.map(\.message).joined(separator: "\n")
+    }
+
+    /// `U+0430 CYRILLIC SMALL LETTER A` for an underlined character under the pointer.
+    func suspiciousCharacterName(at point: NSPoint) -> String? {
+      guard let offset = hitTestOffset(at: point), let line = try? snapshot.position(at: offset, columnUnit: UTF8Unit.self).line,
+        let range = try? snapshot.line(at: line).contentRange, let text = try? snapshot.text(in: range)
+      else { return nil }
+      let column = offset.value - range.lowerBound.value
+      let u = text.utf8
+      // The hit offset is a caret slot: try the character after it, then the one before.
+      for c in [column, column - 1] where c >= 0 && c < u.count {
+        let index = u.index(u.startIndex, offsetBy: c)
+        if let r = suspiciousCharacterRanges(in: text, ideographicSpace: showsWhitespace).first(where: { $0.contains(index) }) {
+          let s = text.unicodeScalars[r.lowerBound]
+          return String(format: "U+%04X ", s.value) + (s.properties.name ?? s.properties.nameAlias ?? "<control>")
+        }
+      }
+      return nil
     }
 
     /// The primary caret's rect in this view's (flipped) coordinates.

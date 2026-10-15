@@ -47,6 +47,8 @@ final class EditorLineRenderer {
   let font: PlatformFont
   /// Colour of text no highlight span covers.
   var baseColor: PlatformColor = .editorLabel
+  /// Also underline U+3000 (`suspiciousCharacterRanges`).
+  var flagsIdeographicSpace = false
 
   init(font: PlatformFont) {
     self.font = font
@@ -103,7 +105,7 @@ final class EditorLineRenderer {
       let color = colorOverrides[span.kind] ?? span.kind.defaultColor
       attributed.addAttribute(.foregroundColor, value: color, range: NSRange(local))
     }
-    for range in suspiciousCharacterRanges(in: text) {
+    for range in suspiciousCharacterRanges(in: text, ideographicSpace: flagsIdeographicSpace) {
       attributed.addAttributes(
         [.underlineStyle: NSUnderlineStyle.thick.rawValue, NSAttributedString.Key(kCTUnderlineColorAttributeName as String): PlatformColor.systemRed.cgColor],
         range: NSRange(range, in: text))
@@ -152,21 +154,45 @@ final class EditorLineRenderer {
   }
 }
 
-/// Characters a font draws like ASCII but that are not (homoglyph phishing,
-/// Trojan Source): invisible / bidi-control scalars anywhere, and Cyrillic,
-/// Greek, Armenian or fullwidth letters inside a word that also has ASCII
-/// letters (`аma` with Cyrillic а). No font can tell them apart — they are
-/// drawn identically on purpose — so the editor underlines them instead.
+/// Characters a font draws like ASCII, or does not draw at all, but that are
+/// something else — homoglyph phishing (`аma` with Cyrillic а), Trojan Source
+/// bidi controls, prompts hidden in tag characters or variation selectors.
+/// No font can tell them apart (the glyphs are identical on purpose), so the
+/// editor underlines them instead:
+/// - always: control characters (C0 but tab, DEL, C1), zero-width and bidi
+///   controls, odd spaces (NBSP, en/em spaces, U+2028/9), tag characters, and
+///   lookalike punctuation (Greek `;`, `−`, `∕`, `⁄`);
+/// - variation selectors and combining marks right after an ASCII letter or
+///   in a run (data smuggling, zalgo), but not after the emoji/kana they serve;
+/// - Cyrillic, Greek, Armenian, Cherokee, small-cap, letterlike, math, Roman
+///   numeral and fullwidth letters/digits inside a word that also has ASCII
+///   letters or digits;
+/// - the ideographic space U+3000 when `ideographicSpace` (Japanese prose uses
+///   it, so it follows the editor's 空白文字を表示 setting).
 // ponytail: an all-Cyrillic lookalike word (`аре`) is not flagged, so Russian
 // or Greek prose stays clean; add Unicode's confusables table if that bites.
-func suspiciousCharacterRanges(in text: String) -> [Range<String.Index>] {
-  func invisible(_ v: UInt32) -> Bool {
-    v == 0xAD || (0x200B...0x200F).contains(v) || (0x202A...0x202E).contains(v)
-      || (0x2060...0x2064).contains(v) || (0x2066...0x2069).contains(v) || v == 0xFEFF
+public func suspiciousCharacterRanges(in text: String, ideographicSpace: Bool = false) -> [Range<String.Index>] {
+  func always(_ v: UInt32) -> Bool {
+    switch v {
+    case 0x00...0x08, 0x0B...0x1F, 0x7F...0x9F, 0xA0, 0xAD, 0x37E, 0x1680, 0x180E, 0x2000...0x200F,
+      0x2028...0x202F, 0x2044, 0x205F...0x2064, 0x2066...0x206F, 0x2212, 0x2215, 0xFEFF, 0xFFF9...0xFFFB,
+      0xE0000...0xE007F:
+      return true
+    case 0x3000: return ideographicSpace
+    default: return false
+    }
   }
   func lookalike(_ v: UInt32) -> Bool {
-    (0x370...0x58F).contains(v) || (0xFF21...0xFF3A).contains(v) || (0xFF41...0xFF5A).contains(v)
+    switch v {
+    case 0x370...0x58F, 0x13A0...0x13FF, 0x1D00...0x1D2B, 0x2100...0x214F, 0x2160...0x2188,
+      0xFF10...0xFF19, 0xFF21...0xFF3A, 0xFF41...0xFF5A, 0x1D400...0x1D7FF:
+      return true
+    default: return false
+    }
   }
+  func selector(_ v: UInt32) -> Bool { (0xFE00...0xFE0F).contains(v) || (0xE0100...0xE01EF).contains(v) }
+  func asciiWord(_ s: Unicode.Scalar) -> Bool { s.isASCII && (s.properties.isAlphabetic || ("0"..."9").contains(s)) }
+
   var result: [Range<String.Index>] = []
   var word: [Range<String.Index>] = []
   var hasASCII = false
@@ -175,18 +201,32 @@ func suspiciousCharacterRanges(in text: String) -> [Range<String.Index>] {
     word = []
     hasASCII = false
   }
+  var previous: Unicode.Scalar?
+  var previousFlaggedMark = false
   var i = text.startIndex
   while i < text.endIndex {
     let next = text.unicodeScalars.index(after: i)
     let s = text.unicodeScalars[i]
-    if invisible(s.value) {
+    let v = s.value
+    let mark = selector(v) || s.properties.generalCategory == .nonspacingMark
+    defer { previous = s; i = next }
+    if always(v) {
       result.append(i..<next)
-    } else if s.isASCII ? (s.properties.isAlphabetic || ("0"..."9").contains(s)) : s.properties.isAlphabetic {
-      if s.isASCII { hasASCII = true } else if lookalike(s.value) { word.append(i..<next) }
+      flush()
+    } else if mark {
+      // A mark on an ASCII letter, or a second mark in a row, is not how real text is written.
+      let flagged = previous.map { asciiWord($0) || (selector($0.value) && selector(v)) || previousFlaggedMark } ?? true
+      if flagged { result.append(i..<next) }
+      previousFlaggedMark = flagged
+      continue
+    } else if asciiWord(s) {
+      hasASCII = true
+    } else if !s.isASCII, s.properties.isAlphabetic || (0xFF10...0xFF19).contains(v) {
+      if lookalike(v) { word.append(i..<next) }
     } else {
       flush()
     }
-    i = next
+    previousFlaggedMark = false
   }
   flush()
   return result

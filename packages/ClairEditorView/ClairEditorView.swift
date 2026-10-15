@@ -91,6 +91,10 @@ import ClairEditorCore
     }
     /// Off keeps the gutter's breakpoint and fold columns and drops only the numbers.
     public var showsLineNumbers = true { didSet { needsDisplay = true } }
+    /// 空白文字を表示: also underline the ideographic space (`suspiciousCharacterRanges`).
+    public var showsWhitespace = false {
+      didSet { renderer.flagsIdeographicSpace = showsWhitespace; renderer.invalidateAll(); needsDisplay = true }
+    }
     public var lineNumberColor: NSColor = .secondaryLabelColor { didSet { needsDisplay = true } }
     /// Line number of the caret's line is drawn in this colour instead.
     public var currentLineNumberColor: NSColor = .labelColor { didSet { needsDisplay = true } }

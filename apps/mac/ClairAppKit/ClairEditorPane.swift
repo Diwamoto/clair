@@ -16,6 +16,7 @@
     var family = ""
     var size: CGFloat = 12
     var lineNumbers = true
+    var showWhitespace = false
 
     /// An uninstalled family falls back to the system monospaced font.
     var font: NSFont {
@@ -681,7 +682,7 @@
       }
       view.caretColor = resolved { NSColor(C.textPrimary).blended(withFraction: 0.9, of: NSColor(C.debugBlue)) ?? NSColor(C.textPrimary) }
       view.selectionColor = resolved { NSColor(C.debugBlue).withAlphaComponent(0.3) }
-      view.gutterWidth = style.gutterWidth; view.showsLineNumbers = style.lineNumbers
+      view.gutterWidth = style.gutterWidth; view.showsLineNumbers = style.lineNumbers; view.showsWhitespace = style.showWhitespace
       view.lineNumberColor = NSColor(C.lineNumber); view.currentLineNumberColor = NSColor(C.textTertiary)
       view.blameAnnotation = blame; view.blameColor = NSColor(C.textQuaternary)
       view.debugStoppedLine = debugLine; view.debugBreakpoints = debugBreakpoints

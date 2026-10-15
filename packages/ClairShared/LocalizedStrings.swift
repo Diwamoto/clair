@@ -54,7 +54,7 @@ extension LocalizedStrings {
     "⌘S のタイミングでフォーマッタを実行します。": "Runs the formatter on ⌘S.",
     "タブ幅": "Tab width",
     "空白文字を表示": "Show whitespace",
-    "タブ・行末の空白を薄く可視化します。": "Faintly shows tabs and trailing spaces.",
+    "全角スペースに下線を引きます。": "Underlines full-width spaces.",
     "行の折り返し": "Word wrap",
     "長い行をエディタの幅に合わせて折り返します。⌥Z でも切り替えられます。": "Wraps long lines to the editor width. ⌥Z also toggles it.",
     "拡張子の言語": "Languages by extension",

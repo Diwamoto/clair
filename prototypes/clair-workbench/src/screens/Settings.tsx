@@ -417,7 +417,7 @@ export function SettingsMain() {
                 />
                 <Row
                   title="空白文字を表示"
-                  note="タブ・行末の空白を薄く可視化します。"
+                  note="全角スペースに下線を引きます。"
                   control={<Switch on={wb.toggles.showWhitespace} onClick={() => wb.setToggle('showWhitespace')} />}
                 />
                 <Row

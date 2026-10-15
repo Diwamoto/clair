@@ -2994,7 +2994,7 @@ import Observation
             SettingsCard(title: tr("編集")) {
               switchRow(tr("保存時に整形"), "formatOnSave", note: tr("⌘S のタイミングでフォーマッタを実行します。"))
               choiceRow(tr("タブ幅"), "tabWidth")
-              switchRow(tr("空白文字を表示"), "showWhitespace", note: tr("タブ・行末の空白を薄く可視化します。"))
+              switchRow(tr("空白文字を表示"), "showWhitespace", note: tr("全角スペースに下線を引きます。"))
               switchRow(tr("行の折り返し"), "softWrap", note: tr("長い行をエディタの幅に合わせて折り返します。⌥Z でも切り替えられます。"))
               // Full-width block: the rows sit under the title instead of squeezing into the trailing control slot.
               VStack(alignment: .leading, spacing: 8) {
@@ -3175,7 +3175,7 @@ import Observation
 
     private var editorStyle: EditorStyle {
       EditorStyle(family: st.fonts["editor"] ?? "", size: CGFloat(Double(st.choices["editorFontSize"] ?? "") ?? 12),
-        lineNumbers: st.toggles["lineNumbers"] != false)
+        lineNumbers: st.toggles["lineNumbers"] != false, showWhitespace: st.toggles["showWhitespace"] == true)
     }
 
     private var terminalStyle: ClairGhosttySurfaceView.Style {

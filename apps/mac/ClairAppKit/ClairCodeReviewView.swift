@@ -3,6 +3,7 @@
   import ClairDesignSystem
   import ClairEditorCore
   import ClairEditorLanguage
+  import ClairEditorView
   import ClairReview
   import SwiftUI
 
@@ -30,7 +31,7 @@
     /// Each line coloured by the editor's tree-sitter highlighter (same token colours as the editor). Off the main actor.
     nonisolated static func highlight(_ lines: [String], path: String) -> [AttributedString] {
       let lines = Array(lines.prefix(maxLines))
-      var out = lines.map { AttributedString($0) }
+      var out = lines.map(flagged)
       guard let id = EditorLanguageID.detect(path: path), let h = try? SyntaxHighlighter(languageID: id),
         let snapshot = try? TextBuffer(lines.joined(separator: "\n")).snapshot, let spans = try? h.reset(to: snapshot)
       else { return out }
@@ -50,6 +51,16 @@
           }
           i += 1
         }
+      }
+      return out
+    }
+
+    /// `text` with the editor's suspicious-character underline (homoglyphs, invisible and control characters).
+    nonisolated static func flagged(_ text: String) -> AttributedString {
+      var out = AttributedString(text)
+      for r in suspiciousCharacterRanges(in: text) {
+        guard let range = Range(r, in: out) else { continue }
+        out[range].underlineStyle = Text.LineStyle(pattern: .solid, color: .red)
       }
       return out
     }
