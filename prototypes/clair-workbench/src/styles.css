@@ -401,3 +401,10 @@ textarea:focus-visible,
     opacity: 0;
   }
 }
+
+/* Concierge: a dot orbiting the agent's logo while it works, and a shimmer on its status line. */
+.orbit { animation: orbit 1.1s linear infinite; transform-origin: center; }
+@keyframes orbit { to { transform: rotate(360deg); } }
+.shimmer { animation: shimmer 1.6s ease-in-out infinite; }
+@keyframes shimmer { 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .orbit, .shimmer { animation: none; } }

@@ -1,22 +1,27 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { IconArrowRight, IconChevron, IconClaude, IconMarkdown, IconTerminalPrompt } from '../icons';
+import { IconArrowRight, IconChevron, IconClaude, IconCodex, IconMarkdown } from '../icons';
 import { color, fs, line, radius, space, wash } from '../tokens';
 
 // ADR-0020: the concierge is a raw PTY agent; this panel draws its official
 // transcript as chat. Children are links to their own terminal panes — their
 // output is never relayed here, which is what keeps the manager cheap.
+// One concierge for all of Clair, not per Project, so switching or closing a
+// Project never kills it; it starts the first time the user opens this view.
 
-type Child = { id: string; name: string; pane: number; state: '実行中' | '入力待ち' | '終了 0' | '終了 1' };
+type Provider = 'claude' | 'codex';
+const PROVIDER_ICON = { claude: IconClaude, codex: IconCodex };
+
+type Child = { id: string; name: string; project: string; provider: Provider; pane: number; state: '実行中' | '入力待ち' | '終了 0' | '終了 1' };
 type Msg =
   | { id: string; from: 'user' | 'agent'; text: string }
   | { id: string; from: 'tool'; name: string; detail: string }
   | { id: string; from: 'children'; ids: string[] };
 
 const CHILDREN: Child[] = [
-  { id: 'c1', name: 'fix-login', pane: 3, state: '実行中' },
-  { id: 'c2', name: 'review-api', pane: 4, state: '入力待ち' },
-  { id: 'c3', name: 'docs-typo', pane: 5, state: '終了 0' },
+  { id: 'c1', name: 'fix-login', project: 'clair', provider: 'claude', pane: 3, state: '実行中' },
+  { id: 'c2', name: 'review-api', project: 'clair', provider: 'codex', pane: 4, state: '入力待ち' },
+  { id: 'c3', name: 'docs-typo', project: 'clair-docs', provider: 'claude', pane: 5, state: '終了 0' },
 ];
 
 const SEED: Msg[] = [
@@ -53,17 +58,34 @@ function ChildChip({ child, focused, onFocus }: { child: Child; focused: boolean
         fontSize: fs.body,
       }}
     >
-      <span style={{ width: 6, height: 6, borderRadius: radius.pill, background: STATE_COLOR[child.state], flexShrink: 0 }} />
-      <IconTerminalPrompt size={12} color={color.textTertiary} />
-      <span style={{ flex: 1, minWidth: 0, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{child.name}</span>
+      <AgentMark provider={child.provider} size={20} busy={child.state === '実行中'} tint={STATE_COLOR[child.state]} />
+      <span style={{ flex: 1, minWidth: 0, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {child.name}
+        <span style={{ marginLeft: 6, color: color.textQuaternary }}>{child.project}</span>
+      </span>
       <span className="tnum" style={{ color: color.textQuaternary }}>{child.state}</span>
       <IconArrowRight size={11} color={color.textQuaternary} />
     </button>
   );
 }
 
+/** The agent's logo in a circle; while busy a dot orbits it (the native side: a rotating arc). */
+function AgentMark({ provider, size, busy, tint = color.textSecondary }: { provider: Provider; size: number; busy?: boolean; tint?: string }) {
+  const Icon = PROVIDER_ICON[provider];
+  return (
+    <span style={{ position: 'relative', width: size, height: size, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, border: `1px solid ${line.hairline}` }}>
+      <Icon size={Math.round(size * 0.5)} color={tint} />
+      {busy ? (
+        <svg className="orbit" width={size} height={size} viewBox="0 0 20 20" style={{ position: 'absolute', inset: -1 }}>
+          <circle cx="10" cy="10" r="9.5" fill="none" stroke={tint} strokeWidth="1.2" strokeLinecap="round" strokeDasharray="12 48" />
+        </svg>
+      ) : null}
+    </span>
+  );
+}
+
 // ponytail: module-level state shared by panel and main; a store slice if the mock grows more concierge state.
-let shared = { running: true, focused: null as string | null };
+let shared = { phase: 'off' as 'off' | 'booting' | 'ready', focused: null as string | null };
 const listeners = new Set<() => void>();
 function useShared() {
   const [, bump] = useState(0);
@@ -79,34 +101,39 @@ function useShared() {
   return [shared, set] as const;
 }
 
+/** Opening the view is what starts the concierge; it then lives until Clair quits. */
+function useLazyStart() {
+  const [state, set] = useShared();
+  useEffect(() => {
+    if (shared.phase !== 'off') return;
+    set({ phase: 'booting' });
+    setTimeout(() => set({ phase: 'ready' }), 1400);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return [state, set] as const;
+}
+
 /** Sidebar: the concierge itself, its tasks, and its instructions. */
 export function ConciergePanel() {
-  const [{ running, focused }, set] = useShared();
+  const [{ phase, focused }, set] = useLazyStart();
+  const running = phase === 'ready';
   const [tasksOpen, setTasksOpen] = useState(true);
-  const setRunning = (v: boolean) => set({ running: v });
   const setFocused = (v: string) => set({ focused: v });
   const active = CHILDREN.filter((c) => !c.state.startsWith('終了')).length;
 
   return (
     <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' }}>
       {/* header: the concierge itself — provider, state, and its raw terminal */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: space[2], height: 40, padding: '0 12px', borderBottom: `1px solid ${line.hairline}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: space[2], height: 40, padding: '0 12px', borderBottom: `1px solid ${line.hairline}`, whiteSpace: 'nowrap' }}>
         <IconClaude size={14} color={color.textSecondary} />
         <span style={{ color: color.textPrimary, fontWeight: 600 }}>コンシェルジュ</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: color.textQuaternary, fontSize: fs.body }}>
           <span style={{ width: 6, height: 6, borderRadius: radius.pill, background: running ? color.success : color.textQuaternary }} />
-          {running ? 'Claude Code · 実行中' : '未起動'}
+          {running ? 'Clair 全体' : '起動中…'}
         </span>
         <span style={{ flex: 1 }} />
-        {running ? (
-          <button className="btn-secondary" title="コンシェルジュのターミナルを開く" style={{ height: 24, padding: '0 8px', borderRadius: radius.control, fontSize: fs.body }}>
-            ターミナル
-          </button>
-        ) : (
-          <button className="btn-primary" onClick={() => setRunning(true)} style={{ height: 24, padding: '0 8px', borderRadius: radius.control, fontSize: fs.body }}>
-            起動
-          </button>
-        )}
+        <button className="btn-secondary" disabled={!running} title="コンシェルジュのターミナルを開く" style={{ height: 24, padding: '0 8px', borderRadius: radius.control, fontSize: fs.body }}>
+          ターミナル
+        </button>
       </div>
 
       {/* tasks: children launched by the concierge, collapsible */}
@@ -133,7 +160,7 @@ export function ConciergePanel() {
         style={{ display: 'flex', alignItems: 'center', gap: space[2], height: 30, padding: '0 12px', borderTop: `1px solid ${line.hairline}`, color: color.textTertiary, fontSize: fs.body }}
       >
         <IconMarkdown size={12} />
-        .clair/concierge.md を編集
+        ~/.clair/concierge.md を編集
       </button>
     </div>
   );
@@ -141,8 +168,9 @@ export function ConciergePanel() {
 
 /** Main area: the concierge's transcript as a full-size chat panel. */
 export function ConciergeMain() {
-  const [{ running, focused }, set] = useShared();
+  const [{ phase, focused }, set] = useLazyStart();
   const [messages, setMessages] = useState<Msg[]>(SEED);
+  const [thinking, setThinking] = useState(false);
   const [draft, setDraft] = useState('');
   const [openTool, setOpenTool] = useState<string | null>(null);
   const setFocused = (v: string) => set({ focused: v });
@@ -151,15 +179,20 @@ export function ConciergeMain() {
   useEffect(() => {
     const el = feedRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length]);
+  }, [messages.length, thinking]);
 
   // Sending while the concierge is down starts it with this as its first request.
   const send = () => {
     const text = draft.trim();
     if (!text) return;
-    if (!running) set({ running: true });
     setMessages((m) => [...m, { id: `u${m.length}`, from: 'user', text }]);
     setDraft('');
+    // ponytail: canned reply; the native side shows this until the transcript gets the next turn.
+    setThinking(true);
+    setTimeout(() => {
+      setThinking(false);
+      setMessages((m) => [...m, { id: `a${m.length}`, from: 'agent', text: '了解です。必要なら Project ごとに分けて agent を起動します。' }]);
+    }, 1800);
   };
 
   return (
@@ -167,7 +200,9 @@ export function ConciergeMain() {
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', width: '100%', maxWidth: 760, margin: '0 auto' }}>
       {/* chat: the concierge's transcript */}
       <div ref={feedRef} className="scroll" style={{ flex: 1, minHeight: 0, padding: '26px 16px 8px' }}>
-        {(
+        {phase !== 'ready' ? (
+          <Waiting label="コンシェルジュを起動しています…" />
+        ) : (
           messages.map((m) => (
             <div key={m.id} className="msg" style={{ marginBottom: space[3] }}>
               {m.from === 'tool' ? (
@@ -190,6 +225,11 @@ export function ConciergeMain() {
                     return <ChildChip key={id} child={c} focused={focused === id} onFocus={() => setFocused(id)} />;
                   })}
                 </div>
+              ) : m.from === 'agent' ? (
+                <div style={{ display: 'flex', gap: space[2], alignItems: 'flex-start' }}>
+                  <AgentMark provider="claude" size={22} />
+                  <div className="prose" style={{ color: color.textSecondary, fontSize: fs.title, lineHeight: 1.55, paddingTop: 1 }}>{m.text}</div>
+                </div>
               ) : (
                 <div
                   className="prose"
@@ -211,6 +251,12 @@ export function ConciergeMain() {
             </div>
           ))
         )}
+        {thinking ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: space[2], color: color.textTertiary, fontSize: fs.body }}>
+            <AgentMark provider="claude" size={22} busy />
+            <span className="shimmer">考えています…</span>
+          </div>
+        ) : null}
       </div>
 
       {/* composer: text goes to the concierge's PTY */}
@@ -218,6 +264,7 @@ export function ConciergeMain() {
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: space[2], padding: '6px 6px 6px 12px', borderRadius: radius.overlay, border: `1px solid ${line.stronger}`, background: color.canvas }}>
           <textarea
             value={draft}
+            disabled={phase !== 'ready'}
                         onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -242,6 +289,16 @@ export function ConciergeMain() {
       </div>
 
       </div>
+    </div>
+  );
+}
+
+/** Booting: the agent's logo in the middle with a dot orbiting it. */
+function Waiting({ label }: { label: string }) {
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: space[3], color: color.textTertiary, fontSize: fs.body }}>
+      <AgentMark provider="claude" size={56} busy />
+      <span className="shimmer">{label}</span>
     </div>
   );
 }
