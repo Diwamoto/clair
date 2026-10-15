@@ -886,9 +886,10 @@ import Observation
       let old = m.buffer.snapshot
       let text = old.string()
       guard let formatted = DocumentFormatter.format(path, text), formatted != text else { return }
-      guard (try? m.apply([TextEdit(range: old.fullRange, replacement: formatted)], label: tr("ドキュメントの整形"))) != nil else { return }
-      buffers.refresh(path)
-      edited(path)
+      // Only the changed lines, through the live view: rebuilding the surface lost the scroll position.
+      let change = DocumentFormatter.changedLines(from: text, to: formatted)
+      let range = TextUTF8Range(UTF8Offset(change.range.lowerBound), UTF8Offset(change.range.upperBound))
+      commit([TextEdit(range: range, replacement: change.replacement)], to: path, manager: m, label: tr("ドキュメントの整形"))
     }
 
     /// Workspace commands must never synchronously encode and replace the persistence file on the

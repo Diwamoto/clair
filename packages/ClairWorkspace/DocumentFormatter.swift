@@ -24,6 +24,24 @@ public enum DocumentFormatter {
     guard supports(path) else { return nil }
     return JSONFormatter.format(text)
   }
+
+  /// The UTF-8 byte range of `old` to replace, and its replacement, that turns `old` into `new` — whole lines, with the
+  /// unchanged leading and trailing lines left out, so applying it leaves the caret and scroll of untouched lines alone.
+  public static func changedLines(from old: String, to new: String) -> (range: Range<Int>, replacement: String) {
+    let a = old.utf8.split(separator: UInt8(ascii: "\n"), omittingEmptySubsequences: false)
+    let b = new.utf8.split(separator: UInt8(ascii: "\n"), omittingEmptySubsequences: false)
+    var head = 0
+    while head < min(a.count, b.count) - 1, a[head].elementsEqual(b[head]) { head += 1 }
+    var tail = 0
+    while tail < min(a.count, b.count) - head - 1, a[a.count - 1 - tail].elementsEqual(b[b.count - 1 - tail]) { tail += 1 }
+    let lineBytes = { (l: [Substring.UTF8View]) in l.reduce(0) { $0 + $1.count + 1 } }
+    let start = lineBytes(Array(a[..<head]))
+    let end = old.utf8.count - lineBytes(Array(a.suffix(tail)))
+    let bStart = lineBytes(Array(b[..<head]))
+    let bEnd = new.utf8.count - lineBytes(Array(b.suffix(tail)))
+    let bytes = Array(new.utf8)[bStart..<bEnd]
+    return (start..<end, String(decoding: bytes, as: UTF8.self))
+  }
 }
 
 /// A minimal recursive-descent JSON pretty-printer. It re-indents structure only: object/array

@@ -63,4 +63,18 @@ final class DocumentFormatterTests: XCTestCase {
     XCTAssertTrue(DocumentFormatter.mayFormat("a/b.swift"))
     XCTAssertFalse(DocumentFormatter.mayFormat("a/b.md"))
   }
+
+  func testChangedLinesKeepsUnchangedLinesOutOfTheEdit() {
+    let old = "a\nb\nc\nd"
+    let new = "a\nB\nx\nd"
+    let (range, replacement) = DocumentFormatter.changedLines(from: old, to: new)
+    XCTAssertEqual(range, 2..<5)
+    XCTAssertEqual(replacement, "B\nx")
+    var bytes = Array(old.utf8)
+    bytes.replaceSubrange(range, with: Array(replacement.utf8))
+    XCTAssertEqual(String(decoding: bytes, as: UTF8.self), new)
+    let (all, rep) = DocumentFormatter.changedLines(from: "{\"é\":1}", to: "{\n  \"é\": 1\n}\n")
+    XCTAssertEqual(all, 0..<"{\"é\":1}".utf8.count)
+    XCTAssertEqual(rep, "{\n  \"é\": 1\n}\n")
+  }
 }
