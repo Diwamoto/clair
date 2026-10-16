@@ -6,6 +6,12 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-10-16
+
+### Added
+
+- Clicking a line number in the editor selects that whole line (with the lines a fold on it hides); dragging selects whole lines, and ⌘-click adds to the selection.
+
 ## [0.17.0] - 2026-10-16
 
 ### Added
@@ -413,7 +419,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.17.1...HEAD
+[0.17.1]: https://github.com/Diwamoto/clair/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/Diwamoto/clair/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/Diwamoto/clair/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/Diwamoto/clair/compare/v0.15.0...v0.15.1
