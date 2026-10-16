@@ -98,6 +98,17 @@ final class WorkbenchCommandTests: XCTestCase {
     XCTAssertEqual(r.commands.filter { $0.shortcut == "⌘⇧N" }.count, 1)
   }
 
+  func testNewFileHasCmdNAndNeedsAProject() throws {
+    let d = try XCTUnwrap(r.commands.first { $0.id == "file.new" })
+    XCTAssertEqual(d.shortcut, "⌘N")
+    XCTAssertFalse(d.aiAvailable)
+    XCTAssertEqual(r.commands.filter { $0.shortcut == "⌘N" }.count, 1)
+    var s = WorkbenchState()
+    XCTAssertEqual(r.execute("file.new", [:], state: &s).failure?.code, .preconditionFailed)
+    s.openProject(WorkbenchProject(name: "p", path: "/tmp/p"), scanFiles: false)
+    XCTAssertNil(r.execute("file.new", [:], state: &s).failure)
+  }
+
   func testProjectSearchIsACommandWithTheAdvertisedShortcut() throws {
     var state = WorkbenchState()
     XCTAssertEqual(r.commands.first { $0.id == "palette.search" }?.shortcut, "⌘⇧F")

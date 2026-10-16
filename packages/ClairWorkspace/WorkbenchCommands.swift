@@ -863,6 +863,11 @@ extension CommandRegistry {
     },
     // ⌘⇧N: the GUI shows the folder picker and answers with `project.open` (ClairWorkbenchStore.run); nothing to change here.
     cmd("project.choose", "フォルダを選んでプロジェクトを開く", .read, ai: false, shortcut: "⌘⇧N") { _, _ in .ok },
+    // ⌘N: the GUI asks for a name and creates the file next to the active one (else at the Project root); nothing to change here.
+    cmd("file.new", "新しいファイル", .read, ai: false, shortcut: "⌘N",
+        preflight: { s, _ throws(CommandError) in
+          try require(s.projects.contains { $0.name == s.project }, "no project"); return .read
+        }) { _, _ in .ok },
     // MCP may navigate only within a Project already open in Clair. The user's CLI keeps its wider file-open behavior.
     cmd("file.open", "パスからファイルを開く", .additive,
         params: [CommandParam("path", .string), CommandParam("line", .int, required: false), CommandParam("column", .int, required: false)],

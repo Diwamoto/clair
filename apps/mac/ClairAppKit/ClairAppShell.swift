@@ -110,6 +110,8 @@ import Observation
     private var sleepAssertion: IOPMAssertionID = 0
     private var persistenceTask: Task<Void, Never>?
     public private(set) var windowGeneration = 0
+    /// Bumped by `file.new` (⌘N); the shell answers with the explorer's name prompt.
+    public private(set) var newFileRequests = 0
 
     /// Map manually started CLI processes back to the terminal panes Clair already owns.
     func refreshDetectedAgents() async {
@@ -403,6 +405,7 @@ import Observation
         if id == "editor.fileSymbols" { showFileSymbols() }
         if id == "editor.problems" { showProblems() }
         if id == "project.choose" { chooseProject() }
+        if id == "file.new" { newFileRequests += 1 }
         if id == "agent.mention" { mentionSelectionToClaude() }
         if id == "agent.ask" { askAgentAboutSelection() }
         if id == "terminal.askAgent" { askAgentAboutTerminalSelection() }
@@ -1137,7 +1140,7 @@ import Observation
 
     public var body: some Commands {
       CommandGroup(replacing: .appSettings) { items(.settings) }
-      CommandGroup(after: .newItem) { items(.file) }
+      CommandGroup(replacing: .newItem) { items(.file) }  // drops SwiftUI's New Window (⌘N); ⌘N is file.new
       CommandGroup(after: .textEditing) { items(.edit) }
       CommandGroup(after: .toolbar) { items(.view) }
       CommandMenu(tr("Pane")) {
@@ -1167,7 +1170,7 @@ import Observation
 
     /// Menu-bar titles follow macOS English menus; the palette keeps the registry's titles.
     static let titles: [String: String] = [
-      "settings.open": "Settings…", "file.save": "Save", "tab.reopenClosed": "Reopen Closed Tab",
+      "settings.open": "Settings…", "file.new": "New File…", "file.save": "Save", "tab.reopenClosed": "Reopen Closed Tab",
       "project.choose": "Open Project…", "pane.close": "Close Tab or Pane", "palette.recent": "Open Recent…", "palette.compare": "Compare With…",
       "window.restart": "Restart Window", "editor.zoomIn": "Zoom In", "editor.zoomInAlt": "Zoom In", "editor.zoomOut": "Zoom Out", "app.restart": "Restart App", "app.investigateCrash": "Investigate Last Crash",
       "palette.find": "Find", "editor.replace": "Replace", "palette.search": "Find in Project", "editor.format": "Format Document",
@@ -1372,6 +1375,11 @@ import Observation
         if st.palette == .search { searchSelection = 0; runSearch() }
       }
       .onChange(of: st.debugNavigationGeneration) { sidebarMode = "ladybug" }
+      // ⌘N: beside the active file; the Project root for none or an ad-hoc `../` tab.
+      .onChange(of: store.newFileRequests) {
+        let folder = st.active.map { ($0 as NSString).deletingLastPathComponent } ?? ""
+        createItem(in: folder.hasPrefix("..") ? "" : folder, folder: false)
+      }
       // A file opened while the concierge chat covers the panes would land hidden behind it.
       .onChange(of: st.active) { if sidebarMode == "concierge" { leaveConcierge() } }
       .onChange(of: store.debugSession?.frames.first) { _, frame in
