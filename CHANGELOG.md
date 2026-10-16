@@ -6,6 +6,21 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-16
+
+### Added
+
+- ⌘N (File ▸ New File…) asks for a name and creates a new file next to the active one, or at the Project root, and opens it.
+- The editor and the diff and review views underline characters that look identical to others or are invisible — control characters, zero-width and bidi characters, look-alike spaces and symbols, and Cyrillic, Greek or full-width letters mixed into ASCII words. In the editor, hovering one shows its code point and name.
+
+### Removed
+
+- File ▸ New Window and its ⌘N shortcut.
+
+### Fixed
+
+- Format on save with the built-in formatter no longer moves the caret to the end of the file or jumps the scroll position.
+
 ## [0.16.0] - 2026-10-14
 
 ### Added
@@ -398,7 +413,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/Diwamoto/clair/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/Diwamoto/clair/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/Diwamoto/clair/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/Diwamoto/clair/compare/v0.14.1...v0.15.0
