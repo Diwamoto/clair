@@ -265,6 +265,9 @@ CoreText で描画する。
 - macOS は `NSTextInputClient`、iOS は `UITextInput` を実装し、日本語 IME、
   marked text、確定、delete を正しく扱う
 - copy/paste、drag/drop、undo、accessibility、system text cursor の契約を守る
+- 行番号の列をクリックするとその行を改行ごと(折りたたみ中なら隠れた行まで)
+  選択し、ドラッグで行単位に広げる。⌘ クリックは既存の選択に足す
+  (2026-10-16 オーナー依頼)
 
 macOS の `NSTextInputClient` は行ローカルの UTF-16 空間で答える(文書全体の
 変換を IME 往復ごとに行わないため)。iOS の `UITextPosition` は文書全体の
