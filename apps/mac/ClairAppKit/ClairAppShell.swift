@@ -1247,6 +1247,8 @@ import Observation
     // U05: sidebar mode + source-control view. GUI-local (no command); the stage buttons go through git.stage/unstage.
     @State private var sidebarMode = "folder"
     @AppStorage("clair.sidebarWidth") private var sidebarWidth = 242.0
+    /// Width when the current drag began, so a drag that snaps the sidebar shut reopens (⌘B) at it.
+    @State private var sidebarDragFrom: Double?
     @State private var debugMode = "debug"
     @State private var debugPID = ""
     struct AssociationDraft: Identifiable, Equatable { let id = UUID(); var ext: String; var lang: String }
@@ -1734,9 +1736,17 @@ import Observation
       .frame(width: sidebarWidth)
       .font(Typography.font(Typography.sidebar))
       .background(C.chrome)
-      // total 1 turns SplitHandle's ratio into a width in points.
+      .clipped()
+      // total 1 turns SplitHandle's ratio into a width in points. Dragged under 20pt it closes like ⌘B.
       .overlay(alignment: .trailing) {
-        SplitHandle(horizontal: true, ratio: sidebarWidth, total: 1) { sidebarWidth = min(max($0, 160), 600) }
+        SplitHandle(horizontal: true, ratio: sidebarWidth, total: 1, onRatio: { w in
+          guard !st.sidebarHidden else { return }
+          if sidebarDragFrom == nil { sidebarDragFrom = sidebarWidth }
+          if w < 20 {
+            sidebarWidth = sidebarDragFrom ?? sidebarWidth; sidebarDragFrom = nil
+            store.run("sidebar.toggle")
+          } else { sidebarWidth = min(w, 600) }
+        }, onEnd: { sidebarDragFrom = nil })
           .frame(width: 6).offset(x: 3)
       }
     }
@@ -3917,6 +3927,7 @@ import Observation
     let ratio: Double
     let total: CGFloat
     let onRatio: (Double) -> Void
+    var onEnd: () -> Void = {}
 
     final class Handle: NSView {
       var parent: SplitHandle!
@@ -3931,7 +3942,7 @@ import Observation
         let delta = parent.horizontal ? p.x - start.point.x : start.point.y - p.y  // window y grows upward
         parent.onRatio(start.ratio + Double(delta / parent.total))
       }
-      override func mouseUp(with event: NSEvent) { start = nil }
+      override func mouseUp(with event: NSEvent) { start = nil; parent.onEnd() }
     }
 
     func makeNSView(context: Context) -> Handle { let v = Handle(); v.parent = self; return v }
