@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { commands, files } from '../data';
-import { IconClaude, IconMarkdown, IconSearch } from '../icons';
+import { IconChevron, IconClaude, IconFolder, IconMarkdown, IconSearch, IconTreeView } from '../icons';
 import { animate, shouldGlide, SMOOTH, SNAPPY, tween, useReducedMotion } from '../spring';
 import { useWorkbench } from '../store';
 import { color, fs, line, mono, radius, space, wash } from '../tokens';
@@ -104,12 +104,14 @@ function QueryInput({
   count,
   inputRef,
   onKeyDown,
+  trailing,
 }: {
   value: string;
   onChange: (v: string) => void;
   count: string;
   inputRef: React.RefObject<HTMLInputElement | null>;
   onKeyDown: (e: React.KeyboardEvent) => void;
+  trailing?: React.ReactNode;
 }) {
   return (
     <div style={{ padding: '8px 12px 8px 12px' }}>
@@ -145,6 +147,7 @@ function QueryInput({
           }}
         />
         <span style={{ fontSize: fs.caption, color: color.textQuaternary }}>{count}</span>
+        {trailing}
       </div>
     </div>
   );
@@ -535,10 +538,63 @@ export function CommandPalette() {
 
 type Hit = { path: string; name: string; kind: string; lineNo: number; text: string; at: number };
 
+// Explorer order: in every directory, folders before files, each by name.
+function treeOrder(a: string, b: string) {
+  const x = a.split('/');
+  const y = b.split('/');
+  for (let i = 0; i < Math.min(x.length, y.length); i++) {
+    if (x[i] === y[i]) continue;
+    const xf = i === x.length - 1;
+    const yf = i === y.length - 1;
+    if (xf !== yf) return xf ? 1 : -1;
+    return x[i].toLowerCase().localeCompare(y[i].toLowerCase());
+  }
+  return x.length - y.length;
+}
+
+type TreeRow =
+  | { kind: 'folder' | 'file'; id: string; name: string; depth: number; count: number }
+  | { kind: 'hit'; index: number; depth: number };
+
+/* Folder → file → hit rows for hits already in tree order; rows under a folded id are left out. */
+function treeRows(hits: Hit[], folded: Set<string>): TreeRow[] {
+  const counts = new Map<string, number>();
+  hits.forEach((h) => {
+    const p = h.path.split('/');
+    p.forEach((_, d) => {
+      const id = p.slice(0, d + 1).join('/');
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    });
+  });
+  const out: TreeRow[] = [];
+  const emitted = new Set<string>();
+  let last = '';
+  let hidden = false;
+  hits.forEach((h, index) => {
+    const p = h.path.split('/');
+    if (h.path !== last) {
+      last = h.path;
+      hidden = false;
+      p.forEach((name, d) => {
+        const id = p.slice(0, d + 1).join('/');
+        if (!hidden && !emitted.has(id)) {
+          emitted.add(id);
+          out.push({ kind: d === p.length - 1 ? 'file' : 'folder', id, name, depth: d, count: counts.get(id) ?? 0 });
+        }
+        hidden = hidden || folded.has(id);
+      });
+    }
+    if (!hidden) out.push({ kind: 'hit', index, depth: p.length });
+  });
+  return out;
+}
+
 export function SearchOverlay() {
   const wb = useWorkbench();
   const [query, setQuery] = useState('Workspace');
   const [index, setIndex] = useState(0);
+  const [tree, setTree] = useState(false);
+  const [folded, setFolded] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
 
   const hits = useMemo(() => {
@@ -552,12 +608,14 @@ export function SearchOverlay() {
         if (at >= 0) out.push({ path: file.path, name: file.name, kind: file.kind, lineNo: i + 1, text, at });
       });
     }
-    return out.slice(0, 40);
-  }, [query, wb.contents]);
+    const shown = out.slice(0, 40);
+    // Tree mode orders hits as the tree draws them, so the flat index still follows the screen.
+    return tree ? [...shown].sort((a, b) => (a.path === b.path ? 0 : treeOrder(a.path, b.path))) : shown;
+  }, [query, wb.contents, tree]);
 
   const fileCount = new Set(hits.map((h) => h.path)).size;
 
-  useEffect(() => setIndex(0), [query]);
+  useEffect(() => setIndex(0), [query, tree]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, Hit[]>();
@@ -569,13 +627,25 @@ export function SearchOverlay() {
     return [...map.entries()];
   }, [hits]);
 
+  const rows = useMemo(() => (tree ? treeRows(hits, folded) : []), [tree, hits, folded]);
+  // ↑↓ walk the hits on screen: all of them as a list, the unfolded ones as a tree.
+  const order = tree ? rows.flatMap((r) => (r.kind === 'hit' ? [r.index] : [])) : hits.map((_, i) => i);
+
+  const step = (d: number) =>
+    setIndex((i) => {
+      if (!order.length) return i;
+      const at = order.indexOf(i);
+      const from = at < 0 ? (d > 0 ? -1 : order.length) : at;
+      return order[Math.min(order.length - 1, Math.max(0, from + d))];
+    });
+
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setIndex((i) => Math.min(hits.length - 1, i + 1));
+      step(1);
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setIndex((i) => Math.max(0, i - 1));
+      step(-1);
     } else if (e.key === 'Enter') {
       e.preventDefault();
       const hit = hits[index];
@@ -583,7 +653,61 @@ export function SearchOverlay() {
     }
   };
 
-  let flat = -1;
+  const toggleFold = (id: string) =>
+    setFolded((s) => {
+      const next = new Set(s);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+
+  const fileIcon = (kind: string) =>
+    kind === 'md' ? <IconMarkdown size={12} color={color.textTertiary} /> : <IconClaude size={12} color={color.textTertiary} />;
+
+  const hitRow = (hit: Hit, i: number, indent: number) => {
+    const on = i === index;
+    return (
+      <button
+        key={`${hit.path}:${hit.lineNo}`}
+        onMouseEnter={() => setIndex(i)}
+        onClick={() => wb.openFile(hit.path)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          width: '100%',
+          height: 32,
+          padding: `0 8px 0 ${indent}px`,
+          marginBottom: 2,
+          borderRadius: radius.control,
+          background: on ? color.surfaceActive : 'transparent',
+          boxShadow: on ? `inset 0 0 0 1px ${line.ring}` : 'none',
+        }}
+      >
+        <span
+          className="cl"
+          style={{
+            fontSize: fs.secondary,
+            color: on ? color.textPrimary : color.textTertiary,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+          }}
+        >
+          {hit.lineNo}
+          {'  '}
+          {hit.text.slice(0, hit.at).trimStart()}
+          <b
+            style={{
+              color: on ? color.textPrimary : color.textSecondary,
+              background: on ? 'rgba(241,242,246,0.22)' : 'rgba(241,242,246,0.14)',
+              borderRadius: radius.control,
+            }}
+          >
+            {hit.text.slice(hit.at, hit.at + query.length)}
+          </b>
+          {hit.text.slice(hit.at + query.length)}
+        </span>
+      </button>
+    );
+  };
 
   return (
     <Scrim onClose={() => wb.setOverlay(null)}>
@@ -600,86 +724,97 @@ export function SearchOverlay() {
           count={`${hits.length}件 · ${fileCount}ファイル`}
           inputRef={inputRef}
           onKeyDown={onKeyDown}
+          trailing={
+            <button
+              className="hoverable"
+              title="ツリー表示"
+              aria-label="ツリー表示"
+              aria-pressed={tree}
+              onClick={() => {
+                setTree((t) => !t);
+                inputRef.current?.focus();
+              }}
+              style={{
+                width: 30,
+                height: 30,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: radius.control,
+                background: tree ? color.surfaceActive : 'transparent',
+                border: `1px solid ${tree ? line.ring : line.hairline}`,
+              }}
+            >
+              <IconTreeView size={14} color={tree ? color.textPrimary : color.textQuaternary} />
+            </button>
+          }
         />
         <div className="scroll" style={{ padding: '0 8px 8px 8px', maxHeight: 400, minHeight: 120 }}>
-          {grouped.map(([path, list], gi) => {
-            const file = files.find((f) => f.path === path)!;
-            const dir = path.slice(0, path.lastIndexOf('/'));
-            return (
-              <div key={path}>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: space[2],
-                    height: 26,
-                    padding: '0 8px',
-                    marginTop: gi ? 6 : 0,
-                    color: color.textTertiary,
-                    fontWeight: 600,
-                    fontSize: fs.caption,
-                  }}
-                >
-                  {file.kind === 'md' ? (
-                    <IconMarkdown size={12} color={color.textTertiary} />
-                  ) : (
-                    <IconClaude size={12} color={color.textTertiary} />
-                  )}
-                  {file.name}
-                  <span className="cl" style={{ marginLeft: 'auto', color: color.textQuaternary, fontWeight: 400 }}>
-                    {dir}
-                  </span>
-                </div>
-                {list.map((hit) => {
-                  flat += 1;
-                  const on = flat === index;
-                  const mine = flat;
-                  return (
-                    <button
-                      key={`${hit.path}:${hit.lineNo}`}
-                      onMouseEnter={() => setIndex(mine)}
-                      onClick={() => wb.openFile(hit.path)}
+          {tree
+            ? rows.map((r) => {
+                if (r.kind === 'hit') return hitRow(hits[r.index], r.index, 30 + r.depth * 12);
+                const open = !folded.has(r.id);
+                const hit = r.kind === 'file' ? hits.find((h) => h.path === r.id) : undefined;
+                return (
+                  <button
+                    key={r.id}
+                    className="hoverable"
+                    onClick={() => toggleFold(r.id)}
+                    aria-expanded={open}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: space[2],
+                      width: '100%',
+                      height: 26,
+                      padding: `0 8px 0 ${8 + r.depth * 12}px`,
+                      borderRadius: radius.control,
+                      color: color.textTertiary,
+                      fontWeight: 600,
+                      fontSize: fs.caption,
+                    }}
+                  >
+                    <IconChevron
+                      size={10}
+                      color={color.textTertiary}
+                      style={{ transform: open ? 'rotate(90deg)' : undefined }}
+                    />
+                    {hit ? fileIcon(hit.kind) : <IconFolder size={12} color={color.textTertiary} />}
+                    {r.name}
+                    <span className="tnum" style={{ marginLeft: 'auto', color: color.textQuaternary, fontWeight: 400 }}>
+                      {r.count}
+                    </span>
+                  </button>
+                );
+              })
+            : grouped.map(([path, list], gi) => {
+                const file = files.find((f) => f.path === path)!;
+                const dir = path.slice(0, path.lastIndexOf('/'));
+                return (
+                  <div key={path}>
+                    <div
                       style={{
                         display: 'flex',
                         alignItems: 'center',
-                        width: '100%',
-                        height: 32,
-                        padding: '0 8px 0 30px',
-                        marginBottom: 2,
-                        borderRadius: radius.control,
-                        background: on ? color.surfaceActive : 'transparent',
-                        boxShadow: on ? `inset 0 0 0 1px ${line.ring}` : 'none',
+                        gap: space[2],
+                        height: 26,
+                        padding: '0 8px',
+                        marginTop: gi ? 6 : 0,
+                        color: color.textTertiary,
+                        fontWeight: 600,
+                        fontSize: fs.caption,
                       }}
                     >
-                      <span
-                        className="cl"
-                        style={{
-                          fontSize: fs.secondary,
-                          color: on ? color.textPrimary : color.textTertiary,
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                        }}
-                      >
-                        {hit.lineNo}
-                        {'  '}
-                        {hit.text.slice(0, hit.at).trimStart()}
-                        <b
-                          style={{
-                            color: on ? color.textPrimary : color.textSecondary,
-                            background: on ? 'rgba(241,242,246,0.22)' : 'rgba(241,242,246,0.14)',
-                            borderRadius: radius.control,
-                          }}
-                        >
-                          {hit.text.slice(hit.at, hit.at + query.length)}
-                        </b>
-                        {hit.text.slice(hit.at + query.length)}
+                      {fileIcon(file.kind)}
+                      {file.name}
+                      <span className="cl" style={{ marginLeft: 'auto', color: color.textQuaternary, fontWeight: 400 }}>
+                        {dir}
                       </span>
-                    </button>
-                  );
-                })}
-              </div>
-            );
-          })}
+                    </div>
+                    {list.map((hit) => hitRow(hit, hits.indexOf(hit), 30))}
+                  </div>
+                );
+              })}
           {!hits.length ? (
             <div style={{ padding: '16px 8px', color: color.textQuaternary, fontSize: fs.caption }}>一致するものはありません。</div>
           ) : null}
@@ -695,8 +830,8 @@ export function SearchOverlay() {
             borderTop: `1px solid ${line.hairline}`,
           }}
         >
-          <KeyChip onClick={() => setIndex((i) => Math.max(0, i - 1))}>↑</KeyChip>
-          <KeyChip onClick={() => setIndex((i) => Math.min(hits.length - 1, i + 1))}>↓</KeyChip>
+          <KeyChip onClick={() => step(-1)}>↑</KeyChip>
+          <KeyChip onClick={() => step(1)}>↓</KeyChip>
           <span style={{ fontSize: fs.caption, color: color.textQuaternary }}>
             <span className="tnum" style={{ color: color.textSecondary }}>
               ↵

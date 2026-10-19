@@ -859,6 +859,9 @@
     let close: () -> Void
     let open: (SearchHit) -> Void
     @State private var replaceMode = false
+    @AppStorage("clair.searchTree") private var tree = false
+    /// Tree mode: folder/file paths whose rows are folded.
+    @State private var collapsed: Set<String> = []
     @FocusState private var queryFocused: Bool
 
     var body: some View {
@@ -869,14 +872,15 @@
             .focused($queryFocused).task { await focusField { queryFocused = true } }
             .textFieldStyle(.plain).font(.system(size: 13)).foregroundStyle(C.textPrimary)
             .onSubmit(openSelected)
-            .onKeyPress(.downArrow) { selection = min(selection + 1, max(displayedHits.count - 1, 0)); return .handled }
-            .onKeyPress(.upArrow) { selection = max(selection - 1, 0); return .handled }
+            .onKeyPress(.downArrow) { step(1); return .handled }
+            .onKeyPress(.upArrow) { step(-1); return .handled }
             .onKeyPress(.escape) { close(); return .handled }
             .onChange(of: query) { selection = 0; search() }
           if searching { ProgressView().controlSize(.small) }
           Text(tr("%@件 · %@ファイル", hits.count, Set(hits.map(\.path)).count)).font(.system(size: 11)).foregroundStyle(C.textQuaternary)
-          chip(".*", on: $regex, help: tr("正規表現"))
-          chip("Aa", on: $caseSensitive, help: tr("大文字小文字を区別"))
+          chip(Text(Image(systemName: "list.bullet.indent")), on: $tree, help: tr("ツリー表示"))
+          chip(Text(".*"), on: $regex, help: tr("正規表現"))
+          chip(Text("Aa"), on: $caseSensitive, help: tr("大文字小文字を区別"))
         }
         .padding(.horizontal, 8).frame(height: 40)
         .background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.control))
@@ -885,6 +889,7 @@
         .padding(12)
         .onChange(of: regex) { selection = 0; search() }
         .onChange(of: caseSensitive) { selection = 0; search() }
+        .onChange(of: tree) { selection = 0 }
 
         if replaceMode {
           HStack(spacing: 6) {
@@ -911,30 +916,26 @@
         }
         ScrollViewReader { proxy in ScrollView {
           LazyVStack(alignment: .leading, spacing: 0) {
-            ForEach(indexedGroups, id: \.path) { group in
-              HStack(spacing: 6) {
-                FileIcon.forPath(group.path).image(size: 11, ink: C.textTertiary)
-                Text(URL(fileURLWithPath: group.path).lastPathComponent).font(.system(size: 11, weight: .semibold)).foregroundStyle(C.textTertiary)
-                Spacer(minLength: 0)
-                Text(group.path.split(separator: "/").dropLast().joined(separator: "/"))
-                  .font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary).lineLimit(1)
-              }
-              .padding(.horizontal, 8).frame(height: 26)
-              ForEach(group.hits, id: \.index) { item in
-                let selected = item.index == selection
-                Button { selection = item.index; open(item.hit) } label: {
-                  HStack(spacing: 8) {
-                    Text("\(item.hit.line)").font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary).frame(width: 32, alignment: .trailing)
-                    Text(item.hit.text.trimmingCharacters(in: .whitespaces)).font(Typography.font(Typography.chrome))
-                      .foregroundStyle(selected ? C.textPrimary : C.textSecondary).lineLimit(1)
-                    Spacer(minLength: 0)
-                  }
-                  .padding(.horizontal, 8).frame(height: 28)
-                  .background(selected ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
-                  .contentShape(Rectangle())
+            if tree {
+              let shown = displayedHits
+              ForEach(Array(SearchTree.rows(shown, collapsed: collapsed).enumerated()), id: \.offset) { _, row in
+                if case .hit(let index) = row.kind {
+                  hitRow(index, shown[index], depth: row.depth)
+                } else {
+                  folderRow(row)
                 }
-                .buttonStyle(.hoverWash).onHover { if $0 { selection = item.index } }
-                .id(item.index)
+              }
+            } else {
+              ForEach(indexedGroups, id: \.path) { group in
+                HStack(spacing: 6) {
+                  FileIcon.forPath(group.path).image(size: 11, ink: C.textTertiary)
+                  Text(URL(fileURLWithPath: group.path).lastPathComponent).font(.system(size: 11, weight: .semibold)).foregroundStyle(C.textTertiary)
+                  Spacer(minLength: 0)
+                  Text(group.path.split(separator: "/").dropLast().joined(separator: "/"))
+                    .font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary).lineLimit(1)
+                }
+                .padding(.horizontal, 8).frame(height: 26)
+                ForEach(group.hits, id: \.index) { item in hitRow(item.index, item.hit, depth: 0) }
               }
             }
           }.padding(.horizontal, 8).padding(.bottom, 8)
@@ -957,10 +958,46 @@
       }
     }
 
+    private func hitRow(_ index: Int, _ hit: SearchHit, depth: Int) -> some View {
+      let selected = index == selection
+      return Button { selection = index; open(hit) } label: {
+        HStack(spacing: 8) {
+          Text("\(hit.line)").font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary).frame(width: 32, alignment: .trailing)
+          Text(hit.text.trimmingCharacters(in: .whitespaces)).font(Typography.font(Typography.chrome))
+            .foregroundStyle(selected ? C.textPrimary : C.textSecondary).lineLimit(1)
+          Spacer(minLength: 0)
+        }
+        .padding(.leading, 8 + CGFloat(depth) * 12).padding(.trailing, 8).frame(height: 28)
+        .background(selected ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
+        .contentShape(Rectangle())
+      }
+      .buttonStyle(.hoverWash).onHover { if $0 { selection = index } }
+      .id(index)
+    }
+
+    /// Tree mode folder or file row: a chevron folds what is under it, with the hit count on the right.
+    private func folderRow(_ row: SearchTreeRow) -> some View {
+      let open = !collapsed.contains(row.path)
+      return Button {
+        if open { collapsed.insert(row.path) } else { collapsed.remove(row.path) }
+      } label: {
+        HStack(spacing: 6) {
+          Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold)).foregroundStyle(C.textTertiary)
+            .rotationEffect(.degrees(open ? 90 : 0)).frame(width: 10)
+          if row.kind == .file { FileIcon.forPath(row.path).image(size: 11, ink: C.textTertiary) }
+          Text(row.name).font(.system(size: 11, weight: .semibold)).foregroundStyle(C.textTertiary).lineLimit(1)
+          Spacer(minLength: 0)
+          Text("\(row.count)").font(Typography.font(Typography.micro)).monospacedDigit().foregroundStyle(C.textQuaternary)
+        }
+        .padding(.leading, 8 + CGFloat(row.depth) * 12).padding(.trailing, 8).frame(height: 26)
+        .contentShape(Rectangle())
+      }.buttonStyle(.hoverWash).accessibilityHint(open ? tr("折りたたむ") : tr("展開する"))
+    }
+
     /// Option toggle drawn as a code-styled chip (VS Code idiom) instead of a system checkbox.
-    private func chip(_ label: String, on: Binding<Bool>, help: String) -> some View {
+    private func chip(_ label: Text, on: Binding<Bool>, help: String) -> some View {
       Button { on.wrappedValue.toggle() } label: {
-        Text(label).font(.system(size: 11, weight: .semibold, design: .monospaced))
+        label.font(.system(size: 11, weight: .semibold, design: .monospaced))
           .foregroundStyle(on.wrappedValue ? C.textPrimary : C.textQuaternary)
           .frame(width: 30, height: 30)
           .background(on.wrappedValue ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
@@ -968,7 +1005,16 @@
       }.buttonStyle(.hoverWash).help(help).accessibilityLabel(help).accessibilityAddTraits(on.wrappedValue ? .isSelected : [])
     }
 
-    private var displayedHits: [SearchHit] { Array(hits.prefix(500)) }
+    /// Tree mode orders hits as the tree draws them, so a flat index still follows the screen.
+    private var displayedHits: [SearchHit] { tree ? SearchTree.sorted(Array(hits.prefix(500))) : Array(hits.prefix(500)) }
+
+    /// ↑↓ over the hits on screen: all of them in list mode, the unfolded ones in tree mode.
+    private func step(_ d: Int) {
+      let order = tree ? SearchTree.rows(displayedHits, collapsed: collapsed).compactMap { if case .hit(let i) = $0.kind { i } else { nil } } : Array(displayedHits.indices)
+      guard !order.isEmpty else { return }
+      let at = order.firstIndex(of: selection) ?? (d > 0 ? -1 : order.count)
+      selection = order[min(max(at + d, 0), order.count - 1)]
+    }
 
     /// Hits grouped by file in first-seen order, retaining their flat keyboard-navigation index.
     private var indexedGroups: [(path: String, hits: [(index: Int, hit: SearchHit)])] {
