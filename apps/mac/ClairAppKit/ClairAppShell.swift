@@ -1372,7 +1372,6 @@ import Observation
         if st.palette == .search { searchSelection = 0; runSearch() }
       }
       .onChange(of: st.debugNavigationGeneration) { sidebarMode = "ladybug" }
-      .onChange(of: st.browserNavigationGeneration) { sidebarMode = Self.browserMode; if st.sidebarHidden { store.run("sidebar.toggle") } }
       // ⌘N: beside the active file; the Project root for none or an ad-hoc `../` tab.
       .onChange(of: store.newFileRequests) {
         let folder = st.active.map { ($0 as NSString).deletingLastPathComponent } ?? ""
@@ -1711,6 +1710,12 @@ import Observation
       .frame(width: ChromeBudget.activityBarWidth).frame(maxHeight: .infinity)
       .background(C.chrome)
       .overlay(alignment: .trailing) { Rectangle().fill(C.surfaceActive).frame(width: 1) }
+      // ⌥⌘B shows the browser's panel. Here, not on the body's modifier chain (already at the type checker's limit);
+      // the activity bar is on screen even while ⌘B hides the sidebar.
+      .onChange(of: st.browserNavigationGeneration) {
+        sidebarMode = Self.browserMode
+        if st.sidebarHidden { store.run("sidebar.toggle") }
+      }
     }
 
     private func activityBarButton(_ icon: String) -> some View {
