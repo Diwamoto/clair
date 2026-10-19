@@ -10,6 +10,7 @@ import { FileIcon } from '../chrome';
 import { finderRoot, PROJECT_ROOT, shellEscape } from '../finder';
 import { color, fs, line, mono, radius, space } from '../tokens';
 import { FinderPane, readPathDrag, setPathDrag } from './Finder';
+import { ProposalPane } from './Proposal';
 
 const byPath = new Map(files.map((f) => [f.path, f]));
 
@@ -191,6 +192,7 @@ function EditorPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
   const folder = finderRoot(path);
   // A file browser tab shows in the editor's place; keyed so each tab keeps its own columns.
   if (folder) return <FinderPane key={path} paneId={node.id} tab={path} root={folder} />;
+  if (path.startsWith('proposal:')) return <ProposalPane key={path} paneId={node.id} id={path} />;
   return <TextEditor node={node} path={path} />;
 }
 

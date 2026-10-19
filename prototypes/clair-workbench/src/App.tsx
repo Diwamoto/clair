@@ -28,6 +28,7 @@ import { ReviewMain, ReviewPanel, ReviewStatus } from './screens/Review';
 import { SettingsScreen } from './screens/Settings';
 import { ConciergeMain, ConciergePanel } from './screens/Concierge';
 import { ExplorerPanel, WorkspaceMain, WorkspaceStatus } from './screens/Workspace';
+import { BrowserPanel } from './screens/Finder';
 import { AppShell, navIdFor } from './chrome';
 import { PanelStage, ScreenStage } from './motion';
 import { WorkbenchProvider, useWorkbench } from './store';
@@ -215,7 +216,7 @@ function Ide() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [wb]);
 
-  const panelId = navIdFor(wb.screen);
+  const panelId = navIdFor(wb.screen, wb.workspacePanel);
 
   // The sidebar panel follows the navigation, not the screen: `graph` maps
   // to the same `review` nav entry as the changes view (it's a mode of the
@@ -234,6 +235,8 @@ function Ide() {
       )
     ) : panelId === 'concierge' ? (
       <ConciergePanel />
+    ) : panelId === 'browser' ? (
+      <BrowserPanel />
     ) : panelId === 'debug' ? (
       wb.screen === 'debugAgent' ? (
         <DebugAgentPanel />

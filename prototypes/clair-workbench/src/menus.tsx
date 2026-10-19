@@ -379,6 +379,7 @@ export function finderEntryMenu(wb: Workbench, entry: FsEntry, paths: string[], 
       }),
       separator,
       item('Send to Agent', { icon: <IconSparkle size={12} />, submenu: agentsSubmenu(wb, `${mention} を見てください。`) }),
+      ...(entry.dir && !many ? [organizeEntry(wb, entry.path, act)] : []),
       item(entry.dir && !many ? 'ターミナルで cd' : 'ターミナルにパスを入力', {
         icon: <IconTerminalPrompt size={12} />,
         run: () => {
@@ -408,11 +409,36 @@ export function finderEntryMenu(wb: Workbench, entry: FsEntry, paths: string[], 
   };
 }
 
+/**
+ * "Agent に整理を頼む ›": asks a running agent to propose how to tidy the
+ * folder. The agent answers with `finder.propose`; nothing moves until the
+ * user applies the proposal tab.
+ */
+function organizeEntry(wb: Workbench, folder: string, act: FinderActions): MenuEntry {
+  return item('Agent に整理を頼む', {
+    icon: <IconSparkle size={12} />,
+    submenu: wb.sessions
+      .filter((s) => s.icon !== 'zsh')
+      .map((s) =>
+        item(s.agent, {
+          detail: [s.project, s.worktree].filter(Boolean).join(' · '),
+          disabled: s.state === 'exit 1',
+          run: () => {
+            wb.requestOrganize(folder, s.agent);
+            act.notice(`${s.agent} に整理案を頼みました`);
+          },
+        }),
+      ),
+  });
+}
+
 /** The empty part of a column: what can land in that folder, and the view itself. */
 export function finderBackgroundMenu(wb: Workbench, folder: string, act: FinderActions): MenuSpec {
   return {
     entries: [
       item('ペースト', { shortcut: '⌘V', disabled: !wb.fileClipboard.length, run: () => act.paste(folder) }),
+      separator,
+      organizeEntry(wb, folder, act),
       item('ターミナルで cd', {
         icon: <IconTerminalPrompt size={12} />,
         run: () => {

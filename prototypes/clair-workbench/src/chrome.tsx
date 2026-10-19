@@ -20,6 +20,7 @@ import {
   IconCodex,
   IconCommand,
   IconEllipsis,
+  IconColumns,
   IconFolder,
   IconGear,
   IconSearch,
@@ -268,19 +269,20 @@ function FileTab({ path, active }: { path: string; active: boolean }) {
   const file = byPath.get(path);
   const tint = active ? color.chromeInk : color.textTertiary;
   const target = `tab:${path}`;
-  const folder = finderRoot(path);
+  const folder = finderRoot(path) ? (wb.finderRoots[path] ?? finderRoot(path)) : null;
+  const proposal = wb.proposals[path];
   return (
     <Tab
-      icon={folder ? <IconFolder size={12} color={tint} /> : file ? <FileIcon kind={file.kind} tint={tint} /> : <IconSparkle size={12} color={tint} />}
-      label={folder ? folder.slice(folder.lastIndexOf('/') + 1) : file?.name ?? path}
+      icon={folder ? <IconColumns size={12} color={tint} /> : file ? <FileIcon kind={file.kind} tint={tint} /> : <IconSparkle size={12} color={tint} />}
+      label={folder ? folder.slice(folder.lastIndexOf('/') + 1) : proposal ? '整理の提案' : file?.name ?? path}
+      dot={proposal ? proposal.state === 'pending' : tab?.dirty}
       active={active}
-      dot={tab?.dirty}
       targeted={wb.contextMenu?.target === target}
       onClick={() => {
         wb.setActivePath(path);
         wb.openFile(path);
       }}
-      onContextMenu={(event) => menu(event, (w) => (folder ? finderTabMenu(w, path, folder) : fileMenu(w, path, 'tab')), target)}
+      onContextMenu={(event) => menu(event, (w) => (folder ? finderTabMenu(w, path, folder) : proposal ? finderTabMenu(w, path, proposal.folder) : fileMenu(w, path, 'tab')), target)}
     />
   );
 }
@@ -646,6 +648,8 @@ export function AppTitlebar({ extra }: { extra?: ReactNode }) {
 // its `review` (changes) default; `⌃⌘G` does the same.
 const NAV: Array<{ id: string; screen: Screen; label: string; icon: (p: { size?: number }) => ReactNode }> = [
   { id: 'files', screen: 'workspace', label: 'File Tree', icon: IconFolder },
+  // A second panel of the workspace, not a screen: the main area stays the panes.
+  { id: 'browser', screen: 'workspace', label: 'ファイルブラウザ', icon: IconColumns },
   { id: 'review', screen: 'review', label: 'Source Control', icon: IconBranch },
   { id: 'agents', screen: 'sessions', label: 'Agents', icon: IconSession },
   { id: 'debug', screen: 'debug', label: 'Debug', icon: IconBug },
@@ -653,7 +657,7 @@ const NAV: Array<{ id: string; screen: Screen; label: string; icon: (p: { size?:
 ];
 
 /** Which strip entry the current screen lights up, and which panel it shows. */
-export function navIdFor(screen: Screen): string {
+export function navIdFor(screen: Screen, workspacePanel: 'files' | 'browser' = 'files'): string {
   if (screen === 'debug' || screen === 'debugAgent') return 'debug';
   if (screen === 'graph' || screen === 'review') return 'review';
   // The agent conversation opens from its own titlebar tab; while it is up,
@@ -661,7 +665,7 @@ export function navIdFor(screen: Screen): string {
   if (screen === 'sessions' || screen === 'activity') return 'agents';
   if (screen === 'concierge') return 'concierge';
   if (screen === 'settings') return 'settings';
-  return 'files';
+  return workspacePanel;
 }
 
 /**
@@ -724,7 +728,7 @@ const NAV_GAP = space[1];
 
 function ActivityBar() {
   const wb = useWorkbench();
-  const active = navIdFor(wb.screen);
+  const active = navIdFor(wb.screen, wb.workspacePanel);
   const containerRef = useRef<HTMLDivElement>(null);
   const [visibleCount, setVisibleCount] = useState(NAV.length);
   const [overflowOpen, setOverflowOpen] = useState(false);
@@ -790,6 +794,7 @@ function ActivityBar() {
               onClick={() => {
                 wb.setOverlay(null);
                 wb.setScreen(item.screen);
+                if (item.id === 'files' || item.id === 'browser') wb.setWorkspacePanel(item.id);
               }}
             >
               <Icon size={18} />

@@ -138,6 +138,51 @@ export function shellEscape(path: string) {
   return path.replace(/[\s\\'"`$!&*()[\]{}<>|;#?~^]/g, (c) => `\\${c}`);
 }
 
+/** One file operation in an agent's proposal. Paths are absolute. */
+export type ProposalOp =
+  | { kind: 'mkdir'; to: string; why?: string }
+  | { kind: 'move' | 'rename'; from: string; to: string; why?: string }
+  | { kind: 'trash'; from: string; why?: string };
+
+export type Proposal = {
+  id: string;
+  folder: string;
+  agent: string;
+  ops: ProposalOp[];
+  state: 'pending' | 'applied' | 'rejected';
+  applied?: number;
+};
+
+const GROUPS: [string, RegExp][] = [
+  ['PDF', /\.pdf$/],
+  ['画像', /\.(png|jpe?g|gif|svg|heic)$/],
+  ['アーカイブ', /\.(zip|tar|gz)$/],
+  ['データ', /\.(json|csv|tsv)$/],
+  ['書類', /\.(docx?|pages|txt|md)$/],
+];
+
+/**
+ * What the mock's agent proposes for a folder: a sub-folder per kind, the
+ * files moved into it, disk images to the trash. Stands in for an agent's
+ * own `finder.propose` call.
+ */
+export function organizePlan(folder: string): ProposalOp[] {
+  const files = (listDir(folder) ?? []).filter((e) => !e.dir && !isHidden(e.name));
+  const shot = files.find((f) => f.name.startsWith('スクリーンショット'));
+  const ops: ProposalOp[] = [];
+  for (const [group, pattern] of GROUPS) {
+    const hits = files.filter((f) => f !== shot && pattern.test(f.name));
+    if (!hits.length) continue;
+    ops.push({ kind: 'mkdir', to: `${folder}/${group}`, why: `${hits.length} 件の${group}をまとめる` });
+    for (const f of hits) ops.push({ kind: 'move', from: f.path, to: `${folder}/${group}/${f.name}` });
+  }
+  for (const f of files.filter((f) => /\.dmg$/.test(f.name))) {
+    ops.push({ kind: 'trash', from: f.path, why: 'インストール済みのディスクイメージ' });
+  }
+  if (shot) ops.push({ kind: 'rename', from: shot.path, to: `${folder}/clair-terminal-bug.png`, why: '中身に合わせた名前' });
+  return ops;
+}
+
 /** The places column: where Finder's sidebar would take you. */
 export const places: { label: string; path: string }[] = [
   { label: 'clair', path: PROJECT_ROOT },

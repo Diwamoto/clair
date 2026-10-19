@@ -81,6 +81,17 @@ export const IconFolder = stroke(
   { strokeLinejoin: 'round' },
 );
 
+// Finder's column-view glyph: a window split into columns. The file browser's
+// activity-bar entry (Finder artboard); the folder stays the explorer's.
+export const IconColumns = stroke(
+  <>
+    <rect x="2.2" y="3.2" width="11.6" height="9.6" rx="1.5" />
+    <path d="M6.1 3.2v9.6M9.9 3.2v9.6" />
+  </>,
+  1.3,
+  { strokeLinejoin: 'round' },
+);
+
 export const IconBranch = stroke(
   <>
     <circle cx="4.6" cy="3.7" r="1.7" />

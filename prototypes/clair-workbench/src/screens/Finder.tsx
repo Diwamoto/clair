@@ -16,14 +16,13 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 
 import { targetRing, useContextMenu } from '../contextMenu';
 import { FileIcon } from '../chrome';
-import { HOME, isHidden, listDir, places, previewText, shellEscape, tildify, type FsEntry } from '../finder';
-import { IconChevron, IconChevronLeft, IconDoc, IconFolder } from '../icons';
+import { HOME, isHidden, listDir, places, previewText, PROJECT_ROOT, shellEscape, tildify, type FsEntry } from '../finder';
+import { IconChevron, IconChevronLeft, IconColumns, IconDoc, IconFolder } from '../icons';
 import { finderBackgroundMenu, finderEntryMenu } from '../menus';
 import { useWorkbench } from '../store';
 import { color, fs, line, radius, space } from '../tokens';
 
 const COLUMN = 200;
-const PLACES = 140;
 const PREVIEW = 240;
 // The mock's disk answers at once; this stands in for a real folder read so
 // the lazy listing is visible.
@@ -54,6 +53,8 @@ type View = { columns: string[]; selection: string[] };
 // Where each tab was left, so switching tabs and back restores its columns.
 // ponytail: module-level, the mock's lifetime; native keeps it in the tab's own state.
 const kept = new Map<string, View>();
+// The last sidebar jump each tab acted on, so a tab mounting after the jump still takes it once.
+const handled = new Map<string, number>();
 
 export function FinderPane({ paneId, tab, root }: { paneId: string; tab: string; root: string }) {
   const wb = useWorkbench();
@@ -73,7 +74,8 @@ export function FinderPane({ paneId, tab, root }: { paneId: string; tab: string;
     for (const folder of view.columns) {
       if (folder in listings) continue;
       setListings((current) => ({ ...current, [folder]: 'loading' }));
-      setTimeout(() => setListings((current) => ({ ...current, [folder]: listDir(folder) })), LOAD_MS);
+      // A folder made in this session (paste, an applied proposal) has no disk listing of its own.
+      setTimeout(() => setListings((current) => ({ ...current, [folder]: listDir(folder) ?? (folder in wb.fsCopies ? [] : null) })), LOAD_MS);
     }
   }, [view.columns, listings]);
 
@@ -102,6 +104,18 @@ export function FinderPane({ paneId, tab, root }: { paneId: string; tab: string;
     setForward([]);
     setView(next);
   };
+
+  // The sidebar's places move this tab (BrowserPanel → wb.goToPlace).
+  // A reveal (`clair reveal`) also selects the file once its folder shows.
+  const jump = wb.finderJump;
+  useEffect(() => {
+    if (!jump || jump.tab !== tab || handled.get(tab) === jump.seq) return;
+    handled.set(tab, jump.seq);
+    go({ columns: [jump.path], selection: jump.select ? [jump.select] : [] });
+  }); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The tab's label and the sidebar's lit place follow the first column.
+  useEffect(() => wb.setFinderRoot(tab, view.columns[0]), [tab, view.columns[0]]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const all = useMemo(() => new Map(view.columns.flatMap((c) => {
     const list = entries(c);
@@ -244,25 +258,6 @@ export function FinderPane({ paneId, tab, root }: { paneId: string; tab: string;
         onMouseDown={() => wb.setFocusedPane(paneId)}
         style={{ flex: 1, minHeight: 0, display: 'flex', outline: 'none' }}
       >
-        {/* Places: Finder's sidebar, as the first, fixed column. */}
-        <div className="scroll" style={{ width: PLACES, flexShrink: 0, padding: '6px 0', background: color.panel, borderRight: `1px solid ${line.hairlineFaint}` }}>
-          <div style={{ fontSize: fs.caption, color: color.textQuaternary, padding: '4px 16px 6px' }}>場所</div>
-          {places.map((p) => {
-            const on = view.columns[0] === p.path;
-            return (
-              <button
-                key={p.path}
-                className={on ? undefined : 'hoverable'}
-                onClick={() => go({ columns: [p.path], selection: [] })}
-                style={{ ...rowStyle(on, false), paddingLeft: 8 }}
-              >
-                <IconFolder size={12} color={color.textTertiary} />
-                <span style={{ fontSize: fs.secondary, color: on ? color.textPrimary : color.textSecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.label}</span>
-              </button>
-            );
-          })}
-        </div>
-
         <div ref={scrollRef} className="scroll" style={{ flex: 1, minWidth: 0, display: 'flex', overflowX: 'auto', overflowY: 'hidden' }}>
           {view.columns.map((folder, index) => {
             const list = entries(folder);
@@ -410,3 +405,64 @@ function Preview({ entry, open }: { entry: FsEntry; open: (entry: FsEntry, app?:
 }
 
 const buttonStyle: React.CSSProperties = { height: 26, padding: '0 10px', borderRadius: radius.control, fontSize: fs.secondary };
+
+/**
+ * The file browser's sidebar panel: Finder's sidebar, in Clair's sidebar.
+ * Picking a place moves the active browser tab there, or opens one; ⌘-click
+ * always opens a new tab. Rows are the explorer's (24px, inset pill).
+ */
+export function BrowserPanel() {
+  const wb = useWorkbench();
+  const activeRoot = wb.finderRoots[wb.activePath] ?? (wb.activePath.startsWith('finder:') ? wb.activePath.slice(7) : null);
+  const tabs = wb.tabs.filter((t) => t.path.startsWith('finder:'));
+  const projects = [
+    { label: 'clair', path: PROJECT_ROOT },
+    // An added folder of the Project (ADR-0017) is listed beside its root.
+    { label: 'clair-docs', path: `${HOME}/Projects/clair-docs` },
+  ];
+  const row = (label: string, path: string, key: string) => {
+    const on = activeRoot === path && wb.screen === 'workspace';
+    return (
+      <button
+        key={key}
+        className={on ? undefined : 'hoverable'}
+        title={tildify(path)}
+        onClick={(event) => wb.goToPlace(path, event.metaKey || event.ctrlKey)}
+        draggable
+        onDragStart={(event) => setPathDrag(event, [path])}
+        style={{ ...rowStyle(on, false), width: 'calc(100% - 16px)', margin: '0 8px' }}
+      >
+        <IconFolder size={12} color={color.textTertiary} />
+        <span style={{ flex: 1, fontSize: fs.secondary, color: on ? color.textPrimary : color.textSecondary, fontWeight: on ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+      </button>
+    );
+  };
+  const heading = (text: string) => (
+    <div style={{ fontSize: fs.caption, color: color.textQuaternary, padding: '10px 16px 4px' }}>{text}</div>
+  );
+  return (
+    <div className="scroll" style={{ position: 'absolute', inset: 0, padding: '0 0 8px' }}>
+      {heading('Project')}
+      {projects.map((p) => row(p.label, p.path, `p:${p.path}`))}
+      {heading('場所')}
+      {places.filter((p) => p.path !== PROJECT_ROOT).map((p) => row(p.label, p.path, `l:${p.path}`))}
+      {tabs.length ? heading('開いているブラウザ') : null}
+      {tabs.map((t) => {
+        const root = wb.finderRoots[t.path] ?? t.path.slice(7);
+        const on = wb.activePath === t.path && wb.screen === 'workspace';
+        return (
+          <button
+            key={t.path}
+            className={on ? undefined : 'hoverable'}
+            onClick={() => wb.openFile(t.path)}
+            title={tildify(root)}
+            style={{ ...rowStyle(on, false), width: 'calc(100% - 16px)', margin: '0 8px' }}
+          >
+            <IconColumns size={12} color={color.textTertiary} />
+            <span className="cl" style={{ flex: 1, fontSize: fs.caption, color: on ? color.textPrimary : color.textTertiary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tildify(root)}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
