@@ -489,6 +489,7 @@ extension LocalizedStrings {
     "%@件 · %@ファイル": "%@ results · %@ files",
     "正規表現": "Regular expression",
     "大文字小文字を区別": "Match case",
+    "ツリー表示": "View as tree",
     "置換": "Replace",
     "すべて置換": "Replace All",
     "置換 ⌥⌘F": "Replace ⌥⌘F",

@@ -18,6 +18,22 @@ final class WorkbenchSearchTests: XCTestCase {
     XCTAssertEqual(QuickOpen.rank("", f).count, 3)
   }
 
+  func testSearchTreeGroupsFoldersFirstAndCollapses() {
+    let h = { (p: String, l: Int) in SearchHit(path: p, line: l, text: "\(p):\(l)") }
+    let hits = SearchTree.sorted([h("README.md", 3), h("a/b/x.swift", 5), h("a/b/x.swift", 9), h("a/y.swift", 1), h("../docs/z.md", 2)])
+    XCTAssertEqual(hits.map(\.path), ["../docs/z.md", "a/b/x.swift", "a/b/x.swift", "a/y.swift", "README.md"])
+    let rows = SearchTree.rows(hits)
+    XCTAssertEqual(rows.map { "\($0.depth) \($0.name) \($0.count)" }, [
+      "0 docs 1", "1 z.md 1", "2 ../docs/z.md:2 1",
+      "0 a 3", "1 b 2", "2 x.swift 2", "3 a/b/x.swift:5 1", "3 a/b/x.swift:9 1", "1 y.swift 1", "2 a/y.swift:1 1",
+      "0 README.md 1", "1 README.md:3 1",
+    ])
+    XCTAssertEqual(rows.compactMap { if case .hit(let i) = $0.kind { i } else { nil } }, [0, 1, 2, 3, 4])
+    // Collapsing a folder hides everything under it but keeps the folder row; a file hides only its hits.
+    XCTAssertEqual(SearchTree.rows(hits, collapsed: ["a/b", "README.md"]).map(\.path),
+      ["../docs", "../docs/z.md", "../docs/z.md", "a", "a/b", "a/y.swift", "a/y.swift", "README.md"])
+  }
+
   func testFindAndReplace() throws {
     let root = try tmp()
     try "foo\nbar foo\n".write(toFile: root + "/a.txt", atomically: true, encoding: .utf8)

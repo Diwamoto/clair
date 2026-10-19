@@ -207,6 +207,12 @@ export const IconQR = stroke(
   { strokeLinejoin: 'round' },
 );
 
+// Search: "view as tree" toggle (Search artboard).
+export const IconTreeView = stroke(<path d="M3 3.8h10M7 8h6M7 12.2h6M4.6 3.8v8.4H7M4.6 8H7" />, 1.4, {
+  strokeLinecap: 'round',
+  strokeLinejoin: 'round',
+});
+
 export const IconChevron = stroke(<path d="M5.5 3.5 10 8l-4.5 4.5" />, 1.7, {
   strokeLinecap: 'round',
   strokeLinejoin: 'round',

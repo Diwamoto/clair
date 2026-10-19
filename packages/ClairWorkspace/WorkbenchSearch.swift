@@ -35,6 +35,58 @@ public struct SearchHit: Sendable, Equatable {
   public let text: String
 }
 
+/// One row of the search results tree: a folder, a file, or a hit (its index into the tree-ordered hit list).
+public struct SearchTreeRow: Sendable, Equatable {
+  public enum Kind: Sendable, Equatable { case folder, file, hit(Int) }
+  /// Folder or file path; for a hit, its file's path.
+  public let path: String
+  public let name: String
+  public let depth: Int
+  public let kind: Kind
+  /// Hits beneath a folder or file; 1 for a hit.
+  public let count: Int
+}
+
+public enum SearchTree {
+  /// Hits in explorer order (folders before files, by name); a file's hits keep their line order.
+  public static func sorted(_ hits: [SearchHit]) -> [SearchHit] {
+    hits.sorted { $0.path != $1.path && WorkbenchFiles.treeOrder($0.path, $1.path) }
+  }
+
+  /// Folder → file → hit rows for `sorted(_:)` hits. Rows under a folder or file in `collapsed` are left out.
+  public static func rows(_ hits: [SearchHit], collapsed: Set<String> = []) -> [SearchTreeRow] {
+    // An added folder (`../docs/…`) is one top-level folder, as in the explorer.
+    func parts(_ path: String) -> [String] {
+      var p = path.split(separator: "/").map(String.init)
+      if p.count > 2, p[0] == ".." { p[0...1] = ["../" + p[1]] }
+      return p
+    }
+    var counts: [String: Int] = [:]
+    for h in hits {
+      let p = parts(h.path)
+      for d in p.indices { counts[p[0...d].joined(separator: "/"), default: 0] += 1 }
+    }
+    var out: [SearchTreeRow] = [], emitted = Set<String>(), last: String?, hidden = false
+    for (i, h) in hits.enumerated() {
+      let p = parts(h.path)
+      if h.path != last {  // a new file: emit its unseen folders, then the file itself
+        last = h.path
+        hidden = false
+        for d in p.indices {
+          let id = p[0...d].joined(separator: "/")
+          if !hidden, emitted.insert(id).inserted {
+            let name = (p[d] as NSString).lastPathComponent
+            out.append(SearchTreeRow(path: id, name: name, depth: d, kind: d == p.count - 1 ? .file : .folder, count: counts[id] ?? 0))
+          }
+          hidden = hidden || collapsed.contains(id)
+        }
+      }
+      if !hidden { out.append(SearchTreeRow(path: h.path, name: h.text, depth: p.count, kind: .hit(i), count: 1)) }
+    }
+    return out
+  }
+}
+
 public enum ProjectSearch {
   static let maxBytes = 1 << 20
 
