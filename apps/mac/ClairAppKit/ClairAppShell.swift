@@ -3392,7 +3392,7 @@ import Observation
                 Text(branch)
               }.footerItem()
             }
-            .buttonStyle(.hoverWash).fixedSize().disabled(gitOperation != nil).help(tr("ブランチを切り替え / 作成"))
+            .buttonStyle(.hoverWash).fixedSize(horizontal: true, vertical: false).disabled(gitOperation != nil).help(tr("ブランチを切り替え / 作成"))
           }
           if st.isRepo {
             // VS Code-style sync: one button shows ↓behind ↑ahead and runs pull then push.
