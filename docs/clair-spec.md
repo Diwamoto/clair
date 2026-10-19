@@ -453,7 +453,7 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   ホーム画面に戻る。ホーム画面だけのとき ⌘W は ⌘Q と同じく確認付きで Clair を終了する
 - file tree、search、Git の sidebar と、pane へ開く補助 view。file tree は対象ファイルを件数で打ち切らずに表示する。gitignore 対象のファイルは暗いグレー(`textQuaternary`)で表示し、検索・quick open には出さない(中身が 1000 件を超える ignored フォルダはビルドキャッシュとみなして出さない)
 - ファイルブラウザ([ADR-0025](decisions/0025-file-browser-and-agent-file-proposals.md)): activity bar の専用アイコンでサイドバーに Project(root と追加フォルダ)・場所(ホーム・デスクトップ・書類・ダウンロード)・開いているブラウザを出し、任意のフォルダを Finder のカラム表示でエディタのタブ(`finder:<絶対パス>`)として開く。⌥⌘B(`finder.open`)と explorer のフォルダの「ファイルブラウザで開く」も同じ。場所はアクティブなブラウザタブをその場所へ動かす(⌘クリックは新しいタブ)。フォルダは左から右へ列として開き、列が出たときにその 1 階層だけを読む。ファイルを 1 つ選ぶとプレビュー列(サイズ・更新日・パス・テキストの先頭)を出す。テキストは Clair で、それ以外は既定のアプリか「このアプリケーションで開く」で開く。⌘C / ⌘V はファイル URL の pasteboard(macOS の Finder と共通)、⌘⌫ は確認してゴミ箱、⇧⌘. は隠しファイル、↑↓←→ と ↵ で移動と開く。右クリックは開く系・Agent に送る(複数選択は `@パス` をまとめて)・Agent に整理を頼む・ターミナルにパスを入力(フォルダは cd)・コピー系・名前を変更・ゴミ箱
-- ファイル(macOS の Finder、explorer、ファイルブラウザ)を Clair の terminal にドロップすると、shell-escape した絶対パスを入力する(Return は押さない)
+- ファイル(macOS の Finder、explorer、ファイルブラウザ、titlebar のファイル / ブラウザのタブ)を Clair の terminal にドロップすると、shell-escape した絶対パスを入力する(Return は押さない)
 - ⌘F はフォーカス中の pane を検索する。editor は開いているファイル内の検索・置換バー(⌥⌘F で置換行を開く。大文字小文字・正規表現、Return / ⇧Return で次 / 前、「すべて置換」は 1 undo 単位)、terminal は scrollback を含む出力の検索(一致の強調と件数は Ghostty が行う)。それ以外の pane では Project 全体の検索を開く。ファイル内のシンボルは ⌘⇧O、ワークスペースのシンボルは ⌘T
 - Quick Open、全文検索・置換、file watcher、⌘K「Open Recent…」(Project ごとに保存する最近開いたファイルを新しい順に開き直す。Compare With… の候補順も同じ記録を使う)
 - diff、stage/unstage、変更の破棄(ボタンと右クリック。「変更」は working tree のみ、「ステージ済み」は HEAD へ戻す、未追跡は削除。確認必須・AI 不可)、commit、branch/worktree の作成・切替

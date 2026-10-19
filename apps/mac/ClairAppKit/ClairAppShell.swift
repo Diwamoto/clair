@@ -1633,7 +1633,8 @@ import Observation
         onClose: { store.run("tab.close", ["path": .string(path)]) },
         // Reorder within the active group only; other groups' tabs live in saved layouts.
         icon: icon, providerIcon: chat?.provider.rawValue,
-        onMove: projectActive ? { from in store.run("tab.reorder", ["source": .string(from), "target": .string(WorkbenchTab.file(path).dragID)]) } : nil
+        onMove: projectActive ? { from in store.run("tab.reorder", ["source": .string(from), "target": .string(WorkbenchTab.file(path).dragID)]) } : nil,
+        fileURL: tabFileURL(path, project: project)
       )
       .clairContextMenu(menus) { projectActive && !FileBrowser.isVirtualTab(path) ? fileMenu(path, tab: true) : ClairMenuSpec(entries: []) }
     }
@@ -2553,6 +2554,14 @@ import Observation
           if ClairGhosttySurfaceView.send("@\(path) ", toPane: a.pane) { store.run("pane.focus", ["id": .int(a.pane)]) }
         }
       })
+    }
+
+    /// What a titlebar tab drags out as: its file (a Project path, or an ad-hoc `../` one), or a browser tab's folder.
+    /// Chats and proposals stand for no file.
+    private func tabFileURL(_ path: String, project: String) -> URL? {
+      if FileBrowser.root(tab: path) != nil { return URL(fileURLWithPath: store.browser(path).root) }
+      guard !FileBrowser.isVirtualTab(path), let root = st.projects.first(where: { $0.name == project })?.path else { return nil }
+      return URL(fileURLWithPath: root).appending(path: path).standardizedFileURL
     }
 
     /// An explorer row drags out as its file URL: onto a terminal it is typed as an escaped path (ADR-0025),
@@ -3820,6 +3829,9 @@ import Observation
     var icon: String?
     var providerIcon: String?
     var onMove: (@MainActor @Sendable (String) -> Void)?
+    /// The file or folder the tab stands for. The drag carries it beside the reorder id, so a tab dropped on a terminal
+    /// is typed there as its path (ADR-0025), like an explorer row.
+    var fileURL: URL? = nil
 
     @State private var isHovered = false
     @State private var isDropTarget = false
@@ -3846,7 +3858,12 @@ import Observation
       .contentShape(Rectangle())
       // Same feel as the pane header drag: a card-shaped ghost of the tab and a ring on the drop target.
       .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(isDropTarget ? L.ring : .clear, lineWidth: 1))
-      .onDrag({ NSItemProvider(object: NSString(string: path)) }, preview: {
+      .onDrag({
+        // The reorder id first: a tab bar drop loads the first string it finds.
+        let provider = NSItemProvider(object: NSString(string: path))
+        if let fileURL { provider.registerObject(fileURL as NSURL, visibility: .all) }
+        return provider
+      }, preview: {
         HStack(spacing: 4) {
           tabIcon(tint: C.chromeInk)
           Text(name).font(.system(size: 11, weight: .semibold)).lineLimit(1)

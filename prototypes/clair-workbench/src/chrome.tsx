@@ -10,7 +10,8 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSPropert
 
 import { targetRing, useContextMenu } from './contextMenu';
 import { files, projectTabs, type FileKind } from './data';
-import { finderRoot } from './finder';
+import { finderRoot, PROJECT_ROOT } from './finder';
+import { setPathDrag } from './screens/Finder';
 import { fileMenu, finderTabMenu, projectMenu, sessionTabMenu, standInTabMenu } from './menus';
 import { chrome, color, fs, groupColor, line, mono, radius, space, wash, withAlpha, type GroupColorKey } from './tokens';
 import {
@@ -179,6 +180,7 @@ function Tab({
   onClick,
   onContextMenu,
   targeted,
+  dragPath,
 }: {
   icon: ReactNode;
   label: string;
@@ -189,11 +191,15 @@ function Tab({
   onContextMenu?: (event: React.MouseEvent) => void;
   /** Its context menu is open. */
   targeted?: boolean;
+  /** The absolute path the tab stands for: dragged onto a terminal it is typed there, like an explorer row. */
+  dragPath?: string;
 }) {
   const tint = active ? color.chromeInk : color.textTertiary;
   return (
     <button
       className={active ? undefined : 'tab-btn'}
+      draggable={!!dragPath}
+      onDragStart={dragPath ? (event) => setPathDrag(event, [dragPath]) : undefined}
       onClick={onClick}
       onContextMenu={onContextMenu}
       title={label}
@@ -275,6 +281,7 @@ function FileTab({ path, active }: { path: string; active: boolean }) {
     <Tab
       icon={folder ? <IconColumns size={12} color={tint} /> : file ? <FileIcon kind={file.kind} tint={tint} /> : <IconSparkle size={12} color={tint} />}
       label={folder ? folder.slice(folder.lastIndexOf('/') + 1) : proposal ? '整理の提案' : file?.name ?? path}
+      dragPath={folder ?? (file ? `${PROJECT_ROOT}/${file.path}` : undefined)}
       dot={proposal ? proposal.state === 'pending' : tab?.dirty}
       active={active}
       targeted={wb.contextMenu?.target === target}

@@ -35,8 +35,8 @@ terminal では受け付けていなかった。
   場所(ホーム・デスクトップ・書類・ダウンロード)・開いているブラウザ。場所はアクティブなブラウザタブを
   その場所へ動かす(戻る/進むは残る)。`finder.open`(⌥⌘B、AI 不可)はタブとパネルを開く。
 - **ドロップ**。Clair の terminal はファイル URL のドロップを受け、Ghostty と同じ規則で shell-escape した
-  絶対パスを paste 経路で入力する。Return は押さない。explorer・ブラウザ・場所の行はファイル URL として
-  ドラッグできる。
+  絶対パスを paste 経路で入力する。Return は押さない。explorer・ブラウザ・場所の行と、titlebar のファイル /
+  ブラウザのタブはファイル URL としてドラッグできる(タブは並べ替え用の id を先頭に持ったまま)。
 - **AI に公開する command**(すべて承認なし):
   - `finder.selection`(read): アクティブなブラウザタブのフォルダと選択(絶対パス)。`editor.context` と
     同じく transient で、ブラウザタブがアクティブでなければ拒否する。
