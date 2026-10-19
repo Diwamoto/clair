@@ -3,6 +3,7 @@
 // the ContextMenu artboard draws are spelled out here.
 
 import { files, type FileKind } from './data';
+import { appsFor, finderTab, PROJECT_ROOT, shellEscape, tildify, type FsEntry } from './finder';
 import { item, separator, type MenuEntry, type MenuSpec } from './contextMenu';
 import {
   IconBranch,
@@ -180,6 +181,22 @@ export function fileMenu(wb: Workbench, path: string, from: 'tab' | 'tree'): Men
   };
 }
 
+/** A file browser tab: close it, or copy the folder it starts from. */
+export function finderTabMenu(wb: Workbench, path: string, folder: string): MenuSpec {
+  return {
+    header: { icon: <IconFolder size={12} />, title: folder.slice(folder.lastIndexOf('/') + 1), sub: tildify(folder) },
+    entries: [
+      item('タブを閉じる', { icon: <IconCloseThin size={11} />, shortcut: '⌘W', run: () => wb.closeTab(path) }),
+      item('他のタブを閉じる', { disabled: wb.tabs.length < 2, run: () => wb.closeOtherTabs(path) }),
+      separator,
+      item('右に分割して開く', { icon: <IconSplitRight size={12} />, run: () => wb.openInSplit(path, 'horizontal') }),
+      separator,
+      item('パスをコピー', { shortcut: '⌥⌘C', run: () => copyText(folder) }),
+      item('Finderで表示', { icon: <IconFolder size={12} />, shortcut: '⌥⌘R' }),
+    ],
+  };
+}
+
 /** A tab that stands in for another project's file — the mock has nothing to open behind it. */
 export function standInTabMenu(wb: Workbench, project: string, file: { path: string; name: string; kind: FileKind }): MenuSpec {
   return {
@@ -227,6 +244,10 @@ export function folderMenu(wb: Workbench, id: string, name: string, isProject: b
     },
     entries: [
       item(open ? '折りたたむ' : '展開', { run: () => wb.toggleFolder(id) }),
+      item('ファイルブラウザで開く', {
+        shortcut: '⌥⌘B',
+        run: () => wb.openFinder(isProject && id === 'clair' ? PROJECT_ROOT : `${PROJECT_ROOT}/${relative}`),
+      }),
       separator,
       item('パスをコピー', { shortcut: '⌥⌘C', run: () => copyText(`${ROOT}/${id}`) }),
       item('相対パスをコピー', { shortcut: '⌥⇧⌘C', disabled: isProject, run: () => copyText(relative) }),
@@ -298,6 +319,110 @@ export function streamMenu(wb: Workbench, ctx: StreamMenuContext): MenuSpec {
       ...paneEntries(wb, ctx.paneId),
       separator,
       closePaneEntry(wb, ctx.paneId),
+    ],
+  };
+}
+
+/* ── file browser ─────────────────────────────────────────────────────── */
+
+export type FinderActions = {
+  open: (entry: FsEntry, app?: string) => void;
+  notice: (text: string) => void;
+  reveal: (path: string) => void;
+  paste: (folder: string) => void;
+  trash: (paths: string[]) => void;
+  showHidden: boolean;
+  toggleHidden: () => void;
+};
+
+const relativeTo = (path: string) => (path.startsWith(PROJECT_ROOT + '/') ? path.slice(PROJECT_ROOT.length + 1) : null);
+
+/**
+ * A row in the file browser (one item, or the selection it belongs to).
+ * Open first, then hand-offs (agent, terminal), then copies, then the trash —
+ * the tree's order, with the Finder verbs it lacks.
+ */
+export function finderEntryMenu(wb: Workbench, entry: FsEntry, paths: string[], act: FinderActions): MenuSpec {
+  const many = paths.length > 1;
+  const parent = entry.path.slice(0, entry.path.lastIndexOf('/'));
+  const relative = relativeTo(entry.path);
+  // An agent reads Project files by their relative path, anything else by its absolute one.
+  const mention = paths.map((p) => `@${relativeTo(p) ?? tildify(p)}`).join(' ');
+
+  const opening: MenuEntry[] = entry.dir
+    ? [
+        item('開く', { shortcut: '↵', disabled: many, run: () => act.open(entry) }),
+        item('新しいタブで開く', { disabled: many, run: () => wb.openFinder(entry.path) }),
+        item('右に分割して開く', { icon: <IconSplitRight size={12} />, disabled: many, run: () => wb.openInSplit(finderTab(entry.path), 'horizontal') }),
+      ]
+    : [
+        item('Clair で開く', { shortcut: '↵', disabled: many || !entry.text, run: () => act.open(entry) }),
+        item('右に分割して開く', {
+          icon: <IconSplitRight size={12} />,
+          disabled: many || !entry.projectPath,
+          run: () => entry.projectPath && wb.openInSplit(entry.projectPath, 'horizontal'),
+        }),
+        item('既定のアプリで開く', { shortcut: '⌘↓', disabled: many, run: () => act.open(entry, '既定のアプリ') }),
+      ];
+
+  return {
+    header: {
+      icon: entry.dir ? <IconFolder size={12} /> : fileGlyph(entry.kind),
+      title: many ? `${paths.length} 項目` : entry.name,
+      sub: tildify(many ? parent : entry.path),
+    },
+    entries: [
+      ...opening,
+      item('このアプリケーションで開く', {
+        disabled: many,
+        submenu: appsFor(entry).map((app) => item(app, { run: () => act.open(entry, app) })),
+      }),
+      separator,
+      item('Send to Agent', { icon: <IconSparkle size={12} />, submenu: agentsSubmenu(wb, `${mention} を見てください。`) }),
+      item(entry.dir && !many ? 'ターミナルで cd' : 'ターミナルにパスを入力', {
+        icon: <IconTerminalPrompt size={12} />,
+        run: () => {
+          wb.typeIntoTerminal(entry.dir && !many ? `cd ${shellEscape(entry.path)}` : paths.map(shellEscape).join(' '));
+          act.notice('ターミナルに入力しました(未送信)');
+        },
+      }),
+      separator,
+      item('コピー', {
+        shortcut: '⌘C',
+        run: () => {
+          wb.setFileClipboard(paths);
+          act.notice(`${paths.length} 項目をコピーしました`);
+        },
+      }),
+      item('ペースト', {
+        shortcut: '⌘V',
+        disabled: !wb.fileClipboard.length,
+        run: () => act.paste(entry.dir && !many ? entry.path : parent),
+      }),
+      item('パスをコピー', { shortcut: '⌥⌘C', run: () => copyText(paths.join('\n')) }),
+      item('相対パスをコピー', { shortcut: '⌥⇧⌘C', disabled: many || relative === null, run: () => copyText(relative ?? '') }),
+      item('Finderで表示', { icon: <IconFolder size={12} />, shortcut: '⌥⌘R' }),
+      separator,
+      item('ゴミ箱に入れる', { shortcut: '⌘⌫', destructive: true, run: () => act.trash(paths) }),
+    ],
+  };
+}
+
+/** The empty part of a column: what can land in that folder, and the view itself. */
+export function finderBackgroundMenu(wb: Workbench, folder: string, act: FinderActions): MenuSpec {
+  return {
+    entries: [
+      item('ペースト', { shortcut: '⌘V', disabled: !wb.fileClipboard.length, run: () => act.paste(folder) }),
+      item('ターミナルで cd', {
+        icon: <IconTerminalPrompt size={12} />,
+        run: () => {
+          wb.typeIntoTerminal(`cd ${shellEscape(folder)}`);
+          act.notice('ターミナルに入力しました(未送信)');
+        },
+      }),
+      item('パスをコピー', { shortcut: '⌥⌘C', run: () => copyText(folder) }),
+      separator,
+      item(act.showHidden ? '隠しファイルを隠す' : '隠しファイルを表示', { shortcut: '⇧⌘.', run: act.toggleHidden }),
     ],
   };
 }

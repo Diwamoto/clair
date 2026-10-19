@@ -20,6 +20,7 @@ import {
   type ChatMessage,
   type Session,
 } from './data';
+import { entryAt, finderTab, PROJECT_ROOT, type FsEntry } from './finder';
 import { applyScheme, type GroupColorKey } from './tokens';
 
 export type Screen =
@@ -145,6 +146,14 @@ function useWorkbenchState() {
   const [maximized, setMaximized] = useState<string | null>(null);
 
   const [terminal, setTerminal] = useState<TerminalLine[]>(initialTerminal);
+  // The terminal's unsent input line. Lifted out of the pane so a drop or a
+  // menu elsewhere can type into it (never with Return: the user sends).
+  const [terminalInput, setTerminalInput] = useState('');
+  // The file browser's writes, over the read-only mock disk (finder.ts):
+  // pasted copies per folder, and trashed paths.
+  const [fileClipboard, setFileClipboard] = useState<string[]>([]);
+  const [fsCopies, setFsCopies] = useState<Record<string, FsEntry[]>>({});
+  const [fsTrashed, setFsTrashed] = useState<Set<string>>(() => new Set());
   const [agentLog] = useState<TerminalLine[]>(initialAgentLog);
   const [awaitingApproval, setAwaitingApproval] = useState(true);
 
@@ -361,6 +370,40 @@ function useWorkbenchState() {
     });
   }, []);
 
+  // The file browser is a tab like a file's (`finder:<folder>`), so it gets
+  // the editor's width and sits in the same tab strip; one tab per folder.
+  const openFinder = useCallback((path?: string) => openFile(finderTab(path ?? PROJECT_ROOT)), [openFile]);
+
+  /** Types into the terminal's input line, space-separated, and leaves it unsent. */
+  const typeIntoTerminal = useCallback((text: string) => {
+    setTerminalInput((current) => (current && !current.endsWith(' ') ? current + ' ' : current) + text + ' ');
+  }, []);
+
+  /** Pastes the copied files into `folder`; a name already there gets " のコピー" like Finder. */
+  const pasteFiles = useCallback(
+    (folder: string, taken: string[]) => {
+      const names = new Set(taken);
+      const pasted = fileClipboard.flatMap((path) => {
+        const source = entryAt(path);
+        if (!source) return [];
+        let name = source.name;
+        while (names.has(name)) {
+          const dot = name.lastIndexOf('.');
+          name = dot > 0 && !source.dir ? `${name.slice(0, dot)} のコピー${name.slice(dot)}` : `${name} のコピー`;
+        }
+        names.add(name);
+        return [{ ...source, name, path: `${folder}/${name}`, projectPath: undefined, modified: '今' }];
+      });
+      if (pasted.length) setFsCopies((current) => ({ ...current, [folder]: [...(current[folder] ?? []), ...pasted] }));
+      return pasted.length;
+    },
+    [fileClipboard],
+  );
+
+  const trashFiles = useCallback((paths: string[]) => {
+    setFsTrashed((current) => new Set([...current, ...paths]));
+  }, []);
+
   const pushTerminal = useCallback((lines: TerminalLine[]) => {
     setTerminal((current) => [...current, ...lines]);
   }, []);
@@ -491,11 +534,13 @@ function useWorkbenchState() {
           return setOverlay('addAgent');
         case 'clair.settings.open':
           return setScreen('settings');
+        case 'clair.finder.open':
+          return openFinder();
         default:
           return setScreen('workspace');
       }
     },
-    [closePane, focusDirection, focusedPane, splitPane],
+    [closePane, focusDirection, focusedPane, openFinder, splitPane],
   );
 
   const toggleFolder = useCallback((id: string) => {
@@ -613,6 +658,16 @@ function useWorkbenchState() {
     closePane,
     terminal,
     runTerminal,
+    terminalInput,
+    setTerminalInput,
+    typeIntoTerminal,
+    openFinder,
+    fileClipboard,
+    setFileClipboard,
+    fsCopies,
+    fsTrashed,
+    pasteFiles,
+    trashFiles,
     awaitingApproval,
     agentLog,
     cursor,

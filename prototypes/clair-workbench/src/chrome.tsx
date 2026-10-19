@@ -10,7 +10,8 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSPropert
 
 import { targetRing, useContextMenu } from './contextMenu';
 import { files, projectTabs, type FileKind } from './data';
-import { fileMenu, projectMenu, sessionTabMenu, standInTabMenu } from './menus';
+import { finderRoot } from './finder';
+import { fileMenu, finderTabMenu, projectMenu, sessionTabMenu, standInTabMenu } from './menus';
 import { chrome, color, fs, groupColor, line, mono, radius, space, wash, withAlpha, type GroupColorKey } from './tokens';
 import {
   IconBranch,
@@ -267,10 +268,11 @@ function FileTab({ path, active }: { path: string; active: boolean }) {
   const file = byPath.get(path);
   const tint = active ? color.chromeInk : color.textTertiary;
   const target = `tab:${path}`;
+  const folder = finderRoot(path);
   return (
     <Tab
-      icon={file ? <FileIcon kind={file.kind} tint={tint} /> : <IconSparkle size={12} color={tint} />}
-      label={file?.name ?? path}
+      icon={folder ? <IconFolder size={12} color={tint} /> : file ? <FileIcon kind={file.kind} tint={tint} /> : <IconSparkle size={12} color={tint} />}
+      label={folder ? folder.slice(folder.lastIndexOf('/') + 1) : file?.name ?? path}
       active={active}
       dot={tab?.dirty}
       targeted={wb.contextMenu?.target === target}
@@ -278,7 +280,7 @@ function FileTab({ path, active }: { path: string; active: boolean }) {
         wb.setActivePath(path);
         wb.openFile(path);
       }}
-      onContextMenu={(event) => menu(event, (w) => fileMenu(w, path, 'tab'), target)}
+      onContextMenu={(event) => menu(event, (w) => (folder ? finderTabMenu(w, path, folder) : fileMenu(w, path, 'tab')), target)}
     />
   );
 }

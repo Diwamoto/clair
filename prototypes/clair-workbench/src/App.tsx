@@ -184,6 +184,11 @@ function Ide() {
         }
       }
 
+      // ⌥ turns the key into another character on macOS: match the physical key.
+      if (event.altKey && event.code === 'KeyB') {
+        event.preventDefault();
+        return wb.runCommand('clair.finder.open');
+      }
       if (key === 'k') {
         event.preventDefault();
         return wb.setOverlay('command');
