@@ -107,9 +107,9 @@
       let store = ClairWorkbenchStore(persistAt: nil)
       _ = try store.run("project.open", ["path": .string(path)]).get()
       XCTAssertNil(store.state.active)
-      store.performFromHome("sidebar.toggle")  // opens no pane: the empty editor stays
+      store.performFromUI("sidebar.toggle")  // opens no pane: the empty editor stays
       XCTAssertEqual(store.state.tree.leaves.map(\.kind), [.editor])
-      store.performFromHome("terminal.show")
+      store.performFromUI("terminal.show")
       XCTAssertEqual(store.state.tree.leaves.map(\.kind), [.terminal])
       XCTAssertEqual(store.state.tree.focused, store.state.tree.leaves.first?.id)
     }

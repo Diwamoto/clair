@@ -96,9 +96,18 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var tabs: [String] = ["apple/ClairApp/ContentView.swift"]
   public var active: String? = "apple/ClairApp/ContentView.swift" {
     didSet {  // every path that makes a file active counts as opening it
-      guard let active, active != oldValue else { return }
+      guard let active else { return dropEmptyEditors() }
+      guard active != oldValue else { return }
       recent = [active] + recent.filter { $0 != active }.prefix(49)
     }
+  }
+  /// The home screen (an empty editor) shows only when nothing else is on screen: with no file
+  /// open, empty editors beside any other pane go away, and opening a file brings one back.
+  public mutating func dropEmptyEditors() {
+    guard active == nil else { return }
+    tree.closeExtraEditors()
+    guard tree.leaves.contains(where: { $0.kind != .editor }), let editor = tree.leaves.first(where: { $0.kind == .editor }) else { return }
+    tree.close(editor.id)
   }
   /// Recently opened files in this Project, newest first; persisted with the layout.
   public var recent: [String] = []
@@ -342,7 +351,10 @@ public struct CommandRegistry: Sendable {
     case .failure(let e): return .failure(e)
     case .success(let risk) where risk >= .destructive && !confirmed:
       return .failure(CommandError(.confirmationRequired, "\(id) is \(risk.label)"))
-    case .success: return .success(table[id]!.run(&state, input))
+    case .success:
+      let result = table[id]!.run(&state, input)
+      state.dropEmptyEditors()  // e.g. a split or a new terminal beside the home screen replaces it
+      return .success(result)
     }
   }
 
@@ -507,7 +519,7 @@ extension CommandRegistry {
       return .ok
     },
     // The leftmost editor is replaced on close; open buffers remain available.
-    // With no file open and other panes beside it, the empty editor is removed; opening a file brings it back.
+    // With no file open, an editor never sits beside other panes (`dropEmptyEditors`); closing the last pane leaves the home screen.
     cmd("pane.close", "ペインを閉じる", .write, shortcut: "⌘W",
         preflight: { s, _ throws(CommandError) in
           try require(!s.panesClosed, "no pane to close")
@@ -522,9 +534,11 @@ extension CommandRegistry {
         s.tree.replaceFocusedEditor()
         return .ok
       }
-      // The tree cannot be empty, so closing the last pane hides it behind the empty panel.
+      // The tree cannot be empty, so closing the last pane leaves an editor (the home screen with no file).
       if s.tree.leaves.count == 1 {
+        let last = s.tree.focused
         s.tree.ensureEditorAtLeft()
+        s.tree.close(last)
         s.launches = s.launches.filter { id, _ in s.tree.leaves.contains { $0.id == id } }
         return .ok
       }
@@ -749,7 +763,6 @@ extension CommandRegistry {
       s.tabs.remove(at: idx); s.dirty.remove(p); s.recordClosed(.file(p))
       s.tabOrder.removeAll { $0 == .file(p) }
       if s.active == p { s.active = s.tabs.isEmpty ? nil : s.tabs[max(idx - 1, 0)] }
-      if s.active == nil { s.tree.closeExtraEditors() }  // at most one empty editor
       return .ok
     },
     cmd("file.save", "保存", .write, shortcut: "⌘S",

@@ -446,9 +446,11 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   「算出不可」とし、合計や割合に入れない)
 - editor / terminal / diff を同じ tab group へ置ける任意 split
 - pane の focus、移動、close、最大化、幅/高さ/全体均等
-- ファイルを開いていない空の editor は、コマンドとショートカットの一覧を表示し、
-  クリックでそのコマンドを実行する(クリックで新しい pane が開いたら空の editor は閉じる)。⌘W は他の pane があれば空の editor を閉じ
-  (ファイルを開くと左端に戻る)、空の editor だけなら ⌘Q と同じく確認付きで Clair を終了する
+- 画面に何もないとき(ファイルを開いておらず、他の pane もないとき)だけ、空の editor がコマンドと
+  ショートカットの一覧(ホーム画面)を表示し、クリックでそのコマンドを実行する。ファイルがない空の editor は
+  他の pane(terminal・preview・graph)と並ばない: 最後のファイルを閉じた、ホーム画面から split や terminal を
+  開いた、などで他の pane があれば空の editor は閉じ(ファイルを開くと左端に戻る)、最後の pane を閉じると
+  ホーム画面に戻る。ホーム画面だけのとき ⌘W は ⌘Q と同じく確認付きで Clair を終了する
 - file tree、search、Git の sidebar と、pane へ開く補助 view。file tree は対象ファイルを件数で打ち切らずに表示する。gitignore 対象のファイルは暗いグレー(`textQuaternary`)で表示し、検索・quick open には出さない(中身が 1000 件を超える ignored フォルダはビルドキャッシュとみなして出さない)
 - ⌘F はフォーカス中の pane を検索する。editor は開いているファイル内の検索・置換バー(⌥⌘F で置換行を開く。大文字小文字・正規表現、Return / ⇧Return で次 / 前、「すべて置換」は 1 undo 単位)、terminal は scrollback を含む出力の検索(一致の強調と件数は Ghostty が行う)。それ以外の pane では Project 全体の検索を開く。ファイル内のシンボルは ⌘⇧O、ワークスペースのシンボルは ⌘T
 - Quick Open、全文検索・置換、file watcher、⌘K「Open Recent…」(Project ごとに保存する最近開いたファイルを新しい順に開き直す。Compare With… の候補順も同じ記録を使う)
