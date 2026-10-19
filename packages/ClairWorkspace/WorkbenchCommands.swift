@@ -82,12 +82,12 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   /// Last scanned tree per Project; not persisted, only makes switching back instant.
   var filesCache: [String: [WorkbenchFile]] = [:]
   public var tree = PaneTree(single: .editor)
-  /// ⌘F belongs to the focused pane: a terminal, or an editor showing a file (not a chat tab or the home screen).
+  /// ⌘F belongs to the focused pane: a terminal, or an editor showing a file (not a chat, browser or proposal tab, or the home screen).
   public var findTargetsFocusedPane: Bool {
     guard !panesClosed else { return false }
     switch tree.leaves.first(where: { $0.id == tree.focused })?.kind {
     case .terminal: return true
-    case .editor: return active.map { AgentHistory.id(tab: $0) == nil } ?? false
+    case .editor: return active.map { !FileBrowser.isVirtualTab($0) } ?? false
     default: return false
     }
   }
@@ -113,6 +113,14 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var recent: [String] = []
   /// Current editor selection; never written to WorkspaceSnapshot.
   public var editorContext: EditorContext?
+  /// ADR-0025: the active browser tab's folder and selection (`finder.selection`); never saved.
+  public var browserContext: FileBrowserContext?
+  /// The latest `finder.reveal`; the browser tab it names shows the folder and selects the item once per `seq`.
+  public var browserReveal: FileBrowserReveal?
+  /// Bumped by `finder.open` (⌥⌘B); the shell answers by showing the browser's sidebar panel. Transient.
+  public var browserNavigationGeneration = 0
+  /// Agents' file-operation proposals by id (`finder.propose`). Transient: a restart drops them.
+  public var fileProposals: [String: FileProposal] = [:]
   public var diffTabs: [WorkbenchDiffTab] = []
   public var activeDiff: WorkbenchDiffTab?
   public var tabOrder: [WorkbenchTab] = []
@@ -722,7 +730,7 @@ extension CommandRegistry {
         s.panesClosed = false
         switch tab {
         case .file(let path):
-          guard AgentHistory.id(tab: path) != nil || s.files.contains(where: { $0.path == path && $0.status != "D" }) else { continue }
+          guard s.keepsVirtualTab(path) || s.files.contains(where: { $0.path == path && $0.status != "D" }) else { continue }
           s.openTab(path)
         case .diff(let target): s.openDiff(target)
         case .terminal: s.tree.splitFocused(.horizontal, kind: .terminal)
@@ -919,6 +927,80 @@ extension CommandRegistry {
       s.previews[id] = active
       s.tree.focus(id)
       return .pane(id)
+    },
+    // ADR-0025: the file browser — Finder's column view as an editor tab (`finder:<folder>`), any folder on disk.
+    cmd("finder.open", "ファイルブラウザを開く", .read, ai: false, params: [CommandParam("path", .string, required: false)],
+        shortcut: "⌥⌘B",
+        preflight: { _, i throws(CommandError) in
+          if let raw = i["path"]?.string { try require(FileBrowser.isFolder(FileBrowser.expand(raw)), "not a folder \(raw)") }
+          return .read
+        }) { s, i in
+      let folder = i["path"]?.string.map(FileBrowser.expand) ?? s.projects.first { $0.name == s.project }?.path ?? NSHomeDirectory()
+      s.openTab(s.tabs.first { FileBrowser.root(tab: $0) == folder } ?? FileBrowser.tabPath(folder))
+      s.browserNavigationGeneration += 1
+      return .ok
+    },
+    // `clair reveal <path>`: an agent shows the user a file (or folder) selected in its folder. Shows only — nothing is
+    // read back — so it needs no approval; the active browser tab moves there, else one opens.
+    cmd("finder.reveal", "ファイルブラウザで表示", .additive, params: [CommandParam("path", .string)], palette: false,
+        preflight: { _, i throws(CommandError) in
+          try require(FileManager.default.fileExists(atPath: FileBrowser.expand(i["path"]!.string!)), "no such item \(i["path"]!)")
+          return .additive
+        }) { s, i in
+      let path = FileBrowser.expand(i["path"]!.string!)
+      let folder = (path as NSString).deletingLastPathComponent
+      let tab = s.active.flatMap { FileBrowser.root(tab: $0) != nil ? $0 : nil }
+        ?? s.tabs.first { FileBrowser.root(tab: $0) == folder } ?? FileBrowser.tabPath(folder)
+      s.openTab(tab)
+      s.browserReveal = FileBrowserReveal(tab: tab, folder: folder, select: path, seq: (s.browserReveal?.seq ?? 0) + 1)
+      return .ok
+    },
+    cmd("finder.selection", "ファイルブラウザの選択を取得", .read, palette: false,
+        preflight: { s, _ throws(CommandError) in
+          try require(s.active.flatMap(FileBrowser.root(tab:)) != nil && s.browserContext != nil, "no file browser tab is active")
+          return .read
+        }) { s, _ in
+      let enc = JSONEncoder(); enc.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+      return .text(String(decoding: (try? enc.encode(s.browserContext!)) ?? Data(), as: UTF8.self))
+    },
+    // An agent proposes how to reorganise a folder; the user applies or rejects it in a tab. Proposing changes
+    // nothing on disk, so it needs no approval; the answer is read with finder.proposal (or `clair finder.wait`).
+    cmd("finder.propose", "ファイル操作を提案", .additive,
+        params: [CommandParam("folder", .string), CommandParam("ops", .string)], palette: false,
+        preflight: { _, i throws(CommandError) in
+          _ = try FileProposal.validate(i["ops"]!.string!, folder: i["folder"]!.string!); return .additive
+        }) { s, i in
+      let v = try! FileProposal.validate(i["ops"]!.string!, folder: i["folder"]!.string!)
+      let id = String(UUID().uuidString.lowercased().prefix(8))
+      let proposal = FileProposal(id: id, folder: v.folder, ops: v.ops)
+      s.fileProposals[id] = proposal
+      s.openTab(proposal.tabPath)
+      return .text(id)
+    },
+    cmd("finder.proposal", "提案の結果を取得", .read, params: [CommandParam("id", .string)], palette: false,
+        preflight: { s, i throws(CommandError) in try require(s.fileProposals[i["id"]!.string!] != nil, "no proposal \(i["id"]!)"); return .read }) { s, i in
+      .text(s.fileProposals[i["id"]!.string!]!.report)
+    },
+    // The proposal tab's 適用 button is the approval; trash makes it destructive (the GUI passes `confirmed`).
+    cmd("finder.applyProposal", "提案を適用", .write, ai: false,
+        params: [CommandParam("id", .string), CommandParam("picked", .string)], palette: false,
+        preflight: { s, i throws(CommandError) in
+          let p = s.fileProposals[i["id"]!.string!]
+          try require(p?.state == .pending, "no pending proposal \(i["id"]!)")
+          let picked = FileProposal.picked(i["picked"]!.string!)
+          try require(!picked.isEmpty && picked.allSatisfy { p!.ops.indices.contains($0) }, "picked must list operation indices")
+          return picked.contains { p!.ops[$0].isDestructive } ? .destructive : .write
+        }) { s, i in
+      let id = i["id"]!.string!
+      s.fileProposals[id]!.apply(FileProposal.picked(i["picked"]!.string!))
+      return .text(s.fileProposals[id]!.report)
+    },
+    cmd("finder.rejectProposal", "提案を却下", .write, ai: false, params: [CommandParam("id", .string)], palette: false,
+        preflight: { s, i throws(CommandError) in
+          try require(s.fileProposals[i["id"]!.string!]?.state == .pending, "no pending proposal \(i["id"]!)"); return .write
+        }) { s, i in
+      s.fileProposals[i["id"]!.string!]!.state = .rejected
+      return .ok
     },
     cmd("editor.context", "現在のファイルと選択範囲を取得", .read, palette: false,
         preflight: { s, _ throws(CommandError) in

@@ -209,6 +209,12 @@ extension WorkbenchState {
     }
   }
 
+  /// A browser or history tab is not a Project file, so a rescan of the tree keeps it; a proposal tab lives only as long
+  /// as its (transient) proposal.
+  func keepsVirtualTab(_ path: String) -> Bool {
+    FileProposal.id(tab: path).map { fileProposals[$0] != nil } ?? FileBrowser.isVirtualTab(path)
+  }
+
   mutating func openTab(_ path: String) {
     if active != path { editorContext = nil }
     panesClosed = false
@@ -314,7 +320,7 @@ extension WorkbenchState {
     // paths still exist. Cached and synchronous trees can be reconciled immediately.
     if cached != nil || scanFiles {
       let paths = Set(files.map(\.path))
-      l.tabs = l.tabs.filter(paths.contains)
+      l.tabs = l.tabs.filter { paths.contains($0) || keepsVirtualTab($0) }
       l.dirty.formIntersection(l.tabs)
       if l.active.map(l.tabs.contains) != true { l.active = l.tabs.last }
     }
