@@ -291,6 +291,8 @@ extension LocalizedStrings {
     "パスをコピー": "Copy Path", "プロンプトをコピー": "Copy Prompt",
     "フルパスをコピー": "Copy Full Path",
     "相対パスをコピー": "Copy Relative Path",
+    "クリックで相対パスをコピー": "Click to copy the relative path",
+    "パスをコピーしました": "Path copied",
     "Finder で表示": "Reveal in Finder",
     "デバッグを開始": "Start Debugging",
     "Go: 現在のファイル": "Go: Current File",
