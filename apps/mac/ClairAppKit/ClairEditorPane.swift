@@ -10,6 +10,7 @@
   import SwiftUI
 
   private typealias C = DesignTokens.Color
+  private typealias L = DesignTokens.Line
 
   /// Settings › エディタ › 表示. A change rebuilds the editor view (its font is fixed at init).
   struct EditorStyle: Hashable {
@@ -446,8 +447,15 @@
     var history: ((String) -> AnyView)? = nil
     /// Renders a tab that is not a file (a file browser, a proposal); nil for a file path.
     var custom: ((String) -> AnyView?)? = nil
+    @State private var copiedAt: Date?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
+      content.overlay(alignment: .top) { copiedToast }
+        .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: copiedAt)
+    }
+
+    @ViewBuilder private var content: some View {
       if let path, let view = custom?(path) {
         view
       } else if let path, let id = AgentHistory.id(tab: path), let history {
@@ -536,11 +544,18 @@
     private func breadcrumb(_ path: String) -> some View {
       let parts = path.split(separator: "/").map(String.init)
       return HStack(spacing: 4) {
-        ForEach(Array(parts.enumerated()), id: \.offset) { i, part in
-          if i > 0 { Text("›").font(.system(size: 11)).foregroundStyle(C.textQuaternary) }
-          Text(part).font(.system(size: 11, weight: i == parts.count - 1 ? .semibold : .regular))
-            .foregroundStyle(i == parts.count - 1 ? C.textSecondary : C.textQuaternary).lineLimit(1)
+        // Hover washes the path; a click copies it and confirms with a toast.
+        Button { copy(path); copiedAt = .now } label: {
+          HStack(spacing: 4) {
+            ForEach(Array(parts.enumerated()), id: \.offset) { i, part in
+              if i > 0 { Text("›").font(.system(size: 11)).foregroundStyle(C.textQuaternary) }
+              Text(part).font(.system(size: 11, weight: i == parts.count - 1 ? .semibold : .regular))
+                .foregroundStyle(i == parts.count - 1 ? C.textSecondary : C.textQuaternary).lineLimit(1)
+            }
+          }.padding(.horizontal, 4).padding(.vertical, 2)
         }
+        .buttonStyle(.hoverWash).padding(.leading, -4)
+        .help(tr("クリックで相対パスをコピー")).accessibilityLabel(tr("相対パスをコピー"))
         Spacer(minLength: 0)
         if let onPreview, TableFile.separator(path) != nil {
           Button(action: onPreview) { Image(systemName: "tablecells").font(.system(size: 11)) }
@@ -553,9 +568,20 @@
             .help(tr("分割を閉じる (⌘W)")).accessibilityLabel(tr("分割を閉じる"))
         }
       }.padding(.horizontal, 12).frame(height: 24).background(C.canvas)
-      .contextMenu {
-        if let root { Button(tr("フルパスをコピー")) { copy((root as NSString).appendingPathComponent(path)) } }
-        Button(tr("相対パスをコピー")) { copy(path) }
+    }
+
+    /// The breadcrumb's "copied" toast, under the 24px row; fades after 1.5s.
+    @ViewBuilder private var copiedToast: some View {
+      if copiedAt != nil {
+        Text(tr("パスをコピーしました")).font(.system(size: 12)).foregroundStyle(C.textPrimary)
+          .padding(.horizontal, 10).padding(.vertical, 5)
+          .background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.overlay))
+          .overlay(RoundedRectangle(cornerRadius: Radius.overlay).stroke(L.strong))
+          .padding(.top, 30).transition(.opacity)
+          .task(id: copiedAt) {
+            try? await Task.sleep(for: .seconds(1.5))
+            if !Task.isCancelled { copiedAt = nil }
+          }
       }
     }
 

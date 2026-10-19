@@ -8,7 +8,7 @@ import { copyText, editorMenu, fileMenu, folderMenu, readClipboard, streamMenu }
 import { useWorkbench, type PaneNode } from '../store';
 import { FileIcon } from '../chrome';
 import { finderRoot, PROJECT_ROOT, shellEscape } from '../finder';
-import { color, fs, line, mono, radius, space } from '../tokens';
+import { color, fs, line, mono, radius, space, wash } from '../tokens';
 import { FinderPane, readPathDrag, setPathDrag } from './Finder';
 import { ProposalPane } from './Proposal';
 
@@ -145,43 +145,98 @@ export function ExplorerPanel() {
  */
 function PathBreadcrumb({ path }: { path: string }) {
   const parts = path.split('/');
+  const [hover, setHover] = useState(false);
+  const [copied, setCopied] = useState(0);
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(0), 1500);
+    return () => clearTimeout(t);
+  }, [copied]);
   return (
-    <div
-      className="cl"
-      style={{
-        height: 24,
-        flexShrink: 0,
-        display: 'flex',
-        alignItems: 'center',
-        gap: space[1],
-        padding: '0 12px',
-        overflow: 'hidden',
-        background: color.canvas,
-      }}
-    >
-      {parts.map((part, i) => {
-        const last = i === parts.length - 1;
-        return (
-          <Fragment key={i}>
-            {i > 0 ? (
-              <span style={{ fontSize: fs.caption, color: color.textQuaternary, flexShrink: 0 }}>›</span>
-            ) : null}
-            <span
-              style={{
-                fontSize: fs.caption,
-                fontWeight: last ? 600 : 400,
-                color: last ? color.textSecondary : color.textQuaternary,
-                whiteSpace: 'nowrap',
-                flexShrink: last ? 0 : 1,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {part}
-            </span>
-          </Fragment>
-        );
-      })}
+    <div style={{ position: 'relative', flexShrink: 0 }}>
+      <div
+        className="cl"
+        style={{
+          height: 24,
+          display: 'flex',
+          alignItems: 'center',
+          padding: '0 12px',
+          overflow: 'hidden',
+          background: color.canvas,
+        }}
+      >
+        {/* Hover washes the path; a click copies it and confirms with a toast. */}
+        <button
+          type="button"
+          title="クリックで相対パスをコピー"
+          aria-label="相対パスをコピー"
+          onClick={() => {
+            copyText(path);
+            setCopied(Date.now());
+          }}
+          onMouseEnter={() => setHover(true)}
+          onMouseLeave={() => setHover(false)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: space[1],
+            minWidth: 0,
+            margin: '0 -4px',
+            padding: '2px 4px',
+            border: 0,
+            borderRadius: radius.card,
+            background: hover ? wash.selected : 'transparent',
+            cursor: 'pointer',
+            transition: 'background 80ms ease-out',
+          }}
+        >
+          {parts.map((part, i) => {
+            const last = i === parts.length - 1;
+            return (
+              <Fragment key={i}>
+                {i > 0 ? (
+                  <span style={{ fontSize: fs.caption, color: color.textQuaternary, flexShrink: 0 }}>›</span>
+                ) : null}
+                <span
+                  style={{
+                    fontSize: fs.caption,
+                    fontWeight: last ? 600 : 400,
+                    color: last ? color.textSecondary : color.textQuaternary,
+                    whiteSpace: 'nowrap',
+                    flexShrink: last ? 0 : 1,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {part}
+                </span>
+              </Fragment>
+            );
+          })}
+        </button>
+      </div>
+      {copied ? (
+        <div
+          role="status"
+          style={{
+            position: 'absolute',
+            top: 30,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 5,
+            padding: '5px 10px',
+            fontSize: fs.caption,
+            color: color.textPrimary,
+            whiteSpace: 'nowrap',
+            background: color.chromeRaised,
+            border: `1px solid ${line.strong}`,
+            borderRadius: radius.overlay,
+            pointerEvents: 'none',
+          }}
+        >
+          パスをコピーしました
+        </div>
+      ) : null}
     </div>
   );
 }
