@@ -19,7 +19,7 @@ Every `clair` call prints one JSON reply; exit 0 = ok, 1 = command error, 3 = Cl
 ## 1. Launch children
 
 ```bash
-clair agent.launch profile=claude prompt="<self-contained task>" [direction=right|down] [branch=<new-branch>]
+clair agent launch profile=claude prompt="<self-contained task>" [direction=right|down] [branch=<new-branch>]
 # → {"result":{"text":{"_0":"/path/to/project#7"}}}   ← the child's key
 ```
 
@@ -35,9 +35,9 @@ clair agent.launch profile=claude prompt="<self-contained task>" [direction=righ
 ## 2. Wait and collect
 
 ```bash
-clair agent.wait key="<key>" [timeout=1800]   # exit 0 when that child exited, 1 on timeout
-clair agent.status key="<key>"                # "running" | "exited <code>"
-clair agent.output key="<key>" [lines=200]     # the child's last output lines
+clair agent wait key="<key>" [timeout=1800]   # exit 0 when that child exited, 1 on timeout
+clair agent status key="<key>"                # "running" | "exited <code>"
+clair agent output key="<key>" [lines=200]     # the child's last output lines
 ```
 
 Launch all children first, then wait on each key in turn.
@@ -45,7 +45,7 @@ Launch all children first, then wait on each key in turn.
 ## 3. Close and continue
 
 ```bash
-clair agent.close key="<key>"
+clair agent close key="<key>"
 ```
 
 Closing your own finished child needs no approval. Worktree branches stay; merge or remove them

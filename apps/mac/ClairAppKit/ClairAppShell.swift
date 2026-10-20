@@ -108,7 +108,7 @@ import Observation
     private var debugSessions: [String: ClairDebugSession] = [:]
     var debugSession: ClairDebugSession? { activeRoot.flatMap { debugSessions[$0] } }
     /// The registry's debug.* preflights read `state.debugPhase`; refresh it from the live session first.
-    /// The IPC gate preflights on its own snapshot, so it calls this too (a stale phase refused `clair debug.continue`).
+    /// The IPC gate preflights on its own snapshot, so it calls this too (a stale phase refused `clair debug continue`).
     func syncDebugPhase() {
       let phase = debugSession?.phaseName ?? "idle"
       if state.debugPhase != phase { state.debugPhase = phase }
@@ -3182,7 +3182,7 @@ import Observation
       .background(C.canvas)
     }
 
-    /// V16: lets agents in Clair terminals drive Clair (`clair agent.launch` …) and know how (the clair-agents skill).
+    /// V16: lets agents in Clair terminals drive Clair (`clair agent launch` …) and know how (the clair-agents skill).
     private var integrationCard: some View {
       SettingsCard(title: tr("連携")) {
         SettingsRow(

@@ -120,7 +120,7 @@ NG は **canvas を変える**のか **native の bug** なのかを分類して
 
 ## 10. CLI / MCP(V02 / V03)
 
-- [ ] `clair open path:line` 、`clair pane.splitRight` などが GUI に反映される。GUI 不在で exit 3
+- [ ] `clair open path:line` 、`clair pane splitRight` などが GUI に反映される。GUI 不在で exit 3
 - [ ] `clair <destructive>` が確認なしで実行されず、GUI の確認ダイアログが出る
 - [ ] `clair mcp serve` を実 MCP クライアント(Claude Code 等)につなぐ: tools/list は `aiAvailable` のみ
 - [ ] write 以上の呼び出しで **window 内の承認カード**が出る(内容・リスク・残り秒・⌘↩ 許可 / esc 拒否)

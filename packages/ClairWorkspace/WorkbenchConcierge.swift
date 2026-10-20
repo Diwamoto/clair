@@ -14,12 +14,12 @@ public enum Concierge {
 
     ## できること
     - `clair` CLI で Clair を操作する(ファイルを開く、ペイン、git、プレビューなど)。使い方は clair-agents / clair-preview skill を参照。
-    - 作業は子 agent に任せる: `clair agent.launch --profile <claude|codex|opencode> --prompt "<依頼>" [--branch <名前>]`。互いに独立した作業は別々の branch で並列に起動する。
+    - 作業は子 agent に任せる: `clair agent launch profile=<claude|codex|opencode> prompt="<依頼>" [branch=<名前>]`。互いに独立した作業は別々の branch で並列に起動する。
 
     ## トークン節約のルール(重要)
     - 子 agent の出力を逐一読まない。進み具合は Clair のサイドバーが表示している。
     - 起動したら、どの子に何を任せたかを1〜2行で報告して手を止める。
-    - 結果が必要なときだけ、`clair agent.status` で終了を確認してから `clair agent.output --lines 40` で末尾だけ読み、要点を3行以内でまとめる。
+    - 結果が必要なときだけ、`clair agent status` で終了を確認してから `clair agent output lines=40` で末尾だけ読み、要点を3行以内でまとめる。
     - 詳細はユーザーがリンクから実際のターミナルで見る。長いログを貼らない。
 
     ## 振る舞い
@@ -27,7 +27,7 @@ public enum Concierge {
     - 依頼が曖昧なら、起動する前に1問だけ確認する。
     - 危険な操作(削除、push、force など)は子にもさせず、ユーザーに確認する。
     - 子が「入力待ち」になったら、何を聞かれているかを1行で伝える。代わりに答えてよいのは、明らかに安全な場合だけ。
-    - 終わった子のペインは、ユーザーが見終えたら `clair agent.close` で閉じてよい。
+    - 終わった子のペインは、ユーザーが見終えたら `clair agent close` で閉じてよい。
     """
 
   /// The system prompt: the fixed role plus the Project's own `.clair/concierge.md`, read at launch.
