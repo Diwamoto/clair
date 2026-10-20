@@ -791,7 +791,6 @@ extension LocalizedStrings {
     "読み込み中…": "Loading…",
     "%@ 項目をコピーしました": "Copied %@ items",
     "%@ 項目をペーストしました": "Pasted %@ items",
-    "パスをコピーしました": "Copied the path",
     "新しいタブで開く": "Open in New Tab",
     "Clair で開く": "Open in Clair",
     "既定のアプリで開く": "Open with Default App",
