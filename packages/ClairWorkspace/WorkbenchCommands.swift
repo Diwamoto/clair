@@ -119,6 +119,9 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var browserReveal: FileBrowserReveal?
   /// Bumped by `finder.open` (⌥⌘B); the shell answers by showing the browser's sidebar panel. Transient.
   public var browserNavigationGeneration = 0
+  /// よく使う項目: folders and files pinned to the file browser's first column, in the order they were added.
+  /// The user's own list, shared by every browser tab and saved with the settings.
+  public var favorites: [String] = []
   /// Agents' file-operation proposals by id (`finder.propose`). Transient: a restart drops them.
   public var fileProposals: [String: FileProposal] = [:]
   public var diffTabs: [WorkbenchDiffTab] = []
@@ -1000,6 +1003,20 @@ extension CommandRegistry {
           try require(s.fileProposals[i["id"]!.string!]?.state == .pending, "no pending proposal \(i["id"]!)"); return .write
         }) { s, i in
       s.fileProposals[i["id"]!.string!]!.state = .rejected
+      return .ok
+    },
+    // The user's own list: agents neither read nor change it (ai: false).
+    cmd("finder.addFavorite", "よく使う項目に追加", .write, ai: false, params: [CommandParam("path", .string)], palette: false,
+        preflight: { _, i throws(CommandError) in
+          try require(FileManager.default.fileExists(atPath: FileBrowser.expand(i["path"]!.string!)), "no such item \(i["path"]!)")
+          return .write
+        }) { s, i in
+      let path = FileBrowser.expand(i["path"]!.string!)
+      if !s.favorites.contains(path) { s.favorites.append(path) }
+      return .ok
+    },
+    cmd("finder.removeFavorite", "よく使う項目から外す", .write, ai: false, params: [CommandParam("path", .string)], palette: false) { s, i in
+      s.favorites.removeAll { $0 == i["path"]!.string! || $0 == FileBrowser.expand(i["path"]!.string!) }
       return .ok
     },
     cmd("editor.context", "現在のファイルと選択範囲を取得", .read, palette: false,

@@ -16,13 +16,14 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 
 import { targetRing, useContextMenu } from '../contextMenu';
 import { FileIcon } from '../chrome';
-import { HOME, isHidden, listDir, places, previewText, PROJECT_ROOT, shellEscape, tildify, type FsEntry } from '../finder';
+import { entryAt, HOME, isHidden, listDir, places, previewText, PROJECT_ROOT, shellEscape, tildify, type FsEntry } from '../finder';
 import { IconChevron, IconChevronLeft, IconColumns, IconDoc, IconFolder } from '../icons';
-import { finderBackgroundMenu, finderEntryMenu } from '../menus';
+import { favoriteMenu, finderBackgroundMenu, finderEntryMenu, type FinderActions } from '../menus';
 import { useWorkbench } from '../store';
 import { color, fs, line, radius, space } from '../tokens';
 
 const COLUMN = 200;
+const FAVORITES = 148;
 const PREVIEW = 240;
 // The mock's disk answers at once; this stands in for a real folder read so
 // the lazy listing is visible.
@@ -258,6 +259,13 @@ export function FinderPane({ paneId, tab, root }: { paneId: string; tab: string;
         onMouseDown={() => wb.setFocusedPane(paneId)}
         style={{ flex: 1, minHeight: 0, display: 'flex', outline: 'none' }}
       >
+        <Favorites
+          paneId={paneId}
+          current={view}
+          go={go}
+          open={open}
+          actions={actions}
+        />
         <div ref={scrollRef} className="scroll" style={{ flex: 1, minWidth: 0, display: 'flex', overflowX: 'auto', overflowY: 'hidden' }}>
           {view.columns.map((folder, index) => {
             const list = entries(folder);
@@ -336,6 +344,97 @@ export function FinderPane({ paneId, tab, root }: { paneId: string; tab: string;
       <div style={{ height: 22, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 12px', fontSize: fs.caption, color: notice ? color.textSecondary : color.textQuaternary, borderTop: `1px solid ${line.hairlineFaint}`, opacity: focused || notice ? 1 : 0.8 }}>
         {notice ?? `${count} 項目${view.selection.length ? ` · ${view.selection.length} 項目を選択` : ''}${showHidden ? ' · 隠しファイルを表示中' : ''}`}
       </div>
+    </div>
+  );
+}
+
+/**
+ * よく使う項目: Finder's favorites as the browser's first, fixed column. The user pins folders and files with
+ * "よく使う項目に追加" or by dropping rows here; a folder starts the columns there, a file opens its folder with
+ * it selected. The list is the user's, shared by every browser tab and saved with Clair's settings.
+ */
+function Favorites({ paneId, current, go, open, actions }: {
+  paneId: string;
+  current: View;
+  go: (next: View) => void;
+  open: (entry: FsEntry, app?: string) => void;
+  actions: FinderActions;
+}) {
+  const wb = useWorkbench();
+  const menu = useContextMenu();
+  const [dropping, setDropping] = useState(false);
+  return (
+    <div
+      className="scroll"
+      onDragOver={(event) => {
+        if (!event.dataTransfer.types.includes(PATHS_TYPE)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'link';
+        setDropping(true);
+      }}
+      onDragLeave={() => setDropping(false)}
+      onDrop={(event) => {
+        setDropping(false);
+        const paths = readPathDrag(event);
+        if (!paths?.length) return;
+        event.preventDefault();
+        wb.addFavorites(paths);
+      }}
+      style={{
+        width: FAVORITES,
+        flexShrink: 0,
+        padding: '6px 0',
+        background: color.panel,
+        borderRight: `1px solid ${line.hairlineFaint}`,
+        boxShadow: dropping ? `inset 0 0 0 1px ${line.ring}` : undefined,
+      }}
+    >
+      <div style={{ fontSize: fs.caption, color: color.textQuaternary, padding: '4px 16px 6px' }}>よく使う項目</div>
+      {wb.favorites.map((path) => {
+        const entry = entryAt(path);
+        const gone = !entry || wb.fsTrashed.has(path);
+        const on = entry?.dir ? current.columns[0] === path : current.selection.includes(path);
+        const targeted = wb.contextMenu?.target === `${paneId}:fav:${path}`;
+        const name = path.slice(path.lastIndexOf('/') + 1);
+        return (
+          <button
+            key={path}
+            draggable={!gone}
+            onDragStart={(event) => setPathDrag(event, [path])}
+            className={on ? undefined : 'hoverable'}
+            title={tildify(path)}
+            onClick={() => {
+              if (!entry || gone) return;
+              const parent = path.slice(0, path.lastIndexOf('/'));
+              go(entry.dir ? { columns: [path], selection: [] } : { columns: [parent], selection: [path] });
+            }}
+            onDoubleClick={() => entry && !gone && !entry.dir && open(entry)}
+            onContextMenu={(event) =>
+              entry
+                ? menu(event, (w) => favoriteMenu(w, entry, actions), `${paneId}:fav:${path}`)
+                : menu(event, (w) => ({ entries: [{ type: 'item', label: 'よく使う項目から外す', run: () => w.removeFavorite(path) }] }))
+            }
+            style={{ ...rowStyle(on, false), boxShadow: targeted ? targetRing : undefined, opacity: gone ? 0.5 : 1 }}
+          >
+            {entry?.dir || !entry ? (
+              <IconFolder size={12} color={color.textTertiary} />
+            ) : entry.kind ? (
+              <FileIcon kind={entry.kind} tint={color.textTertiary} />
+            ) : (
+              <IconDoc size={12} color={color.textTertiary} />
+            )}
+            <span style={{ flex: 1, minWidth: 0, fontSize: fs.secondary, color: on ? color.textPrimary : color.textSecondary, fontWeight: on ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {path === HOME ? 'ホーム' : name}
+            </span>
+          </button>
+        );
+      })}
+      {/* EMPTY STATE: what the column is for, until something is pinned. */}
+      {wb.favorites.length === 0 ? (
+        <div style={{ fontSize: fs.caption, lineHeight: '16px', color: color.textQuaternary, padding: '4px 16px' }}>
+          フォルダやファイルをここへドラッグするか、右クリックの「よく使う項目に追加」で登録
+        </div>
+      ) : null}
     </div>
   );
 }

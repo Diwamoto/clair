@@ -152,6 +152,25 @@ final class FileBrowserTests: XCTestCase {
     XCTAssertTrue(FileManager.default.fileExists(atPath: dir + "/a.txt"))
   }
 
+  func testFavoritesAreTheUsersOwnPinnedListAndAreSaved() throws {
+    let r = CommandRegistry.workbench
+    var s = WorkbenchState()
+    try touch("docs/a.md")
+    _ = try r.execute("finder.addFavorite", ["path": .string(dir + "/docs")], state: &s).get()
+    _ = try r.execute("finder.addFavorite", ["path": .string(dir + "/docs/a.md")], state: &s).get()
+    _ = try r.execute("finder.addFavorite", ["path": .string(dir + "/docs/")], state: &s).get()  // already pinned
+    XCTAssertEqual(s.favorites, [dir + "/docs", dir + "/docs/a.md"])
+    XCTAssertThrowsError(try r.execute("finder.addFavorite", ["path": .string(dir + "/missing")], state: &s).get())
+    XCTAssertFalse(r.commands.first { $0.id == "finder.addFavorite" }!.aiAvailable)
+
+    let url = URL(fileURLWithPath: dir + "/workspace.json")
+    try s.save(to: url)
+    XCTAssertEqual(WorkbenchState.restore(from: url)?.favorites, [dir + "/docs", dir + "/docs/a.md"])
+
+    _ = try r.execute("finder.removeFavorite", ["path": .string(dir + "/docs")], state: &s).get()
+    XCTAssertEqual(s.favorites, [dir + "/docs/a.md"])
+  }
+
   func testCLIRevealResolvesAgainstTheCallersDirectory() {
     let req = WorkbenchCLI.parse(["reveal", "notes/a.md"])
     XCTAssertEqual(req?.command, "finder.reveal")

@@ -232,7 +232,7 @@ public enum WorkbenchCLI {
   static let pathArguments: Set<String> = [
     "project.open path", "project.addFolder path", "project.removeFolder path",
     "file.open path", "file.isOpen path", "file.preview path", "debug.breakpoint path",
-    "finder.open path", "finder.reveal path", "finder.propose folder",
+    "finder.open path", "finder.reveal path", "finder.propose folder", "finder.addFavorite path", "finder.removeFavorite path",
   ]
 
   /// `clair help [prefix]`: every registry command a `clair <command-id>` call can name, with its arguments.
