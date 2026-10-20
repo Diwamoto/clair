@@ -6,6 +6,20 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-10-20
+
+### Changed
+
+- When the editor jumps to a line that is off screen, it lands about a third of the way down instead of at the very edge; a line already comfortably on screen no longer scrolls.
+- The `clair` command takes commands as subcommands, such as `clair project open path=.` and `clair help project`. The dotted form (`clair project.open`) still works.
+
+### Fixed
+
+- The hover popup renders the language server's Markdown instead of showing raw code fences.
+- Hovering, double-clicking, ⌘D and ⌘-click on a member such as `e.cfg.Retrieve` now target the member under the pointer, not the whole chain.
+- Diagnostic messages are shown in the hover popup; before, the popup hid them.
+- Saving a file no longer makes the editor flicker.
+
 ## [0.19.1] - 2026-10-20
 
 ### Added
@@ -453,7 +467,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.19.1...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/Diwamoto/clair/compare/v0.19.1...v0.20.0
 [0.19.1]: https://github.com/Diwamoto/clair/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/Diwamoto/clair/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/Diwamoto/clair/compare/v0.17.1...v0.18.0
