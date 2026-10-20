@@ -6,6 +6,12 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.19.1] - 2026-10-20
+
+### Added
+
+- The file browser's first column lists your favorites: pin folders and files with "Add to Favorites" in a row's menu or by dropping them on it, and remove them from a pin's menu. A favorite folder opens there; a favorite file opens its folder with it selected; a favorite that no longer exists stays dimmed until removed.
+
 ## [0.19.0] - 2026-10-20
 
 ### Added
@@ -447,7 +453,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.19.1...HEAD
+[0.19.1]: https://github.com/Diwamoto/clair/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/Diwamoto/clair/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/Diwamoto/clair/compare/v0.17.1...v0.18.0
 [0.17.1]: https://github.com/Diwamoto/clair/compare/v0.17.0...v0.17.1
