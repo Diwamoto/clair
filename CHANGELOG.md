@@ -6,6 +6,18 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-10-20
+
+### Added
+
+- A Finder-style file browser opens any folder as an editor tab in column view (⌥⌘B), with its own sidebar panel listing Project folders, home, Desktop, Documents, Downloads and open browsers. Text files open in Clair, others in their default app or one you pick; ⌘C/⌘V copy and paste files (shared with the macOS Finder) and ⌘⌫ moves them to the Trash after asking.
+- Dropping a file on a Clair terminal — from the macOS Finder, the explorer, the file browser or a titlebar tab — types its shell-escaped path without pressing Return.
+- Agents can read the file browser's selection, reveal a file, and propose creating, moving, renaming or trashing files in a folder; the proposal opens as a tab where you pick which to apply or reject it. Send to Agent passes a multi-selection as paths.
+
+### Fixed
+
+- The home screen no longer sits beside other panes: closing the last file next to a terminal leaves just the terminal, opening a terminal from the home screen replaces it, and closing the last pane returns to the home screen.
+
 ## [0.17.1] - 2026-10-16
 
 ### Added
@@ -419,7 +431,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.17.1...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/Diwamoto/clair/compare/v0.17.1...v0.18.0
 [0.17.1]: https://github.com/Diwamoto/clair/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/Diwamoto/clair/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/Diwamoto/clair/compare/v0.15.1...v0.16.0
