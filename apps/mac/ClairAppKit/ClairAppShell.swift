@@ -50,6 +50,18 @@ import Observation
     func footerItem() -> some View {
       padding(.horizontal, 5).frame(maxHeight: .infinity).contentShape(Rectangle())
     }
+
+    /// A status-bar item's hover popover, shown while the pointer is on it (one at a time via `hovered`).
+    func footerPopover<Content: View>(_ id: String, _ hovered: Binding<String?>, @ViewBuilder _ content: @escaping () -> Content) -> some View {
+      onHover { inside in
+        if inside { hovered.wrappedValue = id } else if hovered.wrappedValue == id { hovered.wrappedValue = nil }
+      }
+      .popover(isPresented: Binding(get: { hovered.wrappedValue == id }, set: { if !$0, hovered.wrappedValue == id { hovered.wrappedValue = nil } }), arrowEdge: .top) {
+        VStack(alignment: .leading, spacing: 6) { content() }
+          .font(Typography.font(Typography.chrome)).monospacedDigit().foregroundStyle(DesignTokens.Color.textSecondary)
+          .frame(minWidth: 240, maxWidth: 420, alignment: .leading).padding(12)
+      }
+    }
   }
 
   /// V01: the GUI process owns `WorkbenchState` (ADR-0007 state owner). Every
@@ -1256,6 +1268,9 @@ import Observation
     @State private var notificationTestResult: String?
     @State private var quota: [ProviderQuota] = []
     @State private var quotaHovered = false
+    /// Status-bar hover popovers; `headInfo` is read when the branch or sync popover opens.
+    @State private var footerHover: String?
+    @State private var headInfo: WorkbenchGit.HeadInfo?
     @State private var noticesOpen = false
     @State private var groupDropTarget: String?
     @State private var hoveredGroup: String?
@@ -3465,6 +3480,111 @@ import Observation
       }
     }
 
+    private var changeCounts: String {
+      tr("ステージ済み %@ · 未ステージ %@ · 未追跡 %@",
+        changes.filter(\.staged).count, changes.filter { $0.unstaged && !$0.untracked }.count, changes.filter(\.untracked).count)
+    }
+
+    private func loadHeadInfo() async {
+      guard let root = store.activeRoot else { return }
+      let info = await Task.detached(priority: .utility) { WorkbenchGit.headInfo(root) }.value
+      if store.activeRoot == root { headInfo = info }
+    }
+
+    @ViewBuilder private func branchHover(_ branch: String) -> some View {
+      Text(branch).font(.system(size: 13, weight: .semibold)).foregroundStyle(C.textPrimary)
+      Text(headInfo?.upstream.map { tr("追跡: %@", $0) } ?? tr("追跡ブランチなし")).foregroundStyle(C.textTertiary)
+      if let head = headInfo?.head { Text(head).lineLimit(2) }
+      if st.isRepo { Text(changes.isEmpty ? tr("未コミットの変更なし") : changeCounts).foregroundStyle(C.textTertiary) }
+      Text(tr("クリックでブランチを切り替え / 作成")).foregroundStyle(C.textQuaternary)
+        .task { await loadHeadInfo() }
+    }
+
+    @ViewBuilder private var syncHover: some View {
+      if let info = headInfo, info.upstream != nil {
+        ForEach([(tr("Pull %@ 件", sync?.behind ?? info.incoming.count), info.incoming, sync?.behind ?? 0),
+                 (tr("Push %@ 件", sync?.ahead ?? info.outgoing.count), info.outgoing, sync?.ahead ?? 0)], id: \.0) { title, commits, total in
+          Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(C.textPrimary)
+          ForEach(commits, id: \.self) { Text($0).lineLimit(1).truncationMode(.tail) }
+          if total > commits.count { Text(tr("ほか %@ 件", total - commits.count)).foregroundStyle(C.textQuaternary) }
+        }
+        Text(info.fetchedAt.map { tr("最終 fetch: %@", $0.formatted(.relative(presentation: .named))) } ?? tr("まだ fetch していません"))
+          .foregroundStyle(C.textTertiary)
+      } else if headInfo != nil {
+        Text(tr("追跡ブランチがありません")).foregroundStyle(C.textTertiary)
+      } else {
+        Text(tr("読み込み中…")).foregroundStyle(C.textQuaternary)
+      }
+      Text(tr("クリックで Pull → Push")).foregroundStyle(C.textQuaternary)
+        .task { await loadHeadInfo() }
+    }
+
+    /// The active file's server and its first diagnostics; a row jumps to its line.
+    @ViewBuilder private var languageHover: some View {
+      if let rel = st.active, let root = store.activeRoot {
+        let path = root + "/" + rel
+        if let server = store.buffers.language.statusText(path, root: root) {
+          Text(server.text).font(.system(size: 13, weight: .semibold)).foregroundStyle(server.failed ? C.attention : C.textPrimary)
+        }
+        let spans = (store.buffers.language.diagnostics[path]?.spans ?? []).sorted { ($0.severity == .error ? 0 : 1) < ($1.severity == .error ? 0 : 1) }
+        let snapshot = store.buffers.view(rel)?.snapshot
+        if spans.isEmpty { Text(tr("問題はありません")).foregroundStyle(C.textTertiary) }
+        ForEach(Array(spans.prefix(8).enumerated()), id: \.offset) { _, span in
+          let line = snapshot.flatMap { try? $0.position(at: span.range.lowerBound, columnUnit: GraphemeUnit.self, rounding: .down) }.map { $0.line.value + 1 }
+          Button { if let line { footerHover = nil; store.buffers.reveal(rel, line: line) } } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+              Image(systemName: span.severity == .error ? "xmark.circle.fill" : "exclamationmark.triangle.fill")
+                .foregroundStyle(span.severity == .error ? C.danger : C.attention)
+              Text(line.map { "L\($0)" } ?? "").foregroundStyle(C.textQuaternary)
+              Text(span.message).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+            }.contentShape(Rectangle())
+          }.buttonStyle(.hoverWash)
+        }
+        if spans.count > 8 { Text(tr("ほか %@ 件", spans.count - 8)).foregroundStyle(C.textQuaternary) }
+      }
+    }
+
+    @ViewBuilder private func sessionsHover(_ agents: [AgentSession]) -> some View {
+      if agents.isEmpty { Text(tr("実行中のセッションはありません")).foregroundStyle(C.textTertiary) }
+      // Waiting first: those are the ones that need the owner.
+      ForEach(agents.sorted { ($0.status == .attention || $0.status == .blocked ? 0 : 1) < ($1.status == .attention || $1.status == .blocked ? 0 : 1) }) { a in
+        let (label, tint) = statusLabel(a.status)
+        Button { footerHover = nil; store.run("pane.focus", ["id": .int(a.pane)]) } label: {
+          HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Circle().fill(tint).frame(width: 6, height: 6)
+            VStack(alignment: .leading, spacing: 1) {
+              Text(terminalTabTitle(a.project, a.pane)).foregroundStyle(C.textPrimary).lineLimit(1)
+              if let activity = a.activity, !activity.isEmpty { Text(activity).foregroundStyle(C.textTertiary).lineLimit(1) }
+            }
+            Spacer(minLength: 8)
+            Text(label).foregroundStyle(tint)
+          }.contentShape(Rectangle())
+        }.buttonStyle(.hoverWash)
+      }
+      Text(tr("クリックでセッション一覧")).foregroundStyle(C.textQuaternary)
+    }
+
+    @ViewBuilder private var versionHover: some View {
+      let c = store.updateConfig
+      Text("\(c.channel.displayName) \(c.currentVersion)").font(.system(size: 13, weight: .semibold)).foregroundStyle(C.textPrimary)
+      if c.channel.hasUpdateFeed {
+        switch store.update {
+        case .available(let u):
+          Text(tr("%@ が利用できます", u.version)).foregroundStyle(C.attention)
+          Button(tr("適用して再起動")) { Task { await store.installUpdate() } }
+        case .checking: Text(tr("確認中…")).foregroundStyle(C.textTertiary)
+        case .installing: Text(tr("更新を適用しています。完了後に再起動します。")).foregroundStyle(C.textTertiary)
+        case .failed(let m): Text(m).foregroundStyle(C.textTertiary).lineLimit(3)
+        case .idle:
+          Text(tr("最新の状態です。")).foregroundStyle(C.textTertiary)
+          Button(tr("更新を確認")) { Task { await store.checkForUpdate(manual: true) } }
+        }
+      } else {
+        Text(tr("Dev ビルドは更新フィードを持ちません。")).foregroundStyle(C.textTertiary)
+      }
+      Button(tr("チェンジログを開く")) { NSWorkspace.shared.open(ClairUpdateConfiguration.changelogURL) }
+    }
+
     private var statusBar: some View {
       let agents = st.agentSessions.filter { $0.project == st.project && !$0.status.isExited }
       let waiting = agents.filter { $0.status == .attention }.count
@@ -3475,14 +3595,16 @@ import Observation
           Text(tr("設定 · %@", tr(st.section))).footerItem()
         } else {
           if let branch {
-            Button { store.run("git.branches") } label: {
+            Button { footerHover = nil; store.run("git.branches") } label: {
               HStack(spacing: 4) {
                 GitBranchGlyph().stroke(style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round))
                   .frame(width: 11, height: 11)
                 Text(branch)
               }.footerItem()
             }
-            .buttonStyle(.hoverWash).fixedSize(horizontal: true, vertical: false).disabled(gitOperation != nil).help(tr("ブランチを切り替え / 作成"))
+            .buttonStyle(.hoverWash).fixedSize(horizontal: true, vertical: false).disabled(gitOperation != nil)
+            .accessibilityHint(tr("ブランチを切り替え / 作成"))
+            .footerPopover("branch", $footerHover) { branchHover(branch) }
           }
           if st.isRepo {
             // VS Code-style sync: one button shows ↓behind ↑ahead and runs pull then push.
@@ -3491,7 +3613,18 @@ import Observation
                 Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 10))
                 if let sync, sync.behind + sync.ahead > 0 { Text("\(sync.behind)↓ \(sync.ahead)↑") }
               }.footerItem()
-            }.buttonStyle(.hoverWash).disabled(gitOperation != nil).help(sync.map { tr("%@ の同期: pull %@ 件 / push %@ 件\nクリックで Pull → Push", branch ?? "", $0.behind, $0.ahead) } ?? tr("同期 (Pull → Push)"))
+            }.buttonStyle(.hoverWash).disabled(gitOperation != nil).accessibilityHint(tr("同期 (Pull → Push)"))
+            .footerPopover("sync", $footerHover) { syncHover }
+            if !changes.isEmpty {
+              Button { sidebarMode = "shield" } label: {
+                HStack(spacing: 3) {
+                  Image(systemName: "plusminus").font(.system(size: 10))
+                  Text("\(changes.count)")
+                }.footerItem()
+              }
+              .buttonStyle(.hoverWash).help(changeCounts + "\n" + tr("クリックで変更パネルを開く"))
+              .accessibilityLabel(tr("未コミットの変更 %@ 件", changes.count))
+            }
             if let gitOperation { ProgressView().controlSize(.small).help(tr("%@中", gitOperation)) }
             // Failures only: a success toast is noise here (owner, 2026-09-24); the Git panel still shows it.
             if let gitMessage, gitFailed, gitOperation == nil {
@@ -3506,8 +3639,24 @@ import Observation
             }
           }
           if !st.dirty.isEmpty { Text(tr("未保存 %@", st.dirty.count)).foregroundStyle(C.attention).footerItem() }
-          if let caret { Text("Ln \(caret.line), Col \(caret.col)").footerItem() }
-          Group { languageStatus }.footerItem()
+          if let caret {
+            let selected = st.active.flatMap { store.buffers.selected[$0] }
+            Text("Ln \(caret.line), Col \(caret.col)" + (selected.map { $0.lines > 1 ? tr(" (%@ 文字選択, %@ 行)", $0.chars, $0.lines) : tr(" (%@ 文字選択)", $0.chars) } ?? "")).footerItem()
+          }
+          if let path = st.active, let ending = store.buffers.lineEnding(path), ending == .lf || ending == .crlf {
+            Menu {
+              Button("LF") { store.buffers.convertLineEndings(path, to: .lf) }.disabled(ending == .lf)
+              Button("CRLF") { store.buffers.convertLineEndings(path, to: .crlf) }.disabled(ending == .crlf)
+            } label: { Text(ending == .crlf ? "CRLF" : "LF").footerItem() }
+            .menuStyle(.button).buttonStyle(.hoverWash).menuIndicator(.hidden).fixedSize(horizontal: true, vertical: false)
+            .help(tr("改行コード — クリックでファイル全体を変換"))
+          }
+          if st.active.map(store.buffers.isOpen) == true {
+            // ponytail: Clair opens UTF-8 only (other encodings are refused at load), so this is a label, not a switch.
+            Text("UTF-8").footerItem().help(tr("文字コード — Clair は UTF-8 のファイルだけを開きます"))
+          }
+          // One HStack, not a Group: a Group would hang a popover on each of its children.
+          HStack(spacing: 10) { languageStatus }.footerItem().footerPopover("language", $footerHover) { languageHover }
         }
         Spacer()
         ClairResourceMeter { terminalTabTitle($0, $1) }  // same name as the terminal's tab
@@ -3518,8 +3667,10 @@ import Observation
             Text(tr("%@ セッション", agents.count) + (waiting > 0 ? tr(" · 入力待ち %@", waiting) : ""))
           }.footerItem()
         }.buttonStyle(.hoverWash)
+        .footerPopover("sessions", $footerHover) { sessionsHover(agents) }
         noticeButton
         Text("v" + (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev")).footerItem()
+          .footerPopover("version", $footerHover) { versionHover }
       }
       .font(Typography.font(Typography.chrome)).monospacedDigit().foregroundStyle(C.textTertiary)
       .padding(.horizontal, 7).frame(height: ChromeBudget.statusBar)

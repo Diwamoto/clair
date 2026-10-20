@@ -13,7 +13,7 @@
 
   // ADR-0020: the concierge's sidebar (itself, its children, its instructions) and its chat panel.
 
-  private func statusLabel(_ s: AgentSession.Status) -> (String, Color) {
+  func statusLabel(_ s: AgentSession.Status) -> (String, Color) {
     switch s {
     case .running: (tr("実行中"), C.success)
     case .attention: (tr("入力待ち"), C.attention)
