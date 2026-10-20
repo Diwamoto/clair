@@ -23,6 +23,6 @@ codex mcp add clair -- clair mcp serve
 - `review.comment`: ファイルの行(`line`〜`endLine`)にレビューコメントを付ける。ファイルは変更しない。
 - `review.suggest`: 行 `line`〜`endLine` を `replacement` に置き換える提案を付ける。適用するかは利用者が diff で決める。active Project のファイルだけ。
 
-`path` は絶対パスか active Project からの相対パスで、開いている Project 内の既存ファイルに限る。Clair の terminal からは同じことを `clair review.comment path=/abs/file line=12 body="…"` のように CLI でも実行できる。
+`path` は絶対パスか active Project からの相対パスで、開いている Project 内の既存ファイルに限る。Clair の terminal からは同じことを `clair review comment path=/abs/file line=12 body="…"` のように CLI でも実行できる。
 
 Agent が選択内容を使うときは `editor.context` を呼ぶ。選択内容は Agent へ渡るが、Clair の workspace file には保存されない。`file.open` はユーザーの画面を切り替える。Clair 内の terminal からは従来どおり `clair open /absolute/path:line:column` も利用できる。

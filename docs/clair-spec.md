@@ -343,8 +343,8 @@ resolved になる。未保存の editor buffer を含む対象
 ではメニューを無効にし、ディスクと異なる内容を黙って渡さない。この操作は既存の
 agent launch と同じ Project / session / 承認境界を通る。
 
-agent 側から指摘を返す経路として `clair review.comment` / `review.suggest` /
-`review.threads` を残す。
+agent 側から指摘を返す経路として `clair review comment` / `review suggest` /
+`review threads` を残す。
 
 review コメントは行番号や画面上の吹き出しとして保存しない。anchor は最低限
 次を持つ。

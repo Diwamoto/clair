@@ -186,12 +186,13 @@ public final class WorkbenchIPCServer: @unchecked Sendable {
 }
 
 /// CLI argument → request. `clair open path[:line[:col]]` is `file.open` (a relative path is resolved against the
-/// caller's cwd, since the GUI's differs); otherwise `clair <command-id> [key=value …]` with bool/int/double/string inference.
-// ponytail: col is parsed but dropped (the editor reveal is line-only); a file literally named `x:12` needs `clair file.open path=…`;
+/// caller's cwd, since the GUI's differs); otherwise `clair <group> <command> [key=value …]` with bool/int/double/string inference.
+// ponytail: col is parsed but dropped (the editor reveal is line-only); a file literally named `x:12` needs `clair file open path=…`;
 // value inference can't force a numeric-looking string, add `key:=json` when a string param needs it.
 public enum WorkbenchCLI {
   public static func parse(_ args: [String]) -> WorkbenchIPCRequest? {
-    guard let first = args.first else { return nil }
+    var args = args
+    guard var first = args.first else { return nil }
     if first == "preview" {
       guard args.count == 2, !args[1].isEmpty else { return nil }
       let path = args[1]
@@ -208,6 +209,8 @@ public enum WorkbenchCLI {
       if let line = numbers.first { input["line"] = .int(line) }
       return WorkbenchIPCRequest(command: "file.open", input: input, caller: caller)
     }
+    // `clair project open path=.` → `project.open`. The dotted id still parses: installed hooks call `clair agent.report`.
+    if !first.contains("."), args.count > 1, !args[1].contains("=") { first += "." + args.remove(at: 1) }
     var input = CommandInput()
     for a in args.dropFirst() {
       guard let eq = a.firstIndex(of: "="), eq != a.startIndex else { return nil }
@@ -221,25 +224,25 @@ public enum WorkbenchCLI {
   }
 
   /// `command key` pairs the GUI reads as file-system paths. The GUI's cwd is not the caller's, so a relative
-  /// one is resolved here (`clair project.open path=.`). Project-relative paths (tab.open, review.*) are left alone.
+  /// one is resolved here (`clair project open path=.`). Project-relative paths (tab.open, review.*) are left alone.
   static let pathArguments: Set<String> = [
     "project.open path", "project.addFolder path", "project.removeFolder path",
     "file.open path", "file.isOpen path", "file.preview path", "debug.breakpoint path",
   ]
 
-  /// `clair help [prefix]`: every registry command a `clair <command-id>` call can name, with its arguments.
+  /// `clair help [group]`: every registry command a `clair <group> <command>` call can name, with its arguments.
   public static func help(_ prefix: String = "", registry: CommandRegistry = .workbench) -> String {
-    let rows = registry.commands.filter { $0.id.hasPrefix(prefix) }.sorted { $0.id < $1.id }.map { d -> String in
+    let rows = registry.commands.filter { $0.id.hasPrefix(prefix.replacingOccurrences(of: " ", with: ".")) }.sorted { $0.id < $1.id }.map { d -> String in
       let params = d.params.map { p -> String in
         let arg = "\(p.name)=\(p.allowed?.joined(separator: "|") ?? "<\(p.kind.rawValue)>")"
         return p.required ? arg : "[\(arg)]"
       }
       let risk = ["read", "additive", "write", "destructive", "external"][d.risk.rawValue]
-      return ([d.id] + params).joined(separator: " ") + "\n    \(tr(d.title)) — \(risk)\(d.aiAvailable ? "" : ", user-only")"
+      return ([d.id.replacingOccurrences(of: ".", with: " ")] + params).joined(separator: " ") + "\n    \(tr(d.title)) — \(risk)\(d.aiAvailable ? "" : ", user-only")"
     }
     return """
-      usage: clair open [--wait] <path[:line[:col]]> | clair preview <html-path> | clair <command-id> [key=value ...]
-             clair agent.wait key=<root#pane> [timeout=<s>] | clair mcp serve | clair daemon stop|status | clair help [prefix]
+      usage: clair open [--wait] <path[:line[:col]]> | clair preview <html-path> | clair <group> <command> [key=value ...]
+             clair agent wait key=<root#pane> [timeout=<s>] | clair mcp serve | clair daemon stop|status | clair help [group]
       Every call prints one JSON reply; exit 0 ok, 1 command error, 2 usage, 3 Clair not running.
       user-only: not offered to MCP; from a Clair terminal it waits for your approval in Clair.
 

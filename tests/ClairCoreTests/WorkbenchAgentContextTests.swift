@@ -80,7 +80,7 @@ final class WorkbenchAgentContextTests: XCTestCase {
     let review = AgentLaunch(profile: "claude", cwd: "/x", prompt: "review", review: true)
     XCTAssertFalse(plain.command.contains("allowedTools"))
     XCTAssertTrue(review.command.contains("--allowedTools"))
-    XCTAssertTrue(review.command.contains("Bash(clair review.comment:*)"))
+    XCTAssertTrue(review.command.contains("Bash(clair review comment:*)"))
     XCTAssertFalse(review.command.contains("Bash(clair:*)"))
     // A provider without a review form runs its plain batch.
     let codex = AgentLaunch(profile: "codex", cwd: "/x", prompt: "p", review: true).command

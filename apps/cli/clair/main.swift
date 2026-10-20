@@ -1,7 +1,7 @@
 import ClairWorkspace
 import Foundation
 
-// V02: `clair open path[:line:col]` / `clair <command-id> [key=value …]` → running Clair GUI.
+// V02: `clair open path[:line:col]` / `clair <group> <command> [key=value …]` → running Clair GUI.
 // stdout: JSON reply. exit 0 ok, 1 command error, 2 usage, 3 GUI not running / IPC failure.
 // V03: `clair mcp serve` — stdio MCP adapter (newline-delimited JSON-RPC). Authorization is enforced in the GUI.
 if CommandLine.arguments.dropFirst().starts(with: ["mcp", "serve"]) {
@@ -15,7 +15,7 @@ if CommandLine.arguments.dropFirst().starts(with: ["mcp", "serve"]) {
 if CommandLine.arguments.dropFirst().first == "attach" { exit(runAttach(Array(CommandLine.arguments.dropFirst(2)))) }
 if CommandLine.arguments.dropFirst().starts(with: ["daemon", "stop"]) { exit(runDaemonStop(Array(CommandLine.arguments.dropFirst(3)))) }
 if CommandLine.arguments.dropFirst().starts(with: ["daemon", "status"]) { exit(runDaemonStatus(Array(CommandLine.arguments.dropFirst(3)))) }
-// `clair help [prefix]` lists the registry this binary was built with; it needs no running GUI.
+// `clair help [group]` lists the registry this binary was built with; it needs no running GUI.
 if let first = CommandLine.arguments.dropFirst().first, ["help", "--help", "-h"].contains(first), CommandLine.arguments.count <= 3 {
   print(WorkbenchCLI.help(CommandLine.arguments.count == 3 ? CommandLine.arguments[2] : ""))
   exit(0)
@@ -25,10 +25,10 @@ var args = Array(CommandLine.arguments.dropFirst())
 let wait = args.first == "open" && args.count == 3 && args[1] == "--wait"
 if wait { args.remove(at: 1) }
 guard var request = WorkbenchCLI.parse(args) else {
-  FileHandle.standardError.write(Data("usage: clair open [--wait] <path[:line[:col]]> | clair preview <html-path> | clair <command-id> [key=value ...]\n       clair help [prefix] lists the commands\n".utf8))
+  FileHandle.standardError.write(Data("usage: clair open [--wait] <path[:line[:col]]> | clair preview <html-path> | clair <group> <command> [key=value ...]\n       clair help [group] lists the commands\n".utf8))
   exit(2)
 }
-// V16: `clair agent.wait key=<root#pane> [timeout=<s>]` polls agent.status until that delegated agent exits
+// V16: `clair agent wait key=<root#pane> [timeout=<s>]` polls agent.status until that delegated agent exits
 // (exit 0), or prints the last status and exits 1 at the timeout (default 1800 s). Client-side: one IPC call stays short.
 if request.command == "agent.wait" {
   let deadline = Date().addingTimeInterval(TimeInterval(request.input["timeout"].flatMap { if case .int(let t) = $0 { t } else { nil } } ?? 1800))

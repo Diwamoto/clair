@@ -84,6 +84,9 @@ final class WorkbenchIPCTests: XCTestCase {
     XCTAssertEqual(WorkbenchCLI.parse(["open", "/x/y.go"])?.input, ["path": .string("/x/y.go")])
     XCTAssertNil(WorkbenchCLI.parse([]))
     XCTAssertNil(WorkbenchCLI.parse(["pane.focus", "id"]))
+    XCTAssertEqual(WorkbenchCLI.parse(["pane", "splitRight"])?.command, "pane.splitRight")
+    XCTAssertEqual(WorkbenchCLI.parse(["project", "open", "path=/p"]), WorkbenchCLI.parse(["project.open", "path=/p"]))
+    XCTAssertTrue(WorkbenchCLI.help("project").contains("project open"))
   }
 
   // The GUI's cwd is not the caller's: path arguments it reads from disk are made absolute here, project-relative ones are not.
@@ -110,13 +113,13 @@ final class WorkbenchIPCTests: XCTestCase {
   func testHelpListsCommandsWithArguments() {
     let all = WorkbenchCLI.help()
     XCTAssertTrue(all.hasPrefix("usage: clair open"))
-    for id in CommandRegistry.workbench.commands.map(\.id) { XCTAssertTrue(all.contains("\n\(id)"), id) }
-    let projects = WorkbenchCLI.help("project.")
-    XCTAssertTrue(projects.contains("\nproject.list\n"))
-    XCTAssertTrue(projects.contains("\nproject.rename name=<string> label=<string>\n"))
+    for id in CommandRegistry.workbench.commands.map(\.id) { XCTAssertTrue(all.contains("\n\(id.replacingOccurrences(of: ".", with: " "))"), id) }
+    let projects = WorkbenchCLI.help("project")
+    XCTAssertTrue(projects.contains("\nproject list\n"))
+    XCTAssertTrue(projects.contains("\nproject rename name=<string> label=<string>\n"))
     XCTAssertTrue(projects.contains("— write, user-only"))
-    XCTAssertFalse(projects.contains("\nagent."))
-    XCTAssertTrue(WorkbenchCLI.help("agent.launch").contains("[direction=right|down]"))
+    XCTAssertFalse(projects.contains("\nagent "))
+    XCTAssertTrue(WorkbenchCLI.help("agent launch").contains("[direction=right|down]"))
   }
 
   func testPreviewArgumentParsing() throws {

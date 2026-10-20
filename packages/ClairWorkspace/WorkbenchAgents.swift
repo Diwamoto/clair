@@ -29,7 +29,7 @@ public struct AgentProfile: Sendable, Equatable {
     AgentProfile(
       id: "claude", title: "Claude Code", command: "claude", batch: "claude -p", resume: "claude --resume",
       // `-p` denies tools that would ask; allow exactly the Clair review commands (and only those).
-      reviewBatch: "claude --allowedTools 'Bash(clair review.comment:*)' 'Bash(clair review.suggest:*)' 'Bash(clair review.threads:*)' -p",
+      reviewBatch: "claude --allowedTools 'Bash(clair review comment:*)' 'Bash(clair review suggest:*)' 'Bash(clair review threads:*)' -p",
       open: "claude"),
     AgentProfile(id: "codex", title: "Codex", command: "codex", batch: "codex exec", resume: "codex resume", open: "codex"),
     AgentProfile(id: "opencode", title: "OpenCode", command: "opencode", batch: "opencode run", resume: "opencode --session", open: "opencode --prompt"),
