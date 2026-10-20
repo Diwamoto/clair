@@ -155,6 +155,13 @@
       XCTAssertEqual(ranges(view), [0...4, 8...13])
     }
 
+    func testWordStopsAtMemberAccessDots() throws {
+      let view = try makeView("x := e.cfg.Retrieve(ctx)")
+      XCTAssertEqual(view.word(at: UTF8Offset(14)), TextUTF8Range(UTF8Offset(11), UTF8Offset(19)))  // Retrieve
+      XCTAssertEqual(view.word(at: UTF8Offset(8)), TextUTF8Range(UTF8Offset(7), UTF8Offset(10)))  // cfg
+      XCTAssertEqual(view.word(at: UTF8Offset(5)), TextUTF8Range(UTF8Offset(5), UTF8Offset(6)))  // e
+    }
+
     func testOptionDragSelectsTheSamePixelColumnsOnEveryLine() throws {
       let view = try makeView("abcdef\nab\nabcdef")
       // From inside "b" to inside "d": the left edge snaps down, the right edge up.
