@@ -122,8 +122,14 @@
     private func hover(at offset: UTF8Offset, word: TextUTF8Range?, fromCaret: Bool = false) async {
       guard let view else { return }
       let revision = view.snapshot.revision
-      let text = await language.hover(path, root: root, at: offset)
+      let info = await language.hover(path, root: root, at: offset)
       guard !Task.isCancelled, view.snapshot.revision == revision, fromCaret || hoverWord == word, popup == .none || fromCaret else { return }
+      // The underline's own tooltip hides behind this popup, so its messages lead it.
+      let at = word ?? TextUTF8Range(offset, offset)
+      let problems = view.diagnostics
+        .filter { !$0.message.isEmpty && $0.range.lowerBound <= at.upperBound && at.lowerBound <= $0.range.upperBound }
+        .map { ($0.severity == .error ? "⛔ " : "⚠️ ") + $0.message }
+      let text = problems.isEmpty ? info : ([problems.joined(separator: "\n\n")] + [info].compactMap { $0 }).joined(separator: "\n\n")
       guard let text else {
         if fromCaret { message(tr("ホバー情報はありません")) }
         return
