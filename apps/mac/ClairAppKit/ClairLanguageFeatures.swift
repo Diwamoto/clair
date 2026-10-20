@@ -312,13 +312,42 @@
       }
     }
 
+    /// Hover Markdown as shown: ``` fence lines dropped, code kept verbatim, prose with inline markup rendered.
+    static func hoverMarkdown(_ text: String) -> AttributedString {
+      var out = AttributedString(), prose: [Substring] = [], inCode = false
+      func flushProse() {
+        guard !prose.isEmpty else { return }
+        let s = prose.joined(separator: "\n")
+        out += (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(s)
+        out += AttributedString("\n")
+        prose = []
+      }
+      for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
+        if line.trimmingCharacters(in: .whitespaces).hasPrefix("```") {
+          flushProse(); inCode.toggle()
+        } else if inCode {
+          out += AttributedString(line + "\n")
+        } else {
+          prose.append(line)
+        }
+      }
+      flushProse()
+      return trimmed(out)
+    }
+
+    private static func trimmed(_ s: AttributedString) -> AttributedString {
+      var s = s
+      while s.characters.last?.isNewline == true { s.removeSubrange(s.index(beforeCharacter: s.endIndex)..<s.endIndex) }
+      return s
+    }
+
     var body: some View {
       Group {
         switch features.popup {
         case .none: EmptyView()
         case .info(let text):
           ScrollView {
-            Text(text).font(.system(size: 12, design: .monospaced)).foregroundStyle(C.textSecondary)
+            Text(Self.hoverMarkdown(text)).font(.system(size: 12, design: .monospaced)).foregroundStyle(C.textSecondary)
               .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).padding(9)
           }.accessibilityLabel(tr("ホバー情報"))
         case .signature(let s): signature(s)
