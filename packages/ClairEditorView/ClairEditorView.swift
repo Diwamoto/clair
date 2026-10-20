@@ -297,6 +297,19 @@ import ClairEditorCore
       scroll.reflectScrolledClipView(clip)
     }
 
+    /// Jump scroll: a row already comfortably on screen stays put; otherwise it
+    /// lands about a third of the way down so the eye finds it.
+    func scrollToThird(row: Int) {
+      guard let scroll = enclosingScrollView else { return }
+      let clip = scroll.contentView
+      let visible = clip.documentVisibleRect
+      let top = rowTop(row)
+      if top >= visible.minY + lineHeight, top + 2 * lineHeight <= visible.maxY { return }
+      let proposed = NSRect(x: 0, y: top - visible.height / 3, width: visible.width, height: visible.height)
+      clip.scroll(to: clip.constrainBoundsRect(proposed).origin)
+      scroll.reflectScrolledClipView(clip)
+    }
+
     /// Moves the caret to the start of `line` (0-based, clamped), scrolls it into view and takes focus.
     public func reveal(line: Int) {
       let i = min(max(line, 0), snapshot.lineCount - 1)
@@ -304,7 +317,7 @@ import ClairEditorCore
       selection = TextSelectionSet(cursor: l.contentRange.lowerBound)  // opens a fold around it first
       onSelectionChange?(selection)
       syncFrameSize()
-      scrollToVisible(NSRect(x: 0, y: rowTop(i) - 3 * lineHeight, width: 1, height: 7 * lineHeight))
+      scrollToThird(row: i)
       window?.makeFirstResponder(self)
       needsDisplay = true
     }
@@ -633,7 +646,7 @@ import ClairEditorCore
       guard let line = try? snapshot.position(at: range.lowerBound, columnUnit: UTF8Unit.self).line else { return }
       select(range)  // opens a fold around it first
       syncFrameSize()
-      scrollToVisible(NSRect(x: 0, y: rowTop(line.value) - 3 * lineHeight, width: 1, height: 7 * lineHeight))
+      scrollToThird(row: line.value)
     }
 
     private func drawSelections(_ seg: EditorRowSegment, context: CGContext) {
