@@ -135,6 +135,26 @@ public enum WorkbenchGit {
     let n = r.out.split(whereSeparator: \.isWhitespace).compactMap { Int($0) }
     return r.ok && n.count == 2 ? (n[0], n[1]) : nil
   }
+  /// Status-bar hover detail (read on hover, not on every reload): upstream, last commit,
+  /// the first commits pull / push would move, and when FETCH_HEAD was last written.
+  public struct HeadInfo: Sendable, Equatable {
+    public var upstream: String?
+    public var head: String?
+    public var incoming: [String] = []
+    public var outgoing: [String] = []
+    public var fetchedAt: Date?
+  }
+  public static func headInfo(_ root: String, limit: Int = 5) -> HeadInfo {
+    let upstream = run(root, ["rev-parse", "--abbrev-ref", "@{u}"])
+    let log = ["log", "--format=%h %s", "-\(limit)"]
+    let fetchHead = run(root, ["rev-parse", "--path-format=absolute", "--git-path", "FETCH_HEAD"])
+    return HeadInfo(
+      upstream: upstream.ok ? upstream.out : nil,
+      head: { let r = run(root, ["log", "-1", "--format=%h %s · %an · %cr"]); return r.ok && !r.out.isEmpty ? r.out : nil }(),
+      incoming: upstream.ok ? lines(root, log + ["HEAD..@{u}"]) : [],
+      outgoing: upstream.ok ? lines(root, log + ["@{u}..HEAD"]) : [],
+      fetchedAt: fetchHead.ok ? (try? FileManager.default.attributesOfItem(atPath: fetchHead.out))?[.modificationDate] as? Date : nil)
+  }
   /// Stage or unstage a validated group in one subprocess. This is materially cheaper than
   /// spawning git and rescanning the repository once per sidebar row.
   @discardableResult public static func setStaged(_ root: String, paths: [String], staged: Bool) -> String? {

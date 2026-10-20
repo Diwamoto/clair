@@ -41,6 +41,22 @@ final class WorkbenchGitTests: XCTestCase {
     XCTAssertEqual(counts.keys.first, Calendar.current.startOfDay(for: .now))
   }
 
+  func testHeadInfoListsIncomingAndOutgoingAgainstUpstream() throws {
+    let (_, dir) = try repo()
+    XCTAssertNil(WorkbenchGit.headInfo(dir).upstream)
+    let clone = dir + "-clone"
+    sh(dir, "clone", "-q", dir, clone)
+    sh(dir, "commit", "--allow-empty", "-m", "upstream only")
+    sh(clone, "commit", "--allow-empty", "-m", "local only")
+    sh(clone, "fetch", "-q")
+    let info = WorkbenchGit.headInfo(clone)
+    XCTAssertEqual(info.upstream, "origin/main")
+    XCTAssertTrue(info.head?.contains("local only") == true)
+    XCTAssertEqual(info.incoming.map { $0.split(separator: " ", maxSplits: 1).last.map(String.init) }, ["upstream only"])
+    XCTAssertEqual(info.outgoing.map { $0.split(separator: " ", maxSplits: 1).last.map(String.init) }, ["local only"])
+    XCTAssertNotNil(info.fetchedAt)
+  }
+
   func testWaitWithoutRunLoopReturnsStatus() throws {
     let p = Process()
     p.executableURL = URL(fileURLWithPath: "/usr/bin/false")

@@ -173,6 +173,37 @@
         let p = try? snapshot.position(at: head, columnUnit: GraphemeUnit.self, rounding: .down)
       else { return }
       caret[path] = (p.line.value + 1, p.column.value + 1)
+      // Status bar "N 文字選択": grapheme count and lines spanned, O(log n) per selection.
+      var chars = 0, lines = 0
+      for s in sel.selections where !s.isEmpty {
+        guard let a = try? snapshot.position(at: s.range.lowerBound, columnUnit: GraphemeUnit.self, rounding: .down),
+          let b = try? snapshot.position(at: s.range.upperBound, columnUnit: GraphemeUnit.self, rounding: .down),
+          let ga = try? snapshot.convert(s.range.lowerBound, to: GraphemeUnit.self, rounding: .down),
+          let gb = try? snapshot.convert(s.range.upperBound, to: GraphemeUnit.self, rounding: .down) else { continue }
+        chars += gb.value - ga.value
+        lines += b.line.value - a.line.value + 1
+      }
+      selected[path] = chars > 0 ? (chars, lines) : nil
+    }
+    private(set) var selected: [String: (chars: Int, lines: Int)] = [:]
+
+    /// The file's line ending, judged by its first line break; nil for a single-line file.
+    func lineEnding(_ path: String) -> TextLineEnding? {
+      guard case .ready(let m) = loads[path] else { return nil }
+      return try? m.buffer.snapshot.line(at: TextLineIndex(0)).ending
+    }
+
+    /// Rewrites every CRLF / LF break to `target` as one undoable edit through the open view.
+    func convertLineEndings(_ path: String, to target: TextLineEnding) {
+      guard let view = view(path) else { return }
+      let snapshot = view.snapshot
+      let replacement = target == .crlf ? "\r\n" : "\n"
+      let edits = (0..<snapshot.lineCount).compactMap { i -> TextEdit? in
+        guard let line = try? snapshot.line(at: TextLineIndex(i)), let e = line.ending,
+          e == .lf || e == .crlf, e != target else { return nil }
+        return TextEdit(range: line.terminatorRange, replacement: replacement)
+      }
+      if !edits.isEmpty { view.onCommitEdits?(edits) }
     }
     /// Search-hit jump target (1-based line, 0-based UTF-16 column, -1 selects the line); `nonce` makes a repeat jump to the same line still fire.
     private(set) var reveal: (path: String, line: Int, column: Int, nonce: Int)?
