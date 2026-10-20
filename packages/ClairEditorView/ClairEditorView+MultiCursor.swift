@@ -43,7 +43,14 @@ import ClairEditorCore
       else { return nil }
       let string = NSAttributedString(string: text)
       guard string.length > 0 else { return TextUTF8Range(offset, offset) }
-      let word = string.doubleClick(at: min(position.column.value, string.length - 1))
+      let column = min(position.column.value, string.length - 1)
+      var word = string.doubleClick(at: column)
+      // AppKit keeps "e.cfg.Retrieve" one word (like "e.g."); in code each dotted member is its own word.
+      let ns = string.string as NSString
+      let before = ns.range(of: ".", options: .backwards, range: NSRange(location: word.location, length: max(column - word.location, 0)))
+      if before.location != NSNotFound { word = NSRange(location: NSMaxRange(before), length: NSMaxRange(word) - NSMaxRange(before)) }
+      let after = ns.range(of: ".", range: NSRange(location: column, length: max(NSMaxRange(word) - column, 0)))
+      if after.location != NSNotFound, after.location > word.location { word.length = after.location - word.location }
       guard
         let lower = try? snapshot.offset(
           at: TextLinePosition(line: line.index, column: UTF16Offset(word.location)),
