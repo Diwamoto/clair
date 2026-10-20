@@ -18,6 +18,7 @@ import {
   IconSparkle,
   IconSplitDown,
   IconSplitRight,
+  IconStar,
   IconTerminalPrompt,
 } from './icons';
 import type { Screen, Workbench } from './store';
@@ -400,6 +401,9 @@ export function finderEntryMenu(wb: Workbench, entry: FsEntry, paths: string[], 
         disabled: !wb.fileClipboard.length,
         run: () => act.paste(entry.dir && !many ? entry.path : parent),
       }),
+      many || !wb.favorites.includes(entry.path)
+        ? item('よく使う項目に追加', { icon: <IconStar size={12} />, run: () => wb.addFavorites(paths) })
+        : item('よく使う項目から外す', { icon: <IconStar size={12} />, run: () => wb.removeFavorite(entry.path) }),
       item('パスをコピー', { shortcut: '⌥⌘C', run: () => copyText(paths.join('\n')) }),
       item('相対パスをコピー', { shortcut: '⌥⇧⌘C', disabled: many || relative === null, run: () => copyText(relative ?? '') }),
       item('Finderで表示', { icon: <IconFolder size={12} />, shortcut: '⌥⌘R' }),
@@ -430,6 +434,22 @@ function organizeEntry(wb: Workbench, folder: string, act: FinderActions): MenuE
         }),
       ),
   });
+}
+
+/** A row in the favorites column: open it, or take it off the list. */
+export function favoriteMenu(wb: Workbench, entry: FsEntry, act: FinderActions): MenuSpec {
+  return {
+    header: { icon: entry.dir ? <IconFolder size={12} /> : fileGlyph(entry.kind), title: entry.name, sub: tildify(entry.path) },
+    entries: [
+      item(entry.dir ? '開く' : 'Clair で開く', { shortcut: '↵', disabled: !entry.dir && !entry.text, run: () => act.open(entry) }),
+      item('新しいタブで開く', { disabled: !entry.dir, run: () => wb.openFinder(entry.path) }),
+      separator,
+      item('Send to Agent', { icon: <IconSparkle size={12} />, submenu: agentsSubmenu(wb, `@${relativeTo(entry.path) ?? tildify(entry.path)} を見てください。`) }),
+      item('パスをコピー', { shortcut: '⌥⌘C', run: () => copyText(entry.path) }),
+      separator,
+      item('よく使う項目から外す', { icon: <IconStar size={12} />, run: () => wb.removeFavorite(entry.path) }),
+    ],
+  };
 }
 
 /** The empty part of a column: what can land in that folder, and the view itself. */

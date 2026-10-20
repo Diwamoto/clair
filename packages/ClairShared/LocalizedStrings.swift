@@ -773,6 +773,10 @@ extension LocalizedStrings {
     "正常終了": "Exited",
     "異常終了 (exit %@)": "Failed (exit %@)",
     // ADR-0025: file browser and agent file proposals
+    "よく使う項目": "Favorites",
+    "よく使う項目に追加": "Add to Favorites",
+    "よく使う項目から外す": "Remove from Favorites",
+    "フォルダやファイルをここへドラッグするか、右クリックの「よく使う項目に追加」で登録": "Drag folders or files here, or right-click and choose “Add to Favorites”",
     "のコピー": "copy",
     "ファイルブラウザを開く": "Open File Browser",
     "ファイルブラウザで表示": "Show in File Browser",

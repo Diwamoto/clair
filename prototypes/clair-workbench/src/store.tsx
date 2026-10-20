@@ -154,6 +154,8 @@ function useWorkbenchState() {
   const [fileClipboard, setFileClipboard] = useState<string[]>([]);
   const [fsCopies, setFsCopies] = useState<Record<string, FsEntry[]>>({});
   const [fsTrashed, setFsTrashed] = useState<Set<string>>(() => new Set());
+  // よく使う項目: folders and files the user pinned to the browser's leftmost column. Saved with Clair's settings.
+  const [favorites, setFavorites] = useState<string[]>(() => [PROJECT_ROOT, `${PROJECT_ROOT}/docs`, '/Users/daiki/Downloads']);
   // The workspace's sidebar: the explorer tree, or the file browser's places.
   const [workspacePanel, setWorkspacePanel] = useState<'files' | 'browser'>('files');
   // Each file browser tab's current first column (its tab label and the
@@ -755,6 +757,9 @@ function useWorkbenchState() {
     typeIntoTerminal,
     openFinder,
     goToPlace,
+    favorites,
+    addFavorites: (paths: string[]) => setFavorites((current) => [...current, ...paths.filter((p) => !current.includes(p))]),
+    removeFavorite: (path: string) => setFavorites((current) => current.filter((p) => p !== path)),
     reveal,
     proposals,
     requestOrganize,

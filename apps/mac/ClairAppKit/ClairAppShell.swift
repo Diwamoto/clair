@@ -2623,7 +2623,10 @@ import Observation
         openInClair: { store.run("file.open", ["path": .string($0)]) },
         openBrowser: { store.run("finder.open", ["path": .string($0)]) },
         focusPane: { store.run("pane.focus", ["id": .int($0)]) },
-        context: { store.state.browserContext = $0 })
+        context: { store.state.browserContext = $0 },
+        favorites: st.favorites,
+        addFavorites: { paths in for p in paths { store.run("finder.addFavorite", ["path": .string(p)]) } },
+        removeFavorite: { store.run("finder.removeFavorite", ["path": .string($0)]) })
     }
 
     /// Tabs that are not files: a browser's columns, or an agent's file-operation proposal.
