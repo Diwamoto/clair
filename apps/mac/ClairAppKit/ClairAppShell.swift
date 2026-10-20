@@ -1005,7 +1005,12 @@ import Observation
           if generation == self.scanGeneration, root == self.activeRoot,
             self.gitFilesystemMutationRoot != root
           {
-            let changed = preserveDirty ? paths.subtracting(self.state.dirty) : paths
+            // Our own ⌘S comes back as a watcher event; a buffer already equal to the disk is kept, so the
+            // editor does not blank and reload. ponytail: reads each changed open file on main; hash off-main if slow.
+            let changed = (preserveDirty ? paths.subtracting(self.state.dirty) : paths).filter {
+              guard case .ready(let m)? = self.buffers.peek($0), !self.state.dirty.contains($0) else { return true }
+              return FileManager.default.contents(atPath: root + "/" + $0) != Data(m.buffer.snapshot.string().utf8)
+            }
             self.state.applyDiskChange(changed, files: files)
             if paths.contains(where: { FileWatcher.isGitState($0) }) { self.gitRevision += 1 }
             self.buffers.drop(changed)
