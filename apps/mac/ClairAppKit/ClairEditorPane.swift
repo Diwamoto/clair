@@ -476,6 +476,8 @@
     var home: [HomeView.Row] = []
     /// Renders a history chat tab (`AgentHistory.tabPath`) by chat id.
     var history: ((String) -> AnyView)? = nil
+    /// Renders a tab that is not a file (a file browser, a proposal); nil for a file path.
+    var custom: ((String) -> AnyView?)? = nil
     @State private var copiedAt: Date?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -485,7 +487,9 @@
     }
 
     @ViewBuilder private var content: some View {
-      if let path, let id = AgentHistory.id(tab: path), let history {
+      if let path, let view = custom?(path) {
+        view
+      } else if let path, let id = AgentHistory.id(tab: path), let history {
         history(id)
       } else if let path, let root {
         switch buffers.peek(path) {

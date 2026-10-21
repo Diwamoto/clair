@@ -7,7 +7,10 @@ import { IconBranchSmall, IconChevron, IconCloseThin, IconEllipsis, IconFolder }
 import { copyText, editorMenu, fileMenu, folderMenu, readClipboard, streamMenu } from '../menus';
 import { useWorkbench, type PaneNode } from '../store';
 import { FileIcon } from '../chrome';
+import { finderRoot, PROJECT_ROOT, shellEscape } from '../finder';
 import { color, fs, line, mono, radius, space, wash } from '../tokens';
+import { FinderPane, readPathDrag, setPathDrag } from './Finder';
+import { ProposalPane } from './Proposal';
 
 const byPath = new Map(files.map((f) => [f.path, f]));
 
@@ -83,6 +86,8 @@ export function ExplorerPanel() {
               <button
                 key={node.id}
                 className="hoverable"
+                draggable
+                onDragStart={(event) => setPathDrag(event, [`${PROJECT_ROOT}/${node.id.slice(node.id.indexOf('/') + 1)}`])}
                 onClick={() => wb.toggleFolder(node.id)}
                 onContextMenu={(event) => menu(event, (w) => folderMenu(w, node.id, node.name, false), node.id)}
                 style={{ ...row(false), color: node.ignored ? color.textQuaternary : color.textSecondary }}
@@ -102,6 +107,9 @@ export function ExplorerPanel() {
             <button
               key={node.id}
               className={selected ? undefined : 'hoverable'}
+              // Dragged onto a terminal, a row arrives as its absolute path (TerminalPane).
+              draggable
+              onDragStart={(event) => setPathDrag(event, [`${PROJECT_ROOT}/${node.path}`])}
               onClick={() => wb.openFile(node.path)}
               onContextMenu={(event) => menu(event, (w) => fileMenu(w, node.path, 'tree'), node.id)}
               style={{ ...row(selected), color: selected ? color.textPrimary : color.textSecondary }}
@@ -236,6 +244,15 @@ function PathBreadcrumb({ path }: { path: string }) {
 function EditorPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
   const wb = useWorkbench();
   const path = node.filePath ?? wb.activePath;
+  const folder = finderRoot(path);
+  // A file browser tab shows in the editor's place; keyed so each tab keeps its own columns.
+  if (folder) return <FinderPane key={path} paneId={node.id} tab={path} root={folder} />;
+  if (path.startsWith('proposal:')) return <ProposalPane key={path} paneId={node.id} id={path} />;
+  return <TextEditor node={node} path={path} />;
+}
+
+function TextEditor({ node, path }: { node: Extract<PaneNode, { kind: 'leaf' }>; path: string }) {
+  const wb = useWorkbench();
   const file = byPath.get(path);
   const text = wb.contents[path] ?? '';
   const lines = text.split('\n');
@@ -521,7 +538,9 @@ function AgentPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
 
 function TerminalPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
   const wb = useWorkbench();
-  const [input, setInput] = useState('');
+  const input = wb.terminalInput;
+  const setInput = wb.setTerminalInput;
+  const [dropping, setDropping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const menu = useContextMenu();
@@ -553,12 +572,31 @@ function TerminalPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
               selection,
               paste: () => {
                 void readClipboard().then((text) => {
-                  if (text) setInput((current) => current + text.replace(/\n/g, ' '));
+                  if (text) setInput(input + text.replace(/\n/g, ' '));
                   requestAnimationFrame(() => inputRef.current?.focus());
                 });
               },
             }),
           );
+        }}
+        // A dropped file or folder (explorer, file browser) is typed onto the
+        // input line as its shell-escaped path — never sent: the user presses
+        // Return. Same as Ghostty's own drop from the macOS Finder.
+        onDragOver={(event) => {
+          if (!event.dataTransfer.types.includes('application/x-clair-paths')) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'copy';
+          setDropping(true);
+        }}
+        onDragLeave={() => setDropping(false)}
+        onDrop={(event) => {
+          setDropping(false);
+          const paths = readPathDrag(event);
+          if (!paths?.length) return;
+          event.preventDefault();
+          wb.typeIntoTerminal(paths.map(shellEscape).join(' '));
+          wb.setFocusedPane(node.id);
+          requestAnimationFrame(() => inputRef.current?.focus());
         }}
         className="cl scroll"
         style={{
@@ -571,6 +609,7 @@ function TerminalPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
           color: color.code,
           whiteSpace: 'pre',
           cursor: 'text',
+          boxShadow: dropping ? `inset 0 0 0 1px ${line.ring}` : undefined,
         }}
       >
         {wb.terminal.map((l, i) => (

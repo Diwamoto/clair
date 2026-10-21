@@ -199,6 +199,13 @@ public enum WorkbenchCLI {
       let absolute = path.hasPrefix("/") ? path : URL(fileURLWithPath: path, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath)).path
       return WorkbenchIPCRequest(command: "file.preview", input: ["path": .string(absolute)], caller: caller)
     }
+    // `clair reveal <path>`: show a file in Clair's file browser (relative to the caller's cwd).
+    if first == "reveal" {
+      guard args.count == 2, !args[1].isEmpty else { return nil }
+      let path = args[1]
+      let absolute = path.hasPrefix("/") ? path : URL(fileURLWithPath: path, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath)).standardizedFileURL.path
+      return WorkbenchIPCRequest(command: "finder.reveal", input: ["path": .string(absolute)], caller: caller)
+    }
     if first == "open" {
       guard args.count == 2 else { return nil }
       var parts = args[1].split(separator: ":", omittingEmptySubsequences: false).map(String.init)
@@ -228,6 +235,7 @@ public enum WorkbenchCLI {
   static let pathArguments: Set<String> = [
     "project.open path", "project.addFolder path", "project.removeFolder path",
     "file.open path", "file.isOpen path", "file.preview path", "debug.breakpoint path",
+    "finder.open path", "finder.reveal path", "finder.propose folder", "finder.addFavorite path", "finder.removeFavorite path",
   ]
 
   /// `clair help [group]`: every registry command a `clair <group> <command>` call can name, with its arguments.
@@ -241,8 +249,9 @@ public enum WorkbenchCLI {
       return ([d.id.replacingOccurrences(of: ".", with: " ")] + params).joined(separator: " ") + "\n    \(tr(d.title)) — \(risk)\(d.aiAvailable ? "" : ", user-only")"
     }
     return """
-      usage: clair open [--wait] <path[:line[:col]]> | clair preview <html-path> | clair <group> <command> [key=value ...]
-             clair agent wait key=<root#pane> [timeout=<s>] | clair mcp serve | clair daemon stop|status | clair help [group]
+      usage: clair open [--wait] <path[:line[:col]]> | clair preview <html-path> | clair reveal <path> | clair <group> <command> [key=value ...]
+             clair agent wait key=<root#pane> [timeout=<s>] | clair finder wait id=<proposal> [timeout=<s>]
+             clair mcp serve | clair daemon stop|status | clair help [group]
       Every call prints one JSON reply; exit 0 ok, 1 command error, 2 usage, 3 Clair not running.
       user-only: not offered to MCP; from a Clair terminal it waits for your approval in Clair.
 

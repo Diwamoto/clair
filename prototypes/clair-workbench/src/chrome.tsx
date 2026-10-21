@@ -10,7 +10,9 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSPropert
 
 import { targetRing, useContextMenu } from './contextMenu';
 import { files, projectTabs, type FileKind } from './data';
-import { fileMenu, projectMenu, sessionTabMenu, standInTabMenu } from './menus';
+import { finderRoot, PROJECT_ROOT } from './finder';
+import { setPathDrag } from './screens/Finder';
+import { fileMenu, finderTabMenu, projectMenu, sessionTabMenu, standInTabMenu } from './menus';
 import { chrome, color, fs, groupColor, line, mono, radius, space, wash, withAlpha, type GroupColorKey } from './tokens';
 import {
   IconBranch,
@@ -19,6 +21,7 @@ import {
   IconCodex,
   IconCommand,
   IconEllipsis,
+  IconColumns,
   IconFolder,
   IconGear,
   IconSearch,
@@ -177,6 +180,7 @@ function Tab({
   onClick,
   onContextMenu,
   targeted,
+  dragPath,
 }: {
   icon: ReactNode;
   label: string;
@@ -187,11 +191,15 @@ function Tab({
   onContextMenu?: (event: React.MouseEvent) => void;
   /** Its context menu is open. */
   targeted?: boolean;
+  /** The absolute path the tab stands for: dragged onto a terminal it is typed there, like an explorer row. */
+  dragPath?: string;
 }) {
   const tint = active ? color.chromeInk : color.textTertiary;
   return (
     <button
       className={active ? undefined : 'tab-btn'}
+      draggable={!!dragPath}
+      onDragStart={dragPath ? (event) => setPathDrag(event, [dragPath]) : undefined}
       onClick={onClick}
       onContextMenu={onContextMenu}
       title={label}
@@ -267,18 +275,21 @@ function FileTab({ path, active }: { path: string; active: boolean }) {
   const file = byPath.get(path);
   const tint = active ? color.chromeInk : color.textTertiary;
   const target = `tab:${path}`;
+  const folder = finderRoot(path) ? (wb.finderRoots[path] ?? finderRoot(path)) : null;
+  const proposal = wb.proposals[path];
   return (
     <Tab
-      icon={file ? <FileIcon kind={file.kind} tint={tint} /> : <IconSparkle size={12} color={tint} />}
-      label={file?.name ?? path}
+      icon={folder ? <IconColumns size={12} color={tint} /> : file ? <FileIcon kind={file.kind} tint={tint} /> : <IconSparkle size={12} color={tint} />}
+      label={folder ? folder.slice(folder.lastIndexOf('/') + 1) : proposal ? '整理の提案' : file?.name ?? path}
+      dragPath={folder ?? (file ? `${PROJECT_ROOT}/${file.path}` : undefined)}
+      dot={proposal ? proposal.state === 'pending' : tab?.dirty}
       active={active}
-      dot={tab?.dirty}
       targeted={wb.contextMenu?.target === target}
       onClick={() => {
         wb.setActivePath(path);
         wb.openFile(path);
       }}
-      onContextMenu={(event) => menu(event, (w) => fileMenu(w, path, 'tab'), target)}
+      onContextMenu={(event) => menu(event, (w) => (folder ? finderTabMenu(w, path, folder) : proposal ? finderTabMenu(w, path, proposal.folder) : fileMenu(w, path, 'tab')), target)}
     />
   );
 }
@@ -644,6 +655,8 @@ export function AppTitlebar({ extra }: { extra?: ReactNode }) {
 // its `review` (changes) default; `⌃⌘G` does the same.
 const NAV: Array<{ id: string; screen: Screen; label: string; icon: (p: { size?: number }) => ReactNode }> = [
   { id: 'files', screen: 'workspace', label: 'File Tree', icon: IconFolder },
+  // A second panel of the workspace, not a screen: the main area stays the panes.
+  { id: 'browser', screen: 'workspace', label: 'ファイルブラウザ', icon: IconColumns },
   { id: 'review', screen: 'review', label: 'Source Control', icon: IconBranch },
   { id: 'agents', screen: 'sessions', label: 'Agents', icon: IconSession },
   { id: 'debug', screen: 'debug', label: 'Debug', icon: IconBug },
@@ -651,7 +664,7 @@ const NAV: Array<{ id: string; screen: Screen; label: string; icon: (p: { size?:
 ];
 
 /** Which strip entry the current screen lights up, and which panel it shows. */
-export function navIdFor(screen: Screen): string {
+export function navIdFor(screen: Screen, workspacePanel: 'files' | 'browser' = 'files'): string {
   if (screen === 'debug' || screen === 'debugAgent') return 'debug';
   if (screen === 'graph' || screen === 'review') return 'review';
   // The agent conversation opens from its own titlebar tab; while it is up,
@@ -659,7 +672,7 @@ export function navIdFor(screen: Screen): string {
   if (screen === 'sessions' || screen === 'activity') return 'agents';
   if (screen === 'concierge') return 'concierge';
   if (screen === 'settings') return 'settings';
-  return 'files';
+  return workspacePanel;
 }
 
 /**
@@ -722,7 +735,7 @@ const NAV_GAP = space[1];
 
 function ActivityBar() {
   const wb = useWorkbench();
-  const active = navIdFor(wb.screen);
+  const active = navIdFor(wb.screen, wb.workspacePanel);
   const containerRef = useRef<HTMLDivElement>(null);
   const [visibleCount, setVisibleCount] = useState(NAV.length);
   const [overflowOpen, setOverflowOpen] = useState(false);
@@ -788,6 +801,7 @@ function ActivityBar() {
               onClick={() => {
                 wb.setOverlay(null);
                 wb.setScreen(item.screen);
+                if (item.id === 'files' || item.id === 'browser') wb.setWorkspacePanel(item.id);
               }}
             >
               <Icon size={18} />

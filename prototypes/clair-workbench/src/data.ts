@@ -300,6 +300,7 @@ export const commands: Command[] = [
   { title: 'Debug + AI統合（検討中）', id: 'clair.debug.agent', shortcut: '', risk: '読み取り' },
   { title: 'Agentを追加', id: 'clair.agent.add', shortcut: '⌃⌘N', risk: '追加' },
   { title: '設定を開く', id: 'clair.settings.open', shortcut: '⌘,', risk: '読み取り' },
+  { title: 'ファイルブラウザを開く', id: 'clair.finder.open', shortcut: '⌥⌘B', risk: '読み取り' },
 ];
 
 export type Session = {

@@ -94,6 +94,15 @@ import Observation
     /// ADR-0022: the socket Claude Code connects to, and the proposed edits waiting for the user (by proposal path).
     let claudeIDE = ClaudeIDEServer()
     var proposals: [String: ClaudeProposal] = [:]
+    /// ADR-0025: each file browser tab's columns and history, kept while the tab is switched away. Not observed itself:
+    /// the model is, so creating one while a view reads it does not re-render the reader.
+    @ObservationIgnored private var browsers: [String: FileBrowserModel] = [:]
+    func browser(_ tab: String) -> FileBrowserModel {
+      if let m = browsers[tab] { return m }
+      let m = FileBrowserModel(root: FileBrowser.root(tab: tab) ?? NSHomeDirectory())
+      browsers[tab] = m
+      return m
+    }
     var selectionBroadcast: Task<Void, Never>?
     /// V13: a managed worktree is a separate Project and keeps its own debug session.
     private var debugSessions: [String: ClairDebugSession] = [:]
@@ -122,6 +131,8 @@ import Observation
     private var sleepAssertion: IOPMAssertionID = 0
     private var persistenceTask: Task<Void, Never>?
     public private(set) var windowGeneration = 0
+    /// Bumped by `file.new` (⌘N); the shell answers with the explorer's name prompt.
+    public private(set) var newFileRequests = 0
 
     /// Map manually started CLI processes back to the terminal panes Clair already owns.
     func refreshDetectedAgents() async {
@@ -415,6 +426,7 @@ import Observation
         if id == "editor.fileSymbols" { showFileSymbols() }
         if id == "editor.problems" { showProblems() }
         if id == "project.choose" { chooseProject() }
+        if id == "file.new" { newFileRequests += 1 }
         if id == "agent.mention" { mentionSelectionToClaude() }
         if id == "agent.ask" { askAgentAboutSelection() }
         if id == "terminal.askAgent" { askAgentAboutTerminalSelection() }
@@ -643,18 +655,6 @@ import Observation
       }
       guard id == "file.save" else { _ = run(id, input, confirmed: ["app.restart", "app.investigateCrash"].contains(id)); return }
       Task { await saveActiveFile() }
-    }
-
-    /// A click on a home-screen row: when the command opens a new pane, the empty editor makes way for it.
-    func performFromHome(_ id: String) {
-      let before = Set(state.tree.leaves.map(\.id))
-      performFromUI(id)
-      guard state.active == nil, !state.panesClosed, state.tree.leaves.contains(where: { !before.contains($0.id) }),
-        let editor = state.tree.leaves.first(where: { $0.kind == .editor })?.id else { return }
-      let opened = state.tree.focused
-      _ = run("pane.focus", ["id": .int(editor)])
-      _ = run("pane.close")
-      _ = run("pane.focus", ["id": .int(opened)])
     }
 
     /// Runs Git commands through the same typed registry as CLI/MCP without blocking SwiftUI.
@@ -1154,7 +1154,7 @@ import Observation
 
     public var body: some Commands {
       CommandGroup(replacing: .appSettings) { items(.settings) }
-      CommandGroup(after: .newItem) { items(.file) }
+      CommandGroup(replacing: .newItem) { items(.file) }  // drops SwiftUI's New Window (⌘N); ⌘N is file.new
       CommandGroup(after: .textEditing) { items(.edit) }
       CommandGroup(after: .toolbar) { items(.view) }
       CommandMenu(tr("Pane")) {
@@ -1184,7 +1184,7 @@ import Observation
 
     /// Menu-bar titles follow macOS English menus; the palette keeps the registry's titles.
     static let titles: [String: String] = [
-      "settings.open": "Settings…", "file.save": "Save", "tab.reopenClosed": "Reopen Closed Tab",
+      "settings.open": "Settings…", "file.new": "New File…", "file.save": "Save", "tab.reopenClosed": "Reopen Closed Tab",
       "project.choose": "Open Project…", "pane.close": "Close Tab or Pane", "palette.recent": "Open Recent…", "palette.compare": "Compare With…",
       "window.restart": "Restart Window", "editor.zoomIn": "Zoom In", "editor.zoomInAlt": "Zoom In", "editor.zoomOut": "Zoom Out", "app.restart": "Restart App", "app.investigateCrash": "Investigate Last Crash",
       "palette.find": "Find", "editor.replace": "Replace", "palette.search": "Find in Project", "editor.format": "Format Document",
@@ -1198,7 +1198,7 @@ import Observation
       "editor.codeAction": "Quick Fix…", "editor.rename": "Rename Symbol", "editor.fileSymbols": "Go to Symbol in File…",
       "editor.problems": "Show Problems", "editor.hover": "Show Hover", "agent.mention": "Send Selection to Claude Code",
       "tab.next": "Next Tab", "tab.previous": "Previous Tab", "pane.focusNext": "Focus Next Pane",
-      "pane.focusPrevious": "Focus Previous Pane",
+      "pane.focusPrevious": "Focus Previous Pane", "finder.open": "Open File Browser",
     ]
 
     @ViewBuilder private func items(_ m: Menu) -> some View {
@@ -1394,6 +1394,11 @@ import Observation
         if st.palette == .search { searchSelection = 0; runSearch() }
       }
       .onChange(of: st.debugNavigationGeneration) { sidebarMode = "ladybug" }
+      // ⌘N: beside the active file; the Project root for none or an ad-hoc `../` tab.
+      .onChange(of: store.newFileRequests) {
+        let folder = st.active.map { ($0 as NSString).deletingLastPathComponent } ?? ""
+        createItem(in: folder.hasPrefix("..") ? "" : folder, folder: false)
+      }
       // A file opened while the concierge chat covers the panes would land hidden behind it.
       .onChange(of: st.active) { if sidebarMode == "concierge" { leaveConcierge() } }
       .onChange(of: store.debugSession?.frames.first) { _, frame in
@@ -1635,18 +1640,25 @@ import Observation
     private func fileTab(_ path: String, projectActive: Bool, project: String, selected: Bool, dirty: Bool) -> some View {
       let historyID = AgentHistory.id(tab: path)
       let chat = historyID.flatMap { historyTabs[$0] }
+      // ADR-0025: a browser tab is named after the folder its columns start from; a proposal stays marked until answered.
+      let browser = FileBrowser.root(tab: path) != nil ? store.browser(path) : nil
+      let proposal = FileProposal.id(tab: path).flatMap { st.fileProposals[$0] }
+      let label = browser.map { ($0.root as NSString).lastPathComponent }
+        ?? (FileProposal.id(tab: path) != nil ? tr("整理の提案") : historyID == nil ? name(path) : chat?.title ?? tr("チャット履歴"))
+      let icon: String? = browser != nil ? Self.browserMode : FileProposal.id(tab: path) != nil ? "sparkles" : historyID == nil ? nil : "bubble.left.and.bubble.right"
       return FileTabButton(
-        path: WorkbenchTab.file(path).dragID, name: historyID == nil ? name(path) : chat?.title ?? tr("チャット履歴"), selected: selected, dirty: dirty,
+        path: WorkbenchTab.file(path).dragID, name: label, selected: selected, dirty: dirty || proposal?.state == .pending,
         onActivate: {
           if !projectActive { store.run("project.switch", ["name": .string(project)]) }
           store.run("tab.activate", ["path": .string(path)])
         },
         onClose: { store.run("tab.close", ["path": .string(path)]) },
         // Reorder within the active group only; other groups' tabs live in saved layouts.
-        icon: historyID == nil ? nil : "bubble.left.and.bubble.right", providerIcon: chat?.provider.rawValue,
-        onMove: projectActive ? { from in store.run("tab.reorder", ["source": .string(from), "target": .string(WorkbenchTab.file(path).dragID)]) } : nil
+        icon: icon, providerIcon: chat?.provider.rawValue,
+        onMove: projectActive ? { from in store.run("tab.reorder", ["source": .string(from), "target": .string(WorkbenchTab.file(path).dragID)]) } : nil,
+        fileURL: tabFileURL(path, project: project)
       )
-      .clairContextMenu(menus) { projectActive && historyID == nil ? fileMenu(path, tab: true) : ClairMenuSpec(entries: []) }
+      .clairContextMenu(menus) { projectActive && !FileBrowser.isVirtualTab(path) ? fileMenu(path, tab: true) : ClairMenuSpec(entries: []) }
     }
 
     /// Mock `projectMenu`: colour in place, switch/fold/rename, order, mute, close.
@@ -1711,7 +1723,7 @@ import Observation
     /// pair, and icons are bigger now that they own a whole column.
     private var activityBar: some View {
       VStack(spacing: 2) {
-        ForEach(["folder", "shield", "terminal", "ladybug", "concierge"], id: \.self) { icon in
+        ForEach(["folder", Self.browserMode, "shield", "terminal", "ladybug", "concierge"], id: \.self) { icon in
           activityBarButton(icon)
         }
         // ponytail: no overflow "…" menu — the Workbench shows it only when nav items overflow; four always fit here.
@@ -1721,6 +1733,12 @@ import Observation
       .frame(width: ChromeBudget.activityBarWidth).frame(maxHeight: .infinity)
       .background(C.chrome)
       .overlay(alignment: .trailing) { Rectangle().fill(C.surfaceActive).frame(width: 1) }
+      // ⌥⌘B shows the browser's panel. Here, not on the body's modifier chain (already at the type checker's limit);
+      // the activity bar is on screen even while ⌘B hides the sidebar.
+      .onChange(of: st.browserNavigationGeneration) {
+        sidebarMode = Self.browserMode
+        if st.sidebarHidden { store.run("sidebar.toggle") }
+      }
     }
 
     private func activityBarButton(_ icon: String) -> some View {
@@ -1738,7 +1756,7 @@ import Observation
     private var sidebar: some View {
       VStack(spacing: 0) {
         // Lazy: a Project can list thousands of files, and an eager tree makes accessibility traversal (and layout) block the main thread.
-        ScrollView { LazyVStack(alignment: .leading, spacing: 0) { sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "terminal" ? AnyView(sessionList) : sidebarMode == "ladybug" ? AnyView(debugPanel) : sidebarMode == "concierge" ? AnyView(conciergeSidebar) : AnyView(explorer) }.clairScroller() }
+        ScrollView { LazyVStack(alignment: .leading, spacing: 0) { sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "terminal" ? AnyView(sessionList) : sidebarMode == "ladybug" ? AnyView(debugPanel) : sidebarMode == "concierge" ? AnyView(conciergeSidebar) : sidebarMode == Self.browserMode ? AnyView(browserSidebar) : AnyView(explorer) }.clairScroller() }
         Spacer(minLength: 0)
         if sidebarMode == "shield", st.isRepo {
           // Same filled control as the commit button, so it reads as a button and the whole box is the hit target.
@@ -2345,6 +2363,7 @@ import Observation
                   }
                 }
                 .clairContextMenu(menus) { fileMenu(f.path, tab: false) }
+                .onDrag { dragItem(f.path) }
               } else {
                 let open = st.expanded.contains(r.id)
                 treeRow(depth: r.depth, selected: false, action: { store.run("explorer.toggle", ["path": .string(r.id)]) }) {
@@ -2354,6 +2373,7 @@ import Observation
                   Spacer(minLength: 0)
                   if let tint = Self.changeColor(ranks[r.id]) { Circle().fill(tint).frame(width: 6, height: 6) }
                 }
+                .onDrag { dragItem(addedFolder(r.id) ?? r.id) }
                 .clairContextMenu(menus) {
                   if let folder = addedFolder(r.id) {
                     ClairMenuSpec(title: r.label, sub: folder, entries: [
@@ -2369,6 +2389,9 @@ import Observation
                   ClairMenuSpec(title: r.label, sub: r.id, entries: [
                     .item(open ? tr("折りたたむ") : tr("開く")) { store.run("explorer.toggle", ["path": .string(r.id)]) },
                     reviewMenu(tr("このフォルダをレビュー"), .folder(r.id), disabled: st.dirty.contains(where: { $0.hasPrefix(r.id + "/") })),
+                    .item(tr("ファイルブラウザで開く"), shortcut: "⌥⌘B") {
+                      if let url = absolute(r.id) { store.run("finder.open", ["path": .string(url.path)]) }
+                    },
                     .separator,
                   ] + pathItems(r.id) + [.separator] + fileOps(r.id, dir: true))
                   }
@@ -2561,6 +2584,76 @@ import Observation
           if ClairGhosttySurfaceView.send("@\(path) ", toPane: a.pane) { store.run("pane.focus", ["id": .int(a.pane)]) }
         }
       })
+    }
+
+    /// What a titlebar tab drags out as: its file (a Project path, or an ad-hoc `../` one), or a browser tab's folder.
+    /// Chats and proposals stand for no file.
+    private func tabFileURL(_ path: String, project: String) -> URL? {
+      if FileBrowser.root(tab: path) != nil { return URL(fileURLWithPath: store.browser(path).root) }
+      guard !FileBrowser.isVirtualTab(path), let root = st.projects.first(where: { $0.name == project })?.path else { return nil }
+      return URL(fileURLWithPath: root).appending(path: path).standardizedFileURL
+    }
+
+    /// An explorer row drags out as its file URL: onto a terminal it is typed as an escaped path (ADR-0025),
+    /// onto the macOS Finder it copies. `path` is Project-relative, or absolute for an added folder.
+    private func dragItem(_ path: String) -> NSItemProvider {
+      let url = path.hasPrefix("/") ? URL(fileURLWithPath: path) : absolute(path)
+      return url.map { NSItemProvider(object: $0 as NSURL) } ?? NSItemProvider()
+    }
+
+    // MARK: file browser (ADR-0025, Finder artboard)
+
+    /// The sidebar mode and activity-bar glyph of the file browser: Finder's column view.
+    static let browserMode = "rectangle.split.3x1"
+
+    private var browserSidebar: some View {
+      let p = currentProject
+      let activeBrowser = st.active.flatMap { FileBrowser.root(tab: $0) != nil ? store.browser($0) : nil }
+      return FileBrowserSidebar(
+        project: p.map { (name: $0.displayName, path: $0.path, folders: $0.folders ?? []) },
+        tabs: st.tabs.filter { FileBrowser.root(tab: $0) != nil }.map { FileBrowserSidebar.OpenTab(tab: $0, root: store.browser($0).root) },
+        active: st.settingsOpen ? nil : st.active, activeModel: st.settingsOpen ? nil : activeBrowser,
+        openBrowser: { store.run("finder.open", ["path": .string($0)]) },
+        activate: { store.run("tab.activate", ["path": .string($0)]) })
+    }
+
+    private var browserHost: FileBrowserHost {
+      FileBrowserHost(
+        projectRoot: store.activeRoot,
+        agents: st.agentSessions.filter { $0.project == st.project && !$0.status.isExited }.map { (title: $0.title, pane: $0.pane) },
+        terminal: st.tree.leaves.first { leaf in
+          leaf.kind == .terminal && st.launches[leaf.id] == nil
+            && !st.agentSessions.contains { $0.project == st.project && $0.pane == leaf.id }
+        }?.id,
+        openInClair: { store.run("file.open", ["path": .string($0)]) },
+        openBrowser: { store.run("finder.open", ["path": .string($0)]) },
+        focusPane: { store.run("pane.focus", ["id": .int($0)]) },
+        context: { store.state.browserContext = $0 },
+        favorites: st.favorites,
+        addFavorites: { paths in for p in paths { store.run("finder.addFavorite", ["path": .string(p)]) } },
+        removeFavorite: { store.run("finder.removeFavorite", ["path": .string($0)]) })
+    }
+
+    /// Tabs that are not files: a browser's columns, or an agent's file-operation proposal.
+    private func customTab(_ path: String) -> AnyView? {
+      if FileBrowser.root(tab: path) != nil {
+        return AnyView(FileBrowserView(model: store.browser(path), tab: path, reveal: st.browserReveal, menus: menus, host: browserHost).id(path))
+      }
+      guard let id = FileProposal.id(tab: path) else { return nil }
+      guard let p = st.fileProposals[id] else {
+        return AnyView(Text(tr("この提案は Clair の再起動で失われました")).font(.system(size: 12)).foregroundStyle(C.textTertiary)
+          .frame(maxWidth: .infinity, maxHeight: .infinity).background(C.canvas))
+      }
+      return AnyView(FileProposalView(
+        proposal: p,
+        apply: { picked in
+          // The 適用 button is the user's approval, so a trash step (destructive) runs confirmed.
+          let r = store.run("finder.applyProposal", ["id": .string(id), "picked": .string(picked.map(String.init).joined(separator: ","))], confirmed: true)
+          if case .failure(let e) = r { menus.ask(ClairDialog(title: tr("操作できませんでした"), message: e.message) { _ in }) }
+        },
+        reject: { store.run("finder.rejectProposal", ["id": .string(id)]) },
+        reveal: { store.run("finder.open", ["path": .string(p.folder)]) }
+      ).id("\(id)#\(p.state.rawValue)"))
     }
 
     private func pathItems(_ path: String) -> [ClairMenuEntry] {
@@ -2947,7 +3040,7 @@ import Observation
         onDefinition: { store.run("editor.definition") },
         onPreview: { store.run("editor.markdownPreview") },
         onEdit: { store.edited($0) }, onCaret: { store.editorSelectionChanged($0, $1, in: $2) }, previews: st.previews,
-        home: homeShortcuts(st), history: { AnyView(historyTab($0)) })
+        home: homeShortcuts(st), history: { AnyView(historyTab($0)) }, custom: { customTab($0) })
     }
 
     /// Requested breakpoints of the active file; the adapter's line wins once it answers.
@@ -2966,7 +3059,7 @@ import Observation
     private func homeShortcuts(_ st: WorkbenchState) -> [HomeView.Row] {
       ["terminal.show", "palette.files", "palette.commands", "sidebar.toggle", "pane.splitRight"].compactMap { id in
         CommandRegistry.workbench.commands.first { $0.id == id }.flatMap { d in
-          st.shortcut(for: d).map { (tr(d.title), $0, { [store] in store.performFromHome(id) }) }
+          st.shortcut(for: d).map { (tr(d.title), $0, { [store] in store.performFromUI(id) }) }
         }
       }
     }
@@ -3905,6 +3998,9 @@ import Observation
     var icon: String?
     var providerIcon: String?
     var onMove: (@MainActor @Sendable (String) -> Void)?
+    /// The file or folder the tab stands for. The drag carries it beside the reorder id, so a tab dropped on a terminal
+    /// is typed there as its path (ADR-0025), like an explorer row.
+    var fileURL: URL? = nil
 
     @State private var isHovered = false
     @State private var isDropTarget = false
@@ -3931,7 +4027,12 @@ import Observation
       .contentShape(Rectangle())
       // Same feel as the pane header drag: a card-shaped ghost of the tab and a ring on the drop target.
       .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(isDropTarget ? L.ring : .clear, lineWidth: 1))
-      .onDrag({ NSItemProvider(object: NSString(string: path)) }, preview: {
+      .onDrag({
+        // The reorder id first: a tab bar drop loads the first string it finds.
+        let provider = NSItemProvider(object: NSString(string: path))
+        if let fileURL { provider.registerObject(fileURL as NSURL, visibility: .all) }
+        return provider
+      }, preview: {
         HStack(spacing: 4) {
           tabIcon(tint: C.chromeInk)
           Text(name).font(.system(size: 11, weight: .semibold)).lineLimit(1)

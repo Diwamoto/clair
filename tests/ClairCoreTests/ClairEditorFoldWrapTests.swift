@@ -137,6 +137,20 @@
       XCTAssertEqual(sel.head.value, "func a() {\n\tx := 1".utf8.count)
     }
 
+    func testLineNumberClickOnFoldedHeaderSelectsTheHiddenBodyToo() throws {
+      let view = try makeView()
+      view.folds = [byteRange(Self.source, from: "func a", through: "}")]
+      let event = try XCTUnwrap(
+        NSEvent.mouseEvent(
+          with: .leftMouseDown, location: view.convert(NSPoint(x: 10, y: 0.5 * view.lineHeight), to: nil),
+          modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+      view.mouseDown(with: event)
+      let sel = view.selection.selections[0]
+      XCTAssertEqual(sel.anchor.value, 0)
+      XCTAssertEqual(sel.head.value, "func a() {\n\tx := 1\n\ty := 2\n".utf8.count)
+      XCTAssertEqual(view.folds.count, 1)
+    }
+
     func testGutterClickAndCaretCommandsFoldAndUnfold() throws {
       let view = try makeView()
       view.foldRanges = [byteRange(Self.source, from: "func a", through: "}")]

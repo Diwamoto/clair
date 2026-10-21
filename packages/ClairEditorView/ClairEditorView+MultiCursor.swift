@@ -62,6 +62,39 @@ import ClairEditorCore
       return TextUTF8Range(lower, upper)
     }
 
+    // MARK: - Line-number click
+
+    /// The visible line under `point` when it falls in the gutter (left of the text).
+    func gutterLine(at point: NSPoint) -> Int? {
+      guard gutterWidth > 0, point.x < gutterWidth, snapshot.lineCount > 0 else { return nil }
+      return visibleLine(atY: point.y)
+    }
+
+    func visibleLine(atY y: CGFloat) -> Int {
+      rowMap.line(atRow: Int((max(y, 0) / lineHeight).rounded(.down))).line
+    }
+
+    /// Selects from `lineDragAnchor`'s line through `line` by whole lines, the
+    /// anchor staying on the side the drag started from. ⌘ keeps `dragFixedSelections`.
+    func updateLineSelection(to line: Int) {
+      guard let anchor = lineDragAnchor, let from = lineSpan(anchor), let to = lineSpan(line) else { return }
+      let active =
+        line >= anchor
+        ? TextSelection(anchor: from.lowerBound, head: to.upperBound)
+        : TextSelection(anchor: from.upperBound, head: to.lowerBound)
+      guard let updated = try? TextSelectionSet(dragFixedSelections + [active]) else { return }
+      applySelection(updated)
+    }
+
+    /// `line` with its terminator, plus the lines a fold on it hides.
+    private func lineSpan(_ line: Int) -> TextUTF8Range? {
+      let last = fold(onLine: line).flatMap { hiddenLines(for: $0) }?.upperBound ?? line
+      guard let first = try? snapshot.line(at: TextLineIndex(line)),
+        let end = try? snapshot.line(at: TextLineIndex(last))
+      else { return nil }
+      return TextUTF8Range(first.contentRange.lowerBound, end.terminatorRange.upperBound)
+    }
+
     // MARK: - ⌥-drag block selection
 
     /// One selection per line between the anchor and `point`, spanning the

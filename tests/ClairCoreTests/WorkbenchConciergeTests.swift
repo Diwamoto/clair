@@ -48,7 +48,7 @@ final class WorkbenchConciergeTests: XCTestCase {
     let cmd = AgentLaunch(profile: "claude", cwd: root, concierge: "abc-123").command
     XCTAssertTrue(cmd.hasPrefix("claude --session-id abc-123 --append-system-prompt '"), cmd)
     XCTAssertTrue(cmd.contains("テストは make test で"))
-    XCTAssertTrue(cmd.contains("agent.output --lines 40"))
+    XCTAssertTrue(cmd.contains("agent output lines=40"))
     // A hostile session id never reaches the shell.
     XCTAssertEqual(AgentLaunch(profile: "claude", cwd: root, concierge: "x; rm -rf ~").command, "claude")
   }

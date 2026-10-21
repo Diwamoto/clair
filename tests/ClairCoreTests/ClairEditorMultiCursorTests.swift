@@ -137,6 +137,24 @@
       XCTAssertEqual(ranges(view), [0...3, 12...15])
     }
 
+    func testLineNumberClickSelectsLineAndDragExtendsByLines() throws {
+      let view = try makeView("one\ntwo\nthree")
+      view.gutterWidth = 40
+      try mouse(view, .leftMouseDown, NSPoint(x: 10, y: y(view, line: 1)))
+      XCTAssertEqual(ranges(view), [4...8])
+      try mouse(view, .leftMouseDragged, NSPoint(x: 200, y: y(view, line: 2)))
+      XCTAssertEqual(ranges(view), [4...13])
+      try mouse(view, .leftMouseDragged, NSPoint(x: 10, y: y(view, line: 0)))
+      XCTAssertEqual(ranges(view), [0...8])
+      XCTAssertEqual(view.selection.selections.first?.head.value, 0)
+      try mouse(view, .leftMouseUp, NSPoint(x: 10, y: y(view, line: 0)))
+
+      try mouse(view, .leftMouseDown, NSPoint(x: 10, y: y(view, line: 0)))
+      try mouse(view, .leftMouseUp, NSPoint(x: 10, y: y(view, line: 0)))
+      try mouse(view, .leftMouseDown, NSPoint(x: 10, y: y(view, line: 2)), modifiers: .command)
+      XCTAssertEqual(ranges(view), [0...4, 8...13])
+    }
+
     func testWordStopsAtMemberAccessDots() throws {
       let view = try makeView("x := e.cfg.Retrieve(ctx)")
       XCTAssertEqual(view.word(at: UTF8Offset(14)), TextUTF8Range(UTF8Offset(11), UTF8Offset(19)))  // Retrieve
