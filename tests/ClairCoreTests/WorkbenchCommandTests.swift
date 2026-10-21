@@ -98,6 +98,17 @@ final class WorkbenchCommandTests: XCTestCase {
     XCTAssertEqual(r.commands.filter { $0.shortcut == "⌘⇧N" }.count, 1)
   }
 
+  func testNewFileHasCmdNAndNeedsAProject() throws {
+    let d = try XCTUnwrap(r.commands.first { $0.id == "file.new" })
+    XCTAssertEqual(d.shortcut, "⌘N")
+    XCTAssertFalse(d.aiAvailable)
+    XCTAssertEqual(r.commands.filter { $0.shortcut == "⌘N" }.count, 1)
+    var s = WorkbenchState()
+    XCTAssertEqual(r.execute("file.new", [:], state: &s).failure?.code, .preconditionFailed)
+    s.openProject(WorkbenchProject(name: "p", path: "/tmp/p"), scanFiles: false)
+    XCTAssertNil(r.execute("file.new", [:], state: &s).failure)
+  }
+
   func testProjectSearchIsACommandWithTheAdvertisedShortcut() throws {
     var state = WorkbenchState()
     XCTAssertEqual(r.commands.first { $0.id == "palette.search" }?.shortcut, "⌘⇧F")
@@ -295,12 +306,14 @@ final class WorkbenchCommandTests: XCTestCase {
     XCTAssertEqual(r.commands.first { $0.id == "pane.splitDown" }?.shortcut, "⌘⇧D")
     XCTAssertNil(r.commands.first { $0.id == "debug.open" }?.shortcut)
 
+    state.active = nil
     _ = try r.execute("terminal.show", state: &state).get()
     XCTAssertFalse(state.panesClosed)
-    XCTAssertEqual(state.tree.leaves.map(\.kind), [.editor, .terminal])
+    XCTAssertEqual(state.tree.leaves.map(\.kind), [.terminal], "the terminal replaces the home screen")
     let terminal = state.tree.focused
-    state.tree.focus(state.tree.leaves[0].id)
-    state.tree.toggleMaximize()
+    _ = try r.execute("tab.open", ["path": .string("docs/architecture/pane-layout.md")], state: &state).get()
+    XCTAssertEqual(state.tree.leaves.map(\.kind), [.editor, .terminal])
+    state.tree.toggleMaximize()  // the editor
     _ = try r.execute("terminal.show", state: &state).get()
     XCTAssertEqual(state.tree.leaves.map(\.kind), [.editor, .terminal])
     XCTAssertEqual(state.tree.focused, terminal)
@@ -350,9 +363,7 @@ final class WorkbenchCommandTests: XCTestCase {
     s.tree = PaneTree()  // editor | terminals
     let file = s.active!
     try r.execute("tab.close", state: &s).get()
-    s.tree.focus(1)
-    try r.execute("pane.close", state: &s).get()
-    XCTAssertEqual(s.tree.leaves.map(\.kind), [.terminal, .terminal])
+    XCTAssertEqual(s.tree.leaves.map(\.kind), [.terminal, .terminal], "no home screen beside the terminals")
     XCTAssertTrue(s.tree.isValid, "a restored layout keeps the terminals")
     try r.execute("tab.open", ["path": .string(file)], state: &s).get()
     XCTAssertEqual(s.tree.leaves.map(\.kind), [.editor, .terminal, .terminal])
@@ -362,16 +373,29 @@ final class WorkbenchCommandTests: XCTestCase {
     XCTAssertEqual(s.tree.leaves.map(\.kind), [.editor], "the only pane is never removed")
   }
 
-  func testClosingTheLastFileLeavesOnlyOneEmptyEditor() throws {
+  func testHomeScreenShowsOnlyWhenNothingElseIsOnScreen() throws {
     var s = WorkbenchState()
     s.tree = PaneTree()  // editor 1 | terminals, one open file
     try r.execute("pane.splitRight", state: &s).get()
     XCTAssertEqual(s.tree.leaves.map(\.kind), [.editor, .editor, .terminal, .terminal])
     try r.execute("tab.close", state: &s).get()
-    XCTAssertEqual(s.tree.leaves.map(\.kind), [.editor, .terminal, .terminal])
-    s.tree.focus(1)
-    try r.execute("pane.splitDown", state: &s).get()  // no file: splitting the empty editor adds a terminal
-    XCTAssertEqual(s.tree.leaves.filter { $0.kind == .editor }.count, 1)
+    XCTAssertEqual(s.tree.leaves.map(\.kind), [.terminal, .terminal])
+    try r.execute("pane.close", state: &s).get()
+    try r.execute("pane.close", state: &s).get()  // the last terminal: the home screen is all that is left
+    XCTAssertEqual(s.tree.leaves.map(\.kind), [.editor])
+    XCTAssertTrue(s.tree.isValid)
+
+    // Editors only: one empty editor stays as the home screen.
+    var editors = WorkbenchState()
+    try r.execute("pane.splitRight", state: &editors).get()
+    try r.execute("tab.close", state: &editors).get()
+    XCTAssertEqual(editors.tree.leaves.map(\.kind), [.editor])
+
+    // A preview or graph beside the empty editor also replaces the home screen.
+    var preview = WorkbenchState()
+    preview.tree.split(preview.tree.focused, .horizontal, kind: .preview)
+    preview.active = nil
+    XCTAssertEqual(preview.tree.leaves.map(\.kind), [.preview])
   }
 
   func testOpeningFileRepairsLegacyTerminalOnlyLayout() {

@@ -25,7 +25,7 @@ var args = Array(CommandLine.arguments.dropFirst())
 let wait = args.first == "open" && args.count == 3 && args[1] == "--wait"
 if wait { args.remove(at: 1) }
 guard var request = WorkbenchCLI.parse(args) else {
-  FileHandle.standardError.write(Data("usage: clair open [--wait] <path[:line[:col]]> | clair preview <html-path> | clair <group> <command> [key=value ...]\n       clair help [group] lists the commands\n".utf8))
+  FileHandle.standardError.write(Data("usage: clair open [--wait] <path[:line[:col]]> | clair preview <html-path> | clair reveal <path> | clair <group> <command> [key=value ...]\n       clair help [group] lists the commands\n".utf8))
   exit(2)
 }
 // V16: `clair agent wait key=<root#pane> [timeout=<s>]` polls agent.status until that delegated agent exits
@@ -40,6 +40,22 @@ if request.command == "agent.wait" {
     if done || reply.error != nil || Date() > deadline {
       print(String(decoding: try! JSONEncoder().encode(reply), as: UTF8.self))
       exit(done ? 0 : 1)
+    }
+    Thread.sleep(forTimeInterval: 1)
+  }
+}
+// ADR-0025: `clair finder wait id=<proposal> [timeout=<s>]` polls finder.proposal until the user applies or rejects
+// that proposal (exit 0 applied, 1 otherwise), or prints the pending state and exits 1 at the timeout (default 1800 s).
+if request.command == "finder.wait" {
+  let deadline = Date().addingTimeInterval(TimeInterval(request.input["timeout"].flatMap { if case .int(let t) = $0 { t } else { nil } } ?? 1800))
+  request.command = "finder.proposal"
+  request.input["timeout"] = nil
+  while true {
+    guard let reply = try? WorkbenchIPC.call(request) else { FileHandle.standardError.write(Data("clair: Clair is not running\n".utf8)); exit(3) }
+    let state = { if case .text(let t)? = reply.result { t } else { "" } }()
+    if !state.contains(#""state":"pending""#) || reply.error != nil || Date() > deadline {
+      print(String(decoding: try! JSONEncoder().encode(reply), as: UTF8.self))
+      exit(state.contains(#""state":"applied""#) ? 0 : 1)
     }
     Thread.sleep(forTimeInterval: 1)
   }

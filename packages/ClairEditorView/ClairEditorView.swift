@@ -180,6 +180,8 @@ import ClairEditorCore
     private var knownContentWidth: CGFloat = 0
     var dragAnchor: UTF8Offset?
     var dragFixedSelections: [TextSelection] = []
+    /// The line a line-number click started on; a drag extends by whole lines from it.
+    var lineDragAnchor: Int?
     /// Where a ⌥-drag block selection started (`ClairEditorView+MultiCursor.swift`).
     var blockAnchor: NSPoint?
     var verticalCursorGoal: (direction: Int, column: Int, lastTarget: UTF8Offset)?
@@ -377,6 +379,12 @@ import ClairEditorCore
       let point = convert(event.locationInWindow, from: nil)
       if let line = breakpointSlot(at: point), let onToggleBreakpoint { onToggleBreakpoint(line); return }
       if handleFoldClick(at: point) { return }
+      if let line = gutterLine(at: point) {
+        lineDragAnchor = line
+        dragFixedSelections = event.modifierFlags.contains(.command) ? selection.selections : []
+        updateLineSelection(to: line)
+        return
+      }
       // E17: ⌘-click on a confirmed definition link jumps; anywhere else ⌘-click still adds a cursor.
       if event.clickCount == 1, isCommandOnly(event.modifierFlags), let link = definitionLink,
         let offset = hitTestOffset(at: point), link.lowerBound.value <= offset.value, offset.value <= link.upperBound.value {
@@ -413,6 +421,10 @@ import ClairEditorCore
     }
 
     public override func mouseDragged(with event: NSEvent) {
+      if lineDragAnchor != nil {
+        updateLineSelection(to: visibleLine(atY: convert(event.locationInWindow, from: nil).y))
+        return
+      }
       if blockAnchor != nil {
         updateBlockSelection(to: convert(event.locationInWindow, from: nil))
         return
@@ -444,6 +456,7 @@ import ClairEditorCore
       }
       dragAnchor = nil
       blockAnchor = nil
+      lineDragAnchor = nil
     }
 
     private func updateDragSelection(head: UTF8Offset) {

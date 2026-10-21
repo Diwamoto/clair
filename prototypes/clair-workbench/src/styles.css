@@ -408,3 +408,9 @@ textarea:focus-visible,
 .shimmer { animation: shimmer 1.6s ease-in-out infinite; }
 @keyframes shimmer { 50% { opacity: 0.45; } }
 @media (prefers-reduced-motion: reduce) { .orbit, .shimmer { animation: none; } }
+
+/* File browser rows: the selection wash is the keyboard focus (↑↓←→ move
+   it), so a row never wears the focus ring on top of it. */
+button.finder-row:focus-visible {
+  box-shadow: none;
+}

@@ -265,6 +265,9 @@ CoreText で描画する。
 - macOS は `NSTextInputClient`、iOS は `UITextInput` を実装し、日本語 IME、
   marked text、確定、delete を正しく扱う
 - copy/paste、drag/drop、undo、accessibility、system text cursor の契約を守る
+- 行番号の列をクリックするとその行を改行ごと(折りたたみ中なら隠れた行まで)
+  選択し、ドラッグで行単位に広げる。⌘ クリックは既存の選択に足す
+  (2026-10-16 オーナー依頼)
 
 macOS の `NSTextInputClient` は行ローカルの UTF-16 空間で答える(文書全体の
 変換を IME 往復ごとに行わないため)。iOS の `UITextPosition` は文書全体の
@@ -443,10 +446,14 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   「算出不可」とし、合計や割合に入れない)
 - editor / terminal / diff を同じ tab group へ置ける任意 split
 - pane の focus、移動、close、最大化、幅/高さ/全体均等
-- ファイルを開いていない空の editor は、コマンドとショートカットの一覧を表示し、
-  クリックでそのコマンドを実行する(クリックで新しい pane が開いたら空の editor は閉じる)。⌘W は他の pane があれば空の editor を閉じ
-  (ファイルを開くと左端に戻る)、空の editor だけなら ⌘Q と同じく確認付きで Clair を終了する
+- 画面に何もないとき(ファイルを開いておらず、他の pane もないとき)だけ、空の editor がコマンドと
+  ショートカットの一覧(ホーム画面)を表示し、クリックでそのコマンドを実行する。ファイルがない空の editor は
+  他の pane(terminal・preview・graph)と並ばない: 最後のファイルを閉じた、ホーム画面から split や terminal を
+  開いた、などで他の pane があれば空の editor は閉じ(ファイルを開くと左端に戻る)、最後の pane を閉じると
+  ホーム画面に戻る。ホーム画面だけのとき ⌘W は ⌘Q と同じく確認付きで Clair を終了する
 - file tree、search、Git の sidebar と、pane へ開く補助 view。file tree は対象ファイルを件数で打ち切らずに表示する。gitignore 対象のファイルは暗いグレー(`textQuaternary`)で表示し、検索・quick open には出さない(中身が 1000 件を超える ignored フォルダはビルドキャッシュとみなして出さない)
+- ファイルブラウザ([ADR-0025](decisions/0025-file-browser-and-agent-file-proposals.md)): activity bar の専用アイコンでサイドバーに Project(root と追加フォルダ)・場所(ホーム・デスクトップ・書類・ダウンロード)・開いているブラウザを出し、任意のフォルダを Finder のカラム表示でエディタのタブ(`finder:<絶対パス>`)として開く。⌥⌘B(`finder.open`)と explorer のフォルダの「ファイルブラウザで開く」も同じ。場所はアクティブなブラウザタブをその場所へ動かす(⌘クリックは新しいタブ)。カラムの一番左は「よく使う項目」列で、右クリックの「よく使う項目に追加」か行のドロップでフォルダ・ファイルを登録し、項目の右クリックで外す(全ブラウザタブ共通、設定と一緒に保存、AI 不可)。フォルダは左から右へ列として開き、列が出たときにその 1 階層だけを読む。ファイルを 1 つ選ぶとプレビュー列(サイズ・更新日・パス・テキストの先頭)を出す。テキストは Clair で、それ以外は既定のアプリか「このアプリケーションで開く」で開く。⌘C / ⌘V はファイル URL の pasteboard(macOS の Finder と共通)、⌘⌫ は確認してゴミ箱、⇧⌘. は隠しファイル、↑↓←→ と ↵ で移動と開く。右クリックは開く系・Agent に送る(複数選択は `@パス` をまとめて)・Agent に整理を頼む・ターミナルにパスを入力(フォルダは cd)・コピー系・名前を変更・ゴミ箱
+- ファイル(macOS の Finder、explorer、ファイルブラウザ、titlebar のファイル / ブラウザのタブ)を Clair の terminal にドロップすると、shell-escape した絶対パスを入力する(Return は押さない)
 - ⌘F はフォーカス中の pane を検索する。editor は開いているファイル内の検索・置換バー(⌥⌘F で置換行を開く。大文字小文字・正規表現、Return / ⇧Return で次 / 前、「すべて置換」は 1 undo 単位)、terminal は scrollback を含む出力の検索(一致の強調と件数は Ghostty が行う)。それ以外の pane では Project 全体の検索を開く。ファイル内のシンボルは ⌘⇧O、ワークスペースのシンボルは ⌘T
 - Quick Open、全文検索・置換(結果はファイル別リストとツリー表示〔フォルダ → ファイル → 一致行。フォルダとファイルは折りたためる〕を入力欄のチップで切り替え、選んだ表示を記憶する。↑↓ は画面に出ている一致行を順に移る)、file watcher、⌘K「Open Recent…」(Project ごとに保存する最近開いたファイルを新しい順に開き直す。Compare With… の候補順も同じ記録を使う)
 - diff、stage/unstage、変更の破棄(ボタンと右クリック。「変更」は working tree のみ、「ステージ済み」は HEAD へ戻す、未追跡は削除。確認必須・AI 不可)、commit、branch/worktree の作成・切替
@@ -472,6 +479,9 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
 - shortcut は任意 command へユーザーが割り当てられる
 - ⌘⇧N(`project.choose`、File ▸ Open Project…)で folder picker を開き、選んだ任意の folder を
   `project.open` で Project として開く。titlebar の「+」も同じ
+- ⌘N(`file.new`、File ▸ New File…)は名前を尋ね、active file と同じ folder(なければ・ad-hoc file なら
+  Project root)に空の file を作ってタブで開く。explorer の「新しいファイル…」と同じ。SwiftUI 標準の
+  New Window は File menu から外し、shortcut も持たない(2026-10-16 オーナー依頼)
 - `clair open path:line:column` は path を所有する open Project の active pane へ
   file を開く。該当 Project がなければ Git root を新規 Project として開く。どの
   Project にも Git repository にも属さない ad-hoc file は Project を作らず、
@@ -487,13 +497,17 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   - `review.threads [path]`(read): review thread を現在の file 上の行・stale・状態・コメントで返す
   - `review.comment path line [endLine] body`(additive): agent 作者の review thread を追加する。file は変更しない
   - `review.suggest path line [endLine] replacement [body]`(additive): 行 line..endLine を置き換える提案を追加する。active Project の editor buffer の revision に束縛し、適用は利用者が diff で行う(1 undo 単位、未保存)。他の Project の file は拒否する
+- ファイルブラウザの AI 連携([ADR-0025](decisions/0025-file-browser-and-agent-file-proposals.md)、すべて AI 可・承認なし):
+  - `finder.selection`(read): アクティブなブラウザタブのフォルダと選択中の絶対パス。ブラウザタブがアクティブでなければ拒否する
+  - `finder.reveal path`(additive、`clair reveal <path>`): そのファイルを選んだ状態でファイルブラウザに表示する。内容は返さない
+  - `finder.propose folder ops`(additive): フォルダ内の `mkdir` / `move` / `rename` / `trash` の提案。パスはフォルダの中に限り、順に実行して元が存在し先が空いていることを検証する。提案だけではディスクは変わらず「整理の提案」タブが開く。ユーザーが操作ごとに選んで適用(ゴミ箱は未チェックで始まり、含むと破壊的)か却下し、agent は `finder.proposal id` か `clair finder.wait id=…` で結果を読む。適用・却下は AI 不可。提案は再起動で消える
 - `clair preview <html-path>` は HTML file を開き、JavaScript 対応の preview pane を表示して Clair を前面に出す。CLI からの実行前に GUI 承認を求め、MCP には公開しない。`clair-preview` Agent skill は生成した HTML artifact を Clair で見せる方法を Claude / Codex / OpenCode に案内する
 - Clair.app は text file の document type を宣言し、macOS の「このアプリケーションで
   開く」/既定アプリに設定できる。Finder から開いた file は `clair open` と同じ経路を通る
 - Claude Code の IDE 連携([ADR-0022](decisions/0022-claude-code-ide-integration.md)): Clair は 127.0.0.1 の WebSocket と `~/.claude/ide/<port>.lock` で Claude Code の IDE として振る舞い、Clair の terminal に `CLAUDE_CODE_SSE_PORT` を渡す。選択範囲・開いているファイル・診断を答え、`openDiff` の提案は「提案」diff タブで承認 / 却下するまで応答を保留する(承認すると Claude Code がファイルを書く)。開いている Project の外のファイルの提案は Claude Code 自身の承認に任せる。選択の変化を通知し、⌥⌘K で選択範囲を接続中の Claude Code の入力へ渡す
 - 起動中 Clair を操作する CLI を提供する。`clair <command-id> [key=value …]` で registry の任意の command を呼べる
   - `clair help [prefix]` は CLI に組み込まれた registry の command を引数・risk・user-only(AI 不可)付きで一覧する。GUI 不要
-  - GUI が disk の path として読む引数(`project.open` / `project.addFolder` / `project.removeFolder` / `file.open` / `file.isOpen` / `file.preview` / `debug.breakpoint` の `path`)は、相対 path なら呼び出し側の cwd で絶対 path にしてから送る。Project 相対の引数(`tab.open`、`review.*` など)はそのまま
+  - GUI が disk の path として読む引数(`project.open` / `project.addFolder` / `project.removeFolder` / `file.open` / `file.isOpen` / `file.preview` / `debug.breakpoint` / `finder.open` / `finder.reveal` の `path`、`finder.propose` の `folder`)は、相対 path なら呼び出し側の cwd で絶対 path にしてから送る。Project 相対の引数(`tab.open`、`review.*` など)はそのまま
   - 一覧(すべて read):`project.list`(AI 可)は各 Project の `name`(他の `project.*` が取る識別子)・path・label・色・追加フォルダと active Project を返す。`agent.list`(AI 可)はすべての Project の agent terminal を key(`root#pane`)・profile・cwd・状態(`running` / `attention` / `blocked` / `done` / `idle` / `exited` と exit code。`blocked` / `done` / `idle` は agent 自身の報告による)・activity・委譲 run か・parent・concierge かで返す。委譲 run の状態は `agent.status` と同じく記録された exit を優先する。`debug.status`(他の `debug.*` と同じく AI 不可)は active Project の debug session の phase・error・停止理由・thread・stack frame・変数・breakpoint(adapter の検証結果)・debug console の末尾 50 行を返す
   - `debug.*` の preflight は GUI の live session の phase で判定する(Clair の terminal からの呼び出しを含む)
 - `clair mcp serve` の stdio adapter で AI 向け command を公開する

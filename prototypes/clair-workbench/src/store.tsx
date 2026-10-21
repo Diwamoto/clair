@@ -20,6 +20,7 @@ import {
   type ChatMessage,
   type Session,
 } from './data';
+import { entryAt, finderRoot, finderTab, organizePlan, PROJECT_ROOT, type FsEntry, type Proposal } from './finder';
 import { applyScheme, type GroupColorKey } from './tokens';
 
 export type Screen =
@@ -145,6 +146,25 @@ function useWorkbenchState() {
   const [maximized, setMaximized] = useState<string | null>(null);
 
   const [terminal, setTerminal] = useState<TerminalLine[]>(initialTerminal);
+  // The terminal's unsent input line. Lifted out of the pane so a drop or a
+  // menu elsewhere can type into it (never with Return: the user sends).
+  const [terminalInput, setTerminalInput] = useState('');
+  // The file browser's writes, over the read-only mock disk (finder.ts):
+  // pasted copies per folder, and trashed paths.
+  const [fileClipboard, setFileClipboard] = useState<string[]>([]);
+  const [fsCopies, setFsCopies] = useState<Record<string, FsEntry[]>>({});
+  const [fsTrashed, setFsTrashed] = useState<Set<string>>(() => new Set());
+  // よく使う項目: folders and files the user pinned to the browser's leftmost column. Saved with Clair's settings.
+  const [favorites, setFavorites] = useState<string[]>(() => [PROJECT_ROOT, `${PROJECT_ROOT}/docs`, '/Users/daiki/Downloads']);
+  // The workspace's sidebar: the explorer tree, or the file browser's places.
+  const [workspacePanel, setWorkspacePanel] = useState<'files' | 'browser'>('files');
+  // Each file browser tab's current first column (its tab label and the
+  // place the sidebar lights up), and a request from the sidebar to move a
+  // tab to a place — the tab keeps its own back/forward history.
+  const [finderRoots, setFinderRoots] = useState<Record<string, string>>({});
+  const [finderJump, setFinderJump] = useState<{ tab: string; path: string; select?: string; seq: number } | null>(null);
+  // File operations an agent proposed (`finder.propose`); nothing moves until the user applies them.
+  const [proposals, setProposals] = useState<Record<string, Proposal>>({});
   const [agentLog] = useState<TerminalLine[]>(initialAgentLog);
   const [awaitingApproval, setAwaitingApproval] = useState(true);
 
@@ -361,6 +381,122 @@ function useWorkbenchState() {
     });
   }, []);
 
+  // The file browser is a tab like a file's (`finder:<folder>`), so it gets
+  // the editor's width and sits in the same tab strip; one tab per folder.
+  const openFinder = useCallback((path?: string) => openFile(finderTab(path ?? PROJECT_ROOT)), [openFile]);
+
+  /**
+   * A place picked in the sidebar: the active file browser tab moves there
+   * (Finder's sidebar moves its window); with no browser tab active, one opens.
+   */
+  const goToPlace = useCallback(
+    (path: string, newTab = false) => {
+      if (!newTab && finderRoot(activePath) && screen === 'workspace') {
+        setFinderJump((current) => ({ tab: activePath, path, seq: (current?.seq ?? 0) + 1 }));
+        return;
+      }
+      const existing = tabs.find((t) => finderRoot(t.path) && (finderRoots[t.path] ?? finderRoot(t.path)) === path);
+      openFile(existing?.path ?? finderTab(path));
+    },
+    [activePath, finderRoots, openFile, screen, tabs],
+  );
+
+  /** `clair reveal <path>`: the file browser shows the file selected in its folder. */
+  const reveal = useCallback(
+    (path: string) => {
+      const parent = path.slice(0, path.lastIndexOf('/'));
+      const tab = finderRoot(activePath) && screen === 'workspace' ? activePath : finderTab(parent);
+      openFile(tab);
+      setFinderJump((current) => ({ tab, path: parent, select: path, seq: (current?.seq ?? 0) + 1 }));
+    },
+    [activePath, openFile, screen],
+  );
+
+  /**
+   * "Agent に整理を頼む": the agent answers with `clair finder.propose`, which
+   * the mock stands in for after a beat — a proposal tab with the operations.
+   */
+  const requestOrganize = useCallback(
+    (folder: string, agent: string) => {
+      setTimeout(() => {
+        const id = `proposal:${folder}`;
+        setProposals((current) => ({ ...current, [id]: { id, folder, agent, ops: organizePlan(folder), state: 'pending' } }));
+        openFile(id);
+      }, 900);
+    },
+    [openFile],
+  );
+
+  /** Applies the checked operations in order, over the mock disk. */
+  const applyProposal = useCallback(
+    (id: string, picked: number[]) => {
+      const p = proposals[id];
+      if (!p || p.state !== 'pending') return;
+      const copies: Record<string, FsEntry[]> = {};
+      const trashed: string[] = [];
+      const add = (entry: FsEntry) => {
+        const dir = entry.path.slice(0, entry.path.lastIndexOf('/'));
+        copies[dir] = [...(copies[dir] ?? []), entry];
+      };
+      for (const i of picked) {
+        const op = p.ops[i];
+        if (op.kind === 'mkdir') {
+          add({ name: op.to.slice(op.to.lastIndexOf('/') + 1), path: op.to, dir: true, modified: '今' });
+          copies[op.to] = copies[op.to] ?? [];
+        } else if (op.kind === 'trash') {
+          trashed.push(op.from);
+        } else {
+          const source = entryAt(op.from);
+          if (!source) continue;
+          trashed.push(op.from);
+          add({ ...source, name: op.to.slice(op.to.lastIndexOf('/') + 1), path: op.to, projectPath: undefined });
+        }
+      }
+      setFsCopies((fs) => {
+        const next = { ...fs };
+        for (const [dir, list] of Object.entries(copies)) next[dir] = [...(next[dir] ?? []), ...list];
+        return next;
+      });
+      setFsTrashed((t) => new Set([...t, ...trashed]));
+      setProposals((current) => ({ ...current, [id]: { ...p, state: 'applied', applied: picked.length } }));
+    },
+    [proposals],
+  );
+
+  const rejectProposal = useCallback((id: string) => {
+    setProposals((current) => (current[id] ? { ...current, [id]: { ...current[id], state: 'rejected' } } : current));
+  }, []);
+
+  /** Types into the terminal's input line, space-separated, and leaves it unsent. */
+  const typeIntoTerminal = useCallback((text: string) => {
+    setTerminalInput((current) => (current && !current.endsWith(' ') ? current + ' ' : current) + text + ' ');
+  }, []);
+
+  /** Pastes the copied files into `folder`; a name already there gets " のコピー" like Finder. */
+  const pasteFiles = useCallback(
+    (folder: string, taken: string[]) => {
+      const names = new Set(taken);
+      const pasted = fileClipboard.flatMap((path) => {
+        const source = entryAt(path);
+        if (!source) return [];
+        let name = source.name;
+        while (names.has(name)) {
+          const dot = name.lastIndexOf('.');
+          name = dot > 0 && !source.dir ? `${name.slice(0, dot)} のコピー${name.slice(dot)}` : `${name} のコピー`;
+        }
+        names.add(name);
+        return [{ ...source, name, path: `${folder}/${name}`, projectPath: undefined, modified: '今' }];
+      });
+      if (pasted.length) setFsCopies((current) => ({ ...current, [folder]: [...(current[folder] ?? []), ...pasted] }));
+      return pasted.length;
+    },
+    [fileClipboard],
+  );
+
+  const trashFiles = useCallback((paths: string[]) => {
+    setFsTrashed((current) => new Set([...current, ...paths]));
+  }, []);
+
   const pushTerminal = useCallback((lines: TerminalLine[]) => {
     setTerminal((current) => [...current, ...lines]);
   }, []);
@@ -491,11 +627,14 @@ function useWorkbenchState() {
           return setOverlay('addAgent');
         case 'clair.settings.open':
           return setScreen('settings');
+        case 'clair.finder.open':
+          setWorkspacePanel('browser');
+          return openFinder();
         default:
           return setScreen('workspace');
       }
     },
-    [closePane, focusDirection, focusedPane, splitPane],
+    [closePane, focusDirection, focusedPane, openFinder, splitPane],
   );
 
   const toggleFolder = useCallback((id: string) => {
@@ -613,6 +752,31 @@ function useWorkbenchState() {
     closePane,
     terminal,
     runTerminal,
+    terminalInput,
+    setTerminalInput,
+    typeIntoTerminal,
+    openFinder,
+    goToPlace,
+    favorites,
+    addFavorites: (paths: string[]) => setFavorites((current) => [...current, ...paths.filter((p) => !current.includes(p))]),
+    removeFavorite: (path: string) => setFavorites((current) => current.filter((p) => p !== path)),
+    reveal,
+    proposals,
+    requestOrganize,
+    applyProposal,
+    rejectProposal,
+    workspacePanel,
+    setWorkspacePanel,
+    finderRoots,
+    setFinderRoot: (tab: string, root: string) =>
+      setFinderRoots((current) => (current[tab] === root ? current : { ...current, [tab]: root })),
+    finderJump,
+    fileClipboard,
+    setFileClipboard,
+    fsCopies,
+    fsTrashed,
+    pasteFiles,
+    trashFiles,
     awaitingApproval,
     agentLog,
     cursor,

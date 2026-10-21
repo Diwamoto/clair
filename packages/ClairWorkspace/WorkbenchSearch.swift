@@ -153,7 +153,7 @@ extension WorkbenchState {
     filesCache[project] = scanned
     if firstDeferredLoad {
       let existing = Set(scanned.map(\.path))
-      tabs = tabs.filter(existing.contains)
+      tabs = tabs.filter { existing.contains($0) || keepsVirtualTab($0) }
       dirty.formIntersection(tabs)
       if active.map(tabs.contains) != true { active = tabs.last }
     }

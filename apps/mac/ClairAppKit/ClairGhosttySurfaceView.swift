@@ -1,6 +1,7 @@
 import ClairDaemonKit
 import ClairGhostty
 import ClairTerminal
+import ClairWorkspace
 import Foundation
 
 #if os(macOS)
@@ -63,6 +64,7 @@ import Foundation
       self.status = ClairGhosttyStatus(isVendored: false, activationError: nil)
       super.init(frame: .zero)
       wantsLayer = true
+      registerForDraggedTypes([.fileURL])
     }
 
     @available(*, unavailable)
@@ -716,6 +718,27 @@ import Foundation
       guard let text = pasteboard.string(forType: .string) else { return }
       sendText(text)
     }
+
+    // ADR-0025: a file or folder dropped on the terminal (the macOS Finder, Clair's explorer or file browser) is typed
+    // as its shell-escaped path, Ghostty's own rule, on the paste path. Nothing is sent: the user presses Return.
+    public override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+      Self.droppedPaths(sender.draggingPasteboard).isEmpty ? [] : .copy
+    }
+
+    public override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+      let paths = Self.droppedPaths(sender.draggingPasteboard)
+      guard !paths.isEmpty else { return false }
+      window?.makeFirstResponder(self)
+      sendText(Self.dropText(paths))
+      return true
+    }
+
+    static func droppedPaths(_ pasteboard: NSPasteboard) -> [String] {
+      (pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL])?.map(\.path) ?? []
+    }
+
+    /// Space-separated escaped paths and a trailing space, so the next word (or another drop) starts clean.
+    static func dropText(_ paths: [String]) -> String { paths.map(FileBrowser.shellEscape).joined(separator: " ") + " " }
 
     /// Surfaces by daemon session key, kept across unmounts so switching Projects doesn't rebuild the
     /// screen from a fresh `clair attach`. Dropped only when the session itself closes.
