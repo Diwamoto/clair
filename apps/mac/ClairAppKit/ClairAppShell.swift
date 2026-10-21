@@ -2614,7 +2614,12 @@ import Observation
         tabs: st.tabs.filter { FileBrowser.root(tab: $0) != nil }.map { FileBrowserSidebar.OpenTab(tab: $0, root: store.browser($0).root) },
         active: st.settingsOpen ? nil : st.active, activeModel: st.settingsOpen ? nil : activeBrowser,
         openBrowser: { store.run("finder.open", ["path": .string($0)]) },
-        activate: { store.run("tab.activate", ["path": .string($0)]) })
+        activate: { store.run("tab.activate", ["path": .string($0)]) },
+        favorites: st.favorites,
+        addFavorites: { paths in for p in paths { store.run("finder.addFavorite", ["path": .string(p)]) } },
+        removeFavorite: { store.run("finder.removeFavorite", ["path": .string($0)]) },
+        openInClair: { store.run("file.open", ["path": .string($0)]) },
+        menus: menus)
     }
 
     private var browserHost: FileBrowserHost {

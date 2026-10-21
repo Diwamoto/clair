@@ -42,6 +42,31 @@ public enum FileBrowser {
     }
   }
 
+  /// The column sort (Finder's 表示 › 並べ替え). Folders stay on top in every order.
+  public enum Sort: String, Sendable, CaseIterable { case name, modified, size, kind }
+
+  /// `entries` in `sort` order; `ascending` false flips it. Ties fall back to the name.
+  public static func sorted(_ entries: [Entry], by sort: Sort, ascending: Bool) -> [Entry] {
+    func byName(_ a: Entry, _ b: Entry) -> Bool { a.name.localizedStandardCompare(b.name) == .orderedAscending }
+    func before(_ a: Entry, _ b: Entry) -> Bool {
+      switch sort {
+      case .name: return byName(a, b)
+      case .modified:
+        let (x, y) = (a.modified ?? .distantPast, b.modified ?? .distantPast)
+        return x != y ? x < y : byName(a, b)
+      case .size:
+        let (x, y) = (a.size ?? 0, b.size ?? 0)
+        return x != y ? x < y : byName(a, b)
+      case .kind:
+        let (x, y) = ((a.name as NSString).pathExtension.lowercased(), (b.name as NSString).pathExtension.lowercased())
+        return x != y ? x < y : byName(a, b)
+      }
+    }
+    return entries.sorted { a, b in
+      a.isDirectory != b.isDirectory ? a.isDirectory : ascending ? before(a, b) : before(b, a)
+    }
+  }
+
   /// Opens in Clair's editor: the first 8 KiB decode as UTF-8 and hold no NUL. Anything else goes to another app.
   public static func isText(_ path: String) -> Bool {
     guard let h = FileHandle(forReadingAtPath: path) else { return false }

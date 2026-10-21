@@ -83,6 +83,9 @@ export const IconFolder = stroke(
 
 // Finder's column-view glyph: a window split into columns. The file browser's
 // activity-bar entry (Finder artboard); the folder stays the explorer's.
+// Up and down arrows side by side: the file browser's sort button.
+export const IconSort = stroke(<path d="M5 13V3M2.5 5.5 5 3l2.5 2.5M11 3v10M8.5 10.5 11 13l2.5-2.5" />, 1.3, { strokeLinecap: 'round', strokeLinejoin: 'round' });
+
 export const IconColumns = stroke(
   <>
     <rect x="2.2" y="3.2" width="11.6" height="9.6" rx="1.5" />

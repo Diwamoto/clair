@@ -437,11 +437,11 @@ function organizeEntry(wb: Workbench, folder: string, act: FinderActions): MenuE
 }
 
 /** A row in the favorites column: open it, or take it off the list. */
-export function favoriteMenu(wb: Workbench, entry: FsEntry, act: FinderActions): MenuSpec {
+export function favoriteMenu(wb: Workbench, entry: FsEntry, open: (entry: FsEntry) => void): MenuSpec {
   return {
     header: { icon: entry.dir ? <IconFolder size={12} /> : fileGlyph(entry.kind), title: entry.name, sub: tildify(entry.path) },
     entries: [
-      item(entry.dir ? '開く' : 'Clair で開く', { shortcut: '↵', disabled: !entry.dir && !entry.text, run: () => act.open(entry) }),
+      item(entry.dir ? '開く' : 'Clair で開く', { shortcut: '↵', disabled: !entry.dir && !entry.text, run: () => open(entry) }),
       item('新しいタブで開く', { disabled: !entry.dir, run: () => wb.openFinder(entry.path) }),
       separator,
       item('Send to Agent', { icon: <IconSparkle size={12} />, submenu: agentsSubmenu(wb, `@${relativeTo(entry.path) ?? tildify(entry.path)} を見てください。`) }),

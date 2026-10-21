@@ -33,6 +33,19 @@ final class FileBrowserTests: XCTestCase {
     XCTAssertEqual(try FileBrowser.list(dir + "/src").map(\.name), ["deep"])  // never deeper than the folder asked for
   }
 
+  func testSortKeepsFoldersOnTopAndOrdersByTheChosenKey() {
+    func e(_ name: String, dir: Bool = false, size: Int? = nil, at t: TimeInterval? = nil) -> FileBrowser.Entry {
+      .init(name: name, path: "/x/" + name, isDirectory: dir, isHidden: false, size: size, modified: t.map(Date.init(timeIntervalSince1970:)))
+    }
+    let list = [e("b.txt", size: 9, at: 1), e("z", dir: true, at: 5), e("a.md", size: 1, at: 3), e("c.txt", size: 9, at: nil)]
+    let names = { (s: FileBrowser.Sort, up: Bool) in FileBrowser.sorted(list, by: s, ascending: up).map(\.name) }
+    XCTAssertEqual(names(.name, true), ["z", "a.md", "b.txt", "c.txt"])
+    XCTAssertEqual(names(.name, false), ["z", "c.txt", "b.txt", "a.md"])
+    XCTAssertEqual(names(.modified, false), ["z", "a.md", "b.txt", "c.txt"])  // newest first; undated last
+    XCTAssertEqual(names(.size, true), ["z", "a.md", "b.txt", "c.txt"])
+    XCTAssertEqual(names(.kind, true), ["z", "a.md", "b.txt", "c.txt"])
+  }
+
   func testTextDetectionAndPreviewHead() throws {
     try touch("note.md", (1...30).map { "line \($0)" }.joined(separator: "\n"))
     try Data([0x89, 0x50, 0x4E, 0x47, 0x00, 0x01]).write(to: URL(fileURLWithPath: dir + "/image.png"))

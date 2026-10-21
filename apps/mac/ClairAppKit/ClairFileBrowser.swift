@@ -24,6 +24,9 @@
     private(set) var forward: [Location] = []
     var listings: [String: Listing] = [:]
     var showHidden = false
+    /// The column order (表示 › 並べ替え); folders stay on top.
+    var sort: FileBrowser.Sort = .name
+    var ascending = true
     /// Footer text for a moment after an action; Finder's item count otherwise.
     var notice: String?
     /// The last `finder.reveal` this tab acted on.
@@ -39,7 +42,9 @@
       return location.selection.first.map { ($0 as NSString).deletingLastPathComponent } ?? location.columns.last!
     }
 
-    func entries(_ folder: String) -> [FileBrowser.Entry]? { if case .loaded(let e)? = listings[folder] { e } else { nil } }
+    func entries(_ folder: String) -> [FileBrowser.Entry]? {
+      if case .loaded(let e)? = listings[folder] { FileBrowser.sorted(e, by: sort, ascending: ascending) } else { nil }
+    }
     func entry(_ path: String) -> FileBrowser.Entry? { entries((path as NSString).deletingLastPathComponent)?.first { $0.path == path } }
 
     func go(_ next: Location) {
@@ -105,17 +110,13 @@
     let menus: ClairMenuController
     let host: FileBrowserHost
     @FocusState private var focused: Bool
-    @State private var favoriteDrop = false
+    @State private var sortFrame: CGRect = .zero
 
     var body: some View {
       VStack(spacing: 0) {
         toolbar
         Rectangle().fill(L.hairlineFaint).frame(height: 1)
-        HStack(spacing: 0) {
-          favoritesColumn
-          Rectangle().fill(L.hairlineFaint).frame(width: 1)
-          columnsArea
-        }
+        columnsArea
         Rectangle().fill(L.hairlineFaint).frame(height: 1)
         footer
       }
@@ -159,7 +160,7 @@
       HStack(spacing: 4) {
         navButton("chevron.left", tr("戻る"), enabled: !model.back.isEmpty) { model.goBack(); model.load() }
         navButton("chevron.right", tr("進む"), enabled: !model.forward.isEmpty) { model.goForward(); model.load() }
-        // Path bar: `~` for home, then each folder down to what is selected; a segment starts the columns there.
+        // Path bar: `/`, then each folder down to what is selected; a segment starts the columns there.
         HStack(spacing: 4) {
           ForEach(Array(crumbs.enumerated()), id: \.offset) { i, c in
             if i > 0 { Text("›").foregroundStyle(C.textQuaternary) }
@@ -171,7 +172,40 @@
           }
         }.font(.system(size: 11, design: .monospaced)).padding(.leading, 4)
         Spacer(minLength: 0)
+        Button { menus.open(sortMenu, at: CGPoint(x: sortFrame.minX, y: sortFrame.maxY + 4)) } label: {
+          HStack(spacing: 4) {
+            Image(systemName: "arrow.up.arrow.down").font(.system(size: 10, weight: .semibold))
+            Text(sortLabel(model.sort)).font(.system(size: 11))
+          }.foregroundStyle(C.textTertiary).padding(.horizontal, 6).frame(height: 22)
+        }
+        .buttonStyle(HoverWashStyle(radius: Radius.control)).help(tr("並べ替え"))
+        .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { sortFrame = $0 }
       }.padding(.horizontal, 8).frame(height: 28)
+    }
+
+    private func sortLabel(_ sort: FileBrowser.Sort) -> String {
+      switch sort {
+      case .name: tr("名前")
+      case .modified: tr("変更日")
+      case .size: tr("サイズ")
+      case .kind: tr("種類")
+      }
+    }
+
+    /// The key, then the direction; the current choice carries a check.
+    private var sortMenu: ClairMenuSpec {
+      let mark = { (on: Bool, label: String) in (on ? "✓ " : "   ") + label }
+      return ClairMenuSpec(title: tr("並べ替え"), entries: FileBrowser.Sort.allCases.map { s in
+        .item(mark(model.sort == s, sortLabel(s))) {
+          // A date or a size reads newest / largest first, the way Finder starts them.
+          if model.sort != s { model.ascending = s == .name || s == .kind }
+          model.sort = s
+        }
+      } + [
+        .separator,
+        .item(mark(model.ascending, tr("昇順"))) { model.ascending = true },
+        .item(mark(!model.ascending, tr("降順"))) { model.ascending = false },
+      ])
     }
 
     private func navButton(_ symbol: String, _ label: String, enabled: Bool, _ action: @escaping () -> Void) -> some View {
@@ -181,14 +215,10 @@
       }.buttonStyle(HoverWashStyle(radius: Radius.control)).disabled(!enabled).opacity(enabled ? 1 : 0.5).help(label)
     }
 
+    /// From the volume root down: `/ › Users › me › …`.
     private var crumbs: [(label: String, path: String)] {
-      let deepest = model.picked?.path ?? model.location.columns.last!
-      let home = NSHomeDirectory()
-      let base = deepest == home || deepest.hasPrefix(home + "/") ? home : ""
-      let rest = deepest.dropFirst(base.count).split(separator: "/").map(String.init)
-      var out: [(label: String, path: String)] = base.isEmpty ? [(label: "/", path: "/")] : [(label: "~", path: home)]
-      for i in rest.indices { out.append((label: rest[i], path: base + "/" + rest[...i].joined(separator: "/"))) }
-      return out
+      let parts = (model.picked?.path ?? model.location.columns.last!).split(separator: "/").map(String.init)
+      return [(label: "/", path: "/")] + parts.indices.map { (label: parts[$0], path: "/" + parts[...$0].joined(separator: "/")) }
     }
 
     private var footer: some View {
@@ -199,80 +229,6 @@
           .compactMap { $0 }.joined(separator: " · ")
       return Text(text).font(.system(size: 11)).foregroundStyle(model.notice == nil ? C.textQuaternary : C.textSecondary)
         .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).frame(height: 22)
-    }
-
-    // MARK: favorites (よく使う項目)
-
-    /// Finder's favorites as the first, fixed column: pins the user adds with 「よく使う項目に追加」 or by dropping rows
-    /// here. A folder starts the columns there; a file opens its folder with it selected. A pin whose item is gone
-    /// stays, dimmed, until removed.
-    private var favoritesColumn: some View {
-      ScrollView(.vertical) {
-        LazyVStack(alignment: .leading, spacing: 0) {
-          Text(tr("よく使う項目")).font(.system(size: 11)).foregroundStyle(C.textQuaternary)
-            .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 6)
-          ForEach(host.favorites, id: \.self) { favoriteRow($0) }
-          if host.favorites.isEmpty {
-            Text(tr("フォルダやファイルをここへドラッグするか、右クリックの「よく使う項目に追加」で登録"))
-              .font(.system(size: 11)).foregroundStyle(C.textQuaternary).lineSpacing(2)
-              .padding(.horizontal, 16).padding(.vertical, 4)
-          }
-        }.padding(.vertical, 6).clairScroller()
-      }
-      .frame(width: 148)
-      .background(C.panel)
-      .overlay(Rectangle().stroke(favoriteDrop ? L.ring : .clear, lineWidth: 1))
-      // Rows from the columns, the explorer, a tab or the macOS Finder: each becomes a pin.
-      .dropDestination(for: URL.self) { urls, _ in
-        let paths = urls.filter(\.isFileURL).map(\.path)
-        guard !paths.isEmpty else { return false }
-        host.addFavorites(paths)
-        return true
-      } isTargeted: { favoriteDrop = $0 }
-    }
-
-    private func favoriteRow(_ path: String) -> some View {
-      var isDir: ObjCBool = false
-      let exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDir)
-      let folder = !exists || isDir.boolValue
-      let on = folder ? model.root == path : model.location.selection.contains(path)
-      let name = path == NSHomeDirectory() ? tr("ホーム") : (path as NSString).lastPathComponent
-      return HStack(spacing: 8) {
-        (folder ? FileIcon.folder(open: false) : FileIcon.forPath(name)).image(size: 11, ink: C.textTertiary).frame(width: 14)
-        Text(name).font(.system(size: 12, weight: on ? .semibold : .regular)).lineLimit(1).truncationMode(.middle)
-          .foregroundStyle(on ? C.textPrimary : C.textSecondary)
-        Spacer(minLength: 0)
-      }
-      .padding(.horizontal, 8).frame(height: 24)
-      .background(on ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
-      .contentShape(Rectangle())
-      .padding(.horizontal, 6)
-      .opacity(exists ? 1 : 0.5)
-      .onTapGesture {
-        guard exists else { return }
-        model.go(folder ? .init(columns: [path], selection: []) : .init(columns: [(path as NSString).deletingLastPathComponent], selection: [path]))
-        model.load()
-        focused = true
-      }
-      .simultaneousGesture(TapGesture(count: 2).onEnded {
-        guard exists, !folder else { return }
-        if FileBrowser.isText(path) { host.openInClair(path) } else { NSWorkspace.shared.open(URL(fileURLWithPath: path)) }
-      })
-      .onDrag { NSItemProvider(object: URL(fileURLWithPath: path) as NSURL) }
-      .help(path)
-      .clairContextMenu(menus) {
-        ClairMenuSpec(title: name, sub: path, entries: [
-          .item(folder ? tr("開く") : tr("Clair で開く"), disabled: !exists || (!folder && !FileBrowser.isText(path))) {
-            if folder { model.go(.init(columns: [path], selection: [])); model.load() } else { host.openInClair(path) }
-          },
-          .item(tr("新しいタブで開く"), disabled: !exists || !folder) { host.openBrowser(path) },
-          .separator,
-          agentMenu(tr("Agent に送る"), text: FileBrowser.mention(path, root: host.projectRoot) + " "),
-          .item(tr("パスをコピー")) { copyPaths([path]) },
-          .separator,
-          .item(tr("よく使う項目から外す")) { host.removeFavorite(path) },
-        ])
-      }
     }
 
     // MARK: columns
@@ -297,7 +253,7 @@
             .clairContextMenu(menus) { backgroundMenu(folder) }
         }.padding(.vertical, 4).clairScroller()
       }
-      .frame(width: 200)
+      .frame(width: 260)
     }
 
     private func note(_ text: String) -> some View {
@@ -311,12 +267,18 @@
         (e.isDirectory ? FileIcon.folder(open: false) : FileIcon.forPath(e.name)).image(size: 11, ink: C.textTertiary).frame(width: 14)
         Text(e.name).font(.system(size: 12)).lineLimit(1).truncationMode(.middle)
           .foregroundStyle(e.isHidden ? C.textQuaternary : selected || trail ? C.textPrimary : C.textSecondary)
-        Spacer(minLength: 0)
-        if e.isDirectory { Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold)).foregroundStyle(C.textQuaternary) }
+        Spacer(minLength: 4)
+        if let m = e.modified {
+          Text(Self.shortDate(m)).font(.system(size: 10)).monospacedDigit().foregroundStyle(C.textQuaternary).lineLimit(1)
+        }
+        Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold)).foregroundStyle(C.textQuaternary)
+          .opacity(e.isDirectory ? 1 : 0)
       }
       .padding(.horizontal, 8).frame(height: 24)
       .background(selected ? C.surfaceActive : trail ? C.surfaceHover : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
+      .rowHover(radius: Radius.control)
       .contentShape(Rectangle())
+      .help(e.modified.map { "\(e.path)\n\(tr("変更 %@", $0.formatted(date: .abbreviated, time: .shortened)))" } ?? e.path)
       .padding(.horizontal, 6)
       .onTapGesture {
         model.select(e, column: column, toggle: NSEvent.modifierFlags.contains(.command))
@@ -326,11 +288,18 @@
       // A row drags out as a file URL: onto a terminal it becomes its escaped path, onto the macOS Finder a copy.
       // ponytail: one item per drag (SwiftUI's onDrag carries a single provider); a multi-selection goes through the menu.
       .onDrag { NSItemProvider(object: URL(fileURLWithPath: e.path) as NSURL) }
-      .help(e.path)
       .clairContextMenu(menus) {
         if !model.location.selection.contains(e.path) { model.select(e, column: column, toggle: false) }
         return entryMenu(e)
       }
+    }
+
+    /// Today: the time; this year: month/day; older: the year too.
+    private static func shortDate(_ d: Date) -> String {
+      let cal = Calendar.current
+      if cal.isDateInToday(d) { return d.formatted(date: .omitted, time: .shortened) }
+      if cal.isDate(d, equalTo: .now, toGranularity: .year) { return d.formatted(.dateTime.month(.defaultDigits).day()) }
+      return d.formatted(.dateTime.year().month(.defaultDigits).day())
     }
 
     // MARK: actions
@@ -605,6 +574,13 @@
     let activeModel: FileBrowserModel?
     let openBrowser: (String) -> Void
     let activate: (String) -> Void
+    /// よく使う項目 (`WorkbenchState.favorites`): pinned with 「よく使う項目に追加」 or by dropping rows on the section.
+    let favorites: [String]
+    let addFavorites: ([String]) -> Void
+    let removeFavorite: (String) -> Void
+    let openInClair: (String) -> Void
+    let menus: ClairMenuController
+    @State private var favoriteDrop = false
 
     var body: some View {
       LazyVStack(alignment: .leading, spacing: 0) {
@@ -613,6 +589,7 @@
           place(project.name, project.path)
           ForEach(project.folders, id: \.self) { place(($0 as NSString).lastPathComponent, $0) }
         }
+        favoritesSection
         heading(tr("場所"))
         let home = NSHomeDirectory()
         place(tr("ホーム"), home)
@@ -626,6 +603,66 @@
           }
         }
       }.padding(.bottom, 8)
+    }
+
+    /// A folder pin moves the active browser there; a file pin shows its folder with it selected (double-click opens).
+    /// A pin whose item is gone stays, dimmed, until removed.
+    private var favoritesSection: some View {
+      VStack(alignment: .leading, spacing: 0) {
+        heading(tr("よく使う項目"))
+        ForEach(favorites, id: \.self) { favorite($0) }
+        if favorites.isEmpty {
+          Text(tr("フォルダやファイルをここへドラッグするか、右クリックの「よく使う項目に追加」で登録"))
+            .font(.system(size: 11)).foregroundStyle(C.textQuaternary).lineSpacing(2)
+            .padding(.horizontal, 16).padding(.vertical, 4)
+        }
+      }
+      .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(favoriteDrop ? L.ring : .clear, lineWidth: 1).padding(.horizontal, 4))
+      .dropDestination(for: URL.self) { urls, _ in
+        let paths = urls.filter(\.isFileURL).map(\.path)
+        guard !paths.isEmpty else { return false }
+        addFavorites(paths)
+        return true
+      } isTargeted: { favoriteDrop = $0 }
+    }
+
+    private func favorite(_ path: String) -> some View {
+      var isDir: ObjCBool = false
+      let exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDir)
+      let folder = !exists || isDir.boolValue
+      let on = folder ? activeModel?.root == path : activeModel?.location.selection.contains(path) == true
+      let name = path == NSHomeDirectory() ? tr("ホーム") : (path as NSString).lastPathComponent
+      let go = {
+        guard exists else { return }
+        let target = folder ? path : (path as NSString).deletingLastPathComponent
+        if let m = activeModel, !NSEvent.modifierFlags.contains(.command) {
+          m.go(.init(columns: [target], selection: folder ? [] : [path])); m.load()
+        } else {
+          openBrowser(target)
+        }
+      }
+      return row(icon: folder ? "folder" : "doc", label: name, mono: false, on: on, go)
+        .opacity(exists ? 1 : 0.5)
+        .simultaneousGesture(TapGesture(count: 2).onEnded {
+          guard exists, !folder else { return }
+          if FileBrowser.isText(path) { openInClair(path) } else { NSWorkspace.shared.open(URL(fileURLWithPath: path)) }
+        })
+        .onDrag { NSItemProvider(object: URL(fileURLWithPath: path) as NSURL) }
+        .help(path)
+        .clairContextMenu(menus) {
+          ClairMenuSpec(title: name, sub: path, entries: [
+            .item(folder ? tr("開く") : tr("Clair で開く"), disabled: !exists || (!folder && !FileBrowser.isText(path))) {
+              if folder { go() } else { openInClair(path) }
+            },
+            .item(tr("新しいタブで開く"), disabled: !exists || !folder) { openBrowser(path) },
+            .separator,
+            .item(tr("パスをコピー")) {
+              NSPasteboard.general.clearContents(); NSPasteboard.general.setString(path, forType: .string)
+            },
+            .separator,
+            .item(tr("よく使う項目から外す")) { removeFavorite(path) },
+          ])
+        }
     }
 
     private func heading(_ text: String) -> some View {
@@ -660,6 +697,23 @@
     private func tilde(_ path: String) -> String {
       let home = NSHomeDirectory()
       return path == home ? "~" : path.hasPrefix(home + "/") ? "~" + path.dropFirst(home.count) : path
+    }
+  }
+
+  extension View {
+    /// The pointer's wash on a row that is not a Button (it keeps its own tap and drag gestures).
+    func rowHover(radius: CGFloat) -> some View { modifier(RowHover(radius: radius)) }
+  }
+
+  private struct RowHover: ViewModifier {
+    let radius: CGFloat
+    @State private var hovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    func body(content: Content) -> some View {
+      content
+        .overlay(hovered ? DesignTokens.Wash.selected : .clear, in: RoundedRectangle(cornerRadius: radius))
+        .onHover { hovered = $0 }
+        .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: hovered)
     }
   }
 

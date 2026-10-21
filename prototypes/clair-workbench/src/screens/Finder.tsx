@@ -17,13 +17,12 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { targetRing, useContextMenu } from '../contextMenu';
 import { FileIcon } from '../chrome';
 import { entryAt, HOME, isHidden, listDir, places, previewText, PROJECT_ROOT, shellEscape, tildify, type FsEntry } from '../finder';
-import { IconChevron, IconChevronLeft, IconColumns, IconDoc, IconFolder } from '../icons';
-import { favoriteMenu, finderBackgroundMenu, finderEntryMenu, type FinderActions } from '../menus';
+import { IconChevron, IconChevronLeft, IconColumns, IconDoc, IconFolder, IconSort } from '../icons';
+import { favoriteMenu, finderBackgroundMenu, finderEntryMenu } from '../menus';
 import { useWorkbench } from '../store';
 import { color, fs, line, radius, space } from '../tokens';
 
-const COLUMN = 200;
-const FAVORITES = 148;
+const COLUMN = 260;
 const PREVIEW = 240;
 // The mock's disk answers at once; this stands in for a real folder read so
 // the lazy listing is visible.
@@ -51,6 +50,37 @@ export function readPathDrag(event: React.DragEvent): string[] | null {
 
 type View = { columns: string[]; selection: string[] };
 
+/** 表示 › 並べ替え. Folders stay on top in every order. */
+type SortKey = 'name' | 'modified' | 'size' | 'kind';
+const SORT_LABEL: Record<SortKey, string> = { name: '名前', modified: '変更日', size: 'サイズ', kind: '種類' };
+
+// ponytail: the mock's dates are display strings ('今日 09:12', '昨日 18:40', '10/15'); this ranks them.
+// Native sorts the real modification date.
+function dateRank(s: string) {
+  const [day, time = '00:00'] = s.split(' ');
+  const minutes = Number(time.replace(':', '.')) || 0;
+  if (day === '今日') return 2000 + minutes;
+  if (day === '昨日') return 1000 + minutes;
+  const [m, d] = day.split('/').map(Number);
+  return (m || 0) * 31 + (d || 0);
+}
+
+function sizeRank(s?: string) {
+  const [n, unit] = (s ?? '0').split(' ');
+  return Number(n) * ({ KB: 1e3, MB: 1e6, GB: 1e9 } as Record<string, number>)[unit ?? ''] || Number(n) || 0;
+}
+
+function sortEntries(list: FsEntry[], key: SortKey, ascending: boolean) {
+  const byName = (a: FsEntry, b: FsEntry) => a.name.localeCompare(b.name, 'ja', { numeric: true });
+  const ext = (e: FsEntry) => (e.name.includes('.') ? e.name.slice(e.name.lastIndexOf('.') + 1).toLowerCase() : '');
+  const cmp = (a: FsEntry, b: FsEntry) =>
+    key === 'modified' ? dateRank(a.modified) - dateRank(b.modified) || byName(a, b)
+    : key === 'size' ? sizeRank(a.size) - sizeRank(b.size) || byName(a, b)
+    : key === 'kind' ? ext(a).localeCompare(ext(b)) || byName(a, b)
+    : byName(a, b);
+  return [...list].sort((a, b) => (a.dir !== b.dir ? (a.dir ? -1 : 1) : ascending ? cmp(a, b) : cmp(b, a)));
+}
+
 // Where each tab was left, so switching tabs and back restores its columns.
 // ponytail: module-level, the mock's lifetime; native keeps it in the tab's own state.
 const kept = new Map<string, View>();
@@ -66,6 +96,7 @@ export function FinderPane({ paneId, tab, root }: { paneId: string; tab: string;
   const [forward, setForward] = useState<View[]>([]);
   const [listings, setListings] = useState<Record<string, FsEntry[] | 'loading' | null>>({});
   const [showHidden, setShowHidden] = useState(false);
+  const [sort, setSort] = useState<{ key: SortKey; ascending: boolean }>({ key: 'name', ascending: true });
   const [notice, setNotice] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const focused = wb.focusedPane === paneId;
@@ -95,9 +126,8 @@ export function FinderPane({ paneId, tab, root }: { paneId: string; tab: string;
   const entries = (folder: string): FsEntry[] | 'loading' | null => {
     const listed = listings[folder];
     if (listed === undefined || listed === 'loading' || listed === null) return listed ?? 'loading';
-    return [...listed, ...(wb.fsCopies[folder] ?? [])]
-      .filter((e) => !wb.fsTrashed.has(e.path) && (showHidden || !isHidden(e.name)))
-      .sort((a, b) => (a.dir === b.dir ? a.name.localeCompare(b.name, 'ja') : a.dir ? -1 : 1));
+    const shown = [...listed, ...(wb.fsCopies[folder] ?? [])].filter((e) => !wb.fsTrashed.has(e.path) && (showHidden || !isHidden(e.name)));
+    return sortEntries(shown, sort.key, sort.ascending);
   };
 
   const go = (next: View) => {
@@ -121,7 +151,7 @@ export function FinderPane({ paneId, tab, root }: { paneId: string; tab: string;
   const all = useMemo(() => new Map(view.columns.flatMap((c) => {
     const list = entries(c);
     return Array.isArray(list) ? list.map((e) => [e.path, e] as const) : [];
-  })), [view.columns, listings, wb.fsCopies, wb.fsTrashed, showHidden]); // eslint-disable-line react-hooks/exhaustive-deps
+  })), [view.columns, listings, wb.fsCopies, wb.fsTrashed, showHidden, sort]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const picked = view.selection.length === 1 ? all.get(view.selection[0]) : undefined;
   const columnOf = (path: string) => view.columns.indexOf(path.slice(0, path.lastIndexOf('/')));
@@ -207,16 +237,30 @@ export function FinderPane({ paneId, tab, root }: { paneId: string; tab: string;
     }
   };
 
-  // Path bar: `~` for home, then one segment per folder down to what is selected.
+  // Path bar: `/`, then one segment per folder down to what is selected.
   const crumbs = (() => {
-    const deepest = picked?.path ?? view.columns[view.columns.length - 1];
-    const base = deepest === HOME || deepest.startsWith(HOME + '/') ? HOME : '';
-    const rest = deepest.slice(base.length).split('/').filter(Boolean);
-    return [
-      ...(base ? [{ label: '~', path: HOME }] : []),
-      ...rest.map((part, i) => ({ label: part, path: `${base}/${rest.slice(0, i + 1).join('/')}` })),
-    ];
+    const parts = (picked?.path ?? view.columns[view.columns.length - 1]).split('/').filter(Boolean);
+    return [{ label: '/', path: '/' }, ...parts.map((part, i) => ({ label: part, path: `/${parts.slice(0, i + 1).join('/')}` }))];
   })();
+
+  const sortMenu = (event: React.MouseEvent) => {
+    const r = event.currentTarget.getBoundingClientRect();
+    const check = (on: boolean, label: string) => `${on ? '✓ ' : '   '}${label}`;
+    wb.openContextMenu(r.left, r.bottom + 4, () => ({
+      header: { title: '並べ替え' },
+      entries: [
+        ...(Object.keys(SORT_LABEL) as SortKey[]).map((key) => ({
+          type: 'item' as const,
+          label: check(sort.key === key, SORT_LABEL[key]),
+          // A date or a size reads newest / largest first, the way Finder starts them.
+          run: () => setSort((s) => ({ key, ascending: s.key === key ? s.ascending : key === 'name' || key === 'kind' })),
+        })),
+        { type: 'separator' as const },
+        { type: 'item' as const, label: check(sort.ascending, '昇順'), run: () => setSort((s) => ({ ...s, ascending: true })) },
+        { type: 'item' as const, label: check(!sort.ascending, '降順'), run: () => setSort((s) => ({ ...s, ascending: false })) },
+      ],
+    }));
+  };
 
   const count = (() => {
     const last = view.columns[view.columns.length - 1];
@@ -251,6 +295,11 @@ export function FinderPane({ paneId, tab, root }: { paneId: string; tab: string;
             );
           })}
         </div>
+        <button className="hoverable" title="並べ替え" onClick={sortMenu}
+          style={{ height: 22, display: 'flex', alignItems: 'center', gap: 4, padding: '0 6px', borderRadius: radius.control, fontSize: fs.caption, color: color.textTertiary, flexShrink: 0 }}>
+          <IconSort size={11} />
+          {SORT_LABEL[sort.key]}
+        </button>
       </div>
 
       <div
@@ -259,13 +308,6 @@ export function FinderPane({ paneId, tab, root }: { paneId: string; tab: string;
         onMouseDown={() => wb.setFocusedPane(paneId)}
         style={{ flex: 1, minHeight: 0, display: 'flex', outline: 'none' }}
       >
-        <Favorites
-          paneId={paneId}
-          current={view}
-          go={go}
-          open={open}
-          actions={actions}
-        />
         <div ref={scrollRef} className="scroll" style={{ flex: 1, minWidth: 0, display: 'flex', overflowX: 'auto', overflowY: 'hidden' }}>
           {view.columns.map((folder, index) => {
             const list = entries(folder);
@@ -304,7 +346,7 @@ export function FinderPane({ paneId, tab, root }: { paneId: string; tab: string;
                           const paths = view.selection.includes(entry.path) ? view.selection : [entry.path];
                           menu(event, (w) => finderEntryMenu(w, entry, paths, actions), `${paneId}:${entry.path}`);
                         }}
-                        title={tildify(entry.path)}
+                        title={`${tildify(entry.path)}\n変更 ${entry.modified}`}
                         style={{ ...rowStyle(selected && !trail, trail), boxShadow: targeted ? targetRing : undefined }}
                       >
                         {entry.dir ? (
@@ -317,7 +359,8 @@ export function FinderPane({ paneId, tab, root }: { paneId: string; tab: string;
                         <span style={{ flex: 1, minWidth: 0, fontSize: fs.secondary, color: isHidden(entry.name) ? color.textQuaternary : selected ? color.textPrimary : color.textSecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {entry.name}
                         </span>
-                        {entry.dir ? <IconChevron size={9} color={color.textQuaternary} /> : null}
+                        <span className="tnum" style={{ fontSize: fs.caption, color: color.textQuaternary, whiteSpace: 'nowrap', flexShrink: 0 }}>{entry.modified}</span>
+                        <span style={{ width: 9, display: 'flex', flexShrink: 0 }}>{entry.dir ? <IconChevron size={9} color={color.textQuaternary} /> : null}</span>
                       </button>
                     );
                   })
@@ -349,23 +392,17 @@ export function FinderPane({ paneId, tab, root }: { paneId: string; tab: string;
 }
 
 /**
- * よく使う項目: Finder's favorites as the browser's first, fixed column. The user pins folders and files with
- * "よく使う項目に追加" or by dropping rows here; a folder starts the columns there, a file opens its folder with
- * it selected. The list is the user's, shared by every browser tab and saved with Clair's settings.
+ * よく使う項目, in the browser's sidebar section: the user pins folders and files with "よく使う項目に追加" or by
+ * dropping rows on it. A folder moves the active browser there; a file shows in its folder, selected (double-click
+ * opens). Shared by every browser tab and saved with Clair's settings.
  */
-function Favorites({ paneId, current, go, open, actions }: {
-  paneId: string;
-  current: View;
-  go: (next: View) => void;
-  open: (entry: FsEntry, app?: string) => void;
-  actions: FinderActions;
-}) {
+function Favorites({ activeRoot }: { activeRoot: string | null }) {
   const wb = useWorkbench();
   const menu = useContextMenu();
   const [dropping, setDropping] = useState(false);
+  const open = (entry: FsEntry) => (entry.dir ? wb.goToPlace(entry.path) : entry.projectPath ? wb.openFile(entry.projectPath) : wb.reveal(entry.path));
   return (
     <div
-      className="scroll"
       onDragOver={(event) => {
         if (!event.dataTransfer.types.includes(PATHS_TYPE)) return;
         event.preventDefault();
@@ -380,21 +417,14 @@ function Favorites({ paneId, current, go, open, actions }: {
         event.preventDefault();
         wb.addFavorites(paths);
       }}
-      style={{
-        width: FAVORITES,
-        flexShrink: 0,
-        padding: '6px 0',
-        background: color.panel,
-        borderRight: `1px solid ${line.hairlineFaint}`,
-        boxShadow: dropping ? `inset 0 0 0 1px ${line.ring}` : undefined,
-      }}
+      style={{ margin: '0 4px', borderRadius: radius.card, boxShadow: dropping ? `inset 0 0 0 1px ${line.ring}` : undefined }}
     >
-      <div style={{ fontSize: fs.caption, color: color.textQuaternary, padding: '4px 16px 6px' }}>よく使う項目</div>
+      <div style={{ fontSize: fs.caption, color: color.textQuaternary, padding: '10px 12px 4px' }}>よく使う項目</div>
       {wb.favorites.map((path) => {
         const entry = entryAt(path);
         const gone = !entry || wb.fsTrashed.has(path);
-        const on = entry?.dir ? current.columns[0] === path : current.selection.includes(path);
-        const targeted = wb.contextMenu?.target === `${paneId}:fav:${path}`;
+        const on = !!entry?.dir && activeRoot === path && wb.screen === 'workspace';
+        const targeted = wb.contextMenu?.target === `fav:${path}`;
         const name = path.slice(path.lastIndexOf('/') + 1);
         return (
           <button
@@ -403,18 +433,18 @@ function Favorites({ paneId, current, go, open, actions }: {
             onDragStart={(event) => setPathDrag(event, [path])}
             className={on ? undefined : 'hoverable'}
             title={tildify(path)}
-            onClick={() => {
+            onClick={(event) => {
               if (!entry || gone) return;
-              const parent = path.slice(0, path.lastIndexOf('/'));
-              go(entry.dir ? { columns: [path], selection: [] } : { columns: [parent], selection: [path] });
+              if (entry.dir) wb.goToPlace(path, event.metaKey || event.ctrlKey);
+              else wb.reveal(path);
             }}
             onDoubleClick={() => entry && !gone && !entry.dir && open(entry)}
             onContextMenu={(event) =>
               entry
-                ? menu(event, (w) => favoriteMenu(w, entry, actions), `${paneId}:fav:${path}`)
+                ? menu(event, (w) => favoriteMenu(w, entry, open), `fav:${path}`)
                 : menu(event, (w) => ({ entries: [{ type: 'item', label: 'よく使う項目から外す', run: () => w.removeFavorite(path) }] }))
             }
-            style={{ ...rowStyle(on, false), boxShadow: targeted ? targetRing : undefined, opacity: gone ? 0.5 : 1 }}
+            style={{ ...rowStyle(on, false), width: 'calc(100% - 8px)', margin: '0 4px', boxShadow: targeted ? targetRing : undefined, opacity: gone ? 0.5 : 1 }}
           >
             {entry?.dir || !entry ? (
               <IconFolder size={12} color={color.textTertiary} />
@@ -429,9 +459,9 @@ function Favorites({ paneId, current, go, open, actions }: {
           </button>
         );
       })}
-      {/* EMPTY STATE: what the column is for, until something is pinned. */}
+      {/* EMPTY STATE: what the section is for, until something is pinned. */}
       {wb.favorites.length === 0 ? (
-        <div style={{ fontSize: fs.caption, lineHeight: '16px', color: color.textQuaternary, padding: '4px 16px' }}>
+        <div style={{ fontSize: fs.caption, lineHeight: '16px', color: color.textQuaternary, padding: '4px 12px' }}>
           フォルダやファイルをここへドラッグするか、右クリックの「よく使う項目に追加」で登録
         </div>
       ) : null}
@@ -543,6 +573,7 @@ export function BrowserPanel() {
     <div className="scroll" style={{ position: 'absolute', inset: 0, padding: '0 0 8px' }}>
       {heading('Project')}
       {projects.map((p) => row(p.label, p.path, `p:${p.path}`))}
+      <Favorites activeRoot={activeRoot} />
       {heading('場所')}
       {places.filter((p) => p.path !== PROJECT_ROOT).map((p) => row(p.label, p.path, `l:${p.path}`))}
       {tabs.length ? heading('開いているブラウザ') : null}
