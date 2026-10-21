@@ -233,9 +233,59 @@ function PathBreadcrumb({ path }: { path: string }) {
   );
 }
 
+// draw.io's own embed mode: the file's XML goes in by postMessage and every
+// edit comes back the same way, so the diagram is just another view of the buffer.
+const DRAWIO_URL = 'https://embed.diagrams.net/?embed=1&proto=json&spin=1&ui=min&dark=1&noExitBtn=1&noSaveBtn=1&saveAndExit=0';
+
+function DiagramPane({ node, path }: { node: Extract<PaneNode, { kind: 'leaf' }>; path: string }) {
+  const wb = useWorkbench();
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  const xmlRef = useRef(wb.contents[path] ?? '');
+  xmlRef.current = wb.contents[path] ?? '';
+
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.source !== frameRef.current?.contentWindow || typeof event.data !== 'string') return;
+      const msg = JSON.parse(event.data) as { event: string; xml?: string };
+      const post = (data: object) => frameRef.current?.contentWindow?.postMessage(JSON.stringify(data), '*');
+      if (msg.event === 'init') post({ action: 'load', xml: xmlRef.current, autosave: 1 });
+      // Each autosave is one edit to the buffer (the tab turns dirty); ⌘S inside draw.io saves.
+      if ((msg.event === 'autosave' || msg.event === 'save') && msg.xml !== undefined) wb.editFile(path, msg.xml);
+      if (msg.event === 'save') wb.saveFile(path);
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [wb, path]);
+
+  return (
+    <div
+      onMouseDown={() => wb.setFocusedPane(node.id)}
+      style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, background: color.canvas }}
+    >
+      <PathBreadcrumb path={path} />
+      <iframe
+        ref={frameRef}
+        key={path}
+        src={DRAWIO_URL}
+        // diagrams.net answers 403 to a localhost Referer.
+        referrerPolicy="no-referrer"
+        title={`draw.io — ${path}`}
+        style={{ flex: 1, width: '100%', border: 0, background: color.canvas }}
+      />
+    </div>
+  );
+}
+
 function EditorPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
   const wb = useWorkbench();
   const path = node.filePath ?? wb.activePath;
+  const file = byPath.get(path);
+  if (file?.kind === 'drawio') return <DiagramPane node={node} path={path} />;
+  return <TextEditorPane node={node} path={path} />;
+}
+
+function TextEditorPane({ node, path }: { node: Extract<PaneNode, { kind: 'leaf' }>; path: string }) {
+  const wb = useWorkbench();
   const file = byPath.get(path);
   const text = wb.contents[path] ?? '';
   const lines = text.split('\n');

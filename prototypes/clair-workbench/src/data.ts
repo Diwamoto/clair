@@ -16,7 +16,7 @@ export const AGENT_PROFILES = [
 
 export type AgentProfileId = (typeof AGENT_PROFILES)[number]['id'];
 
-export type FileKind = 'swift' | 'go' | 'md' | 'rust';
+export type FileKind = 'swift' | 'go' | 'md' | 'rust' | 'drawio';
 
 export type MockFile = {
   path: string;
@@ -188,6 +188,34 @@ The pane tree is a binary tree of splits. A split owns its ratio so the divider
 can drag it, and focus moves by geometry rather than by pane index.
 `;
 
+// A plain uncompressed .drawio file, the format draw.io itself writes.
+const paneLayoutDiagram = `<mxfile host="Clair">
+  <diagram id="pane-layout" name="Pane layout">
+    <mxGraphModel dx="800" dy="600" grid="1" gridSize="10" page="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="ws" value="ProjectWorkspace" style="rounded=1;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="200" y="40" width="160" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="split" value="PaneSplit" style="rounded=1;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="200" y="140" width="160" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="editor" value="EditorPane" style="rounded=1;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="60" y="240" width="140" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="term" value="TerminalPane" style="rounded=1;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="360" y="240" width="140" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="ws" target="split"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="split" target="editor"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="split" target="term"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
+`;
+
 export const files: MockFile[] = [
   {
     path: 'apple/ClairApp/ProjectWorkspace.swift',
@@ -208,6 +236,7 @@ export const files: MockFile[] = [
   { path: 'apple/ClairApp/SessionRail.swift', name: 'SessionRail.swift', kind: 'swift', status: 'A', content: sessionRail },
   { path: 'clair-docs/site/index.md', name: 'index.md', kind: 'md', content: readme },
   { path: 'docs/architecture/pane-layout.md', name: 'pane-layout.md', kind: 'md', content: paneLayoutDoc },
+  { path: 'docs/architecture/pane-layout.drawio', name: 'pane-layout.drawio', kind: 'drawio', content: paneLayoutDiagram },
 ];
 
 export type TreeNode =
@@ -269,6 +298,14 @@ export const tree: TreeNode[] = [
     id: 'f7',
     parent: 'clair/docs',
     path: 'docs/architecture/pane-layout.md',
+  },
+  {
+    type: 'file',
+    name: 'pane-layout.drawio',
+    depth: 2,
+    id: 'f8',
+    parent: 'clair/docs',
+    path: 'docs/architecture/pane-layout.drawio',
   },
   // Gitignored: listed, but in textQuaternary so it reads as not part of the project.
   { type: 'folder', name: 'dist', depth: 1, id: 'clair/dist', parent: 'clair', ignored: true },
