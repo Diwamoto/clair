@@ -295,7 +295,6 @@ function EditorPane({ node }: { node: Extract<PaneNode, { kind: 'leaf' }> }) {
 }
 
 function TextEditor({ node, path }: { node: Extract<PaneNode, { kind: 'leaf' }>; path: string }) {
-  const wb = useWorkbench();
   const file = byPath.get(path);
   if (file?.kind === 'drawio') return <DiagramPane node={node} path={path} />;
   return <TextEditorPane node={node} path={path} />;
