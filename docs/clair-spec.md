@@ -481,8 +481,9 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
 - shortcut は任意 command へユーザーが割り当てられる
 - ⌘⇧N(`project.choose`、File ▸ Open Project…)で folder picker を開き、選んだ任意の folder を
   `project.open` で Project として開く。titlebar の「+」も同じ
-- ⌘N(`file.new`、File ▸ New File…)は名前を尋ね、active file と同じ folder(なければ・ad-hoc file なら
-  Project root)に空の file を作ってタブで開く。explorer の「新しいファイル…」と同じ。SwiftUI 標準の
+- ⌘N(`file.new`、File ▸ New File)は名前を尋ねず、active file と同じ folder(なければ・ad-hoc file なら
+  Project root)に未使用の `NewFileN`(N=1,2,…)を空で作ってタブで開く。最初の ⌘S で名前を尋ね、保存後
+  その名前へ移す(取り消せば `NewFileN` のまま。2026-10-22 オーナー依頼)。explorer の「新しいファイル…」は従来どおり先に名前を尋ねる。SwiftUI 標準の
   New Window は File menu から外し、shortcut も持たない(2026-10-16 オーナー依頼)
 - `clair open path:line:column` は path を所有する open Project の active pane へ
   file を開く。該当 Project がなければ Git root を新規 Project として開く。どの

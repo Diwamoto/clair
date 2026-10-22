@@ -283,6 +283,7 @@ extension LocalizedStrings {
     "新しいフォルダー": "New Folder",
     "新しいファイル": "New File",
     "名前を変更": "Rename",
+    "名前を付けて保存": "Save As",
     "“%@” を削除しますか?": "Delete “%@”?",
     "フォルダーとその中身をゴミ箱に移動します。": "Moves the folder and its contents to the Trash.",
     "ゴミ箱に移動します。": "Moves it to the Trash.",

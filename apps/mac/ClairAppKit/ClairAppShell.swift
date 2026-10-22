@@ -131,8 +131,11 @@ import Observation
     private var sleepAssertion: IOPMAssertionID = 0
     private var persistenceTask: Task<Void, Never>?
     public private(set) var windowGeneration = 0
-    /// Bumped by `file.new` (⌘N); the shell answers with the explorer's name prompt.
+    /// Bumped by `file.new` (⌘N); the shell answers by opening a `NewFileN` named on first save.
     public private(set) var newFileRequests = 0
+    /// ⌘N files not yet named; their first ⌘S asks for a name (`nameRequest`) instead of saving in place.
+    var untitled: Set<String> = []
+    public var nameRequest: String?
 
     /// Map manually started CLI processes back to the terminal panes Clair already owns.
     func refreshDetectedAgents() async {
@@ -704,6 +707,7 @@ import Observation
 
     private func saveActiveFile() async {
       guard let path = state.active else { _ = run("file.save"); return }
+      if untitled.contains(path) { nameRequest = path; return }
       _ = await saveFile(path)
     }
 
@@ -1184,7 +1188,7 @@ import Observation
 
     /// Menu-bar titles follow macOS English menus; the palette keeps the registry's titles.
     static let titles: [String: String] = [
-      "settings.open": "Settings…", "file.new": "New File…", "file.save": "Save", "tab.reopenClosed": "Reopen Closed Tab",
+      "settings.open": "Settings…", "file.new": "New File", "file.save": "Save", "tab.reopenClosed": "Reopen Closed Tab",
       "project.choose": "Open Project…", "pane.close": "Close Tab or Pane", "palette.recent": "Open Recent…", "palette.compare": "Compare With…",
       "window.restart": "Restart Window", "editor.zoomIn": "Zoom In", "editor.zoomInAlt": "Zoom In", "editor.zoomOut": "Zoom Out", "app.restart": "Restart App", "app.investigateCrash": "Investigate Last Crash",
       "palette.find": "Find", "editor.replace": "Replace", "palette.search": "Find in Project", "editor.format": "Format Document",
@@ -1384,7 +1388,7 @@ import Observation
         else if let p = st.palette { paletteView(p) }
       }
       .animation(.easeOut(duration: 0.09), value: st.palette == nil)
-      .overlay(alignment: .bottomTrailing) { updateToast.padding(.trailing, 16).padding(.bottom, ChromeBudget.statusBar + 12) }
+      .overlay(alignment: .bottomTrailing) { updateToast.onChange(of: store.nameRequest) { nameUntitled() }.padding(.trailing, 16).padding(.bottom, ChromeBudget.statusBar + 12) }
       .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: store.update)
       .onChange(of: st.choices["appearance"], initial: true) { _, v in ColorSchemeChoice(setting: v).apply() }
       .onChange(of: st.fileAssociations, initial: true) { _, v in EditorLanguageID.associations = v }
@@ -1397,7 +1401,7 @@ import Observation
       // ⌘N: beside the active file; the Project root for none or an ad-hoc `../` tab.
       .onChange(of: store.newFileRequests) {
         let folder = st.active.map { ($0 as NSString).deletingLastPathComponent } ?? ""
-        createItem(in: folder.hasPrefix("..") ? "" : folder, folder: false)
+        createUntitled(in: folder.hasPrefix("..") ? "" : folder)
       }
       // A file opened while the concierge chat covers the panes would land hidden behind it.
       .onChange(of: st.active) { if sidebarMode == "concierge" { leaveConcierge() } }
@@ -2542,6 +2546,35 @@ import Observation
         } catch { return fileError(error) }
         store.refreshProjectFiles()
         if !isFolder { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { store.run("tab.open", ["path": .string(rel)]) } }
+      }
+    }
+
+    /// ⌘N: an empty `NewFileN` opened at once; the name is chosen on its first save.
+    private func createUntitled(in folder: String) {
+      guard let rel = (1...).lazy.map({ (folder as NSString).appendingPathComponent("NewFile\($0)") })
+        .first(where: { absolute($0).map { !FileManager.default.fileExists(atPath: $0.path) } ?? true }),
+        let url = absolute(rel) else { return }
+      do { try Data().write(to: url, options: .withoutOverwriting) } catch { return fileError(error) }
+      store.untitled.insert(rel)
+      store.refreshProjectFiles()
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { store.run("tab.open", ["path": .string(rel)]) }
+    }
+
+    /// First ⌘S of a ⌘N file: save in place, then move it to the chosen name. Cancel leaves it as `NewFileN`.
+    private func nameUntitled() {
+      guard let path = store.nameRequest else { return }
+      store.nameRequest = nil
+      promptName(tr("名前を付けて保存"), initial: (path as NSString).lastPathComponent) { name in
+        let rel = ((path as NSString).deletingLastPathComponent as NSString).appendingPathComponent(name)
+        Task {
+          guard await store.saveFile(path) else { return }
+          store.untitled.remove(path)
+          guard name != (path as NSString).lastPathComponent, let from = absolute(path), let to = absolute(rel) else { return }
+          do { try FileManager.default.moveItem(at: from, to: to) } catch { return fileError(error) }
+          closeTabs(under: path)
+          store.refreshProjectFiles()
+          DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { store.run("tab.open", ["path": .string(rel)]) }
+        }
       }
     }
 
