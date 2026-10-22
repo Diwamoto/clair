@@ -753,7 +753,12 @@ import Foundation
     nonisolated(unsafe) private static var kept: [String: ClairGhosttySurfaceView] = [:]
     private var keptKey: String?
     static func reusable(key: String) -> ClairGhosttySurfaceView? {
-      guard let v = kept[key], v.window == nil, v.superview == nil else { return nil }
+      guard let v = kept[key] else { return nil }
+      // A split/close/move re-makes the pane before SwiftUI drops the old host, so the kept view is
+      // still mounted here; take it over instead of starting a fresh `clair attach` (which lost scrollback).
+      // A different window showing the same key keeps its view.
+      if let w = v.window, w !== NSApp.keyWindow { return nil }
+      v.removeFromSuperview()
       return v
     }
     static func keep(_ v: ClairGhosttySurfaceView, key: String) {
