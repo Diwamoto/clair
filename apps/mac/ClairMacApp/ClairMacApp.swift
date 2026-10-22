@@ -99,10 +99,16 @@ import SwiftUI
     ClairWorkbenchStore.open(files: urls.filter(\.isFileURL).map(\.path))
   }
 
-  /// ⌘Q asks first: quitting also stops the daemon's shells. An update relaunch is already confirmed.
+  /// ⌘Q asks first: quitting also stops the daemon's shells. An update relaunch is already confirmed,
+  /// and a logout / restart / shutdown (incl. a macOS update) quits at once: a modal there aborts it.
+  /// The saved workspace and agent resume bring the window back on the next launch.
   func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
     // The startup benchmark quits itself unattended (CLAIR_STARTUP_TRACE=exit).
     if ClairDaemonLauncher.keepsSessionsOnQuit || ProcessInfo.processInfo.environment["CLAIR_STARTUP_TRACE"] != nil { return .terminateNow }
+    // loginwindow's quit event carries a reason (kAEQuitReason); a user ⌘Q has none.
+    if NSAppleEventManager.shared().currentAppleEvent?.attributeDescriptor(forKeyword: AEKeyword(kAEQuitReason)) != nil {
+      return .terminateNow
+    }
     let alert = NSAlert()
     alert.messageText = tr("Clair を終了しますか？")
     alert.informativeText = tr("実行中のターミナルとエージェントも終了します。")
