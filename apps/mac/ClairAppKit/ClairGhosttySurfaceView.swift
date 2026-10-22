@@ -65,6 +65,7 @@ import Foundation
       super.init(frame: .zero)
       wantsLayer = true
       registerForDraggedTypes([.fileURL])
+      Self.live.add(self)
     }
 
     @available(*, unavailable)
@@ -258,6 +259,10 @@ import Foundation
         minimum-contrast = 3
         window-padding-x = 8
         font-codepoint-map = U+3000-U+30FF,U+3400-U+4DBF,U+4E00-U+9FFF,U+F900-U+FAFF,U+FF00-U+FFEF=BIZ UDGothic
+        keybind = super+equal=unbind
+        keybind = super+plus=unbind
+        keybind = super+minus=unbind
+        keybind = super+zero=unbind
 
         """ + ansi.enumerated().map { "palette = \($0.offset)=\($0.element)\n" }.joined() + style.config
     }
@@ -278,10 +283,12 @@ import Foundation
       didSet {
         guard style != oldValue else { return }
         themePaths = writeThemes()
-        for v in kept.values { v.reloadConfig() }
+        for v in live.allObjects { v.reloadConfig() }
       }
     }
 
+    /// Every surface, kept or not: a style change must reach unkept panes too.
+    nonisolated(unsafe) private static let live = NSHashTable<ClairGhosttySurfaceView>.weakObjects()
     /// libghostty reads config from a file only; rewritten when `style` changes. nil (defaults) if the write fails.
     static var themePaths = writeThemes()
     private static func writeThemes() -> [Bool: String] {
