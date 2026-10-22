@@ -6,6 +6,14 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-10-22
+
+### Changed
+- ⌘N opens a new empty file named NewFile1, NewFile2, … right away; you choose its name when you first save it.
+
+### Fixed
+- A failed Git action now shows its full error message in a hover popover instead of a cut-off tooltip.
+
 ## [0.22.2] - 2026-10-22
 
 ### Fixed
@@ -506,7 +514,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.22.2...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.23.0...HEAD
+[0.23.0]: https://github.com/Diwamoto/clair/compare/v0.22.2...v0.23.0
 [0.22.2]: https://github.com/Diwamoto/clair/compare/v0.22.1...v0.22.2
 [0.22.1]: https://github.com/Diwamoto/clair/compare/v0.22.0...v0.22.1
 [0.22.0]: https://github.com/Diwamoto/clair/compare/v0.21.0...v0.22.0
