@@ -17,6 +17,17 @@ final class AgentHistoryTests: XCTestCase {
     XCTAssertEqual(item.estimatedUSD ?? 0, 0.004145, accuracy: 0.000001)
   }
 
+  func testMatchesEveryWordInTitleProjectOrMessages() {
+    let date = Date(timeIntervalSince1970: 0)
+    var item = AgentHistory(id: "1", provider: .claude, title: "Fix Finder", date: date,
+                            messages: [.init(id: "m", role: "user", text: "検索を足して", date: date)], estimatedUSD: nil)
+    item.project = "/w/clair"
+    XCTAssertTrue(item.matches(""))
+    XCTAssertTrue(item.matches("finder"))
+    XCTAssertTrue(item.matches("ｃｌａｉｒ 検索"))
+    XCTAssertFalse(item.matches("finder 削除"))
+  }
+
   func testFormatsClaudeCommandTagsLikeCcedit() {
     XCTAssertEqual(AgentHistoryReader.formatUserText("<command-message>clair-task</command-message>\n<command-name>/clair-task</command-name>\n<command-args>直して</command-args>"), "/clair-task 直して")
     XCTAssertNil(AgentHistoryReader.formatUserText("<local-command-caveat>Caveat: ignore</local-command-caveat>"))

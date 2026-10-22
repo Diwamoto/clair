@@ -55,6 +55,16 @@ public struct AgentHistory: Sendable, Identifiable {
 
   public var promptCount: Int { messages.filter { $0.role == "user" }.count }
 
+  /// Whether the title, project, or a listed message contains every space-separated word (case/width-insensitive).
+  /// ponytail: list rows only keep the prompts and the last reply, so mid-chat replies are not searched;
+  /// read files in full (`transcript(of:)`) if that turns out to matter.
+  public func matches(_ query: String) -> Bool {
+    let words = query.split(whereSeparator: \.isWhitespace)
+    guard !words.isEmpty else { return true }
+    let haystack = ([title, project ?? ""] + messages.map(\.text)).joined(separator: "\n")
+    return words.allSatisfy { haystack.range(of: $0, options: [.caseInsensitive, .widthInsensitive, .diacriticInsensitive]) != nil }
+  }
+
   /// One row of the chat: a message, or the progress (narration and thinking) an agent run made before its reply.
   public enum ChatItem: Sendable, Identifiable {
     case message(Message)

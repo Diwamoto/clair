@@ -497,6 +497,8 @@ extension LocalizedStrings {
     "起動中のエージェントはありません": "No running agents",
     "過去のチャット": "Past chats",
     "履歴を更新": "Refresh history",
+    "チャットを検索": "Search chats",
+    "検索をクリア": "Clear search",
     "履歴はありません": "No history",
     "アーカイブ（1ヶ月以上前）": "Archive (over a month ago)",
     "アーカイブはありません": "No archive",

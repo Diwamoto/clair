@@ -1048,6 +1048,7 @@
     private static let page = 10
     @State private var archive: [AgentHistory]?
     @State private var archiveOpen = false
+    @State private var historyQuery = ""
     /// cwd → "repo · branch", read off the main thread.
     @State private var gitLabels: [String: String] = [:]
 
@@ -1161,6 +1162,17 @@
           Image(systemName: "arrow.clockwise")
         }.buttonStyle(.plain).help(tr("履歴を更新"))
       }.padding(.horizontal, 20).padding(.top, 14)
+      HStack(spacing: 6) {
+        Image(systemName: "magnifyingglass").foregroundStyle(C.textQuaternary)
+        TextField(tr("チャットを検索"), text: $historyQuery).textFieldStyle(.plain)
+          .font(Typography.font(Typography.sidebar)).foregroundStyle(C.textPrimary)
+          .onKeyPress(.escape) { historyQuery = ""; return .handled }
+        if !historyQuery.isEmpty {
+          Button { historyQuery = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(C.textQuaternary) }
+            .buttonStyle(.plain).help(tr("検索をクリア")).accessibilityLabel(tr("検索をクリア"))
+        }
+      }.padding(.horizontal, 8).frame(height: 26).background(C.surfaceActive.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+        .padding(.horizontal, 16).padding(.top, 6)
       if historyLoading {
         Text("Loading...").font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
           .padding(.horizontal, 20).frame(height: 28)
@@ -1168,7 +1180,7 @@
         Text(tr("履歴はありません")).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textQuaternary).padding(16)
       }
       // ponytail: regrouped on every render; cache in @State if history counts make this visible.
-      historyDays(histories, key: "recent")
+      historyDays(histories.filter { $0.matches(historyQuery) }, key: "recent")
       Button {
         archiveOpen.toggle()
         if archiveOpen, archive == nil { Task { archive = await AgentHistoryStore.shared.load(.archive) } }
@@ -1184,7 +1196,7 @@
           if archive.isEmpty {
             Text(tr("アーカイブはありません")).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textQuaternary).padding(16)
           }
-          historyDays(archive, key: "archive")
+          historyDays(archive.filter { $0.matches(historyQuery) }, key: "archive")
         } else {
           Text("Loading...").font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
           .padding(.horizontal, 20).frame(height: 28)

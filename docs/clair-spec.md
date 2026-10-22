@@ -411,6 +411,8 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
 - Agents 一覧は現在の agent terminal への移動と、3 provider の local chat history
   の閲覧を統合する。実行中の agent は Project ごとに titlebar の順でまとめ、見出しに件数と
   入力待ちの有無を示す(見出しで折りたためる)。履歴行には provider が分かるラベルとアイコンを付ける。
+  履歴は上部の検索欄で、タイトル・directory・依頼文・最後の返答に全語を含むチャットへ絞り込む
+  (アーカイブにも効く)。
   チャットは依頼ごとに agent の最後の返答だけを吹き出しで示し、それまでの途中発言と
   provider が読める形で保存した thinking(Codex の reasoning summary、OpenCode の
   reasoning、Claude Code の未 redact の thinking)は「途中経過 N 件」の折りたたみ
