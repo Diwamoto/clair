@@ -6,6 +6,24 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-10-22
+
+### Added
+
+- Project search results can be shown as a folder tree; folders and files fold, arrow keys move between visible hits, and the choice is remembered.
+- The status bar shows the selection size, line endings (with whole-file LF/CRLF conversion), encoding and the number of uncommitted changes; branch, sync, language, session and version items open richer popovers.
+- Clicking the editor breadcrumb copies the file's relative path and confirms with a toast.
+- `.drawio` files open in an embedded draw.io pane.
+- The Finder sorts by name, date modified, size or kind, shows each item's modified date, keeps favorites in the sidebar and starts its path bar at `/`.
+
+### Changed
+
+- The sidebar can be dragged all the way closed; dragging it under a small width hides it like ⌘B and reopening restores its previous width.
+
+### Fixed
+
+- The footer branch button's hover highlight fills the bar height like the other items.
+
 ## [0.20.0] - 2026-10-20
 
 ### Changed
@@ -467,7 +485,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/Diwamoto/clair/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/Diwamoto/clair/compare/v0.19.1...v0.20.0
 [0.19.1]: https://github.com/Diwamoto/clair/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/Diwamoto/clair/compare/v0.18.0...v0.19.0
