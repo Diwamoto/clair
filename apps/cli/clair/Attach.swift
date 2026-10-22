@@ -107,6 +107,17 @@ func runAttach(_ args: [String]) -> Int32 {
     Thread.sleep(forTimeInterval: 0.1)
     tcflush(STDIN_FILENO, TCIFLUSH)
   }
+  // The 1 MB journal tail of a TUI (Claude Code, vim…) is mostly in-place diffs, which replay onto a
+  // fresh surface as a near-blank screen. A size wiggle sends SIGWINCH so the app redraws in full.
+  // ponytail: nudge, not a restored screen; a daemon-side VT (libghostty-vt on macOS) would replay exact state.
+  if open {
+    let s = windowSize()
+    if s.columns > 1 {
+      try? attach.resize(rows: s.rows, columns: s.columns - 1)
+      Thread.sleep(forTimeInterval: 0.05)
+    }
+    try? attach.resize(rows: s.rows, columns: s.columns)
+  }
 
   let savedTermios = original
   let stdinReader = Thread {
