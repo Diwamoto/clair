@@ -6,6 +6,17 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-10-22
+
+### Added
+
+- Past agent chats can be filtered by title, directory, prompts and last reply.
+
+### Fixed
+
+- ⌘= and ⌘- now change the font size in every terminal pane, not just the focused one.
+- Splitting, closing or moving a terminal pane no longer loses its scrollback.
+
 ## [0.21.0] - 2026-10-22
 
 ### Added
@@ -485,7 +496,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/Diwamoto/clair/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/Diwamoto/clair/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/Diwamoto/clair/compare/v0.19.1...v0.20.0
 [0.19.1]: https://github.com/Diwamoto/clair/compare/v0.19.0...v0.19.1
