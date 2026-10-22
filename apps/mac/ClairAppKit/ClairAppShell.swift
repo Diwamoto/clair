@@ -3648,7 +3648,9 @@ import Observation
               .foregroundStyle(C.attention)
               .frame(maxWidth: 260, alignment: .leading)
               .footerItem()
-              .help(gitMessage)
+              .footerPopover("gitMessage", $footerHover) {
+                Text(gitMessage).foregroundStyle(C.attention).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+              }
             }
           }
           if !st.dirty.isEmpty { Text(tr("未保存 %@", st.dirty.count)).foregroundStyle(C.attention).footerItem() }
