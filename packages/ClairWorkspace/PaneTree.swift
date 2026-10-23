@@ -155,6 +155,37 @@ public struct PaneTree: Sendable, Equatable, Codable {
     }
   }
 
+  /// `focusExpand`: the focused pane takes `share` of each axis it sits on; every other pane on that axis splits the rest evenly.
+  public mutating func expandFocused(_ share: Double) {
+    root = Self.expand(root, focused, share, [:])
+  }
+
+  private static func expand(_ n: Node, _ id: Int, _ share: Double, _ weights: [Axis: Double]) -> Node {
+    guard case .split(let ax, _, let a, let b) = n else { return n }
+    guard contains(n, id) else { return map(n) { if case .split(let ax, _, let a, let b) = $0 { .split(axis: ax, ratio: Double(span(a, ax)) / Double(span(a, ax) + span(b, ax)), first: a, second: b) } else { nil } } }
+    var weights = weights
+    // The focused leaf's weight is fixed by the outermost split on this axis, so nested same-axis splits agree.
+    let w = weights[ax] ?? share * Double(span(n, ax) - 1) / (1 - share)
+    weights[ax] = w
+    let wa = weight(a, ax, id, w), wb = weight(b, ax, id, w)
+    return .split(axis: ax, ratio: wa / (wa + wb), first: expand(a, id, share, weights), second: expand(b, id, share, weights))
+  }
+
+  private static func contains(_ n: Node, _ id: Int) -> Bool {
+    switch n {
+    case .leaf(let i, _): i == id
+    case .split(_, _, let a, let b): contains(a, id) || contains(b, id)
+    }
+  }
+
+  private static func weight(_ n: Node, _ axis: Axis, _ id: Int, _ w: Double) -> Double {
+    switch n {
+    case .leaf(let i, _): return i == id ? w : 1
+    case .split(let ax, _, let a, let b):
+      return ax == axis ? weight(a, axis, id, w) + weight(b, axis, id, w) : max(weight(a, axis, id, w), weight(b, axis, id, w))
+    }
+  }
+
   /// Panes side by side along `axis`: a chain of three same-axis splits equalizes to thirds, not 50/25/25.
   private static func span(_ n: Node, _ axis: Axis) -> Int {
     guard case .split(let ax, _, let a, let b) = n else { return 1 }

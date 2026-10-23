@@ -212,6 +212,7 @@ function useWorkbenchState() {
     restoreLayout: true,
     confirmClose: true,
     autoEqualize: false,
+    focusExpand: false,
     hideQuota: false,
     formatOnSave: true,
     showWhitespace: false,

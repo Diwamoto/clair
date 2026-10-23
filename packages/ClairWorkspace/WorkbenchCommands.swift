@@ -32,7 +32,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public enum Palette: String, Sendable, Codable { case commands, files, search, symbols, references, branches, compare, recent }
 
   public static let sections = ["一般", "AIプロバイダー", "使用状況", "エディタ", "ターミナル", "通知", "モバイル", "アップデート"]
-  public static let toggleKeys = ["restoreLayout", "confirmClose", "hideQuota", "preventSleepOnBattery", "formatOnSave", "showWhitespace", "softWrap", "terminalApprovals", "lineNumbers", "terminalCursorBlink", "notifyEnabled", "notifyOnBell", "notifyOnExit", "notifyWhenActive", "notifySound", "autoEqualize"]
+  public static let toggleKeys = ["restoreLayout", "confirmClose", "hideQuota", "preventSleepOnBattery", "formatOnSave", "showWhitespace", "softWrap", "terminalApprovals", "lineNumbers", "terminalCursorBlink", "notifyEnabled", "notifyOnBell", "notifyOnExit", "notifyWhenActive", "notifySound", "autoEqualize", "focusExpand"]
   /// Closed-set settings (the mock's segmented controls). The first option is the default.
   /// Palette titles of `toggleKeys` / `choiceOptions`, matching the settings rows, so every setting is reachable from ⌘K.
   public static let settingTitles = [
@@ -45,7 +45,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
     "terminalFontSize": "ターミナルの文字サイズ", "terminalCursorStyle": "ターミナルのカーソルの形",
     "notifyEnabled": "通知を有効にする", "notifyOnBell": "入力待ち・通知要求で通知", "notifyOnExit": "終了で通知",
     "notifyWhenActive": "Clair が前面のときも通知", "notifySound": "通知のサウンド", "language": "言語",
-    "autoEqualize": "ペインを均等に再配置",
+    "autoEqualize": "ペインを均等に再配置", "focusExpand": "フォーカスしたペインを拡大", "focusExpandRatio": "拡大したペインの割合",
   ]
   // agent registry: `defaultAgent` reads its choices from the `AgentProfile` registry instead of
   // a literal list, so switching to a newly registered agent needs no change here.
@@ -60,6 +60,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
     "terminalFontSize": ["11", "12", "13", "14", "16", "18"],
     "terminalCursorStyle": ["ブロック", "バー", "下線"],
     "language": ClairLanguage.allCases.map(\.rawValue),  // English is the default
+    "focusExpandRatio": ["50", "60", "70", "80", "90"],
   ]
   /// Font family per surface (`editor`, `terminal`); "" is the system monospaced font.
   public static let fontKeys = ["editor", "terminal"]
@@ -163,9 +164,9 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var palette: Palette?
   /// E17: definition-jump history for ⌃- / ⌃⇧-. Transient (not in `WorkspaceSnapshot`).
   public var navigation = NavigationHistory()
-  public var toggles = ["restoreLayout": true, "confirmClose": true, "hideQuota": false, "preventSleepOnBattery": false, "formatOnSave": false, "showWhitespace": false, "softWrap": false, "terminalApprovals": true, "lineNumbers": true, "terminalCursorBlink": true, "notifyEnabled": true, "notifyOnBell": true, "notifyOnExit": true, "notifyWhenActive": false, "notifySound": false, "autoEqualize": false]
+  public var toggles = ["restoreLayout": true, "confirmClose": true, "hideQuota": false, "preventSleepOnBattery": false, "formatOnSave": false, "showWhitespace": false, "softWrap": false, "terminalApprovals": true, "lineNumbers": true, "terminalCursorBlink": true, "notifyEnabled": true, "notifyOnBell": true, "notifyOnExit": true, "notifyWhenActive": false, "notifySound": false, "autoEqualize": false, "focusExpand": false]
   // Font sizes default to what Clair shipped with (mock editor 12px, terminal 13pt), not the smallest option.
-  public var choices = WorkbenchState.choiceOptions.mapValues { $0[0] }.merging(["editorFontSize": "12", "terminalFontSize": "13"]) { $1 }
+  public var choices = WorkbenchState.choiceOptions.mapValues { $0[0] }.merging(["editorFontSize": "12", "terminalFontSize": "13", "focusExpandRatio": "60"]) { $1 }
   public var fonts = ["editor": "", "terminal": ""]
   /// V11: user shortcut assignments over the registry defaults. An empty string unassigns a default.
   public var shortcuts: [String: String] = [:]
@@ -366,8 +367,12 @@ public struct CommandRegistry: Sendable {
     case .success(let risk) where risk >= .destructive && !confirmed:
       return .failure(CommandError(.confirmationRequired, "\(id) is \(risk.label)"))
     case .success:
+      let focused = state.tree.focused
       let result = table[id]!.run(&state, input)
       state.dropEmptyEditors()  // e.g. a split or a new terminal beside the home screen replaces it
+      if state.tree.focused != focused, state.toggles["focusExpand"] == true {
+        state.tree.expandFocused((Double(state.choices["focusExpandRatio"] ?? "") ?? 60) / 100)
+      }
       return .success(result)
     }
   }

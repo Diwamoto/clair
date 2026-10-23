@@ -72,6 +72,25 @@ final class PaneTreeTests: XCTestCase {
     XCTAssertEqual(inner, 0.5)
   }
 
+  func testExpandFocusedGivesTheFocusedPaneItsShareAndEvensTheRest() {
+    var t = PaneTree(single: .editor)
+    for _ in 0..<5 { t.splitFocused(.horizontal) }  // six columns, focus on the last
+    t.focus(1); t.expandFocused(0.6)
+    guard case .split(_, let first, _, .split(_, let second, _, _)) = t.root else { return XCTFail() }
+    XCTAssertEqual(first, 0.6, accuracy: 1e-9)
+    XCTAssertEqual(second, 0.2, accuracy: 1e-9)  // 0.08 of the whole, out of the remaining 0.4
+  }
+
+  func testFocusExpandSettingAppliesOnFocusChange() {
+    var s = WorkbenchState()
+    s.toggles["focusExpand"] = true
+    s.choices["focusExpandRatio"] = "80"
+    _ = CommandRegistry.workbench.execute("pane.splitRight", state: &s)
+    _ = CommandRegistry.workbench.execute("pane.focusPrevious", state: &s)
+    guard case .split(_, let r, _, _) = s.tree.root else { return XCTFail() }
+    XCTAssertEqual(r, 0.8, accuracy: 1e-9)
+  }
+
   func testAutoEqualizeSettingAppliesOnSplitAndClose() {
     var s = WorkbenchState()
     s.toggles["autoEqualize"] = true

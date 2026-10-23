@@ -320,6 +320,11 @@ export function SettingsMain() {
                     control={<Switch on={wb.toggles.autoEqualize} onClick={() => wb.setToggle('autoEqualize')} />}
                   />
                   <Row
+                    title="フォーカスしたペインを拡大"
+                    note="フォーカスを移したペインを大きくし、同じ向きに並ぶ他のペインを細くします。"
+                    control={<Switch on={wb.toggles.focusExpand} onClick={() => wb.setToggle('focusExpand')} />}
+                  />
+                  <Row
                     last
                     title="閉じる前に確認"
                     note="実行中のターミナルや未保存のエディタを閉じる前に確認します。"
