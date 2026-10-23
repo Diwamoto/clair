@@ -1409,7 +1409,9 @@ import Observation
       .frame(minWidth: 900, minHeight: 560)
       .clairMenuHost(menus)
       .overlay {
-        if st.palette == .search { searchOverlay }
+        if let d = todoDraft {
+          TodoEditor(todo: d.todo, isNew: d.isNew, save: { todoDraft = nil; saveTodo($0) }, cancel: { todoDraft = nil })
+        } else if st.palette == .search { searchOverlay }
         else if let p = st.palette { paletteView(p) }
       }
       .animation(.easeOut(duration: 0.09), value: st.palette == nil)
@@ -2036,16 +2038,27 @@ import Observation
     }
 
     @State private var todos: [ClairTodo] = []
+    /// The TODO in the add / edit modal, and whether it is a new one.
+    @State private var todoDraft: (todo: ClairTodo, isNew: Bool)?
 
-    /// `~/.clair/todo/*.md`, written by agents through the clair-todo skill; a row opens the file in the editor.
-    // ponytail: reloads on activity-bar click only, add a directory watcher if live refresh matters.
+    /// `~/.clair/todo/*.md`, written by agents through the clair-todo skill or here; a row opens the file in the editor.
+    // ponytail: reloads on activity-bar click and after an edit here only, add a directory watcher if live refresh matters.
     private var todoList: some View {
       VStack(alignment: .leading, spacing: 0) {
+        HStack {
+          Text(tr("TODO")).font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textTertiary)
+          Spacer()
+          Button { todoDraft = (ClairTodo(path: "", title: ""), true) } label: { Image(systemName: "plus").font(.system(size: 11)) }
+            .buttonStyle(.hoverWash).foregroundStyle(C.textSecondary).help(tr("TODO を追加")).accessibilityLabel(tr("TODO を追加"))
+        }.padding(.horizontal, 12).padding(.vertical, 6)
         if todos.isEmpty {
           Text(tr("TODO はまだありません")).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary).padding(12)
         }
         ForEach(todos, id: \.path) { t in
           treeRow(depth: 0, selected: st.active == t.path, action: { store.run("file.open", ["path": .string(t.path)]) }) {
+            Button { saveTodo(t.with { $0.done.toggle() }) } label: {
+              Image(systemName: t.done ? "checkmark.circle.fill" : "circle").font(.system(size: 12))
+            }.buttonStyle(.plain).foregroundStyle(C.textTertiary).accessibilityLabel(t.done ? tr("未完了に戻す") : tr("完了にする"))
             Text("P\(t.priority)").font(Typography.font(Typography.sidebarMicro))
               .foregroundStyle(t.priority == 1 && !t.done ? C.danger : C.textTertiary)
             Text(t.title).font(Typography.font(Typography.sidebar)).strikethrough(t.done)
@@ -2053,8 +2066,32 @@ import Observation
             Spacer(minLength: 0)
             if let due = t.due { Text(due).font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textTertiary) }
           }
+          .clairContextMenu(menus) {
+            ClairMenuSpec(title: t.title, sub: t.path, entries: [
+              .item(tr("開く")) { store.run("file.open", ["path": .string(t.path)]) },
+              .item(tr("編集…")) { todoDraft = (t, false) },
+              .item(t.done ? tr("未完了に戻す") : tr("完了にする")) { saveTodo(t.with { $0.done.toggle() }) },
+              .separator,
+              .item(tr("削除…"), destructive: true) { deleteTodo(t) },
+            ])
+          }
         }
       }
+    }
+
+    private func saveTodo(_ t: ClairTodo) {
+      var t = t
+      if t.path.isEmpty { t.path = ClairTodo.newPath(title: t.title) }
+      do { try t.save() } catch { fileError(error) }
+      todos = ClairTodo.list()
+    }
+
+    private func deleteTodo(_ t: ClairTodo) {
+      menus.ask(ClairDialog(title: tr("TODO を削除"), message: tr("「%@」をゴミ箱に入れます。", t.title), confirm: tr("削除"), destructive: true) { _ in
+        do { try FileManager.default.trashItem(at: URL(fileURLWithPath: t.path), resultingItemURL: nil) } catch { fileError(error) }
+        closeTabs(under: t.path)
+        todos = ClairTodo.list()
+      })
     }
 
     private var sessionList: some View {
