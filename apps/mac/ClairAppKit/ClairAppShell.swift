@@ -52,14 +52,39 @@ import Observation
     }
 
     /// A status-bar item's hover popover, shown while the pointer is on it (one at a time via `hovered`).
+    /// It stays open while the pointer is on the popover itself, so its buttons can be clicked.
     func footerPopover<Content: View>(_ id: String, _ hovered: Binding<String?>, @ViewBuilder _ content: @escaping () -> Content) -> some View {
-      onHover { inside in
-        if inside { hovered.wrappedValue = id } else if hovered.wrappedValue == id { hovered.wrappedValue = nil }
+      modifier(FooterPopover(id: id, hovered: hovered, content: content))
+    }
+  }
+
+  private struct FooterPopover<PopoverContent: View>: ViewModifier {
+    let id: String
+    @Binding var hovered: String?
+    let content: () -> PopoverContent
+    @State private var onItem = false
+    @State private var onPopover = false
+
+    /// Grace period so the pointer can travel from the item into the popover.
+    private func closeSoon() {
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+        if !onItem, !onPopover, hovered == id { hovered = nil }
       }
-      .popover(isPresented: Binding(get: { hovered.wrappedValue == id }, set: { if !$0, hovered.wrappedValue == id { hovered.wrappedValue = nil } }), arrowEdge: .top) {
+    }
+
+    func body(content item: Content) -> some View {
+      item.onHover { inside in
+        onItem = inside
+        if inside { hovered = id } else { closeSoon() }
+      }
+      .popover(isPresented: Binding(get: { hovered == id }, set: { if !$0, hovered == id { hovered = nil } }), arrowEdge: .top) {
         VStack(alignment: .leading, spacing: 6) { content() }
           .font(Typography.font(Typography.chrome)).monospacedDigit().foregroundStyle(DesignTokens.Color.textSecondary)
           .frame(minWidth: 240, maxWidth: 420, alignment: .leading).padding(12)
+          .onHover { inside in
+            onPopover = inside
+            if !inside { closeSoon() }
+          }
       }
     }
   }
