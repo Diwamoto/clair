@@ -47,11 +47,17 @@ Use the requested browser when the user explicitly asks for one, or when a runni
 public enum ClairSkills {
   public static func isInstalled(home: URL = .homeDirectory) -> Bool {
     ClairAgentSkill.isInstalled(home: home) && ClairPreviewSkill.isInstalled(home: home)
+      && todoTargets(home).allSatisfy { (try? String(contentsOf: $0, encoding: .utf8)) == ClairTodoSkill.markdown }
+  }
+
+  static func todoTargets(_ home: URL) -> [URL] {
+    [".claude/skills", ".agents/skills"].map { home.appending(path: $0).appending(path: ClairTodoSkill.name).appending(path: "SKILL.md") }
   }
 
   public static func install(home: URL = .homeDirectory) throws {
     for (skill, targets) in [(ClairAgentSkill.markdown, ClairAgentSkill.targets(home: home)),
-                             (ClairPreviewSkill.markdown, ClairPreviewSkill.targets(home: home))] {
+                             (ClairPreviewSkill.markdown, ClairPreviewSkill.targets(home: home)),
+                             (ClairTodoSkill.markdown, todoTargets(home))] {
       for url in targets where FileManager.default.fileExists(atPath: url.path) {
         guard (try String(contentsOf: url, encoding: .utf8)) == skill else {
           throw NSError(domain: "ClairSkills", code: 1, userInfo: [NSLocalizedDescriptionKey: "編集済み skill を上書きできません: \(url.path)"])
@@ -60,10 +66,17 @@ public enum ClairSkills {
     }
     try ClairAgentSkill.install(home: home)
     try ClairPreviewSkill.install(home: home)
+    for url in todoTargets(home) {
+      try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try ClairTodoSkill.markdown.write(to: url, atomically: true, encoding: .utf8)
+    }
   }
 
   public static func uninstall(home: URL = .homeDirectory) throws {
     try ClairAgentSkill.uninstall(home: home)
     try ClairPreviewSkill.uninstall(home: home)
+    for url in todoTargets(home) where (try? String(contentsOf: url, encoding: .utf8)) == ClairTodoSkill.markdown {
+      try FileManager.default.removeItem(at: url.deletingLastPathComponent())
+    }
   }
 }

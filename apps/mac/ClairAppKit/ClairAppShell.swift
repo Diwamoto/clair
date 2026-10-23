@@ -1752,7 +1752,7 @@ import Observation
     /// pair, and icons are bigger now that they own a whole column.
     private var activityBar: some View {
       VStack(spacing: 2) {
-        ForEach(["folder", Self.browserMode, "shield", "terminal", "ladybug", "concierge"], id: \.self) { icon in
+        ForEach(["folder", Self.browserMode, "shield", "terminal", "ladybug", "checklist", "concierge"], id: \.self) { icon in
           activityBarButton(icon)
         }
         // ponytail: no overflow "…" menu — the Workbench shows it only when nav items overflow; four always fit here.
@@ -1779,13 +1779,14 @@ import Observation
         }
         if icon == "shield" { reloadChanges() }
         if icon == "ladybug" { store.run("debug.open") }
+        if icon == "checklist" { todos = ClairTodo.list() }
       }
     }
 
     private var sidebar: some View {
       VStack(spacing: 0) {
         // Lazy: a Project can list thousands of files, and an eager tree makes accessibility traversal (and layout) block the main thread.
-        ScrollView { LazyVStack(alignment: .leading, spacing: 0) { sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "terminal" ? AnyView(sessionList) : sidebarMode == "ladybug" ? AnyView(debugPanel) : sidebarMode == "concierge" ? AnyView(conciergeSidebar) : sidebarMode == Self.browserMode ? AnyView(browserSidebar) : AnyView(explorer) }.clairScroller() }
+        ScrollView { LazyVStack(alignment: .leading, spacing: 0) { sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "terminal" ? AnyView(sessionList) : sidebarMode == "ladybug" ? AnyView(debugPanel) : sidebarMode == "concierge" ? AnyView(conciergeSidebar) : sidebarMode == "checklist" ? AnyView(todoList) : sidebarMode == Self.browserMode ? AnyView(browserSidebar) : AnyView(explorer) }.clairScroller() }
         Spacer(minLength: 0)
         if sidebarMode == "shield", st.isRepo {
           // Same filled control as the commit button, so it reads as a button and the whole box is the hit target.
@@ -2032,6 +2033,28 @@ import Observation
       leaveConcierge()
       store.refreshProjectFiles()
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { store.run("tab.open", ["path": .string(Concierge.instructionsPath)]) }
+    }
+
+    @State private var todos: [ClairTodo] = []
+
+    /// `~/.clair/todo/*.md`, written by agents through the clair-todo skill; a row opens the file in the editor.
+    // ponytail: reloads on activity-bar click only, add a directory watcher if live refresh matters.
+    private var todoList: some View {
+      VStack(alignment: .leading, spacing: 0) {
+        if todos.isEmpty {
+          Text(tr("TODO はまだありません")).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary).padding(12)
+        }
+        ForEach(todos, id: \.path) { t in
+          treeRow(depth: 0, selected: st.active == t.path, action: { store.run("file.open", ["path": .string(t.path)]) }) {
+            Text("P\(t.priority)").font(Typography.font(Typography.sidebarMicro))
+              .foregroundStyle(t.priority == 1 && !t.done ? C.danger : C.textTertiary)
+            Text(t.title).font(Typography.font(Typography.sidebar)).strikethrough(t.done)
+              .foregroundStyle(t.done ? C.textTertiary : C.textPrimary).lineLimit(1)
+            Spacer(minLength: 0)
+            if let due = t.due { Text(due).font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textTertiary) }
+          }
+        }
+      }
     }
 
     private var sessionList: some View {
