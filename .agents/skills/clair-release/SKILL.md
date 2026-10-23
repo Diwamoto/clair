@@ -20,16 +20,19 @@ in English.
 
 ## Steps
 
-1. **Preflight.** `git fetch origin main --tags`. Work on a branch or worktree
-   created from `origin/main`. The main worktree is shared, so never stash,
-   reset or commit other people's changes there; commit with explicit paths.
+1. **Preflight.** `git fetch origin main --tags`. Release from local `main` itself — no
+   separate branch or worktree, so the pushed commits are the ones `main`
+   already has. If `main` is behind `origin/main`, `git merge --ff-only
+   origin/main` first; if they diverged, stop and ask. The main worktree is
+   shared, so never stash, reset or commit other people's changes there;
+   commit with explicit paths.
    Stop if `origin/main` has a `release.yml` run in progress
    (`gh run list --workflow release.yml -L 3`).
 
 2. **Find the range.** The previous release is the newest tag that points into
    main: `git describe --tags --abbrev=0 --match 'v*' origin/main`. If there
    is none (first release), the range is all of history. Otherwise use
-   `<tag>..origin/main`. If the range has no user-visible change, say so and
+   `<tag>..main` (local, so unpushed commits ship in this release). If the range has no user-visible change, say so and
    stop.
 
 3. **Collect the changes.** Read `git log --no-merges --format='%h %s%n%b' <range>`
@@ -93,12 +96,13 @@ in English.
 7. **Commit.** Commit with explicit paths:
    `git commit -m "chore(release): v<version>" -- CHANGELOG.md VERSION`.
 
-8. **User gate: publish.** Show the user the version, the CHANGELOG section
-   and the commit, and ask for confirmation. Pushing publishes to every
-   installed app, and a published version cannot be taken back. Only after
-   they say yes:
-   - push the commit to `main` (fast-forward; if `main` moved, rebase and
-     re-check the range first). Do not force-push.
+8. **Publish.** Invoking this skill is the owner's standing approval to
+   publish: do not ask before pushing. Stop and ask only when something
+   genuinely needs a human (an unclear version, a breaking change you are
+   unsure about, a failing check, `main` moved in a way you cannot rebase
+   cleanly). Then:
+   - `git push origin main` (fast-forward). If it is rejected because
+     `origin/main` moved, stop and ask. Do not rebase or force-push.
    - tag that exact commit and push the tag, which is what publishes:
      `git tag v<version> <commit> && git push origin v<version>`.
    - watch the run: `gh run watch "$(gh run list --workflow release.yml -L 1 --json databaseId -q '.[0].databaseId')"`.
