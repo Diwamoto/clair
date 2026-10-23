@@ -6,6 +6,15 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-10-23
+
+### Added
+- Double-click the divider between panes to make them all equal size.
+- A TODO list in the sidebar: each TODO is a Markdown file in `~/.clair/todo`, and agents can add and finish TODOs with the bundled clair-todo skill.
+
+### Fixed
+- The version popover in the status bar no longer closes as soon as the pointer leaves the status-bar item, so its update button can be clicked.
+
 ## [0.24.0] - 2026-10-23
 
 ### Added
@@ -523,7 +532,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.24.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.25.0...HEAD
+[0.25.0]: https://github.com/Diwamoto/clair/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/Diwamoto/clair/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/Diwamoto/clair/compare/v0.22.2...v0.23.0
 [0.22.2]: https://github.com/Diwamoto/clair/compare/v0.22.1...v0.22.2
