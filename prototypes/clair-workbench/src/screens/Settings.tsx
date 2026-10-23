@@ -321,7 +321,7 @@ export function SettingsMain() {
                   />
                   <Row
                     title="フォーカスしたペインを拡大"
-                    note="フォーカスを移したペインを大きくし、同じ向きに並ぶ他のペインを細くします。"
+                    note="フォーカスを移したペインを大きくし、同じ向きに並ぶ他のペインを細くします。境界線をダブルクリックすると等分に戻ります。"
                     control={<Switch on={wb.toggles.focusExpand} onClick={() => wb.setToggle('focusExpand')} />}
                   />
                   <Row

@@ -41,7 +41,7 @@ extension LocalizedStrings {
     "実行中のターミナルや未保存のエディタを閉じる前に確認します。": "Asks before closing running terminals or unsaved editors.",
     "ペインを均等に再配置": "Equalize panes automatically",
     "フォーカスしたペインを拡大": "Enlarge the focused pane",
-    "フォーカスを移したペインを大きくし、同じ向きに並ぶ他のペインを細くします。": "Enlarges the pane you focus and narrows the others beside it.",
+    "フォーカスを移したペインを大きくし、同じ向きに並ぶ他のペインを細くします。境界線をダブルクリックすると等分に戻ります。": "Enlarges the pane you focus and narrows the others beside it. Double-click a divider to even them out again.",
     "拡大したペインの割合": "Focused pane share",
     "分割（⌘D / ⌘⇧D）や閉じたあと、ペインを等分の大きさに並べ直します。": "After a split (⌘D / ⌘⇧D) or close, resizes panes to equal shares.",
     "インターフェース": "Interface",

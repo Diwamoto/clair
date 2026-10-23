@@ -449,7 +449,7 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
 - editor / terminal / diff を同じ tab group へ置ける任意 split
 - pane の focus、移動、close、最大化、幅/高さ/全体均等(均等は同じ軸に並ぶ pane を等分する。設定 `autoEqualize`
   が on なら分割・close のたびに自動で均等化する。設定 `focusExpand` が on ならフォーカス移動のたびに、フォーカスした
-  pane が並ぶ向きの `focusExpandRatio`(50〜90%、既定 60%)を占め、他の pane が残りを等分する。どちらも既定は off)
+  pane が並ぶ向きの `focusExpandRatio`(50〜90%、既定 60%)を占め、他の pane が残りを等分する。どちらも既定は off。pane の境界線のダブルクリックは全体均等)
 - 画面に何もないとき(ファイルを開いておらず、他の pane もないとき)だけ、空の editor がコマンドと
   ショートカットの一覧(ホーム画面)を表示し、クリックでそのコマンドを実行する。ファイルがない空の editor は
   他の pane(terminal・preview・graph)と並ばない: 最後のファイルを閉じた、ホーム画面から split や terminal を

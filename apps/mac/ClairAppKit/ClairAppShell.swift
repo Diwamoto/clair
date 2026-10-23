@@ -3120,7 +3120,7 @@ import Observation
               switchRow(tr("前回のレイアウトを復元"), "restoreLayout", note: tr("Projectごとのファイル、ターミナル、分割位置を再開します。"))
               switchRow(tr("閉じる前に確認"), "confirmClose", note: tr("実行中のターミナルや未保存のエディタを閉じる前に確認します。"))
               switchRow(tr("ペインを均等に再配置"), "autoEqualize", note: tr("分割（⌘D / ⌘⇧D）や閉じたあと、ペインを等分の大きさに並べ直します。"))
-              switchRow(tr("フォーカスしたペインを拡大"), "focusExpand", note: tr("フォーカスを移したペインを大きくし、同じ向きに並ぶ他のペインを細くします。"))
+              switchRow(tr("フォーカスしたペインを拡大"), "focusExpand", note: tr("フォーカスを移したペインを大きくし、同じ向きに並ぶ他のペインを細くします。境界線をダブルクリックすると等分に戻ります。"))
               choiceRow(tr("拡大したペインの割合"), "focusExpandRatio")
             }
             SettingsCard(title: tr("インターフェース")) {
@@ -4228,6 +4228,8 @@ import Observation
     let total: CGFloat
     let onRatio: (Double) -> Void
     var onEnd: () -> Void = {}
+    /// Double-click: pane dividers equalize the layout (undoes `focusExpand` or a manual drag).
+    var onDoubleClick: () -> Void = {}
 
     final class Handle: NSView {
       var parent: SplitHandle!
@@ -4235,7 +4237,10 @@ import Observation
       override var mouseDownCanMoveWindow: Bool { false }
       override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
       override func resetCursorRects() { addCursorRect(bounds, cursor: parent.horizontal ? .resizeLeftRight : .resizeUpDown) }
-      override func mouseDown(with event: NSEvent) { start = (event.locationInWindow, parent.ratio) }
+      override func mouseDown(with event: NSEvent) {
+        if event.clickCount == 2 { start = nil; parent.onDoubleClick(); return }
+        start = (event.locationInWindow, parent.ratio)
+      }
       override func mouseDragged(with event: NSEvent) {
         guard let start, parent.total > 0 else { return }
         let p = event.locationInWindow
@@ -4353,7 +4358,7 @@ import Observation
             }
             // Drawn after both panes so it sits above their terminal/editor NSViews, which otherwise take the drag.
             let at = total * ratio + 0.5
-            SplitHandle(horizontal: h, ratio: ratio, total: total) { onRatio(lastLeaf(a), $0) }
+            SplitHandle(horizontal: h, ratio: ratio, total: total, onRatio: { onRatio(lastLeaf(a), $0) }, onDoubleClick: { run("pane.equalize", [:]) })
               .frame(width: h ? 7 : g.size.width, height: h ? g.size.height : 7)
               .position(x: h ? at : g.size.width / 2, y: h ? g.size.height / 2 : at)
           }
