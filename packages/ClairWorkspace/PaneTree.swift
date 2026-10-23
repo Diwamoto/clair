@@ -150,8 +150,15 @@ public struct PaneTree: Sendable, Equatable, Codable {
   public mutating func equalize() {
     root = Self.map(root) { n in
       guard case .split(let ax, _, let a, let b) = n else { return nil }
-      return .split(axis: ax, ratio: 0.5, first: a, second: b)
+      let wa = Double(Self.span(a, ax)), wb = Double(Self.span(b, ax))
+      return .split(axis: ax, ratio: wa / (wa + wb), first: a, second: b)
     }
+  }
+
+  /// Panes side by side along `axis`: a chain of three same-axis splits equalizes to thirds, not 50/25/25.
+  private static func span(_ n: Node, _ axis: Axis) -> Int {
+    guard case .split(let ax, _, let a, let b) = n else { return 1 }
+    return ax == axis ? span(a, axis) + span(b, axis) : max(span(a, axis), span(b, axis))
   }
 
   /// Cycles focus through leaves in appearance order (`⌃⌘→`).

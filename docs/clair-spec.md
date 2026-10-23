@@ -447,7 +447,8 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   請求額と区別して表示する。欠損分をゼロ扱いしない(料金の分からないモデルは
   「算出不可」とし、合計や割合に入れない)
 - editor / terminal / diff を同じ tab group へ置ける任意 split
-- pane の focus、移動、close、最大化、幅/高さ/全体均等
+- pane の focus、移動、close、最大化、幅/高さ/全体均等(均等は同じ軸に並ぶ pane を等分する。設定 `autoEqualize`
+  が on なら分割・close のたびに自動で均等化する。既定は off)
 - 画面に何もないとき(ファイルを開いておらず、他の pane もないとき)だけ、空の editor がコマンドと
   ショートカットの一覧(ホーム画面)を表示し、クリックでそのコマンドを実行する。ファイルがない空の editor は
   他の pane(terminal・preview・graph)と並ばない: 最後のファイルを閉じた、ホーム画面から split や terminal を

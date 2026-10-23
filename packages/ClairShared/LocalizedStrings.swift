@@ -39,6 +39,8 @@ extension LocalizedStrings {
     "Projectごとのファイル、ターミナル、分割位置を再開します。": "Reopens each Project's files, terminals, and splits.",
     "閉じる前に確認": "Confirm before closing",
     "実行中のターミナルや未保存のエディタを閉じる前に確認します。": "Asks before closing running terminals or unsaved editors.",
+    "ペインを均等に再配置": "Equalize panes automatically",
+    "分割（⌘D / ⌘⇧D）や閉じたあと、ペインを等分の大きさに並べ直します。": "After a split (⌘D / ⌘⇧D) or close, resizes panes to equal shares.",
     "インターフェース": "Interface",
     "外観": "Appearance",
     "エディタ、ターミナル、サイドバーの配色をまとめて切り替えます。": "Switches the colors of the editor, terminal, and sidebar together.",

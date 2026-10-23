@@ -63,6 +63,27 @@ final class PaneTreeTests: XCTestCase {
     XCTAssertEqual(r2, 0.5)
   }
 
+  func testEqualizeGivesEachPaneOnAnAxisAnEqualShare() {
+    var t = PaneTree(single: .editor)
+    t.splitFocused(.horizontal); t.splitFocused(.horizontal)  // 1 | (2 | 3) — split halves the focused pane
+    t.equalize()
+    guard case .split(_, let outer, _, .split(_, let inner, _, _)) = t.root else { return XCTFail() }
+    XCTAssertEqual(outer, 1.0 / 3, accuracy: 1e-9)
+    XCTAssertEqual(inner, 0.5)
+  }
+
+  func testAutoEqualizeSettingAppliesOnSplitAndClose() {
+    var s = WorkbenchState()
+    s.toggles["autoEqualize"] = true
+    _ = CommandRegistry.workbench.execute("pane.splitRight", state: &s)
+    _ = CommandRegistry.workbench.execute("pane.splitRight", state: &s)
+    guard case .split(_, let r, _, _) = s.tree.root else { return XCTFail() }
+    XCTAssertEqual(r, 1.0 / 3, accuracy: 1e-9)
+    _ = CommandRegistry.workbench.execute("pane.close", confirmed: true, state: &s)
+    guard case .split(_, let r2, _, _) = s.tree.root else { return XCTFail() }
+    XCTAssertEqual(r2, 0.5)
+  }
+
   func testRatioMovesOnlyThatDivider() {
     var t = PaneTree()  // editor 1 | (agent 2 / terminal 3)
     t.focus(1); t.splitFocused(.vertical)  // (1 / 4) | (2 / 3)

@@ -315,6 +315,11 @@ export function SettingsMain() {
                     control={<Switch on={wb.toggles.restoreLayout} onClick={() => wb.setToggle('restoreLayout')} />}
                   />
                   <Row
+                    title="ペインを均等に再配置"
+                    note="分割（⌘D / ⌘⇧D）や閉じたあと、ペインを等分の大きさに並べ直します。"
+                    control={<Switch on={wb.toggles.autoEqualize} onClick={() => wb.setToggle('autoEqualize')} />}
+                  />
+                  <Row
                     last
                     title="閉じる前に確認"
                     note="実行中のターミナルや未保存のエディタを閉じる前に確認します。"

@@ -32,7 +32,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public enum Palette: String, Sendable, Codable { case commands, files, search, symbols, references, branches, compare, recent }
 
   public static let sections = ["一般", "AIプロバイダー", "使用状況", "エディタ", "ターミナル", "通知", "モバイル", "アップデート"]
-  public static let toggleKeys = ["restoreLayout", "confirmClose", "hideQuota", "preventSleepOnBattery", "formatOnSave", "showWhitespace", "softWrap", "terminalApprovals", "lineNumbers", "terminalCursorBlink", "notifyEnabled", "notifyOnBell", "notifyOnExit", "notifyWhenActive", "notifySound"]
+  public static let toggleKeys = ["restoreLayout", "confirmClose", "hideQuota", "preventSleepOnBattery", "formatOnSave", "showWhitespace", "softWrap", "terminalApprovals", "lineNumbers", "terminalCursorBlink", "notifyEnabled", "notifyOnBell", "notifyOnExit", "notifyWhenActive", "notifySound", "autoEqualize"]
   /// Closed-set settings (the mock's segmented controls). The first option is the default.
   /// Palette titles of `toggleKeys` / `choiceOptions`, matching the settings rows, so every setting is reachable from ⌘K.
   public static let settingTitles = [
@@ -45,6 +45,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
     "terminalFontSize": "ターミナルの文字サイズ", "terminalCursorStyle": "ターミナルのカーソルの形",
     "notifyEnabled": "通知を有効にする", "notifyOnBell": "入力待ち・通知要求で通知", "notifyOnExit": "終了で通知",
     "notifyWhenActive": "Clair が前面のときも通知", "notifySound": "通知のサウンド", "language": "言語",
+    "autoEqualize": "ペインを均等に再配置",
   ]
   // agent registry: `defaultAgent` reads its choices from the `AgentProfile` registry instead of
   // a literal list, so switching to a newly registered agent needs no change here.
@@ -82,6 +83,8 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   /// Last scanned tree per Project; not persisted, only makes switching back instant.
   var filesCache: [String: [WorkbenchFile]] = [:]
   public var tree = PaneTree(single: .editor)
+  /// `autoEqualize` setting: after a split or close, every pane on an axis gets the same share.
+  mutating func autoEqualize() { if toggles["autoEqualize"] == true { tree.equalize() } }
   /// ⌘F belongs to the focused pane: a terminal, or an editor showing a file (not a chat, browser or proposal tab, or the home screen).
   public var findTargetsFocusedPane: Bool {
     guard !panesClosed else { return false }
@@ -160,7 +163,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var palette: Palette?
   /// E17: definition-jump history for ⌃- / ⌃⇧-. Transient (not in `WorkspaceSnapshot`).
   public var navigation = NavigationHistory()
-  public var toggles = ["restoreLayout": true, "confirmClose": true, "hideQuota": false, "preventSleepOnBattery": false, "formatOnSave": false, "showWhitespace": false, "softWrap": false, "terminalApprovals": true, "lineNumbers": true, "terminalCursorBlink": true, "notifyEnabled": true, "notifyOnBell": true, "notifyOnExit": true, "notifyWhenActive": false, "notifySound": false]
+  public var toggles = ["restoreLayout": true, "confirmClose": true, "hideQuota": false, "preventSleepOnBattery": false, "formatOnSave": false, "showWhitespace": false, "softWrap": false, "terminalApprovals": true, "lineNumbers": true, "terminalCursorBlink": true, "notifyEnabled": true, "notifyOnBell": true, "notifyOnExit": true, "notifyWhenActive": false, "notifySound": false, "autoEqualize": false]
   // Font sizes default to what Clair shipped with (mock editor 12px, terminal 13pt), not the smallest option.
   public var choices = WorkbenchState.choiceOptions.mapValues { $0[0] }.merging(["editorFontSize": "12", "terminalFontSize": "13"]) { $1 }
   public var fonts = ["editor": "", "terminal": ""]
@@ -464,10 +467,10 @@ extension CommandRegistry {
 
   private static let core: [Command] = [
     cmd("pane.splitRight", "ペインを右に分割", .additive, shortcut: "⌘D") { s, _ in
-      s.tree.splitFocused(.horizontal, kind: s.active == nil ? .terminal : nil); return .pane(s.tree.focused)
+      s.tree.splitFocused(.horizontal, kind: s.active == nil ? .terminal : nil); s.autoEqualize(); return .pane(s.tree.focused)
     },
     cmd("pane.splitDown", "ペインを下に分割", .additive, shortcut: "⌘⇧D") { s, _ in
-      s.tree.splitFocused(.vertical, kind: s.active == nil ? .terminal : nil); return .pane(s.tree.focused)
+      s.tree.splitFocused(.vertical, kind: s.active == nil ? .terminal : nil); s.autoEqualize(); return .pane(s.tree.focused)
     },
     cmd("terminal.show", "ターミナルを開く", .additive, shortcut: "⌘J") { s, _ in
       s.panesClosed = false
@@ -555,6 +558,7 @@ extension CommandRegistry {
       }
       s.tree.closeFocused()
       s.launches = s.launches.filter { id, _ in s.tree.leaves.contains { $0.id == id } }
+      s.autoEqualize()
       return .ok
     },
     cmd("pane.open", "ペインを開く", .additive, params: [CommandParam("kind", .string, allowed: ["editor", "terminal"])]) { s, i in

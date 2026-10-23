@@ -3119,6 +3119,7 @@ import Observation
             SettingsCard(title: tr("ワークスペース")) {
               switchRow(tr("前回のレイアウトを復元"), "restoreLayout", note: tr("Projectごとのファイル、ターミナル、分割位置を再開します。"))
               switchRow(tr("閉じる前に確認"), "confirmClose", note: tr("実行中のターミナルや未保存のエディタを閉じる前に確認します。"))
+              switchRow(tr("ペインを均等に再配置"), "autoEqualize", note: tr("分割（⌘D / ⌘⇧D）や閉じたあと、ペインを等分の大きさに並べ直します。"))
             }
             SettingsCard(title: tr("インターフェース")) {
               choiceRow(tr("外観"), "appearance", note: tr("エディタ、ターミナル、サイドバーの配色をまとめて切り替えます。"))
