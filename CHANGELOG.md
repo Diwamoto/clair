@@ -6,6 +6,15 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-10-23
+
+### Added
+- New setting "Equalize panes automatically": after a split (⌘D / ⌘⇧D) or closing a pane, panes are resized to equal shares.
+- New setting "Enlarge the focused pane": the pane you focus takes 50–90% (default 60%) of its row or column and the others share the rest.
+
+### Changed
+- Equalize Panes now gives every pane in a row or column the same size (three panes get a third each, not 50/25/25).
+
 ## [0.23.0] - 2026-10-22
 
 ### Changed
@@ -514,7 +523,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/Diwamoto/clair/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/Diwamoto/clair/compare/v0.22.2...v0.23.0
 [0.22.2]: https://github.com/Diwamoto/clair/compare/v0.22.1...v0.22.2
 [0.22.1]: https://github.com/Diwamoto/clair/compare/v0.22.0...v0.22.1
