@@ -74,13 +74,17 @@ struct ProviderQuota: Sendable, Equatable {
 
   /// Codex blocks (spawns a process), so the caller runs this off the main actor.
   /// `previous` carries a throttled provider's last answer forward instead of asking again.
-  static func fetchAll(previous: [ProviderQuota] = [], now: Date = Date()) async -> [ProviderQuota] {
-    [
-      ProviderQuota(provider: "Codex", state: codex(), fetchedAt: now),
-      await claudeCode(previous: previous.first { $0.provider == "Claude Code" }, now: now),
-      ProviderQuota(provider: "OpenCode", state: await openCode(), fetchedAt: now),
-    ]
+  /// Only the agents in `agents` (profile ids the user marked as used) are asked.
+  static func fetchAll(previous: [ProviderQuota] = [], agents: Set<String> = sources, now: Date = Date()) async -> [ProviderQuota] {
+    var all: [ProviderQuota] = []
+    if agents.contains("codex") { all.append(ProviderQuota(provider: "Codex", state: codex(), fetchedAt: now)) }
+    if agents.contains("claude") { all.append(await claudeCode(previous: previous.first { $0.provider == "Claude Code" }, now: now)) }
+    if agents.contains("opencode") { all.append(ProviderQuota(provider: "OpenCode", state: await openCode(), fetchedAt: now)) }
+    return all
   }
+
+  /// Agent profile ids Clair can read a usage window for.
+  static let sources: Set<String> = ["claude", "codex", "opencode"]
 
   /// Claude Code's own `/usage` source: the undocumented `api.anthropic.com/api/oauth/usage`, authorized with the
   /// OAuth token Claude Code keeps in the login Keychain (owner-approved 2026-09-23, as Orca/CodexBar do).

@@ -33,6 +33,9 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
 
   public static let sections = ["一般", "AIプロバイダー", "使用状況", "エディタ", "ターミナル", "通知", "モバイル", "アップデート"]
   public static let toggleKeys = ["restoreLayout", "confirmClose", "hideQuota", "preventSleepOnBattery", "formatOnSave", "showWhitespace", "softWrap", "terminalApprovals", "lineNumbers", "terminalCursorBlink", "notifyEnabled", "notifyOnBell", "notifyOnExit", "notifyWhenActive", "notifySound", "autoEqualize", "focusExpand"]
+    + AgentProfile.all.map { agentKey($0.id) }
+  /// Per-agent "使う" switch: off hides the agent from launch menus and the status bar's usage meter.
+  public static func agentKey(_ id: String) -> String { "agent.\(id)" }
   /// Closed-set settings (the mock's segmented controls). The first option is the default.
   /// Palette titles of `toggleKeys` / `choiceOptions`, matching the settings rows, so every setting is reachable from ⌘K.
   public static let settingTitles = [
@@ -46,7 +49,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
     "notifyEnabled": "通知を有効にする", "notifyOnBell": "入力待ち・通知要求で通知", "notifyOnExit": "終了で通知",
     "notifyWhenActive": "Clair が前面のときも通知", "notifySound": "通知のサウンド", "language": "言語",
     "autoEqualize": "ペインを均等に再配置", "focusExpand": "フォーカスしたペインを拡大", "focusExpandRatio": "拡大したペインの割合",
-  ]
+  ].merging(AgentProfile.all.map { (agentKey($0.id), "\($0.title) を使う") }) { a, _ in a }
   // agent registry: `defaultAgent` reads its choices from the `AgentProfile` registry instead of
   // a literal list, so switching to a newly registered agent needs no change here.
   public static let choiceOptions: [String: [String]] = [
@@ -85,6 +88,9 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   var filesCache: [String: [WorkbenchFile]] = [:]
   public var tree = PaneTree(single: .editor)
   /// `autoEqualize` setting: after a split or close, every pane on an axis gets the same share.
+  /// The agents the user marked as used, in registry order.
+  public var usedAgents: [AgentProfile] { AgentProfile.all.filter { toggles[WorkbenchState.agentKey($0.id)] != false } }
+
   mutating func autoEqualize() { if toggles["autoEqualize"] == true { tree.equalize() } }
   /// ⌘F belongs to the focused pane: a terminal, or an editor showing a file (not a chat, browser or proposal tab, or the home screen).
   public var findTargetsFocusedPane: Bool {
@@ -165,6 +171,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   /// E17: definition-jump history for ⌃- / ⌃⇧-. Transient (not in `WorkspaceSnapshot`).
   public var navigation = NavigationHistory()
   public var toggles = ["restoreLayout": true, "confirmClose": true, "hideQuota": false, "preventSleepOnBattery": false, "formatOnSave": false, "showWhitespace": false, "softWrap": false, "terminalApprovals": true, "lineNumbers": true, "terminalCursorBlink": true, "notifyEnabled": true, "notifyOnBell": true, "notifyOnExit": true, "notifyWhenActive": false, "notifySound": false, "autoEqualize": false, "focusExpand": false]
+    .merging(AgentProfile.all.map { (WorkbenchState.agentKey($0.id), true) }) { a, _ in a }
   // Font sizes default to what Clair shipped with (mock editor 12px, terminal 13pt), not the smallest option.
   public var choices = WorkbenchState.choiceOptions.mapValues { $0[0] }.merging(["editorFontSize": "12", "terminalFontSize": "13", "focusExpandRatio": "60"]) { $1 }
   public var fonts = ["editor": "", "terminal": ""]
@@ -384,7 +391,7 @@ public struct CommandRegistry: Sendable {
       return commands.filter { $0.inPalette && (state.isRepo || !($0.id.hasPrefix("git.") || $0.id.hasPrefix("worktree."))) }
         .map { PaletteItem(title: $0.englishName, hint: state.shortcut(for: $0) ?? "", id: $0.id, input: [:], detail: tr($0.title)) }
         .filter { $0.matches(q) }
-        + AgentProfile.all.map { PaletteItem(title: tr("%@ を起動", $0.title), hint: "", id: "agent.launch", input: ["profile": .string($0.id)]) }
+        + state.usedAgents.map { PaletteItem(title: tr("%@ を起動", $0.title), hint: "", id: "agent.launch", input: ["profile": .string($0.id)]) }
           .filter { $0.matches(q) }
         + settingItems(state).filter { $0.matches(q) }
     case .files:
@@ -417,7 +424,8 @@ public struct CommandRegistry: Sendable {
     let t = WorkbenchState.settingTitles
     return WorkbenchState.toggleKeys.map { k in
       let on = state.toggles[k] == true
-      return PaletteItem(title: tr("設定: %@を%@にする", tr(t[k] ?? k), on ? tr("オフ") : tr("オン")), hint: "", id: "settings.set", input: ["key": .string(k), "value": .bool(!on)])
+      let agent = AgentProfile.all.first { WorkbenchState.agentKey($0.id) == k }
+      return PaletteItem(title: tr("設定: %@を%@にする", agent.map { tr("%@ を使う", $0.title) } ?? tr(t[k] ?? k), on ? tr("オフ") : tr("オン")), hint: "", id: "settings.set", input: ["key": .string(k), "value": .bool(!on)])
     }
       + WorkbenchState.choiceOptions.keys.sorted().flatMap { k in
         WorkbenchState.choiceOptions[k]!.filter { $0 != state.choices[k] }.map {

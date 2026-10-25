@@ -49,6 +49,7 @@ extension LocalizedStrings {
     "エディタ、ターミナル、サイドバーの配色をまとめて切り替えます。": "Switches the colors of the editor, terminal, and sidebar together.",
     "言語": "Language",
     "ステータスバーの利用枠を隠す": "Hide usage quota in the status bar",
+    "使うAgent": "Agents in Use", "ステータスバーの利用枠にも表示します。": "Also shown in the status bar's usage quota.",
     "承認ポリシー": "Approval policy",
     "ターミナル・Agent会話での変更提案を、どこまで自動で通すか。": "How far changes proposed in terminals and agent chats go through automatically.",
     "表示": "Display",
@@ -163,7 +164,7 @@ extension LocalizedStrings {
     "ステップイン": "Step Into", "ステップアウト": "Step Out", "デバッグを再起動": "Restart Debugging", "デバッグを終了": "Stop Debugging", "デバッグの状態": "Debug Status",
     "状態を取得": "Get State", "ショートカットを割り当て": "Assign Shortcut",
     "読み取り": "read", "追加": "Add", "書き込み": "write", "破壊的": "destructive", "外部": "external",
-    "%@ を起動": "Launch %@",
+    "%@ を起動": "Launch %@", "%@ を使う": "Use %@",
 
     // Command errors
     "最後の Project は閉じられません": "The last Project cannot be closed",

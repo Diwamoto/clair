@@ -9,6 +9,7 @@ import {
 } from 'react';
 
 import {
+  AGENT_PROFILES,
   activityItems,
   changedFiles,
   chat,
@@ -218,6 +219,8 @@ function useWorkbenchState() {
     showWhitespace: false,
     terminalApprovals: true,
     preventSleepDuringAgent: true,
+    // 使うAgent: one switch per registry agent, all on.
+    ...Object.fromEntries(AGENT_PROFILES.map((p) => [`agent.${p.id}`, true])),
   });
 
   // AI プロバイダー / エディタ / ターミナル / アップデート — Switch 以外の設定値。

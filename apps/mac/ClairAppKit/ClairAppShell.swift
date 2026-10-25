@@ -2302,7 +2302,7 @@ import Observation
     /// Floating, bottom-right: saves the comments as JSON and hands them to the agent picked from its menu.
     private func sendButton(_ r: ReviewSession, count: Int) -> some View {
       Button {
-        menus.open(ClairMenuSpec(title: tr("送信先"), entries: AgentProfile.all.filter { $0.open != nil }.map { p in .item(p.title) { sendReview(r, provider: p.id) } }),
+        menus.open(ClairMenuSpec(title: tr("送信先"), entries: st.usedAgents.filter { $0.open != nil }.map { p in .item(p.title) { sendReview(r, provider: p.id) } }),
           at: CGPoint(x: sendFrame.maxX, y: sendFrame.minY - 4))
       } label: {
         HStack(spacing: 6) {
@@ -3233,6 +3233,12 @@ import Observation
               defaultAgentRow
               choiceRow(tr("承認ポリシー"), "approvalPolicy", note: tr("ターミナル・Agent会話での変更提案を、どこまで自動で通すか。"))
             }
+            SettingsCard(title: tr("使うAgent")) {
+              ForEach(AgentProfile.all, id: \.id) { profile in
+                switchRow(profile.title, WorkbenchState.agentKey(profile.id),
+                  note: ProviderQuota.sources.contains(profile.id) ? tr("ステータスバーの利用枠にも表示します。") : nil)
+              }
+            }
             integrationCard
           case "エディタ":
             SettingsCard(title: tr("表示")) {
@@ -3446,7 +3452,7 @@ import Observation
     private var defaultAgentRow: some View {
       SettingsRow(title: tr("既定のAgent"), note: tr("⌃⌘N で追加するときの初期選択。titlebarのタブは個別に選べます。")) {
         Menu {
-          ForEach(AgentProfile.all, id: \.id) { profile in
+          ForEach(st.usedAgents, id: \.id) { profile in
             Button(profile.title) { store.run("settings.choose", ["key": .string("defaultAgent"), "value": .string(profile.id)]) }
           }
         } label: {
@@ -3469,6 +3475,11 @@ import Observation
     /// redistributed in this repository; offline or on failure the provider's initial stands in.
     @ViewBuilder private func quotaProviderIcon(_ provider: String, size: CGFloat = 15) -> some View {
       ProviderBrandIcon(provider: provider, size: size)
+    }
+
+    /// Agents whose usage the status bar reads: the used ones Clair has a source for, none while the meter is hidden.
+    private var quotaAgents: Set<String> {
+      st.toggles["hideQuota"] == true ? [] : ProviderQuota.sources.intersection(st.usedAgents.map(\.id))
     }
 
     private var quotaMeter: some View {
@@ -3796,7 +3807,7 @@ import Observation
         }
         Spacer()
         ClairResourceMeter { terminalTabTitle($0, $1) }  // same name as the terminal's tab
-        if st.toggles["hideQuota"] != true { quotaMeter }
+        if !quotaAgents.isEmpty { quotaMeter }
         Button { sidebarMode = "terminal" } label: {
           HStack(spacing: 5) {
             if waiting > 0 { Circle().fill(C.attention).frame(width: 6, height: 6) }
@@ -3815,11 +3826,12 @@ import Observation
       // Here, not on `body`: its modifier chain is at the type-checker's limit. The status bar is always mounted.
       .onChange(of: store.gitRevision) { reloadChanges() }
       // Off the main actor, every 5 min while the toggle is on; turning it off cancels the loop.
-      .task(id: st.toggles["hideQuota"] != true) {
-        guard st.toggles["hideQuota"] != true else { quota = []; return }
+      .task(id: quotaAgents) {
+        let agents = quotaAgents
+        guard !agents.isEmpty else { quota = []; return }
         while !Task.isCancelled {
           let previous = quota
-          quota = await Task.detached(priority: .utility) { await ProviderQuota.fetchAll(previous: previous) }.value
+          quota = await Task.detached(priority: .utility) { await ProviderQuota.fetchAll(previous: previous, agents: agents) }.value
           try? await Task.sleep(for: .seconds(300))
         }
       }

@@ -386,7 +386,7 @@ export function SettingsMain() {
                     first
                     title="既定のAgent"
                     note="⌃⌘N で追加するときの初期選択。titlebarのタブは個別に選べます。"
-                    control={<Dropdown value={wb.defaultAgent} options={AGENT_PROFILES} onChange={wb.setDefaultAgent} />}
+                    control={<Dropdown value={wb.defaultAgent} options={AGENT_PROFILES.filter((p) => wb.toggles[`agent.${p.id}`])} onChange={wb.setDefaultAgent} />}
                   />
                   <Row
                     last
@@ -400,6 +400,18 @@ export function SettingsMain() {
                       />
                     }
                   />
+                </Card>
+                <Card title="使うAgent">
+                  {AGENT_PROFILES.map((p, i) => (
+                    <Row
+                      key={p.id}
+                      first={i === 0}
+                      last={i === AGENT_PROFILES.length - 1}
+                      title={p.title}
+                      note={['claude', 'codex', 'opencode'].includes(p.id) ? 'ステータスバーの利用枠にも表示します。' : undefined}
+                      control={<Switch on={wb.toggles[`agent.${p.id}`]} onClick={() => wb.setToggle(`agent.${p.id}`)} />}
+                    />
+                  ))}
                 </Card>
                 <Card title="インターフェース">
                   <Row

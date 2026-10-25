@@ -91,6 +91,16 @@ final class WorkbenchCommandTests: XCTestCase {
     XCTAssertEqual(WorkbenchState.settingTitles.keys.sorted(), (WorkbenchState.toggleKeys + WorkbenchState.choiceOptions.keys).sorted())
   }
 
+  func testUnusedAgentLeavesLaunchItems() {
+    var s = WorkbenchState()
+    XCTAssertEqual(s.usedAgents, AgentProfile.all)
+    r.execute("settings.set", ["key": .string(WorkbenchState.agentKey("codex")), "value": .bool(false)], state: &s)
+    XCTAssertFalse(s.usedAgents.contains { $0.id == "codex" })
+    let launches = r.paletteItems(.commands, query: "", state: s).filter { $0.id == "agent.launch" }.map { $0.input["profile"]?.string }
+    XCTAssertFalse(launches.contains("codex"))
+    XCTAssertTrue(launches.contains("claude"))
+  }
+
   func testChooseProjectHasCmdShiftNAndIsHiddenFromAgents() throws {
     let d = try XCTUnwrap(r.commands.first { $0.id == "project.choose" })
     XCTAssertEqual(d.shortcut, "⌘⇧N")
