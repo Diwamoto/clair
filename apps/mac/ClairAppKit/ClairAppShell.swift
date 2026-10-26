@@ -3922,7 +3922,7 @@ import Observation
             }))
               .focused($paletteFocused).task(id: p) { await focusField { paletteFocused = true } }
               .textFieldStyle(.plain).font(.system(size: 13)).foregroundStyle(C.textPrimary)
-              .onSubmit { run(list) }
+              .onSubmit { run(p) }
               .onKeyPress(.downArrow) { moveSelection(min(selection + 1, max(list.count - 1, 0))); return .handled }
               .onKeyPress(.upArrow) { moveSelection(max(selection - 1, 0)); return .handled }
               .onKeyPress(.escape) { store.run("palette.close"); return .handled }
@@ -3988,7 +3988,7 @@ import Observation
                   selection = i
                   withAnimation(reduceMotion ? nil : .spring(duration: 0.26, bounce: 0.12)) { paletteHighlight = i }
                 }
-                .onTapGesture { selection = i; run(list) }
+                .onTapGesture { selection = i; run(p) }
                 }
               }.padding(.horizontal, 8).padding(.bottom, 8)
             }
@@ -4036,7 +4036,12 @@ import Observation
       withAnimation(reduceMotion ? nil : .timingCurve(0.16, 1, 0.3, 1, duration: 0.07)) { paletteHighlight = next }
     }
 
-    private func run(_ list: [PaletteItem]) {
+    /// Reads the list now, not the one captured at the last render: Return right after a keystroke, or an IME commit,
+    /// lands in `query` within this event, and the stale list's first row is `pane.splitRight` (an extra pane).
+    private func run(_ p: WorkbenchState.Palette) {
+      // Return while composing Japanese commits the text; marked text never reaches `query`, so it is not a submit.
+      if (NSApp.keyWindow?.firstResponder as? NSTextView)?.hasMarkedText() == true { return }
+      let list = items(p)
       guard selection < list.count else { return }
       let it = list[selection]
       store.run("palette.close")
