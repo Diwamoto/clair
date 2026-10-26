@@ -6,6 +6,13 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-10-26
+
+### Added
+- Add, edit, complete and delete TODOs right from the sidebar.
+- Settings > AI providers has a switch per agent: agents you switch off disappear from the launch palette, the default-agent picker and the review send menu, and the status bar stops reading their usage.
+- Opening the review screen starts a side chat with your default agent beside it, so you can ask questions before sending the review; the chat closes with the review.
+
 ## [0.25.0] - 2026-10-23
 
 ### Added
@@ -532,7 +539,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.25.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.26.0...HEAD
+[0.26.0]: https://github.com/Diwamoto/clair/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/Diwamoto/clair/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/Diwamoto/clair/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/Diwamoto/clair/compare/v0.22.2...v0.23.0
