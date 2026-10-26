@@ -6,6 +6,11 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.26.1] - 2026-10-26
+
+### Fixed
+- Choosing a command in the command palette right after typing could run Split Right instead, adding an extra pane; the palette now runs the row it shows.
+
 ## [0.26.0] - 2026-10-26
 
 ### Added
@@ -539,7 +544,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.26.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.26.1...HEAD
+[0.26.1]: https://github.com/Diwamoto/clair/compare/v0.26.0...v0.26.1
 [0.26.0]: https://github.com/Diwamoto/clair/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/Diwamoto/clair/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/Diwamoto/clair/compare/v0.23.0...v0.24.0
