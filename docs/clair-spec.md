@@ -346,6 +346,12 @@ resolved になる。未保存の editor buffer を含む対象
 ではメニューを無効にし、ディスクと異なる内容を黙って渡さない。この操作は既存の
 agent launch と同じ Project / session / 承認境界を通る。
 
+一括送信の前に都度質問できるよう、レビュー画面を開くと既定の Agent を Project root で
+対話モードで起動し、その terminal を画面の右側に出す(2026-10-26 オーナー依頼)。
+レビュー画面を開くことを起動の承認とする。同じ Project で別の対象のレビューを開き
+直しても同じ agent を使い続け、レビュー画面が消える(閉じる・送信・Project 切替)と
+その agent の terminal を閉じる。
+
 agent 側から指摘を返す経路として `clair review comment` / `review suggest` /
 `review threads` を残す。
 

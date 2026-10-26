@@ -646,8 +646,7 @@ extension CommandRegistry {
           let own = l.parent != nil && l.parent == i["parent"]?.string && AgentRun(id: l.run!).exitCode != nil
           return own ? .read : .write
         }) { s, i in
-      let t = s.terminal(i["key"]!.string!)!
-      s.withLayout(t.project) { l in l.tree.close(t.pane); l.launches[t.pane] = nil }
+      s.closeTerminal(i["key"]!.string!)
       return .ok
     },
     // Every agent terminal in every Project (launched or detected), so a CLI caller can find a key without the GUI.

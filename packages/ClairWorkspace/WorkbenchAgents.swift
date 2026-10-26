@@ -175,6 +175,12 @@ extension WorkbenchState {
     return tree?.leaves.contains { $0.id == pane && $0.kind == .terminal } == true ? (p.name, pane) : nil
   }
 
+  /// Removes the terminal pane behind `root#pane`, in any Project, with its launch.
+  public mutating func closeTerminal(_ key: String) {
+    guard let t = terminal(key) else { return }
+    withLayout(t.project) { l in l.tree.close(t.pane); l.launches[t.pane] = nil }
+  }
+
   mutating func withLayout<R>(_ name: String, _ body: (inout ProjectLayout) -> R) -> R {
     if name == project { return body(&layout) }
     var l = layouts[name] ?? ProjectLayout()

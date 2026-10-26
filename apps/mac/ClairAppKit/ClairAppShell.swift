@@ -337,6 +337,13 @@ import Observation
       }
     }
 
+    /// Closes a terminal pane the GUI itself opened, in any Project, and ends its shell (the review chat).
+    func closeTerminal(_ key: String) {
+      state.closeTerminal(key)
+      ClairDaemonLauncher.closeSession(key: key); ClairGhosttySurfaceView.discard(key: key)
+      refreshSleepAssertion(); persistState()
+    }
+
     /// V09: block idle system sleep while agents run (AC power; battery only if opted in). Display may still sleep.
     private func refreshSleepAssertion() {
       let ac = (IOPSGetProvidingPowerSourceType(nil)?.takeRetainedValue() as String?) == kIOPSACPowerValue
@@ -2152,7 +2159,23 @@ import Observation
       let expanded = folders.count <= 50 ? Set(folders) : Set(folders.filter { files.first?.hasPrefix($0 + "/") == true })
       let name: String = switch target { case .file(let p): p; case .folder(let p): p + "/"; case .project: st.project }
       reviewFile = nil
-      review = ReviewSession(title: name, files: files, rows: rows, expanded: expanded, selected: files.first)
+      // Another review in the same Project keeps the chat already open.
+      let (chat, chatKey) = review.map { ($0.chat, $0.chatKey) } ?? launchReviewChat()
+      review = ReviewSession(title: name, files: files, rows: rows, expanded: expanded, selected: files.first, chat: chat, chatKey: chatKey)
+    }
+
+    /// The review's side chat: the default agent, interactive in the Project root, for questions before the batch send.
+    /// Its pane sits in the tree, hidden while the review screen covers the panes, and closes with the review.
+    // ponytail: the pane is persisted like any agent pane, so it survives a restart as an ordinary pane.
+    private func launchReviewChat() -> (Int?, String?) {
+      guard let root = store.activeRoot else { return (nil, nil) }
+      let profile = AgentProfile.named(st.choices["defaultAgent"] ?? "")?.id ?? "claude"
+      // Opening the review is the user's approval, as with the send button.
+      switch store.run("agent.launch", ["profile": .string(profile)], confirmed: true) {
+      case .success(.pane(let pane)): return (pane, ClairWorkbenchStore.terminalKey(root: root, pane: pane))
+      case .success: return (nil, nil)
+      case .failure(let error): reviewError = error.message; return (nil, nil)
+      }
     }
 
     private func resume(_ history: AgentHistory, in project: String) {
@@ -2261,6 +2284,12 @@ import Observation
             if lines != nil { await store.buffers.prefetch(path, root: root) }
             guard !Task.isCancelled, review?.selected == path else { return }
             reviewFile = ReviewFile(path: path, lines: lines, highlighted: highlighted)
+          }
+          if let pane = r.chat, let key = r.chatKey {
+            Rectangle().fill(L.hairline).frame(width: 1)
+            // ponytail: fixed width; a drag handle if people want it wider.
+            ClairGhosttySurface(launch: st.launches[pane].map { ($0.command, $0.cwd) }, pane: pane, sessionKey: key)
+              .id(key).frame(width: 440).background(C.surface)
           }
         }
       }.background(C.canvas)
@@ -3016,6 +3045,10 @@ import Observation
       let rows: [ExplorerRow]
       var expanded: Set<String>
       var selected: String?
+      /// The side chat's terminal pane (`launchReviewChat`).
+      var chat: Int?
+      /// Its terminal key, fixed at open: it still names the pane after a Project switch.
+      var chatKey: String?
     }
 
     struct ReviewFile: Equatable {
@@ -3126,6 +3159,10 @@ import Observation
       }
       .overlay(alignment: .top) {
         if debugControlsVisible { debugToolbar.padding(.top, 12) }
+      }
+      // However the review goes away (close, send, Project switch), its chat goes with it.
+      .onChange(of: review?.chatKey) { old, new in
+        if let old, old != new { store.closeTerminal(old) }
       }
       .overlay {
         if sidebarMode == "concierge" {

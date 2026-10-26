@@ -207,6 +207,21 @@ final class WorkbenchAgentLaunchTests: XCTestCase {
     XCTAssertEqual(s.tree.focused, focused)
     XCTAssertNil(s.terminal(key))
   }
+
+  // The review chat is interactive (no run id, so not agent.close's) and must close even after a Project switch.
+  func testCloseTerminalInAnotherProject() throws {
+    var (s, root) = try opened()
+    guard case .pane(let pane) = try r.execute("agent.launch", ["profile": .string("claude")], confirmed: true, state: &s).get()
+    else { return XCTFail() }
+    let key = WorkbenchState.terminalKey(root, pane)
+    let other = URL.temporaryDirectory.appending(path: "clair-v07-\(UUID().uuidString)").resolvingSymlinksInPath()
+    try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+    try r.execute("project.open", ["path": .string(other.path)], state: &s).get()
+    XCTAssertNotNil(s.terminal(key))
+    s.closeTerminal(key)
+    XCTAssertNil(s.terminal(key))
+    XCTAssertNil(s.withLayoutCopy(URL(fileURLWithPath: root).lastPathComponent).launches[pane])
+  }
 }
 
 /// An agent's own hooks report working / blocked / done through `agent.report`.
