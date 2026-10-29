@@ -233,6 +233,12 @@
       return l
     }
 
+    /// ⌘N: an empty buffer with no file behind it yet.
+    func openEmpty(_ path: String) {
+      guard loads[path] == nil, let buffer = try? TextBuffer() else { return }
+      loads[path] = .ready(EditorTransactionManager(buffer: buffer, selection: TextSelectionSet(cursor: UTF8Offset(0))))
+    }
+
     /// Rebuilds the surface from the buffer after it was changed outside the view (a review suggestion applied).
     func refresh(_ path: String) { revisions[path, default: 0] += 1 }
 

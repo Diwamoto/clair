@@ -215,7 +215,7 @@ extension WorkbenchState {
   /// A browser or history tab is not a Project file, so a rescan of the tree keeps it; a proposal tab lives only as long
   /// as its (transient) proposal.
   func keepsVirtualTab(_ path: String) -> Bool {
-    FileProposal.id(tab: path).map { fileProposals[$0] != nil } ?? FileBrowser.isVirtualTab(path)
+    untitled.contains(path) || (FileProposal.id(tab: path).map { fileProposals[$0] != nil } ?? FileBrowser.isVirtualTab(path))
   }
 
   mutating func openTab(_ path: String) {

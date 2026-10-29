@@ -137,6 +137,8 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var favorites: [String] = []
   /// Agents' file-operation proposals by id (`finder.propose`). Transient: a restart drops them.
   public var fileProposals: [String: FileProposal] = [:]
+  /// ⌘N buffers with nothing on disk yet (`Untitled-N`); their tabs survive rescans and the first ⌘S names them. Transient.
+  public var untitled: Set<String> = []
   public var diffTabs: [WorkbenchDiffTab] = []
   public var activeDiff: WorkbenchDiffTab?
   public var tabOrder: [WorkbenchTab] = []
@@ -694,7 +696,8 @@ extension CommandRegistry {
     },
     cmd("tab.open", "ファイルを開く", .read, params: [CommandParam("path", .string)],
         preflight: { s, i throws(CommandError) in
-          try require(s.files.contains { $0.path == i["path"]?.string && $0.status != "D" }, "no file \(i["path"]!)"); return .read
+          try require(s.untitled.contains(i["path"]!.string!) || s.files.contains { $0.path == i["path"]?.string && $0.status != "D" },
+                      "no file \(i["path"]!)"); return .read
         }) { s, i in
       s.openTab(i["path"]!.string!); return .ok
     },
@@ -907,11 +910,21 @@ extension CommandRegistry {
     },
     // ⌘⇧N: the GUI shows the folder picker and answers with `project.open` (ClairWorkbenchStore.run); nothing to change here.
     cmd("project.choose", "フォルダを選んでプロジェクトを開く", .read, ai: false, shortcut: "⌘⇧N") { _, _ in .ok },
-    // ⌘N: the GUI asks for a name and creates the file next to the active one (else at the Project root); nothing to change here.
+    // ⌘N, as in VS Code: an empty `Untitled-N` tab beside the active file (else at the Project root), focused and
+    // with nothing on disk; the GUI gives it an empty buffer and asks for a name on its first ⌘S.
     cmd("file.new", "新しいファイル", .read, ai: false, shortcut: "⌘N",
         preflight: { s, _ throws(CommandError) in
           try require(s.projects.contains { $0.name == s.project }, "no project"); return .read
-        }) { _, _ in .ok },
+        }) { s, _ in
+      let folder = s.active.flatMap { a in s.untitled.contains(a) || s.files.contains { $0.path == a } ? a : nil }
+        .map { ($0 as NSString).deletingLastPathComponent } ?? ""
+      let path = (1...).lazy.map { (folder as NSString).appendingPathComponent("Untitled-\($0)") }
+        .first { p in !s.untitled.contains(p) && !s.files.contains { $0.path == p } }!
+      s.untitled.insert(path)
+      s.openTab(path)
+      s.selectTab(.file(path))  // focus the editor even when ⌘N came from a terminal
+      return .ok
+    },
     // MCP may navigate only within a Project already open in Clair. The user's CLI keeps its wider file-open behavior.
     cmd("file.open", "パスからファイルを開く", .additive,
         params: [CommandParam("path", .string), CommandParam("line", .int, required: false), CommandParam("column", .int, required: false)],

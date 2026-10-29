@@ -119,6 +119,24 @@ final class WorkbenchCommandTests: XCTestCase {
     XCTAssertNil(r.execute("file.new", [:], state: &s).failure)
   }
 
+  func testNewFileOpensAnUnsavedUntitledTabBesideTheActiveFileAndFocusesTheEditor() throws {
+    var s = WorkbenchState()
+    s.openProject(WorkbenchProject(name: "p", path: "/tmp/p"), scanFiles: false)
+    s.tree = PaneTree()  // editor | terminals
+    s.files = [WorkbenchFile(path: "src/a.swift", status: nil), WorkbenchFile(path: "src/Untitled-1", status: nil)]
+    s.tabs = ["src/a.swift"]; s.active = "src/a.swift"
+    _ = try r.execute("pane.focus", ["id": .int(2)], state: &s).get()
+    _ = try r.execute("file.new", state: &s).get()
+    XCTAssertEqual(s.active, "src/Untitled-2")  // Untitled-1 is taken on disk
+    XCTAssertEqual(s.untitled, ["src/Untitled-2"])
+    XCTAssertEqual(s.tree.focused, 1)
+    XCTAssertEqual(s.selectedTitlebarTab, .file("src/Untitled-2"))
+    _ = try r.execute("file.new", state: &s).get()
+    XCTAssertEqual(s.active, "src/Untitled-3")
+    s.refreshStatus(reconcileOpenFiles: true)  // /tmp/p has no files: a.swift's tab goes, the unsaved ones stay
+    XCTAssertEqual(s.tabs, ["src/Untitled-2", "src/Untitled-3"])
+  }
+
   func testProjectSearchIsACommandWithTheAdvertisedShortcut() throws {
     var state = WorkbenchState()
     XCTAssertEqual(r.commands.first { $0.id == "palette.search" }?.shortcut, "⌘⇧F")
