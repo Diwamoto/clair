@@ -760,10 +760,10 @@ extension CommandRegistry {
         case .diff(let target): s.openDiff(target)
         case .terminal: s.tree.splitFocused(.horizontal, kind: .terminal)
         case .graph: s.tree.splitFocused(.horizontal, kind: .graph)
+        case .preview: continue  // ponytail: preview tabs are not recorded; reopen with ⌘⇧V
         }
         return .ok
       }
-        case .preview: continue  // ponytail: preview tabs are not recorded; reopen with ⌘⇧V
       return .ok
     },
     cmd("tab.reorder", "タブを並べ替え", .read,
