@@ -18,6 +18,23 @@ final class WorkbenchSearchTests: XCTestCase {
     XCTAssertEqual(QuickOpen.rank("", f).count, 3)
   }
 
+  func testQuickOpenTokensAndSubstrings() {
+    let f = ["packages/ClairWorkspace/WorkbenchSearch.swift", "apps/mac/Search.swift", "tests/WorkbenchSearchTests.swift"]
+      .map { WorkbenchFile(path: $0, status: nil) }
+    // Space-separated tokens match in any order.
+    XCTAssertEqual(QuickOpen.rank("search workspace", f).map(\.path), ["packages/ClairWorkspace/WorkbenchSearch.swift"])
+    XCTAssertEqual(QuickOpen.rank("mac/sea", f).first?.path, "apps/mac/Search.swift")
+    XCTAssertEqual(QuickOpen.rank("", f, limit: 2).count, 2)
+  }
+
+  func testFilesPaletteListsRecentFirst() {
+    var s = WorkbenchState()
+    s.files = ["a.txt", "b.txt", "c.txt"].map { WorkbenchFile(path: $0, status: nil) }
+    s.recent = ["c.txt", "b.txt"]
+    XCTAssertEqual(CommandRegistry.workbench.paletteItems(.files, query: "", state: s).map(\.title), ["c.txt", "b.txt", "a.txt"])
+    XCTAssertEqual(CommandRegistry.workbench.paletteItems(.files, query: "txt", state: s).first?.title, "c.txt")
+  }
+
   func testSearchTreeGroupsFoldersFirstAndCollapses() {
     let h = { (p: String, l: Int) in SearchHit(path: p, line: l, text: "\(p):\(l)") }
     let hits = SearchTree.sorted([h("README.md", 3), h("a/b/x.swift", 5), h("a/b/x.swift", 9), h("a/y.swift", 1), h("../docs/z.md", 2)])

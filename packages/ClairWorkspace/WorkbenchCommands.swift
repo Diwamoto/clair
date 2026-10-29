@@ -400,7 +400,10 @@ public struct CommandRegistry: Sendable {
           .filter { $0.matches(q) }
         + settingItems(state).filter { $0.matches(q) }
     case .files:
-      return QuickOpen.rank(query, state.files.filter { $0.status != "D" && $0.status != "!" })
+      // Recently opened files first (newest first) so an empty query is the history and ties favour it.
+      // ponytail: 200-row cap keeps per-keystroke ranking/diffing cheap on big trees; page if someone needs more.
+      let candidates = state.files.filter { $0.status != "D" && $0.status != "!" }
+      return QuickOpen.rank(query, Self.byRecency(candidates, state.recent), limit: 200)
         .map { PaletteItem(title: $0.path, hint: "", id: "tab.open", input: ["path": .string($0.path)]) }
     case .recent:
       // Reopen a recently opened file, newest first; files gone from the tree drop out.
@@ -412,16 +415,20 @@ public struct CommandRegistry: Sendable {
       guard let active = state.active else { return [] }
       // Recently opened files first (newest first), then the rest in tree order; rank keeps that order on ties.
       let candidates = state.files.filter { $0.status != "D" && $0.path != active }
-      let order = Dictionary(state.recent.enumerated().map { ($1, $0) }, uniquingKeysWith: min)
-      let byRecency = candidates.enumerated().sorted {
-        (order[$0.element.path] ?? .max, $0.offset) < (order[$1.element.path] ?? .max, $1.offset)
-      }.map(\.element)
-      return QuickOpen.rank(query, byRecency)
+      return QuickOpen.rank(query, Self.byRecency(candidates, state.recent), limit: 200)
         .map { PaletteItem(title: $0.path, hint: "", id: "diff.open",
                            input: ["path": .string(active), "staged": .bool(false), "untracked": .bool(false), "against": .string($0.path)]) }
     case .search, .symbols, .references, .branches:
       return []  // search runs in the GUI; symbols/references come from the language server; branches load off the main thread
     }
+  }
+
+  /// `files` with those in `recent` first, newest first; the rest keep their order.
+  static func byRecency(_ files: [WorkbenchFile], _ recent: [String]) -> [WorkbenchFile] {
+    let order = Dictionary(recent.enumerated().map { ($1, $0) }, uniquingKeysWith: min)
+    return files.enumerated().sorted {
+      (order[$0.element.path] ?? .max, $0.offset) < (order[$1.element.path] ?? .max, $1.offset)
+    }.map(\.element)
   }
 
   /// One row per settings value: flip each toggle, pick each other choice, open each section.

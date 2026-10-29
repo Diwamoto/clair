@@ -9,15 +9,24 @@ import Foundation
 // ponytail: search reads files serially (cancellable per file) and skips >1 MB / non-UTF-8; parallelise if 10k-file search feels slow.
 
 public enum QuickOpen {
-  /// Case-insensitive subsequence match. Basename hits and consecutive runs rank first; ties keep path order.
-  public static func rank(_ query: String, _ files: [WorkbenchFile]) -> [WorkbenchFile] {
-    let q = Array(query.lowercased())
-    guard !q.isEmpty else { return files }
-    return files.compactMap { f -> (Int, WorkbenchFile)? in
-      let name = f.path.split(separator: "/").last.map(String.init) ?? f.path
-      guard let s = score(q, f.path.lowercased()) else { return nil }
-      return (s + (score(q, name.lowercased()) != nil ? 100 : 0), f)
-    }.enumerated().sorted { ($0.element.0, $1.offset) > ($1.element.0, $0.offset) }.map(\.element.1)
+  /// Case-insensitive; whitespace splits the query into tokens that must all match the path (any order).
+  /// Each token matches as a subsequence; substring hits outrank scattered ones, and basename hits rank first.
+  /// Ties keep input order, so callers pass the list in the order they want ties broken (e.g. recent first).
+  public static func rank(_ query: String, _ files: [WorkbenchFile], limit: Int = .max) -> [WorkbenchFile] {
+    let tokens = query.lowercased().split(whereSeparator: \.isWhitespace).map(String.init)
+    guard !tokens.isEmpty else { return Array(files.prefix(limit)) }
+    let qs = tokens.map(Array.init)
+    let ranked = files.compactMap { f -> (Int, WorkbenchFile)? in
+      let path = f.path.lowercased()
+      let name = path.split(separator: "/").last.map(String.init) ?? path
+      var total = 0
+      for (t, q) in zip(tokens, qs) {
+        guard let s = score(q, path) else { return nil }
+        total += s + (path.contains(t) ? 50 : 0) + (name.contains(t) ? 200 : score(q, name) != nil ? 100 : 0)
+      }
+      return (total, f)
+    }
+    return ranked.enumerated().sorted { ($0.element.0, $1.offset) > ($1.element.0, $0.offset) }.prefix(limit).map(\.element.1)
   }
 
   private static func score(_ q: [Character], _ s: String) -> Int? {
