@@ -860,6 +860,8 @@
     let open: (SearchHit) -> Void
     @State private var replaceMode = false
     @AppStorage("clair.searchTree") private var tree = false
+    /// Queries whose hit was opened, newest first, one per line; shown while the field is empty.
+    @AppStorage("clair.searchHistory") private var historyText = ""
     /// Tree mode: folder/file paths whose rows are folded.
     @State private var collapsed: Set<String> = []
     @FocusState private var queryFocused: Bool
@@ -916,7 +918,18 @@
         }
         ScrollViewReader { proxy in ScrollView {
           LazyVStack(alignment: .leading, spacing: 0) {
-            if tree {
+            if query.isEmpty {
+              ForEach(history, id: \.self) { q in
+                Button { query = q } label: {
+                  HStack(spacing: 8) {
+                    Image(systemName: "clock.arrow.circlepath").font(.system(size: 11)).foregroundStyle(C.textQuaternary).frame(width: 14)
+                    Text(q).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary).lineLimit(1)
+                    Spacer(minLength: 0)
+                  }
+                  .padding(.horizontal, 8).frame(height: 28).contentShape(Rectangle())
+                }.buttonStyle(.hoverWash).help(tr("この語で検索"))
+              }
+            } else if tree {
               let shown = displayedHits
               ForEach(Array(SearchTree.rows(shown, collapsed: collapsed).enumerated()), id: \.offset) { _, row in
                 if case .hit(let index) = row.kind {
@@ -960,7 +973,7 @@
 
     private func hitRow(_ index: Int, _ hit: SearchHit, depth: Int) -> some View {
       let selected = index == selection
-      return Button { selection = index; open(hit) } label: {
+      return Button { selection = index; openHit(hit) } label: {
         HStack(spacing: 8) {
           Text("\(hit.line)").font(Typography.font(Typography.micro)).foregroundStyle(C.textQuaternary).frame(width: 32, alignment: .trailing)
           Text(hit.text.trimmingCharacters(in: .whitespaces)).font(Typography.font(Typography.chrome))
@@ -1028,7 +1041,16 @@
 
     private func openSelected() {
       guard displayedHits.indices.contains(selection) else { search(); return }
-      open(displayedHits[selection])
+      openHit(displayedHits[selection])
+    }
+
+    private var history: [String] { historyText.split(separator: "\n").map(String.init) }
+
+    private func openHit(_ hit: SearchHit) {
+      if !query.contains("\n") {
+        historyText = ([query] + history.filter { $0 != query }).prefix(20).joined(separator: "\n")
+      }
+      open(hit)
     }
   }
 
