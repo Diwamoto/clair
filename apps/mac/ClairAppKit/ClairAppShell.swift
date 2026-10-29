@@ -2671,7 +2671,11 @@ import Observation
       do { try Data().write(to: url, options: .withoutOverwriting) } catch { return fileError(error) }
       store.untitled.insert(rel)
       store.refreshProjectFiles()
-      DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { store.run("tab.open", ["path": .string(rel)]) }
+      // tab.open leaves focus where it was; activate so ⌘N from a terminal lands in the editor, ready to type.
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        store.run("tab.open", ["path": .string(rel)])
+        store.run("tab.activate", ["path": .string(rel)])
+      }
     }
 
     /// First ⌘S of a ⌘N file: save in place, then move it to the chosen name. Cancel leaves it as `NewFileN`.
