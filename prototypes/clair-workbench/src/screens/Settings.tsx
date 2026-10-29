@@ -426,6 +426,7 @@ export function SettingsMain() {
             ) : section === 'エディタ' ? (
               <>
               <DisplayCard terminal={false} />
+              <MarkdownPreviewCard />
               <Card title="編集">
                 <Row
                   first
@@ -654,6 +655,18 @@ function DisplayCard({ terminal }: { terminal: boolean }) {
       ) : (
         <Row last title="行番号を表示" control={<Switch on={lineNumbers} onClick={() => setLineNumbers(!lineNumbers)} />} />
       )}
+    </Card>
+  );
+}
+
+/** 設定 › エディタ「Markdown プレビュー」. Mirrors the native card. */
+function MarkdownPreviewCard() {
+  const [theme, setTheme] = useState<'アプリに合わせる' | 'ライト' | 'ダーク'>('アプリに合わせる');
+  const [size, setSize] = useState<string>('13');
+  return (
+    <Card title="Markdown プレビュー">
+      <Row first title="テーマ" control={<Segmented value={theme} options={['アプリに合わせる', 'ライト', 'ダーク'] as const} onChange={setTheme} />} />
+      <Row last title="文字サイズ" note="本文の大きさ。見出しやコードも同じ比率で変わります。" control={<Segmented value={size} options={FONT_SIZES} onChange={setSize} />} />
     </Card>
   );
 }

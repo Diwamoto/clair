@@ -14,6 +14,12 @@
     let buffers: EditorBuffers
     let root: String?
     let path: String?
+    /// Settings → エディタ → Markdown プレビュー: "ライト" / "ダーク" pin the scheme, anything else follows the app.
+    var theme: String? = nil
+    /// Body text size; headings and code scale with it.
+    var fontSize: Double = 13
+
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
       if let root, let path, MarkdownPreview.isMarkdown(path), case .ready(let m)? = buffers.peek(path) {
@@ -24,7 +30,7 @@
           ScrollView {
             LazyVStack(alignment: .leading, spacing: 10) {
               ForEach(Array(blocks.enumerated()), id: \.offset) { i, b in
-                MarkdownBlockView(block: b.block, root: root, path: path).id(i)
+                MarkdownBlockView(block: b.block, root: root, path: path, scale: fontSize / 13).id(i)
               }
             }
             .padding(20)
@@ -41,6 +47,7 @@
           if ["http", "https", "mailto"].contains(url.scheme?.lowercased() ?? "") { NSWorkspace.shared.open(url) }
           return .handled
         })
+        .environment(\.colorScheme, theme == "ライト" ? .light : theme == "ダーク" ? .dark : colorScheme)
       } else {
         Text(tr("Markdown ファイルを開くとプレビューを表示します。"))
           .font(.system(size: 12)).foregroundStyle(C.textTertiary)
@@ -53,32 +60,33 @@
     let block: MarkdownBlock
     let root: String
     let path: String
+    let scale: Double
 
     var body: some View {
       switch block {
       case .heading(let level, let text):
-        inline(text).font(.system(size: [26, 21, 17, 15, 13, 12][level - 1], weight: .semibold))
+        inline(text).font(.system(size: [26, 21, 17, 15, 13, 12][level - 1] * scale, weight: .semibold))
           .foregroundStyle(C.textPrimary).padding(.top, level <= 2 ? 8 : 4)
         if level <= 2 { Rectangle().fill(C.divider).frame(height: 1) }
       case .paragraph(let text):
-        inline(text).font(.system(size: 13)).foregroundStyle(C.textSecondary)
+        inline(text).font(.system(size: 13 * scale)).foregroundStyle(C.textSecondary)
       case .listItem(let marker, let depth, let text, let checked):
         HStack(alignment: .firstTextBaseline, spacing: 6) {
           if let checked { Image(systemName: checked ? "checkmark.square" : "square").foregroundStyle(C.textTertiary) }
           else { Text(marker).foregroundStyle(C.textTertiary) }
           inline(text)
         }
-        .font(.system(size: 13)).foregroundStyle(C.textSecondary).padding(.leading, CGFloat(depth) * 18)
+        .font(.system(size: 13 * scale)).foregroundStyle(C.textSecondary).padding(.leading, CGFloat(depth) * 18 * scale)
       case .code(let language, let text) where language.lowercased() == "mermaid" && MermaidDiagram.parse(text) != nil:
         MermaidView(diagram: MermaidDiagram.parse(text)!)
       case .code(_, let text):
         ScrollView(.horizontal, showsIndicators: false) {
-          Text(text).font(.system(size: 12, design: .monospaced)).foregroundStyle(C.code).padding(10)
+          Text(text).font(.system(size: 12 * scale, design: .monospaced)).foregroundStyle(C.code).padding(10)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(C.panel, in: RoundedRectangle(cornerRadius: 6))
       case .quote(let text):
-        inline(text).font(.system(size: 13)).foregroundStyle(C.textTertiary)
+        inline(text).font(.system(size: 13 * scale)).foregroundStyle(C.textTertiary)
           .padding(.leading, 12).overlay(alignment: .leading) { Rectangle().fill(C.divider).frame(width: 3) }
       case .table(let header, let rows):
         Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
@@ -88,7 +96,7 @@
             GridRow { ForEach(Array(row.enumerated()), id: \.offset) { inline($1) } }
           }
         }
-        .font(.system(size: 12)).foregroundStyle(C.textSecondary)
+        .font(.system(size: 12 * scale)).foregroundStyle(C.textSecondary)
       case .image(let alt, let source):
         if let url = MarkdownPreview.localImage(source, root: root, file: path) {
           AsyncImage(url: url) { image in image.resizable().scaledToFit().frame(maxWidth: 640, alignment: .leading) }
@@ -96,7 +104,7 @@
             .accessibilityLabel(alt)
         } else {
           // Remote images are never fetched; show what they are instead.
-          Label(alt.isEmpty ? source : alt, systemImage: "photo").font(.system(size: 12)).foregroundStyle(C.textQuaternary)
+          Label(alt.isEmpty ? source : alt, systemImage: "photo").font(.system(size: 12 * scale)).foregroundStyle(C.textQuaternary)
         }
       case .rule:
         Rectangle().fill(C.divider).frame(height: 1)

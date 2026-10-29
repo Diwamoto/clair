@@ -459,6 +459,9 @@
     var onFocus: (() -> Void)? = nil
     var softWrap = false
     var style = EditorStyle()
+    /// Settings → Markdown プレビュー, passed through to `MarkdownPreviewPane`.
+    var previewTheme: String? = nil
+    var previewFontSize: Double = 13
     var debugLine: Int? = nil
     var debugBreakpoints: Set<Int> = []
     var onToggleDebugBreakpoint: ((Int) -> Void)? = nil
