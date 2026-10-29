@@ -6,6 +6,16 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-10-29
+
+### Added
+- Select several explorer rows at once with ⌘-click, ⇧-click and ⇧-arrow keys.
+- Settings > Editor has a Markdown Preview card to pick the preview theme (match app, light or dark) and font size.
+- Markdown, CSV and HTML preview panes now appear as titlebar tabs labelled with their file, and stay open when that file's tab is closed.
+
+### Changed
+- ⌘N opens an empty, unsaved Untitled tab instead of writing a file to disk, and focuses the editor even when pressed from a terminal; the first ⌘S asks for a name.
+
 ## [0.26.1] - 2026-10-26
 
 ### Fixed
@@ -544,7 +554,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.26.1...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.27.0...HEAD
+[0.27.0]: https://github.com/Diwamoto/clair/compare/v0.26.1...v0.27.0
 [0.26.1]: https://github.com/Diwamoto/clair/compare/v0.26.0...v0.26.1
 [0.26.0]: https://github.com/Diwamoto/clair/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/Diwamoto/clair/compare/v0.24.0...v0.25.0
