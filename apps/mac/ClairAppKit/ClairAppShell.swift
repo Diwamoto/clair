@@ -1424,7 +1424,15 @@ import Observation
         else if let p = st.palette { paletteView(p) }
       }
       .animation(.easeOut(duration: 0.09), value: st.palette == nil)
-      .overlay(alignment: .bottomTrailing) { updateToast.onChange(of: store.nameRequest) { nameUntitled() }.padding(.trailing, 16).padding(.bottom, ChromeBudget.statusBar + 12) }
+      // Notices and approval cards share the bottom-right corner (owner, 2026-10-29).
+      .overlay(alignment: .bottomTrailing) {
+        VStack(alignment: .trailing, spacing: 8) {
+          if let a = store.mcpApproval {
+            ApprovalCard(id: a.id, input: a.input, risk: a.risk, deadline: store.mcpApprovalDeadline, decide: store.resolveMCPApproval)
+              .transition(.move(edge: .trailing).combined(with: .opacity))
+          }
+          updateToast
+        }.onChange(of: store.nameRequest) { nameUntitled() }.padding(.trailing, 16).padding(.bottom, ChromeBudget.statusBar + 12) }
       .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: store.update)
       .onChange(of: st.choices["appearance"], initial: true) { _, v in ColorSchemeChoice(setting: v).apply() }
       .onChange(of: st.fileAssociations, initial: true) { _, v in EditorLanguageID.associations = v }
@@ -1468,12 +1476,6 @@ import Observation
       .confirmationDialog(
         Text(pendingTitle), isPresented: Binding(get: { store.pending != nil }, set: { if !$0 { store.pending = nil } })
       ) { pendingActions }
-      .overlay(alignment: .topTrailing) {
-        if let a = store.mcpApproval {
-          ApprovalCard(id: a.id, input: a.input, risk: a.risk, deadline: store.mcpApprovalDeadline, decide: store.resolveMCPApproval)
-            .padding(.top, 56).padding(.trailing, 12).transition(.move(edge: .trailing).combined(with: .opacity))
-        }
-      }
       .animation(.easeOut(duration: 0.18), value: store.mcpApproval?.id)
     }
 
