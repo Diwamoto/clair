@@ -19,6 +19,7 @@ public enum WorkbenchTab: Sendable, Codable, Hashable {
   case file(String)
   case terminal(Int)
   case graph(Int)
+  case preview(Int)
   case diff(WorkbenchDiffTab)
 
   public var dragID: String {
@@ -26,6 +27,7 @@ public enum WorkbenchTab: Sendable, Codable, Hashable {
     case .file(let path): return "file:\(path)"
     case .terminal(let id): return "terminal:\(id)"
     case .graph(let id): return "graph:\(id)"
+    case .preview(let id): return "preview:\(id)"
     case .diff(let target): return "diff:\(target.staged):\(target.untracked):\(target.path)" + (target.against.map { "<\($0)" } ?? "")
     }
   }
@@ -131,6 +133,7 @@ public struct ProjectLayout: Sendable, Codable, Equatable {
         switch leaf.kind {
         case .terminal: return .terminal(leaf.id)
         case .graph: return .graph(leaf.id)
+        case .preview: return .preview(leaf.id)
         default: return nil
         }
       }
@@ -231,7 +234,8 @@ extension WorkbenchState {
     if let activeDiff { return .diff(activeDiff) }
     guard let pane = tree.leaves.first(where: { $0.id == tree.focused }) else { return nil }
     switch pane.kind {
-    case .editor, .preview: return active.flatMap { tabs.contains($0) ? .file($0) : nil }
+    case .editor: return active.flatMap { tabs.contains($0) ? .file($0) : nil }
+    case .preview: return .preview(pane.id)
     case .terminal: return .terminal(pane.id)
     case .graph: return .graph(pane.id)
     }
@@ -249,8 +253,8 @@ extension WorkbenchState {
       guard tree.leaves.contains(where: { $0.id == id && $0.kind == .terminal }) else { return }
       tree.focus(id)
       activeDiff = nil
-    case .graph(let id):
-      guard tree.leaves.contains(where: { $0.id == id && $0.kind == .graph }) else { return }
+    case .graph(let id), .preview(let id):
+      guard tree.leaves.contains(where: { $0.id == id && $0.kind == (tab == .graph(id) ? .graph : .preview) }) else { return }
       tree.focus(id)
       activeDiff = nil
     case .diff(let target):

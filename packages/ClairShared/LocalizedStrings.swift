@@ -284,6 +284,7 @@ extension LocalizedStrings {
     "分割して開く": "Open to the Side",
     "比較対象として選択": "Select for Compare",
     "%@ と比較": "Compare with %@",
+    "プレビュー": "Preview", "プレビュー: %@": "Preview: %@",
     "選択を解除": "Deselect",
     "このファイルをレビュー": "Review This File",
     "新しいファイル…": "New File…",

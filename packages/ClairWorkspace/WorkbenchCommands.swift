@@ -760,6 +760,7 @@ extension CommandRegistry {
         }
         return .ok
       }
+        case .preview: continue  // ponytail: preview tabs are not recorded; reopen with ⌘⇧V
       return .ok
     },
     cmd("tab.reorder", "タブを並べ替え", .read,

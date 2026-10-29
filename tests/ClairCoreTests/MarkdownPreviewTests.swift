@@ -80,6 +80,21 @@ final class MarkdownPreviewTests: XCTestCase {
     XCTAssertEqual(restored, s.tree)
   }
 
+  func testPreviewPaneIsATitlebarTabThatOutlivesItsFileTab() throws {
+    let r = CommandRegistry.workbench
+    var s = WorkbenchState()
+    _ = try r.execute("tab.open", ["path": .string("docs/architecture/pane-layout.md")], state: &s).get()
+    _ = try r.execute("editor.markdownPreview", state: &s).get()
+    let preview = s.tree.leaves.first { $0.kind == .preview }!.id
+    XCTAssertTrue(s.titlebarTabs.contains(.preview(preview)))
+    _ = try r.execute("tab.close", ["path": .string("docs/architecture/pane-layout.md")], state: &s).get()
+    XCTAssertFalse(s.titlebarTabs.contains(.file("docs/architecture/pane-layout.md")))
+    XCTAssertTrue(s.titlebarTabs.contains(.preview(preview)), "the preview stays when its file tab is closed")
+    s.selectTab(.preview(preview))
+    XCTAssertEqual(s.tree.focused, preview)
+    XCTAssertEqual(s.selectedTitlebarTab, .preview(preview))
+  }
+
   func testHTMLPreviewUsesExistingPaneForSameFile() throws {
     let registry = CommandRegistry.workbench
     var state = WorkbenchState()
