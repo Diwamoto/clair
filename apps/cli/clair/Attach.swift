@@ -141,12 +141,28 @@ func runAttach(_ args: [String]) -> Int32 {
   }
   stdinReader.start()
 
-  do {
-    while open, try attach.pump({ try writeAll(STDOUT_FILENO, $0) }) {}
-  } catch {
-    return failAndReport("lost the daemon: \(error)", "terminal: lost the daemon (\(ClairIssueReporter.kind(of: error)))")
+  // A dropped control connection (daemon busy, sleep/wake, socket hiccup) is retried from the same
+  // cursor, which loses nothing; only a daemon that stays unreachable, or one that no longer knows
+  // the session, ends the pane (the GUI then offers to reconnect).
+  // ponytail: a fixed 15 s window; make it adaptive if long sleeps still end panes.
+  var lostSince: Date?
+  while open {
+    do {
+      open = try attach.pump({ try writeAll(STDOUT_FILENO, $0) })
+      lostSince = nil
+    } catch let error as ClairDaemonError where !isRemoteFailure(error) && Date().timeIntervalSince(lostSince ?? Date()) < 15 {
+      if lostSince == nil { lostSince = Date() }
+      Thread.sleep(forTimeInterval: 0.5)
+    } catch {
+      return failAndReport("lost the daemon: \(error)", "terminal: lost the daemon (\(ClairIssueReporter.kind(of: error)))")
+    }
   }
   return 0
+}
+
+private func isRemoteFailure(_ error: ClairDaemonError) -> Bool {
+  if case .remoteFailure = error { return true }
+  return false
 }
 
 /// Closing a pane or quitting Clair also cuts the daemon off, but then the surface hangs up and

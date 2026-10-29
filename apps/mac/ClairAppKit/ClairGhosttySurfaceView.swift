@@ -1,4 +1,6 @@
 import ClairDaemonKit
+import ClairDesignSystem
+import ClairShared
 import ClairGhostty
 import ClairTerminal
 import ClairWorkspace
@@ -418,6 +420,7 @@ import Foundation
       let e = ghosttyApp.takeEvents()
       let exit = exitReported ? nil : e.exitCode
       if exit != nil { exitReported = true }
+      if let exit, exit != 0, launch != nil, session == nil { showDisconnected() }
       if let title = e.title { onTitle?(title) }
       // Web links go to the browser; file paths open in Clair's editor. Nothing else is
       // launched: a cmd-click must not run local files or custom schemes.
@@ -747,6 +750,47 @@ import Foundation
     /// Space-separated escaped paths and a trailing space, so the next word (or another drop) starts clean.
     static func dropText(_ paths: [String]) -> String { paths.map(FileBrowser.shellEscape).joined(separator: " ") + " " }
 
+    // MARK: - Lost connection
+
+    /// The daemon command an agent pane launched with; set by `ClairGhosttySurface`.
+    var agentCommand = false
+    private var disconnectBanner: NSView?
+
+    /// `clair attach` gave up on the daemon (spec §7): offer to reattach by the same key, which
+    /// restores a shell the daemon still runs, or starts the pane's command (e.g. Claude) afresh.
+    private func showDisconnected() {
+      guard disconnectBanner == nil else { return }
+      let key = keptKey
+      Task { @MainActor [weak self] in
+        let live = await Task.detached { key.map(ClairDaemonLauncher.hasLiveShell) ?? false }.value
+        guard let self, self.disconnectBanner == nil, self.exitReported else { return }
+        let label = live ? tr("ターミナルを復元") : self.agentCommand ? tr("エージェントを再起動") : tr("シェルを再起動")
+        let banner = NSHostingView(rootView: DisconnectBanner(action: label) { [weak self] in self?.reconnect() })
+        banner.translatesAutoresizingMaskIntoConstraints = false
+        self.addSubview(banner)
+        NSLayoutConstraint.activate([
+          banner.topAnchor.constraint(equalTo: self.topAnchor, constant: 8),
+          banner.centerXAnchor.constraint(equalTo: self.centerXAnchor),
+          banner.widthAnchor.constraint(lessThanOrEqualTo: self.widthAnchor, constant: -16),
+        ])
+        self.disconnectBanner = banner
+      }
+    }
+
+    /// Replaces the dead surface with a fresh `clair attach` for the same pane.
+    func reconnect() {
+      disconnectBanner?.removeFromSuperview()
+      disconnectBanner = nil
+      Task.detached(priority: .userInitiated) { _ = ClairDaemonLauncher.ensureRunning() }
+      teardownGhosttySurface()
+      exitReported = false
+      guard window != nil else { return }
+      createGhosttySurface()
+      recomputeMetrics()
+      startPollTimerIfNeeded()
+      window?.makeFirstResponder(self)
+    }
+
     /// Surfaces by daemon session key, kept across unmounts so switching Projects doesn't rebuild the
     /// screen from a fresh `clair attach`. Dropped only when the session itself closes.
     // ponytail: hidden surfaces keep their poll timer; pause it off-window if idle CPU with many Projects matters.
@@ -976,6 +1020,25 @@ import Foundation
   }
 
   /// SwiftUI host for `ClairGhosttySurfaceView`.
+  /// Floats over the top of a terminal pane whose `clair attach` lost the daemon.
+  private struct DisconnectBanner: View {
+    private typealias C = DesignTokens.Color
+    let action: String
+    let onTap: () -> Void
+    var body: some View {
+      HStack(spacing: 10) {
+        Image(systemName: "bolt.horizontal.circle").foregroundStyle(C.attention)
+        Text(tr("ターミナルとの接続が切れました")).foregroundStyle(C.textPrimary)
+        Button(action, action: onTap)
+      }
+      .font(.system(size: 12))
+      .padding(.horizontal, 12).padding(.vertical, 8)
+      .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+      .overlay(RoundedRectangle(cornerRadius: 8).stroke(C.divider))
+      .accessibilityElement(children: .contain)
+    }
+  }
+
   public struct ClairGhosttySurface: NSViewRepresentable {
     let launch: (command: String, cwd: String)?
     let onFacts: ((Int, Int?, (title: String, body: String)?) -> Void)?
@@ -1011,6 +1074,7 @@ import Foundation
       v.onOpenFile = onOpenFile
       v.onFocus = onFocus
       v.wantsFocus = focused
+      v.agentCommand = !(launch?.command ?? "").isEmpty
       if let pane { ClairGhosttySurfaceView.register(v, pane: pane) }
       return v
     }

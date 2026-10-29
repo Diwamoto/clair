@@ -133,7 +133,7 @@ extension LocalizedStrings {
     "ペインを右に分割": "Split Pane Right", "ペインを下に分割": "Split Pane Down", "ターミナルを開く": "Open Terminal",
     "ペインのフォーカスを右へ": "Focus Next Pane", "ペインのフォーカスを左へ": "Focus Previous Pane", "ペインにフォーカス": "Focus Pane",
     "ペインを最大化": "Maximize Pane", "分割を均等化": "Equalize Splits", "分割比を変更": "Change Split Ratio",
-    "ペインを移動": "Move Pane", "ペインの表示を入れ替え": "Swap Panes", "ペインを閉じる": "Close Pane", "ペインを開く": "Open Pane",
+    "ペインを移動": "Move Pane", "ペインの表示を入れ替え": "Swap Panes", "ペインを閉じる": "Close Pane", "ターミナルとの接続が切れました": "Lost the connection to this terminal", "ターミナルを復元": "Restore Terminal", "エージェントを再起動": "Restart Agent", "シェルを再起動": "Restart Shell", "ペインを開く": "Open Pane",
     "エージェントを起動": "Launch Agent", "エージェントの状態": "Agent Status", "エージェントの出力": "Agent Output", "エージェント一覧": "List Agents",
     "エージェントのペインを閉じる": "Close Agent Pane", "ファイルを開く": "Open File", "タブを切り替え": "Switch Tab",
     "次のタブ": "Next Tab", "前のタブ": "Previous Tab", "差分を開く": "Open Diff", "差分タブを切り替え": "Switch Diff Tab",
