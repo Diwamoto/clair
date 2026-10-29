@@ -6,6 +6,16 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-10-30
+
+### Added
+- Quick Open (⌘P) lists recently opened files first when empty, and matches space-separated words anywhere in the path.
+- The search field shows your recent queries while it is empty; click one to search again.
+
+### Fixed
+- Terminals ride out brief daemon hiccups instead of ending, and offer to reconnect or restart a pane that was lost.
+- MCP approval cards now stay pinned to the bottom-right alongside notices.
+
 ## [0.27.0] - 2026-10-29
 
 ### Added
@@ -554,7 +564,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.27.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.28.0...HEAD
+[0.28.0]: https://github.com/Diwamoto/clair/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/Diwamoto/clair/compare/v0.26.1...v0.27.0
 [0.26.1]: https://github.com/Diwamoto/clair/compare/v0.26.0...v0.26.1
 [0.26.0]: https://github.com/Diwamoto/clair/compare/v0.25.0...v0.26.0
