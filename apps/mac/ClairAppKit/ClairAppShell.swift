@@ -156,10 +156,7 @@ import Observation
     private var sleepAssertion: IOPMAssertionID = 0
     private var persistenceTask: Task<Void, Never>?
     public private(set) var windowGeneration = 0
-    /// Bumped by `file.new` (⌘N); the shell answers by opening a `NewFileN` named on first save.
-    public private(set) var newFileRequests = 0
-    /// ⌘N files not yet named; their first ⌘S asks for a name (`nameRequest`) instead of saving in place.
-    var untitled: Set<String> = []
+    /// A ⌘N buffer's first ⌘S asks for a name (`state.untitled`) instead of saving in place.
     public var nameRequest: String?
 
     /// Map manually started CLI processes back to the terminal panes Clair already owns.
@@ -461,7 +458,7 @@ import Observation
         if id == "editor.fileSymbols" { showFileSymbols() }
         if id == "editor.problems" { showProblems() }
         if id == "project.choose" { chooseProject() }
-        if id == "file.new" { newFileRequests += 1 }
+        if id == "file.new", let p = state.active { buffers.openEmpty(p) }
         if id == "agent.mention" { mentionSelectionToClaude() }
         if id == "agent.ask" { askAgentAboutSelection() }
         if id == "terminal.askAgent" { askAgentAboutTerminalSelection() }
@@ -716,7 +713,7 @@ import Observation
       if changesWorkingTree { endGitFilesystemMutation(root: root) }
       guard state.project == project, activeRoot == root else { return result.0 }
       if changesWorkingTree {
-        buffers.dropAll(except: state.dirty)
+        buffers.dropAll(except: state.dirty.union(state.untitled))
       }
       if result.0 == nil {
         state.files = result.1.files
@@ -739,7 +736,7 @@ import Observation
 
     private func saveActiveFile() async {
       guard let path = state.active else { _ = run("file.save"); return }
-      if untitled.contains(path) { nameRequest = path; return }
+      if state.untitled.contains(path) { nameRequest = path; return }
       _ = await saveFile(path)
     }
 
@@ -1345,6 +1342,11 @@ import Observation
     @State private var explorerRanks: [String: Int] = [:]
     @State private var explorerTask: Task<Void, Never>?
     @State private var explorerVisibilityTask: Task<Void, Never>?
+    /// ⌘-click / ⇧-click / ⇧↑↓ multi-selection (row ids), its range anchor, and the keyboard cursor. GUI-local.
+    @State private var explorerSel: Set<String> = []
+    @State private var explorerAnchor: String?
+    @State private var explorerCursor: String?
+    @FocusState private var explorerFocused: Bool
     // V05: search panel state (GUI-local).
     @State private var searchQuery = ""
     @State private var replaceText = ""
@@ -1432,11 +1434,6 @@ import Observation
         if st.palette == .search { searchSelection = 0; runSearch() }
       }
       .onChange(of: st.debugNavigationGeneration) { sidebarMode = "ladybug" }
-      // ⌘N: beside the active file; the Project root for none or an ad-hoc `../` tab.
-      .onChange(of: store.newFileRequests) {
-        let folder = st.active.map { ($0 as NSString).deletingLastPathComponent } ?? ""
-        createUntitled(in: folder.hasPrefix("..") ? "" : folder)
-      }
       // A file opened while the concierge chat covers the panes would land hidden behind it.
       .onChange(of: st.active) { if sidebarMode == "concierge" { leaveConcierge() } }
       .onChange(of: store.debugSession?.frames.first) { _, frame in
@@ -1602,8 +1599,9 @@ import Observation
               case .file(let path):
                 fileTab(path, projectActive: active, project: p.name,
                   selected: selectedTab == tab, dirty: dirty.contains(path))
-              case .terminal(let id), .graph(let id):
-                let title = tab == .graph(id) ? tr("コミットグラフ") : terminalTabTitle(p.name, id)
+              case .terminal(let id), .graph(let id), .preview(let id):
+                let title = tab == .graph(id) ? tr("コミットグラフ")
+                  : tab == .preview(id) ? previewTabTitle(p.name, id) : terminalTabTitle(p.name, id)
                 let agent = st.agentSessions.first { $0.project == p.name && $0.pane == id && !$0.status.isExited }
                 FileTabButton(
                   path: tab.dragID, name: title, selected: selectedTab == tab, dirty: false,
@@ -1614,8 +1612,8 @@ import Observation
                   onClose: {
                     if !active { store.run("project.switch", ["name": .string(p.name)]) }
                     store.run("pane.focus", ["id": .int(id)]); store.run("pane.close")
-                  }, icon: tab == .graph(id) ? "point.3.connected.trianglepath.dotted" : "terminal",
-                  providerIcon: tab == .graph(id) ? nil : agent?.title,
+                  }, icon: tab == .graph(id) ? "point.3.connected.trianglepath.dotted" : tab == .preview(id) ? "eye" : "terminal",
+                  providerIcon: tab == .terminal(id) ? agent?.title : nil,
                   onMove: active ? { from in store.run("tab.reorder", ["source": .string(from), "target": .string(tab.dragID)]) } : nil)
                 .help(title)
               case .diff(let target):
@@ -1669,6 +1667,11 @@ import Observation
     }
 
     /// The shell's OSC title; an agent whose title is just its folder name (Codex) shows its profile name instead.
+    private func previewTabTitle(_ project: String, _ pane: Int) -> String {
+      let path = project == st.project ? st.previews[pane] : st.layouts[project]?.previews[pane]
+      return path.map { tr("プレビュー: %@", ($0 as NSString).lastPathComponent) } ?? tr("プレビュー")
+    }
+
     private func terminalTabTitle(_ project: String, _ pane: Int) -> String {
       let osc = st.paneTitles[NotificationLog.paneKey(project, pane)].flatMap { $0.isEmpty ? nil : $0 }
       guard let agent = st.agentSessions.first(where: { $0.project == project && $0.pane == pane }) else { return osc ?? "Terminal" }
@@ -2471,7 +2474,7 @@ import Observation
             ForEach(visibleExplorerRows) { r in
               if let f = r.file {
                 let on = st.active == f.path && !st.settingsOpen
-                treeRow(depth: r.depth, selected: on, action: { store.run("tab.open", ["path": .string(f.path)]) }) {
+                treeRow(depth: r.depth, selected: on || explorerSel.contains(r.id), action: { explorerClick(r.id) { store.run("tab.open", ["path": .string(f.path)]) } }) {
                   Color.clear.frame(width: 10)  // chevron slot: a file lines up with its sibling folders
                   FileIcon.forPath(f.path).image(size: 10, ink: on ? C.textSecondary : C.textTertiary).frame(width: 16)
                   Text(r.label).font(.system(size: 13, weight: on ? .semibold : .regular)).foregroundStyle(Self.changeColor(ranks[f.path]) ?? (r.ignored ? C.textQuaternary : on ? C.textPrimary : C.textSecondary)).lineLimit(1)
@@ -2480,11 +2483,11 @@ import Observation
                     Text(st.dirty.contains(f.path) ? "M" : f.status ?? "M").font(.system(size: 12, weight: .semibold)).foregroundStyle(tint)
                   }
                 }
-                .clairContextMenu(menus) { fileMenu(f.path, tab: false) }
+                .clairContextMenu(menus) { multiMenu(r.id) ?? fileMenu(f.path, tab: false) }
                 .onDrag { dragItem(f.path) }
               } else {
                 let open = st.expanded.contains(r.id)
-                treeRow(depth: r.depth, selected: false, action: { store.run("explorer.toggle", ["path": .string(r.id)]) }) {
+                treeRow(depth: r.depth, selected: explorerSel.contains(r.id), action: { explorerClick(r.id) { store.run("explorer.toggle", ["path": .string(r.id)]) } }) {
                   chevron(open: open)
                   FileIcon.folder(open: open).image(size: 11, ink: C.textTertiary).frame(width: 16)
                   Text(r.label).font(.system(size: 13)).foregroundStyle(Self.changeColor(ranks[r.id]) ?? (r.ignored ? C.textQuaternary : C.textSecondary)).lineLimit(1)
@@ -2493,7 +2496,7 @@ import Observation
                 }
                 .onDrag { dragItem(addedFolder(r.id) ?? r.id) }
                 .clairContextMenu(menus) {
-                  if let folder = addedFolder(r.id) {
+                  if let m = multiMenu(r.id) { m } else if let folder = addedFolder(r.id) {
                     ClairMenuSpec(title: r.label, sub: folder, entries: [
                       .item(open ? tr("折りたたむ") : tr("開く")) { store.run("explorer.toggle", ["path": .string(r.id)]) },
                       .separator,
@@ -2519,10 +2522,54 @@ import Observation
           }
         }
       }.padding(.vertical, 4)
+      .focusable().focusEffectDisabled().focused($explorerFocused)
+      .onKeyPress(keys: [.upArrow, .downArrow]) { press in
+        explorerStep(press.key == .upArrow ? -1 : 1, extend: press.modifiers.contains(.shift)) ? .handled : .ignored
+      }
+      .onChange(of: st.active) { explorerSel = [] }
       .onChange(of: st.dirty) { explorerRanks = Self.changeRanks(st.files, dirty: st.dirty) }
       .alert(tr("レビューを開始できませんでした"), isPresented: Binding(get: { reviewError != nil }, set: { if !$0 { reviewError = nil } })) {
         Button("OK") {}
       } message: { Text(reviewError ?? "") }
+    }
+
+    /// ⌘-click toggles a row, ⇧-click selects the range from the anchor; a plain click clears it and does `plain`.
+    private func explorerClick(_ id: String, plain: () -> Void) {
+      explorerFocused = true
+      let mods = NSEvent.modifierFlags
+      if !mods.contains(.command) && !mods.contains(.shift) { explorerSel = []; explorerAnchor = id; explorerCursor = id; plain(); return }
+      (explorerSel, explorerAnchor) = Self.explorerSelect(visibleExplorerRows.map(\.id), sel: explorerSel, anchor: explorerAnchor, target: id, extend: mods.contains(.shift), toggle: mods.contains(.command))
+      explorerCursor = id
+    }
+
+    private func explorerStep(_ delta: Int, extend: Bool) -> Bool {
+      let ids = visibleExplorerRows.map(\.id)
+      let from = explorerCursor ?? st.active
+      guard !ids.isEmpty else { return false }
+      let i = from.flatMap { ids.firstIndex(of: $0) }.map { min(max($0 + delta, 0), ids.count - 1) } ?? 0
+      (explorerSel, explorerAnchor) = Self.explorerSelect(ids, sel: explorerSel, anchor: explorerAnchor ?? from, target: ids[i], extend: extend, toggle: false)
+      explorerCursor = ids[i]
+      return true
+    }
+
+    nonisolated static func explorerSelect(_ ids: [String], sel: Set<String>, anchor: String?, target: String, extend: Bool, toggle: Bool) -> (Set<String>, String?) {
+      if extend, let a = anchor.flatMap({ ids.firstIndex(of: $0) }), let t = ids.firstIndex(of: target) {
+        return (Set(ids[min(a, t)...max(a, t)]), anchor)
+      }
+      if toggle { return (sel.symmetricDifference([target]), target) }
+      return ([target], target)
+    }
+
+    /// The menu for a right-click inside a multi-selection: acts on every selected row.
+    private func multiMenu(_ id: String) -> ClairMenuSpec? {
+      guard explorerSel.count > 1, explorerSel.contains(id) else { return nil }
+      let paths = visibleExplorerRows.map(\.id).filter(explorerSel.contains)
+      return ClairMenuSpec(title: tr("%@ 項目", "\(paths.count)"), entries: [
+        agentItems(paths),
+        .item(tr("パスをコピー")) { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(paths.joined(separator: "\n"), forType: .string) },
+        .separator,
+        .item(tr("選択を解除")) { explorerSel = [] },
+      ])
     }
 
     private func rebuildExplorer() {
@@ -2663,35 +2710,21 @@ import Observation
       }
     }
 
-    /// ⌘N: an empty `NewFileN` opened at once; the name is chosen on its first save.
-    private func createUntitled(in folder: String) {
-      guard let rel = (1...).lazy.map({ (folder as NSString).appendingPathComponent("NewFile\($0)") })
-        .first(where: { absolute($0).map { !FileManager.default.fileExists(atPath: $0.path) } ?? true }),
-        let url = absolute(rel) else { return }
-      do { try Data().write(to: url, options: .withoutOverwriting) } catch { return fileError(error) }
-      store.untitled.insert(rel)
-      store.refreshProjectFiles()
-      // tab.open leaves focus where it was; activate so ⌘N from a terminal lands in the editor, ready to type.
-      DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-        store.run("tab.open", ["path": .string(rel)])
-        store.run("tab.activate", ["path": .string(rel)])
-      }
-    }
-
-    /// First ⌘S of a ⌘N file: save in place, then move it to the chosen name. Cancel leaves it as `NewFileN`.
+    /// First ⌘S of a ⌘N buffer: write it under the chosen name (beside where ⌘N put it) and show that file instead.
+    /// Cancel keeps the buffer unsaved, with nothing on disk.
     private func nameUntitled() {
       guard let path = store.nameRequest else { return }
       store.nameRequest = nil
       promptName(tr("名前を付けて保存"), initial: (path as NSString).lastPathComponent) { name in
         let rel = ((path as NSString).deletingLastPathComponent as NSString).appendingPathComponent(name)
-        Task {
-          guard await store.saveFile(path) else { return }
-          store.untitled.remove(path)
-          guard name != (path as NSString).lastPathComponent, let from = absolute(path), let to = absolute(rel) else { return }
-          do { try FileManager.default.moveItem(at: from, to: to) } catch { return fileError(error) }
-          closeTabs(under: path)
-          store.refreshProjectFiles()
-          DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { store.run("tab.open", ["path": .string(rel)]) }
+        guard let url = absolute(rel), case .ready(let m)? = store.buffers.peek(path) else { return }
+        do { try Data(m.buffer.snapshot.string().utf8).write(to: url, options: .withoutOverwriting) } catch { return fileError(error) }
+        store.run("tab.close", ["path": .string(path)], confirmed: true)
+        store.state.untitled.remove(path)
+        store.refreshProjectFiles()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+          store.run("tab.open", ["path": .string(rel)])
+          store.run("tab.activate", ["path": .string(rel)])
         }
       }
     }
@@ -2728,11 +2761,13 @@ import Observation
     }
 
     /// "Agent に送る ›": types `@path ` into a running agent terminal of this Project. No Return; the user reviews and sends.
-    private func agentItems(_ path: String) -> ClairMenuEntry {
+    private func agentItems(_ path: String) -> ClairMenuEntry { agentItems([path]) }
+
+    private func agentItems(_ paths: [String]) -> ClairMenuEntry {
       let agents = st.agentSessions.filter { $0.project == st.project && !$0.status.isExited }
       return .item(tr("Agent に送る"), disabled: agents.isEmpty, submenu: agents.map { a in
         .item("\(a.title) · pane \(a.pane)") {
-          if ClairGhosttySurfaceView.send("@\(path) ", toPane: a.pane) { store.run("pane.focus", ["id": .int(a.pane)]) }
+          if ClairGhosttySurfaceView.send(paths.map { "@\($0) " }.joined(), toPane: a.pane) { store.run("pane.focus", ["id": .int(a.pane)]) }
         }
       })
     }
@@ -3192,6 +3227,7 @@ import Observation
     private var activeEditor: EditorPane {
       EditorPane(buffers: store.buffers, root: store.activeRoot, path: st.active,
         softWrap: st.toggles["softWrap"] == true, style: editorStyle,
+        previewTheme: st.choices["previewTheme"], previewFontSize: Double(st.choices["previewFontSize"] ?? "") ?? 13,
         debugLine: store.debugSession?.frames.first(where: { $0.id == store.debugSession?.selectedFrame }).flatMap {
           $0.path == store.activeRoot.map { $0 + "/" + (st.active ?? "") } ? $0.line : nil
         },
@@ -3286,6 +3322,10 @@ import Observation
               fontRow("editor")
               choiceRow(tr("文字サイズ"), "editorFontSize")
               switchRow(tr("行番号を表示"), "lineNumbers")
+            }
+            SettingsCard(title: tr("Markdown プレビュー")) {
+              choiceRow(tr("テーマ"), "previewTheme")
+              choiceRow(tr("文字サイズ"), "previewFontSize", note: tr("本文の大きさ。見出しやコードも同じ比率で変わります。"))
             }
             SettingsCard(title: tr("編集")) {
               switchRow(tr("保存時に整形"), "formatOnSave", note: tr("⌘S のタイミングでフォーマッタを実行します。"))
@@ -4461,7 +4501,8 @@ import Observation
             else if kind == .graph { CommitGraphPane(root: project) }
             else if kind == .preview, let path = editor.previews[id] ?? editor.path, TableFile.separator(path) != nil { TablePane(buffers: editor.buffers, path: path, onEdit: editor.onEdit) }
             else if kind == .preview, let path = editor.previews[id] ?? editor.path, path.lowercased().hasSuffix(".html") || path.lowercased().hasSuffix(".htm") { HTMLPreviewPane(buffers: editor.buffers, root: editor.root, path: path) }
-            else if kind == .preview { MarkdownPreviewPane(buffers: editor.buffers, root: editor.root, path: editor.previews[id] ?? editor.path) }
+            else if kind == .preview { MarkdownPreviewPane(buffers: editor.buffers, root: editor.root, path: editor.previews[id] ?? editor.path,
+              theme: editor.previewTheme, fontSize: editor.previewFontSize) }
             else { editor.inPane(focused: id == focused, onFocus: { if id != focused { onFocus(id) } },
               // Split editors have no pane header; the leftmost one is anchored (`pane.close` replaces it).
               onClose: leftmost ? nil : { run("pane.focus", ["id": .int(id)]); run("pane.close", [:]) }) }

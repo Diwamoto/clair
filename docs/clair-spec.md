@@ -293,6 +293,7 @@ macOS の `NSTextInputClient` は行ローカルの UTF-16 空間で答える(�
 品質 gate とは別に、日常作業に必要な editor 機能として次を持つ(2026-09-25 オーナー決定)。
 
 - Markdown の live preview(editor と並べて表示、編集に追従)。preview / 表の pane は開いたファイルに束縛され、editor が別ファイルに切り替わっても表示を保つ。別ファイルで開くと別 pane になり、同じファイルなら既存 pane に focus する
+- Markdown preview のテーマ(アプリに合わせる / ライト / ダーク)と本文の文字サイズ(見出し・コードも同じ比率)は設定 › エディタで選べる
 - Markdown preview の ```` ```mermaid ```` fence は WebView / JS を使わず native に描画する(flowchart と sequenceDiagram。未対応の図はコードブロックのまま表示)
 - CSV / TSV の表エディタ(preview と同じボタン・⌘⇧V で開き、セル編集は buffer への 1 undo 単位の書き戻し。保存は通常の ⌘S)
 - HTML / HTM のプレビュー(preview と同じボタン・⌘⇧V で開き、未保存 buffer の内容と JavaScript の動作を表示)。相対パスの local file 参照はプレビュー対象ファイルと同じフォルダ内のみ解決できる(`..` や symlink でそのフォルダの外へは出られない)。プレビュー内でのページ遷移は許可しない。JavaScript とリモートリソースはネットワーク通信できる。WebView は非永続のデータストアを使う。明示的にクリックした http/https/mailto リンクは既定のアプリで開く。WebView は editor の入力・描画経路に使用しない
@@ -462,6 +463,7 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   開いた、などで他の pane があれば空の editor は閉じ(ファイルを開くと左端に戻る)、最後の pane を閉じると
   ホーム画面に戻る。ホーム画面だけのとき ⌘W は ⌘Q と同じく確認付きで Clair を終了する
 - file tree、search、Git の sidebar と、pane へ開く補助 view。file tree は対象ファイルを件数で打ち切らずに表示する。gitignore 対象のファイルは暗いグレー(`textQuaternary`)で表示し、検索・quick open には出さない(中身が 1000 件を超える ignored フォルダはビルドキャッシュとみなして出さない)
+- explorer の複数選択: ⌘クリックで行を足し引き、⇧クリックと ⇧↑↓ でアンカーからの範囲を選ぶ(↑↓ は 1 行選択を動かす)。普通のクリックは選択を解いて従来どおり開く / 開閉する。選択内の右クリックは「Agent に送る」(`@パス` をまとめて)・「パスをコピー」(改行区切り)・「選択を解除」。選択は GUI ローカルで、アクティブタブが変わると解ける
 - ファイルブラウザ([ADR-0025](decisions/0025-file-browser-and-agent-file-proposals.md)): activity bar の専用アイコンでサイドバーに Project(root と追加フォルダ)・よく使う項目・場所(ホーム・デスクトップ・書類・ダウンロード)・開いているブラウザを出し、任意のフォルダを Finder のカラム表示でエディタのタブ(`finder:<絶対パス>`)として開く。⌥⌘B(`finder.open`)と explorer のフォルダの「ファイルブラウザで開く」も同じ。場所はアクティブなブラウザタブをその場所へ動かす(⌘クリックは新しいタブ)。サイドバーの「よく使う項目」には、右クリックの「よく使う項目に追加」か行のドロップでフォルダ・ファイルを登録し、項目の右クリックで外す(全ブラウザタブ共通、設定と一緒に保存、AI 不可)。パスバーはルート `/` から選択中の項目までを出す。並べ替え(名前・変更日・サイズ・種類、昇順 / 降順、フォルダは常に上)はタブごとで、各行に変更日時を出す。行はポインタでハイライトする。フォルダは左から右へ列として開き、列が出たときにその 1 階層だけを読む。ファイルを 1 つ選ぶとプレビュー列(サイズ・更新日・パス・テキストの先頭)を出す。テキストは Clair で、それ以外は既定のアプリか「このアプリケーションで開く」で開く。⌘C / ⌘V はファイル URL の pasteboard(macOS の Finder と共通)、⌘⌫ は確認してゴミ箱、⇧⌘. は隠しファイル、↑↓←→ と ↵ で移動と開く。右クリックは開く系・Agent に送る(複数選択は `@パス` をまとめて)・Agent に整理を頼む・ターミナルにパスを入力(フォルダは cd)・コピー系・名前を変更・ゴミ箱
 - TODO: Clair は `~/.clair/todo/*.md`(1 TODO = 1 ファイル、front matter に `title` / `priority`(1–3)/ `due`(YYYY-MM-DD、任意)/ `done`、本文は自由なコンテキスト)を TODO プロジェクトとして持つ。activity bar の TODO アイコンでサイドバーに未完了→優先度→期限順に並べ、行でその md をエディタに開く。サイドバーの「+」で追加、行の丸で完了切替、右クリックで開く・編集(タイトル / 優先度 / 期限をパレット風モーダルで)・完了切替・削除(確認してゴミ箱)。追加・実行は `clair-todo` Agent skill(設定の skill インストールで `clair-agents` / `clair-preview` と一緒に入る)で Agent が行う
 - ファイル(macOS の Finder、explorer、ファイルブラウザ、titlebar のファイル / ブラウザのタブ)を Clair の terminal にドロップすると、shell-escape した絶対パスを入力する(Return は押さない)

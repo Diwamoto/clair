@@ -65,6 +65,14 @@
       XCTAssertLessThan(elapsed, 0.2, "20,000-file explorer model took \(elapsed)s")
     }
 
+    func testExplorerMultiSelection() {
+      let ids = ["a", "b", "c", "d"]
+      XCTAssertEqual(ClairAppShell.explorerSelect(ids, sel: [], anchor: "b", target: "d", extend: true, toggle: false).0, ["b", "c", "d"])
+      XCTAssertEqual(ClairAppShell.explorerSelect(ids, sel: [], anchor: "c", target: "a", extend: true, toggle: false).0, ["a", "b", "c"])
+      XCTAssertEqual(ClairAppShell.explorerSelect(ids, sel: ["a"], anchor: "a", target: "c", extend: false, toggle: true).0, ["a", "c"])
+      XCTAssertEqual(ClairAppShell.explorerSelect(ids, sel: ["a", "c"], anchor: "a", target: "c", extend: false, toggle: true).0, ["a"])
+    }
+
     func testFolderTakesHighestChangeRank() {
       let files = [("a/new.swift", "U"), ("a/b/edit.swift", "M"), ("a/b/gone.swift", "D"), ("c/new.swift", "A"), ("c/typed.swift", nil), ("d/x", nil)]
         .map { WorkbenchFile(path: $0.0, status: $0.1) }
