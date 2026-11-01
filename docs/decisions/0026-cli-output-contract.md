@@ -54,8 +54,9 @@ Goはcontrol planeの候補から外している。現在のrepoにRustコード
 
 Option Aを採る。
 
-- どの呼び出しもstdoutにJSONを1行出す。成功は `{"ok":true,"result":…}`、失敗は `{"ok":false,"error":{"code":…,"message":…}}`。
-- 人が読むときは `--pretty` で同じJSONを字下げして出せる。既定は1行のまま。
+- どの呼び出しもstdoutにJSONを出す。成功は `{"ok":true,"result":…}`、失敗は `{"ok":false,"error":{"code":…,"message":…}}`。
+- 既定は人向けで、字下げし、stdoutが端末かつ `NO_COLOR` がなければ色を付ける。パイプ先では色なしの有効なJSONになる。
+- AI agentとscriptは `--compact` で色なしの1行を受け取る。実行元の自動判定はしない(Clairのterminalでは人もagentも同じ環境で動くため)。
 - `ok` がtrueなのはexit 0のときだけ。exitは1 command error、2 usage、3 Clairまたはdaemonに届かない。
 - 例外は人が読む `help` / `--help` / `-h`、stdoutを占有する `attach` と `mcp serve`、成功時に無出力の `open --wait`。
 - helpと `error.message` は設定の「言語」に従う。JSONのkey、`error.code`、command id、引数名、riskは翻訳しない。

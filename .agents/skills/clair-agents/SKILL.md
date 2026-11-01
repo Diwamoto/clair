@@ -7,8 +7,9 @@ description: Fan work out to parallel child agents in split Clair terminal panes
 
 Works only inside a Clair terminal: `echo $CLAIR_TERMINAL_KEY` must print `<root>#<pane>`, and `clair`
 must be on PATH (Clair → 設定 → AIプロバイダー → `clair` コマンドをインストール).
-Every `clair` call prints one JSON line: `{"ok":true,"result":…}` or `{"ok":false,"error":{"code":…,"message":…}}`;
-exit 0 = ok, 1 = command error, 2 = usage, 3 = Clair not running. Branch on `error.code`: `error.message` follows Clair's language.
+Add `--compact` to every `clair` call: it prints one line of JSON, `{"ok":true,"result":…}` or `{"ok":false,"error":{"code":…,"message":…}}`
+(without it the reply is indented for people). Exit 0 = ok, 1 = command error, 2 = usage, 3 = Clair not running.
+Branch on `error.code`: `error.message` follows Clair's language.
 
 ## 1. Launch children
 

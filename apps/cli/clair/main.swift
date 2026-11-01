@@ -4,10 +4,12 @@ import Foundation
 // V02: `clair open path[:line:col]` / `clair <group> <command> [key=value …]` → running Clair GUI.
 // Output contract: `WorkbenchCLI` (ADR-0026). `attach` and `mcp serve` own stdout, so only they stand outside it.
 let raw = Array(CommandLine.arguments.dropFirst())
-let args = raw.filter { $0 != "--pretty" }
+let args = raw.filter { $0 != "--compact" }
 
 func finish(_ outcome: WorkbenchCLI.Outcome) -> Never {
-  if let output = raw.contains("--pretty") ? outcome.pretty.output : outcome.output { print(output) }
+  // Color only on a terminal, so a pipe still gets valid JSON. https://no-color.org
+  let color = isatty(STDOUT_FILENO) == 1 && (ProcessInfo.processInfo.environment["NO_COLOR"] ?? "").isEmpty
+  if let output = raw.contains("--compact") ? outcome.output : outcome.readable(color: color).output { print(output) }
   exit(outcome.code)
 }
 

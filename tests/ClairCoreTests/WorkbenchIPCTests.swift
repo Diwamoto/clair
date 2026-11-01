@@ -143,12 +143,26 @@ final class WorkbenchIPCTests: XCTestCase {
     XCTAssertFalse(try XCTUnwrap(WorkbenchCLI.run(["state", "snapshot"], call: call).output).contains("_0"))
   }
 
-  func testPrettyIndentsTheSameReplyAndLeavesHelpAlone() {
-    let pretty = run(["pane.splitRight"], reply: .pane(3)).pretty
-    XCTAssertEqual(pretty, WorkbenchCLI.Outcome(output: "{\n  \"ok\" : true,\n  \"result\" : {\n    \"pane\" : 3\n  }\n}", code: 0))
-    XCTAssertEqual(run(["help"], reply: .ok).pretty, run(["help"], reply: .ok))
-    XCTAssertEqual(WorkbenchCLI.Outcome(output: nil, code: 0).pretty.output, nil)
-    XCTAssertEqual(run(["pane.focus", "id"], reply: .ok).pretty.code, 2)
+  func testReadableIndentsTheSameReplyAndLeavesHelpAlone() {
+    let readable = run(["pane.splitRight"], reply: .pane(3)).readable(color: false)
+    XCTAssertEqual(readable, WorkbenchCLI.Outcome(output: "{\n  \"ok\" : true,\n  \"result\" : {\n    \"pane\" : 3\n  }\n}", code: 0))
+    XCTAssertEqual(run(["help"], reply: .ok).readable(color: true), run(["help"], reply: .ok))
+    XCTAssertEqual(WorkbenchCLI.Outcome(output: nil, code: 0).readable(color: true).output, nil)
+    XCTAssertEqual(run(["pane.focus", "id"], reply: .ok).readable(color: false).code, 2)
+  }
+
+  func testColorPaintsTokensWithoutReadingInsideStrings() throws {
+    func paint(_ code: Int, _ text: String) -> String { "\u{1B}[\(code)m\(text)\u{1B}[0m" }
+    XCTAssertEqual(
+      WorkbenchCLI.colored(#"{"a" : true, "b" : null, "c" : -1.5e+2, "d" : false}"#),
+      "{\(paint(36, #""a""#)) : \(paint(35, "true")), \(paint(36, #""b""#)) : \(paint(90, "null")), \(paint(36, #""c""#)) : \(paint(33, "-1.5e+2")), \(paint(36, #""d""#)) : \(paint(35, "false"))}")
+    // Literals, numbers, colons and escaped quotes inside a string stay part of that string.
+    let text = #""true 1 \" : null""#
+    XCTAssertEqual(WorkbenchCLI.colored(text), paint(32, text))
+    // Removing the color gives back JSON that still parses.
+    let colored = try XCTUnwrap(run(["agent.launch"], reply: .text(#"a"b:1"#)).readable(color: true).output)
+    let plain = colored.replacing(#/\x{1B}\[\d+m/#, with: "")
+    XCTAssertEqual((try JSONSerialization.jsonObject(with: Data(plain.utf8)) as? [String: Any])?["result"] as? String, #"a"b:1"#)
   }
 
   func testEveryFailureIsJSONWithItsExitCode() throws {

@@ -17,6 +17,7 @@ public enum Concierge {
     - 作業は子 agent に任せる: `clair agent launch profile=<claude|codex|opencode> prompt="<依頼>" [branch=<名前>]`。互いに独立した作業は別々の branch で並列に起動する。
 
     ## トークン節約のルール(重要)
+    - `clair` は必ず `--compact` を付けて実行する(色なしの1行の JSON になる)。
     - 子 agent の出力を逐一読まない。進み具合は Clair のサイドバーが表示している。
     - 起動したら、どの子に何を任せたかを1〜2行で報告して手を止める。
     - 結果が必要なときだけ、`clair agent status` で終了を確認してから `clair agent output lines=40` で末尾だけ読み、要点を3行以内でまとめる。

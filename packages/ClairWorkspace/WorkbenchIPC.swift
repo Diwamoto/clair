@@ -195,18 +195,35 @@ public enum WorkbenchCLI {
     public let output: String?
     public let code: Int32
 
-    /// `--pretty`: the same reply indented for reading. Help text is not JSON and stays as it is.
-    public var pretty: Outcome {
+    /// The default for people: the same reply indented, colored for a terminal. Help text is not JSON and stays as it is.
+    public func readable(color: Bool) -> Outcome {
       guard let output, let object = try? JSONSerialization.jsonObject(with: Data(output.utf8)),
         let data = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
       else { return self }
-      return Outcome(output: String(decoding: data, as: UTF8.self), code: code)
+      let text = String(decoding: data, as: UTF8.self)
+      return Outcome(output: color ? WorkbenchCLI.colored(text) : text, code: code)
+    }
+  }
+
+  /// ANSI colors for JSON text. A string is matched whole, so nothing inside one is mistaken for a literal.
+  static func colored(_ json: String) -> String {
+    json.replacing(#/"(?:[^"\\]|\\.)*"(\s*:)?|true|false|null|-?\d[\d.eE+-]*/#) { match in
+      func paint(_ code: Int, _ token: Substring) -> String { "\u{1B}[\(code)m\(token)\u{1B}[0m" }
+      let token = match.output.0
+      if let colon = match.output.1 { return paint(36, token.dropLast(colon.count)) + colon }
+      switch token.first {
+      case "\"": return paint(32, token)
+      case "t", "f": return paint(35, token)
+      case "n": return paint(90, token)
+      default: return paint(33, token)
+      }
     }
   }
 
   public typealias Call = (WorkbenchIPCRequest, TimeInterval) throws -> WorkbenchIPCReply
 
-  // Output contract (ADR-0026): one JSON line on stdout, `ok` is true exactly when the exit code is 0.
+  // Output contract (ADR-0026): one JSON reply on stdout, `ok` is true exactly when the exit code is 0.
+  // `Outcome.output` is the `--compact` form, one line for scripts and agents; `readable` is the default.
   // `error.code` and the JSON keys are stable; `error.message` follows the language setting.
   public static func success(_ result: Any = NSNull()) -> Outcome {
     Outcome(output: line(["ok": true, "result": result]), code: 0)
@@ -378,9 +395,9 @@ public enum WorkbenchCLI {
       \(tr("usage:")) \(usage)
              clair agent wait key=<root#pane> [timeout=<s>] | clair finder wait id=<proposal> [timeout=<s>]
              clair mcp serve | clair daemon stop|status
-      \(tr("Every call prints one JSON line: {\"ok\":true,\"result\":…} or {\"ok\":false,\"error\":{\"code\":…,\"message\":…}}."))
+      \(tr("Every call prints one JSON reply: {\"ok\":true,\"result\":…} or {\"ok\":false,\"error\":{\"code\":…,\"message\":…}}."))
       \(tr("Exit 0 ok, 1 command error, 2 usage, 3 Clair not running."))
-      \(tr("--pretty indents the JSON for reading."))
+      \(tr("--compact prints it on one line without color, for AI agents and scripts."))
       \(tr("user-only: not offered to MCP; from a Clair terminal it waits for your approval in Clair."))
 
 
