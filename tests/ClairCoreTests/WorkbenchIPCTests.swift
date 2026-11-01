@@ -143,6 +143,14 @@ final class WorkbenchIPCTests: XCTestCase {
     XCTAssertFalse(try XCTUnwrap(WorkbenchCLI.run(["state", "snapshot"], call: call).output).contains("_0"))
   }
 
+  func testPrettyIndentsTheSameReplyAndLeavesHelpAlone() {
+    let pretty = run(["pane.splitRight"], reply: .pane(3)).pretty
+    XCTAssertEqual(pretty, WorkbenchCLI.Outcome(output: "{\n  \"ok\" : true,\n  \"result\" : {\n    \"pane\" : 3\n  }\n}", code: 0))
+    XCTAssertEqual(run(["help"], reply: .ok).pretty, run(["help"], reply: .ok))
+    XCTAssertEqual(WorkbenchCLI.Outcome(output: nil, code: 0).pretty.output, nil)
+    XCTAssertEqual(run(["pane.focus", "id"], reply: .ok).pretty.code, 2)
+  }
+
   func testEveryFailureIsJSONWithItsExitCode() throws {
     let denied = WorkbenchCLI.run(["tab.next"]) { _, _ in WorkbenchIPCReply(error: CommandError(.denied, "no")) }
     XCTAssertEqual(denied, WorkbenchCLI.Outcome(output: #"{"error":{"code":"denied","message":"no"},"ok":false}"#, code: 1))

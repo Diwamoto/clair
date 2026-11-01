@@ -883,6 +883,7 @@ extension LocalizedStrings {
     "Every call prints one JSON line: {\"ok\":true,\"result\":…} or {\"ok\":false,\"error\":{\"code\":…,\"message\":…}}.":
       "どの呼び出しも JSON を 1 行出力します: {\"ok\":true,\"result\":…} または {\"ok\":false,\"error\":{\"code\":…,\"message\":…}}。",
     "Exit 0 ok, 1 command error, 2 usage, 3 Clair not running.": "終了コード: 0 成功、1 コマンドエラー、2 使い方の誤り、3 Clair が起動していない。",
+    "--pretty indents the JSON for reading.": "--pretty を付けると JSON を読みやすく整形します。",
     "user-only: not offered to MCP; from a Clair terminal it waits for your approval in Clair.":
       "user-only: MCP には公開しません。Clair のターミナルから実行すると Clair での承認を待ちます。",
     // Menu bar titles (ClairAppShell `titles`)

@@ -194,6 +194,14 @@ public enum WorkbenchCLI {
   public struct Outcome: Equatable, Sendable {
     public let output: String?
     public let code: Int32
+
+    /// `--pretty`: the same reply indented for reading. Help text is not JSON and stays as it is.
+    public var pretty: Outcome {
+      guard let output, let object = try? JSONSerialization.jsonObject(with: Data(output.utf8)),
+        let data = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
+      else { return self }
+      return Outcome(output: String(decoding: data, as: UTF8.self), code: code)
+    }
   }
 
   public typealias Call = (WorkbenchIPCRequest, TimeInterval) throws -> WorkbenchIPCReply
@@ -372,6 +380,7 @@ public enum WorkbenchCLI {
              clair mcp serve | clair daemon stop|status
       \(tr("Every call prints one JSON line: {\"ok\":true,\"result\":…} or {\"ok\":false,\"error\":{\"code\":…,\"message\":…}}."))
       \(tr("Exit 0 ok, 1 command error, 2 usage, 3 Clair not running."))
+      \(tr("--pretty indents the JSON for reading."))
       \(tr("user-only: not offered to MCP; from a Clair terminal it waits for your approval in Clair."))
 
 
