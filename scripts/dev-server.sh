@@ -14,8 +14,8 @@ Manage Clair Node/Vite dev servers so agents do not spawn duplicates.
   stop   <pid>                  Stop a previously started dev server.
 
 Examples:
-  dev-server.sh status prototypes/clair-workbench 5173
-  dev-server.sh start  prototypes/clair-workbench 5173
+  dev-server.sh status docs-site 5173
+  dev-server.sh start  docs-site 5173
   dev-server.sh stop   12345
 EOF
 }

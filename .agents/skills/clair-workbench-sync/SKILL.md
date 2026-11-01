@@ -1,22 +1,17 @@
 ---
 name: clair-workbench-sync
-description: Change Clair's UI in the workbench mock (prototypes/clair-workbench) and the Clair UI Design canvas together, in one pass. Use when the user gives UI feedback on the running mock — layout, chrome, navigation, motion, component behaviour — and the change is a design decision, not just a mock detail. Covers editing and republishing the canvas artifact itself. Native Swift work goes through clair-task instead.
+description: Change Clair's UI design on the Clair UI Design canvas — layout, chrome, navigation, motion, component behaviour — when the change is a design decision. Covers editing and republishing the canvas artifact itself. Native Swift work goes through clair-task instead.
 ---
 
-# Clair Workbench Sync
+# Clair Canvas Edit
 
-The Design canvas stays the source of truth for what Clair looks like. The
-workbench mock is where that design gets proven as something you can
-actually operate. This skill exists because those two drift apart in one
-specific way: **an artboard is a single still frame, so it cannot show what
-is shared.** Every artboard draws its own titlebar because it has to; that
-does not mean each screen owns one. Only running the mock reveals that.
+The Design canvas is the source of truth for what Clair looks like. The
+workbench mock that used to sit beside it was removed on 2026-11-01; the name
+of this skill is left over from it.
 
-So the flow is canvas → mock for appearance, and mock → canvas for anything
-the mock proves the canvas got structurally wrong. Both halves land in the
-same pass. Never absorb a design change on the mock side alone and never
-leave the canvas behind "for later" — the next person to read the canvas
-would be reading a lie.
+**An artboard is a single still frame, so it cannot show what is shared.**
+Every artboard draws its own titlebar because it has to; that does not mean
+each screen owns one. Read artboards with that in mind.
 
 Requires the `Artifact` tool for both reading and republishing the canvas,
 so this only runs from Claude Code.
@@ -36,12 +31,10 @@ file paths, component names, commands, and raw tool output as they are.
   `Tokens` — the token reference sheet (colors, 4-step type scale, 3-step
   radius, 7-step spacing, latency budget, chrome budget). `Tokens` is the
   one artboard that defines rules rather than a screen; read it before
-  deciding anything the other artboards do not literally draw.
-- **Workbench mock**: `prototypes/clair-workbench`
-  — Vite + React + TypeScript, a real implementation with state, not an
-  embedded copy of the artboards. Published privately as an Artifact so it
-  can be opened from a phone; `README.md` there records the current URL,
-  the shell structure, and the motion model.
+  deciding anything the other artboards do not literally draw. Above them,
+  the `Current*` boards hold offscreen captures of the shipped app (2026-11-01)
+  and `CurrentTokens` is generated from `packages/ClairDesignSystem`. Where a
+  hand-drawn board disagrees with them, the `Current*` board is right.
 - **Native work** goes through [`clair-task`](../clair-task/SKILL.md).
   This skill never edits `apps/`, `packages/`, or `Package.swift`.
 - `scripts/canvas_edit.py` in this skill directory extracts and repacks the
@@ -52,9 +45,9 @@ file paths, component names, commands, and raw tool output as they are.
 The canvas owns colors, type, spacing, radius, copy, iconography, and what
 each screen contains. Copy those; do not reinterpret them.
 
-Three things a set of still frames cannot express. When the mock needs one,
-derive it from what `Tokens` already states rather than inventing it, and
-say in the report which token you derived it from:
+Three things a set of still frames cannot express. Derive them from what
+`Tokens` already states rather than inventing them, and say in the report
+which token you derived each from:
 
 - **Live states** — hover, focus, empty. `Tokens` defines `surfaceHover`,
   `surfaceActive` and an EMPTY STATE component. Those are the vocabulary.
@@ -67,9 +60,7 @@ say in the report which token you derived it from:
   about one screen. Read it that way.
 
 If the canvas genuinely does not define something and no token covers it,
-**do not invent it in the mock.** Fall back to the nearest thing the canvas
-does define, and report the gap as a gap so the user can fill it on the
-canvas. Silently inventing is the one failure this skill exists to prevent.
+**do not invent it silently.** Report the gap so the user can decide it.
 
 ## Editing the canvas
 
@@ -103,40 +94,15 @@ python3 .agents/skills/clair-workbench-sync/scripts/canvas_edit.py \
 
 ## Workflow
 
-1. Read the canvas fresh (`Artifact`, `action: "read"`). Read the mock
-   source for whatever the feedback touches. Do not change anything yet.
-2. Decide which side each part of the change belongs to, and say so before
-   working. A visual value the canvas already states → mock only. A
-   structural or navigational decision → both. Something the canvas does
-   not define → report the gap; do not invent.
-3. Apply the mock change. Values come from `tokens.ts` (which mirrors the
-   `Tokens` artboard); if a value is missing there, it belongs in the
-   canvas first.
-4. Apply the matching canvas edit in the same pass, per **Editing the
-   canvas** above.
-5. Verify the mock in a browser. `npx vite --host --port 5174` from the
-   prototype directory — `scripts/dev-server.sh` does not reliably start
-   this project. Then, and this matters:
-   - The Browser pane may be **hidden**, in which case screenshots return
-     a stale frame and `setTimeout` is throttled. Confirm behaviour with
-     `read_page` / `get_page_text` / `javascript_tool`, not screenshots
-     alone, and never conclude a timer is broken from a hidden pane.
-   - Changing only the hash does **not** reload. Navigate with a
-     cache-busting query (`?r=2#/ide`) after editing source.
-   - Check every screen the change can reach, not just the obvious one.
-6. `npm run artifact` (typecheck + build + emit `dist/artifact.html`) and
-   `git diff --check`.
-7. Commit the mock in the parent Clair repository. Branch first if on
-   `master`.
-8. Republish both: the mock with `Artifact` on
-   `prototypes/clair-workbench/dist/artifact.html` (same path keeps the
-   same URL), and the canvas as above. Stop any dev server you started.
-9. Report in Japanese: what changed in the mock, what changed on the
-   canvas and in which artboards, any judgment call you made and why, any
-   gap you found and left for the canvas, and what you verified. **Always
-   end the report with both artifact links** (mock and canvas, each as a
-   markdown link), even when the URL did not change — the user reads this
-   from a phone and needs the link right there, not something to go dig up.
+1. Read the canvas fresh (`Artifact`, `action: "read"`). Do not change
+   anything yet.
+2. Say which artboards the change touches. Something the canvas does not
+   define → report the gap; do not invent.
+3. Apply the canvas edit per **Editing the canvas** above and republish.
+4. Report in Japanese: what changed and in which artboards, any judgment
+   call you made and why, and any gap you left open. **Always end the report
+   with the canvas link** as a markdown link, even when the URL did not
+   change — the user reads this from a phone and needs the link right there.
 
 ## Reporting judgment calls
 

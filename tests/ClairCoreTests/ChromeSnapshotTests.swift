@@ -7,7 +7,7 @@
   @testable import ClairAppKit
 
   /// U04 mock comparison aid: `CLAIR_SNAPSHOT=1 swift test --filter ChromeSnapshotTests` renders the shell offscreen to /tmp/cmp/native.png
-  /// (a Workbench mock screenshot goes beside it as mock.png). Skipped otherwise; it asserts nothing.
+  /// (a reference screenshot goes beside it as mock.png). Skipped otherwise; it asserts nothing.
   @MainActor final class ChromeSnapshotTests: XCTestCase {
     func fixture(_ root: String, _ files: [String: String]) throws {
       for (p, c) in files {

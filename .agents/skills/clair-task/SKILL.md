@@ -1,6 +1,6 @@
 ---
 name: clair-task
-description: Implement a change the owner asks for in Clair — a direct request or a GitHub issue — following Clair's implementation guidelines end to end: read the spec and relevant ADRs, implement inline under ponytail, keep the Design canvas and workbench mock ahead of native UI, verify proportionally (including running the real app when behaviour is visible), and commit only this session's changes. Reports in Japanese. Not for releases (clair-release) or pure mock/canvas design work (clair-workbench-sync).
+description: Implement a change the owner asks for in Clair — a direct request or a GitHub issue — following Clair's implementation guidelines end to end: read the spec and relevant ADRs, implement inline under ponytail, keep the Design canvas ahead of native UI, verify proportionally (including running the real app when behaviour is visible), and commit only this session's changes. Reports in Japanese. Not for releases (clair-release) or pure canvas design work (clair-workbench-sync).
 ---
 
 # Clair task
@@ -48,11 +48,10 @@ operation, or deletion of user work — ask first for each.
   Mark deliberate shortcuts with a `ponytail:` comment naming the ceiling and
   the upgrade path. Never cut corners on trust-boundary validation, error
   handling that prevents data loss, security, or accessibility.
-- **Canvas and mock lead native UI.** A change to how Clair looks or behaves
+- **The canvas leads native UI.** A change to how Clair looks or behaves
   on screen that the Design canvas does not already draw goes through
-  [`clair-workbench-sync`](../clair-workbench-sync/SKILL.md) first (mock and
-  canvas in one pass), then native. A value the canvas already states needs
-  no sync.
+  [`clair-workbench-sync`](../clair-workbench-sync/SKILL.md) first, then
+  native. A value the canvas already states needs no sync.
 - **Keep docs true.** When the change alters a contract, update
   `docs/clair-spec.md` in the same commit. A new product, safety,
   compatibility, or cross-component decision gets an ADR under
@@ -76,8 +75,7 @@ operation, or deletion of user work — ask first for each.
    - real subprocess / PTY / Ghostty: `make test-integration` or a filter of it;
    - visible behaviour: run the app and look at it. Reuse a running
      `make dev` if one is up; if another session owns it, do not rebuild the
-     bundle under it — render the affected view offscreen or ask. Mock:
-     `npx vite --port 5174` in `prototypes/clair-workbench`;
+     bundle under it — render the affected view offscreen or ask;
    - before committing a larger slice: `make foundation` / `make lint`.
    Stop every server or app you started.
 5. **Commit** with [`session-commit`](../session-commit/SKILL.md): only this
@@ -100,8 +98,8 @@ Ask before:
 
 - changing product scope, acceptance criteria, a security boundary, public
   protocol, migration guarantee, or an accepted ADR;
-- a UI state neither the canvas nor the mock defines, when building it needs
-  a design choice;
+- a UI state the canvas does not define, when building it needs a design
+  choice;
 - Apple Team ID, certificates, APNs keys, signing, device registration,
   TestFlight, or another account-side action;
 - pushing, opening/updating a PR or issue, publishing, deploying, or

@@ -38,12 +38,9 @@ existing environment when one is already running.
 - **iOS app**: `make dev-ios` launches it in a Simulator.
 - **Swift tests**: `make test` for the fast core/app unit tests,
   `make test-integration` for the slow real-subprocess/PTY/daemon tests.
-- **Workbench mock**: lives in `prototypes/clair-workbench`. Use
-  `scripts/dev-server.sh` to start or reuse its local dev server (default port
-  `5173`). Do not run `npm run dev` directly unless you are certain no server is
-  already listening.
-- **Docs site**: lives in `docs-site`. Use `scripts/dev-server.sh` for the same
-  port-reuse behavior.
+- **Docs site**: lives in `docs-site`. Use `scripts/dev-server.sh` to start or
+  reuse its local dev server (default port `5173`). Do not run `npm run dev`
+  directly unless you are certain no server is already listening.
 
 When you start a long-running environment, track it and stop it at the end of
 the task unless the user explicitly asks to keep it running. Do not leave orphan

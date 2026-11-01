@@ -2,8 +2,8 @@
 ///
 /// Every value under `DesignTokens` is transcribed, not chosen, from
 /// `docs/plans/clair-ui-implementation-checklist.md` §2 ("Design
-/// tokens"), which is itself a frozen machine-copy of
-/// `prototypes/clair-workbench/src/tokens.ts`. Do not add a token here that
+/// tokens"), a frozen machine-copy of the since-removed workbench mock's
+/// tokens. Do not add a token here that
 /// the checklist does not define, and do not reach for a `native` alternative
 /// (e.g. a system color) in place of a value the checklist gives explicitly.
 ///
