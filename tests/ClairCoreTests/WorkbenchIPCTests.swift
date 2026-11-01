@@ -1,3 +1,4 @@
+import ClairShared
 import Foundation
 import XCTest
 
@@ -108,6 +109,92 @@ final class WorkbenchIPCTests: XCTestCase {
       XCTAssertEqual(req.input, ["key": .string("/r#3")], id)
     }
     XCTAssertEqual(WorkbenchIPCRequest(command: "tab.open", input: ["parent": .string("x")], caller: "/r#2").callerAsParent().input["parent"], .string("x"))
+  }
+
+  private func decoded(_ outcome: WorkbenchCLI.Outcome) throws -> [String: Any] {
+    try XCTUnwrap(JSONSerialization.jsonObject(with: Data(XCTUnwrap(outcome.output).utf8)) as? [String: Any])
+  }
+
+  private func run(_ args: [String], reply: CommandResult) -> WorkbenchCLI.Outcome {
+    WorkbenchCLI.run(args) { _, _ in WorkbenchIPCReply(result: reply) }
+  }
+
+  func testOutputHasOneShapeWithoutEnumEncoding() throws {
+    XCTAssertEqual(run(["tab.next"], reply: .ok), WorkbenchCLI.Outcome(output: #"{"ok":true,"result":null}"#, code: 0))
+    XCTAssertEqual(run(["pane.splitRight"], reply: .pane(3)).output, #"{"ok":true,"result":{"pane":3}}"#)
+    XCTAssertEqual(run(["agent.launch"], reply: .text("/p#7")).output, #"{"ok":true,"result":"/p#7"}"#)
+    XCTAssertEqual(run(["finder.propose"], reply: .text("id-1")).output, #"{"ok":true,"result":"id-1"}"#)
+    XCTAssertEqual(run(["finder.proposal", "id=a"], reply: .text(#"{"state":"pending"}"#)).output, #"{"ok":true,"result":{"state":"pending"}}"#)
+    // Only finder.* answers in JSON text; agent output that looks like JSON stays a string.
+    XCTAssertEqual(run(["agent.output"], reply: .text("[1]")).output, #"{"ok":true,"result":"[1]"}"#)
+    let projects = try decoded(run(["project.list"], reply: .projects(active: "a", projects: [])))["result"] as? [String: Any]
+    XCTAssertEqual(projects?["active"] as? String, "a")
+    let context = try decoded(run(["editor.context"], reply: .diagnostics([])))["result"]
+    XCTAssertEqual(context as? [String], [])
+    XCTAssertFalse(try XCTUnwrap(run(["state.snapshot"], reply: .snapshot(WorkbenchState())).output).contains("_0"))
+  }
+
+  func testRunRendersRepliesFromARealSocket() throws {
+    let (_, url, _) = try serve()
+    let call: WorkbenchCLI.Call = { try WorkbenchIPC.call($0, socket: url, timeout: $1) }
+    XCTAssertEqual(WorkbenchCLI.run(["project", "list"], call: call).code, 0)
+    XCTAssertEqual(try decoded(WorkbenchCLI.run(["project", "list"], call: call))["ok"] as? Bool, true)
+    XCTAssertEqual(WorkbenchCLI.run(["no.such"], call: call), WorkbenchCLI.Outcome(output: #"{"error":{"code":"unknownCommand","message":"no.such"},"ok":false}"#, code: 1))
+    XCTAssertFalse(try XCTUnwrap(WorkbenchCLI.run(["state", "snapshot"], call: call).output).contains("_0"))
+  }
+
+  func testEveryFailureIsJSONWithItsExitCode() throws {
+    let denied = WorkbenchCLI.run(["tab.next"]) { _, _ in WorkbenchIPCReply(error: CommandError(.denied, "no")) }
+    XCTAssertEqual(denied, WorkbenchCLI.Outcome(output: #"{"error":{"code":"denied","message":"no"},"ok":false}"#, code: 1))
+    XCTAssertEqual(run(["pane.focus", "id"], reply: .ok).code, 2)
+    XCTAssertEqual(try decoded(run([], reply: .ok))["ok"] as? Bool, false)
+    for (error, code) in [(WorkbenchIPCError.notRunning, "notRunning"), (.badMessage, "ipcFailure")] {
+      let down = WorkbenchCLI.run(["tab.next"]) { _, _ in throw error }
+      XCTAssertEqual(down.code, 3)
+      XCTAssertEqual((try decoded(down)["error"] as? [String: Any])?["code"] as? String, code)
+    }
+  }
+
+  func testWaitsExitByOutcomeAndKeepTheLastState() throws {
+    XCTAssertEqual(run(["agent.wait", "key=/r#1"], reply: .text("exited 2")).output, #"{"ok":true,"result":"exited 2"}"#)
+    let timedOut = run(["agent", "wait", "key=/r#1", "timeout=-1"], reply: .text("running"))
+    XCTAssertEqual(timedOut.code, 1)
+    XCTAssertEqual((try decoded(timedOut)["error"] as? [String: Any])?["code"] as? String, "timeout")
+    XCTAssertEqual(try decoded(timedOut)["result"] as? String, "running")
+    XCTAssertEqual(run(["finder.wait", "id=a"], reply: .text(#"{"state":"applied"}"#)).code, 0)
+    let rejected = run(["finder.wait", "id=a"], reply: .text(#"{"state":"rejected"}"#))
+    XCTAssertEqual(rejected.code, 1)
+    XCTAssertEqual((try decoded(rejected)["error"] as? [String: Any])?["code"] as? String, "rejected")
+    XCTAssertEqual((try decoded(rejected)["result"] as? [String: Any])?["state"] as? String, "rejected")
+  }
+
+  func testOpenWaitIsSilentOnSuccess() {
+    var calls = 0
+    let done = WorkbenchCLI.run(["open", "--wait", "/x.md"]) { request, _ in
+      calls += 1
+      return WorkbenchIPCReply(result: request.command == "file.isOpen" ? .text("closed") : .ok)
+    }
+    XCTAssertEqual(done, WorkbenchCLI.Outcome(output: nil, code: 0))
+    XCTAssertEqual(calls, 2)
+  }
+
+  func testHelpFlagWorksAtAnyDepth() {
+    XCTAssertEqual(run(["agent", "launch", "--help"], reply: .ok), WorkbenchCLI.Outcome(output: WorkbenchCLI.help("agent launch"), code: 0))
+    XCTAssertEqual(run(["help", "agent", "launch"], reply: .ok).output, WorkbenchCLI.help("agent launch"))
+    XCTAssertEqual(run(["-h"], reply: .ok).output, WorkbenchCLI.help())
+  }
+
+  func testMessagesFollowTheSavedLanguageButCodesDoNot() throws {
+    let file = URL.temporaryDirectory.appending(path: "clair-lang-\(UUID().uuidString.prefix(8)).json")
+    addTeardownBlock { try? FileManager.default.removeItem(at: file); ClairLanguage.current = .english }
+    try Data(#"{"choices":{"language":"日本語"}}"#.utf8).write(to: file)
+    WorkbenchCLI.loadLanguage(from: file)
+    XCTAssertTrue(WorkbenchCLI.help().hasPrefix("使い方: clair open"))
+    let down = WorkbenchCLI.run(["tab.next"]) { _, _ in throw WorkbenchIPCError.notRunning }
+    XCTAssertEqual(down.output, #"{"error":{"code":"notRunning","message":"Clair が起動していません"},"ok":false}"#)
+    XCTAssertEqual(CommandRegistry.workbench.execute("pane.splitRight", ["x": .int(1)], state: &Host().state), .failure(CommandError(.invalidInput, "不明な引数です: x")))
+    WorkbenchCLI.loadLanguage(from: file.appendingPathExtension("missing"))
+    XCTAssertEqual(ClairLanguage.current, .english)
   }
 
   func testHelpListsCommandsWithArguments() {

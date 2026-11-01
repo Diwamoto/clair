@@ -190,6 +190,122 @@ public final class WorkbenchIPCServer: @unchecked Sendable {
 // ponytail: col is parsed but dropped (the editor reveal is line-only); a file literally named `x:12` needs `clair file open path=…`;
 // value inference can't force a numeric-looking string, add `key:=json` when a string param needs it.
 public enum WorkbenchCLI {
+  /// What one invocation leaves behind: a line for stdout (nil = silent) and the exit code.
+  public struct Outcome: Equatable, Sendable {
+    public let output: String?
+    public let code: Int32
+  }
+
+  public typealias Call = (WorkbenchIPCRequest, TimeInterval) throws -> WorkbenchIPCReply
+
+  // Output contract (ADR-0026): one JSON line on stdout, `ok` is true exactly when the exit code is 0.
+  // `error.code` and the JSON keys are stable; `error.message` follows the language setting.
+  public static func success(_ result: Any = NSNull()) -> Outcome {
+    Outcome(output: line(["ok": true, "result": result]), code: 0)
+  }
+
+  /// exit 1 command error, 2 usage, 3 Clair unreachable. `result` is the last state a wait saw.
+  public static func failure(_ code: String, _ message: String, exit: Int32, result: Any? = nil) -> Outcome {
+    var object: [String: Any] = ["ok": false, "error": ["code": code, "message": message]]
+    object["result"] = result
+    return Outcome(output: line(object), code: exit)
+  }
+
+  public static func usageFailure(_ usage: String) -> Outcome { failure("usage", tr("usage:") + " " + usage, exit: 2) }
+
+  public static var daemonNotRunning: Outcome { failure("notRunning", tr("The Clair daemon is not running"), exit: 3) }
+
+  private static func line(_ object: [String: Any]) -> String {
+    String(decoding: try! JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes]), as: UTF8.self)
+  }
+
+  /// The reply's value without Swift's enum encoding (`{"text":{"_0":"x"}}` → `"x"`); the wire format stays as it is.
+  private static func payload(_ result: CommandResult, command: String) -> Any {
+    switch result {
+    case .ok: return NSNull()
+    case .pane(let pane): return ["pane": pane]
+    // finder.* answers in JSON text or a bare proposal id.
+    case .text(let text) where command.hasPrefix("finder."):
+      return (try? JSONSerialization.jsonObject(with: Data(text.utf8))) ?? text
+    default:
+      guard let data = try? JSONEncoder().encode(result), let tagged = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+        let value = tagged.values.first
+      else { return NSNull() }
+      return unwrapped(value)
+    }
+  }
+
+  private static func unwrapped(_ value: Any) -> Any {
+    if let object = value as? [String: Any] {
+      if object.count == 1, let only = object["_0"] { return unwrapped(only) }
+      return object.mapValues(unwrapped)
+    }
+    return (value as? [Any])?.map(unwrapped) ?? value
+  }
+
+  private static func outcome(_ reply: WorkbenchIPCReply, command: String) -> Outcome {
+    if let error = reply.error { return failure(error.code.rawValue, error.message, exit: 1) }
+    return success(payload(reply.result ?? .ok, command: command))
+  }
+
+  /// Every call except the two that own stdout (`attach`, `mcp serve`) and `daemon`, which needs the daemon client.
+  public static func run(_ arguments: [String], call: Call = { try WorkbenchIPC.call($0, timeout: $1) }) -> Outcome {
+    var args = arguments
+    if let flag = args.firstIndex(where: { $0 == "--help" || $0 == "-h" }) {
+      return Outcome(output: help(args[..<flag].joined(separator: " ")), code: 0)
+    }
+    if args.first == "help" { return Outcome(output: help(args.dropFirst().joined(separator: " ")), code: 0) }
+    // `clair open --wait <path>` ($VISUAL / git editor): returns once that file has no tab in any open Project.
+    let wait = args.first == "open" && args.count == 3 && args[1] == "--wait"
+    if wait { args.remove(at: 1) }
+    guard let request = parse(args) else { return usageFailure(usage) }
+    do {
+      if request.command == "agent.wait" || request.command == "finder.wait" { return try poll(request, call: call) }
+      let reply = try call(request, 90)  // may wait on a GUI approval card (60 s)
+      guard wait, reply.error == nil else { return outcome(reply, command: request.command) }
+      let check = WorkbenchIPCRequest(command: "file.isOpen", input: ["path": request.input["path"]!], caller: request.caller)
+      // ponytail: 0.5 s polling like agent.wait; a GUI push on tab close if latency or IPC load matters.
+      while case .text("open")? = try call(check, 5).result { Thread.sleep(forTimeInterval: 0.5) }
+      // As $VISUAL (Ctrl+G in Claude) stdout lands in the caller's terminal, so success prints nothing.
+      return Outcome(output: nil, code: 0)
+    } catch {
+      let down = (error as? WorkbenchIPCError) == .notRunning
+      return failure(down ? "notRunning" : "ipcFailure", down ? tr("Clair is not running") : "\(error)", exit: 3)
+    }
+  }
+
+  /// V16 `clair agent wait key=<root#pane>`: until that delegated agent exits. ADR-0025 `clair finder wait id=<proposal>`:
+  /// until the user applies or rejects it (rejected exits 1). `timeout=<s>` (default 1800) exits 1 too. Client-side: one IPC call stays short.
+  private static func poll(_ wait: WorkbenchIPCRequest, call: Call) throws -> Outcome {
+    let agent = wait.command == "agent.wait"
+    let deadline = Date().addingTimeInterval(TimeInterval(wait.input["timeout"]?.int ?? 1800))
+    var request = wait
+    request.command = agent ? "agent.status" : "finder.proposal"
+    request.input["timeout"] = nil
+    while true {
+      let reply = try call(request, 5)
+      guard reply.error == nil, let result = reply.result else { return outcome(reply, command: request.command) }
+      let text = { if case .text(let t) = result { t } else { "" } }()
+      let last = payload(result, command: request.command)
+      if agent ? text.hasPrefix("exited") : !text.contains(#""state":"pending""#) {
+        if agent || text.contains(#""state":"applied""#) { return success(last) }
+        return failure("rejected", tr("The proposal was not applied"), exit: 1, result: last)
+      }
+      if Date() > deadline { return failure("timeout", tr("Timed out waiting"), exit: 1, result: last) }
+      Thread.sleep(forTimeInterval: 1)
+    }
+  }
+
+  /// The language chosen in Settings (GUI not needed: read from its saved workspace). Unreadable means the default.
+  public static func loadLanguage(
+    from url: URL = ProcessInfo.processInfo.environment["CLAIR_WORKSPACE_FILE"].map { URL(fileURLWithPath: $0) }
+      ?? ClairChannel.current.dataURL.appending(path: "workspace.json")
+  ) {
+    struct Saved: Decodable { let choices: [String: String]? }
+    let saved = (try? Data(contentsOf: url)).flatMap { try? JSONDecoder().decode(Saved.self, from: $0) }
+    ClairLanguage.current = ClairLanguage(rawValue: saved?.choices?["language"] ?? "") ?? .english
+  }
+
   public static func parse(_ args: [String]) -> WorkbenchIPCRequest? {
     var args = args
     guard var first = args.first else { return nil }
@@ -238,6 +354,8 @@ public enum WorkbenchCLI {
     "finder.open path", "finder.reveal path", "finder.propose folder", "finder.addFavorite path", "finder.removeFavorite path",
   ]
 
+  static let usage = "clair open [--wait] <path[:line[:col]]> | clair preview <html-path> | clair reveal <path> | clair <group> <command> [key=value ...] | clair help [group]"
+
   /// `clair help [group]`: every registry command a `clair <group> <command>` call can name, with its arguments.
   public static func help(_ prefix: String = "", registry: CommandRegistry = .workbench) -> String {
     let rows = registry.commands.filter { $0.id.hasPrefix(prefix.replacingOccurrences(of: " ", with: ".")) }.sorted { $0.id < $1.id }.map { d -> String in
@@ -249,11 +367,12 @@ public enum WorkbenchCLI {
       return ([d.id.replacingOccurrences(of: ".", with: " ")] + params).joined(separator: " ") + "\n    \(tr(d.title)) — \(risk)\(d.aiAvailable ? "" : ", user-only")"
     }
     return """
-      usage: clair open [--wait] <path[:line[:col]]> | clair preview <html-path> | clair reveal <path> | clair <group> <command> [key=value ...]
+      \(tr("usage:")) \(usage)
              clair agent wait key=<root#pane> [timeout=<s>] | clair finder wait id=<proposal> [timeout=<s>]
-             clair mcp serve | clair daemon stop|status | clair help [group]
-      Every call prints one JSON reply; exit 0 ok, 1 command error, 2 usage, 3 Clair not running.
-      user-only: not offered to MCP; from a Clair terminal it waits for your approval in Clair.
+             clair mcp serve | clair daemon stop|status
+      \(tr("Every call prints one JSON line: {\"ok\":true,\"result\":…} or {\"ok\":false,\"error\":{\"code\":…,\"message\":…}}."))
+      \(tr("Exit 0 ok, 1 command error, 2 usage, 3 Clair not running."))
+      \(tr("user-only: not offered to MCP; from a Clair terminal it waits for your approval in Clair."))
 
 
       """ + rows.joined(separator: "\n")

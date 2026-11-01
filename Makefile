@@ -17,7 +17,7 @@ dev: ## Build and launch the Clair macOS app (Ctrl-C to stop). Sessions share on
 dev-daemon-restart: ## Rebuild and restart the shared dev daemon; running `make dev` sessions bring it back.
 	@swift build --package-path . --product ClairDaemon
 	@swift build --package-path . --product clair
-	@CLAIR_CHANNEL=dev .build/arm64-apple-macosx/debug/clair daemon stop || true
+	@CLAIR_CHANNEL=dev .build/arm64-apple-macosx/debug/clair daemon stop >/dev/null 2>&1 || true
 
 dev-ios: ## Build and launch Clair Mobile in an iOS Simulator.
 	@./scripts/run-mobile-simulator.sh

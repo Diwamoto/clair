@@ -449,11 +449,11 @@ public struct CommandRegistry: Sendable {
 
   private static func validate(_ input: CommandInput, _ params: [CommandParam]) throws(CommandError) {
     for key in input.keys where !params.contains(where: { $0.name == key }) {
-      throw CommandError(.invalidInput, "unknown argument \(key)")
+      throw CommandError(.invalidInput, tr("unknown argument %@", key))
     }
     for p in params {
       guard let v = input[p.name] else {
-        if p.required { throw CommandError(.invalidInput, "missing \(p.name)") }
+        if p.required { throw CommandError(.invalidInput, tr("missing %@", p.name)) }
         continue
       }
       let ok: Bool
@@ -463,7 +463,7 @@ public struct CommandRegistry: Sendable {
       case .double: ok = v.double != nil
       case .bool: ok = v.bool != nil
       }
-      if !ok { throw CommandError(.invalidInput, "\(p.name) must be \(p.kind.rawValue)\(p.allowed.map { " in \($0)" } ?? "")") }
+      if !ok { throw CommandError(.invalidInput, tr("%@ must be %@", p.name, "\(p.kind.rawValue)\(p.allowed.map { " in \($0)" } ?? "")")) }
     }
   }
 }

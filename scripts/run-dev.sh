@@ -22,7 +22,7 @@ live_sessions() {
     done
 }
 
-daemon_up() { "$bin_dir/clair" daemon status --directory "$dev_dir" 2>/dev/null; }
+daemon_up() { "$bin_dir/clair" daemon status --directory "$dev_dir" >/dev/null 2>&1; }
 
 # Starts a daemon unless one answers. Two sessions racing is harmless: the daemon's lock admits one.
 ensure_daemon() {
@@ -45,7 +45,7 @@ stop_all() {
     if [[ -n "$(live_sessions)" ]]; then
         printf 'dev: other dev sessions remain; leaving the daemon running\n'
     else
-        "$bin_dir/clair" daemon stop --directory "$dev_dir" 2>/dev/null || true
+        "$bin_dir/clair" daemon stop --directory "$dev_dir" >/dev/null 2>&1 || true
         [[ -n "$daemon_pid" ]] && wait "$daemon_pid" 2>/dev/null || true
     fi
     printf 'dev: stopped\n'

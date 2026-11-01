@@ -314,7 +314,7 @@ macOS の `NSTextInputClient` は行ローカルの UTF-16 空間で答える(�
 見た目の基本として次を持つ(2026-09-26 オーナー決定)。
 
 - カラースキーム: app chrome、editor の syntax 色、terminal の色を 1 つの scheme として切り替える。同梱の dark / light と、OS の外観への追従を持つ。scheme は Clair 同梱の定義だけで、VS Code テーマ互換や外部テーマの読み込みは約束しない
-- 表示言語(2026-09-30 オーナー依頼): Mac app の UI は English(既定)と日本語を持ち、設定 › 一般「言語」で再起動なしに切り替える。command id と agent 向け skill 本文は翻訳しない
+- 表示言語(2026-09-30 オーナー依頼): Mac app の UI は English(既定)と日本語を持ち、設定 › 一般「言語」で再起動なしに切り替える。`clair` CLI の help と error message も同じ設定に従う(§9)。command id と agent 向け skill 本文は翻訳しない
 - 括弧の色分け(2026-09-29 オーナー決定): `()` `[]` `{}` を入れ子の深さで 3 色循環させる(VS Code の bracket pair colorization と同じ色)。文字列・コメント内の括弧は対象外、対応の取れない括弧はエラー色。tree-sitter の構文木から求めるので grammar のある言語だけ
 - 言語ごとのファイルアイコン: file tree、editor tab、検索結果、quick open で拡張子・既知ファイル名から言語アイコンを出す。未知の種類は汎用アイコン
 - 拡張子の言語: 設定 › エディタ「拡張子の言語」(拡張子と言語セレクトの行リスト、＋で追加) が組み込みの拡張子判定より優先される。既定は `tpl=terraform`。未知の言語名は無視して組み込み判定へ落ちる
@@ -521,6 +521,8 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   開く」/既定アプリに設定できる。Finder から開いた file は `clair open` と同じ経路を通る
 - Claude Code の IDE 連携([ADR-0022](decisions/0022-claude-code-ide-integration.md)): Clair は 127.0.0.1 の WebSocket と `~/.claude/ide/<port>.lock` で Claude Code の IDE として振る舞い、Clair の terminal に `CLAUDE_CODE_SSE_PORT` を渡す。選択範囲・開いているファイル・診断を答え、`openDiff` の提案は「提案」diff タブで承認 / 却下するまで応答を保留する(承認すると Claude Code がファイルを書く)。開いている Project の外のファイルの提案は Claude Code 自身の承認に任せる。選択の変化を通知し、⌥⌘K で選択範囲を接続中の Claude Code の入力へ渡す
 - 起動中 Clair を操作する CLI を提供する。`clair <command-id> [key=value …]` で registry の任意の command を呼べる
+  - 出力契約([ADR-0026](decisions/0026-cli-output-contract.md)): どの呼び出しも stdout に JSON を 1 行出す。成功は `{"ok":true,"result":…}`(値を返さない command は `null`)、失敗は `{"ok":false,"error":{"code":…,"message":…}}`。`ok` が true なのは exit 0 のときだけで、exit は 1 command error、2 usage、3 Clair / daemon に届かない。待機の timeout と提案の不適用は exit 1 で、最後の状態を `result` にも入れる。例外は人が読む `help` と `--help` / `-h`、stdout を占有する `attach` と `mcp serve`、成功時に何も出さない `open --wait`
+  - 言語は設定の「言語」に従う(GUI 不要、保存された workspace から読む)。翻訳するのは help と `error.message` で、JSON の key、`error.code`、command id、引数名、risk は翻訳しない。script と agent は `error.code` で分岐する
   - `clair help [prefix]` は CLI に組み込まれた registry の command を引数・risk・user-only(AI 不可)付きで一覧する。GUI 不要
   - GUI が disk の path として読む引数(`project.open` / `project.addFolder` / `project.removeFolder` / `file.open` / `file.isOpen` / `file.preview` / `debug.breakpoint` / `finder.open` / `finder.reveal` の `path`、`finder.propose` の `folder`)は、相対 path なら呼び出し側の cwd で絶対 path にしてから送る。Project 相対の引数(`tab.open`、`review.*` など)はそのまま
   - 一覧(すべて read):`project.list`(AI 可)は各 Project の `name`(他の `project.*` が取る識別子)・path・label・色・追加フォルダと active Project を返す。`agent.list`(AI 可)はすべての Project の agent terminal を key(`root#pane`)・profile・cwd・状態(`running` / `attention` / `blocked` / `done` / `idle` / `exited` と exit code。`blocked` / `done` / `idle` は agent 自身の報告による)・activity・委譲 run か・parent・concierge かで返す。委譲 run の状態は `agent.status` と同じく記録された exit を優先する。`debug.status`(他の `debug.*` と同じく AI 不可)は active Project の debug session の phase・error・停止理由・thread・stack frame・変数・breakpoint(adapter の検証結果)・debug console の末尾 50 行を返す

@@ -875,6 +875,16 @@ extension LocalizedStrings {
   ]
 
   static let japanese: [String: String] = [
+    // `clair` CLI (ADR-0026)
+    "usage:": "使い方:", "Clair is not running": "Clair が起動していません",
+    "The Clair daemon is not running": "Clair の daemon が起動していません",
+    "The proposal was not applied": "提案は適用されませんでした", "Timed out waiting": "待機がタイムアウトしました",
+    "unknown argument %@": "不明な引数です: %@", "missing %@": "引数がありません: %@", "%@ must be %@": "%@ は %@ で指定してください",
+    "Every call prints one JSON line: {\"ok\":true,\"result\":…} or {\"ok\":false,\"error\":{\"code\":…,\"message\":…}}.":
+      "どの呼び出しも JSON を 1 行出力します: {\"ok\":true,\"result\":…} または {\"ok\":false,\"error\":{\"code\":…,\"message\":…}}。",
+    "Exit 0 ok, 1 command error, 2 usage, 3 Clair not running.": "終了コード: 0 成功、1 コマンドエラー、2 使い方の誤り、3 Clair が起動していない。",
+    "user-only: not offered to MCP; from a Clair terminal it waits for your approval in Clair.":
+      "user-only: MCP には公開しません。Clair のターミナルから実行すると Clair での承認を待ちます。",
     // Menu bar titles (ClairAppShell `titles`)
     "Open File Browser": "ファイルブラウザを開く",
     "Settings…": "設定…", "Save": "保存", "Reopen Closed Tab": "閉じたタブを再度開く",

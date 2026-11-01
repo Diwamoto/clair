@@ -50,7 +50,10 @@ private func writeAll(_ fd: Int32, _ data: Data) throws {
 func runAttach(_ args: [String]) -> Int32 {
   guard let f = flags(args), let key = f["key"], let cwd = f["cwd"],
     Set(f.keys).isSubset(of: ["key", "cwd", "command", "directory"])
-  else { return fail("usage: clair attach --key <key> --cwd <path> [--command <cmd>] [--directory <dir>]") }
+  else {
+    _ = fail("usage: clair attach --key <key> --cwd <path> [--command <cmd>] [--directory <dir>]")
+    return 2
+  }
   let client = daemonClient(f["directory"])
   let environment = ProcessInfo.processInfo.environment.filter {
     ClairLocalTerminalHost.forwardedEnvironment.contains($0.key)
@@ -175,17 +178,12 @@ private func failAndReport(_ message: String, _ title: String) -> Int32 {
   return status
 }
 
-func runDaemonStop(_ args: [String]) -> Int32 {
-  guard let f = flags(args), Set(f.keys).isSubset(of: ["directory"]) else {
-    return fail("usage: clair daemon stop [--directory <dir>]")
+func runDaemon(_ args: [String]) -> WorkbenchCLI.Outcome {
+  guard let action = args.first, ["stop", "status"].contains(action), let f = flags(Array(args.dropFirst())), Set(f.keys).isSubset(of: ["directory"]) else {
+    return WorkbenchCLI.usageFailure("clair daemon stop|status [--directory <dir>]")
   }
-  do { try daemonClient(f["directory"]).shutdown() } catch { return fail("\(error)") }
-  return 0
-}
-
-func runDaemonStatus(_ args: [String]) -> Int32 {
-  guard let f = flags(args), Set(f.keys).isSubset(of: ["directory"]) else {
-    return fail("usage: clair daemon status [--directory <dir>]")
-  }
-  return (try? daemonClient(f["directory"]).health()) == nil ? 1 : 0
+  let client = daemonClient(f["directory"])
+  if action == "status" { return (try? client.health()) == nil ? WorkbenchCLI.daemonNotRunning : WorkbenchCLI.success(["running": true]) }
+  do { try client.shutdown() } catch { return WorkbenchCLI.failure("notRunning", "\(error)", exit: 3) }
+  return WorkbenchCLI.success()
 }
