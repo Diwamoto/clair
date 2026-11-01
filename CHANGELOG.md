@@ -6,6 +6,17 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-11-02
+
+### Added
+- `clair --compact` prints each reply as one uncolored line for scripts and agents.
+- `--help` works at any depth of a `clair` command.
+
+### Changed
+- Every `clair` command now replies with the same JSON shape, reporting success or an error code and message, and its exit code always matches.
+- `clair` replies are indented, and colored in a terminal unless `NO_COLOR` is set; piped output stays valid JSON.
+- `clair` help and error messages follow the language chosen in Settings.
+
 ## [0.28.0] - 2026-10-30
 
 ### Added
@@ -564,7 +575,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.28.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.29.0...HEAD
+[0.29.0]: https://github.com/Diwamoto/clair/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/Diwamoto/clair/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/Diwamoto/clair/compare/v0.26.1...v0.27.0
 [0.26.1]: https://github.com/Diwamoto/clair/compare/v0.26.0...v0.26.1
