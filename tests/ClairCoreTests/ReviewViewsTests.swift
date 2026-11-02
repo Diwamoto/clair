@@ -100,6 +100,19 @@
       XCTAssertEqual(rows[1].id, "../../x/docs")
     }
 
+    func testMultiFolderProjectShowsPeerSections() {
+      let files = ["src/a.go", "../docs/b.md"].map { WorkbenchFile(path: $0, status: nil) }
+      let rows = ClairAppShell.explorerRows(for: files, roots: ["../docs"], rootName: "app")
+      XCTAssertEqual(rows.map(\.label), ["app", "src", "a.go", "docs", "b.md"])
+      XCTAssertEqual(rows.map(\.depth), [1, 2, 3, 1, 2])
+      XCTAssertEqual(rows.filter(\.section).map(\.id), [".", "../docs"])
+      // Folding the root hides only its own rows; `.` is open by default.
+      XCTAssertEqual(ClairAppShell.visibleExplorerRows(rows, expanded: [".", "../docs"]).map(\.label), ["app", "docs", "b.md"])
+      XCTAssertEqual(ClairAppShell.visibleExplorerRows(rows, expanded: ["src"]).map(\.label), ["app", "src", "a.go", "docs"])
+      // No added folder: no section row.
+      XCTAssertEqual(ClairAppShell.explorerRows(for: [files[0]], rootName: "app").map(\.depth), [1, 2])
+    }
+
     func testThreadAnchorsToLineAndResolves() throws {
       let snap = try TextBuffer("a\nbb\nccc").snapshot
       let s = ReviewStore(file: nil)

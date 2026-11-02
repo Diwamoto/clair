@@ -68,26 +68,33 @@ public struct AgentLaunch: Sendable, Codable, Equatable {
   /// the command would make the daemon replace a live shell. `resumeReportedAgents` turns it into `resume`
   /// only when the shell is gone.
   public var session: String?
+  /// The Project's added folders when this agent started (ADR-0017). Fixed at launch: deriving them live
+  /// would change `command` when a folder is added, and a changed command replaces the running shell.
+  public var folders: [String]?
   public init(
     profile: String, cwd: String, prompt: String? = nil, parent: String? = nil, resume: String? = nil, concierge: String? = nil,
-    opening: String? = nil, review: Bool = false
+    opening: String? = nil, review: Bool = false, folders: [String]? = nil
   ) {
     self.profile = profile; self.cwd = cwd; self.prompt = prompt; self.parent = parent; self.resume = resume; self.concierge = concierge
     self.opening = opening
     self.review = review ? true : nil
+    self.folders = folders?.isEmpty == true ? nil : folders
     run = prompt == nil ? nil : UUID().uuidString.lowercased()
   }
   public var command: String {
     guard let p = AgentProfile.named(profile) else { return "" }
-    if let concierge, AgentProfile.isSessionID(concierge) { return Concierge.command(session: concierge, root: cwd, opening: opening) }
-    if let resume, let prefix = p.resume, AgentProfile.isSessionID(resume) { return "\(prefix) \(resume)" }
-    if prompt == nil, let opening, let open = p.open { return "\(open) \(AgentRun.quote(opening))" }
-    guard let prompt, let run else { return p.command }
+    // Last on the line: `--add-dir` is variadic and would swallow a prompt after it.
+    // ponytail: Claude Code only; other CLIs still see just the cwd until their flags are verified.
+    let dirs = profile == "claude" ? (folders ?? []).map { " --add-dir \(AgentRun.quote($0))" }.joined() : ""
+    if let concierge, AgentProfile.isSessionID(concierge) { return Concierge.command(session: concierge, root: cwd, opening: opening) + dirs }
+    if let resume, let prefix = p.resume, AgentProfile.isSessionID(resume) { return "\(prefix) \(resume)\(dirs)" }
+    if prompt == nil, let opening, let open = p.open { return "\(open) \(AgentRun.quote(opening))\(dirs)" }
+    guard let prompt, let run else { return p.command + dirs }
     // `script` keeps a TTY for the agent while recording it, and exits with the agent's status.
     // Wrapped in /bin/sh so the user's login shell (zsh, fish, …) only sees one quoted argument.
     let r = AgentRun(id: run), q = AgentRun.quote
     let batch = review == true ? p.reviewBatch ?? p.batch : p.batch
-    let inner = "mkdir -p \(q(AgentRun.directory.path)); script -q \(q(r.log.path)) \(batch) \(q(prompt)); echo $? > \(q(r.exit.path))"
+    let inner = "mkdir -p \(q(AgentRun.directory.path)); script -q \(q(r.log.path)) \(batch) \(q(prompt))\(dirs); echo $? > \(q(r.exit.path))"
     return "/bin/sh -c \(q(inner))"
   }
 }

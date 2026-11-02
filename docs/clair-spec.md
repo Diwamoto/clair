@@ -410,6 +410,7 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
 
 - Git の有無を問わず local folder を Project として開き、複数 Project を 1
   process で切り替える
+- Project にフォルダを追加すると([ADR-0017](decisions/0017-project-extra-folders.md))、explorer は root と追加フォルダを同列の section として出し、Clair が起動する Claude Code の agent には `--add-dir` で全フォルダを context として渡す(起動時点の構成で固定)
 - Project ごとに workspace、terminal、agent、notification、local settings を保持
 - titlebar の Project chip を右クリックして、tab group の色、表示名、並び順、
   folder の追加、Project を閉じる操作を行う。これらは Project に保存され、切り替えや

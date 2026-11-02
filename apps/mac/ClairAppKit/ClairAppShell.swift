@@ -2421,13 +2421,17 @@ import Observation
       let file: WorkbenchFile?
       /// Gitignored: a file with status `!`, or a folder holding nothing else. Drawn dimmed.
       var ignored = false
+      /// A workspace folder's top row in a multi-folder Project: the root (`.`) or an added folder.
+      var section = false
     }
 
     nonisolated static func visibleExplorerRows(_ rows: [ExplorerRow], expanded: Set<String>) -> [ExplorerRow] {
       var hidden: String?
       return rows.filter { r in
+        if r.section { hidden = nil }
         if let h = hidden { if r.id.hasPrefix(h) { return false }; hidden = nil }
-        if r.file == nil, !expanded.contains(r.id) { hidden = r.id + "/" }
+        // `.` has no path prefix: an empty one hides everything up to the next section.
+        if r.id == "." { if expanded.contains(".") { hidden = "" } } else if r.file == nil, !expanded.contains(r.id) { hidden = r.id + "/" }
         return true
       }
     }
@@ -2467,6 +2471,9 @@ import Observation
           treeRow(depth: 0, selected: false, action: { rootFolded.toggle() }) {
             Text(st.project).font(.system(size: 13, weight: .semibold)).textCase(.uppercase).foregroundStyle(C.textPrimary)
             Spacer(minLength: 0)
+            if let added = currentProject?.folders?.count, added > 0 {
+              Text(tr("%@ フォルダ", "\(added + 1)")).font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textTertiary)
+            }
           }
           .clairContextMenu(menus) {
             ClairMenuSpec(title: st.project, entries: [reviewMenu(tr("この Project をレビュー"), .project, disabled: !st.dirty.isEmpty)])
@@ -2488,17 +2495,24 @@ import Observation
                 .clairContextMenu(menus) { multiMenu(r.id) ?? fileMenu(f.path, tab: false) }
                 .onDrag { dragItem(f.path) }
               } else {
-                let open = st.expanded.contains(r.id)
+                // The root section starts open, so `expanded` records it folded.
+                let open = r.id == "." ? !st.expanded.contains(".") : st.expanded.contains(r.id)
                 treeRow(depth: r.depth, selected: explorerSel.contains(r.id), action: { explorerClick(r.id) { store.run("explorer.toggle", ["path": .string(r.id)]) } }) {
                   chevron(open: open)
                   FileIcon.folder(open: open).image(size: 11, ink: C.textTertiary).frame(width: 16)
-                  Text(r.label).font(.system(size: 13)).foregroundStyle(Self.changeColor(ranks[r.id]) ?? (r.ignored ? C.textQuaternary : C.textSecondary)).lineLimit(1)
+                  Text(r.label).font(.system(size: 13, weight: r.section ? .semibold : .regular)).foregroundStyle(Self.changeColor(ranks[r.id]) ?? (r.section ? C.textPrimary : r.ignored ? C.textQuaternary : C.textSecondary)).lineLimit(1)
                   Spacer(minLength: 0)
                   if let tint = Self.changeColor(ranks[r.id]) { Circle().fill(tint).frame(width: 6, height: 6) }
                 }
+                .padding(.top, r.section ? 6 : 0)
                 .onDrag { dragItem(addedFolder(r.id) ?? r.id) }
                 .clairContextMenu(menus) {
-                  if let m = multiMenu(r.id) { m } else if let folder = addedFolder(r.id) {
+                  if let m = multiMenu(r.id) { m } else if r.id == "." {
+                    ClairMenuSpec(title: r.label, sub: currentProject?.path, entries: [
+                      .item(open ? tr("折りたたむ") : tr("開く")) { store.run("explorer.toggle", ["path": .string(r.id)]) },
+                      reviewMenu(tr("この Project をレビュー"), .project, disabled: !st.dirty.isEmpty),
+                    ])
+                  } else if let folder = addedFolder(r.id) {
                     ClairMenuSpec(title: r.label, sub: folder, entries: [
                       .item(open ? tr("折りたたむ") : tr("開く")) { store.run("explorer.toggle", ["path": .string(r.id)]) },
                       .separator,
@@ -2578,8 +2592,9 @@ import Observation
       explorerTask?.cancel()
       explorerRanks = Self.changeRanks(st.files, dirty: st.dirty)
       let files = st.files, project = st.project, roots = currentProject?.folderPrefixes ?? []
+      let rootName = currentProject.map { ($0.path as NSString).lastPathComponent }
       explorerTask = Task {
-        let rows = await Task.detached(priority: .utility) { Self.explorerRows(for: files, roots: roots) }.value
+        let rows = await Task.detached(priority: .utility) { Self.explorerRows(for: files, roots: roots, rootName: rootName) }.value
         guard !Task.isCancelled, st.project == project, st.files == files else { return }
         explorerRows = rows
         rebuildVisibleExplorer()
@@ -2597,8 +2612,11 @@ import Observation
     }
 
     /// `roots`: added folders' relative prefixes (`../docs`); each is one top-level row named after the folder.
-    nonisolated static func explorerRows(for files: [WorkbenchFile], roots: [String] = []) -> [ExplorerRow] {
+    /// `rootName` (the explorer, with added folders): the root gets a section row `.` as their peer, its files one level in.
+    nonisolated static func explorerRows(for files: [WorkbenchFile], roots: [String] = [], rootName: String? = nil) -> [ExplorerRow] {
       var out: [ExplorerRow] = []
+      let sections = rootName != nil && !roots.isEmpty
+      if sections, let rootName { out.append(ExplorerRow(id: ".", label: rootName, depth: 1, file: nil, section: true)) }
       var seen = Set<String>(), live = Set<String>()  // live: folders holding a file that is not ignored
       out.reserveCapacity(files.count * 2)
       for file in files where file.status != "D" {  // deleted files only tint their folders (changeRanks)
@@ -2607,16 +2625,17 @@ import Observation
         let parts = root.map { [$0] + file.path.dropFirst($0.count + 1).split(separator: "/").map(String.init) }
           ?? file.path.split(separator: "/").map(String.init)
         guard let name = parts.last else { continue }
+        let indent = sections && root == nil ? 1 : 0
         if parts.count > 1 {
           for depth in 0..<(parts.count - 1) {
             let id = parts[0...depth].joined(separator: "/")
-            if seen.insert(id).inserted { out.append(ExplorerRow(id: id, label: (parts[depth] as NSString).lastPathComponent, depth: depth + 1, file: nil)) }
+            if seen.insert(id).inserted { out.append(ExplorerRow(id: id, label: (parts[depth] as NSString).lastPathComponent, depth: depth + 1 + indent, file: nil, section: sections && root != nil && depth == 0)) }
             if file.status != "!" { live.insert(id) }
           }
         }
-        out.append(ExplorerRow(id: file.path, label: name, depth: parts.count, file: file, ignored: file.status == "!"))
+        out.append(ExplorerRow(id: file.path, label: name, depth: parts.count + indent, file: file, ignored: file.status == "!"))
       }
-      for i in out.indices where out[i].file == nil { out[i].ignored = !live.contains(out[i].id) }
+      for i in out.indices where out[i].file == nil && out[i].id != "." { out[i].ignored = !live.contains(out[i].id) }
       return out
     }
 

@@ -628,7 +628,7 @@ extension CommandRegistry {
       let launch = AgentLaunch(
         profile: i["profile"]!.string!, cwd: cwd, prompt: i["prompt"]?.string.flatMap { $0.isEmpty ? nil : $0 },
         parent: i["parent"]?.string, resume: i["resume"]?.string,
-        opening: i["opening"]?.string.flatMap { $0.isEmpty ? nil : $0 }, review: i["review"]?.bool == true)
+        opening: i["opening"]?.string.flatMap { $0.isEmpty ? nil : $0 }, review: i["review"]?.bool == true, folders: home.project.folders)
       let axis: PaneTree.Axis = i["direction"]?.string == "down" ? .vertical : .horizontal
       let pane = s.withLayout(home.project.name) { l in
         let id = home.pane.map { l.tree.split($0, axis, kind: .terminal) } ?? { l.tree.splitFocused(.vertical, kind: .terminal); return l.tree.focused }()
@@ -697,7 +697,7 @@ extension CommandRegistry {
       let pane = s.tree.focused
       s.launches[pane] = AgentLaunch(
         profile: "claude", cwd: home.project.path, concierge: UUID().uuidString.lowercased(),
-        opening: i["message"]?.string.flatMap { $0.isEmpty ? nil : $0 })
+        opening: i["message"]?.string.flatMap { $0.isEmpty ? nil : $0 }, folders: home.project.folders)
       s.panesClosed = false
       return .pane(pane)
     },

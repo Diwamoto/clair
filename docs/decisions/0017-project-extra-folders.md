@@ -32,8 +32,13 @@ Project 名は layout と terminal 再接続 (`project#pane`) の key でもあ�
 
 ## Consequences
 
-- 追加 folder の Git status・file 監視・terminal/agent の cwd は root だけ。追加 folder の
-  変更は root の再 scan で拾う。必要になったら folder ごとの watcher を足す。
+- 追加 folder の Git status・terminal/agent の cwd は root だけ。
+- Clair が起動する Claude Code の agent には、起動時点の追加 folder を `--add-dir` で渡し、
+  Project 全体を context にする(2026-11-02 owner 決定)。範囲を広げるのは人の「フォルダを
+  追加」だけで、`project.addFolder` は引き続き `ai: false`。起動コマンドは launch に固定し、
+  追加しても動作中の agent は置き換えない(次の起動から効く)。shell に手で打った `claude` と
+  他の CLI には渡らない。
+- 追加 folder がある Project の explorer は、root と追加 folder を同列の section として出す。
 - diff tab と remote workspace protocol は `..` を含む path を拒否するため、追加 folder の
   file は diff / mobile からは開けない。
 - 表示名の変更は `label` だけを変え、`name` (key) は変えない。

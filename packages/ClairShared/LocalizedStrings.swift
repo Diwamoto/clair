@@ -229,7 +229,7 @@ extension LocalizedStrings {
     "このProjectに切り替え": "Switch to This Project",
     "グループを展開": "Expand Group",
     "グループを折りたたむ": "Collapse Group",
-    "フォルダを追加…": "Add Folder…",
+    "フォルダを追加…": "Add Folder…", "%@ フォルダ": "%@ Folders",
     "Project名を変更…": "Rename Project…",
     "Project名を変更": "Rename Project",
     "空にするとフォルダ名に戻ります。": "Leave empty to use the folder name.",

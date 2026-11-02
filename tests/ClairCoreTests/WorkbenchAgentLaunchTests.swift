@@ -53,6 +53,10 @@ final class WorkbenchAgentLaunchTests: XCTestCase {
     XCTAssertEqual(AgentLaunch(profile: "claude", cwd: "/x", opening: "read `a.json`; it's done").command, #"claude 'read `a.json`; it'\''s done'"#)
     XCTAssertEqual(AgentLaunch(profile: "opencode", cwd: "/x", opening: "go").command, "opencode --prompt 'go'")
     XCTAssertNil(AgentLaunch(profile: "claude", cwd: "/x", opening: "go").run)
+    // Added folders follow the prompt, since `--add-dir` is variadic.
+    XCTAssertEqual(AgentLaunch(profile: "claude", cwd: "/x", opening: "go", folders: ["/a b", "/c"]).command, "claude 'go' --add-dir '/a b' --add-dir '/c'")
+    XCTAssertEqual(AgentLaunch(profile: "claude", cwd: "/x", resume: "s1", folders: ["/a"]).command, "claude --resume s1 --add-dir '/a'")
+    XCTAssertEqual(AgentLaunch(profile: "codex", cwd: "/x", folders: ["/a"]).command, "codex")
     var (s, _) = try opened()
     let a = try r.execute("agent.launch", ["profile": .string("codex"), "opening": .string("go")], confirmed: true, state: &s).get()
     guard case .pane(let id) = a else { return XCTFail() }
