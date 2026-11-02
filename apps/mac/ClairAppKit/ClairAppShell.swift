@@ -4181,7 +4181,8 @@ import Observation
     let provider: String
     let size: CGFloat
     // Claude's installed app ships a transparent menu-bar symbol. Read it once;
-    // the web favicon below remains the fallback on other Macs.
+    // claude.com's transparent icon.svg is the fallback on other Macs (AsyncImage cannot decode SVG, NSImage can).
+    @State private var claudeWebSymbol: NSImage?
     private static let claudeSymbol: NSImage? = {
       guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.anthropic.claudefordesktop"),
         let image = NSImage(contentsOf: app.appending(path: "Contents/Resources/TrayIconTemplate@3x.png"))
@@ -4193,14 +4194,28 @@ import Observation
     var body: some View {
       let domain: String? = switch provider {
       case "Codex": "chatgpt.com"
-      case "Claude Code": "claude.ai"
       case "OpenCode": "opencode.ai"
       default: nil
       }
-      if provider == "Claude Code", let claudeSymbol = Self.claudeSymbol {
-        Image(nsImage: claudeSymbol).renderingMode(.template).resizable().scaledToFit()
-          .foregroundStyle(Color(red: 217.0 / 255, green: 119.0 / 255, blue: 87.0 / 255))
-          .frame(width: size, height: size).accessibilityHidden(true)
+      if provider == "Claude Code" {
+        Group {
+          if let symbol = Self.claudeSymbol ?? claudeWebSymbol {
+            Image(nsImage: symbol).renderingMode(.template).resizable().scaledToFit()
+              .foregroundStyle(Color(red: 217.0 / 255, green: 119.0 / 255, blue: 87.0 / 255))
+          } else {
+            Text(provider.prefix(1)).font(.system(size: size * 0.7, weight: .semibold))
+              .foregroundStyle(C.textTertiary)
+          }
+        }
+        .frame(width: size, height: size).accessibilityHidden(true)
+        .task {
+          guard Self.claudeSymbol == nil, claudeWebSymbol == nil,
+            let (data, _) = try? await URLSession.shared.data(from: URL(string: "https://claude.com/icon.svg")!),
+            let image = NSImage(data: data)
+          else { return }
+          image.isTemplate = true
+          claudeWebSymbol = image
+        }
       } else if let domain {
         AsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(domain)&sz=64")) { phase in
           if let image = phase.image {
