@@ -516,6 +516,8 @@ void clair_ghostty_app_take_events(clair_ghostty_app_t app, clair_ghostty_app_ev
 // Terminal search (⌘F): Ghostty's match count and selected match (0-based), each -1 when unknown.
 // Returns false when neither changed since the last call.
 bool clair_ghostty_app_take_search(clair_ghostty_app_t app, int64_t *total, int64_t *selected);
+// Latest scrollback position in rows; false when unchanged since the last call.
+bool clair_ghostty_app_take_scrollbar(clair_ghostty_app_t app, uint64_t *total, uint64_t *offset, uint64_t *len);
 clair_ghostty_surface_config_s clair_ghostty_surface_config_new(void);
 clair_ghostty_surface_t clair_ghostty_surface_new(
     clair_ghostty_app_t app, const clair_ghostty_surface_config_s *config);

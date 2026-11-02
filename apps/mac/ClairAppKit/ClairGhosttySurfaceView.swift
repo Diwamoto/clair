@@ -152,6 +152,7 @@ import Foundation
     public override func layout() {
       super.layout()
       recomputeMetrics()
+      layoutScrollbar()
     }
 
     /// Font/DPI + window resize. With a real surface, this is
@@ -436,6 +437,8 @@ import Foundation
         TerminalFind.shared.open[pane]?.total = found.total
         TerminalFind.shared.open[pane]?.selected = found.selected
       }
+      if let bar = ghosttyApp.takeScrollbar() { updateScrollbar(total: bar.total, offset: bar.offset, len: bar.len) }
+      hideIdleScrollbar()
       if redraw { needsDisplay = true }
     }
 
@@ -601,7 +604,10 @@ import Foundation
         rect: .zero, options: [.mouseMoved, .activeInKeyWindow, .inVisibleRect], owner: self))
     }
 
-    public override func mouseMoved(with event: NSEvent) { sendHover(event) }
+    public override func mouseMoved(with event: NSEvent) {
+      sendHover(event)
+      if convert(event.locationInWindow, from: nil).x >= bounds.maxX - scrollbar.frame.width { revealScrollbar() }
+    }
 
     // cmd pressed/released without moving: resend the position so the underline toggles.
     public override func flagsChanged(with event: NSEvent) {
@@ -900,9 +906,59 @@ import Foundation
       do {
         try ghosttySurface.sendMouseScroll(
           x: event.scrollingDeltaX, y: event.scrollingDeltaY, mods: mods)
+        revealScrollbar()
       } catch {
         lastReportedError = String(describing: error)
       }
+    }
+
+    // Libghostty draws no scrollbar, so the editor's overlay scroller sits on top: revealed by scrolling
+    // or hovering the right edge, hidden after a second idle (from the poll) and whenever nothing is scrolled off.
+    private lazy var scrollbar: ClairScroller = {
+      let bar = ClairScroller()
+      bar.scrollerStyle = .legacy  // a lone overlay scroller has no scroll view to drive its knob
+      bar.isEnabled = true
+      bar.isHidden = true
+      bar.target = self
+      bar.action = #selector(scrollbarMoved)
+      addSubview(bar)
+      layoutScrollbar(bar)
+      return bar
+    }()
+    private var scrollbarRows: (total: UInt64, len: UInt64) = (0, 0)
+    private var scrollbarIdleSince = Date.distantPast
+
+    private func layoutScrollbar(_ bar: ClairScroller? = nil) {
+      guard let bar = bar ?? (subviews.first { $0 is ClairScroller } as? ClairScroller) else { return }
+      let width = ClairScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy)
+      bar.frame = CGRect(x: bounds.maxX - width, y: 0, width: width, height: bounds.height)
+    }
+
+    private func updateScrollbar(total: UInt64, offset: UInt64, len: UInt64) {
+      scrollbarRows = (total, len)
+      guard total > len else { scrollbar.isHidden = true; return }
+      scrollbar.knobProportion = CGFloat(len) / CGFloat(total)
+      // While the knob is dragged the pointer leads; the echoed row would only make it jitter.
+      guard scrollbar.hitPart != .knob || NSEvent.pressedMouseButtons == 0 else { return }
+      scrollbar.doubleValue = Double(offset) / Double(total - len)
+    }
+
+    private func revealScrollbar() {
+      scrollbarIdleSince = Date()
+      if scrollbarRows.total > scrollbarRows.len { scrollbar.isHidden = false }
+    }
+
+    private func hideIdleScrollbar() {
+      guard !scrollbar.isHidden, Date().timeIntervalSince(scrollbarIdleSince) > 1 else { return }
+      let pointer = scrollbar.convert(window?.mouseLocationOutsideOfEventStream ?? .zero, from: nil)
+      if scrollbar.bounds.contains(pointer) || NSEvent.pressedMouseButtons != 0 { return }
+      scrollbar.isHidden = true
+    }
+
+    @objc private func scrollbarMoved() {
+      revealScrollbar()
+      let row = (scrollbar.doubleValue * Double(scrollbarRows.total - scrollbarRows.len)).rounded()
+      ghosttySurface?.bindingAction("scroll_to_row:\(Int(row))")
     }
 
     public var currentScrollbackOffset: UInt64 { scrollbackOffset }

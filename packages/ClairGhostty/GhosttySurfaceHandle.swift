@@ -246,6 +246,18 @@ public final class GhosttyAppHandle {
     #endif
   }
 
+  /// Ghostty's scrollback position in rows after `tick()`; nil when unchanged since the last call.
+  public func takeScrollbar() -> (total: UInt64, offset: UInt64, len: UInt64)? {
+    #if CLAIR_GHOSTTY_VENDORED
+      guard isValid else { return nil }
+      var total: UInt64 = 0, offset: UInt64 = 0, len: UInt64 = 0
+      guard clair_ghostty_app_take_scrollbar(raw, &total, &offset, &len) else { return nil }
+      return (total, offset, len)
+    #else
+      return nil
+    #endif
+  }
+
   #if CLAIR_GHOSTTY_VENDORED
     /// Shared config-marshalling between `withSurface` and `retainSurface`:
     /// only the free-on-return-vs-caller-owns policy differs between them.

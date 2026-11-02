@@ -168,6 +168,44 @@ import Testing
       #expect(reported == ["a", "b", "a"])
     }
 
+    /// Scrollback reaches the overlay scroller, a scroll reveals it, and dragging it moves the viewport.
+    @Test(.enabled(if: GhosttyRuntime.isVendored)) @MainActor
+    func scrollbarFollowsScrollbackAndScrollsIt() async throws {
+      let window = NSWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 600, height: 300), styleMask: [.borderless],
+        backing: .buffered, defer: false)
+      let view = ClairGhosttySurfaceView(launch: (command: "/bin/sh -c 'seq 1 2000; sleep 30'", cwd: "/tmp"))
+      window.contentView = view
+      window.orderFront(nil)
+      defer { window.orderOut(nil) }
+      view.layoutSubtreeIfNeeded()
+
+      func scroller() -> NSScroller? { view.subviews.compactMap { $0 as? NSScroller }.first }
+      func wait(_ done: () -> Bool) async throws {
+        for _ in 0..<200 where !done() { try await Task.sleep(for: .milliseconds(25)) }
+      }
+      try await wait { (scroller()?.knobProportion ?? 1) < 0.5 }
+      let bar = try #require(scroller())
+      #expect(bar.knobProportion < 0.5)
+      #expect(bar.doubleValue == 1)  // following output: the knob sits at the bottom
+      bar.isHidden = false
+      #expect(bar.layer?.superlayer === view.layer)  // composited above libghostty's own layer
+      let image = try #require(bar.bitmapImageRepForCachingDisplay(in: bar.bounds))
+      bar.cacheDisplay(in: bar.bounds, to: image)
+      let inked = (0..<image.pixelsHigh).contains { (image.colorAt(x: image.pixelsWide / 2, y: $0)?.alphaComponent ?? 0) > 0 }
+      #expect(inked)  // the knob is really drawn
+      bar.isHidden = true
+
+      bar.doubleValue = 0
+      _ = bar.sendAction(bar.action, to: bar.target)
+      #expect(!bar.isHidden)
+      bar.doubleValue = 1  // only Ghostty's echo of the row can bring it back to the top
+      try await wait { bar.doubleValue == 0 }
+      #expect(bar.doubleValue == 0)
+      try await wait { bar.isHidden }
+      #expect(bar.isHidden)  // idle: gets out of the way
+    }
+
     /// Settings › ターミナル › 表示: the font and cursor lines are keys libghostty accepts in every value we write.
     @Test(.enabled(if: GhosttyRuntime.isVendored)) @MainActor
     func terminalStyleLinesAreAcceptedConfig() throws {

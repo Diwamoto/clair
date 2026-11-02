@@ -107,6 +107,8 @@ typedef struct {
   bool search_changed;
   int64_t search_total;     // -1 = unknown
   int64_t search_selected;  // -1 = none
+  bool scrollbar_changed;
+  ghostty_action_scrollbar_s scrollbar;
 } clair_ghostty_app_events_record;
 
 static bool clair_ghostty_action_cb(
@@ -133,6 +135,9 @@ static bool clair_ghostty_action_cb(
   } else if (action.tag == GHOSTTY_ACTION_SEARCH_SELECTED) {
     rec->search_selected = (int64_t)action.action.search_selected.selected;
     rec->search_changed = true;
+  } else if (action.tag == GHOSTTY_ACTION_SCROLLBAR) {
+    rec->scrollbar = action.action.scrollbar;
+    rec->scrollbar_changed = true;
   } else if (action.tag == GHOSTTY_ACTION_SHOW_CHILD_EXITED)
     rec->exit_code = (int64_t)action.action.child_exited.exit_code;
   else if (action.tag == GHOSTTY_ACTION_OPEN_URL) {
@@ -189,6 +194,16 @@ bool clair_ghostty_app_take_search(clair_ghostty_app_t app, int64_t *total, int6
   *total = rec->search_total;
   *selected = rec->search_selected;
   rec->search_changed = false;
+  return true;
+}
+
+bool clair_ghostty_app_take_scrollbar(clair_ghostty_app_t app, uint64_t *total, uint64_t *offset, uint64_t *len) {
+  clair_ghostty_app_events_record *rec = ghostty_app_userdata(app);
+  if (!rec || !rec->scrollbar_changed) return false;
+  *total = rec->scrollbar.total;
+  *offset = rec->scrollbar.offset;
+  *len = rec->scrollbar.len;
+  rec->scrollbar_changed = false;
   return true;
 }
 
