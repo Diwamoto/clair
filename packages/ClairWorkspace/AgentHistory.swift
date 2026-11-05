@@ -65,14 +65,14 @@ public struct AgentHistory: Sendable, Identifiable {
     return words.allSatisfy { haystack.range(of: $0, options: [.caseInsensitive, .widthInsensitive, .diacriticInsensitive]) != nil }
   }
 
-  /// `history.list` (#68): chats last active in `period` under `project` (that folder or below) from `provider`
+  /// `history.list` (#68): chats active during `period` (first-to-last message overlaps it) under `project` (that folder or below) from `provider`
   /// matching `query`, newest first.
   public static func filter(
     _ histories: [AgentHistory], period: DateInterval, project: String? = nil, provider: Provider? = nil, query: String = "", limit: Int = 50
   ) -> [AgentHistory] {
     let root = project.map { URL(fileURLWithPath: $0).standardizedFileURL.path }
     return Array(histories.filter { h in
-      period.contains(h.date) && provider.map { $0 == h.provider } ?? true && h.matches(query)
+      (h.messages.first?.date ?? h.date) < period.end && h.date >= period.start && provider.map { $0 == h.provider } ?? true && h.matches(query)
         && root.map { r in h.project.map { $0 == r || $0.hasPrefix(r.hasSuffix("/") ? r : r + "/") } ?? false } ?? true
     }.sorted { $0.date > $1.date }.prefix(max(0, limit)))
   }

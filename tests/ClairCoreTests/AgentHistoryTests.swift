@@ -315,6 +315,11 @@ final class AgentHistoryTests: XCTestCase {
     XCTAssertEqual(AgentHistory.filter(all, period: today, project: "/w/clair").map(\.title), ["b", "a"])
     XCTAssertEqual(AgentHistory.filter(all, period: today, provider: .claude, limit: 1).map(\.title), ["c"])
     XCTAssertEqual(AgentHistory.filter(all, period: today, query: "FINDER b").map(\.title), ["b"])
+    // A chat that started inside the period and went on past its end still counts for that day.
+    let long = AgentHistory(id: "claude:long", provider: .claude, title: "long", date: day + 7200,
+                            messages: [.init(id: "m", role: "user", text: "x", date: day)], estimatedUSD: nil, project: "/w/clair")
+    XCTAssertEqual(AgentHistory.filter([long], period: today).map(\.title), ["long"])
+    XCTAssertEqual(AgentHistory.filter([long], period: DateInterval(start: day - 3600, end: day - 10)).map(\.title), [])
     let row = all[0].listJSON
     XCTAssertEqual(row["id"] as? String, "Claude Code:a")
     XCTAssertEqual(row["sessionID"] as? String, "a")

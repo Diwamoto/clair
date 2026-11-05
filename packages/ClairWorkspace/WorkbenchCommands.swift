@@ -827,7 +827,8 @@ extension CommandRegistry {
       let provider: AgentHistory.Provider? = i["provider"]?.string.map { ["claude": .claude, "codex": .codex, "opencode": .opencode][$0]! }
       // ponytail: scans provider files synchronously (mtime-filtered first); cache via AgentHistoryStore if a wide range is slow.
       let rows = AgentHistory.filter(
-        AgentHistoryReader.load(period: period), period: period, project: i["project"]?.string, provider: provider,
+        // A chat still going after `until` was written after it: load by mtime from `since` on, filter by overlap.
+        AgentHistoryReader.load(period: DateInterval(start: period.start, end: .distantFuture)), period: period, project: i["project"]?.string, provider: provider,
         query: i["query"]?.string ?? "", limit: i["limit"]?.int ?? 50)
       return .text(todoJSON(rows.map(\.listJSON)))
     },

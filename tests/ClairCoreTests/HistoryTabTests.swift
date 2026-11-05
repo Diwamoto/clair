@@ -20,4 +20,18 @@ final class HistoryTabTests: XCTestCase {
     _ = try r.execute("tab.reopenClosed", state: &s).get()
     XCTAssertEqual(s.active, path)
   }
+
+  // #68: a history.list row's `id` opens with history.open and its `sessionID` resumes with agent.launch.
+  func testListRowOpensAndResumes() throws {
+    let chat = AgentHistory(id: "Claude Code:0f8e3c2a-1b2c-4d5e-8f90-123456789abc", provider: .claude, title: "t", date: Date(),
+                            messages: [], estimatedUSD: nil, project: "/w")
+    let row = chat.listJSON
+    let r = CommandRegistry.workbench
+    var s = WorkbenchState()
+    _ = try r.execute("history.open", ["id": .string(row["id"] as! String)], state: &s).get()
+    XCTAssertEqual(s.active.flatMap(AgentHistory.id(tab:)), chat.id)
+    let session = row["sessionID"] as! String
+    XCTAssertTrue(AgentProfile.isSessionID(session))
+    XCTAssertTrue(AgentLaunch(profile: "claude", cwd: "/w", resume: session).command.contains("--resume \(session)"))
+  }
 }
