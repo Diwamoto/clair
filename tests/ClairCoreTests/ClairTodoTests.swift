@@ -44,3 +44,42 @@ final class ClairTodoWriteTests: XCTestCase {
   }
 }
 
+
+final class ClairTodoCommandTests: XCTestCase {
+  func testUpdateKeepsUnknownKeysAndAppendsBody() throws {
+    let home = URL.temporaryDirectory.appending(path: "clair-todo-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: home) }
+    let path = ClairTodo.newPath(title: "KR work", home: home)
+    try ClairTodo(path: path, title: "KR work").save(appendBody: "context")
+    try "---\ntitle: KR work\npriority: 2\nkr: KR1\ndone: false\n---\ncontext\n".write(toFile: path, atomically: true, encoding: .utf8)
+    XCTAssertTrue(ClairTodo.isTodoFile(path, home: home))
+    let t = ClairTodo.parse(path: path, text: try String(contentsOfFile: path, encoding: .utf8))
+    XCTAssertEqual(t.extra, ["kr": "KR1"])
+    try t.with { $0.done = true }.save(appendBody: "result: shipped")
+    let text = try String(contentsOfFile: path, encoding: .utf8)
+    XCTAssertTrue(text.contains("kr: KR1") && text.contains("done: true"))
+    XCTAssertTrue(text.hasSuffix("context\nresult: shipped\n"))
+    XCTAssertEqual(ClairTodo.parse(path: path, text: text).json["kr"] as? String, "KR1")
+  }
+
+  func testInvalidValuesAndPaths() throws {
+    XCTAssertNil(ClairTodo.invalid(priority: 1, due: "2026-11-05"))
+    XCTAssertNil(ClairTodo.invalid(priority: nil, due: ""))
+    XCTAssertNotNil(ClairTodo.invalid(priority: 4, due: nil))
+    XCTAssertNotNil(ClairTodo.invalid(priority: nil, due: "2026-13-01"))
+    XCTAssertNotNil(ClairTodo.invalid(priority: nil, due: "11/05"))
+    let home = URL.temporaryDirectory
+    XCTAssertFalse(ClairTodo.isTodoFile(ClairTodo.dir(home: home).path + "/../x.md", home: home))
+    XCTAssertFalse(ClairTodo.isTodoFile("/etc/hosts", home: home))
+  }
+
+  func testCommandsRejectInvalidInputWithoutWriting() {
+    let r = CommandRegistry.workbench
+    var s = WorkbenchState()
+    for (id, input) in [("todo.add", ["title": CommandArg.string("x"), "priority": .int(9)]),
+                        ("todo.add", ["title": .string("x"), "due": .string("tomorrow")]),
+                        ("todo.update", ["path": .string("/etc/hosts"), "done": .bool(true)])] {
+      if case .success = r.execute(id, input, state: &s) { XCTFail("\(id) \(input) passed") }
+    }
+  }
+}

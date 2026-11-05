@@ -249,8 +249,8 @@ public enum WorkbenchCLI {
     switch result {
     case .ok: return NSNull()
     case .pane(let pane): return ["pane": pane]
-    // finder.* answers in JSON text or a bare proposal id.
-    case .text(let text) where command.hasPrefix("finder."):
+    // finder.* answers in JSON text or a bare proposal id; todo.* in JSON text.
+    case .text(let text) where command.hasPrefix("finder.") || command.hasPrefix("todo."):
       return (try? JSONSerialization.jsonObject(with: Data(text.utf8))) ?? text
     default:
       guard let data = try? JSONEncoder().encode(result), let tagged = try? JSONSerialization.jsonObject(with: data) as? [String: Any],

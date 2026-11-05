@@ -7,6 +7,8 @@ public struct ClairTodo: Equatable, Sendable {
   public var priority: Int
   public var due: String?
   public var done: Bool
+  /// Front-matter keys Clair does not own (`kr:` …), as read; `render(onto:)` keeps them in the file.
+  public var extra: [String: String] = [:]
 
   public init(path: String, title: String, priority: Int = 2, due: String? = nil, done: Bool = false) {
     self.path = path; self.title = title; self.priority = priority; self.due = due; self.done = done
@@ -31,7 +33,8 @@ public struct ClairTodo: Equatable, Sendable {
       case "priority": t.priority = Int(value) ?? 2
       case "due": t.due = value.isEmpty ? nil : value
       case "done": t.done = value == "true"
-      default: break
+      case "title": break
+      default: t.extra[key] = value
       }
     }
     return t
@@ -60,12 +63,38 @@ public struct ClairTodo: Equatable, Sendable {
     return out.joined(separator: "\n") + "\n" + body
   }
 
-  /// Writes this TODO's front matter into its file, keeping the body.
-  public func save() throws {
+  /// Writes this TODO's front matter into its file, keeping the body; `appendBody` goes on a new line at the end.
+  public func save(appendBody: String? = nil) throws {
     let url = URL(fileURLWithPath: path)
     try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     let old = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
-    try render(onto: old).write(to: url, atomically: true, encoding: .utf8)
+    var text = render(onto: old)
+    if let appendBody, !appendBody.isEmpty { text += (text.hasSuffix("\n") ? "" : "\n") + appendBody + "\n" }
+    try text.write(to: url, atomically: true, encoding: .utf8)
+  }
+
+  /// Why `priority` / `due` cannot be written, or nil when they can.
+  public static func invalid(priority: Int?, due: String?) -> String? {
+    if let priority, !(1...3).contains(priority) { return "priority must be 1, 2 or 3" }
+    if let due, !due.isEmpty {
+      let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"
+      if due.count != 10 || f.date(from: due) == nil { return "due must be YYYY-MM-DD" }
+    }
+    return nil
+  }
+
+  /// `path` names an existing TODO file directly in `~/.clair/todo` (no `..`, no other folder).
+  public static func isTodoFile(_ path: String, home: URL = .homeDirectory) -> Bool {
+    let url = URL(fileURLWithPath: path).standardizedFileURL
+    return url.pathExtension == "md" && url.deletingLastPathComponent().path == dir(home: home).standardizedFileURL.path
+      && FileManager.default.fileExists(atPath: url.path)
+  }
+
+  /// The `todo.*` command reply: Clair's fields plus the file's own keys.
+  public var json: [String: Any] {
+    var o: [String: Any] = extra
+    o["path"] = path; o["title"] = title; o["priority"] = priority; o["due"] = due ?? NSNull(); o["done"] = done
+    return o
   }
 
   /// A new file path for `title`: the title without `/` or `:`, numbered when taken.
@@ -113,16 +142,24 @@ done: false
 Free-form context: why, links, the project path, what was tried, next step.
 ```
 
+Use the commands (`clair todo.list` … or the `mcp__clair__todo_*` tools) rather than writing the files; they check the values and keep extra keys such as `kr:`. Edit a file by hand only when Clair is not running.
+
+```sh
+clair todo.list done=false                     # JSON: path, title, priority, due, done, extra keys; priority → due order
+clair todo.add title="Fix login" priority=1 due=2026-10-30 body="context"
+clair todo.update path=<path> done=true appendBody="result: shipped"   # also title / priority / due ("" clears)
+```
+
 ## Add
 
-When the user asks for a TODO, create the file right away — do not ask for confirmation. Default `priority: 2`, omit `due` unless a date was given (resolve "明日", "金曜" to a date). Put everything a later session needs into the body: the current project path, related files, the request in the user's words.
+When the user asks for a TODO, add it right away — do not ask for confirmation. Default `priority: 2`, omit `due` unless a date was given (resolve "明日", "金曜" to a date). Put everything a later session needs into the body: the current project path, related files, the request in the user's words.
 
 ## List
 
-Read the front matter of every file in `~/.clair/todo`, show open ones sorted by priority, then due date.
+`todo.list done=false` gives the open ones, sorted by priority, then due date.
 
 ## Work on one
 
-When asked to do a TODO (or "次のtodo"), pick the requested one or the open one with the best priority / earliest due, read its body for context, `cd` to the project it names, and do the work. Append progress notes to the body as you go. When finished, set `done: true` and add a short result line. Do not delete files unless the user asks.
+When asked to do a TODO (or "次のtodo"), pick the requested one or the open one with the best priority / earliest due, read its file for context, `cd` to the project it names, and do the work. Add progress notes with `appendBody` as you go. When finished, `todo.update path=… done=true appendBody="<short result>"`. Do not delete files unless the user asks.
 """# + "\n"
 }

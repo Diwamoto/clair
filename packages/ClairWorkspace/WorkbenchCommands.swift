@@ -517,6 +517,19 @@ extension CommandRegistry {
     if !ok { throw CommandError(.preconditionFailed, message()) }
   }
 
+  private static func todoJSON(_ object: Any) -> String {
+    String(decoding: (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes])) ?? Data("null".utf8), as: UTF8.self)
+  }
+
+  // ponytail: `run` cannot throw, so a failed write after a passing preflight answers `{"error":…}`; make run throwing if more commands need it.
+  private static func todoJSONError(_ message: String) -> CommandResult { .text(todoJSON(["error": message])) }
+
+  private static func todoSave(_ t: ClairTodo, appendBody: String?) -> CommandResult {
+    do { try t.save(appendBody: appendBody) } catch { return todoJSONError(error.localizedDescription) }
+    let saved = (try? String(contentsOf: URL(fileURLWithPath: t.path), encoding: .utf8)).map { ClairTodo.parse(path: t.path, text: $0) } ?? t
+    return .text(todoJSON(saved.json))
+  }
+
   public static let workbench = CommandRegistry(core + [shortcutSet(core.map(\.descriptor))])
 
   private static let core: [Command] = [
@@ -766,6 +779,45 @@ extension CommandRegistry {
     },
     cmd("history.open", "チャット履歴をタブで開く", .read, params: [CommandParam("id", .string)], palette: false) { s, i in
       s.openTab(AgentHistory.tabPrefix + i["id"]!.string!); return .ok
+    },
+    // #70: agents edit `~/.clair/todo` through these instead of writing the files; replies are JSON text.
+    cmd("todo.list", "TODO 一覧", .read, params: [CommandParam("done", .bool, required: false)], palette: false) { _, i in
+      .text(todoJSON(ClairTodo.list().filter { t in i["done"]?.bool.map { $0 == t.done } ?? true }.map(\.json)))
+    },
+    cmd("todo.add", "TODO を追加", .additive,
+        params: [CommandParam("title", .string), CommandParam("priority", .int, required: false),
+                 CommandParam("due", .string, required: false), CommandParam("body", .string, required: false)],
+        palette: false,
+        preflight: { _, i throws(CommandError) in
+          try require(!i["title"]!.string!.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "title is empty")
+          if let why = ClairTodo.invalid(priority: i["priority"]?.int, due: i["due"]?.string) { throw CommandError(.invalidInput, why) }
+          return .additive
+        }) { _, i in
+      let title = i["title"]!.string!
+      let due = i["due"]?.string.flatMap { $0.isEmpty ? nil : $0 }
+      let t = ClairTodo(path: ClairTodo.newPath(title: title), title: title, priority: i["priority"]?.int ?? 2, due: due)
+      return todoSave(t, appendBody: i["body"]?.string)
+    },
+    cmd("todo.update", "TODO を更新", .write,
+        params: [CommandParam("path", .string), CommandParam("title", .string, required: false),
+                 CommandParam("priority", .int, required: false), CommandParam("due", .string, required: false),
+                 CommandParam("done", .bool, required: false), CommandParam("appendBody", .string, required: false)],
+        palette: false,
+        preflight: { _, i throws(CommandError) in
+          try require(ClairTodo.isTodoFile(i["path"]!.string!), "no TODO file \(i["path"]!.string!) in ~/.clair/todo")
+          if let title = i["title"]?.string { try require(!title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "title is empty") }
+          if let why = ClairTodo.invalid(priority: i["priority"]?.int, due: i["due"]?.string) { throw CommandError(.invalidInput, why) }
+          return .write
+        }) { _, i in
+      let path = i["path"]!.string!
+      guard let text = try? String(contentsOf: URL(fileURLWithPath: path), encoding: .utf8) else { return todoJSONError("cannot read \(path)") }
+      let t = ClairTodo.parse(path: path, text: text).with { t in
+        if let v = i["title"]?.string { t.title = v }
+        if let v = i["priority"]?.int { t.priority = v }
+        if let v = i["due"]?.string { t.due = v.isEmpty ? nil : v }  // due="" clears it
+        if let v = i["done"]?.bool { t.done = v }
+      }
+      return todoSave(t, appendBody: i["appendBody"]?.string)
     },
     cmd("tab.activate", "タブを切り替え", .read, params: [CommandParam("path", .string)],
         preflight: { s, i throws(CommandError) in
