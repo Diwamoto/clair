@@ -1375,8 +1375,9 @@
     }
   }
 
-  /// ccedit-style (LINE-like) chat: user turns are right-aligned blue bubbles, assistant turns are
-  /// left bubbles whose avatar shows once per run, opening at the latest message; and very long turns start collapsed.
+  /// A history chat in the concierge's chat vocabulary (canvas `履歴チャット`): user turns are right-aligned
+  /// bubbles, each agent run carries the provider header once and its reply is bubble-less Markdown, with the
+  /// run's progress folded into one line. Opens at the latest message; very long turns start collapsed.
   struct AgentChatView: View {
     let history: AgentHistory
     /// Body text size; follows the editor font size (⌘=/⌘-) so long chats stay readable.
@@ -1421,22 +1422,25 @@
               let previous = index > 0 ? items[index - 1].anchor : nil
               let next = index + 1 < items.count ? items[index + 1].anchor : nil
               let newDay = previous.map { !Calendar.current.isDate($0.date, inSameDayAs: message.date) } ?? true
-              // Progress sits on the agent's side, so it neither splits a run nor repeats the avatar.
+              // Progress sits on the agent's side, so it neither splits a run nor repeats the header.
               let side = { (m: AgentHistory.Message?) in m.map { $0.role == "user" } }
-              if newDay { daySeparator(message.date).padding(.top, previous == nil ? 0 : 16).padding(.bottom, 12) }
+              let header = message.role != "user" && (newDay || side(previous) != false)
+              let top: CGFloat = previous == nil || newDay ? 0 : side(previous) == side(message) ? 10 : 22
+              if newDay { daySeparator(message.date).padding(.top, previous == nil ? 0 : 22).padding(.bottom, 16) }
               if case .progress(let steps) = item {
-                ProgressRow(steps: steps, provider: history.provider, fontSize: fontSize, showLabel: newDay || side(previous) != false).padding(.top, previous == nil || newDay ? 0 : side(previous) == false ? 5 : 16)
+                ProgressRow(steps: steps, provider: history.provider, fontSize: fontSize, header: header).padding(.top, top)
               } else if message.text.hasPrefix("[Skill loaded") {
                 systemPill(String(message.text.dropFirst().dropLast()).replacing("Skill loaded", with: tr("スキル読込")), icon: "wand.and.stars")
-                  .padding(.top, previous == nil || newDay ? 0 : 8)
+                  .padding(.top, previous == nil || newDay ? 0 : 10)
               } else {
-              Bubble(message: message, provider: history.provider, fontSize: fontSize,
-                     showLabel: message.role != "user" && (newDay || side(previous) != false),
+                Turn(message: message, provider: history.provider, fontSize: fontSize, header: header,
                      showTime: side(next) != side(message))
-                .padding(.top, previous == nil || newDay ? 0 : side(previous) == side(message) ? 5 : 16)
+                  .padding(.top, top)
               }
             }
-          }.padding(16).padding(.bottom, 16)
+          }
+          .padding(.horizontal, 24).padding(.vertical, 24)
+          .frame(maxWidth: 760).frame(maxWidth: .infinity)
         }.defaultScrollAnchor(.bottom).clairScroller()
       }.frame(maxWidth: .infinity, maxHeight: .infinity).background(C.canvas)
         .task { transcript = await AgentHistoryStore.shared.transcript(history) }
@@ -1458,7 +1462,7 @@
         .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(C.divider.opacity(0.6), lineWidth: 1))
     }
 
-    /// LINE-style centred day pill between turns from different days.
+    /// Centred day pill between turns from different days.
     private func daySeparator(_ date: Date) -> some View {
       Text(date.formatted(.dateTime.month().day().weekday(.abbreviated)))
         .font(.system(size: fontSize - 2)).foregroundStyle(C.textTertiary)
@@ -1466,89 +1470,98 @@
         .frame(maxWidth: .infinity)
     }
 
+    /// The provider's mark, name and time, once at the top of each agent run.
+    private struct RunHeader: View {
+      let provider: AgentHistory.Provider
+      let date: Date
+      let fontSize: CGFloat
+
+      var body: some View {
+        HStack(spacing: 8) {
+          ProviderAvatar(provider: provider, size: 24)
+            .background(provider.tint.opacity(0.16), in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+          Text(provider.rawValue).font(.system(size: fontSize - 2, weight: .semibold)).foregroundStyle(C.textPrimary)
+          Text(date.formatted(date: .omitted, time: .shortened)).font(.system(size: fontSize - 3)).foregroundStyle(C.textQuaternary)
+        }
+      }
+    }
+
     /// An agent run's narration and thinking before its reply, folded by default.
     private struct ProgressRow: View {
       let steps: [AgentHistory.Message]
       let provider: AgentHistory.Provider
       let fontSize: CGFloat
-      let showLabel: Bool
+      let header: Bool
       @State private var expanded = false
 
       var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-          Group { if showLabel { ProviderAvatar(provider: provider, size: 28) } }.frame(width: 28)
-          VStack(alignment: .leading, spacing: 6) {
-            Button { expanded.toggle() } label: {
-              HStack(spacing: 4) {
-                Image(systemName: "chevron.right").rotationEffect(.degrees(expanded ? 90 : 0))
-                Text(tr("途中経過 %@ 件", steps.count))
-              }
-            }.buttonStyle(.plain).font(.system(size: fontSize - 3)).foregroundStyle(C.textTertiary)
-              .accessibilityValue(expanded ? tr("折りたたむ") : tr("続きを表示"))
-            if expanded {
-              VStack(alignment: .leading, spacing: 8) {
-                ForEach(steps) { step in
-                  VStack(alignment: .leading, spacing: 2) {
-                    // "Thinking" is the providers' own term, so it stays untranslated.
-                    if step.role == "thinking" { Text(verbatim: "Thinking").font(.system(size: fontSize - 3)).foregroundStyle(C.textQuaternary) }
-                    Text((try? AttributedString(markdown: step.text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(step.text))
-                      .font(.system(size: fontSize))
-                      .foregroundStyle(step.role == "thinking" ? C.textTertiary : C.textSecondary).textSelection(.enabled)
-                  }
+        VStack(alignment: .leading, spacing: 10) {
+          if header { RunHeader(provider: provider, date: steps[0].date, fontSize: fontSize) }
+          Button { expanded.toggle() } label: {
+            HStack(spacing: 4) {
+              Image(systemName: "chevron.right").font(.system(size: fontSize - 6, weight: .semibold)).rotationEffect(.degrees(expanded ? 90 : 0))
+              Text(tr("途中経過 %@ 件", steps.count))
+            }.contentShape(Rectangle())
+          }.buttonStyle(.plain).font(.system(size: fontSize - 3)).foregroundStyle(C.textTertiary)
+            .accessibilityValue(expanded ? tr("折りたたむ") : tr("続きを表示"))
+          if expanded {
+            VStack(alignment: .leading, spacing: 8) {
+              ForEach(steps) { step in
+                VStack(alignment: .leading, spacing: 2) {
+                  // "Thinking" is the providers' own term, so it stays untranslated.
+                  if step.role == "thinking" { Text(verbatim: "Thinking").font(.system(size: fontSize - 3)).foregroundStyle(C.textQuaternary) }
+                  Text(inline(step.text)).font(.system(size: fontSize - 1)).lineSpacing(3)
+                    .foregroundStyle(step.role == "thinking" ? C.textTertiary : C.textSecondary).textSelection(.enabled)
                 }
-              }.padding(.leading, 10).overlay(alignment: .leading) { Rectangle().fill(C.divider).frame(width: 2) }
-            }
-          }.frame(maxWidth: .infinity, alignment: .leading).padding(.top, showLabel ? 6 : 0)
-        }.padding(.trailing, 40)
+              }
+            }.padding(.leading, 12).overlay(alignment: .leading) { Rectangle().fill(C.divider).frame(width: 2) }
+          }
+        }.frame(maxWidth: .infinity, alignment: .leading)
       }
     }
 
-    private struct Bubble: View {
+    /// One turn: the user's bubble, or the agent's reply as Markdown under the run header. Copy shows on hover.
+    private struct Turn: View {
       let message: AgentHistory.Message
       let provider: AgentHistory.Provider
       let fontSize: CGFloat
-      let showLabel: Bool
+      let header: Bool
       let showTime: Bool
       @State private var expanded = false
+      @State private var hovered = false
 
       var body: some View {
         let long = message.text.count > 1500
         let text = long && !expanded ? String(message.text.prefix(1500)) + "…" : message.text
-        let body = Text((try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(text))
-          .font(.system(size: fontSize)).foregroundStyle(C.textPrimary).textSelection(.enabled)
         let more = Button(expanded ? tr("折りたたむ") : tr("続きを表示")) { expanded.toggle() }
           .buttonStyle(.plain).font(.system(size: fontSize - 3)).foregroundStyle(C.textTertiary)
-        let time = Text(message.date.formatted(date: .omitted, time: .shortened))
-          .font(.system(size: fontSize - 3)).foregroundStyle(C.textQuaternary)
-        if message.role == "user" {
-          HStack {
-            Spacer(minLength: 0)
+        let user = message.role == "user"
+        let copy = Button { copyToPasteboard(message.text) } label: { Image(systemName: "doc.on.doc").frame(width: 24, height: 22) }
+          .buttonStyle(.hoverWash).font(.system(size: fontSize - 4)).foregroundStyle(C.textQuaternary)
+          .help(user ? tr("プロンプトをコピー") : tr("返答をコピー")).accessibilityLabel(user ? tr("プロンプトをコピー") : tr("返答をコピー"))
+          .opacity(hovered ? 1 : 0)
+        Group {
+          if user {
             VStack(alignment: .trailing, spacing: 4) {
-              body.foregroundStyle(.white).padding(.horizontal, 14).padding(.vertical, 9)
-                .background(C.debugBlue, in: UnevenRoundedRectangle(topLeadingRadius: 16, bottomLeadingRadius: 16, bottomTrailingRadius: 16, topTrailingRadius: 5))
-              HStack(spacing: 8) {
-                if long { more }; if showTime { time }
-                Button {
-                  NSPasteboard.general.clearContents(); NSPasteboard.general.setString(message.text, forType: .string)
-                } label: { Image(systemName: "doc.on.doc") }
-                  .buttonStyle(.plain).font(.system(size: fontSize - 3)).foregroundStyle(C.textTertiary)
-                  .help(tr("プロンプトをコピー")).accessibilityLabel(tr("プロンプトをコピー"))
+              Text(inline(text)).font(.system(size: fontSize)).lineSpacing(3).foregroundStyle(C.textPrimary).textSelection(.enabled)
+                .padding(.horizontal, 16).padding(.vertical, 10)
+                .background(C.surfaceActive, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+              HStack(spacing: 6) {
+                if long { more }
+                if showTime || hovered {
+                  Text(message.date.formatted(date: .omitted, time: .shortened)).font(.system(size: fontSize - 3)).foregroundStyle(C.textQuaternary)
+                }
+                copy
               }
-            }.containerRelativeFrame(.horizontal, alignment: .trailing) { width, _ in width * 0.72 }
+            }.frame(maxWidth: .infinity, alignment: .trailing).padding(.leading, 120)
+          } else {
+            VStack(alignment: .leading, spacing: 10) {
+              if header { RunHeader(provider: provider, date: message.date, fontSize: fontSize) }
+              ForEach(Array(MarkdownPreview.parse(text).enumerated()), id: \.offset) { _, b in ChatBlock(block: b.block, size: fontSize) }
+              HStack(spacing: 6) { copy.padding(.leading, -5); if long { more } }
+            }.textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
           }
-        } else {
-          HStack(alignment: .top, spacing: 10) {
-            Group {
-              if showLabel { ProviderAvatar(provider: provider, size: 28) }
-            }.frame(width: 28)
-            VStack(alignment: .leading, spacing: 4) {
-              body.padding(.horizontal, 14).padding(.vertical, 10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(C.surfaceActive, in: UnevenRoundedRectangle(topLeadingRadius: 5, bottomLeadingRadius: 16, bottomTrailingRadius: 16, topTrailingRadius: 16))
-              if long || showTime { HStack(spacing: 8) { if showTime { time }; if long { more } } }
-            }
-          }.padding(.trailing, 40)
-        }
+        }.onHover { hovered = $0 }
       }
     }
   }

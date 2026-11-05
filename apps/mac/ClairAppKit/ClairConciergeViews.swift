@@ -327,11 +327,12 @@
     }
   }
 
-  private func inline(_ s: String) -> AttributedString {
+  /// Inline Markdown (bold, code, links) for a chat line; falls back to the raw text.
+  func inline(_ s: String) -> AttributedString {
     (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(s)
   }
 
-  private func copyToPasteboard(_ s: String) {
+  func copyToPasteboard(_ s: String) {
     NSPasteboard.general.clearContents(); NSPasteboard.general.setString(s, forType: .string)
   }
 
@@ -387,7 +388,7 @@
             Text(message.date.formatted(date: .omitted, time: .shortened)).font(.system(size: 12)).foregroundStyle(C.textQuaternary)
           }
         }
-        ForEach(Array(MarkdownPreview.parse(message.text).enumerated()), id: \.offset) { _, b in ChatBlock(block: b.block) }
+        ForEach(Array(MarkdownPreview.parse(message.text).enumerated()), id: \.offset) { _, b in ChatBlock(block: b.block, size: 15) }
         Button { copyToPasteboard(message.text) } label: { Image(systemName: "doc.on.doc").frame(width: 24, height: 22) }
           .buttonStyle(.hoverWash).font(.system(size: 11)).foregroundStyle(C.textQuaternary)
           .help(tr("返答をコピー")).accessibilityLabel(tr("返答をコピー"))
@@ -399,23 +400,24 @@
     }
   }
 
-  /// A Markdown block in chat: headings sized for a conversation, code as a card, images never loaded;
-  /// everything else is the Markdown preview's own block view.
-  private struct ChatBlock: View {
+  /// A Markdown block in chat (concierge and history): headings sized for a conversation, code as a card,
+  /// images never loaded; everything else is the Markdown preview's own block view. `size` is the body size.
+  struct ChatBlock: View {
     let block: MarkdownBlock
+    let size: CGFloat
 
     var body: some View {
       switch block {
       case .heading(let level, let text):
-        Text(inline(text)).font(.system(size: [20, 18, 16, 15, 15, 15][level - 1], weight: .semibold))
+        Text(inline(text)).font(.system(size: size * [1.33, 1.2, 1.07, 1, 1, 1][level - 1], weight: .semibold))
           .foregroundStyle(C.textPrimary).padding(.top, 6)
       case .code(let language, let text) where !(language.lowercased() == "mermaid" && MermaidDiagram.parse(text) != nil):
-        CodeCard(language: language, text: text)
+        CodeCard(language: language, text: text, size: size - 2)
       case .image(let alt, let source):
         // The chat has no Project file to resolve against, so images stay what they are.
-        Label(alt.isEmpty ? source : alt, systemImage: "photo").font(.system(size: 13)).foregroundStyle(C.textQuaternary)
+        Label(alt.isEmpty ? source : alt, systemImage: "photo").font(.system(size: size - 2)).foregroundStyle(C.textQuaternary)
       default:
-        MarkdownBlockView(block: block, root: "", path: "", scale: 15.0 / 13).lineSpacing(4)
+        MarkdownBlockView(block: block, root: "", path: "", scale: size / 13).lineSpacing(4)
       }
     }
   }
@@ -423,12 +425,14 @@
   private struct CodeCard: View {
     let language: String
     let text: String
+    /// Code size; the header stays one step below it.
+    let size: CGFloat
     @State private var copied = false
 
     var body: some View {
       VStack(alignment: .leading, spacing: 0) {
         HStack {
-          Text(verbatim: language.isEmpty ? "code" : language).font(.system(size: 12, design: .monospaced)).foregroundStyle(C.textTertiary)
+          Text(verbatim: language.isEmpty ? "code" : language).font(.system(size: size - 1, design: .monospaced)).foregroundStyle(C.textTertiary)
           Spacer(minLength: 0)
           Button {
             copyToPasteboard(text); copied = true
@@ -436,12 +440,12 @@
           } label: {
             Label(copied ? tr("コピーしました") : tr("コピー"), systemImage: copied ? "checkmark" : "doc.on.doc")
               .padding(.horizontal, 6).frame(height: 22)
-          }.buttonStyle(.hoverWash).font(.system(size: 12)).foregroundStyle(C.textTertiary)
+          }.buttonStyle(.hoverWash).font(.system(size: size - 1)).foregroundStyle(C.textTertiary)
         }
         .padding(.leading, 12).padding(.trailing, 6).frame(height: 30).background(W.soft)
         Rectangle().fill(L.hairline).frame(height: 1)
         ScrollView(.horizontal, showsIndicators: false) {
-          Text(verbatim: text).font(.system(size: 13, design: .monospaced)).lineSpacing(3).foregroundStyle(C.code)
+          Text(verbatim: text).font(.system(size: size, design: .monospaced)).lineSpacing(3).foregroundStyle(C.code)
             .padding(.horizontal, 14).padding(.vertical, 12)
         }
       }
