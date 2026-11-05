@@ -184,6 +184,17 @@ import Observation
         state.detectedLaunches = detected
         refreshSleepAssertion()
       }
+      recordAgentPanes()
+    }
+
+    /// #69: `agent.history`'s file, folded from the live panes on each detection tick (2 s), so a closed pane's
+    /// end is at most one tick late. Off when workspace persistence is.
+    @ObservationIgnored private var agentRecords: [AgentPaneRecord]?
+    private func recordAgentPanes() {
+      guard persistURL != nil else { return }
+      let old = agentRecords ?? AgentPaneLog.load()
+      let merged = AgentPaneLog.merge(old, live: state.liveAgentRecords())
+      if merged != agentRecords { agentRecords = merged; if merged != old { AgentPaneLog.save(merged) } }
     }
 
     /// V02: serves this store to `clair` CLI. Only the first window's store wins the socket.

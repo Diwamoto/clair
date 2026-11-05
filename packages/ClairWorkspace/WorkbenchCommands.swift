@@ -751,11 +751,12 @@ extension CommandRegistry {
                  CommandParam("project", .string, required: false)],
         palette: false,
         preflight: { _, i throws(CommandError) in
-          for key in ["since", "until"] { if let d = i[key]?.string { try require(AgentPaneLog.day(d) != nil, "\(key) is not YYYY-MM-DD") } }
+          for key in ["since", "until"] { if let d = i[key]?.string { try require(historyDay(d) != nil, "\(key) is not YYYY-MM-DD") } }
+          try require(historyPeriod(i) != nil, "since is after until")
           return .read
         }) { s, i in
-      let since = i["since"]?.string.flatMap(AgentPaneLog.day) ?? Calendar.current.startOfDay(for: .now)
-      let until = i["until"]?.string.flatMap(AgentPaneLog.day).flatMap { Calendar.current.date(byAdding: .day, value: 1, to: $0) } ?? .distantFuture
+      let period = historyPeriod(i)!
+      let (since, until) = (period.start, period.end)
       // The file is up to one detection tick behind; folding the live panes in makes a just-closed pane's end exact enough.
       let rows = AgentPaneLog.filter(
         AgentPaneLog.merge(AgentPaneLog.load(), live: s.liveAgentRecords()), since: since, until: until, project: i["project"]?.string)

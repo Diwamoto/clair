@@ -248,6 +248,7 @@ public enum WorkbenchCLI {
   private static func payload(_ result: CommandResult, command: String) -> Any {
     switch result {
     case .ok: return NSNull()
+    case .text(let text) where command == "agent.history": return (try? JSONSerialization.jsonObject(with: Data(text.utf8))) ?? text
     case .pane(let pane): return ["pane": pane]
     // finder.* answers in JSON text or a bare proposal id; todo.* and history.list in JSON text.
     case .text(let text) where command.hasPrefix("finder.") || command.hasPrefix("todo.") || command == "history.list":
@@ -386,6 +387,7 @@ public enum WorkbenchCLI {
   static let helpValues = [
     "history.open id": "<Provider>:<sessionID>", "agent.launch resume": "<sessionID>",
     "history.list since": "<YYYY-MM-DD>", "history.list until": "<YYYY-MM-DD>", "history.list project": "<path>",
+    "agent.history since": "<YYYY-MM-DD>", "agent.history until": "<YYYY-MM-DD>",
   ]
 
   /// `clair help [group]`: every registry command a `clair <group> <command>` call can name, with its arguments.
