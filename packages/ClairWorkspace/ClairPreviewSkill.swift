@@ -58,10 +58,11 @@ public enum ClairSkills {
     for (skill, targets) in [(ClairAgentSkill.markdown, ClairAgentSkill.targets(home: home)),
                              (ClairPreviewSkill.markdown, ClairPreviewSkill.targets(home: home)),
                              (ClairTodoSkill.markdown, todoTargets(home))] {
-      for url in targets where FileManager.default.fileExists(atPath: url.path) {
-        guard (try String(contentsOf: url, encoding: .utf8)) == skill else {
-          throw NSError(domain: "ClairSkills", code: 1, userInfo: [NSLocalizedDescriptionKey: "編集済み skill を上書きできません: \(url.path)"])
-        }
+      // An older shipped version and a user edit look the same, so keep any differing file as SKILL.md.bak and update.
+      for url in targets where FileManager.default.fileExists(atPath: url.path) && (try? String(contentsOf: url, encoding: .utf8)) != skill {
+        let backup = url.appendingPathExtension("bak")
+        try? FileManager.default.removeItem(at: backup)
+        try FileManager.default.moveItem(at: url, to: backup)
       }
     }
     try ClairAgentSkill.install(home: home)

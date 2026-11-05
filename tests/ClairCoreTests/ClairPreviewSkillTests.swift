@@ -18,14 +18,14 @@ final class ClairPreviewSkillTests: XCTestCase {
     XCTAssertFalse(FileManager.default.fileExists(atPath: home.appending(path: ".claude/skills/clair-preview").path))
   }
 
-  func testBundleDoesNotOverwriteEditedSkill() throws {
+  func testBundleBacksUpEditedSkillAndUpdates() throws {
     let home = URL.temporaryDirectory.appending(path: "clair-skills-\(UUID().uuidString)")
     defer { try? FileManager.default.removeItem(at: home) }
-    try ClairAgentSkill.install(home: home)
-    let edited = ClairAgentSkill.targets(home: home)[0]
-    try "mine".write(to: edited, atomically: true, encoding: .utf8)
-    XCTAssertThrowsError(try ClairSkills.install(home: home))
-    XCTAssertEqual(try String(contentsOf: edited, encoding: .utf8), "mine")
-    XCTAssertFalse(ClairPreviewSkill.isInstalled(home: home))
+    let edited = ClairSkills.todoTargets(home)[0]
+    try FileManager.default.createDirectory(at: edited.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try "old".write(to: edited, atomically: true, encoding: .utf8)
+    try ClairSkills.install(home: home)
+    XCTAssertTrue(ClairSkills.isInstalled(home: home))
+    XCTAssertEqual(try String(contentsOf: edited.appendingPathExtension("bak"), encoding: .utf8), "old")
   }
 }
