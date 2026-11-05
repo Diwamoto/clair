@@ -413,6 +413,7 @@ import Observation
           state.notices.markRead(project: state.project, pane: pane)
         }
         if id == "agent.report" { agentReported(input) }
+        if id == "notice.post", let n = state.notices.items.first, n.kind == .posted, !n.read { announce(n, true) }
         if id == "notice.toggle", state.noticesOpen { noticeStack = [] }
         // `clair open` / Finder usually come while another app is in front: bring the file into view.
         if id == "file.open" || id == "file.preview" {
@@ -1140,7 +1141,8 @@ import Observation
       }
       guard !NSApp.isActive || state.toggles["notifyWhenActive"] == true else { return }
       let agent = noticeSource(n.project, n.pane).agent
-      deliverNotification(title: n.sessionTitle ?? agent, subtitle: tr("%@ · %@ · ターミナル %@ · %@", n.project, agent, n.pane, n.title), body: n.sourceBody ?? "", id: "clair-\(n.id)") { _ in }
+      let subtitle = n.kind == .posted ? tr("%@ · %@", n.project, n.title) : tr("%@ · %@ · ターミナル %@ · %@", n.project, agent, n.pane, n.title)
+      deliverNotification(title: n.sessionTitle ?? agent, subtitle: subtitle, body: n.sourceBody ?? "", id: "clair-\(n.id)") { _ in }
     }
 
     /// Settings → 通知 → テスト. Ignores the enable/foreground toggles so the path can always be checked; `done(false)` = not allowed or not an app bundle.
@@ -3757,7 +3759,16 @@ import Observation
 
     private func openNotice(_ n: WorkbenchNotice) {
       if n.project != st.project { store.run("project.switch", ["name": .string(n.project)]) }
-      store.run("pane.focus", ["id": .int(n.pane)])
+      if n.kind == .posted {
+        store.state.notices.markRead(project: n.project, pane: 0)
+        if let open = n.open, let root = st.projects.first(where: { $0.name == n.project })?.path {
+          // A path that exists under the Project is a file; anything else is a chat history id.
+          FileManager.default.fileExists(atPath: root + "/" + open)
+            ? store.run("file.open", ["path": .string(open)]) : store.run("history.open", ["id": .string(open)])
+        }
+      } else {
+        store.run("pane.focus", ["id": .int(n.pane)])
+      }
       if st.noticesOpen { store.run("notice.toggle") }
     }
 
@@ -3775,7 +3786,7 @@ import Observation
           }
         }
         Group {
-          Text(tr("%@ · ターミナル %@ · %@", n.project, n.pane, n.title)).foregroundStyle(n.kind == .exited && n.exitCode != 0 ? C.attention : C.textTertiary).lineLimit(1)
+          Text(n.kind == .posted ? tr("%@ · %@", n.project, n.title) : tr("%@ · ターミナル %@ · %@", n.project, n.pane, n.title)).foregroundStyle(n.kind == .exited && n.exitCode != 0 ? C.attention : C.textTertiary).lineLimit(1)
           if let body = n.sourceBody, !body.isEmpty { Text(body).font(.system(size: 12)).foregroundStyle(C.textSecondary).lineLimit(3) }
         }.padding(.leading, 14)
       }

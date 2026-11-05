@@ -7,7 +7,7 @@ import Foundation
 // ponytail: history lives in memory only (cap 200), not workspace.json; persist if restore-after-quit matters.
 
 public struct WorkbenchNotice: Sendable, Codable, Equatable, Identifiable {
-  public enum Kind: String, Sendable, Codable { case bell, exited, done }
+  public enum Kind: String, Sendable, Codable { case bell, exited, done, posted }  // posted: `notice.post` from an agent, pane 0
   public let id: Int
   public let project: String
   public let pane: Int
@@ -16,6 +16,8 @@ public struct WorkbenchNotice: Sendable, Codable, Equatable, Identifiable {
   public let sourceTitle: String?
   public let sourceBody: String?
   public let sessionTitle: String?
+  /// `notice.post open=`: a Project-relative file path or a chat history id, opened on click.
+  public var open: String? = nil
   public let at: Date
   public var read: Bool
 
@@ -24,6 +26,7 @@ public struct WorkbenchNotice: Sendable, Codable, Equatable, Identifiable {
     switch kind {
     case .bell: sourceTitle.flatMap { $0.isEmpty ? nil : $0 } ?? tr("通知")
     case .done: tr("完了")
+    case .posted: tr("エージェントから")
     case .exited: exitCode == 0 ? tr("正常終了") : tr("異常終了 (exit %@)", exitCode ?? -1)
     }
   }
@@ -42,13 +45,20 @@ public struct NotificationLog: Sendable, Codable, Equatable {
 
   /// Records the fact. A muted source is kept in history (already read) but returns nil: no badge, no macOS alert.
   @discardableResult
-  public mutating func record(project: String, pane: Int, kind: WorkbenchNotice.Kind, exitCode: Int? = nil, sourceTitle: String? = nil, sourceBody: String? = nil, sessionTitle: String? = nil, at: Date = Date()) -> WorkbenchNotice? {
+  public mutating func record(project: String, pane: Int, kind: WorkbenchNotice.Kind, exitCode: Int? = nil, sourceTitle: String? = nil, sourceBody: String? = nil, sessionTitle: String? = nil, open: String? = nil, at: Date = Date()) -> WorkbenchNotice? {
     let muted = mutedProjects.contains(project) || mutedPanes.contains(Self.paneKey(project, pane))
-    let n = WorkbenchNotice(id: nextID, project: project, pane: pane, kind: kind, exitCode: exitCode, sourceTitle: sourceTitle, sourceBody: sourceBody.map { String($0.prefix(Self.bodyCap)) }, sessionTitle: sessionTitle, at: at, read: muted)
+    let n = WorkbenchNotice(id: nextID, project: project, pane: pane, kind: kind, exitCode: exitCode, sourceTitle: sourceTitle, sourceBody: sourceBody.map { String($0.prefix(Self.bodyCap)) }, sessionTitle: sessionTitle, open: open, at: at, read: muted)
     nextID += 1
     items.insert(n, at: 0)
     if items.count > Self.cap { items.removeLast(items.count - Self.cap) }
     return muted ? nil : n
+  }
+
+  /// `notice.post` budget: at most this many posts per `postWindow`, so a looping agent cannot flood the stack.
+  public static let postLimit = 5
+  public static let postWindow: TimeInterval = 60
+  public func postAllowed(at: Date = Date()) -> Bool {
+    items.lazy.filter { $0.kind == .posted && at.timeIntervalSince($0.at) < Self.postWindow }.count < Self.postLimit
   }
 
   public func unread(_ project: String? = nil) -> Int { items.filter { !$0.read && (project == nil || $0.project == project) }.count }

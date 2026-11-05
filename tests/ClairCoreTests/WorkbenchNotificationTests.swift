@@ -42,6 +42,23 @@ final class WorkbenchNotificationTests: XCTestCase {
     XCTAssertEqual(log.unread("p"), 1)
   }
 
+  func testPostRespectsMuteAndRateLimit() throws {
+    var s = WorkbenchState()
+    s.projects = [WorkbenchProject(name: "p", path: "/tmp"), WorkbenchProject(name: "q", path: "/tmp")]; s.project = "p"
+    let reg = CommandRegistry.workbench
+    XCTAssertNoThrow(try reg.execute("notice.post", ["title": .string("期限切れ"), "body": .string("TODO 3 件"), "open": .string("a.md")], state: &s).get())
+    XCTAssertEqual(s.notices.items.first?.sessionTitle, "期限切れ"); XCTAssertEqual(s.notices.items.first?.open, "a.md")
+    XCTAssertEqual(s.notices.unread("p"), 1)
+    s.notices.mutedProjects.insert("q")
+    XCTAssertNoThrow(try reg.execute("notice.post", ["title": .string("x"), "project": .string("q")], state: &s).get())
+    XCTAssertEqual(s.notices.unread("q"), 0)  // muted: history only
+    XCTAssertEqual(reg.execute("notice.post", ["title": .string("x"), "project": .string("nope")], state: &s).failureCode, .preconditionFailed)
+    for _ in 0..<3 { XCTAssertNoThrow(try reg.execute("notice.post", ["title": .string("x")], state: &s).get()) }
+    XCTAssertEqual(reg.execute("notice.post", ["title": .string("x")], state: &s).failureCode, .preconditionFailed)
+    XCTAssertTrue(s.notices.postAllowed(at: Date().addingTimeInterval(NotificationLog.postWindow + 1)))
+    XCTAssertEqual(reg.commands.first { $0.id == "notice.post" }?.aiAvailable, true)
+  }
+
   func testToggleOpensTheNoticePanel() throws {
     var s = WorkbenchState()
     let reg = CommandRegistry.workbench

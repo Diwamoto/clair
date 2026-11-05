@@ -1279,6 +1279,26 @@ extension CommandRegistry {
     cmd("notice.markRead", "通知を既読にする", .write, params: [CommandParam("project", .string, required: false)]) { s, i in
       s.notices.markRead(project: i["project"]?.string); return .ok
     },
+    // #71: an agent tells the user something a chat reply would not surface. Mute and history apply as for
+    // terminal facts; the GUI announces it. Rate-limited per `NotificationLog.postLimit`.
+    cmd("notice.post", "通知を出す", .additive,
+        params: [
+          CommandParam("title", .string), CommandParam("body", .string, required: false),
+          CommandParam("project", .string, required: false), CommandParam("open", .string, required: false),
+        ],
+        palette: false,
+        preflight: { s, i throws(CommandError) in
+          let project = i["project"]?.string ?? s.project
+          try require(s.projects.contains { $0.name == project }, "no project \(project)")
+          try require(!i["title"]!.string!.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "title is empty")
+          try require(s.notices.postAllowed(), "too many notices: at most \(NotificationLog.postLimit) per minute")
+          return .additive
+        }) { s, i in
+      s.notices.record(
+        project: i["project"]?.string ?? s.project, pane: 0, kind: .posted,
+        sourceBody: i["body"]?.string, sessionTitle: String(i["title"]!.string!.prefix(120)), open: i["open"]?.string)
+      return .ok
+    },
     cmd("notice.clear", "通知履歴を消去", .write, ai: false) { s, _ in s.notices.clear(); return .ok },
     cmd("notice.toggle", "通知一覧", .read, ai: false, shortcut: "⌘⇧H") { s, _ in s.noticesOpen.toggle(); return .ok },
     cmd("notice.muteProject", "Project の通知をミュート", .write, ai: false,
