@@ -39,7 +39,8 @@ clair agent launch profile=claude prompt="<self-contained task>" [direction=righ
 ```bash
 clair agent wait key="<key>" [timeout=1800]   # exit 0 when that child exited, 1 on timeout
 clair agent status key="<key>"                # "running" | "exited <code>"
-clair agent output key="<key>" [lines=200]     # the child's last output lines
+clair agent output key="<key>" [lines=200]     # last output lines — works on any terminal pane in the
+                                               # active Project (find keys with `clair agent list`), not only your children
 ```
 
 Launch all children first, then wait on each key in turn.

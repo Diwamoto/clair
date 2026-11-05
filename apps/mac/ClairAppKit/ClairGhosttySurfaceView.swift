@@ -850,6 +850,11 @@ import Foundation
       return true
     }
 
+    /// Everything the terminal in `pane` holds, scrollback included (`agent.output` on a non-delegated pane).
+    public static func screenText(inPane pane: Int) -> String? {
+      try? byPane[pane]?.view?.ghosttySurface?.readText(.screen)
+    }
+
     /// The selected text of the terminal in `pane`, nil without a selection.
     public static func selectedText(inPane pane: Int) -> String? {
       guard let v = byPane[pane]?.view, let surface = v.ghosttySurface, (try? surface.hasSelection()) == true,

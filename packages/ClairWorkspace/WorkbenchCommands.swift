@@ -646,9 +646,8 @@ extension CommandRegistry {
     },
     cmd("agent.output", "エージェントの出力", .read,
         params: [CommandParam("key", .string), CommandParam("lines", .int, required: false)], palette: false,
-        preflight: { s, i throws(CommandError) in _ = try s.delegated(i["key"]!.string!); return .read }) { s, i in
-      let l = try! s.delegated(i["key"]!.string!)
-      return .text(AgentRun(id: l.run!).output(lines: max(1, i["lines"]?.int ?? 200)))
+        preflight: { s, i throws(CommandError) in _ = try s.paneOutput(i["key"]!.string!, lines: 1); return .read }) { s, i in
+      .text(try! s.paneOutput(i["key"]!.string!, lines: max(1, i["lines"]?.int ?? 200)))
     },
     // Closing your own finished child is housekeeping; anything else ends someone's session and needs approval.
     cmd("agent.close", "エージェントのペインを閉じる", .read,

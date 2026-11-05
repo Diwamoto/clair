@@ -137,8 +137,12 @@ final class WorkbenchAgentLaunchTests: XCTestCase {
     XCTAssertTrue(l.command.contains("claude -p"))
     // unknown parent terminal: refused before anything opens
     XCTAssertEqual(r.execute("agent.launch", ["profile": .string("claude"), "parent": .string(root + "#99")], confirmed: true, state: &s).failure?.code, .preconditionFailed)
-    // status/output only for delegated agents
+    // status only for delegated agents; output reads any terminal pane's screen through the GUI hook
     XCTAssertEqual(r.execute("agent.status", ["key": .string(parent)], state: &s).failure?.code, .preconditionFailed)
+    XCTAssertEqual(r.execute("agent.output", ["key": .string(parent)], state: &s).failure?.code, .preconditionFailed)
+    WorkbenchState.screenText = { _ in "a\nb\nc\n" }
+    defer { WorkbenchState.screenText = { _ in nil } }
+    XCTAssertEqual(try r.execute("agent.output", ["key": .string(parent), "lines": .int(2)], state: &s).get(), .text("b\nc"))
   }
 
   // The recorded run: the generated command really records output and the exit status through `script`.

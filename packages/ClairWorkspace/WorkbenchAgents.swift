@@ -170,6 +170,23 @@ public struct WorkbenchAgent: Sendable, Codable, Equatable {
 }
 
 extension WorkbenchState {
+  /// The scrollback+screen text of a terminal pane in the active Project, installed by the GUI
+  /// (the PTY bytes live in the daemon; Ghostty holds the rendered text). nil when not mounted.
+  nonisolated(unsafe) public static var screenText: (_ pane: Int) -> String? = { _ in nil }
+
+  /// What `agent.output` reads: a delegated run's log, else any terminal pane's rendered screen.
+  func paneOutput(_ key: String, lines: Int) throws(CommandError) -> String {
+    if let l = try? delegated(key) { return AgentRun(id: l.run!).output(lines: lines) }
+    guard let t = terminal(key) else { throw CommandError(.preconditionFailed, "\(key) is not a terminal") }
+    // ponytail: only the active Project's panes are mounted in Ghostty; read the daemon journal for the rest if needed.
+    guard t.project == project, let text = Self.screenText(t.pane) else {
+      throw CommandError(.preconditionFailed, "\(key) is not in the active Project")
+    }
+    // Trim first: the blank rows under the cursor would otherwise use up `lines`.
+    return text.trimmingCharacters(in: .whitespacesAndNewlines)
+      .split(separator: "\n", omittingEmptySubsequences: false).suffix(lines).joined(separator: "\n")
+  }
+
   /// Same key the GUI uses for the daemon shell behind a terminal pane (`ClairWorkbenchStore.terminalKey`).
   public static func terminalKey(_ root: String, _ pane: Int) -> String { "\(root)#\(pane)" }
 
