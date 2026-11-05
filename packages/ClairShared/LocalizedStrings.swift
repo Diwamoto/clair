@@ -792,6 +792,7 @@ extension LocalizedStrings {
     "デバッガーの応答がありません: %@": "No response from the debugger: %@",
     "終了コード: %@": "Exit code: %@",
     "正常終了": "Exited",
+    "完了": "Done", "未読 %@": "%@ unread", "ほか %@ 件 · ⇧⌘H で一覧": "%@ more · ⇧⌘H to list", "通知一覧": "Notifications",
     "異常終了 (exit %@)": "Failed (exit %@)",
     // ADR-0025: file browser and agent file proposals
     "よく使う項目": "Favorites",

@@ -192,6 +192,8 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var agentReports: [String: AgentReport] = [:]
   public var notices = NotificationLog()
   public var settingsOpen = false
+  /// The notice list panel (⇧⌘H). Transient.
+  public var noticesOpen = false
   /// Transient UI navigation request. The sidebar selection itself belongs to the app shell.
   public var debugNavigationGeneration = 0
   /// ⌘B hides the sidebar panel (activity bar stays). Transient.
@@ -721,6 +723,8 @@ extension CommandRegistry {
         params: [
           CommandParam("state", .string, allowed: AgentReport.State.allCases.map(\.rawValue)),
           CommandParam("session", .string, required: false), CommandParam("parent", .string, required: false),
+          // The reply that ended the turn; the GUI records it as the "done" notice's body.
+          CommandParam("message", .string, required: false),
         ],
         palette: false,
         preflight: { s, i throws(CommandError) in
@@ -1276,6 +1280,7 @@ extension CommandRegistry {
       s.notices.markRead(project: i["project"]?.string); return .ok
     },
     cmd("notice.clear", "通知履歴を消去", .write, ai: false) { s, _ in s.notices.clear(); return .ok },
+    cmd("notice.toggle", "通知一覧", .read, ai: false, shortcut: "⌘⇧H") { s, _ in s.noticesOpen.toggle(); return .ok },
     cmd("notice.muteProject", "Project の通知をミュート", .write, ai: false,
         params: [CommandParam("name", .string), CommandParam("muted", .bool)],
         preflight: { s, i throws(CommandError) in

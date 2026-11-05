@@ -29,6 +29,27 @@ final class WorkbenchNotificationTests: XCTestCase {
     XCTAssertEqual(log.items.first?.sessionTitle, "設定画面の修正")
   }
 
+  func testDoneNoticeFoldsTheIdleBellUntilWorkingAgain() {
+    var log = NotificationLog()
+    log.record(project: "p", pane: 1, kind: .done, sourceBody: String(repeating: "あ", count: 1000))
+    XCTAssertEqual(log.items.first?.title, "Done")
+    XCTAssertEqual(log.items.first?.sourceBody?.count, NotificationLog.bodyCap)
+    XCTAssertTrue(log.hasUnreadDone(project: "p", pane: 1))
+    XCTAssertFalse(log.hasUnreadDone(project: "p", pane: 2))
+    log.record(project: "p", pane: 1, kind: .bell)
+    log.markDoneRead(project: "p", pane: 1)  // the agent works again: only the stale "done" is read
+    XCTAssertFalse(log.hasUnreadDone(project: "p", pane: 1))
+    XCTAssertEqual(log.unread("p"), 1)
+  }
+
+  func testToggleOpensTheNoticePanel() throws {
+    var s = WorkbenchState()
+    let reg = CommandRegistry.workbench
+    XCTAssertNoThrow(try reg.execute("notice.toggle", [:], state: &s).get())
+    XCTAssertTrue(s.noticesOpen)
+    XCTAssertEqual(reg.commands.first { $0.id == "notice.toggle" }?.shortcut, "⌘⇧H")
+  }
+
   func testMuteCommandsAndAIBoundary() throws {
     var s = WorkbenchState()
     s.projects = [WorkbenchProject(name: "p", path: "/tmp")]; s.project = "p"

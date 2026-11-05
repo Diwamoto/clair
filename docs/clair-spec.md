@@ -542,7 +542,9 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
 - command risk は固定 metadata と runtime preflight で判定し、必要な承認を GUI に
   表示する。AI の自己申告 risk を authorization に使わない
 - Clair の terminal で起動した agent の bell / 通知要求 / 終了を記録し、Clair が前面にないとき macOS notification を送る。通知要求の title / body と、terminal が報告する session title は Mac 上の通知と履歴に表示する。通常の terminal は通知しない
-- 通知一覧は status bar 右端の通知ボタンの popover だけに置く(独立画面は設けない)。行から対象 terminal へ移動し既読にする。記録は session 状態と Project badge にも使う
+- 通知一覧は右端からスライドする通知パネルに置く(⇧⌘H か status bar 右端の通知ボタンで開閉、Esc でも閉じる。2026-11-05 オーナー依頼で popover から移した)。行から対象 terminal へ移動し既読にする。記録は session 状態と Project badge にも使う
+- Clair が前面のあいだに記録した通知は左下にカードとして積む(新しいものが下、最大 4 枚、残りは「ほか N 件」)。× か、カードのクリック、対象 pane の focus で消える。背面のときは macOS notification を使う。カードとパネルの行は terminal のタイトル、Project・agent・terminal・事実、agent の言葉(OSC の本文か、下記の完了時の返答)の先頭数行を出す
+- Claude Code の hooks が `agent.report state=done` に添える最後の返答(Stop の `last_assistant_message`)は、GUI が「完了」通知の本文として記録する。報告できるのは Clair の terminal だけで、OSC の本文と同じく terminal から来たテキストとして扱う。未読の「完了」がある pane の入力待ちベルは重ねて記録せず、その pane が working に戻ると「完了」は既読になる
 - Project / terminal 単位で notification を mute できる
 
 ## 10. Mobile

@@ -33,6 +33,10 @@ Clair は agent TUI の screen scraping を対象外にしている(仕様 §2-3
   `session_id` から渡す)は agent の launch に記録して保存する。起動時、daemon に shell が残っていない agent pane
   だけ、その id で `resume` コマンドを使って会話を開き直す。daemon は command が変わると live shell を作り直すため、
   shell が生きている pane の command は変えない(daemon が応答するのに問い合わせが失敗した pane も変えない)。
+- 追記(2026-11-05、オーナー依頼): `Stop` の hook は最後の返答(`last_assistant_message`、macOS の `plutil` で
+  stdin から取り出す)を `message=` に添える。GUI はそれを本文にした「完了」通知を記録する(通知を書くのは GUI だけで、
+  報告元は `parent` の pane に限られる)。本文は OSC の本文と同じく terminal から来たテキストとして表示だけに使う。
+  古い hooks は「未導入」に見えるので、入れ直すと新しい command に置き換わる。
 
 ## Consequences
 

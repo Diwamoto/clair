@@ -201,7 +201,7 @@ extension WorkbenchState {
   public static func terminalKey(_ root: String, _ pane: Int) -> String { "\(root)#\(pane)" }
 
   /// V16: the open Project and terminal pane behind `root#pane`, in any Project (not just the shown one).
-  func terminal(_ key: String) -> (project: String, pane: Int)? {
+  public func terminal(_ key: String) -> (project: String, pane: Int)? {
     guard let i = key.lastIndex(of: "#"), let pane = Int(key[key.index(after: i)...]),
       let p = projects.first(where: { $0.path == String(key[..<i]) })
     else { return nil }

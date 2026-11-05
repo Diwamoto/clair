@@ -6,9 +6,13 @@ import Foundation
 public enum ClairClaudeHooks {
   static let marker = "clair agent.report"
   /// The hook's stdin is Claude Code's JSON; its `session_id` lets Clair reopen the conversation after a restart.
+  /// `done` also passes the reply that ended the turn (Stop's `last_assistant_message`, read with macOS's plutil)
+  /// so the notice says what happened.
+  // ponytail: the CLI types a bare number/true/false value, so a reply that is only "42" fails the report; send the message on its own call if that bites.
   static func command(_ state: String) -> String {
-    let session = #"$(sed -n 's/.*"session_id" *: *"\([A-Za-z0-9_-]*\)".*/\1/p' | head -n 1)"#
-    return "[ -n \"$CLAIR_TERMINAL_KEY\" ] && command -v clair >/dev/null && \(marker) state=\(state) session=\"\(session)\" >/dev/null 2>&1; true"
+    let session = #"$(printf %s "$j" | sed -n 's/.*"session_id" *: *"\([A-Za-z0-9_-]*\)".*/\1/p' | head -n 1)"#
+    let message = state == "done" ? #" message="$(printf %s "$j" | plutil -extract last_assistant_message raw -o - - 2>/dev/null | head -c 2000)""# : ""
+    return "[ -n \"$CLAIR_TERMINAL_KEY\" ] && command -v clair >/dev/null && { j=$(cat); \(marker) state=\(state) session=\"\(session)\"\(message) >/dev/null 2>&1; }; true"
   }
   /// event → (matcher, state). `Notification` fires for other reasons too (idle, auth); only dialogs block.
   static let events: [(event: String, matcher: String?, state: String)] = [
@@ -20,7 +24,10 @@ public enum ClairClaudeHooks {
 
   public static func isInstalled(home: URL = .homeDirectory) -> Bool {
     guard let hooks = (try? ClairClaudeEditor.read(home))?["hooks"] as? [String: Any] else { return false }
-    return events.allSatisfy { e in ((hooks[e.event] as? [[String: Any]]) ?? []).contains(where: ours) }
+    // The exact command, so an install from an older Clair reads as not installed and the reinstall picks up the new one.
+    return events.allSatisfy { e in
+      ((hooks[e.event] as? [[String: Any]]) ?? []).contains { (($0["hooks"] as? [[String: Any]]) ?? []).contains { $0["command"] as? String == command(e.state) } }
+    }
   }
 
   /// Replaces Clair's entries (so a reinstall picks up new ones) and keeps every other hook.

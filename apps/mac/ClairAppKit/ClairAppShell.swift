@@ -412,6 +412,8 @@ import Observation
         if id == "pane.focus", case .int(let pane)? = input["id"] {
           state.notices.markRead(project: state.project, pane: pane)
         }
+        if id == "agent.report" { agentReported(input) }
+        if id == "notice.toggle", state.noticesOpen { noticeStack = [] }
         // `clair open` / Finder usually come while another app is in front: bring the file into view.
         if id == "file.open" || id == "file.preview" {
           NSApp?.activate(ignoringOtherApps: true)
@@ -1084,24 +1086,61 @@ import Observation
     private var lastAgentNotification: (key: String, body: String, at: Date)?
 
     public func facts(pane: Int, bells: Int, exit: Int?, notification: (title: String, body: String)?) {
-      guard let agent = state.agentLaunch(in: state.project, pane: pane) else { return }
+      guard state.agentLaunch(in: state.project, pane: pane) != nil else { return }
       // Agents may emit the same desktop notification over both OSC 9 and OSC 777.
       if exit == nil, let notification {
         let key = NotificationLog.paneKey(state.project, pane)
         if let last = lastAgentNotification, last.key == key, last.body == notification.body, Date().timeIntervalSince(last.at) < 2 { return }
         lastAgentNotification = (key, notification.body, Date())
       }
-      let agentName = AgentProfile.named(agent.profile)?.title ?? agent.profile
-      let oscTitle = state.paneTitles[NotificationLog.paneKey(state.project, pane)]
-      let sessionTitle = oscTitle.flatMap { $0.isEmpty || $0 == (agent.cwd as NSString).lastPathComponent ? nil : $0 } ?? tr("%@ · ターミナル %@", agentName, pane)
-      // Only this GUI writes facts (no command records them), so an agent cannot fabricate notifications.
-      // History and badges always record; the toggles below only gate the macOS alert.
-      var fresh: WorkbenchNotice?
-      if bells > 0, let n = state.notices.record(project: state.project, pane: pane, kind: .bell, sourceTitle: notification?.title, sourceBody: notification?.body, sessionTitle: sessionTitle), state.toggles["notifyOnBell"] != false { fresh = n }
-      if let exit, let n = state.notices.record(project: state.project, pane: pane, kind: .exited, exitCode: exit, sessionTitle: sessionTitle), state.toggles["notifyOnExit"] != false { fresh = n }
+      let sessionTitle = noticeSource(state.project, pane).session
+      // Only this GUI writes notices (from terminal facts, or an `agent.report` the registry tied to its terminal),
+      // so an agent cannot fabricate one for another pane. History and badges always record; the toggles only gate the alert.
+      // An unread "done" already says the agent waits; its idle bell a minute later would only repeat it.
+      if bells > 0, !state.notices.hasUnreadDone(project: state.project, pane: pane),
+        let n = state.notices.record(project: state.project, pane: pane, kind: .bell, sourceTitle: notification?.title, sourceBody: notification?.body, sessionTitle: sessionTitle)
+      { announce(n, state.toggles["notifyOnBell"] != false) }
+      if let exit, let n = state.notices.record(project: state.project, pane: pane, kind: .exited, exitCode: exit, sessionTitle: sessionTitle) { announce(n, state.toggles["notifyOnExit"] != false) }
       refreshSleepAssertion()
-      guard let n = fresh, state.toggles["notifyEnabled"] != false, !NSApp.isActive || state.toggles["notifyWhenActive"] == true else { return }
-      deliverNotification(title: n.sessionTitle ?? agentName, subtitle: tr("%@ · %@ · ターミナル %@ · %@", n.project, agentName, n.pane, n.title), body: n.sourceBody ?? "", id: "clair-\(n.id)") { _ in }
+    }
+
+    /// `agent.report` from a Clair terminal (the registry checked the caller): a finished turn becomes a "done"
+    /// notice carrying the reply that ended it; working again makes that notice stale.
+    private func agentReported(_ input: CommandInput) {
+      guard case .string(let parent)? = input["parent"], let t = state.terminal(parent) else { return }
+      switch input["state"] {
+      case .string("done")?:
+        let body: String? = if case .string(let m)? = input["message"] { m.trimmingCharacters(in: .whitespacesAndNewlines) } else { nil }
+        if let n = state.notices.record(project: t.project, pane: t.pane, kind: .done, sourceBody: body?.isEmpty == false ? body : nil, sessionTitle: noticeSource(t.project, t.pane).session) {
+          announce(n, state.toggles["notifyOnBell"] != false)
+        }
+      case .string("working")?: state.notices.markDoneRead(project: t.project, pane: t.pane)
+      default: break
+      }
+    }
+
+    /// The agent's name and the terminal's own title (OSC 0/2, e.g. Claude Code's "✳ topic") for a notice.
+    private func noticeSource(_ project: String, _ pane: Int) -> (agent: String, session: String) {
+      let agent = state.agentLaunch(in: project, pane: pane)
+      let name = agent.map { AgentProfile.named($0.profile)?.title ?? $0.profile } ?? "Claude Code"
+      let osc = state.paneTitles[NotificationLog.paneKey(project, pane)]
+      let session = osc.flatMap { $0.isEmpty || $0 == agent.map({ ($0.cwd as NSString).lastPathComponent }) ? nil : $0 } ?? tr("%@ · ターミナル %@", name, pane)
+      return (name, session)
+    }
+
+    /// Notices shown as bottom-left cards, oldest first. Only while Clair is frontmost; in the background the
+    /// macOS notification does that job. A card leaves on ×, or when its notice is read.
+    public var noticeStack: [Int] = []
+
+    private func announce(_ n: WorkbenchNotice, _ kindEnabled: Bool) {
+      guard kindEnabled, state.toggles["notifyEnabled"] != false else { return }
+      if NSApp.isActive, !state.noticesOpen {
+        let unread = Set(state.notices.items.lazy.filter { !$0.read }.map(\.id))
+        noticeStack = noticeStack.filter(unread.contains) + [n.id]
+      }
+      guard !NSApp.isActive || state.toggles["notifyWhenActive"] == true else { return }
+      let agent = noticeSource(n.project, n.pane).agent
+      deliverNotification(title: n.sessionTitle ?? agent, subtitle: tr("%@ · %@ · ターミナル %@ · %@", n.project, agent, n.pane, n.title), body: n.sourceBody ?? "", id: "clair-\(n.id)") { _ in }
     }
 
     /// Settings → 通知 → テスト. Ignores the enable/foreground toggles so the path can always be checked; `done(false)` = not allowed or not an app bundle.
@@ -1321,7 +1360,6 @@ import Observation
     /// Status-bar hover popovers; `headInfo` is read when the branch or sync popover opens.
     @State private var footerHover: String?
     @State private var headInfo: WorkbenchGit.HeadInfo?
-    @State private var noticesOpen = false
     @State private var groupDropTarget: String?
     @State private var hoveredGroup: String?
     @State private var rootFolded = false
@@ -1436,7 +1474,15 @@ import Observation
         else if let p = st.palette { paletteView(p) }
       }
       .animation(.easeOut(duration: 0.09), value: st.palette == nil)
-      // Notices and approval cards share the bottom-right corner (owner, 2026-10-29).
+      // The notice panel slides in from the trailing edge between the titlebar and the status bar (owner, 2026-11-05).
+      .overlay(alignment: .trailing) {
+        if st.noticesOpen { noticePanel.padding(.top, ChromeBudget.titlebar).padding(.bottom, ChromeBudget.statusBar) }
+      }
+      .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: st.noticesOpen)
+      // Agent notices pile up bottom-left, like Notification Center (owner, 2026-11-05).
+      .overlay(alignment: .bottomLeading) { noticeStackView.padding(.leading, 16).padding(.bottom, ChromeBudget.statusBar + 12) }
+      .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: store.noticeStack)
+      // Approval cards and the update toast share the bottom-right corner (owner, 2026-10-29).
       .overlay(alignment: .bottomTrailing) {
         VStack(alignment: .trailing, spacing: 8) {
           if let a = store.mcpApproval {
@@ -3697,60 +3743,110 @@ import Observation
       }
     }
 
-    /// V08 history: every recorded fact across Projects, newest first. A row jumps to its terminal (marks it read).
+    /// V08 history lives in the notice panel (⇧⌘H); the bell opens and closes it.
     private var noticeButton: some View {
       let unread = st.notices.unread()
-      return Button { noticesOpen.toggle() } label: {
+      return Button { store.run("notice.toggle") } label: {
         HStack(spacing: 3) {
           Image(systemName: unread > 0 ? "bell.badge" : "bell").font(.system(size: 11))
           if unread > 0 { Text("\(unread)").foregroundStyle(C.attention) }
         }.footerItem()
       }
-      .buttonStyle(.hoverWash).help(tr("通知")).accessibilityLabel(unread > 0 ? tr("通知 未読 %@ 件", unread) : tr("通知"))
-      .popover(isPresented: $noticesOpen, arrowEdge: .top) {
-        VStack(alignment: .leading, spacing: 0) {
-          HStack {
-            Text(tr("通知")).font(.system(size: 13, weight: .semibold))
-            Spacer()
-            Button(tr("すべて既読")) { store.run("notice.markRead", [:]) }.disabled(unread == 0)
-            Button(tr("消去")) { store.run("notice.clear", [:]) }.disabled(st.notices.items.isEmpty)
-          }
-          .buttonStyle(.borderless).padding(10)
-          Divider()
-          if st.notices.items.isEmpty {
-            Text(tr("通知はありません")).foregroundStyle(C.textQuaternary).padding(12)
-          } else {
-            ScrollView {
-              LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(st.notices.items) { n in
-                  Button {
-                    if n.project != st.project { store.run("project.switch", ["name": .string(n.project)]) }
-                    store.run("pane.focus", ["id": .int(n.pane)])
-                    noticesOpen = false
-                  } label: {
-                    HStack(spacing: 8) {
-                      Circle().fill(n.read ? Color.clear : C.attention).frame(width: 6, height: 6)
-                      VStack(alignment: .leading, spacing: 2) {
-                        Text(n.sessionTitle ?? tr("ターミナル %@", n.pane))
-                          .foregroundStyle(C.textPrimary)
-                        Text(tr("%@ · ターミナル %@ · %@", n.project, n.pane, n.title)).foregroundStyle(n.kind == .exited && n.exitCode != 0 ? C.attention : C.textTertiary)
-                        if let body = n.sourceBody, !body.isEmpty { Text(body).foregroundStyle(C.textSecondary).fixedSize(horizontal: false, vertical: true) }
-                      }
-                      Spacer(minLength: 8)
-                      Text(n.at.formatted(date: .omitted, time: .shortened)).foregroundStyle(C.textQuaternary)
-                    }
-                    .padding(.horizontal, 10).padding(.vertical, 6).contentShape(Rectangle())
-                  }
-                  .buttonStyle(.hoverWash)
-                }
-              }
-            }
-            .frame(maxHeight: 360)
+      .buttonStyle(.hoverWash).help(tr("通知") + " (⇧⌘H)").accessibilityLabel(unread > 0 ? tr("通知 未読 %@ 件", unread) : tr("通知"))
+    }
+
+    private func openNotice(_ n: WorkbenchNotice) {
+      if n.project != st.project { store.run("project.switch", ["name": .string(n.project)]) }
+      store.run("pane.focus", ["id": .int(n.pane)])
+      if st.noticesOpen { store.run("notice.toggle") }
+    }
+
+    /// One notice: the terminal's title, Project · agent · terminal · fact, then what the agent said.
+    private func noticeContent(_ n: WorkbenchNotice, close: (() -> Void)? = nil) -> some View {
+      VStack(alignment: .leading, spacing: 3) {
+        HStack(spacing: 8) {
+          Circle().fill(n.read ? Color.clear : n.kind == .exited && n.exitCode != 0 ? C.danger : C.attention).frame(width: 6, height: 6)
+          Text(n.sessionTitle ?? tr("ターミナル %@", n.pane)).font(.system(size: 13, weight: .semibold)).foregroundStyle(C.textPrimary).lineLimit(1)
+          Spacer(minLength: 8)
+          Text(n.at.formatted(date: .omitted, time: .shortened)).foregroundStyle(C.textQuaternary)
+          if let close {
+            Button(action: close) { Image(systemName: "xmark").font(.system(size: 9, weight: .semibold)).frame(width: 16, height: 16) }
+              .buttonStyle(.hoverWash).foregroundStyle(C.textQuaternary).help(tr("閉じる")).accessibilityLabel(tr("閉じる"))
           }
         }
-        .font(Typography.font(Typography.chrome)).monospacedDigit()
-        .frame(width: 320)
+        Group {
+          Text(tr("%@ · ターミナル %@ · %@", n.project, n.pane, n.title)).foregroundStyle(n.kind == .exited && n.exitCode != 0 ? C.attention : C.textTertiary).lineLimit(1)
+          if let body = n.sourceBody, !body.isEmpty { Text(body).font(.system(size: 12)).foregroundStyle(C.textSecondary).lineLimit(3) }
+        }.padding(.leading, 14)
       }
+      .font(Typography.font(Typography.chrome)).monospacedDigit()
+      .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Bottom-left cards (canvas `NoticeStack`): newest at the bottom, at most 4, the rest folded into a chip.
+    @ViewBuilder private var noticeStackView: some View {
+      let cards = store.noticeStack.compactMap { id in st.notices.items.first { $0.id == id && !$0.read } }
+      if !cards.isEmpty, !st.noticesOpen {
+        VStack(alignment: .leading, spacing: 8) {
+          if cards.count > 4 {
+            Button { store.run("notice.toggle") } label: {
+              Text(tr("ほか %@ 件 · ⇧⌘H で一覧", cards.count - 4)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+                .padding(.horizontal, 10).frame(height: 24)
+                .background(C.chromeRaised, in: Capsule()).overlay(Capsule().stroke(L.strong))
+            }.buttonStyle(.plain)
+          }
+          ForEach(cards.suffix(4)) { n in
+            Button { openNotice(n) } label: {
+              noticeContent(n) { store.noticeStack.removeAll { $0 == n.id } }
+                .padding(.horizontal, 14).padding(.vertical, 12).frame(width: 340)
+                .background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.overlay))
+                .overlay(RoundedRectangle(cornerRadius: Radius.overlay).stroke(L.strong))
+                .contentShape(RoundedRectangle(cornerRadius: Radius.overlay))
+            }
+            .buttonStyle(.plain)
+            .transition(.move(edge: .leading).combined(with: .opacity))
+          }
+        }
+      }
+    }
+
+    /// The notice list (canvas `NoticePanel`): every recorded fact across Projects, newest first. A row jumps to its
+    /// terminal and marks it read. ⇧⌘H, Esc or the bell closes it.
+    private var noticePanel: some View {
+      let unread = st.notices.unread()
+      return VStack(alignment: .leading, spacing: 0) {
+        // Esc closes even when focus stayed in the terminal (a key equivalent runs before keyDown).
+        Button("") { store.run("notice.toggle") }.keyboardShortcut(.cancelAction).opacity(0).frame(width: 0, height: 0)
+        HStack(spacing: 10) {
+          Text(tr("通知")).font(.system(size: 13, weight: .semibold)).foregroundStyle(C.textPrimary)
+          if unread > 0 { Text(tr("未読 %@", unread)).foregroundStyle(C.attention) }
+          Spacer()
+          Button(tr("すべて既読")) { store.run("notice.markRead", [:]) }.disabled(unread == 0)
+          Button(tr("消去")) { store.run("notice.clear", [:]) }.disabled(st.notices.items.isEmpty)
+        }
+        .buttonStyle(.borderless).font(Typography.font(Typography.chrome)).padding(.horizontal, 14).padding(.vertical, 12)
+        Divider()
+        if st.notices.items.isEmpty {
+          Text(tr("通知はありません")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary).padding(14)
+          Spacer()
+        } else {
+          ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+              ForEach(st.notices.items) { n in
+                Button { openNotice(n) } label: {
+                  noticeContent(n).padding(.horizontal, 14).padding(.vertical, 10).contentShape(Rectangle())
+                }
+                .buttonStyle(.hoverWash)
+                Divider().opacity(0.5)
+              }
+            }
+          }
+        }
+      }
+      .frame(width: 360).frame(maxHeight: .infinity, alignment: .top)
+      .background(C.chromeRaised)
+      .overlay(alignment: .leading) { Rectangle().fill(L.strong).frame(width: 1) }
+      .transition(.move(edge: .trailing))
     }
 
     private var changeCounts: String {

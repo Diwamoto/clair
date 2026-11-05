@@ -316,4 +316,18 @@ final class ClairClaudeHooksTests: XCTestCase {
     XCTAssertEqual((hooks["Stop"]?.first?["hooks"] as? [[String: Any]])?.first?["command"] as? String, "say done")
     XCTAssertEqual(json["model"] as? String, "opus")
   }
+
+  func testDoneHookPassesTheLastReplyAndOldInstallsNeedReinstall() throws {
+    let done = ClairClaudeHooks.command("done")
+    XCTAssertTrue(done.contains("last_assistant_message") && done.contains("message="))
+    XCTAssertFalse(ClairClaudeHooks.command("working").contains("message="))
+    let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let url = ClairClaudeEditor.settings(home: home)
+    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    let old = ["UserPromptSubmit", "PostToolUse", "Notification", "Stop"].map { #""\#($0)":[{"hooks":[{"type":"command","command":"clair agent.report state=x"}]}]"# }
+    try Data(#"{"hooks":{\#(old.joined(separator: ","))}}"#.utf8).write(to: url)
+    XCTAssertFalse(ClairClaudeHooks.isInstalled(home: home))
+    try ClairClaudeHooks.install(home: home)
+    XCTAssertTrue(ClairClaudeHooks.isInstalled(home: home))
+  }
 }
