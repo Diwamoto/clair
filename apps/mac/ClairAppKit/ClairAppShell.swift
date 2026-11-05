@@ -3248,7 +3248,12 @@ import Observation
       .overlay {
         if sidebarMode == "concierge" {
           let c = st.concierge(in: st.project)
-          ConciergeChatView(session: c?.session, pane: c?.pane, children: st.conciergeChildren(in: st.project), focus: focusConciergeChild, start: { startConcierge($0) })
+          ConciergeChatView(
+            session: c?.session, pane: c?.pane,
+            status: c.flatMap { c in st.agentSessions.first { $0.project == st.project && $0.pane == c.pane }?.status },
+            children: st.conciergeChildren(in: st.project), focus: focusConciergeChild,
+            openTerminal: { if let c { store.run("pane.focus", ["id": .int(c.pane)]) }; leaveConcierge() },
+            start: { startConcierge($0) })
         }
       }
     }

@@ -12,6 +12,13 @@ extension LocalizedStrings {
     "コンシェルジュは起動していません": "The concierge is not running",
     "依頼を送ると、ここに会話が表示されます": "Send a request and the conversation appears here",
     "コンシェルジュに頼む…": "Ask the concierge…",
+    "何をお任せしますか?": "What should I take on?",
+    "依頼を子エージェントに割り振り、進み具合をここにまとめます。": "I hand requests to child agents and sum up their progress here.",
+    "未コミットの変更をレビューして": "Review the uncommitted changes", "テストを実行して、失敗を直して": "Run the tests and fix failures",
+    "この Project の構成を説明して": "Explain how this Project is laid out", "残っている TODO を片付けて": "Clear the remaining TODOs",
+    "考えています…": "Thinking…", "ターミナルで承認を待っています": "Waiting for approval in the terminal",
+    "子エージェント · %@": "Child agents · %@", "返答をコピー": "Copy reply", "コピーしました": "Copied",
+    "⏎ 送信": "⏎ Send", "⏎ 送信 · 最初の送信で起動": "⏎ Send · starts on first send",
     "# コンシェルジュへの指示\n\nこの Project で守ってほしいことを書きます。次回の起動から反映されます。\n":
       "# Concierge instructions\n\nWrite what the concierge should follow in this Project. Applies from its next start.\n",
     // Find bar (⌘F)

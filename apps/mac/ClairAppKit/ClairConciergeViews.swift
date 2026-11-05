@@ -1,10 +1,13 @@
 #if os(macOS)
+  import AppKit
   import ClairDesignSystem
   import ClairShared
   import ClairWorkspace
   import SwiftUI
 
   private typealias C = DesignTokens.Color
+  private typealias L = DesignTokens.Line
+  private typealias W = DesignTokens.Wash
 
   // The concierge is read like a conversation, not scanned like chrome: one step above the chrome scale.
   private let chatFont = Font.system(size: 15)  // Tokens: title step (15)
@@ -105,88 +108,200 @@
   }
 
   /// The concierge transcript as chat, over the panes (they stay mounted, so the PTY keeps running).
+  /// Canvas: `Concierge` (conversation) and `Concierge — 空の状態` (no transcript yet).
   struct ConciergeChatView: View {
     let session: String?
     let pane: Int?
+    /// The concierge terminal's own state: `.blocked` is a prompt only the raw terminal can answer,
+    /// and a finished turn (`done` / `idle` / `attention`) ends the working indicator.
+    let status: AgentSession.Status?
     let children: [(session: AgentSession, launch: AgentLaunch)]
     let focus: (AgentSession) -> Void
+    let openTerminal: () -> Void
     /// Starts the concierge with `message` as its first request (the one undecided thing is decided on send).
     let start: (String) -> Void
-    @State private var messages: [AgentHistory.Message] = []
+    /// nil until the transcript has been read once, so the empty state never flashes over a loading chat.
+    @State private var messages: [AgentHistory.Message]?
     /// Kept across leaving and reopening the chat (the view is rebuilt each time).
     @SceneStorage("concierge.draft") private var draft = ""
     /// Shown until the transcript catches up with what was just sent.
     @State private var pending: String?
     @FocusState private var focused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var scheme
+
+    private static let column: CGFloat = 760
+    /// Chat surfaces (user bubble, composer) round past the 3-step chrome radius on purpose; canvas `Concierge`.
+    private static let bubbleRadius: CGFloat = 16
 
     var body: some View {
-      VStack(spacing: 0) {
+      Group {
+        if messages?.isEmpty == true && pending == nil && children.isEmpty {
+          emptyState
+        } else {
           ScrollView {
-            LazyVStack(alignment: .leading, spacing: 16) {
-              if messages.isEmpty && pending == nil {
-                Text(tr("依頼を送ると、ここに会話が表示されます")).foregroundStyle(C.textQuaternary).frame(maxWidth: .infinity).padding(.top, 40)
+            LazyVStack(alignment: .leading, spacing: 22) {
+              let all = messages ?? []
+              ForEach(Array(all.enumerated()), id: \.element.id) { i, m in
+                row(m, header: i == 0 || all[i - 1].role == "user").transition(appear)
               }
-              ForEach(messages) { m in bubble(m.role, m.text) }
-              if let pending { bubble("user", pending).opacity(0.6) }
+              if let pending { userBubble(pending).opacity(0.6).transition(appear) }
+              if status == .blocked {
+                blockedRow.transition(appear)
+              } else if working {
+                WorkingRow().transition(appear)
+              }
               // Children are shown as links after the conversation, never as relayed output.
               if !children.isEmpty {
-                VStack(spacing: 4) {
+                VStack(alignment: .leading, spacing: 6) {
+                  Text(tr("子エージェント · %@", children.count)).font(.system(size: 12)).foregroundStyle(C.textTertiary)
                   ForEach(children, id: \.session.id) { c in
-                    ConciergeChildLink(session: c.session, title: c.launch.prompt.map(ConciergeSidebar.shortTitle) ?? c.session.title) { focus(c.session) }
+                    ChildCard(session: c.session, title: c.launch.prompt.map(ConciergeSidebar.shortTitle) ?? c.session.title) { focus(c.session) }
                   }
                 }
               }
-            }.padding(.horizontal, 16).padding(.vertical, 26).frame(maxWidth: 760).frame(maxWidth: .infinity)
+            }
+            .padding(.horizontal, 24).padding(.top, 32).padding(.bottom, 8)
+            .frame(maxWidth: Self.column).frame(maxWidth: .infinity)
           }.defaultScrollAnchor(.bottom).clairScroller()
-          composer.frame(maxWidth: 760).frame(maxWidth: .infinity).padding(.horizontal, 16).padding(.bottom, 12)
+        }
+      }
+      .safeAreaInset(edge: .bottom, spacing: 0) {
+        composer
+          .padding(.horizontal, 24).padding(.top, 20).padding(.bottom, 18)
+          .frame(maxWidth: Self.column).frame(maxWidth: .infinity)
+          // The conversation scrolls under the composer and fades out above it.
+          .background(LinearGradient(stops: [.init(color: C.canvas.opacity(0), location: 0), .init(color: C.canvas, location: 0.3)],
+                                     startPoint: .top, endPoint: .bottom))
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity).background(C.canvas)
       .task(id: session) { await follow() }
     }
 
-    private func bubble(_ role: String, _ body: String) -> some View {
-      let text = Text((try? AttributedString(markdown: body, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(body))
-        .font(chatFont).textSelection(.enabled)
-      return Group {
-        if role == "user" {
-          HStack {
-            Spacer(minLength: 60)
-            text.foregroundStyle(C.textPrimary).padding(.horizontal, 14).padding(.vertical, 10)
-              .background(C.surfaceActive, in: RoundedRectangle(cornerRadius: 10))
-          }
-        } else {
-          text.foregroundStyle(C.textSecondary).frame(maxWidth: .infinity, alignment: .leading)
-        }
+    /// Waiting on a reply: something was just sent, or the last turn is the user's and the agent has not reported finishing.
+    private var working: Bool {
+      let asked = pending != nil || messages?.last?.role == "user"
+      return asked && (status == nil || status == .running)
+    }
+
+    private var appear: AnyTransition {
+      reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 8))
+    }
+
+    @ViewBuilder private func row(_ m: AgentHistory.Message, header: Bool) -> some View {
+      if m.role != "user" {
+        Reply(message: m, header: header).padding(.top, header ? 0 : -10)
+      } else if m.text.hasPrefix("[Skill loaded") {
+        Label(String(m.text.dropFirst().dropLast()).replacing("Skill loaded", with: tr("スキル読込")), systemImage: "wand.and.stars")
+          .font(.system(size: 12)).foregroundStyle(C.textTertiary)
+          .padding(.horizontal, 10).padding(.vertical, 3).background(W.medium, in: Capsule())
+          .frame(maxWidth: .infinity)
+      } else {
+        userBubble(m.text)
       }
     }
 
+    private func userBubble(_ body: String) -> some View {
+      HStack {
+        Spacer(minLength: 120)
+        Text(inline(body)).font(chatFont).lineSpacing(3).foregroundStyle(C.textPrimary).textSelection(.enabled)
+          .padding(.horizontal, 16).padding(.vertical, 10)
+          .background(C.surfaceActive, in: RoundedRectangle(cornerRadius: Self.bubbleRadius, style: .continuous))
+      }
+    }
+
+    /// The concierge waits on a permission or question in its raw terminal; the chat cannot answer it.
+    private var blockedRow: some View {
+      HStack(spacing: 10) {
+        ConciergeAvatar()
+        Circle().fill(C.attention).frame(width: 6, height: 6)
+        Text(tr("ターミナルで承認を待っています")).font(.system(size: 14)).foregroundStyle(C.textSecondary)
+        Button(tr("ターミナルを開く"), action: openTerminal)
+          .buttonStyle(.plain).font(.system(size: 12, weight: .medium)).foregroundStyle(C.textPrimary)
+          .padding(.horizontal, 10).frame(height: 24)
+          .background(W.strong, in: Capsule()).overlay(Capsule().strokeBorder(L.stronger))
+      }
+    }
+
+    /// Built on the Tokens EMPTY STATE vocabulary: glyph, title, one line, then starters that only fill the composer.
+    private var emptyState: some View {
+      VStack(spacing: 12) {
+        Image(systemName: "brain.head.profile").font(.system(size: 26)).foregroundStyle(C.textSecondary)
+          .frame(width: 56, height: 56)
+          .background(W.raised, in: RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous))
+          .overlay(RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous).strokeBorder(L.strong.opacity(0.6)))
+        Text(tr("何をお任せしますか?")).font(.system(size: 22, weight: .semibold)).foregroundStyle(C.textPrimary).padding(.top, 6)
+        Text(tr("依頼を子エージェントに割り振り、進み具合をここにまとめます。")).font(.system(size: 14)).foregroundStyle(C.textTertiary)
+          .multilineTextAlignment(.center)
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+          ForEach(Self.starters, id: \.text) { s in
+            Button { draft = tr(s.text); focused = true } label: {
+              HStack(spacing: 10) {
+                Image(systemName: s.icon).font(.system(size: 12)).foregroundStyle(C.textTertiary).frame(width: 16)
+                Text(tr(s.text)).font(.system(size: 13)).foregroundStyle(C.textSecondary).lineLimit(1)
+                Spacer(minLength: 0)
+              }
+              .padding(.horizontal, 14).frame(height: 44)
+              .background(W.faint, in: RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous))
+              .overlay(RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous).strokeBorder(L.hairline))
+              .contentShape(Rectangle())
+            }.buttonStyle(HoverWashStyle(radius: Radius.overlay))
+          }
+        }.frame(maxWidth: 560).padding(.top, 18)
+      }
+      .padding(.horizontal, 24).frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private static let starters: [(icon: String, text: String)] = [
+      ("checkmark.seal", "未コミットの変更をレビューして"), ("testtube.2", "テストを実行して、失敗を直して"),
+      ("map", "この Project の構成を説明して"), ("checklist", "残っている TODO を片付けて"),
+    ]
+
     private var composer: some View {
-      HStack(alignment: .bottom, spacing: 8) {
-        TextField(tr("コンシェルジュに頼む…"), text: $draft, axis: .vertical)
-          .textFieldStyle(.plain).lineLimit(2...8).font(chatFont)
-          .frame(maxWidth: .infinity, minHeight: 48, alignment: .topLeading)
+      let empty = draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+      return VStack(alignment: .leading, spacing: 12) {
+        TextField("", text: $draft, prompt: Text(tr("コンシェルジュに頼む…")).foregroundStyle(C.textQuaternary), axis: .vertical)
+          .textFieldStyle(.plain).lineLimit(1...10).font(chatFont)
           .focused($focused)
           .onSubmit(send)
-        let empty = draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        Button(action: send) {
-          Image(systemName: "arrow.up").font(.system(size: 14, weight: .bold)).foregroundStyle(C.canvas)
-            .frame(width: 32, height: 32).background(empty ? C.textQuaternary : C.textPrimary, in: Circle())
-        }.buttonStyle(.plain).disabled(empty).help(tr("送信")).accessibilityLabel(tr("送信"))
+        HStack(spacing: 8) {
+          HStack(spacing: 6) {
+            Circle().fill(pane == nil ? C.textQuaternary : C.success).frame(width: 6, height: 6)
+            Text(verbatim: "Claude Code")
+          }
+          .font(.system(size: 12)).foregroundStyle(C.textTertiary)
+          .padding(.horizontal, 9).frame(height: 24).background(W.medium, in: Capsule())
+          Spacer(minLength: 0)
+          Text(pane == nil ? tr("⏎ 送信 · 最初の送信で起動") : tr("⏎ 送信")).font(.system(size: 11)).foregroundStyle(C.lineNumber)
+          Button(action: send) {
+            Image(systemName: "arrow.up").font(.system(size: 14, weight: .bold)).foregroundStyle(empty ? C.textQuaternary : C.canvas)
+              .frame(width: 32, height: 32).background(empty ? W.strongest : C.textPrimary, in: Circle())
+          }
+          .buttonStyle(.plain).disabled(empty).help(tr("送信")).accessibilityLabel(tr("送信"))
+          .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: empty)
+        }
       }
-      .padding(.leading, 12).padding(.trailing, 8).padding(.vertical, 10)
-      .contentShape(RoundedRectangle(cornerRadius: 10))
-      .onTapGesture { focused = true }  // the whole box is the input, not just the text line
-      .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(focused ? C.textTertiary : C.divider, lineWidth: 1))
+      .padding(.leading, 16).padding(.trailing, 12).padding(.top, 14).padding(.bottom, 10)
+      .background(C.surfaceHover, in: RoundedRectangle(cornerRadius: Self.bubbleRadius, style: .continuous))
+      .overlay(RoundedRectangle(cornerRadius: Self.bubbleRadius, style: .continuous).strokeBorder(focused ? L.ring : L.strong))
+      .shadow(color: .black.opacity(scheme == .dark ? 0.3 : 0.08), radius: 12, y: 6)
+      .contentShape(RoundedRectangle(cornerRadius: Self.bubbleRadius))
+      .onTapGesture { focused = true }  // the whole card is the input, not just the text line
+      .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: focused)
     }
 
     /// Types the text into the concierge PTY, then a real Return key press so the TUI reads it as a submit, not a pasted newline.
     private func send() {
       let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
       guard !text.isEmpty else { return }
-      guard let pane else { draft = ""; pending = text; return start(text) }
+      guard let pane else { draft = ""; show(text); return start(text) }
       guard ClairGhosttySurfaceView.send(text, toPane: pane) else { return }
-      draft = ""; pending = text
+      draft = ""; show(text)
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { ClairGhosttySurfaceView.pressReturn(inPane: pane) }
+    }
+
+    private func show(_ text: String) {
+      withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration)) { pending = text }
     }
 
     /// Re-reads the transcript whenever the session file changes.
@@ -199,12 +314,165 @@
           let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
           if modified != seen {
             seen = modified
-            messages = await Task.detached { AgentHistoryReader.transcript(file: file, provider: .claude).filter { $0.role != "thinking" } }.value
-            if messages.last?.role == "user" || messages.contains(where: { $0.role == "user" && $0.text == pending }) { pending = nil }
+            let read = await Task.detached { AgentHistoryReader.transcript(file: file, provider: .claude).filter { $0.role != "thinking" } }.value
+            // The first read lands as is; later ones slide new turns in.
+            withAnimation(messages == nil || reduceMotion ? nil : .easeOut(duration: Motion.screenDuration)) {
+              messages = read
+              if read.last?.role == "user" || read.contains(where: { $0.role == "user" && $0.text == pending }) { pending = nil }
+            }
           }
-        }
+        } else if messages == nil { messages = [] }
         try? await Task.sleep(for: .seconds(1))
       }
+    }
+  }
+
+  private func inline(_ s: String) -> AttributedString {
+    (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(s)
+  }
+
+  private func copyToPasteboard(_ s: String) {
+    NSPasteboard.general.clearContents(); NSPasteboard.general.setString(s, forType: .string)
+  }
+
+  /// The concierge's mark: its activity-bar glyph on a raised tile.
+  private struct ConciergeAvatar: View {
+    var body: some View {
+      Image(systemName: "brain.head.profile").font(.system(size: 12)).foregroundStyle(C.textSecondary)
+        .frame(width: 24, height: 24)
+        .background(W.strong, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(L.strong.opacity(0.6)))
+    }
+  }
+
+  /// The reply is pending: a comet orbits the avatar and the label shimmers (both still under Reduce Motion).
+  private struct WorkingRow: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+      TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { context in
+        let t = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
+        let sweep = (t.truncatingRemainder(dividingBy: 1.8) / 1.8) * 1.6 - 0.3  // -0.3…1.3 so the highlight enters and leaves
+        HStack(spacing: 10) {
+          ConciergeAvatar().overlay {
+            RoundedRectangle(cornerRadius: Radius.card + 3, style: .continuous)
+              .strokeBorder(AngularGradient(colors: [C.textSecondary.opacity(0), C.textSecondary], center: .center,
+                                            angle: .degrees(t * 300)), lineWidth: 1.5)
+              .padding(-3)
+          }
+          Text(tr("考えています…")).font(.system(size: 14))
+            .foregroundStyle(LinearGradient(stops: [
+              .init(color: C.textQuaternary, location: min(max(sweep - 0.25, 0), 1)),
+              .init(color: C.textPrimary, location: min(max(sweep, 0), 1)),
+              .init(color: C.textQuaternary, location: min(max(sweep + 0.25, 0), 1)),
+            ], startPoint: .leading, endPoint: .trailing))
+        }
+      }
+      .accessibilityElement(children: .combine)
+    }
+  }
+
+  /// One assistant message: bubble-less Markdown under the avatar header (once per run), copy on hover.
+  private struct Reply: View {
+    let message: AgentHistory.Message
+    let header: Bool
+    @State private var hovered = false
+
+    var body: some View {
+      VStack(alignment: .leading, spacing: 10) {
+        if header {
+          HStack(spacing: 8) {
+            ConciergeAvatar()
+            Text(tr("コンシェルジュ")).font(.system(size: 13, weight: .semibold)).foregroundStyle(C.textPrimary)
+            Text(message.date.formatted(date: .omitted, time: .shortened)).font(.system(size: 12)).foregroundStyle(C.textQuaternary)
+          }
+        }
+        ForEach(Array(MarkdownPreview.parse(message.text).enumerated()), id: \.offset) { _, b in ChatBlock(block: b.block) }
+        Button { copyToPasteboard(message.text) } label: { Image(systemName: "doc.on.doc").frame(width: 24, height: 22) }
+          .buttonStyle(.hoverWash).font(.system(size: 11)).foregroundStyle(C.textQuaternary)
+          .help(tr("返答をコピー")).accessibilityLabel(tr("返答をコピー"))
+          .opacity(hovered ? 1 : 0).padding(.leading, -5)
+      }
+      .textSelection(.enabled)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .onHover { hovered = $0 }
+    }
+  }
+
+  /// A Markdown block in chat: headings sized for a conversation, code as a card, images never loaded;
+  /// everything else is the Markdown preview's own block view.
+  private struct ChatBlock: View {
+    let block: MarkdownBlock
+
+    var body: some View {
+      switch block {
+      case .heading(let level, let text):
+        Text(inline(text)).font(.system(size: [20, 18, 16, 15, 15, 15][level - 1], weight: .semibold))
+          .foregroundStyle(C.textPrimary).padding(.top, 6)
+      case .code(let language, let text) where !(language.lowercased() == "mermaid" && MermaidDiagram.parse(text) != nil):
+        CodeCard(language: language, text: text)
+      case .image(let alt, let source):
+        // The chat has no Project file to resolve against, so images stay what they are.
+        Label(alt.isEmpty ? source : alt, systemImage: "photo").font(.system(size: 13)).foregroundStyle(C.textQuaternary)
+      default:
+        MarkdownBlockView(block: block, root: "", path: "", scale: 15.0 / 13).lineSpacing(4)
+      }
+    }
+  }
+
+  private struct CodeCard: View {
+    let language: String
+    let text: String
+    @State private var copied = false
+
+    var body: some View {
+      VStack(alignment: .leading, spacing: 0) {
+        HStack {
+          Text(verbatim: language.isEmpty ? "code" : language).font(.system(size: 12, design: .monospaced)).foregroundStyle(C.textTertiary)
+          Spacer(minLength: 0)
+          Button {
+            copyToPasteboard(text); copied = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
+          } label: {
+            Label(copied ? tr("コピーしました") : tr("コピー"), systemImage: copied ? "checkmark" : "doc.on.doc")
+              .padding(.horizontal, 6).frame(height: 22)
+          }.buttonStyle(.hoverWash).font(.system(size: 12)).foregroundStyle(C.textTertiary)
+        }
+        .padding(.leading, 12).padding(.trailing, 6).frame(height: 30).background(W.soft)
+        Rectangle().fill(L.hairline).frame(height: 1)
+        ScrollView(.horizontal, showsIndicators: false) {
+          Text(verbatim: text).font(.system(size: 13, design: .monospaced)).lineSpacing(3).foregroundStyle(C.code)
+            .padding(.horizontal, 14).padding(.vertical, 12)
+        }
+      }
+      .background(C.panel)
+      .clipShape(RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous))
+      .overlay(RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous).strokeBorder(L.hairline))
+    }
+  }
+
+  /// A child agent in the chat: a card that opens its own terminal pane; its output is never relayed.
+  private struct ChildCard: View {
+    let session: AgentSession
+    let title: String
+    let open: () -> Void
+
+    var body: some View {
+      let (text, color) = statusLabel(session.status)
+      Button(action: open) {
+        HStack(spacing: 10) {
+          Circle().fill(color).frame(width: 6, height: 6)
+          Text(title).lineLimit(1).foregroundStyle(C.textSecondary)
+          Spacer(minLength: 0)
+          Text(text).foregroundStyle(C.textQuaternary)
+          Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(C.textQuaternary)
+        }
+        .font(rowFont)
+        .padding(.horizontal, 14).frame(height: 40)
+        .background(W.faint, in: RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous).strokeBorder(L.hairline))
+        .contentShape(Rectangle())
+      }.buttonStyle(HoverWashStyle(radius: Radius.overlay)).help(tr("ペイン %@ へ移動", session.pane))
     }
   }
 #endif

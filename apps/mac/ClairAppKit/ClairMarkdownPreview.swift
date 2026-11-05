@@ -56,7 +56,7 @@
     }
   }
 
-  private struct MarkdownBlockView: View {
+  struct MarkdownBlockView: View {
     let block: MarkdownBlock
     let root: String
     let path: String
