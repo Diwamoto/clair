@@ -6,6 +6,24 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-11-05
+
+### Added
+- Split editors each keep their own file, and dropping a file tab on an editor's edge opens it in a new split on that side.
+- Folders added to a workspace show as their own sections in the Explorer, and Claude Code agents launched by Clair can see them.
+- Terminals show a scrollbar.
+- Agents can read any terminal pane's screen, and can type into another agent's pane after your approval.
+
+### Changed
+- The concierge chat has a new look: replies render as Markdown with copyable code cards, a working indicator shows while a reply is pending, and an empty chat offers starter requests.
+- The history chat shares the concierge's look, and its text scales with the editor font size.
+- Windows with many agents writing files stay responsive instead of stalling on repeated rescans.
+
+### Fixed
+- Clicking text inside a pane, such as a history chat, now focuses that pane.
+- Drop zones shown while dragging a tab disappear as soon as you release the mouse.
+- The fallback Claude icon has a transparent background instead of a square.
+
 ## [0.29.0] - 2026-11-02
 
 ### Added
@@ -575,7 +593,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.29.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.30.0...HEAD
+[0.30.0]: https://github.com/Diwamoto/clair/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/Diwamoto/clair/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/Diwamoto/clair/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/Diwamoto/clair/compare/v0.26.1...v0.27.0
