@@ -1036,7 +1036,6 @@ import Observation
         let files = (self?.scanFiles(root) ?? []) + WorkbenchFiles.scanFolders(folders, from: root)
         DispatchQueue.main.async {
           guard let self else { return }
-          self.scanning = false
           if generation == self.scanGeneration, root == self.activeRoot,
             self.gitFilesystemMutationRoot != root
           {
@@ -1046,7 +1045,10 @@ import Observation
               guard case .ready(let m)? = self.buffers.peek($0), !self.state.dirty.contains($0) else { return true }
               return FileManager.default.contents(atPath: root + "/" + $0) != Data(m.buffer.snapshot.string().utf8)
             }
-            self.state.applyDiskChange(changed, files: files)
+            // Any `state` write re-renders the whole shell, so a rescan that found the same tree writes nothing.
+            if files != self.state.files || !self.state.dirty.isDisjoint(with: changed) || self.state.files.isEmpty {
+              self.state.applyDiskChange(changed, files: files)
+            }
             if paths.contains(where: { FileWatcher.isGitState($0) }) { self.gitRevision += 1 }
             self.buffers.drop(changed)
             if let active = self.state.active, changed.contains(active) { self.state.editorContext = nil }
@@ -1057,11 +1059,17 @@ import Observation
               self.pendingScan = pending
             } else { self.pendingScan = (paths, root, generation, preserveDirty) }
           }
-          if let pending = self.pendingScan {
-            self.pendingScan = nil
-            self.diskChanged(
-              pending.paths, root: pending.root, generation: pending.generation,
-              preserveDirty: pending.preserveDirty)
+          // Agents writing nonstop would otherwise rescan back to back (a full core, 3 git spawns per scan).
+          // ponytail: fixed 1 s gap; scale it with the scan's own duration if huge trees still saturate.
+          let cooldown: Double = self.pendingScan?.generation == generation ? 1 : 0
+          DispatchQueue.main.asyncAfter(deadline: .now() + cooldown) {
+            self.scanning = false
+            if let pending = self.pendingScan {
+              self.pendingScan = nil
+              self.diskChanged(
+                pending.paths, root: pending.root, generation: pending.generation,
+                preserveDirty: pending.preserveDirty)
+            }
           }
         }
       }
@@ -4369,7 +4377,24 @@ import Observation
       .overlay(Rectangle().fill(isDropTarget ? L.ring : .clear).frame(height: 1), alignment: .bottom)
       .contentShape(Rectangle())
       .onHover { isHovered = $0 }
-      .onDrag({ onDragStart(); return NSItemProvider(object: NSString(string: "\(id)")) }, preview: {
+      .onDrag({ onDragStart(); return NSItemProvider(object: NSString(string: "\(id)")) }, preview: { PaneDragPreview(id: id) })
+      .onDrop(of: [.text], isTargeted: $isDropTarget) { providers in
+        guard let provider = providers.first else { return false }
+        provider.loadObject(ofClass: NSString.self) { object, _ in
+          guard let fromID = (object as? NSString).flatMap({ Int($0 as String) }) else { return }
+          Task { @MainActor in onSwap(fromID, id); onDragEnd() }
+        }
+        return true
+      }
+    }
+  }
+
+  /// `onDrag`'s preview closure runs on every header body update; the window capture (a synchronous
+  /// WindowServer round trip) lives in this view's own body so it only runs when a drag renders it.
+  private struct PaneDragPreview: View {
+    let id: Int
+
+    var body: some View {
         if let shot = ClairGhosttySurfaceView.snapshot(pane: id) {
           let scale = min(1, 360 / max(shot.size.width, 1))
           Image(nsImage: shot).resizable()
@@ -4389,15 +4414,6 @@ import Observation
         .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(L.ring, lineWidth: 1))
         .opacity(0.9)
         }
-      })
-      .onDrop(of: [.text], isTargeted: $isDropTarget) { providers in
-        guard let provider = providers.first else { return false }
-        provider.loadObject(ofClass: NSString.self) { object, _ in
-          guard let fromID = (object as? NSString).flatMap({ Int($0 as String) }) else { return }
-          Task { @MainActor in onSwap(fromID, id); onDragEnd() }
-        }
-        return true
-      }
     }
   }
 
