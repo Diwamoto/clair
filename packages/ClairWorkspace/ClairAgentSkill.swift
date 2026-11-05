@@ -7,10 +7,23 @@ public enum ClairAgentSkill {
   public static let markdown = #"""
 ---
 name: clair-agents
-description: Fan work out to parallel child agents in split Clair terminal panes and collect their results with the `clair` CLI. Use when you run inside a Clair terminal (`CLAIR_TERMINAL_KEY` is set) and a task splits into independent parts worth running in parallel — optionally each on its own Git branch/worktree — then gather the results and close the panes before continuing the main flow.
+description: Work through Clair's own panes — launch child agents in split terminal panes, open files/diffs/reviews in the editor for the user to see — with the `clair` CLI and the `mcp__clair__*` tools. Use by default whenever you run inside a Clair terminal (`CLAIR_TERMINAL_KEY` is set) — not only for parallel work: any side task (investigation, test run, long build, a second opinion, an isolated fix on its own branch) goes to a child pane, and anything the user should look at is opened in Clair instead of pasted into chat.
 ---
 
 # Clair agents (fan-out / fan-in)
+
+## Default reflexes — act, don't ask
+
+Inside Clair, use its panes proactively; the user wants this without being asked.
+
+- Side work that doesn't need your context (research, reproduction, test/build runs, a review of
+  your own diff, an independent fix) → launch a child pane (§1) and keep going on the main flow.
+  Even a single child is fine; don't wait for "parallelizable" work.
+- Changes that edit files → give the child `branch=` so it works in its own worktree.
+- Files, diffs, or review points the user should see → open them in Clair
+  (`mcp__clair__file_open`, `mcp__clair__diff_open`, `mcp__clair__review_comment`) rather than
+  quoting them in chat.
+- Clean up: close finished child panes (§3) before you report back.
 
 Works only inside a Clair terminal: `echo $CLAIR_TERMINAL_KEY` must print `<root>#<pane>`, and `clair`
 must be on PATH (Clair → 設定 → AIプロバイダー → `clair` コマンドをインストール).
