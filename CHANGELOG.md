@@ -6,6 +6,25 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-11-05
+
+### Added
+- Agent notices stack in the bottom-left corner, and ⇧⌘H opens a panel listing them; agents can post their own notices.
+- Agents can list, add and update your Clair TODOs.
+- The agent list shows how much of each agent's context is used.
+- Agents can list chat history and look up past agent panes.
+- Agents can schedule other agents to launch, or be prompted, at a set time.
+
+## [0.31.0] - 2026-11-05
+
+### Added
+- Agent notices stack in the bottom-left corner, and ⇧⌘H opens a panel listing them.
+- Agents can post a Clair notice.
+- Agents can list, add and update Clair TODOs.
+- Agents can see each agent pane's context usage.
+- Agents can list chat history, and the history of agent panes including closed ones.
+- Schedules launch an agent or type into an agent pane at set times on chosen days, with an option to run a missed time once on return.
+
 ## [0.30.0] - 2026-11-05
 
 ### Added
@@ -593,7 +612,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.30.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.31.0...HEAD
+[0.31.0]: https://github.com/Diwamoto/clair/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/Diwamoto/clair/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/Diwamoto/clair/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/Diwamoto/clair/compare/v0.27.0...v0.28.0
