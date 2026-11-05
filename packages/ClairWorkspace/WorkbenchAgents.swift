@@ -171,6 +171,20 @@ public struct WorkbenchAgent: Sendable, Codable, Equatable {
   /// (no reported session, or a provider whose usage Clair does not read).
   public var contextTokens: Int? = nil
   public var contextLimit: Int? = nil
+
+  enum CodingKeys: String, CodingKey {
+    case key, project, pane, profile, cwd, status, exitCode, activity, delegated, parent, concierge, contextTokens, contextLimit
+  }
+  /// Writes unknown context as `null` rather than dropping the key (agent.list contract).
+  public func encode(to encoder: Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(key, forKey: .key); try c.encode(project, forKey: .project); try c.encode(pane, forKey: .pane)
+    try c.encode(profile, forKey: .profile); try c.encode(cwd, forKey: .cwd); try c.encode(status, forKey: .status)
+    try c.encodeIfPresent(exitCode, forKey: .exitCode); try c.encodeIfPresent(activity, forKey: .activity)
+    try c.encode(delegated, forKey: .delegated); try c.encodeIfPresent(parent, forKey: .parent)
+    try c.encode(concierge, forKey: .concierge)
+    try c.encode(contextTokens, forKey: .contextTokens); try c.encode(contextLimit, forKey: .contextLimit)
+  }
 }
 
 public enum AgentContext {
@@ -193,7 +207,8 @@ public enum AgentContext {
   static func tokens(inTail data: Data) -> Int? {
     for line in data.split(separator: 10).reversed() {
       guard let o = try? JSONSerialization.jsonObject(with: line) as? [String: Any], o["type"] as? String == "assistant",
-        o["isSidechain"] as? Bool != true, let usage = (o["message"] as? [String: Any])?["usage"] as? [String: Any]
+        o["isSidechain"] as? Bool != true, (o["message"] as? [String: Any])?["model"] as? String != "<synthetic>",
+        let usage = (o["message"] as? [String: Any])?["usage"] as? [String: Any]
       else { continue }
       return ["input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"]
         .reduce(0) { $0 + ((usage[$1] as? NSNumber)?.intValue ?? 0) }
@@ -201,9 +216,14 @@ public enum AgentContext {
     return nil
   }
 
-  /// ponytail: the JSONL does not name the window; 200k unless usage already passed it (a 1M session).
-  /// A 1M session under 200k reads as 200k — read the model's `[1m]` setting if that matters.
-  public static func claudeLimit(_ tokens: Int) -> Int { tokens > 200_000 ? 1_000_000 : 200_000 }
+  /// The JSONL does not name the window: 1M once usage passed 200k, or when Claude Code's `model`
+  /// setting asks for `[1m]`; otherwise unknown (a session may have switched model).
+  public static func claudeLimit(_ tokens: Int, home: URL = .homeDirectory) -> Int? {
+    if tokens > 200_000 { return 1_000_000 }
+    let settings = (try? Data(contentsOf: home.appending(path: ".claude/settings.json")))
+      .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+    return (settings?["model"] as? String)?.hasSuffix("[1m]") == true ? 1_000_000 : nil
+  }
 }
 
 extension WorkbenchState {
@@ -338,7 +358,7 @@ extension WorkbenchState {
         key: Self.terminalKey(root, s.pane), project: s.project, pane: s.pane, profile: l.profile, cwd: s.cwd,
         status: status, exitCode: exitCode, activity: s.activity, delegated: l.run != nil, parent: l.parent,
         concierge: l.concierge != nil,
-        contextTokens: tokens, contextLimit: tokens.map(AgentContext.claudeLimit))
+        contextTokens: tokens, contextLimit: tokens.flatMap { AgentContext.claudeLimit($0) })
     }
   }
 
