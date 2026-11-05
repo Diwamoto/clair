@@ -1516,18 +1516,17 @@ import Observation
         if st.noticesOpen { noticePanel.padding(.top, ChromeBudget.titlebar).padding(.bottom, ChromeBudget.statusBar) }
       }
       .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: st.noticesOpen)
-      // Agent notices pile up bottom-left, like Notification Center (owner, 2026-11-05).
-      .overlay(alignment: .bottomLeading) { noticeStackView.padding(.leading, 16).padding(.bottom, ChromeBudget.statusBar + 12) }
-      .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: store.noticeStack)
-      // Approval cards and the update toast share the bottom-right corner (owner, 2026-10-29).
+      // Agent notices, approval cards and the update toast share the bottom-right corner (owner, 2026-11-06).
       .overlay(alignment: .bottomTrailing) {
         VStack(alignment: .trailing, spacing: 8) {
+          noticeStackView
           if let a = store.mcpApproval {
             ApprovalCard(id: a.id, input: a.input, risk: a.risk, deadline: store.mcpApprovalDeadline, decide: store.resolveMCPApproval)
               .transition(.move(edge: .trailing).combined(with: .opacity))
           }
           updateToast
         }.onChange(of: store.nameRequest) { nameUntitled() }.padding(.trailing, 16).padding(.bottom, ChromeBudget.statusBar + 12) }
+      .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: store.noticeStack)
       .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: store.update)
       .onChange(of: st.choices["appearance"], initial: true) { _, v in ColorSchemeChoice(setting: v).apply() }
       .onChange(of: st.fileAssociations, initial: true) { _, v in EditorLanguageID.associations = v }
@@ -3829,11 +3828,11 @@ import Observation
       .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Bottom-left cards (canvas `NoticeStack`): newest at the bottom, at most 4, the rest folded into a chip.
+    /// Bottom-right cards (canvas `NoticeStack`): newest at the bottom, at most 4, the rest folded into a chip.
     @ViewBuilder private var noticeStackView: some View {
       let cards = store.noticeStack.compactMap { id in st.notices.items.first { $0.id == id && !$0.read } }
       if !cards.isEmpty, !st.noticesOpen {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .trailing, spacing: 8) {
           if cards.count > 4 {
             Button { store.run("notice.toggle") } label: {
               Text(tr("ほか %@ 件 · ⇧⌘H で一覧", cards.count - 4)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
@@ -3850,7 +3849,7 @@ import Observation
                 .contentShape(RoundedRectangle(cornerRadius: Radius.overlay))
             }
             .buttonStyle(.plain)
-            .transition(.move(edge: .leading).combined(with: .opacity))
+            .transition(.move(edge: .trailing).combined(with: .opacity))
           }
         }
       }
