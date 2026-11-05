@@ -199,11 +199,14 @@ import Observation
         case .skip(let fire): all[n].lastRun = fire
         case .run(let fire):
           all[n].lastRun = fire
-          if let key = schedule.key {
-            run("agent.send", ["key": .string(key), "text": .string(schedule.prompt)], confirmed: true)
-          } else if let profile = schedule.profile {
-            if state.project != schedule.project { run("project.switch", ["name": .string(schedule.project)]) }
-            run("agent.launch", ["profile": .string(profile), "prompt": .string(schedule.prompt)], confirmed: true)
+          // Launches into the schedule's Project without switching the shown one; a failure is a notice, not silence.
+          let result = schedule.key.map { run("agent.send", ["key": .string($0), "text": .string(schedule.prompt)], confirmed: true) }
+            ?? schedule.profile.map {
+              run("agent.launch", ["profile": .string($0), "prompt": .string(schedule.prompt), "project": .string(schedule.project)], confirmed: true)
+            }
+          if case .failure(let e)? = result {
+            let project = state.projects.contains { $0.name == schedule.project } ? schedule.project : state.project
+            run("notice.post", ["title": .string(tr("スケジュールを実行できませんでした")), "body": .string(e.message), "project": .string(project)])
           }
         }
         changed = true

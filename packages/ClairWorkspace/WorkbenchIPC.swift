@@ -250,8 +250,9 @@ public enum WorkbenchCLI {
     case .ok: return NSNull()
     case .text(let text) where command == "agent.history": return (try? JSONSerialization.jsonObject(with: Data(text.utf8))) ?? text
     case .pane(let pane): return ["pane": pane]
-    // finder.* answers in JSON text or a bare proposal id; todo.* and history.list in JSON text.
-    case .text(let text) where command.hasPrefix("finder.") || command.hasPrefix("todo.") || command == "history.list":
+    // finder.* answers in JSON text or a bare proposal id; todo.*, schedule.* and history.list in JSON text.
+    case .text(let text) where command.hasPrefix("finder.") || command.hasPrefix("todo.") || command.hasPrefix("schedule.")
+      || command == "history.list":
       return (try? JSONSerialization.jsonObject(with: Data(text.utf8))) ?? text
     default:
       guard let data = try? JSONEncoder().encode(result), let tagged = try? JSONSerialization.jsonObject(with: data) as? [String: Any],

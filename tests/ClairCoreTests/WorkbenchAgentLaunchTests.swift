@@ -25,6 +25,21 @@ final class WorkbenchAgentLaunchTests: XCTestCase {
     XCTAssertEqual(s.notices.unread(s.project), 0)
   }
 
+  // #72: a schedule launches into its Project without switching the shown one; a missing Project fails.
+  func testLaunchIntoAnotherProjectKeepsTheShownOne() throws {
+    var (s, _) = try opened()
+    let other = URL.temporaryDirectory.appending(path: "clair-72-\(UUID().uuidString)").resolvingSymlinksInPath()
+    try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+    try r.execute("project.open", ["path": .string(other.path)], state: &s).get()
+    let otherName = s.project
+    try r.execute("project.switch", ["name": .string(s.projects[0].name)], state: &s).get()
+    let shown = s.project
+    _ = try r.execute("agent.launch", ["profile": .string("claude"), "prompt": .string("hi"), "project": .string(otherName)], confirmed: true, state: &s).get()
+    XCTAssertEqual(s.project, shown)
+    XCTAssertTrue(s.agentSessions.contains { $0.project == otherName })
+    XCTAssertEqual(r.execute("agent.launch", ["profile": .string("claude"), "project": .string("gone")], confirmed: true, state: &s).failure?.code, .preconditionFailed)
+  }
+
   func testLaunchNeedsConfirmationAndIsAIAvailableForV16() throws {
     var (s, _) = try opened()
     XCTAssertEqual(r.commands.first { $0.id == "agent.launch" }?.aiAvailable, true)

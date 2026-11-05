@@ -127,6 +127,7 @@ final class WorkbenchIPCTests: XCTestCase {
     XCTAssertEqual(run(["finder.proposal", "id=a"], reply: .text(#"{"state":"pending"}"#)).output, #"{"ok":true,"result":{"state":"pending"}}"#)
     // Only finder.* answers in JSON text; agent output that looks like JSON stays a string.
     XCTAssertEqual(run(["agent.output"], reply: .text("[1]")).output, #"{"ok":true,"result":"[1]"}"#)
+    XCTAssertEqual(run(["schedule.list"], reply: .text("[]")).output, #"{"ok":true,"result":[]}"#)  // #72
     let projects = try decoded(run(["project.list"], reply: .projects(active: "a", projects: [])))["result"] as? [String: Any]
     XCTAssertEqual(projects?["active"] as? String, "a")
     let context = try decoded(run(["editor.context"], reply: .diagnostics([])))["result"]

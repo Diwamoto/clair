@@ -519,6 +519,12 @@ extension CommandRegistry {
     if !ok { throw CommandError(.preconditionFailed, message()) }
   }
 
+  private static func launchHome(_ s: WorkbenchState, _ i: CommandInput) throws(CommandError) -> (project: WorkbenchProject, pane: Int?) {
+    guard i["parent"] == nil, let name = i["project"]?.string else { return try s.launchHome(i["parent"]?.string) }
+    guard let p = s.projects.first(where: { $0.name == name }) else { throw CommandError(.preconditionFailed, "no project \(name)") }
+    return (p, nil)
+  }
+
   private static func todoJSON(_ object: Any) -> String {
     String(decoding: (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes])) ?? Data("null".utf8), as: UTF8.self)
   }
@@ -680,6 +686,8 @@ extension CommandRegistry {
           // resume = provider-native session id (history.list's `sessionID`), not the `<Provider>:` history id.
           CommandParam("parent", .string, required: false), CommandParam("resume", .string, required: false),
           CommandParam("review", .bool, required: false), CommandParam("opening", .string, required: false),
+          // A Project other than the shown one, without switching to it (#72 schedules). Ignored with parent.
+          CommandParam("project", .string, required: false),
         ], palette: false,
         preflight: { s, i throws(CommandError) in
           try require(i["resume"]?.string.map(AgentProfile.isSessionID) ?? true, "invalid session id")
@@ -687,7 +695,7 @@ extension CommandRegistry {
             try require(i["prompt"] == nil, "prompt and opening are exclusive")
             try require(AgentProfile.named(i["profile"]!.string!)?.open != nil, "\(i["profile"]!.string!) cannot open with a message")
           }
-          let home = try s.launchHome(i["parent"]?.string)
+          let home = try launchHome(s, i)
           if let b = i["branch"]?.string {
             try require(FileManager.default.fileExists(atPath: home.project.path + "/.git"), "not a Git project")
             try require(WorkbenchGit.validBranch(b), "invalid branch name")
@@ -695,7 +703,7 @@ extension CommandRegistry {
           }
           return .external
         }) { s, i in
-      let home = try! s.launchHome(i["parent"]?.string)
+      let home = try! launchHome(s, i)
       var cwd = home.project.path
       if let b = i["branch"]?.string {
         guard case .success(let wt) = WorkbenchGit.createWorktree(home.project, branch: b) else { return .text("worktree add failed") }
