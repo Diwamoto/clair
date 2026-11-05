@@ -227,9 +227,10 @@ public enum AgentContext {
   /// The JSONL names the model but not its window, so the window follows the model the session was asked for,
   /// in Claude Code's precedence: in-session `/model` > `ANTHROPIC_MODEL` > `<cwd>/.claude/settings.local.json` >
   /// `<cwd>/.claude/settings.json` > `~/.claude/settings.json`. The first one found decides: `[1m]` / `1M` → 1M,
-  /// else 200k. None found → nil. Usage over 200k is 1M whatever they say.
+  /// else nil — an alias (`opus`) or a `/model` display name (`Opus 5.5`) can be 1M by plan default, so 200k is
+  /// never assumed (#73: a 160k `opus` pane did not hit a 60% autocompact). Usage over 200k is 1M whatever they say.
   /// ponytail: a `--model` argument, or `ANTHROPIC_MODEL` exported only in the pane's shell, is not visible to
-  /// Clair — such a 1M session under 200k reads as 200k. Read the claude process's argv/env if that matters.
+  /// Clair — such a 1M session under 200k reads as nil. Read the claude process's argv/env if that matters.
   static func limit(_ tokens: Int, switched: String?, cwd: String, home: URL, env: [String: String]) -> Int? {
     if tokens > 200_000 { return 1_000_000 }
     func setting(_ url: URL) -> String? {
@@ -239,7 +240,7 @@ public enum AgentContext {
     let asked = switched ?? env["ANTHROPIC_MODEL"] ?? setting(dir.appending(path: "settings.local.json"))
       ?? setting(dir.appending(path: "settings.json")) ?? setting(home.appending(path: ".claude/settings.json"))
     guard let asked else { return nil }
-    return asked.lowercased().contains("[1m]") || asked.contains("1M") ? 1_000_000 : 200_000
+    return asked.lowercased().contains("[1m]") || asked.contains("1M") ? 1_000_000 : nil
   }
 }
 

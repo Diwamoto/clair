@@ -29,14 +29,17 @@ final class AgentContextTokensTests: XCTestCase {
     XCTAssertNil(limit(), "no source names a model: unknown, not 200k")
     XCTAssertEqual(limit(300_000), 1_000_000, "usage past 200k proves 1M")
     try settings(home.appending(path: ".claude/settings.json"), "opus")
-    XCTAssertEqual(limit(), 200_000, "user settings")
+    XCTAssertNil(limit(), "an alias without [1m] may be 1M by default: unknown, not 200k")
     try settings(cwd.appending(path: ".claude/settings.json"), "opus[1m]")
     XCTAssertEqual(limit(), 1_000_000, "project settings outrank user")
     try settings(cwd.appending(path: ".claude/settings.local.json"), "sonnet")
-    XCTAssertEqual(limit(), 200_000, "local settings outrank project")
+    XCTAssertNil(limit(), "local settings outrank project")
     XCTAssertEqual(limit(env: ["ANTHROPIC_MODEL": "claude-opus-5-5[1m]"]), 1_000_000, "env outranks settings")
     XCTAssertEqual(limit(switched: "<local-command-stdout>Set model to `Opus 5.5 (1M context)`", env: ["ANTHROPIC_MODEL": "sonnet"]),
       1_000_000, "in-session /model outranks everything")
+    // Real /model stdout names the display name only; it decides, and says nothing about the window.
+    XCTAssertNil(limit(switched: "<local-command-stdout>Set model to `Opus 5.5` and saved as your default for new sessions</local-command-stdout>",
+      env: ["ANTHROPIC_MODEL": "opus[1m]"]))
   }
 
   func testSessionModelSwitchIsReadFromTail() {
