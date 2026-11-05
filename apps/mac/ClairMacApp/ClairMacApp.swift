@@ -121,6 +121,7 @@ import SwiftUI
   func applicationWillTerminate(_ notification: Notification) {
     ClairWorkbenchStore.stopClaudeIDE()
     ClairDaemonLauncher.shutdown()
+    AgentPaneLog.endOpen()  // #69: the runs end at quit, not at the next launch
   }
 }
 

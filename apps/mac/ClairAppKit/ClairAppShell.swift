@@ -211,14 +211,12 @@ import Observation
       if changed { ClairSchedule.save(all) }
     }
 
-    /// #69: `agent.history`'s file, folded from the live panes on each detection tick (2 s), so a closed pane's
-    /// end is at most one tick late. Off when workspace persistence is.
-    @ObservationIgnored private var agentRecords: [AgentPaneRecord]?
+    /// #69: `agent.history`'s file, folded from this window's panes on each detection tick (2 s), so a closed
+    /// pane's end is at most one tick late. Off when workspace persistence is.
+    @ObservationIgnored private var ownedAgentKeys: Set<String> = []
     private func recordAgentPanes() {
       guard persistURL != nil else { return }
-      let old = agentRecords ?? AgentPaneLog.load()
-      let merged = AgentPaneLog.merge(old, live: state.liveAgentRecords())
-      if merged != agentRecords { agentRecords = merged; if merged != old { AgentPaneLog.save(merged) } }
+      AgentPaneLog.record(live: state.liveAgentRecords(), owned: &ownedAgentKeys)
     }
 
     /// V02: serves this store to `clair` CLI. Only the first window's store wins the socket.

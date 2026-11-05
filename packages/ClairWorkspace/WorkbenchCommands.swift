@@ -756,9 +756,9 @@ extension CommandRegistry {
         }) { s, i in
       let period = historyPeriod(i)!
       let (since, until) = (period.start, period.end)
-      // The file is up to one detection tick behind; folding the live panes in makes a just-closed pane's end exact enough.
+      // The file is up to one detection tick behind; the live panes refresh it. Ending is left to each window's tick.
       let rows = AgentPaneLog.filter(
-        AgentPaneLog.merge(AgentPaneLog.load(), live: s.liveAgentRecords()), since: since, until: until, project: i["project"]?.string)
+        AgentPaneLog.merge(AgentPaneLog.load(), live: s.liveAgentRecords(), owned: []), since: since, until: until, project: i["project"]?.string)
       return .text(String(decoding: (try? JSONEncoder().encode(rows)) ?? Data("[]".utf8), as: UTF8.self))
     },
     // An agent's official hooks say what it is doing (`ClairClaudeHooks`); `parent` is the calling terminal,
