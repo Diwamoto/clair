@@ -188,41 +188,58 @@ public struct WorkbenchAgent: Sendable, Codable, Equatable {
 }
 
 public enum AgentContext {
-  /// Context size of a Claude Code session: the latest main-chain assistant usage in its JSONL
-  /// (input + cache read + cache write). Reads only the file's tail.
-  public static func claudeTokens(session: String, home: URL = .homeDirectory) -> Int? {
-    guard AgentProfile.isSessionID(session) else { return nil }
+  /// Context size and window of a Claude Code session: the latest main-chain, non-synthetic assistant usage in
+  /// its JSONL (input + cache read + cache write) and `limit(...)`. Reads only the file's tail.
+  public static func claude(session: String, cwd: String, home: URL = .homeDirectory,
+    env: [String: String] = ProcessInfo.processInfo.environment) -> (tokens: Int?, limit: Int?) {
+    guard AgentProfile.isSessionID(session) else { return (nil, nil) }
     let root = home.appending(path: ".claude/projects")
     guard let dirs = try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil),
       let file = dirs.lazy.map({ $0.appending(path: "\(session).jsonl") }).first(where: { FileManager.default.fileExists(atPath: $0.path) }),
       let handle = try? FileHandle(forReadingFrom: file)
-    else { return nil }
+    else { return (nil, nil) }
     defer { try? handle.close() }
-    // ponytail: last 1 MiB only; a single reply bigger than that reads as unknown.
+    // ponytail: last 1 MiB only; a single reply bigger than that, or a `/model` before it, reads as unknown.
     let end = (try? handle.seekToEnd()) ?? 0
     try? handle.seek(toOffset: end > 1 << 20 ? end - (1 << 20) : 0)
-    return tokens(inTail: (try? handle.readToEnd()) ?? Data())
+    let tail = scan((try? handle.readToEnd()) ?? Data())
+    guard let tokens = tail.tokens else { return (nil, nil) }
+    return (tokens, limit(tokens, switched: tail.model, cwd: cwd, home: home, env: env))
   }
 
-  static func tokens(inTail data: Data) -> Int? {
-    for line in data.split(separator: 10).reversed() {
-      guard let o = try? JSONSerialization.jsonObject(with: line) as? [String: Any], o["type"] as? String == "assistant",
-        o["isSidechain"] as? Bool != true, (o["message"] as? [String: Any])?["model"] as? String != "<synthetic>",
-        let usage = (o["message"] as? [String: Any])?["usage"] as? [String: Any]
-      else { continue }
-      return ["input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"]
-        .reduce(0) { $0 + ((usage[$1] as? NSNumber)?.intValue ?? 0) }
+  /// The latest usage, and the latest in-session `/model` switch (its `<local-command-stdout>`).
+  static func scan(_ data: Data) -> (tokens: Int?, model: String?) {
+    var tokens: Int?, model: String?
+    for line in data.split(separator: 10).reversed() where tokens == nil || model == nil {
+      guard let o = try? JSONSerialization.jsonObject(with: line) as? [String: Any], o["isSidechain"] as? Bool != true else { continue }
+      let message = o["message"] as? [String: Any]
+      if model == nil, let text = (o["content"] ?? message?["content"]) as? String,
+        text.hasPrefix("<local-command-stdout>Set model to") { model = text }
+      if tokens == nil, o["type"] as? String == "assistant", message?["model"] as? String != "<synthetic>",
+        let usage = message?["usage"] as? [String: Any] {
+        tokens = ["input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"]
+          .reduce(0) { $0 + ((usage[$1] as? NSNumber)?.intValue ?? 0) }
+      }
     }
-    return nil
+    return (tokens, model)
   }
 
-  /// The JSONL does not name the window: 1M once usage passed 200k, or when Claude Code's `model`
-  /// setting asks for `[1m]`; otherwise unknown (a session may have switched model).
-  public static func claudeLimit(_ tokens: Int, home: URL = .homeDirectory) -> Int? {
+  /// The JSONL names the model but not its window, so the window follows the model the session was asked for,
+  /// in Claude Code's precedence: in-session `/model` > `ANTHROPIC_MODEL` > `<cwd>/.claude/settings.local.json` >
+  /// `<cwd>/.claude/settings.json` > `~/.claude/settings.json`. The first one found decides: `[1m]` / `1M` → 1M,
+  /// else 200k. None found → nil. Usage over 200k is 1M whatever they say.
+  /// ponytail: a `--model` argument, or `ANTHROPIC_MODEL` exported only in the pane's shell, is not visible to
+  /// Clair — such a 1M session under 200k reads as 200k. Read the claude process's argv/env if that matters.
+  static func limit(_ tokens: Int, switched: String?, cwd: String, home: URL, env: [String: String]) -> Int? {
     if tokens > 200_000 { return 1_000_000 }
-    let settings = (try? Data(contentsOf: home.appending(path: ".claude/settings.json")))
-      .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
-    return (settings?["model"] as? String)?.hasSuffix("[1m]") == true ? 1_000_000 : nil
+    func setting(_ url: URL) -> String? {
+      (try? Data(contentsOf: url)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }?["model"] as? String
+    }
+    let dir = URL(filePath: cwd).appending(path: ".claude")
+    let asked = switched ?? env["ANTHROPIC_MODEL"] ?? setting(dir.appending(path: "settings.local.json"))
+      ?? setting(dir.appending(path: "settings.json")) ?? setting(home.appending(path: ".claude/settings.json"))
+    guard let asked else { return nil }
+    return asked.lowercased().contains("[1m]") || asked.contains("1M") ? 1_000_000 : 200_000
   }
 }
 
@@ -353,12 +370,12 @@ extension WorkbenchState {
       case .exited(let code): status = "exited"; exitCode = code
       }
       let session = l.session ?? l.concierge ?? l.resume
-      let tokens = l.profile == "claude" ? session.flatMap { AgentContext.claudeTokens(session: $0) } : nil
+      let context = l.profile == "claude" ? session.map { AgentContext.claude(session: $0, cwd: s.cwd) } : nil
       return WorkbenchAgent(
         key: Self.terminalKey(root, s.pane), project: s.project, pane: s.pane, profile: l.profile, cwd: s.cwd,
         status: status, exitCode: exitCode, activity: s.activity, delegated: l.run != nil, parent: l.parent,
         concierge: l.concierge != nil,
-        contextTokens: tokens, contextLimit: tokens.flatMap { AgentContext.claudeLimit($0) })
+        contextTokens: context?.tokens, contextLimit: context?.limit)
     }
   }
 
