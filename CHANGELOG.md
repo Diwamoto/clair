@@ -9,15 +9,6 @@ All notable changes to Clair are documented here. The format follows
 ## [0.31.0] - 2026-11-05
 
 ### Added
-- Agent notices stack in the bottom-left corner, and ⇧⌘H opens a panel listing them; agents can post their own notices.
-- Agents can list, add and update your Clair TODOs.
-- The agent list shows how much of each agent's context is used.
-- Agents can list chat history and look up past agent panes.
-- Agents can schedule other agents to launch, or be prompted, at a set time.
-
-## [0.31.0] - 2026-11-05
-
-### Added
 - Agent notices stack in the bottom-left corner, and ⇧⌘H opens a panel listing them.
 - Agents can post a Clair notice.
 - Agents can list, add and update Clair TODOs.
