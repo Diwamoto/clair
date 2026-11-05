@@ -167,6 +167,43 @@ public struct WorkbenchAgent: Sendable, Codable, Equatable {
   /// Terminal key of the agent that launched this one.
   public let parent: String?
   public let concierge: Bool
+  /// Tokens in the agent's context as of its latest reply, and the window they fill. nil when unknown
+  /// (no reported session, or a provider whose usage Clair does not read).
+  public var contextTokens: Int? = nil
+  public var contextLimit: Int? = nil
+}
+
+public enum AgentContext {
+  /// Context size of a Claude Code session: the latest main-chain assistant usage in its JSONL
+  /// (input + cache read + cache write). Reads only the file's tail.
+  public static func claudeTokens(session: String, home: URL = .homeDirectory) -> Int? {
+    guard AgentProfile.isSessionID(session) else { return nil }
+    let root = home.appending(path: ".claude/projects")
+    guard let dirs = try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil),
+      let file = dirs.lazy.map({ $0.appending(path: "\(session).jsonl") }).first(where: { FileManager.default.fileExists(atPath: $0.path) }),
+      let handle = try? FileHandle(forReadingFrom: file)
+    else { return nil }
+    defer { try? handle.close() }
+    // ponytail: last 1 MiB only; a single reply bigger than that reads as unknown.
+    let end = (try? handle.seekToEnd()) ?? 0
+    try? handle.seek(toOffset: end > 1 << 20 ? end - (1 << 20) : 0)
+    return tokens(inTail: (try? handle.readToEnd()) ?? Data())
+  }
+
+  static func tokens(inTail data: Data) -> Int? {
+    for line in data.split(separator: 10).reversed() {
+      guard let o = try? JSONSerialization.jsonObject(with: line) as? [String: Any], o["type"] as? String == "assistant",
+        o["isSidechain"] as? Bool != true, let usage = (o["message"] as? [String: Any])?["usage"] as? [String: Any]
+      else { continue }
+      return ["input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"]
+        .reduce(0) { $0 + ((usage[$1] as? NSNumber)?.intValue ?? 0) }
+    }
+    return nil
+  }
+
+  /// ponytail: the JSONL does not name the window; 200k unless usage already passed it (a 1M session).
+  /// A 1M session under 200k reads as 200k — read the model's `[1m]` setting if that matters.
+  public static func claudeLimit(_ tokens: Int) -> Int { tokens > 200_000 ? 1_000_000 : 200_000 }
 }
 
 extension WorkbenchState {
@@ -295,10 +332,13 @@ extension WorkbenchState {
       case .idle: status = "idle"
       case .exited(let code): status = "exited"; exitCode = code
       }
+      let session = l.session ?? l.concierge ?? l.resume
+      let tokens = l.profile == "claude" ? session.flatMap { AgentContext.claudeTokens(session: $0) } : nil
       return WorkbenchAgent(
         key: Self.terminalKey(root, s.pane), project: s.project, pane: s.pane, profile: l.profile, cwd: s.cwd,
         status: status, exitCode: exitCode, activity: s.activity, delegated: l.run != nil, parent: l.parent,
-        concierge: l.concierge != nil)
+        concierge: l.concierge != nil,
+        contextTokens: tokens, contextLimit: tokens.map(AgentContext.claudeLimit))
     }
   }
 
