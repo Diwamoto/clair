@@ -185,6 +185,30 @@ import Observation
         refreshSleepAssertion()
       }
       recordAgentPanes()
+      runSchedules()
+    }
+
+    /// #72: fires due schedules on the detection tick (2 s). The user made each one, so no approval is asked.
+    private func runSchedules() {
+      guard persistURL != nil else { return }
+      var all = ClairSchedule.load()
+      var changed = false
+      for (n, schedule) in all.enumerated() {
+        switch schedule.decide(now: Date()) {
+        case .wait: continue
+        case .skip(let fire): all[n].lastRun = fire
+        case .run(let fire):
+          all[n].lastRun = fire
+          if let key = schedule.key {
+            run("agent.send", ["key": .string(key), "text": .string(schedule.prompt)], confirmed: true)
+          } else if let profile = schedule.profile {
+            if state.project != schedule.project { run("project.switch", ["name": .string(schedule.project)]) }
+            run("agent.launch", ["profile": .string(profile), "prompt": .string(schedule.prompt)], confirmed: true)
+          }
+        }
+        changed = true
+      }
+      if changed { ClairSchedule.save(all) }
     }
 
     /// #69: `agent.history`'s file, folded from the live panes on each detection tick (2 s), so a closed pane's

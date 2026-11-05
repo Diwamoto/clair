@@ -871,6 +871,41 @@ extension CommandRegistry {
       }
       return todoSave(t, appendBody: i["appendBody"]?.string)
     },
+    // #72: the GUI fires these (ClairWorkbenchStore.runSchedules). add/remove are user-only: an agent must not
+    // schedule itself to run later.
+    cmd("schedule.list", "スケジュール一覧", .read, palette: false) { _, _ in
+      .text(todoJSON(ClairSchedule.load().map(\.json)))
+    },
+    cmd("schedule.add", "スケジュールを追加", .additive, ai: false,
+        params: [CommandParam("time", .string), CommandParam("days", .string, required: false),
+                 CommandParam("project", .string), CommandParam("prompt", .string),
+                 CommandParam("profile", .string, required: false, allowed: AgentProfile.all.map(\.id)),
+                 CommandParam("key", .string, required: false), CommandParam("catchUp", .bool, required: false)],
+        palette: false,
+        preflight: { s, i throws(CommandError) in
+          try require(ClairSchedule.parseTime(i["time"]!.string!) != nil, "time is not HH:MM")
+          try require(ClairSchedule.parseDays(i["days"]?.string ?? "") != nil, "days is weekdays, daily or mon,tue,…")
+          try require(s.projects.contains { $0.name == i["project"]!.string! }, "no project \(i["project"]!.string!)")
+          try require((i["profile"] == nil) != (i["key"] == nil), "give exactly one of profile or key")
+          try require(!i["prompt"]!.string!.isEmpty, "prompt is empty")
+          return .additive
+        }) { _, i in
+      let t = ClairSchedule.parseTime(i["time"]!.string!)!
+      let new = ClairSchedule(
+        id: String(UUID().uuidString.prefix(8)).lowercased(), days: ClairSchedule.parseDays(i["days"]?.string ?? "")!,
+        hour: t.hour, minute: t.minute, project: i["project"]!.string!, profile: i["profile"]?.string, key: i["key"]?.string,
+        prompt: i["prompt"]!.string!, catchUp: i["catchUp"]?.bool ?? false, lastRun: Date())
+      ClairSchedule.save(ClairSchedule.load() + [new])
+      return .text(todoJSON(new.json))
+    },
+    cmd("schedule.remove", "スケジュールを削除", .write, ai: false, params: [CommandParam("id", .string)], palette: false,
+        preflight: { _, i throws(CommandError) in
+          try require(ClairSchedule.load().contains { $0.id == i["id"]!.string! }, "no schedule \(i["id"]!.string!)")
+          return .write
+        }) { _, i in
+      ClairSchedule.save(ClairSchedule.load().filter { $0.id != i["id"]!.string! })
+      return .ok
+    },
     cmd("tab.activate", "タブを切り替え", .read, params: [CommandParam("path", .string)],
         preflight: { s, i throws(CommandError) in
           try require(s.tabs.contains(i["path"]!.string!), "no tab \(i["path"]!)"); return .read
