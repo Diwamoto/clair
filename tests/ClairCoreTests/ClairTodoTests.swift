@@ -62,6 +62,15 @@ final class ClairTodoCommandTests: XCTestCase {
     XCTAssertEqual(ClairTodo.parse(path: path, text: text).json["kr"] as? String, "KR1")
   }
 
+  func testMultilineTitleKeepsFrontMatter() {
+    let old = "---\ntitle: a\npriority: 1\nkr: KR1\ndone: false\n---\nbody\n"
+    let t = ClairTodo.parse(path: "/x.md", text: old).with { $0.title = "x\n---\nfoo" }
+    let back = ClairTodo.parse(path: "/x.md", text: t.render(onto: old))
+    XCTAssertEqual(back.title, "x --- foo")
+    XCTAssertEqual(back.priority, 1)
+    XCTAssertEqual(back.extra, ["kr": "KR1"])
+  }
+
   func testInvalidValuesAndPaths() throws {
     XCTAssertNil(ClairTodo.invalid(priority: 1, due: "2026-11-05"))
     XCTAssertNil(ClairTodo.invalid(priority: nil, due: ""))

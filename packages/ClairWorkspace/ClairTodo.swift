@@ -55,7 +55,9 @@ public struct ClairTodo: Equatable, Sendable {
   /// `text` with its front matter rewritten from this TODO; the body and unknown keys are kept.
   public func render(onto text: String) -> String {
     let (meta, body) = Self.split(text)
-    var out = ["---", "title: \"\(title.replacingOccurrences(of: "\"", with: "'"))\"", "priority: \(priority)"]
+    // One line: a newline in the title would end the front matter early and drop the keys after it (#70).
+    let line = title.split(whereSeparator: \.isNewline).joined(separator: " ").replacingOccurrences(of: "\"", with: "'")
+    var out = ["---", "title: \"\(line)\"", "priority: \(priority)"]
     if let due { out.append("due: \(due)") }
     out.append("done: \(done)")
     out += meta.filter { line in !Self.keys.contains(line.split(separator: ":").first.map { $0.trimmingCharacters(in: .whitespaces) } ?? "") }.map(String.init)

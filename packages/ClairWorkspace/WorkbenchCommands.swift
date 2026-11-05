@@ -379,7 +379,8 @@ public struct CommandRegistry: Sendable {
     let descriptor: CommandDescriptor
     /// Throws for unmet preconditions; returns the effective risk.
     let preflight: @Sendable (WorkbenchState, CommandInput) throws(CommandError) -> CommandRisk
-    let run: @Sendable (inout WorkbenchState, CommandInput) -> CommandResult
+    /// Throws when the effect itself fails after a passing preflight (e.g. a file write).
+    let run: @Sendable (inout WorkbenchState, CommandInput) throws(CommandError) -> CommandResult
   }
 
   private let table: [String: Command]
@@ -408,7 +409,8 @@ public struct CommandRegistry: Sendable {
       return .failure(CommandError(.confirmationRequired, "\(id) is \(risk.label)"))
     case .success:
       let focused = state.tree.focused
-      let result = table[id]!.run(&state, input)
+      let result: CommandResult
+      do { result = try table[id]!.run(&state, input) } catch { return .failure(error) }
       state.syncEditorFiles()
       state.dropEmptyEditors()  // e.g. a split or a new terminal beside the home screen replaces it
       if state.tree.focused != focused, state.toggles["focusExpand"] == true {
@@ -504,7 +506,7 @@ extension CommandRegistry {
     _ id: String, _ title: String, _ risk: CommandRisk, ai: Bool = true, params: [CommandParam] = [],
     shortcut: String? = nil, palette: Bool? = nil,
     preflight: @escaping @Sendable (WorkbenchState, CommandInput) throws(CommandError) -> CommandRisk = { _, _ in .read },
-    _ run: @escaping @Sendable (inout WorkbenchState, CommandInput) -> CommandResult
+    _ run: @escaping @Sendable (inout WorkbenchState, CommandInput) throws(CommandError) -> CommandResult
   ) -> Command {
     Command(
       descriptor: CommandDescriptor(
@@ -521,11 +523,8 @@ extension CommandRegistry {
     String(decoding: (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes])) ?? Data("null".utf8), as: UTF8.self)
   }
 
-  // ponytail: `run` cannot throw, so a failed write after a passing preflight answers `{"error":…}`; make run throwing if more commands need it.
-  private static func todoJSONError(_ message: String) -> CommandResult { .text(todoJSON(["error": message])) }
-
-  private static func todoSave(_ t: ClairTodo, appendBody: String?) -> CommandResult {
-    do { try t.save(appendBody: appendBody) } catch { return todoJSONError(error.localizedDescription) }
+  private static func todoSave(_ t: ClairTodo, appendBody: String?) throws(CommandError) -> CommandResult {
+    do { try t.save(appendBody: appendBody) } catch { throw CommandError(.preconditionFailed, error.localizedDescription) }
     let saved = (try? String(contentsOf: URL(fileURLWithPath: t.path), encoding: .utf8)).map { ClairTodo.parse(path: t.path, text: $0) } ?? t
     return .text(todoJSON(saved.json))
   }
@@ -844,11 +843,11 @@ extension CommandRegistry {
           try require(!i["title"]!.string!.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "title is empty")
           if let why = ClairTodo.invalid(priority: i["priority"]?.int, due: i["due"]?.string) { throw CommandError(.invalidInput, why) }
           return .additive
-        }) { _, i in
+        }) { _, i throws(CommandError) in
       let title = i["title"]!.string!
       let due = i["due"]?.string.flatMap { $0.isEmpty ? nil : $0 }
       let t = ClairTodo(path: ClairTodo.newPath(title: title), title: title, priority: i["priority"]?.int ?? 2, due: due)
-      return todoSave(t, appendBody: i["body"]?.string)
+      return try todoSave(t, appendBody: i["body"]?.string)
     },
     cmd("todo.update", "TODO を更新", .write,
         params: [CommandParam("path", .string), CommandParam("title", .string, required: false),
@@ -860,16 +859,16 @@ extension CommandRegistry {
           if let title = i["title"]?.string { try require(!title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "title is empty") }
           if let why = ClairTodo.invalid(priority: i["priority"]?.int, due: i["due"]?.string) { throw CommandError(.invalidInput, why) }
           return .write
-        }) { _, i in
+        }) { _, i throws(CommandError) in
       let path = i["path"]!.string!
-      guard let text = try? String(contentsOf: URL(fileURLWithPath: path), encoding: .utf8) else { return todoJSONError("cannot read \(path)") }
+      guard let text = try? String(contentsOf: URL(fileURLWithPath: path), encoding: .utf8) else { throw CommandError(.preconditionFailed, "cannot read \(path)") }
       let t = ClairTodo.parse(path: path, text: text).with { t in
         if let v = i["title"]?.string { t.title = v }
         if let v = i["priority"]?.int { t.priority = v }
         if let v = i["due"]?.string { t.due = v.isEmpty ? nil : v }  // due="" clears it
         if let v = i["done"]?.bool { t.done = v }
       }
-      return todoSave(t, appendBody: i["appendBody"]?.string)
+      return try todoSave(t, appendBody: i["appendBody"]?.string)
     },
     // #72: the GUI fires these (ClairWorkbenchStore.runSchedules). add/remove are user-only: an agent must not
     // schedule itself to run later.
