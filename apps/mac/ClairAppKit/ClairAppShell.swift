@@ -3794,10 +3794,10 @@ import Observation
     private func openNotice(_ n: WorkbenchNotice) {
       if n.project != st.project { store.run("project.switch", ["name": .string(n.project)]) }
       if n.kind == .posted {
-        store.state.notices.markRead(project: n.project, pane: 0)
+        store.state.notices.markRead(project: n.project, pane: n.pane)
         if let open = n.open, let root = st.projects.first(where: { $0.name == n.project })?.path {
-          // A path that exists under the Project is a file; anything else is a chat history id.
-          FileManager.default.fileExists(atPath: root + "/" + open)
+          // An existing file (absolute, or relative to the Project) opens as a file; anything else is a chat history id.
+          FileManager.default.fileExists(atPath: open.hasPrefix("/") ? open : root + "/" + open)
             ? store.run("file.open", ["path": .string(open)]) : store.run("history.open", ["id": .string(open)])
         }
       } else {

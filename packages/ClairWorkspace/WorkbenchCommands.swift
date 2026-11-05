@@ -1423,6 +1423,7 @@ extension CommandRegistry {
         params: [
           CommandParam("title", .string), CommandParam("body", .string, required: false),
           CommandParam("project", .string, required: false), CommandParam("open", .string, required: false),
+          CommandParam("parent", .string, required: false),  // set by the GUI from the caller's terminal, for pane mute
         ],
         palette: false,
         preflight: { s, i throws(CommandError) in
@@ -1432,8 +1433,10 @@ extension CommandRegistry {
           try require(s.notices.postAllowed(), "too many notices: at most \(NotificationLog.postLimit) per minute")
           return .additive
         }) { s, i in
+      let caller = i["parent"]?.string.flatMap { s.terminal($0) }
+      let project = i["project"]?.string ?? caller?.project ?? s.project
       s.notices.record(
-        project: i["project"]?.string ?? s.project, pane: 0, kind: .posted,
+        project: project, pane: caller?.project == project ? caller!.pane : 0, kind: .posted,
         sourceBody: i["body"]?.string, sessionTitle: String(i["title"]!.string!.prefix(120)), open: i["open"]?.string)
       return .ok
     },

@@ -15,6 +15,16 @@ final class WorkbenchAgentLaunchTests: XCTestCase {
     return (s, dir.path)
   }
 
+  // #71: a post from a terminal is recorded on that pane, so the pane's mute applies.
+  func testNoticePostFromTerminalHonoursPaneMute() throws {
+    var (s, root) = try opened()
+    let req = WorkbenchIPCRequest(command: "notice.post", input: ["title": .string("x")], caller: WorkbenchState.terminalKey(root, 2)).callerAsParent()
+    s.notices.mutedPanes.insert(NotificationLog.paneKey(s.project, 2))
+    XCTAssertNoThrow(try r.execute(req.command, req.input, state: &s).get())
+    XCTAssertEqual(s.notices.items.first?.pane, 2)
+    XCTAssertEqual(s.notices.unread(s.project), 0)
+  }
+
   func testLaunchNeedsConfirmationAndIsAIAvailableForV16() throws {
     var (s, _) = try opened()
     XCTAssertEqual(r.commands.first { $0.id == "agent.launch" }?.aiAvailable, true)
