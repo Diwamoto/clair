@@ -143,6 +143,14 @@ final class WorkbenchAgentLaunchTests: XCTestCase {
     WorkbenchState.screenText = { _ in "a\nb\nc\n" }
     defer { WorkbenchState.screenText = { _ in nil } }
     XCTAssertEqual(try r.execute("agent.output", ["key": .string(parent), "lines": .int(2)], state: &s).get(), .text("b\nc"))
+    // agent.send is a write, so an agent's call waits for approval (MCPGate); it types into the pane
+    XCTAssertEqual(try r.preflight("agent.send", ["key": .string(parent), "text": .string("hi")], s).get(), .write)
+    XCTAssertEqual(r.execute("agent.send", ["key": .string(root + "#99"), "text": .string("hi")], state: &s).failure?.code, .preconditionFailed)
+    var sent: [String] = []
+    WorkbenchState.screenInput = { _, t in sent.append(t); return true }
+    defer { WorkbenchState.screenInput = { _, _ in false } }
+    XCTAssertEqual(try r.execute("agent.send", ["key": .string(parent), "text": .string("hi")], state: &s).get(), .ok)
+    XCTAssertEqual(sent, ["hi"])
   }
 
   // The recorded run: the generated command really records output and the exit status through `script`.

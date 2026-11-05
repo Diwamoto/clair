@@ -242,6 +242,7 @@ import Observation
         }
       }
       WorkbenchState.screenText = { ClairGhosttySurfaceView.screenText(inPane: $0) }
+      WorkbenchState.screenInput = { ClairGhosttySurfaceView.send($1, toPane: $0) && ClairGhosttySurfaceView.pressReturn(inPane: $0) }
       let server = WorkbenchIPCServer { req in
         let req = req.callerAsParent()
         if req.via == .mcp || req.caller != nil || req.command == "file.preview" {

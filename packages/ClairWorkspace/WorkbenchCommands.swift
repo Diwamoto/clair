@@ -649,6 +649,12 @@ extension CommandRegistry {
         preflight: { s, i throws(CommandError) in _ = try s.paneOutput(i["key"]!.string!, lines: 1); return .read }) { s, i in
       .text(try! s.paneOutput(i["key"]!.string!, lines: max(1, i["lines"]?.int ?? 200)))
     },
+    // Typing into someone else's terminal steers their session, so it always asks first.
+    cmd("agent.send", "エージェントに入力を送る", .write,
+        params: [CommandParam("key", .string), CommandParam("text", .string)], palette: false,
+        preflight: { s, i throws(CommandError) in _ = try s.inputPane(i["key"]!.string!); return .write }) { s, i in
+      WorkbenchState.screenInput(try! s.inputPane(i["key"]!.string!), i["text"]!.string!) ? .ok : .text("pane is not mounted")
+    },
     // Closing your own finished child is housekeeping; anything else ends someone's session and needs approval.
     cmd("agent.close", "エージェントのペインを閉じる", .read,
         params: [CommandParam("key", .string), CommandParam("parent", .string, required: false)], palette: false,

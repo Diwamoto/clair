@@ -173,6 +173,16 @@ extension WorkbenchState {
   /// The scrollback+screen text of a terminal pane in the active Project, installed by the GUI
   /// (the PTY bytes live in the daemon; Ghostty holds the rendered text). nil when not mounted.
   nonisolated(unsafe) public static var screenText: (_ pane: Int) -> String? = { _ in nil }
+  /// Types `text` into a terminal pane of the active Project and presses Return, installed by the GUI.
+  nonisolated(unsafe) public static var screenInput: (_ pane: Int, _ text: String) -> Bool = { _, _ in false }
+
+  /// The active-Project terminal behind `key` that `agent.send` may type into.
+  func inputPane(_ key: String) throws(CommandError) -> Int {
+    guard let t = terminal(key), t.project == project else {
+      throw CommandError(.preconditionFailed, "\(key) is not a terminal in the active Project")
+    }
+    return t.pane
+  }
 
   /// What `agent.output` reads: a delegated run's log, else any terminal pane's rendered screen.
   func paneOutput(_ key: String, lines: Int) throws(CommandError) -> String {
