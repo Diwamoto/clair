@@ -6,6 +6,18 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.31.1] - 2026-11-06
+
+### Fixed
+- Agent notice cards stack in the bottom-right corner.
+- Notices posted by agents open absolute file paths and respect a muted pane.
+- Agent context usage uses the right context window for the model, and shows the limit as unknown instead of guessing.
+- Agent history records why an agent ended, its meaningful activity, and which window it belonged to.
+- History lists chats whose activity overlaps the requested period.
+- Scheduled runs launch into their own project without switching the window, report failures, and ask once before running a schedule that agents did not add.
+- TODOs with multi-line titles keep their front matter, and save failures are reported.
+- Updating bundled skills backs up your changed skill files instead of refusing.
+
 ## [0.31.0] - 2026-11-05
 
 ### Added
@@ -603,7 +615,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.31.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.31.1...HEAD
+[0.31.1]: https://github.com/Diwamoto/clair/compare/v0.31.0...v0.31.1
 [0.31.0]: https://github.com/Diwamoto/clair/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/Diwamoto/clair/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/Diwamoto/clair/compare/v0.28.0...v0.29.0
