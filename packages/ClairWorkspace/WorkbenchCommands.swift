@@ -530,6 +530,20 @@ extension CommandRegistry {
     return .text(todoJSON(saved.json))
   }
 
+  static func historyDay(_ text: String) -> Date? {
+    let f = DateFormatter()
+    f.calendar = Calendar(identifier: .gregorian); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"
+    return f.date(from: text).flatMap { f.string(from: $0) == text ? $0 : nil }  // rejects 2026-02-30
+  }
+
+  /// [since 00:00, the day after until 00:00) in local time; today when neither is given; nil if since > until.
+  static func historyPeriod(_ i: CommandInput, now: Date = .now) -> DateInterval? {
+    let cal = Calendar.current
+    let start = i["since"]?.string.flatMap(historyDay) ?? cal.startOfDay(for: now)
+    let end = i["until"]?.string.flatMap(historyDay).flatMap { cal.date(byAdding: .day, value: 1, to: $0) } ?? .distantFuture
+    return start < end ? DateInterval(start: start, end: end) : nil
+  }
+
   public static let workbench = CommandRegistry(core + [shortcutSet(core.map(\.descriptor))])
 
   private static let core: [Command] = [
@@ -664,6 +678,7 @@ extension CommandRegistry {
           CommandParam("profile", .string, allowed: AgentProfile.all.map(\.id)),
           CommandParam("prompt", .string, required: false), CommandParam("branch", .string, required: false),
           CommandParam("direction", .string, required: false, allowed: ["right", "down"]),
+          // resume = provider-native session id (history.list's `sessionID`), not the `<Provider>:` history id.
           CommandParam("parent", .string, required: false), CommandParam("resume", .string, required: false),
           CommandParam("review", .bool, required: false), CommandParam("opening", .string, required: false),
         ], palette: false,
@@ -730,6 +745,22 @@ extension CommandRegistry {
     },
     // Every agent terminal in every Project (launched or detected), so a CLI caller can find a key without the GUI.
     cmd("agent.list", "エージェント一覧", .read, palette: false) { s, _ in .agents(s.agentList) },
+    // #69: agent panes that ran in [since, until] (local days, default today), closed ones included, as JSON text.
+    cmd("agent.history", "エージェントペインの記録", .read,
+        params: [CommandParam("since", .string, required: false), CommandParam("until", .string, required: false),
+                 CommandParam("project", .string, required: false)],
+        palette: false,
+        preflight: { _, i throws(CommandError) in
+          for key in ["since", "until"] { if let d = i[key]?.string { try require(AgentPaneLog.day(d) != nil, "\(key) is not YYYY-MM-DD") } }
+          return .read
+        }) { s, i in
+      let since = i["since"]?.string.flatMap(AgentPaneLog.day) ?? Calendar.current.startOfDay(for: .now)
+      let until = i["until"]?.string.flatMap(AgentPaneLog.day).flatMap { Calendar.current.date(byAdding: .day, value: 1, to: $0) } ?? .distantFuture
+      // The file is up to one detection tick behind; folding the live panes in makes a just-closed pane's end exact enough.
+      let rows = AgentPaneLog.filter(
+        AgentPaneLog.merge(AgentPaneLog.load(), live: s.liveAgentRecords()), since: since, until: until, project: i["project"]?.string)
+      return .text(String(decoding: (try? JSONEncoder().encode(rows)) ?? Data("[]".utf8), as: UTF8.self))
+    },
     // An agent's official hooks say what it is doing (`ClairClaudeHooks`); `parent` is the calling terminal,
     // filled from CLAIR_TERMINAL_KEY by the IPC layer. Display state only, so it needs no approval.
     cmd("agent.report", "エージェントの状態を報告", .read,
@@ -779,6 +810,26 @@ extension CommandRegistry {
     },
     cmd("history.open", "チャット履歴をタブで開く", .read, params: [CommandParam("id", .string)], palette: false) { s, i in
       s.openTab(AgentHistory.tabPrefix + i["id"]!.string!); return .ok
+    },
+    // #68: since/until are local days (until inclusive); default is today. Replies are JSON text, no message bodies.
+    cmd("history.list", "チャット履歴を一覧", .read,
+        params: [CommandParam("since", .string, required: false), CommandParam("until", .string, required: false),
+                 CommandParam("project", .string, required: false),
+                 CommandParam("provider", .string, required: false, allowed: ["claude", "codex", "opencode"]),
+                 CommandParam("query", .string, required: false), CommandParam("limit", .int, required: false)],
+        palette: false,
+        preflight: { _, i throws(CommandError) in
+          for key in ["since", "until"] { if let d = i[key]?.string { try require(historyDay(d) != nil, "\(key) is not YYYY-MM-DD") } }
+          try require(historyPeriod(i) != nil, "since is after until")
+          return .read
+        }) { _, i in
+      let period = historyPeriod(i)!
+      let provider: AgentHistory.Provider? = i["provider"]?.string.map { ["claude": .claude, "codex": .codex, "opencode": .opencode][$0]! }
+      // ponytail: scans provider files synchronously (mtime-filtered first); cache via AgentHistoryStore if a wide range is slow.
+      let rows = AgentHistory.filter(
+        AgentHistoryReader.load(period: period), period: period, project: i["project"]?.string, provider: provider,
+        query: i["query"]?.string ?? "", limit: i["limit"]?.int ?? 50)
+      return .text(todoJSON(rows.map(\.listJSON)))
     },
     // #70: agents edit `~/.clair/todo` through these instead of writing the files; replies are JSON text.
     cmd("todo.list", "TODO 一覧", .read, params: [CommandParam("done", .bool, required: false)], palette: false) { _, i in

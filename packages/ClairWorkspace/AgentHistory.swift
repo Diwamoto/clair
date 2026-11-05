@@ -65,6 +65,28 @@ public struct AgentHistory: Sendable, Identifiable {
     return words.allSatisfy { haystack.range(of: $0, options: [.caseInsensitive, .widthInsensitive, .diacriticInsensitive]) != nil }
   }
 
+  /// `history.list` (#68): chats last active in `period` under `project` (that folder or below) from `provider`
+  /// matching `query`, newest first.
+  public static func filter(
+    _ histories: [AgentHistory], period: DateInterval, project: String? = nil, provider: Provider? = nil, query: String = "", limit: Int = 50
+  ) -> [AgentHistory] {
+    let root = project.map { URL(fileURLWithPath: $0).standardizedFileURL.path }
+    return Array(histories.filter { h in
+      period.contains(h.date) && provider.map { $0 == h.provider } ?? true && h.matches(query)
+        && root.map { r in h.project.map { $0 == r || $0.hasPrefix(r.hasSuffix("/") ? r : r + "/") } ?? false } ?? true
+    }.sorted { $0.date > $1.date }.prefix(max(0, limit)))
+  }
+
+  /// `history.list` row: `id` goes to `history.open`, `sessionID` to `agent.launch resume=`. No message bodies.
+  public var listJSON: [String: Any] {
+    let iso = ISO8601DateFormatter()
+    return [
+      "id": id, "sessionID": sessionID, "provider": provider.rawValue, "title": title, "project": project ?? NSNull(),
+      "start": iso.string(from: messages.first?.date ?? date), "last": iso.string(from: date),
+      "promptCount": promptCount, "resumeCommand": resumeCommand ?? NSNull(),
+    ]
+  }
+
   /// One row of the chat: a message, or the progress (narration and thinking) an agent run made before its reply.
   public enum ChatItem: Sendable, Identifiable {
     case message(Message)

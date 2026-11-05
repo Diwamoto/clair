@@ -547,6 +547,7 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
 - Claude Code の hooks が `agent.report state=done` に添える最後の返答(Stop の `last_assistant_message`)は、GUI が「完了」通知の本文として記録する。報告できるのは Clair の terminal だけで、OSC の本文と同じく terminal から来たテキストとして扱う。未読の「完了」がある pane の入力待ちベルは重ねて記録せず、その pane が working に戻ると「完了」は既読になる
 - Project / terminal 単位で notification を mute できる
 - agent は `notice.post title= [body=] [project=] [open=]` で通知を出せる(#71)。mute と履歴は terminal の通知と同じに従い、全体で 1 分 5 件まで(超えると preconditionFailed)。クリックで `open` の Project 内ファイルかチャット履歴 id を開く
+- agent は `history.list [since until project provider query limit]`(read、AI 可、応答は JSON)でチャット履歴を一覧できる(#68)。since / until はローカル日付の YYYY-MM-DD(until を含む、既定は今日)で最終活動日時で絞り、project はそのフォルダ以下、provider は `claude` / `codex` / `opencode`、query は履歴画面の検索と同じ判定、limit の既定は 50。各要素は `id`(`history.open` 用の `<Provider>:<sessionID>`、例 `Claude Code:<uuid>`)・`sessionID`(`agent.launch resume=` 用の provider-native id)・provider・title・project・start / last・promptCount・resumeCommand で、本文は返さない
 
 ## 10. Mobile
 

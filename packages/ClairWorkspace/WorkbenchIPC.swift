@@ -249,8 +249,8 @@ public enum WorkbenchCLI {
     switch result {
     case .ok: return NSNull()
     case .pane(let pane): return ["pane": pane]
-    // finder.* answers in JSON text or a bare proposal id; todo.* in JSON text.
-    case .text(let text) where command.hasPrefix("finder.") || command.hasPrefix("todo."):
+    // finder.* answers in JSON text or a bare proposal id; todo.* and history.list in JSON text.
+    case .text(let text) where command.hasPrefix("finder.") || command.hasPrefix("todo.") || command == "history.list":
       return (try? JSONSerialization.jsonObject(with: Data(text.utf8))) ?? text
     default:
       guard let data = try? JSONEncoder().encode(result), let tagged = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -377,15 +377,22 @@ public enum WorkbenchCLI {
     "project.open path", "project.addFolder path", "project.removeFolder path",
     "file.open path", "file.isOpen path", "file.preview path", "debug.breakpoint path",
     "finder.open path", "finder.reveal path", "finder.propose folder", "finder.addFavorite path", "finder.removeFavorite path",
+    "history.list project",
   ]
 
   static let usage = "clair open [--wait] <path[:line[:col]]> | clair preview <html-path> | clair reveal <path> | clair <group> <command> [key=value ...] | clair help [group]"
+
+  /// Help placeholders that say which id a string argument takes (#68).
+  static let helpValues = [
+    "history.open id": "<Provider>:<sessionID>", "agent.launch resume": "<sessionID>",
+    "history.list since": "<YYYY-MM-DD>", "history.list until": "<YYYY-MM-DD>", "history.list project": "<path>",
+  ]
 
   /// `clair help [group]`: every registry command a `clair <group> <command>` call can name, with its arguments.
   public static func help(_ prefix: String = "", registry: CommandRegistry = .workbench) -> String {
     let rows = registry.commands.filter { $0.id.hasPrefix(prefix.replacingOccurrences(of: " ", with: ".")) }.sorted { $0.id < $1.id }.map { d -> String in
       let params = d.params.map { p -> String in
-        let arg = "\(p.name)=\(p.allowed?.joined(separator: "|") ?? "<\(p.kind.rawValue)>")"
+        let arg = "\(p.name)=\(p.allowed?.joined(separator: "|") ?? helpValues["\(d.id) \(p.name)"] ?? "<\(p.kind.rawValue)>")"
         return p.required ? arg : "[\(arg)]"
       }
       let risk = ["read", "additive", "write", "destructive", "external"][d.risk.rawValue]

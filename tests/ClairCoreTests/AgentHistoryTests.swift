@@ -300,4 +300,32 @@ final class AgentHistoryTests: XCTestCase {
                             estimatedUSD: nil, project: "/tmp/it's")
     XCTAssertEqual(chat.resumeCommand, #"cd '/tmp/it'\''s' && claude --resume abc-1"#)
   }
+
+  // #68: history.list filters by last activity, project subtree, provider and the history search.
+  func testHistoryListFilter() {
+    let day = Date(timeIntervalSince1970: 1_800_000_000)
+    func chat(_ id: String, _ p: AgentHistory.Provider, _ at: Date, _ project: String) -> AgentHistory {
+      AgentHistory(id: "\(p.rawValue):\(id)", provider: p, title: id, date: at,
+                   messages: [.init(id: "m", role: "user", text: "fix finder", date: at)], estimatedUSD: nil, project: project)
+    }
+    let all = [chat("a", .claude, day, "/w/clair"), chat("b", .codex, day + 60, "/w/clair/sub"),
+               chat("c", .claude, day + 120, "/w/clairx"), chat("old", .claude, day - 86_400, "/w/clair")]
+    let today = DateInterval(start: day - 10, end: day + 3600)
+    XCTAssertEqual(AgentHistory.filter(all, period: today).map(\.title), ["c", "b", "a"])
+    XCTAssertEqual(AgentHistory.filter(all, period: today, project: "/w/clair").map(\.title), ["b", "a"])
+    XCTAssertEqual(AgentHistory.filter(all, period: today, provider: .claude, limit: 1).map(\.title), ["c"])
+    XCTAssertEqual(AgentHistory.filter(all, period: today, query: "FINDER b").map(\.title), ["b"])
+    let row = all[0].listJSON
+    XCTAssertEqual(row["id"] as? String, "Claude Code:a")
+    XCTAssertEqual(row["sessionID"] as? String, "a")
+    XCTAssertEqual(row["promptCount"] as? Int, 1)
+  }
+
+  func testHistoryListPeriod() {
+    XCTAssertNil(CommandRegistry.historyDay("2026-02-30"))
+    let p = CommandRegistry.historyPeriod(["since": .string("2026-11-05"), "until": .string("2026-11-05")])!
+    XCTAssertEqual(p.duration, 86_400, accuracy: 3600)
+    XCTAssertNil(CommandRegistry.historyPeriod(["since": .string("2026-11-06"), "until": .string("2026-11-05")]))
+    XCTAssertEqual(CommandRegistry.historyPeriod([:], now: Date(timeIntervalSince1970: 1_800_000_000))!.end, .distantFuture)
+  }
 }
