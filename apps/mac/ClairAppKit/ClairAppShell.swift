@@ -188,7 +188,8 @@ import Observation
       runSchedules()
     }
 
-    /// #72: fires due schedules on the detection tick (2 s). The user made each one, so no approval is asked.
+    /// #72: fires due schedules on the detection tick (2 s). One made by `schedule.add` runs as is; one that
+    /// appeared or changed in the file some other way asks once first (an agent must not schedule itself).
     private func runSchedules() {
       guard persistURL != nil else { return }
       var all = ClairSchedule.load()
@@ -199,19 +200,30 @@ import Observation
         case .skip(let fire): all[n].lastRun = fire
         case .run(let fire):
           all[n].lastRun = fire
-          // Launches into the schedule's Project without switching the shown one; a failure is a notice, not silence.
-          let result = schedule.key.map { run("agent.send", ["key": .string($0), "text": .string(schedule.prompt)], confirmed: true) }
-            ?? schedule.profile.map {
-              run("agent.launch", ["profile": .string($0), "prompt": .string(schedule.prompt), "project": .string(schedule.project)], confirmed: true)
-            }
-          if case .failure(let e)? = result {
-            let project = state.projects.contains { $0.name == schedule.project } ? schedule.project : state.project
-            run("notice.post", ["title": .string(tr("スケジュールを実行できませんでした")), "body": .string(e.message), "project": .string(project)])
+          if schedule.isApproved { runSchedule(schedule); break }
+          var input: CommandInput = ["project": .string(schedule.project), "prompt": .string(schedule.prompt)]
+          input["profile"] = schedule.profile.map(CommandArg.string); input["key"] = schedule.key.map(CommandArg.string)
+          Task.detached { [weak self] in
+            guard let self else { return }
+            let ok = self.requestMCPApproval("schedule.run", input, .external)
+            await MainActor.run { if ok { schedule.approve(); self.runSchedule(schedule) } }
           }
         }
         changed = true
       }
       if changed { ClairSchedule.save(all) }
+    }
+
+    /// Launches into the schedule's Project without switching the shown one; a failure is a notice, not silence.
+    private func runSchedule(_ schedule: ClairSchedule) {
+      let result = schedule.key.map { run("agent.send", ["key": .string($0), "text": .string(schedule.prompt)], confirmed: true) }
+        ?? schedule.profile.map {
+          run("agent.launch", ["profile": .string($0), "prompt": .string(schedule.prompt), "project": .string(schedule.project)], confirmed: true)
+        }
+      if case .failure(let e)? = result {
+        let project = state.projects.contains { $0.name == schedule.project } ? schedule.project : state.project
+        run("notice.post", ["title": .string(tr("スケジュールを実行できませんでした")), "body": .string(e.message), "project": .string(project)])
+      }
     }
 
     /// #69: `agent.history`'s file, folded from this window's panes on each detection tick (2 s), so a closed

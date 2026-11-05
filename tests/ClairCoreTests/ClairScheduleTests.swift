@@ -32,6 +32,20 @@ import Testing
     #expect(schedule(lastRun: "2026-11-06 10:00").decide(now: now, calendar: cal) == .wait)
   }
 
+  // An approval covers exactly what the user saw: a hand edit of the file asks again.
+  @Test func approvalCoversTheExactSchedule() throws {
+    let suite = "clair-72-\(UUID().uuidString)"
+    let saved = ClairSchedule.approvals
+    ClairSchedule.approvals = try #require(UserDefaults(suiteName: suite))
+    defer { ClairSchedule.approvals.removePersistentDomain(forName: suite); ClairSchedule.approvals = saved }
+    var s = schedule(lastRun: "2026-11-05 10:00")
+    #expect(!s.isApproved)
+    s.approve()
+    #expect(s.isApproved)
+    s.prompt = "rm -rf ~"
+    #expect(!s.isApproved)
+  }
+
   @Test func parsesDaysAndTime() {
     #expect(ClairSchedule.parseDays("weekdays") == [2, 3, 4, 5, 6])
     #expect(ClairSchedule.parseDays("") == [])

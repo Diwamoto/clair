@@ -904,6 +904,7 @@ extension CommandRegistry {
         hour: t.hour, minute: t.minute, project: i["project"]!.string!, profile: i["profile"]?.string, key: i["key"]?.string,
         prompt: i["prompt"]!.string!, catchUp: i["catchUp"]?.bool ?? false, lastRun: Date())
       ClairSchedule.save(ClairSchedule.load() + [new])
+      new.approve()  // user-only command: the user made it
       return .text(todoJSON(new.json))
     },
     cmd("schedule.remove", "スケジュールを削除", .write, ai: false, params: [CommandParam("id", .string)], palette: false,

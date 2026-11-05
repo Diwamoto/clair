@@ -69,6 +69,24 @@ public struct ClairSchedule: Codable, Equatable, Sendable {
     return out
   }
 
+  /// Everything that decides what a run does. The user approved exactly this; a hand edit of the file changes it.
+  var fingerprint: String {
+    ([id, days.map(String.init).joined(separator: ","), "\(hour):\(minute)", project, profile ?? "", key ?? "", prompt])
+      .joined(separator: "\u{1f}")
+  }
+
+  /// Approvals live in the GUI's defaults, not in `schedules.json`, so an agent that writes the file cannot
+  /// schedule itself without the user's say-so: `schedule.add` approves, anything else asks once on first fire.
+  // ponytail: advisory like `caller` (an agent with a shell can `defaults write`); sign with a Keychain key if
+  // this must hold against a determined agent.
+  nonisolated(unsafe) public static var approvals: UserDefaults = .standard
+  static let approvalsKey = "approvedSchedules"
+  public var isApproved: Bool { Self.approvals.stringArray(forKey: Self.approvalsKey)?.contains(fingerprint) == true }
+  public func approve() {
+    guard !isApproved else { return }
+    Self.approvals.set((Self.approvals.stringArray(forKey: Self.approvalsKey) ?? []) + [fingerprint], forKey: Self.approvalsKey)
+  }
+
   public static func url(home: URL = .homeDirectory) -> URL { home.appending(path: ".clair/schedules.json") }
 
   public static func load(_ url: URL = url()) -> [ClairSchedule] {
