@@ -95,6 +95,17 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var usedAgents: [AgentProfile] { AgentProfile.all.filter { toggles[WorkbenchState.agentKey($0.id)] != false } }
 
   mutating func autoEqualize() { if toggles["autoEqualize"] == true { tree.equalize() } }
+  /// Every editor showing `active` keeps it from now on: a new editor pane is about to become the current one.
+  mutating func pinEditors() {
+    guard let active else { return }
+    for e in tree.leaves where e.kind == .editor && editorFiles[e.id] == nil { editorFiles[e.id] = active }
+  }
+  /// ⌘D / ⌘⇧D: a split editor starts on the same file and becomes current; the original keeps that file.
+  mutating func splitFocused(_ axis: PaneTree.Axis) {
+    if tree.leaves.first(where: { $0.id == tree.focused })?.kind == .editor { pinEditors() }
+    tree.splitFocused(axis, kind: active == nil ? .terminal : nil)
+    autoEqualize()
+  }
   /// ⌘F belongs to the focused pane: a terminal, or an editor showing a file (not a chat, browser or proposal tab, or the home screen).
   public var findTargetsFocusedPane: Bool {
     guard !panesClosed else { return false }
@@ -121,6 +132,18 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
     tree.closeExtraEditors()
     guard tree.leaves.contains(where: { $0.kind != .editor }), let editor = tree.leaves.first(where: { $0.kind == .editor }) else { return }
     tree.close(editor.id)
+  }
+  /// Drops pins of closed panes and closed tabs, and makes a focused pinned editor the current one: every other
+  /// editor that showed `active` keeps that file, and the focused one's file becomes `active`.
+  public mutating func syncEditorFiles() {
+    let editors = tree.leaves.filter { $0.kind == .editor }.map(\.id)
+    editorFiles = editorFiles.filter { editors.contains($0.key) && tabs.contains($0.value) }
+    // The focused pinned editor, or the leftmost one when every editor is pinned (the current one was closed).
+    let current = editorFiles[tree.focused] != nil ? tree.focused : editors.allSatisfy { editorFiles[$0] != nil } ? editors.first : nil
+    guard let current, let file = editorFiles.removeValue(forKey: current) else { return }
+    if let active { for e in editors where e != current && editorFiles[e] == nil { editorFiles[e] = active } }
+    if active != file { editorContext = nil }
+    active = file
   }
   /// Recently opened files in this Project, newest first; persisted with the layout.
   public var recent: [String] = []
@@ -158,6 +181,9 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   }
   /// Preview pane id → the file it was opened for (Markdown rendered, CSV/TSV as a table).
   public var previews: [Int: String] = [:]
+  /// Split editor pane id → the file it keeps showing. The editor without an entry is the current one and shows `active`;
+  /// focusing a pinned editor makes it current (`syncEditorFiles`), so the focused editor always shows the active tab.
+  public var editorFiles: [Int: String] = [:]
   /// CLI agents started by hand in Clair terminals. Refreshed from live process facts, never saved.
   public var detectedLaunches: [String: [Int: AgentLaunch]] = [:]
   /// Latest OSC 0/2 window title per `NotificationLog.paneKey`, as Ghostty shows in its tab. Transient.
@@ -381,6 +407,7 @@ public struct CommandRegistry: Sendable {
     case .success:
       let focused = state.tree.focused
       let result = table[id]!.run(&state, input)
+      state.syncEditorFiles()
       state.dropEmptyEditors()  // e.g. a split or a new terminal beside the home screen replaces it
       if state.tree.focused != focused, state.toggles["focusExpand"] == true {
         state.tree.expandFocused((Double(state.choices["focusExpandRatio"] ?? "") ?? 60) / 100)
@@ -492,10 +519,28 @@ extension CommandRegistry {
 
   private static let core: [Command] = [
     cmd("pane.splitRight", "ペインを右に分割", .additive, shortcut: "⌘D") { s, _ in
-      s.tree.splitFocused(.horizontal, kind: s.active == nil ? .terminal : nil); s.autoEqualize(); return .pane(s.tree.focused)
+      s.splitFocused(.horizontal); return .pane(s.tree.focused)
     },
     cmd("pane.splitDown", "ペインを下に分割", .additive, shortcut: "⌘⇧D") { s, _ in
-      s.tree.splitFocused(.vertical, kind: s.active == nil ? .terminal : nil); s.autoEqualize(); return .pane(s.tree.focused)
+      s.splitFocused(.vertical); return .pane(s.tree.focused)
+    },
+    // Dropping a titlebar file tab on an editor's edge opens it there in a new editor pane; the other editors keep their files.
+    cmd("tab.split", "タブを分割して開く", .additive,
+        params: [CommandParam("path", .string), CommandParam("target", .int), CommandParam("edge", .string)], palette: false,
+        preflight: { s, i throws(CommandError) in
+          try require(s.tabs.contains(i["path"]!.string!), "no tab \(i["path"]!)")
+          try require(s.tree.leaves.contains { $0.id == i["target"]?.int && $0.kind == .editor }, "target must be an editor pane")
+          try require(i["edge"]?.string.flatMap(PaneTree.Edge.init(rawValue:)) != nil, "edge must be left/right/top/bottom")
+          return .additive
+        }) { s, i in
+      let path = i["path"]!.string!, edge = PaneTree.Edge(rawValue: i["edge"]!.string!)!
+      s.pinEditors()
+      let pane = s.tree.split(i["target"]!.int!, edge.axis, kind: .editor, before: edge.before)
+      s.tree.focus(pane)
+      if s.active != path { s.editorContext = nil }
+      s.active = path; s.activeDiff = nil; s.panesClosed = false
+      s.autoEqualize()
+      return .pane(pane)
     },
     cmd("terminal.show", "ターミナルを開く", .additive, shortcut: "⌘J") { s, _ in
       s.panesClosed = false
@@ -555,6 +600,7 @@ extension CommandRegistry {
       let a = i["idA"]!.int!, b = i["idB"]!.int!
       s.tree.swapLeaves(a, b)
       (s.launches[a], s.launches[b]) = (s.launches[b], s.launches[a])
+      (s.editorFiles[a], s.editorFiles[b]) = (s.editorFiles[b], s.editorFiles[a])
       return .ok
     },
     // The leftmost editor is replaced on close; open buffers remain available.
@@ -588,6 +634,7 @@ extension CommandRegistry {
     },
     cmd("pane.open", "ペインを開く", .additive, params: [CommandParam("kind", .string, allowed: ["editor", "terminal"])]) { s, i in
       s.tree = PaneTree(single: .editor)
+      s.editorFiles = [:]  // ids restart with the new tree
       if i["kind"]!.string! == "terminal" { s.tree.splitFocused(.horizontal, kind: .terminal) }
       s.panesClosed = false
       return .pane(s.tree.focused)
@@ -808,6 +855,8 @@ extension CommandRegistry {
       let idx = s.tabs.firstIndex(of: p)!
       s.tabs.remove(at: idx); s.dirty.remove(p); s.recordClosed(.file(p))
       s.tabOrder.removeAll { $0 == .file(p) }
+      // A split editor goes with its file; the leftmost stays (the left edge is an editor) and shows `active`.
+      for (pane, file) in s.editorFiles where file == p && s.tree.leaves.first?.id != pane { s.tree.close(pane) }
       if s.active == p { s.active = s.tabs.isEmpty ? nil : s.tabs[max(idx - 1, 0)] }
       return .ok
     },

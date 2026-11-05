@@ -455,6 +455,10 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   請求額と区別して表示する。欠損分をゼロ扱いしない(料金の分からないモデルは
   「算出不可」とし、合計や割合に入れない)
 - editor / terminal / diff を同じ tab group へ置ける任意 split
+- 分割した editor はそれぞれ自分のファイルを表示する。フォーカス中の editor がアクティブタブを表示し、タブの切替はその editor
+  だけを変える(ほかの editor が表示中のファイルのタブを選ぶとその editor にフォーカスする)。titlebar のファイルタブを
+  editor へドラッグすると、カーソルに近い上下左右の半分に分割して開く(`tab.split`)。⌘D / ⌘⇧D で分けた editor は同じ
+  ファイルから始まり、元の editor はそのファイルを保つ。タブを閉じるとそのファイルを表示していた分割 editor も閉じる
 - pane の focus、移動、close、最大化、幅/高さ/全体均等(均等は同じ軸に並ぶ pane を等分する。設定 `autoEqualize`
   が on なら分割・close のたびに自動で均等化する。設定 `focusExpand` が on ならフォーカス移動のたびに、フォーカスした
   pane が並ぶ向きの `focusExpandRatio`(50〜90%、既定 60%)を占め、他の pane が残りを等分する。どちらも既定は off。pane の境界線のダブルクリックは全体均等)

@@ -79,13 +79,15 @@ public struct PaneTree: Sendable, Equatable, Codable {
   }
 
   /// V16: splits `target` without moving focus (an agent fanning out must not steal the user's pane). Returns the new id.
+  /// `before` puts the new pane left of / above `target` instead of after it.
   @discardableResult
-  public mutating func split(_ target: Int, _ axis: Axis, kind newKind: PaneKind? = nil) -> Int {
+  public mutating func split(_ target: Int, _ axis: Axis, kind newKind: PaneKind? = nil, before: Bool = false) -> Int {
     let new = nextID
     nextID += 1
     root = Self.map(root) { n in
       guard case .leaf(let id, let kind) = n, id == target else { return nil }
-      return .split(axis: axis, ratio: 0.5, first: n, second: .leaf(id: new, kind: newKind ?? kind))
+      let added = Node.leaf(id: new, kind: newKind ?? kind)
+      return .split(axis: axis, ratio: 0.5, first: before ? added : n, second: before ? n : added)
     }
     maximized = nil
     return new
@@ -109,7 +111,7 @@ public struct PaneTree: Sendable, Equatable, Codable {
     if maximized == target { maximized = nil }
   }
 
-  /// Editors all show the shared active tab, so with no file they are identical empty panes:
+  /// With no file open every editor is the same empty pane (split editors keep files only while tabs are open):
   /// keep only the leftmost one.
   public mutating func closeExtraEditors() {
     for extra in leaves.filter({ $0.kind == .editor }).dropFirst() { close(extra.id) }
@@ -231,7 +233,11 @@ public struct PaneTree: Sendable, Equatable, Codable {
     root = swapped
   }
 
-  public enum Edge: String, Sendable, CaseIterable { case left, right, top, bottom }
+  public enum Edge: String, Sendable, CaseIterable {
+    case left, right, top, bottom
+    public var axis: Axis { self == .left || self == .right ? .horizontal : .vertical }
+    public var before: Bool { self == .left || self == .top }
+  }
 
   /// Moves leaf `id` beside `target`, splitting `target` in half on `edge`; the moved pane keeps its id
   /// (so its terminal session) and takes focus.
@@ -240,11 +246,9 @@ public struct PaneTree: Sendable, Equatable, Codable {
       leaves.contains(where: { $0.id == target }), let pruned = Self.remove(root, id)
     else { return }
     let moved = Node.leaf(id: id, kind: kind)
-    let axis: Axis = edge == .left || edge == .right ? .horizontal : .vertical
-    let before = edge == .left || edge == .top
     let candidate = Self.map(pruned) { n in
       guard case .leaf(let i, _) = n, i == target else { return nil }
-      return .split(axis: axis, ratio: 0.5, first: before ? moved : n, second: before ? n : moved)
+      return .split(axis: edge.axis, ratio: 0.5, first: edge.before ? moved : n, second: edge.before ? n : moved)
     }
     guard Self.anchored(Self.leaves(candidate)) else { return }
     root = candidate

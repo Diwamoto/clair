@@ -460,7 +460,7 @@
   struct EditorPane: View {
     let buffers: EditorBuffers
     let root: String?
-    let path: String?
+    var path: String?
     var focused = false
     var onFocus: (() -> Void)? = nil
     var softWrap = false
@@ -481,6 +481,8 @@
     let onCaret: (String, TextSelectionSet, TextSnapshot) -> Void
     /// Preview pane id → the file it shows (`WorkbenchState.previews`).
     var previews: [Int: String] = [:]
+    /// Split editor pane id → the file it keeps showing (`WorkbenchState.editorFiles`); other editors show `path`.
+    var editorFiles: [Int: String] = [:]
     /// Shortcut rows for the home screen shown while no file is open; empty keeps the plain note.
     var home: [HomeView.Row] = []
     /// Renders a history chat tab (`AgentHistory.tabPath`) by chat id.
@@ -561,8 +563,12 @@
       }
     }
 
-    func inPane(focused: Bool, onFocus: @escaping () -> Void, onClose: (() -> Void)? = nil) -> EditorPane {
+    func inPane(_ id: Int, focused: Bool, onFocus: @escaping () -> Void, onClose: (() -> Void)? = nil) -> EditorPane {
       var pane = self
+      if let file = editorFiles[id], file != path {
+        // The debugger marks belong to the active file.
+        pane.path = file; pane.debugLine = nil; pane.debugBreakpoints = []
+      }
       pane.focused = focused
       pane.onFocus = onFocus
       pane.onClose = onClose

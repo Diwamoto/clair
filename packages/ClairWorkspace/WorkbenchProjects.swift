@@ -121,9 +121,11 @@ public struct ProjectLayout: Sendable, Codable, Equatable {
   public var launches: [Int: AgentLaunch] = [:]
   /// Preview pane id → bound file, persisted so a restored preview keeps showing its own file.
   public var previews: [Int: String] = [:]
+  /// Split editor pane id → its own file (`WorkbenchState.editorFiles`), persisted like `previews`.
+  public var editorFiles: [Int: String] = [:]
   /// Every pane closed in this Project only; not persisted (restore reopens the layout).
   public var panesClosed = false
-  private enum CodingKeys: String, CodingKey { case tree, tabs, active, dirty, expanded, diffTabs, activeDiff, tabOrder, recent, previews }
+  private enum CodingKeys: String, CodingKey { case tree, tabs, active, dirty, expanded, diffTabs, activeDiff, tabOrder, recent, previews, editorFiles }
 
   public init() {}
 
@@ -159,6 +161,7 @@ public struct ProjectLayout: Sendable, Codable, Equatable {
     tabOrder = try c.decodeIfPresent([WorkbenchTab].self, forKey: .tabOrder) ?? []
     recent = try c.decodeIfPresent([String].self, forKey: .recent) ?? []
     previews = try c.decodeIfPresent([Int: String].self, forKey: .previews) ?? [:]
+    editorFiles = try c.decodeIfPresent([Int: String].self, forKey: .editorFiles) ?? [:]
   }
 }
 
@@ -166,10 +169,10 @@ extension WorkbenchState {
   var layout: ProjectLayout {
     get {
       var l = ProjectLayout(tree: tree, tabs: tabs, active: active, dirty: dirty, expanded: expanded, launches: launches, panesClosed: panesClosed, diffTabs: diffTabs, activeDiff: activeDiff, tabOrder: tabOrder)
-      l.previews = previews; l.recent = recent
+      l.previews = previews; l.editorFiles = editorFiles; l.recent = recent
       return l
     }
-    set { tree = newValue.tree; tabs = newValue.tabs; active = newValue.active; dirty = newValue.dirty; expanded = newValue.expanded; launches = newValue.launches; previews = newValue.previews; panesClosed = newValue.panesClosed; diffTabs = newValue.diffTabs; activeDiff = newValue.activeDiff; tabOrder = newValue.tabOrder; recent = newValue.recent }
+    set { tree = newValue.tree; tabs = newValue.tabs; active = newValue.active; dirty = newValue.dirty; expanded = newValue.expanded; launches = newValue.launches; previews = newValue.previews; editorFiles = newValue.editorFiles; panesClosed = newValue.panesClosed; diffTabs = newValue.diffTabs; activeDiff = newValue.activeDiff; tabOrder = newValue.tabOrder; recent = newValue.recent }
   }
 
   /// The open Project with the deepest root containing `file` (a nested Project wins over its parent).
@@ -227,7 +230,7 @@ extension WorkbenchState {
   }
 
   /// Titlebar order and selection are shared by shortcuts and native chrome.
-  /// Editor panes show the active file; they are not extra titlebar tabs.
+  /// The focused editor shows the active file; split editors' files are ordinary file tabs, not extra ones.
   public var titlebarTabs: [WorkbenchTab] { layout.titlebarTabs }
 
   public var selectedTitlebarTab: WorkbenchTab? {
@@ -244,7 +247,10 @@ extension WorkbenchState {
   mutating func selectTab(_ tab: WorkbenchTab) {
     switch tab {
     case .file(let path):
-      guard tabs.contains(path), let editor = tree.leaves.first(where: { $0.kind == .editor }) else { return }
+      // A split editor already showing the file takes focus (`syncEditorFiles` makes it current); otherwise the current editor shows it.
+      if let pinned = editorFiles.first(where: { $0.value == path })?.key { tree.focus(pinned); activeDiff = nil; return }
+      let editors = tree.leaves.filter { $0.kind == .editor }
+      guard tabs.contains(path), let editor = editors.first(where: { editorFiles[$0.id] == nil }) ?? editors.first else { return }
       if active != path { editorContext = nil }
       active = path
       activeDiff = nil
@@ -335,6 +341,7 @@ extension WorkbenchState {
     if !l.tree.isValid { l.tree = PaneTree(single: .editor) }
     l.launches = l.launches.filter { id, _ in l.tree.leaves.contains { $0.id == id } }
     l.previews = l.previews.filter { id, _ in l.tree.leaves.contains { $0.id == id } }
+    l.editorFiles = l.editorFiles.filter { id, file in l.tabs.contains(file) && l.tree.leaves.contains { $0.id == id && $0.kind == .editor } }
     layout = l
     notices.markRead(project: p.name)  // looking at a Project clears its badge
   }

@@ -386,6 +386,47 @@ final class WorkbenchCommandTests: XCTestCase {
     XCTAssertEqual(r.execute("pane.swap", ["idA": .int(s.tree.focused), "idB": .int(2)], state: &s).failure?.code, .preconditionFailed)
   }
 
+  func testSplitEditorsKeepTheirOwnFiles() throws {
+    var s = WorkbenchState()
+    s.tabs = ["a.swift", "b.swift", "c.swift"]; s.active = "a.swift"
+    let left = s.tree.focused
+    // Dropping a tab on the left editor's bottom edge opens it below, focused; the left editor keeps a.swift.
+    guard case .pane(let below) = try r.execute("tab.split", ["path": .string("b.swift"), "target": .int(left), "edge": .string("bottom")], state: &s).get()
+    else { return XCTFail("no pane") }
+    XCTAssertEqual(s.tree.leaves.map(\.id), [left, below])
+    XCTAssertEqual(s.tree.focused, below)
+    XCTAssertEqual(s.active, "b.swift")
+    XCTAssertEqual(s.editorFiles, [left: "a.swift"])
+    // A tab click shows in the focused editor; the other keeps its file.
+    try r.execute("tab.activate", ["path": .string("c.swift")], state: &s).get()
+    XCTAssertEqual(s.tree.focused, below)
+    XCTAssertEqual(s.editorFiles, [left: "a.swift"])
+    // Focusing the other editor makes it current: the tab bar follows it and the first keeps c.swift.
+    try r.execute("pane.focus", ["id": .int(left)], state: &s).get()
+    XCTAssertEqual(s.active, "a.swift")
+    XCTAssertEqual(s.editorFiles, [below: "c.swift"])
+    // Activating a file another editor shows focuses that editor instead of loading it twice.
+    try r.execute("tab.activate", ["path": .string("c.swift")], state: &s).get()
+    XCTAssertEqual(s.tree.focused, below)
+    XCTAssertEqual(s.editorFiles, [left: "a.swift"])
+    // ⌘D on an editor: the original keeps its file.
+    try r.execute("pane.splitRight", state: &s).get()
+    XCTAssertEqual(s.editorFiles[below], "c.swift")
+    XCTAssertEqual(s.active, "c.swift")
+    // Closing a pinned file closes its split editor.
+    let right = s.tree.focused
+    try r.execute("tab.close", ["path": .string("c.swift")], state: &s).get()
+    XCTAssertEqual(s.tree.leaves.map(\.id), [left, right])
+    XCTAssertNil(s.editorFiles[right])
+    // Edges: left of the leftmost editor stays a valid layout; a terminal is not a target.
+    try r.execute("tab.split", ["path": .string("b.swift"), "target": .int(left), "edge": .string("left")], state: &s).get()
+    XCTAssertEqual(s.tree.leaves.count, 3)
+    XCTAssertTrue(s.tree.isValid)
+    s.tree.split(left, .horizontal, kind: .terminal)
+    let terminal = s.tree.leaves.first { $0.kind == .terminal }!.id
+    XCTAssertEqual(r.execute("tab.split", ["path": .string("b.swift"), "target": .int(terminal), "edge": .string("left")], state: &s).failure?.code, .preconditionFailed)
+  }
+
   func testClosingEmptyEditorRemovesItOnlyBesideOtherPanes() throws {
     var s = WorkbenchState()
     s.tree = PaneTree()  // editor | terminals

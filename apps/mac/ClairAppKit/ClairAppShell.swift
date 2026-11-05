@@ -1291,6 +1291,8 @@ import Observation
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var store: ClairWorkbenchStore
     @State private var draggingPane: Int?
+    /// File tab being dragged from the titlebar; editor panes show edge drop zones meanwhile (`tab.split`).
+    @State private var draggingTab: String?
     @State private var integrationNotes: [String: String] = [:]  // V16: last install result per row
     private var st: WorkbenchState { store.state }
     @State private var query = ""
@@ -1709,7 +1711,8 @@ import Observation
         // Reorder within the active group only; other groups' tabs live in saved layouts.
         icon: icon, providerIcon: chat?.provider.rawValue,
         onMove: projectActive ? { from in store.run("tab.reorder", ["source": .string(from), "target": .string(WorkbenchTab.file(path).dragID)]) } : nil,
-        fileURL: tabFileURL(path, project: project)
+        fileURL: tabFileURL(path, project: project),
+        onDragStart: projectActive && !FileBrowser.isVirtualTab(path) ? { draggingTab = path } : nil
       )
       .clairContextMenu(menus) { projectActive && !FileBrowser.isVirtualTab(path) ? fileMenu(path, tab: true) : ClairMenuSpec(entries: []) }
     }
@@ -3224,7 +3227,15 @@ import Observation
           title: { terminalTabTitle(st.project, $0) },
           onRatio: { store.run("pane.setRatio", ["id": .int($0), "ratio": .double($1)]) },
           editor: activeEditor,
-          run: { _ = store.run($0, $1) }, dragging: $draggingPane)
+          run: { _ = store.run($0, $1) }, dragging: $draggingPane, draggingTab: $draggingTab)
+          // A drag dropped outside every pane (or on the tab bar) never reaches a zone: clear it once the mouse is up.
+          // ponytail: polls the button while a drag is live; an NSDraggingSource end hook would be exact.
+          .task(id: draggingTab ?? draggingPane.map(String.init)) {
+            guard draggingTab != nil || draggingPane != nil else { return }
+            while NSEvent.pressedMouseButtons & 1 != 0 { try? await Task.sleep(for: .milliseconds(100)) }
+            try? await Task.sleep(for: .milliseconds(300))  // let the drop on a zone land first
+            if !Task.isCancelled { draggingTab = nil; draggingPane = nil }
+          }
         }
       }
       .overlay(alignment: .top) {
@@ -3270,7 +3281,7 @@ import Observation
         },
         onDefinition: { store.run("editor.definition") },
         onPreview: { store.run("editor.markdownPreview") },
-        onEdit: { store.edited($0) }, onCaret: { store.editorSelectionChanged($0, $1, in: $2) }, previews: st.previews,
+        onEdit: { store.edited($0) }, onCaret: { store.editorSelectionChanged($0, $1, in: $2) }, previews: st.previews, editorFiles: st.editorFiles,
         home: homeShortcuts(st), history: { AnyView(historyTab($0)) }, custom: { customTab($0) })
     }
 
@@ -4273,6 +4284,8 @@ import Observation
     /// The file or folder the tab stands for. The drag carries it beside the reorder id, so a tab dropped on a terminal
     /// is typed there as its path (ADR-0025), like an explorer row.
     var fileURL: URL? = nil
+    /// A file tab's drag start: editor panes offer their edges to open it in a split (`tab.split`).
+    var onDragStart: (() -> Void)? = nil
 
     @State private var isHovered = false
     @State private var isDropTarget = false
@@ -4300,6 +4313,7 @@ import Observation
       // Same feel as the pane header drag: a card-shaped ghost of the tab and a ring on the drop target.
       .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(isDropTarget ? L.ring : .clear, lineWidth: 1))
       .onDrag({
+        onDragStart?()
         // The reorder id first: a tab bar drop loads the first string it finds.
         let provider = NSItemProvider(object: NSString(string: path))
         if let fileURL { provider.registerObject(fileURL as NSURL, visibility: .all) }
@@ -4417,8 +4431,7 @@ import Observation
     }
   }
 
-  /// Drag-time overlay on a pane: highlights the half nearest the cursor where the dragged pane will land.
-  // ponytail: a cancelled drag (dropped outside any pane) leaves the zones up until a click; add an NSDraggingSource end hook if that annoys.
+  /// Drag-time overlay on a pane: highlights the half nearest the cursor where the dragged pane or tab will land.
   private struct PaneDropZones: View, DropDelegate {
     let onMove: (PaneTree.Edge) -> Void
     let onCancel: () -> Void
@@ -4511,6 +4524,8 @@ import Observation
     let run: (String, CommandInput) -> Void
     /// Pane whose header handle is being dragged; other panes show edge drop zones meanwhile.
     @Binding var dragging: Int?
+    /// File tab being dragged from the titlebar; editor panes show edge drop zones meanwhile.
+    @Binding var draggingTab: String?
     /// Only first children all the way down: the anchored editor slot (`PaneTree.replaceFocusedEditor`).
     var leftmost = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -4527,10 +4542,10 @@ import Observation
     @ViewBuilder
     private func parts(_ axis: PaneTree.Axis, _ total: CGFloat, _ a: PaneTree.Node, _ b: PaneTree.Node, ratio: Double) -> some View {
       let h = axis == .horizontal
-      PaneView(node: a, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onTitle: onTitle, title: title, onRatio: onRatio, editor: editor, run: run, dragging: $dragging, leftmost: leftmost)
+      PaneView(node: a, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onTitle: onTitle, title: title, onRatio: onRatio, editor: editor, run: run, dragging: $dragging, draggingTab: $draggingTab, leftmost: leftmost)
         .frame(width: h ? total * ratio : nil, height: h ? nil : total * ratio)
       Rectangle().fill(L.paneDivider).frame(width: h ? 1 : nil, height: h ? nil : 1)
-      PaneView(node: b, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onTitle: onTitle, title: title, onRatio: onRatio, editor: editor, run: run, dragging: $dragging, leftmost: false)
+      PaneView(node: b, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onTitle: onTitle, title: title, onRatio: onRatio, editor: editor, run: run, dragging: $dragging, draggingTab: $draggingTab, leftmost: false)
     }
 
     var body: some View {
@@ -4557,7 +4572,7 @@ import Observation
             else if kind == .preview, let path = editor.previews[id] ?? editor.path, path.lowercased().hasSuffix(".html") || path.lowercased().hasSuffix(".htm") { HTMLPreviewPane(buffers: editor.buffers, root: editor.root, path: path) }
             else if kind == .preview { MarkdownPreviewPane(buffers: editor.buffers, root: editor.root, path: editor.previews[id] ?? editor.path,
               theme: editor.previewTheme, fontSize: editor.previewFontSize) }
-            else { editor.inPane(focused: id == focused, onFocus: { if id != focused { onFocus(id) } },
+            else { editor.inPane(id, focused: id == focused, onFocus: { if id != focused { onFocus(id) } },
               // Split editors have no pane header; the leftmost one is anchored (`pane.close` replaces it).
               onClose: leftmost ? nil : { run("pane.focus", ["id": .int(id)]); run("pane.close", [:]) }) }
             if kind == .terminal { TerminalFindBar(pane: id).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing) }
@@ -4566,6 +4581,12 @@ import Observation
                 run("pane.move", ["id": .int(from), "target": .int(id), "edge": .string(edge.rawValue)])
                 dragging = nil
               } onCancel: { dragging = nil }
+            } else if kind == .editor, let tab = draggingTab {
+              // Only editors: a tab dropped on a terminal still types its path there (ADR-0025).
+              PaneDropZones { edge in
+                run("tab.split", ["path": .string(tab), "target": .int(id), "edge": .string(edge.rawValue)])
+                draggingTab = nil
+              } onCancel: { draggingTab = nil }
             }
           }
         }
