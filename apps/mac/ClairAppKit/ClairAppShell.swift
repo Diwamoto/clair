@@ -4575,7 +4575,8 @@ import Observation
         // ponytail: the tree re-renders on split, so this keys off focus, not "is new".
         .opacity(shown || id != focused || reduceMotion ? 1 : 0)
         .onAppear { withAnimation(.easeOut(duration: Motion.screenDuration)) { shown = true } }
-        .onTapGesture { onFocus(id) }
+        // Simultaneous, so a click on selectable text or a button inside the pane (a history chat's bubbles) still focuses it.
+        .simultaneousGesture(TapGesture().onEnded { if id != focused { onFocus(id) } })
         // ponytail: the libghostty NSView may consume right-clicks, so terminal panes might not show this; copy/paste/clear items wait on U06 surface commands.
         .contextMenu {
           Button(tr("右に分割")) { run("pane.focus", ["id": .int(id)]); run("pane.splitRight", [:]) }
