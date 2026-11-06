@@ -442,6 +442,8 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   通常の agent launch と同じく raw PTY で起動し、GUI はその session の公式 transcript を
   チャットとして描画して、送信は PTY に書き込む。コンシェルジュが起動した子 agent
   (`parent` がコンシェルジュ)は状態と pane へのリンクで示し、出力は中継しない。
+  コンシェルジュは `agent.launch project=` で表示中の Project を切り替えずに別の Project へ
+  子を起動できる。他の agent が `parent` 付きで別の Project を指定すると preconditionFailed になる。
   指示は `~/.clair/concierge.md`。待ち中は agent のアイコンの周囲を回る表示で示す。
   チャットは返答を Markdown(コードは言語名とコピー付きのカード)で描画し、返答待ちの間は
   作業中の行を、コンシェルジュがターミナルで承認を待つ間はターミナルを開く導線を出す。

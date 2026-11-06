@@ -520,7 +520,13 @@ extension CommandRegistry {
   }
 
   private static func launchHome(_ s: WorkbenchState, _ i: CommandInput) throws(CommandError) -> (project: WorkbenchProject, pane: Int?) {
-    guard i["parent"] == nil, let name = i["project"]?.string else { return try s.launchHome(i["parent"]?.string) }
+    guard let name = i["project"]?.string else { return try s.launchHome(i["parent"]?.string) }
+    if let parent = i["parent"]?.string {
+      let home = try s.launchHome(parent)
+      if home.project.name == name { return home }
+      let caller = s.terminal(parent).flatMap { s.withLayoutCopy($0.project).launches[$0.pane] }
+      try require(caller?.concierge != nil, "only the concierge launches into another project")
+    }
     guard let p = s.projects.first(where: { $0.name == name }) else { throw CommandError(.preconditionFailed, "no project \(name)") }
     return (p, nil)
   }
@@ -686,7 +692,7 @@ extension CommandRegistry {
           // resume = provider-native session id (history.list's `sessionID`), not the `<Provider>:` history id.
           CommandParam("parent", .string, required: false), CommandParam("resume", .string, required: false),
           CommandParam("review", .bool, required: false), CommandParam("opening", .string, required: false),
-          // A Project other than the shown one, without switching to it (#72 schedules). Ignored with parent.
+          // A Project other than the shown one, without switching to it (#72 schedules).
           CommandParam("project", .string, required: false),
         ], palette: false,
         preflight: { s, i throws(CommandError) in
@@ -720,7 +726,7 @@ extension CommandRegistry {
         return id
       }
       if home.project.name == s.project { s.panesClosed = false }
-      return home.pane == nil ? .pane(pane) : .text(WorkbenchState.terminalKey(home.project.path, pane))
+      return i["parent"] == nil ? .pane(pane) : .text(WorkbenchState.terminalKey(home.project.path, pane))
     },
     // V16: fan-in. `key` is the `root#pane` terminal key agent.launch returned.
     cmd("agent.status", "エージェントの状態", .read, params: [CommandParam("key", .string)], palette: false,

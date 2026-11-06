@@ -41,6 +41,32 @@ final class WorkbenchConciergeTests: XCTestCase {
     XCTAssertEqual(children.map(\.launch.prompt), ["fix login"])
   }
 
+  func testOnlyTheConciergeLaunchesIntoAnotherProject() throws {
+    var (s, root) = try opened()
+    guard case .pane(let pane) = try r.execute("concierge.open", confirmed: true, state: &s).get() else { return XCTFail() }
+    guard case .pane(let plain) = try r.execute("agent.launch", ["profile": .string("claude")], confirmed: true, state: &s).get() else { return XCTFail() }
+    let home = s.project
+    let other = URL.temporaryDirectory.appending(path: "clair-concierge-\(UUID().uuidString)").resolvingSymlinksInPath()
+    try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+    try r.execute("project.open", ["path": .string(other.path)], state: &s).get()
+    let target = try XCTUnwrap(s.projects.first { $0.path == other.path }?.name)
+    try r.execute("project.open", ["path": .string(root)], state: &s).get()
+    XCTAssertEqual(s.project, home)
+
+    let key = WorkbenchState.terminalKey(root, pane)
+    let launched = try r.execute("agent.launch", ["profile": .string("codex"), "prompt": .string("fix login"),
+      "parent": .string(key), "project": .string(target)], confirmed: true, state: &s).get()
+    guard case .text(let child) = launched, let t = s.terminal(child) else { return XCTFail("\(launched)") }
+    XCTAssertEqual(t.project, target)
+    XCTAssertEqual(s.project, home)
+    XCTAssertEqual(s.withLayoutCopy(target).launches[t.pane]?.cwd, other.path)
+    XCTAssertEqual(s.conciergeChildren(in: home).map(\.launch.prompt), ["fix login"])
+
+    let denied = r.execute("agent.launch", ["profile": .string("codex"), "parent": .string(WorkbenchState.terminalKey(root, plain)),
+      "project": .string(target)], confirmed: true, state: &s)
+    XCTAssertEqual(denied.failure?.code, .preconditionFailed)
+  }
+
   func testCommandFixesSessionAndAppendsProjectInstructions() throws {
     let (_, root) = try opened()
     try FileManager.default.createDirectory(atPath: root + "/.clair", withIntermediateDirectories: true)
