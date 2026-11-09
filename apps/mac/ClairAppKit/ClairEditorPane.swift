@@ -641,28 +641,29 @@
     }
   }
 
-  /// The first screen of a Project with no file open: the Clair mark in block characters over its command shortcuts, centred.
+  /// The first screen of a Project with no file open: the Clair mark over its command shortcuts, centred.
   struct HomeView: View {
     /// A clickable command row: clicking runs it, the same as pressing `keys`.
     typealias Row = (title: String, keys: String, run: () -> Void)
     let shortcuts: [Row]
-    // A/B/C pick the icon's three blues (TL / TR+BL / BR); the 24×11 grid follows the app icon's four rounded squares.
-    private static let art = [
-      "  AAAAAAAAAA   BBBBBBB", "  AAAAAAAAAA   BBBBBBB", "  AAAAAAAAAA   BBBBBBB",
-      "  AAAAAAAAAA", "  AAAAAAAAAA",
-      "            CCCCCCCCCC", "            CCCCCCCCCC",
-      "  BBBBBBB   CCCCCCCCCC", "  BBBBBBB   CCCCCCCCCC", "  BBBBBBB   CCCCCCCCCC",
+    // The app icon's four rounded squares on a 20×20 grid (x, y, w, h), in its three blues: TL / TR+BL / BR.
+    private static let mark: [(CGRect, Color)] = [
+      (CGRect(x: 0, y: 0, width: 10, height: 10), Color(red: 0.18, green: 0.62, blue: 1)),
+      (CGRect(x: 13, y: 0, width: 7, height: 6), Color(red: 0.05, green: 0.47, blue: 0.85)),
+      (CGRect(x: 0, y: 14, width: 7, height: 6), Color(red: 0.05, green: 0.47, blue: 0.85)),
+      (CGRect(x: 10, y: 10, width: 10, height: 10), Color(red: 0.41, green: 0.77, blue: 1)),
     ]
-    private static let blue: [Character: Color] = ["A": Color(red: 0.18, green: 0.62, blue: 1), "B": Color(red: 0.05, green: 0.47, blue: 0.85), "C": Color(red: 0.41, green: 0.77, blue: 1)]
 
     var body: some View {
       VStack(spacing: 28) {
-        VStack(spacing: 0) {
-          ForEach(Array(Self.art.enumerated()), id: \.offset) { _, row in
-            row.padding(toLength: 24, withPad: " ", startingAt: 0).reduce(Text("")) { $0 + Text(String($1 == " " ? " " : "█")).foregroundColor(Self.blue[$1] ?? .clear) }
+        Canvas { ctx, size in
+          let u = size.width / 20
+          for (r, color) in Self.mark {
+            let rect = CGRect(x: r.minX * u, y: r.minY * u, width: r.width * u, height: r.height * u)
+            ctx.fill(Path(roundedRect: rect, cornerRadius: min(rect.width, rect.height) * 0.22, style: .continuous), with: .color(color))
           }
         }
-        .font(.system(size: 14, design: .monospaced)).accessibilityHidden(true)
+        .frame(width: 88, height: 88).accessibilityHidden(true)
         VStack(spacing: 0) {
           ForEach(shortcuts, id: \.title) { s in
             Button(action: s.run) {
