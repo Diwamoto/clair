@@ -2,7 +2,7 @@ import XCTest
 
 @testable import ClairWorkspace
 
-/// ADR-0020: one concierge per Project; its children are agents launched with it as `parent`.
+/// ADR-0020: one concierge for all of Clair; its children are agents launched with it as `parent`.
 final class WorkbenchConciergeTests: XCTestCase {
   let r = CommandRegistry.workbench
 
@@ -19,7 +19,7 @@ final class WorkbenchConciergeTests: XCTestCase {
     XCTAssertEqual(r.commands.first { $0.id == "concierge.open" }?.aiAvailable, false)
     XCTAssertEqual(r.execute("concierge.open", state: &s).failure?.code, .confirmationRequired)
     guard case .pane(let pane) = try r.execute("concierge.open", confirmed: true, state: &s).get() else { return XCTFail() }
-    let c = try XCTUnwrap(s.concierge(in: s.project))
+    let c = try XCTUnwrap(s.concierge())
     XCTAssertEqual(c.pane, pane)
     XCTAssertEqual(s.launches[pane]?.cwd, root)
     XCTAssertTrue(AgentProfile.isSessionID(c.session))
@@ -37,20 +37,62 @@ final class WorkbenchConciergeTests: XCTestCase {
     let key = WorkbenchState.terminalKey(root, pane)
     try r.execute("agent.launch", ["profile": .string("codex"), "prompt": .string("fix login"), "parent": .string(key)], confirmed: true, state: &s).get()
     try r.execute("agent.launch", ["profile": .string("claude")], confirmed: true, state: &s).get()  // not a child
-    let children = s.conciergeChildren(in: s.project)
+    let children = s.conciergeChildren()
     XCTAssertEqual(children.map(\.launch.prompt), ["fix login"])
   }
 
-  func testCommandFixesSessionAndAppendsProjectInstructions() throws {
-    let (_, root) = try opened()
-    try FileManager.default.createDirectory(atPath: root + "/.clair", withIntermediateDirectories: true)
-    try "テストは make test で".write(toFile: root + "/" + Concierge.instructionsPath, atomically: true, encoding: .utf8)
-    let cmd = AgentLaunch(profile: "claude", cwd: root, concierge: "abc-123").command
+  func testCommandFixesSessionAndAppendsSettingsPrompt() throws {
+    var (s, root) = try opened()
+    try r.execute("settings.concierge", ["prompt": .string("テストは make test で")], confirmed: true, state: &s).get()
+    guard case .pane(let pane) = try r.execute("concierge.open", confirmed: true, state: &s).get() else { return XCTFail() }
+    s.launches[pane]?.concierge = "abc-123"
+    let cmd = try XCTUnwrap(s.launches[pane]?.command)
     XCTAssertTrue(cmd.hasPrefix("claude --session-id abc-123 --append-system-prompt '"), cmd)
     XCTAssertTrue(cmd.contains("テストは make test で"))
     XCTAssertTrue(cmd.contains("agent output lines=40"))
     // A hostile session id never reaches the shell.
     XCTAssertEqual(AgentLaunch(profile: "claude", cwd: root, concierge: "x; rm -rf ~").command, "claude")
+  }
+
+  func testSettingsAreUserOnlyAndCwdMustBeADirectory() throws {
+    var (s, root) = try opened()
+    XCTAssertEqual(r.commands.first { $0.id == "settings.concierge" }?.aiAvailable, false)
+    XCTAssertEqual(r.execute("settings.concierge", ["cwd": .string("relative")], confirmed: true, state: &s).failure?.code, .preconditionFailed)
+    let other = URL.temporaryDirectory.appending(path: "clair-cwd-\(UUID().uuidString)").path
+    try FileManager.default.createDirectory(atPath: other, withIntermediateDirectories: true)
+    try r.execute("settings.concierge", ["cwd": .string(other)], confirmed: true, state: &s).get()
+    guard case .pane(let pane) = try r.execute("concierge.open", confirmed: true, state: &s).get() else { return XCTFail() }
+    XCTAssertEqual(s.launches[pane]?.cwd, other)
+    XCTAssertNotEqual(other, root)
+  }
+
+  func testConciergeIsFoundFromAnotherProject() throws {
+    var (s, root) = try opened()
+    guard case .pane(let pane) = try r.execute("concierge.open", confirmed: true, state: &s).get() else { return XCTFail() }
+    let second = URL.temporaryDirectory.appending(path: "clair-concierge-\(UUID().uuidString)").resolvingSymlinksInPath()
+    try FileManager.default.createDirectory(at: second, withIntermediateDirectories: true)
+    try r.execute("project.open", ["path": .string(second.path)], state: &s).get()
+    let host = try XCTUnwrap(s.projects.first { $0.path == root }?.name)
+    XCTAssertNotEqual(s.project, host)
+    XCTAssertEqual(s.concierge()?.project, host)
+    // Opening it again goes back to its host instead of starting a second one.
+    try r.execute("concierge.open", confirmed: true, state: &s).get()
+    XCTAssertEqual(s.project, host); XCTAssertEqual(s.tree.focused, pane)
+  }
+
+  func testFingerprintChangesWithWhatTheConciergeReads() throws {
+    let (_, root) = try opened()
+    let a = Concierge.fingerprint(prompt: "p", cwd: root)
+    XCTAssertEqual(a, Concierge.fingerprint(prompt: "p", cwd: root))
+    XCTAssertNotEqual(a, Concierge.fingerprint(prompt: "q", cwd: root))
+    try FileManager.default.createDirectory(atPath: root + "/.claude/skills/x", withIntermediateDirectories: true)
+    try "v1".write(toFile: root + "/.claude/skills/x/SKILL.md", atomically: true, encoding: .utf8)
+    let b = Concierge.fingerprint(prompt: "p", cwd: root)
+    XCTAssertNotEqual(a, b)
+    try "v2".write(toFile: root + "/.claude/skills/x/SKILL.md", atomically: true, encoding: .utf8)
+    XCTAssertNotEqual(b, Concierge.fingerprint(prompt: "p", cwd: root))
+    try "c".write(toFile: root + "/CLAUDE.md", atomically: true, encoding: .utf8)
+    XCTAssertNotEqual(b, Concierge.fingerprint(prompt: "p", cwd: root))
   }
 
   func testMessageSentBeforeStartBecomesTheOpeningPrompt() throws {

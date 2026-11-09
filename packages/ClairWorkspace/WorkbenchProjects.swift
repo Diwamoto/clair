@@ -499,13 +499,15 @@ private struct WorkspaceSnapshot: Codable {
   var fileAssociations: [String: String]?
   var fonts: [String: String]?
   var favorites: [String]?
+  var conciergePrompt: String?
+  var conciergeCwd: String?
 }
 
 extension WorkbenchState {
   public func save(to url: URL) throws {
     var s = self
     if !s.project.isEmpty { s.layouts[s.project] = s.layout }
-    let data = try JSONEncoder().encode(WorkspaceSnapshot(projects: s.projects, project: s.project, layouts: s.layouts, toggles: s.toggles, choices: s.choices, shortcuts: s.shortcuts, fileAssociations: s.fileAssociations, fonts: s.fonts, favorites: s.favorites))
+    let data = try JSONEncoder().encode(WorkspaceSnapshot(projects: s.projects, project: s.project, layouts: s.layouts, toggles: s.toggles, choices: s.choices, shortcuts: s.shortcuts, fileAssociations: s.fileAssociations, fonts: s.fonts, favorites: s.favorites, conciergePrompt: s.conciergePrompt, conciergeCwd: s.conciergeCwd))
     try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     try data.write(to: url, options: .atomic)
   }
@@ -519,6 +521,8 @@ extension WorkbenchState {
     for (k, v) in snap.choices ?? [:] where WorkbenchState.choiceOptions[k]?.contains(v) == true { s.choices[k] = v }
     for (id, key) in snap.shortcuts ?? [:] where key.isEmpty || WorkbenchState.canonicalShortcut(key) == key { s.shortcuts[id] = key }
     if let a = snap.fileAssociations { s.fileAssociations = a }
+    s.conciergePrompt = snap.conciergePrompt ?? ""
+    s.conciergeCwd = snap.conciergeCwd ?? ""
     // A pin whose item is gone stays (dimmed in the column) until the user removes it, like Finder's.
     s.favorites = (snap.favorites ?? []).filter { $0.hasPrefix("/") }
     for (k, v) in snap.fonts ?? [:] where s.fonts[k] != nil && WorkbenchState.isValidFontFamily(v) { s.fonts[k] = v }

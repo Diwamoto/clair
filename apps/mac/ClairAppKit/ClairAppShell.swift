@@ -1411,6 +1411,8 @@ import Observation
     @State private var debugPID = ""
     struct AssociationDraft: Identifiable, Equatable { let id = UUID(); var ext: String; var lang: String }
     @State private var associationRows: [AssociationDraft] = []
+    @State private var conciergePromptDraft = ""
+    @State private var conciergeCwdDraft = ""
     @State private var notificationTestResult: String?
     @State private var quota: [ProviderQuota] = []
     @State private var quotaHovered = false
@@ -2129,17 +2131,45 @@ import Observation
 
     private var conciergeSidebar: some View {
       ConciergeSidebar(
-        running: st.concierge(in: st.project) != nil,
-        children: st.conciergeChildren(in: st.project), start: { startConcierge() },
-        openTerminal: {
-          if let c = st.concierge(in: st.project) { store.run("pane.focus", ["id": .int(c.pane)]) }
-          leaveConcierge()
-        },
+        running: st.concierge() != nil,
+        children: st.conciergeChildren(), start: { startConcierge() },
+        openTerminal: { focusConcierge(); leaveConcierge() },
         focus: focusConciergeChild, editInstructions: editConciergeInstructions)
     }
 
+    /// #76: a new concierge starts only once the user has approved what it reads (prompt, cwd, its project files).
     private func startConcierge(_ message: String? = nil) {
-      store.run("concierge.open", message.map { ["message": .string($0)] } ?? [:], confirmed: true)
+      let input: CommandInput = message.map { ["message": .string($0)] } ?? [:]
+      if let c = st.concierge() {
+        // Panes mount per active Project (pane ids repeat across Projects), so type only once its host is shown.
+        // ponytail: fixed delay for the mount; hook the surface's mount if a slow switch drops the message.
+        store.run("concierge.open", [:], confirmed: true)
+        if let message, !message.isEmpty {
+          DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            if ClairGhosttySurfaceView.send(message, toPane: c.pane) {
+              DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { ClairGhosttySurfaceView.pressReturn(inPane: c.pane) }
+            }
+          }
+        }
+        return
+      }
+      let cwd = st.conciergeCwd.isEmpty ? store.activeRoot ?? "" : st.conciergeCwd
+      let fingerprint = Concierge.fingerprint(prompt: st.conciergePrompt, cwd: cwd)
+      if Concierge.isApproved(fingerprint) { store.run("concierge.open", input, confirmed: true); return }
+      Task.detached { [store] in
+        let ok = store.requestMCPApproval("concierge.open", ["cwd": .string(cwd)], .external)
+        await MainActor.run {
+          guard ok else { return }
+          Concierge.approve(fingerprint)
+          store.run("concierge.open", input, confirmed: true)
+        }
+      }
+    }
+
+    private func focusConcierge() {
+      guard let c = st.concierge() else { return }
+      if c.project != st.project { store.run("project.switch", ["name": .string(c.project)]) }
+      store.run("pane.focus", ["id": .int(c.pane)])
     }
 
     /// Leaving the concierge for a pane or file hands the sidebar back to the file tree.
@@ -2153,15 +2183,7 @@ import Observation
     }
 
     private func editConciergeInstructions() {
-      guard let root = store.activeRoot else { return }
-      let url = URL(fileURLWithPath: root).appending(path: Concierge.instructionsPath)
-      if !FileManager.default.fileExists(atPath: url.path) {
-        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? Data(tr("# コンシェルジュへの指示\n\nこの Project で守ってほしいことを書きます。次回の起動から反映されます。\n").utf8).write(to: url, options: .withoutOverwriting)
-      }
-      leaveConcierge()
-      store.refreshProjectFiles()
-      DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { store.run("tab.open", ["path": .string(Concierge.instructionsPath)]) }
+      store.run("settings.open", ["section": .string("AIプロバイダー")])
     }
 
     @State private var todos: [ClairTodo] = []
@@ -3349,12 +3371,12 @@ import Observation
       }
       .overlay {
         if sidebarMode == "concierge" {
-          let c = st.concierge(in: st.project)
+          let c = st.concierge()
           ConciergeChatView(
-            session: c?.session, pane: c?.pane,
-            status: c.flatMap { c in st.agentSessions.first { $0.project == st.project && $0.pane == c.pane }?.status },
-            children: st.conciergeChildren(in: st.project), focus: focusConciergeChild,
-            openTerminal: { if let c { store.run("pane.focus", ["id": .int(c.pane)]) }; leaveConcierge() },
+            session: c?.session, pane: c?.project == st.project ? c?.pane : nil,
+            status: c.flatMap { c in st.agentSessions.first { $0.project == c.project && $0.pane == c.pane }?.status },
+            children: st.conciergeChildren(), focus: focusConciergeChild,
+            openTerminal: { focusConcierge(); leaveConcierge() },
             start: { startConcierge($0) })
         }
       }
@@ -3464,6 +3486,25 @@ import Observation
                 switchRow(profile.title, WorkbenchState.agentKey(profile.id),
                   note: ProviderQuota.sources.contains(profile.id) ? tr("ステータスバーの利用枠にも表示します。") : nil)
               }
+            }
+            SettingsCard(title: tr("コンシェルジュ")) {
+              VStack(alignment: .leading, spacing: 6) {
+                Text(tr("作業フォルダ")).font(.system(size: 13))
+                TextField(tr("空欄なら開いている Project"), text: $conciergeCwdDraft)
+                  .textFieldStyle(.roundedBorder).accessibilityLabel(tr("作業フォルダ"))
+                  .onSubmit { store.run("settings.concierge", ["cwd": .string(conciergeCwdDraft)]) }
+                Text(tr("そのフォルダのプロジェクトスキルと CLAUDE.md が読み込まれます。")).font(.system(size: 11)).foregroundStyle(C.textTertiary)
+                Text(tr("指示")).font(.system(size: 13)).padding(.top, 6)
+                TextEditor(text: $conciergePromptDraft)
+                  .font(.system(size: 12)).frame(height: 120)
+                  .overlay(RoundedRectangle(cornerRadius: 6).stroke(L.strong)).accessibilityLabel(tr("指示"))
+                Button(tr("保存")) {
+                  store.run("settings.concierge", ["prompt": .string(conciergePromptDraft), "cwd": .string(conciergeCwdDraft)])
+                }
+                Text(tr("次にコンシェルジュを起動したときから反映されます。内容が変わると起動前に確認します。")).font(.system(size: 11)).foregroundStyle(C.textTertiary)
+              }
+              .padding(.vertical, 8)
+              .onAppear { conciergePromptDraft = st.conciergePrompt; conciergeCwdDraft = st.conciergeCwd }
             }
             integrationCard
           case "エディタ":

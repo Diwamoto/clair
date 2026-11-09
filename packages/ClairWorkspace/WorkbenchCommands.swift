@@ -212,6 +212,10 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var shortcuts: [String: String] = [:]
   /// File extension (lowercased, no dot) → editor language id. Overrides the built-in detection.
   public var fileAssociations = ["tpl": "terraform"]
+  /// #76: the one concierge's extra instructions (after `Concierge.basePrompt`) and its working directory
+  /// ("" = the active Project root). User-only (`settings.concierge` is ai: false).
+  public var conciergePrompt = ""
+  public var conciergeCwd = ""
   /// `"tpl=terraform,j2=python"` ⇄ the map (the settings list sends this). Malformed or empty pairs are dropped.
   public static func parseAssociations(_ text: String) -> [String: String] {
     var map: [String: String] = [:]
@@ -791,7 +795,7 @@ extension CommandRegistry {
       }
       return .ok
     },
-    // ADR-0020: focus the Project's concierge, starting it if needed. GUI-only (ai: false): an agent
+    // ADR-0020: focus Clair's one concierge (in whichever Project hosts it), starting it if needed. GUI-only (ai: false): an agent
     // must not spawn a concierge; it launches children through agent.launch instead.
     cmd("concierge.open", "コンシェルジュを開く", .external, ai: false,
         params: [CommandParam("message", .string, required: false)],
@@ -799,13 +803,18 @@ extension CommandRegistry {
           _ = try s.launchHome(nil)
           return .external
         }) { s, i in
-      if let c = s.concierge(in: s.project) { s.tree.focus(c.pane); return .pane(c.pane) }
+      if let c = s.concierge() {
+        if c.project != s.project, let p = s.projects.first(where: { $0.name == c.project }) { s.switchProject(to: p, scanFiles: false) }
+        s.tree.focus(c.pane); return .pane(c.pane)
+      }
       let home = try! s.launchHome(nil)
       s.tree.splitFocused(.horizontal, kind: .terminal)
       let pane = s.tree.focused
+      let cwd = s.conciergeCwd.isEmpty ? home.project.path : s.conciergeCwd
       s.launches[pane] = AgentLaunch(
-        profile: "claude", cwd: home.project.path, concierge: UUID().uuidString.lowercased(),
-        opening: i["message"]?.string.flatMap { $0.isEmpty ? nil : $0 }, folders: home.project.folders)
+        profile: "claude", cwd: cwd, concierge: UUID().uuidString.lowercased(),
+        opening: i["message"]?.string.flatMap { $0.isEmpty ? nil : $0 }, folders: cwd == home.project.path ? home.project.folders : [])
+      s.launches[pane]?.conciergePrompt = s.conciergePrompt
       s.panesClosed = false
       return .pane(pane)
     },
@@ -1344,6 +1353,21 @@ extension CommandRegistry {
     cmd("settings.fileAssociations", "拡張子の言語を設定", .write, ai: false,
         params: [CommandParam("value", .string)]) { s, i in
       s.fileAssociations = WorkbenchState.parseAssociations(i["value"]!.string!); return .ok
+    },
+    // #76: ai: false — an agent that rewrote these would direct every later task.
+    cmd("settings.concierge", "コンシェルジュの指示と作業フォルダを設定", .write, ai: false,
+        params: [CommandParam("prompt", .string, required: false), CommandParam("cwd", .string, required: false)],
+        palette: false,
+        preflight: { _, i throws(CommandError) in
+          if let cwd = i["cwd"]?.string, !cwd.isEmpty {
+            var dir: ObjCBool = false
+            try require(cwd.hasPrefix("/") && FileManager.default.fileExists(atPath: cwd, isDirectory: &dir) && dir.boolValue, "cwd is not an absolute directory")
+          }
+          return .write
+        }) { s, i in
+      if let v = i["prompt"]?.string { s.conciergePrompt = v }
+      if let v = i["cwd"]?.string { s.conciergeCwd = v }
+      return .ok
     },
     cmd("sidebar.toggle", "サイドバーの表示切替", .read, ai: false, shortcut: "⌘B") { s, _ in s.sidebarHidden.toggle(); return .ok },
     cmd("editor.zoomIn", "文字を大きく", .read, ai: false, shortcut: "⌘=") { s, _ in s.stepEditorFontSize(1); return .ok },

@@ -95,7 +95,7 @@
         }
         Divider()
         Button(action: editInstructions) {
-          Label(tr("%@ を編集", Concierge.instructionsPath), systemImage: "doc.text")
+          Label(tr("指示と作業フォルダを設定"), systemImage: "gearshape")
             .font(rowFont).foregroundStyle(C.textTertiary)
             .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 14).frame(height: 36).contentShape(Rectangle())
         }.buttonStyle(.hoverWash)

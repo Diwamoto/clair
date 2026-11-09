@@ -442,7 +442,16 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   通常の agent launch と同じく raw PTY で起動し、GUI はその session の公式 transcript を
   チャットとして描画して、送信は PTY に書き込む。コンシェルジュが起動した子 agent
   (`parent` がコンシェルジュ)は状態と pane へのリンクで示し、出力は中継しない。
-  指示は `~/.clair/concierge.md`。待ち中は agent のアイコンの周囲を回る表示で示す。
+  本体は既存の Project の layout に置かれ、どの Project からも同じ一つを開く(別の Project にあるときは
+  その Project に切り替えて出す)。指示は設定の `concierge.prompt`(固定の役割の後ろに足す自由記述)、
+  作業フォルダは `concierge.cwd`(空なら起動時の active Project root。そこのプロジェクトスキルと
+  `CLAUDE.md` が読まれる)。どちらも設定画面か `settings.concierge [prompt cwd]`(AI 不可。agent が
+  書き換えると以後の全タスクを指揮できるため)で変え、次の起動から反映する。新しく起動する前に、
+  prompt・cwd と cwd の `CLAUDE.md` / `CLAUDE.local.md` / `.mcp.json` / `.claude/CLAUDE.md` /
+  `.claude/settings{,.local}.json` / `.claude/{skills,agents,commands,hooks,rules}/` 配下の内容のハッシュを
+  GUI の defaults の承認済みの値と比べ、違えば承認カードを出す(`schedules.json` と同じ方式。限界も同じで、
+  shell を持つ agent は defaults を書ける。`~/.claude` は対象外)。限界: ホストの Project を閉じると
+  コンシェルジュの pane も layout から外れる。待ち中は agent のアイコンの周囲を回る表示で示す。
   チャットは返答を Markdown(コードは言語名とコピー付きのカード)で描画し、返答待ちの間は
   作業中の行を、コンシェルジュがターミナルで承認を待つ間はターミナルを開く導線を出す。
   会話がまだないときは依頼の例を出し、選ぶと送信欄に入る(送信はしない)

@@ -1,5 +1,5 @@
 ---
-title: "Project ごとのコンシェルジュ agent を raw PTY + transcript の GUI チャットで出す"
+title: "Clair 全体で一つのコンシェルジュ agent を raw PTY + transcript の GUI チャットで出す"
 status: accepted
 date: 2026-09-30
 ---
@@ -8,11 +8,13 @@ date: 2026-09-30
 
 ## 決定
 
-各 Project に一つ、Clair の操作と子 agent の管理を任せるコンシェルジュ agent を置く。
+Clair 全体に一つ、Clair の操作と子 agent の管理を任せるコンシェルジュ agent を置く
+(2026-11-09 改訂、#76。当初は Project ごとだった)。
 activity bar の 5 つ目「コンシェルジュ」から sidebar に開く。
 
 - 本体は既定 Agent の CLI を通常の agent launch と同じく raw PTY で起動する。
-  cwd は Project root、承認境界も `agent.launch` と同じ。
+  cwd は設定の `concierge.cwd`(空なら active Project root)、承認境界も `agent.launch` と同じ。
+  pane はどこかの Project の layout に置き、どの Project からも同じ一つを開く。
 - GUI はその session の provider 公式 transcript(Claude Code / Codex の JSONL、
   OpenCode の DB。`AgentHistoryReader` が読むもの)をチャットとして描画する。
   送信欄の入力はその PTY に書き込む。TUI の画面は解析しない。
@@ -20,7 +22,16 @@ activity bar の 5 つ目「コンシェルジュ」から sidebar に開く。
   チャットと sidebar はその状態(process の事実)と pane へのリンクを出し、
   子の出力をコンシェルジュへ中継しない。要約が必要なときだけコンシェルジュが
   `agent.output` で末尾を読む。
-- Project ごとの指示は `.clair/concierge.md` に置き、起動時に渡す。
+- 指示は設定の `concierge.prompt` に置き、起動時に固定の役割の後ろに足して渡す。
+  `settings.concierge` は AI 不可。prompt・cwd・cwd のプロジェクトファイルのハッシュが前回の
+  承認から変わっていたら、起動前に承認カードを出す。
+
+## 改訂の理由(2026-11-09)
+
+工程を分担するエージェントファクトリー(#74)では、コンシェルジュは Project をまたいで子を起動する。
+中身(工程表と遷移のルール)は利用者側のプロンプトとプロジェクトスキルに持たせ、Clair は
+どのプロンプトと cwd で動かすかを選べるだけにする(疎結合)。コンシェルジュは以後の全タスクを
+指揮するので、agent からは書き換えられず、読み込む内容の変化はユーザーが承認する。
 
 ## 理由
 
