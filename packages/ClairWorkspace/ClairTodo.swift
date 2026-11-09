@@ -183,7 +183,7 @@ clair todo.update path=<path> stage=impl lane=code agent=<terminal key>         
 clair todo.update path=<path> stage=impl appendBody="- impl <terminal key> <one-line note>"   # every stage change: one history line
 ```
 
-Workflow artifacts live in the Project, not in `~/.clair`, so a sandboxed child can read them: `<project root>/.clair/todo/<TODO file name without .md>/plan.md` and `review.md`. Set `project:` (Project name or path) on a staged TODO so the board knows where to look.
+Workflow artifacts sit next to the TODO: `~/.clair/todo/<TODO file name without .md>/plan.md` and `review.md`. A sandboxed child cannot see `~/.clair`, so the concierge puts plan.md's text into the child's prompt and writes review.md itself. Set `project:` (Project name or path) on a staged TODO so the board can link its pane.
 
 
 ## Add

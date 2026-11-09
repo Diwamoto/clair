@@ -11,7 +11,7 @@ public struct TodoBoardCard: Equatable, Sendable {
   public let state: State
   /// `- <stage> …` lines of the TODO body, oldest first: who did each stage.
   public var history: [String] = []
-  /// Existing `<root>/.clair/todo/<name>/{plan,review}.md` in the Project or the branch worktree.
+  /// Existing `~/.clair/todo/<name>/{plan,review}.md`, next to the TODO file.
   public var artifacts: [String] = []
 
   static func history(_ text: String) -> [String] {
@@ -39,10 +39,8 @@ extension WorkbenchState {
         else if session?.status == .blocked || session?.status == .attention || t.stage == "plan" || t.stage == "submit" { .waiting }
         else { .running }
       let project = live?.project ?? named
-      let stem = ((t.path as NSString).lastPathComponent as NSString).deletingPathExtension
-      let roots = [projects.first { $0.name == project }?.path, t.branch.flatMap { b in projects.first { $0.branch == b }?.path }].compactMap { $0 }
-      let artifacts = roots.flatMap { r in ["plan.md", "review.md"].map { "\(r)/.clair/todo/\(stem)/\($0)" } }
-        .filter { FileManager.default.fileExists(atPath: $0) }
+      let dir = (t.path as NSString).deletingPathExtension
+      let artifacts = ["plan.md", "review.md"].map { "\(dir)/\($0)" }.filter { FileManager.default.fileExists(atPath: $0) }
       let text = (try? String(contentsOfFile: t.path, encoding: .utf8)) ?? ""
       return TodoBoardCard(todo: t, project: project, pane: live?.pane, state: state, history: TodoBoardCard.history(text), artifacts: artifacts)
     }
