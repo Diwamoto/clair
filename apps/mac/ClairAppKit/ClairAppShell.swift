@@ -1591,6 +1591,8 @@ import Observation
       .task {
         while !Task.isCancelled {
           await store.refreshDetectedAgents()
+          // The concierge and its children rewrite the TODO files while the board is open.
+          if sidebarMode == "concierge", conciergeBoard { todos = ClairTodo.list() }
           try? await Task.sleep(for: .seconds(2))
         }
       }

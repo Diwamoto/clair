@@ -462,8 +462,8 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   sandbox から見えるのは cwd(bind mount)だけで、`~/.clair`・`~/.claude`・Clair の IPC socket は見えない。
   Claude の認証は sbx の global secret(sandbox 内で一度 `/login`)で、未ログインなら claude 自身のエラーが出力に残る。
   worktree は `branch=` で Clair が作り(sbx v0.32 に `--branch` はない)、それを workspace にする。
-  `agent.close` で閉じると `sbx rm --force` で sandbox を捨てる。worktree は残り、`worktree.remove` で片付ける。
-  承認の境界は通常の `agent.launch` と同じ(external)。限界: pane を UI で閉じた・Clair が落ちたなど `agent.close` を通らずに残った sandbox は `sbx ls` で見て手で消す。待ち中は agent のアイコンの周囲を回る表示で示す。
+  `agent.close` や ⌘W でペインを閉じると `sbx rm --force` で sandbox を捨てる。worktree は残り、`worktree.remove` で片付ける。
+  承認の境界は通常の `agent.launch` と同じ(external)。限界: Project を閉じた・Clair が落ちたなどでペインを閉じずに残った sandbox は `sbx ls` で見て手で消す。待ち中は agent のアイコンの周囲を回る表示で示す。
   チャットは返答を Markdown(コードは言語名とコピー付きのカード)で描画し、返答待ちの間は
   作業中の行を、コンシェルジュがターミナルで承認を待つ間はターミナルを開く導線を出す。
   会話がまだないときは依頼の例を出し、選ぶと送信欄に入る(送信はしない)
@@ -475,7 +475,7 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   `stage: done` か `done: true` なら完了。Project は `agent` の pane の Project、無ければ `project:` key(名前かパス)。
   「あなた待ちだけ」と Project で絞り込め、カードを選ぶと retry / branch / pr / agent と「ペインを開く」(Project を切り替えて
   その pane へ)・「PR を開く」(https のみ)・「TODO を開く」を出す。限界: plan.md / review.md / diff への直接の導線はなく、
-  ボードは開いたときの TODO を出す(開き直しで更新)。Design canvas にはまだ描かれていない(オーナー判断 2026-11-09)。
+  ボードは開いている間 2 秒ごとに TODO を読み直す。Design canvas にはまだ描かれていない(オーナー判断 2026-11-09)。
 - 設定の「使用状況」はユーザーが送信した依頼・追記を 1 件として集計する。
   アクティビティ(今日・直近 7 日と前週比・連続日数・よく使う時間帯、直近 1 年の
   日別 activity calendar とエージェント別の絞り込み、時間帯ごとの合計と曜日 × 時間帯の

@@ -324,6 +324,14 @@ extension WorkbenchState {
     }
   }
 
+  /// Drops the launches of closed panes; a closed sandboxed child takes its sandbox with it (#75).
+  mutating func pruneLaunches() {
+    for (id, l) in launches where !tree.leaves.contains(where: { $0.id == id }) {
+      if let name = l.sandbox { AgentRun.removeSandbox(name) }
+      launches[id] = nil
+    }
+  }
+
   mutating func withLayout<R>(_ name: String, _ body: (inout ProjectLayout) -> R) -> R {
     if name == project { return body(&layout) }
     var l = layouts[name] ?? ProjectLayout()

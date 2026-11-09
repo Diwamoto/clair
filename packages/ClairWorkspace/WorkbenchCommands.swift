@@ -669,11 +669,11 @@ extension CommandRegistry {
         let last = s.tree.focused
         s.tree.ensureEditorAtLeft()
         s.tree.close(last)
-        s.launches = s.launches.filter { id, _ in s.tree.leaves.contains { $0.id == id } }
+        s.pruneLaunches()
         return .ok
       }
       s.tree.closeFocused()
-      s.launches = s.launches.filter { id, _ in s.tree.leaves.contains { $0.id == id } }
+      s.pruneLaunches()
       s.autoEqualize()
       return .ok
     },
