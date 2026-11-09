@@ -76,7 +76,7 @@ clair_ghostty_vt_result_e clair_ghostty_vt_grid_ref(
 
 clair_ghostty_vt_result_e clair_ghostty_vt_select_all(
     clair_ghostty_vt_terminal_t terminal, clair_ghostty_vt_selection_s *out_selection) {
-  GhosttySelection real_selection = GHOSTTY_INIT_SIZED(GhosttySelection);
+  GhosttySelection real_selection = {0};
   GhosttyResult result = ghostty_terminal_select_all((GhosttyTerminal)terminal, &real_selection);
   if (result == GHOSTTY_SUCCESS && out_selection) {
     memcpy(out_selection, &real_selection, sizeof(*out_selection));
@@ -89,14 +89,17 @@ clair_ghostty_vt_result_e clair_ghostty_vt_format_selection_alloc(
     bool unwrap, bool trim, uint8_t **out_ptr, size_t *out_len) {
   GhosttySelection real_selection;
   memcpy(&real_selection, selection, sizeof(real_selection));
-  GhosttyTerminalSelectionFormatOptions options =
-      GHOSTTY_INIT_SIZED(GhosttyTerminalSelectionFormatOptions);
-  options.emit = GHOSTTY_FORMATTER_FORMAT_PLAIN;
-  options.unwrap = unwrap;
-  options.trim = trim;
-  options.selection = &real_selection;
-  return (clair_ghostty_vt_result_e)ghostty_terminal_selection_format_alloc(
-      (GhosttyTerminal)terminal, NULL, options, out_ptr, out_len);
+  GhosttyFormatter formatter;
+  GhosttyResult result =
+      ghostty_formatter_terminal_new(NULL, &formatter, (GhosttyTerminal)terminal);
+  if (result != GHOSTTY_SUCCESS) return (clair_ghostty_vt_result_e)result;
+  // Emit defaults to plain text; set only what differs per call.
+  ghostty_formatter_set(formatter, GHOSTTY_FORMATTER_OPT_UNWRAP, &unwrap);
+  ghostty_formatter_set(formatter, GHOSTTY_FORMATTER_OPT_TRIM, &trim);
+  ghostty_formatter_set(formatter, GHOSTTY_FORMATTER_OPT_SELECTION, &real_selection);
+  result = ghostty_formatter_format_alloc(formatter, NULL, out_ptr, out_len);
+  ghostty_formatter_free(formatter);
+  return (clair_ghostty_vt_result_e)result;
 }
 
 void clair_ghostty_vt_free(uint8_t *ptr, size_t len) { ghostty_free(NULL, ptr, len); }
@@ -105,7 +108,8 @@ void clair_ghostty_vt_scroll_viewport(
     clair_ghostty_vt_terminal_t terminal, clair_ghostty_vt_scroll_s behavior) {
   GhosttyTerminalScrollViewport real_behavior;
   memcpy(&real_behavior, &behavior, sizeof(real_behavior));
-  ghostty_terminal_scroll_viewport((GhosttyTerminal)terminal, real_behavior);
+  // Only fails for a NULL terminal, which requireHandle() already rules out.
+  (void)ghostty_terminal_scroll_viewport((GhosttyTerminal)terminal, real_behavior);
 }
 #endif  // CLAIR_GHOSTTY_VT_VENDORED
 
@@ -121,7 +125,7 @@ int clair_ghostty_vt_abi_is_vendored(void) {
          clair_ghostty_vt_probe_terminal_get != 0 &&
          clair_ghostty_vt_probe_terminal_grid_ref != 0 &&
          clair_ghostty_vt_probe_terminal_select_all != 0 &&
-         clair_ghostty_vt_probe_terminal_selection_format_alloc != 0 &&
+         clair_ghostty_vt_probe_formatter_format_alloc != 0 &&
          clair_ghostty_vt_probe_terminal_scroll_viewport != 0 && clair_ghostty_vt_probe_free != 0;
 #else
   return 0;

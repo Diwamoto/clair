@@ -14,7 +14,7 @@ public struct GhosttyVTCursor: Equatable, Sendable {
 /// One rendered screen: the whole active screen (including scrollback rows
 /// currently visible after a scroll) as plain-text lines, plus cursor
 /// position and scrollback extent. `lines` is produced by
-/// `ghostty_terminal_selection_format_alloc` over a `select_all()`
+/// a `ghostty_formatter_*` format over a `select_all()`
 /// snapshot -- the same shape (an array of visible-line strings)
 /// `ClairTerminalView`'s CoreText renderer draws one `CTLine` per
 /// element of, mirroring how `EditorLineRenderer` (`ClairEditorView`)
@@ -232,7 +232,6 @@ public final class GhosttyVTTerminal {
       let endRef = try gridRef(atViewportColumn: end.column, row: end.row)
     else { return nil }
     var selection = clair_ghostty_vt_selection_s()
-    selection.size = MemoryLayout<clair_ghostty_vt_selection_s>.size
     selection.start = startRef
     selection.end = endRef
     selection.rectangle = false
