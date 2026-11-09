@@ -291,31 +291,38 @@ import Observation
       }
       WorkbenchState.screenText = { ClairGhosttySurfaceView.screenText(inPane: $0) }
       WorkbenchState.screenInput = { ClairGhosttySurfaceView.send($1, toPane: $0) && ClairGhosttySurfaceView.pressReturn(inPane: $0) }
-      let server = WorkbenchIPCServer { req in
-        let req = req.callerAsParent()
-        if req.via == .mcp || req.caller != nil || req.command == "file.preview" {
-          return MCPGate.handle(
-            req, registry: CommandRegistry.workbench,
-            snapshot: {
-              DispatchQueue.main.sync {
-                MainActor.assumeIsolated {
-                  if req.command.hasPrefix("debug.") { store.syncDebugPhase() }
-                  return store.state
-                }
-              }
-            },
-            approve: { store.approve($0, $1, $2, caller: req.caller) },
-            run: { recheck, confirmed in
-              DispatchQueue.main.sync {
-                MainActor.assumeIsolated {
-                  if req.command.hasPrefix("debug.") { store.syncDebugPhase() }
-                  if let e = recheck(store.state) { return .failure(e) }
-                  return store.run(req.command, req.input, confirmed: confirmed)
-                }
-              }
-            })
+      let server = WorkbenchIPCServer(callerOf: { pid in
+        let keys = DispatchQueue.main.sync {
+          MainActor.assumeIsolated {
+            store.state.projects.flatMap { p in
+              let tree = p.name == store.state.project ? store.state.tree : store.state.layouts[p.name]?.tree
+              return (tree?.leaves ?? []).filter { $0.kind == .terminal }.map { ClairWorkbenchStore.terminalKey(root: p.path, pane: $0.id) }
+            }
+          }
         }
-        return DispatchQueue.main.sync { MainActor.assumeIsolated { store.run(req.command, req.input) } }
+        return ClairCLIProcessScanner.terminal(of: pid, keys: keys)
+      }) { req in
+        let req = req.callerAsParent()
+        return MCPGate.handle(
+          req, registry: CommandRegistry.workbench,
+          snapshot: {
+            DispatchQueue.main.sync {
+              MainActor.assumeIsolated {
+                if req.command.hasPrefix("debug.") { store.syncDebugPhase() }
+                return store.state
+              }
+            }
+          },
+          approve: { store.approve($0, $1, $2, caller: req.caller) },
+          run: { recheck, confirmed in
+            DispatchQueue.main.sync {
+              MainActor.assumeIsolated {
+                if req.command.hasPrefix("debug.") { store.syncDebugPhase() }
+                if let e = recheck(store.state) { return .failure(e) }
+                return store.run(req.command, req.input, confirmed: confirmed)
+              }
+            }
+          })
       }
       Task.detached(priority: .utility) { [weak self] in
         let started = (try? server.start()) != nil

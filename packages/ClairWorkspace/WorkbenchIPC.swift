@@ -17,7 +17,7 @@ public struct WorkbenchIPCRequest: Codable, Equatable, Sendable {
   public enum Via: String, Codable, Sendable { case mcp }
   /// V16: `root#pane` of the Clair terminal the CLI runs in (`CLAIR_TERMINAL_KEY`). Such calls go through
   /// `MCPGate`, and the GUI passes it to agent.* as `parent`. Advisory: a process can unset its environment,
-  /// so this routes well-behaved agents to approval; it is not an authentication boundary.
+  /// so the GUI server replaces it with the terminal the peer process actually runs under (`callerOf`).
   public var caller: String?
   public init(command: String, input: CommandInput = [:], via: Via? = nil, caller: String? = nil) {
     self.command = command; self.input = input; self.via = via; self.caller = caller
@@ -119,10 +119,13 @@ public final class WorkbenchIPCServer: @unchecked Sendable {
   private let url: URL
   private let allowedUID: uid_t
   private let handler: Handler
+  private let callerOf: (@Sendable (pid_t) -> String?)?
   private var listener: Int32 = -1
 
-  public init(socket url: URL = WorkbenchIPC.defaultSocketURL, allowedUID: uid_t = geteuid(), handler: @escaping Handler) {
-    self.url = url; self.allowedUID = allowedUID; self.handler = handler
+  /// `callerOf` maps the peer's pid to the Clair terminal it runs under; when given, it replaces the client's own claim.
+  public init(socket url: URL = WorkbenchIPC.defaultSocketURL, allowedUID: uid_t = geteuid(),
+              callerOf: (@Sendable (pid_t) -> String?)? = nil, handler: @escaping Handler) {
+    self.url = url; self.allowedUID = allowedUID; self.callerOf = callerOf; self.handler = handler
   }
 
   public func start() throws {
@@ -172,9 +175,13 @@ public final class WorkbenchIPCServer: @unchecked Sendable {
     setsockopt(c, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
     var uid: uid_t = 0, gid: gid_t = 0
     guard getpeereid(c, &uid, &gid) == 0, uid == allowedUID else { return }
-    guard let data = WorkbenchIPC.readLine(c), let req = try? JSONDecoder().decode(WorkbenchIPCRequest.self, from: data) else {
+    guard let data = WorkbenchIPC.readLine(c), var req = try? JSONDecoder().decode(WorkbenchIPCRequest.self, from: data) else {
       WorkbenchIPC.writeAll(c, (try? JSONEncoder().encode(WorkbenchIPCReply(error: CommandError(.invalidInput, "malformed request")))) ?? Data())
       return
+    }
+    if let callerOf {
+      var pid: pid_t = 0, len = socklen_t(MemoryLayout<pid_t>.size)
+      req.caller = getsockopt(c, SOL_LOCAL, LOCAL_PEERPID, &pid, &len) == 0 && pid > 0 ? callerOf(pid) : nil
     }
     var reply = WorkbenchIPCReply()
     switch handler(req) {

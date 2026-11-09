@@ -5,7 +5,8 @@
   import Foundation
 
   /// Identifies known CLI agents under shells owned by Clair's daemon. Process names are
-  /// advisory UI facts; they never authorize commands or infer approval state.
+  /// advisory UI facts; they never authorize commands or infer approval state. Only the process tree
+  /// says which terminal an IPC caller runs in (`terminal(of:)`).
   enum ClairCLIProcessScanner {
     struct ProcessInfo {
       let pid: Int32
@@ -19,7 +20,9 @@
       return shells.compactMapValues { profile(shell: $0, processes: processes) }
     }
 
-    static func profiles(keys: [String]) -> [String: String] {
+    static func profiles(keys: [String]) -> [String: String] { profiles(shells: shells(keys: keys)) }
+
+    private static func shells(keys: [String]) -> [String: Int32] {
       let client = ClairDaemonControlClient(paths: ClairDaemonLauncher.paths)
       var shells: [String: Int32] = [:]
       for key in keys {
@@ -27,7 +30,24 @@
           shells[key] = pid
         }
       }
-      return profiles(shells: shells)
+      return shells
+    }
+
+    static func terminal(of pid: Int32, keys: [String]) -> String? {
+      terminal(of: pid, shells: shells(keys: keys), processes: snapshot())
+    }
+
+    static func terminal(of pid: Int32, shells: [String: Int32], processes: [ProcessInfo]) -> String? {
+      let keyByShell = Dictionary(shells.map { ($1, $0) }, uniquingKeysWith: { a, _ in a })
+      let parentOf = Dictionary(processes.map { ($0.pid, $0.parent) }, uniquingKeysWith: { a, _ in a })
+      var current = pid
+      var seen: Set<Int32> = []
+      while current > 1, seen.insert(current).inserted {
+        if let key = keyByShell[current] { return key }
+        guard let next = parentOf[current] else { return nil }
+        current = next
+      }
+      return nil
     }
 
     static func profile(shell: Int32, processes: [ProcessInfo]) -> String? {

@@ -24,6 +24,26 @@
       XCTAssertNil(ClairCLIProcessScanner.profile(shell: 30, processes: processes))
     }
 
+    func testTerminalOfResolvesOnlyTheOwningShellsAncestry() {
+      let processes = [
+        ClairCLIProcessScanner.ProcessInfo(pid: 10, parent: 1, name: "zsh"),
+        ClairCLIProcessScanner.ProcessInfo(pid: 11, parent: 10, name: "claude"),
+        ClairCLIProcessScanner.ProcessInfo(pid: 12, parent: 11, name: "clair"),
+        ClairCLIProcessScanner.ProcessInfo(pid: 20, parent: 1, name: "zsh"),
+        ClairCLIProcessScanner.ProcessInfo(pid: 30, parent: 1, name: "clair"),  // outside Clair
+        ClairCLIProcessScanner.ProcessInfo(pid: 40, parent: 41, name: "a"),  // parent loop
+        ClairCLIProcessScanner.ProcessInfo(pid: 41, parent: 40, name: "b"),
+      ]
+      let shells = ["/p#1": Int32(10), "/p#2": 20]
+      func of(_ pid: Int32) -> String? { ClairCLIProcessScanner.terminal(of: pid, shells: shells, processes: processes) }
+      XCTAssertEqual(of(12), "/p#1")
+      XCTAssertEqual(of(10), "/p#1")
+      XCTAssertEqual(of(20), "/p#2")
+      XCTAssertNil(of(30))
+      XCTAssertNil(of(40))
+      XCTAssertNil(of(99))
+    }
+
     func testDetectedLaunchAppearsInAgentListWithoutReplacingMenuLaunch() {
       var state = WorkbenchState()
       state.project = "clair"

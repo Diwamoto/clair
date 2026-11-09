@@ -67,6 +67,16 @@ final class WorkbenchMCPTests: XCTestCase {
       run: { _, _ in XCTFail("preview ran without approval"); return .success(.ok) })
     XCTAssertEqual(plainCLIAsked, 1)
     XCTAssertEqual(plainCLI.failure?.code, .denied)
+    // A CLI call with no caller (outside Clair, or one whose terminal could not be resolved) gets the same gate.
+    for (id, input): (String, CommandInput) in [("settings.set", ["key": .string("hideQuota"), "value": .bool(true)]),
+                        ("schedule.add", ["time": .string("09:00"), "project": .string("p"), "prompt": .string("x")])] {
+      var asked = 0
+      _ = MCPGate.handle(
+        WorkbenchIPCRequest(command: id, input: input), registry: reg, snapshot: { WorkbenchState() },
+        approve: { _, _, _ in asked += 1; return false },
+        run: { _, _ in XCTFail("\(id) ran without approval"); return .success(.ok) })
+      if id == "settings.set" { XCTAssertEqual(asked, 1) }  // schedule.add may fail preflight first; it never runs
+    }
     var project = WorkbenchState()
     let root = file.deletingLastPathComponent().path
     project.openProject(WorkbenchProject(name: "fixture", path: root))

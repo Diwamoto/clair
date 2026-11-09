@@ -21,9 +21,9 @@ public enum MCPGate {
     guard let d = registry.commands.first(where: { $0.id == req.command }) else {
       return .failure(CommandError(.unknownCommand, req.command))
     }
-    // V16: a CLI call from inside a Clair terminal may be an agent or the user. Non-AI commands are not
+    // V16: a CLI call may be an agent or the user, inside a Clair terminal or not. Non-AI commands are not
     // refused there (the user's own `clair open` keeps working) but always need approval in the GUI.
-    let terminal = req.via == nil && (req.caller != nil || req.command == "file.preview")
+    let terminal = req.via == nil
     guard d.aiAvailable || terminal else { return .failure(CommandError(.notAvailableToAI, "\(req.command) is not available to AI")) }
     let seen = snapshot()
     // A file.open tool may navigate within an already open Project, but cannot open an arbitrary path
