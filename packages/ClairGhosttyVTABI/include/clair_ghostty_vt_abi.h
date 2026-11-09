@@ -105,7 +105,6 @@ typedef struct {
 // argument in the macOS ABI (`ClairGhosttyABI`'s `clair_ghostty_text_s`
 // doc comment) -- same "read and use immediately" rule.
 typedef struct {
-  size_t size;
   void *node;
   uint16_t x;
   uint16_t y;
@@ -114,7 +113,6 @@ typedef struct {
 // Mirrors `GhosttySelection`. `rectangle` is always false for the linear
 // (non-block) touch selection this task implements.
 typedef struct {
-  size_t size;
   clair_ghostty_vt_grid_ref_s start;
   clair_ghostty_vt_grid_ref_s end;
   bool rectangle;
@@ -190,8 +188,6 @@ _Static_assert(offsetof(clair_ghostty_vt_point_s, value) == offsetof(GhosttyPoin
 
 _Static_assert(sizeof(clair_ghostty_vt_grid_ref_s) == sizeof(GhosttyGridRef),
                "GhosttyGridRef size changed upstream");
-_Static_assert(offsetof(clair_ghostty_vt_grid_ref_s, size) == offsetof(GhosttyGridRef, size),
-               "GhosttyGridRef.size offset changed upstream");
 _Static_assert(offsetof(clair_ghostty_vt_grid_ref_s, node) == offsetof(GhosttyGridRef, node),
                "GhosttyGridRef.node offset changed upstream");
 _Static_assert(offsetof(clair_ghostty_vt_grid_ref_s, x) == offsetof(GhosttyGridRef, x),
@@ -201,8 +197,6 @@ _Static_assert(offsetof(clair_ghostty_vt_grid_ref_s, y) == offsetof(GhosttyGridR
 
 _Static_assert(sizeof(clair_ghostty_vt_selection_s) == sizeof(GhosttySelection),
                "GhosttySelection size changed upstream");
-_Static_assert(offsetof(clair_ghostty_vt_selection_s, size) == offsetof(GhosttySelection, size),
-               "GhosttySelection.size offset changed upstream");
 _Static_assert(offsetof(clair_ghostty_vt_selection_s, start) == offsetof(GhosttySelection, start),
                "GhosttySelection.start offset changed upstream");
 _Static_assert(offsetof(clair_ghostty_vt_selection_s, end) == offsetof(GhosttySelection, end),
@@ -211,14 +205,14 @@ _Static_assert(offsetof(clair_ghostty_vt_selection_s, rectangle) ==
                    offsetof(GhosttySelection, rectangle),
                "GhosttySelection.rectangle offset changed upstream");
 
-_Static_assert((int)CLAIR_GHOSTTY_VT_SCROLL_TOP == (int)GHOSTTY_SCROLL_VIEWPORT_TOP,
-               "GHOSTTY_SCROLL_VIEWPORT_TOP changed upstream");
-_Static_assert((int)CLAIR_GHOSTTY_VT_SCROLL_BOTTOM == (int)GHOSTTY_SCROLL_VIEWPORT_BOTTOM,
-               "GHOSTTY_SCROLL_VIEWPORT_BOTTOM changed upstream");
-_Static_assert((int)CLAIR_GHOSTTY_VT_SCROLL_DELTA == (int)GHOSTTY_SCROLL_VIEWPORT_DELTA,
-               "GHOSTTY_SCROLL_VIEWPORT_DELTA changed upstream");
-_Static_assert((int)CLAIR_GHOSTTY_VT_SCROLL_ROW == (int)GHOSTTY_SCROLL_VIEWPORT_ROW,
-               "GHOSTTY_SCROLL_VIEWPORT_ROW changed upstream");
+_Static_assert((int)CLAIR_GHOSTTY_VT_SCROLL_TOP == (int)GHOSTTY_TERMINAL_SCROLL_VIEWPORT_TOP,
+               "GHOSTTY_TERMINAL_SCROLL_VIEWPORT_TOP changed upstream");
+_Static_assert((int)CLAIR_GHOSTTY_VT_SCROLL_BOTTOM == (int)GHOSTTY_TERMINAL_SCROLL_VIEWPORT_BOTTOM,
+               "GHOSTTY_TERMINAL_SCROLL_VIEWPORT_BOTTOM changed upstream");
+_Static_assert((int)CLAIR_GHOSTTY_VT_SCROLL_DELTA == (int)GHOSTTY_TERMINAL_SCROLL_VIEWPORT_DELTA,
+               "GHOSTTY_TERMINAL_SCROLL_VIEWPORT_DELTA changed upstream");
+_Static_assert((int)CLAIR_GHOSTTY_VT_SCROLL_ROW == (int)GHOSTTY_TERMINAL_SCROLL_VIEWPORT_ROW,
+               "GHOSTTY_TERMINAL_SCROLL_VIEWPORT_ROW changed upstream");
 _Static_assert(sizeof(clair_ghostty_vt_scroll_value_u) == sizeof(GhosttyTerminalScrollViewportValue),
                "GhosttyTerminalScrollViewportValue size changed upstream");
 _Static_assert(sizeof(clair_ghostty_vt_scroll_s) == sizeof(GhosttyTerminalScrollViewport),
@@ -266,10 +260,10 @@ static GhosttyResult (*const clair_ghostty_vt_probe_terminal_grid_ref)(
     GhosttyTerminal, GhosttyPoint, GhosttyGridRef *) = ghostty_terminal_grid_ref;
 static GhosttyResult (*const clair_ghostty_vt_probe_terminal_select_all)(
     GhosttyTerminal, GhosttySelection *) = ghostty_terminal_select_all;
-static GhosttyResult (*const clair_ghostty_vt_probe_terminal_selection_format_alloc)(
-    GhosttyTerminal, const GhosttyAllocator *, GhosttyTerminalSelectionFormatOptions, uint8_t **,
-    size_t *) = ghostty_terminal_selection_format_alloc;
-static void (*const clair_ghostty_vt_probe_terminal_scroll_viewport)(
+static GhosttyResult (*const clair_ghostty_vt_probe_formatter_format_alloc)(
+    GhosttyFormatter, const GhosttyAllocator *, uint8_t **, size_t *) =
+    ghostty_formatter_format_alloc;
+static GhosttyResult (*const clair_ghostty_vt_probe_terminal_scroll_viewport)(
     GhosttyTerminal, GhosttyTerminalScrollViewport) = ghostty_terminal_scroll_viewport;
 static void (*const clair_ghostty_vt_probe_free)(const GhosttyAllocator *, uint8_t *, size_t) =
     ghostty_free;

@@ -11,7 +11,7 @@ the commit recorded in `config/ghostty-pin.json`. Ghostty is available under
 the MIT License.
 
 - Project: https://github.com/ghostty-org/ghostty
-- Pinned commit: `d4c88d8069912b653d707191388ca98e24751f12` (`1.3.2-dev`)
+- Pinned commit: `0fa3d577a5614150ff8e2c152de5fb9d5c6d2dec` (`vt-1.0.0`)
 - License: MIT — Copyright (c) 2024 Mitchell Hashimoto, Ghostty contributors
 - The upstream `LICENSE` file is staged at vendor time to
   `packages/Vendor/ghostty/LICENSE-ghostty` (git-ignored,

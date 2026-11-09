@@ -10,15 +10,15 @@
 /// without the other fails that test, not silently.
 public enum GhosttyPin {
   public static let upstreamRepository = "https://github.com/ghostty-org/ghostty"
-  public static let pinnedCommit = "d4c88d8069912b653d707191388ca98e24751f12"
-  public static let pinnedCommitDescription = "1.3.2-dev (post-v1.3.1 main)"
+  public static let pinnedCommit = "0fa3d577a5614150ff8e2c152de5fb9d5c6d2dec"
+  public static let pinnedCommitDescription = "vt-1.0.0 (libghostty-vt 1.0 tag)"
 
   public static let licenseSPDXIdentifier = "MIT"
   public static let licenseCopyright =
     "Copyright (c) 2024 Mitchell Hashimoto, Ghostty contributors"
 
   public static let toolchainName = "zig"
-  public static let toolchainVersion = "0.16.0"
+  public static let toolchainVersion = "0.17.0"
 
   public static let buildMode = "ReleaseFast"
   public static let xcframeworkName = "GhosttyKit.xcframework"
