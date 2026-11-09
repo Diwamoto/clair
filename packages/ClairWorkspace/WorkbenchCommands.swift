@@ -43,7 +43,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
     "preventSleepOnBattery": "バッテリー駆動中もエージェント実行中はスリープさせない", "formatOnSave": "保存時に整形",
     "showWhitespace": "空白文字を表示", "softWrap": "行の折り返し", "terminalApprovals": "コマンド実行前に確認",
     "defaultAgent": "既定のAgent", "approvalPolicy": "承認ポリシー", "tabWidth": "タブ幅", "defaultShell": "デフォルトシェル",
-    "scrollback": "スクロールバック", "appearance": "外観",
+    "scrollback": "スクロールバック", "appearance": "外観", "material": "素材",
     "lineNumbers": "行番号を表示", "terminalCursorBlink": "ターミナルのカーソルを点滅", "editorFontSize": "エディタの文字サイズ",
     "terminalFontSize": "ターミナルの文字サイズ", "terminalCursorStyle": "ターミナルのカーソルの形",
     "notifyEnabled": "通知を有効にする", "notifyOnBell": "入力待ち・通知要求で通知", "notifyOnExit": "終了で通知",
@@ -60,6 +60,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
     "defaultShell": ["/bin/zsh", "/bin/bash"],
     "scrollback": ["1000", "5000", "10000"],
     "appearance": ["ダーク", "ライト", "システム"],  // E18; mirrors ClairDesignSystem.ColorSchemeChoice
+    "material": ["クラシック", "Liquid Glass"],  // mirrors ClairDesignSystem.MaterialChoice
     "editorFontSize": ["11", "12", "13", "14", "16", "18"],
     "terminalFontSize": ["11", "12", "13", "14", "16", "18"],
     "terminalCursorStyle": ["ブロック", "バー", "下線"],

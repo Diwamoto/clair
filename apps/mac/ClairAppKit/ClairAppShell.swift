@@ -1385,6 +1385,9 @@ import Observation
   /// contents other than the terminal are placeholders owned by U05/U06.
   public struct ClairAppShell: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    /// 素材 = Liquid Glass, unless the system asks for reduced transparency (then the flat chrome stands in).
+    private var glass: Bool { MaterialChoice(setting: st.choices["material"]) == .glass && !reduceTransparency }
     @State private var store: ClairWorkbenchStore
     @State private var draggingPane: Int?
     /// File tab being dragged from the titlebar; editor panes show edge drop zones meanwhile (`tab.split`).
@@ -1497,9 +1500,9 @@ import Observation
               activityBar
               if !st.sidebarHidden {
                 sidebar
-                Rectangle().fill(C.surfaceActive).frame(width: 1)
+                if !glass { Rectangle().fill(C.surfaceActive).frame(width: 1) }
               }
-              main
+              main.readingPanel()
             }
           }
           .allowsHitTesting(!st.settingsOpen)
@@ -1523,7 +1526,8 @@ import Observation
         .animation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration), value: st.settingsOpen)
         statusBar
       }
-      .background(C.canvas)
+      .background { if glass { GlassWallpaper() } else { C.canvas } }
+      .environment(\.clairGlass, glass)
       .frame(minWidth: 900, minHeight: 560)
       .clairMenuHost(menus)
       .overlay {
@@ -1550,7 +1554,10 @@ import Observation
         }.onChange(of: store.nameRequest) { nameUntitled() }.padding(.trailing, 16).padding(.bottom, ChromeBudget.statusBar + 12) }
       .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: store.noticeStack)
       .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: store.update)
-      .onChange(of: st.choices["appearance"], initial: true) { _, v in ColorSchemeChoice(setting: v).apply() }
+      // The glass wallpaper is black, so 素材 = Liquid Glass draws in the dark scheme whatever 外観 says.
+      .onChange(of: [st.choices["appearance"], st.choices["material"]], initial: true) { _, _ in
+        ColorSchemeChoice(setting: MaterialChoice(setting: st.choices["material"]) == .glass ? ColorSchemeChoice.dark.rawValue : st.choices["appearance"]).apply()
+      }
       .onChange(of: st.fileAssociations, initial: true) { _, v in EditorLanguageID.associations = v }
       .onChange(of: terminalStyle, initial: true) { _, v in ClairGhosttySurfaceView.style = v }
       .onChange(of: st.palette) {
@@ -1632,7 +1639,7 @@ import Observation
       }
       .frame(height: ChromeBudget.titlebar)
       .background(TitlebarArea())
-      .background(C.chrome)
+      .chromeBackground()
       .overlay(alignment: .bottom) { Rectangle().fill(C.surfaceActive).frame(height: 1) }
     }
 
@@ -1891,8 +1898,8 @@ import Observation
       }
       .padding(.vertical, 8)
       .frame(width: ChromeBudget.activityBarWidth).frame(maxHeight: .infinity)
-      .background(C.chrome)
-      .overlay(alignment: .trailing) { Rectangle().fill(C.surfaceActive).frame(width: 1) }
+      .chromeBackground()
+      .overlay(alignment: .trailing) { if !glass { Rectangle().fill(C.surfaceActive).frame(width: 1) } }
       // ⌥⌘B shows the browser's panel. Here, not on the body's modifier chain (already at the type checker's limit);
       // the activity bar is on screen even while ⌘B hides the sidebar.
       .onChange(of: st.browserNavigationGeneration) {
@@ -1934,8 +1941,8 @@ import Observation
       }
       .frame(width: sidebarWidth)
       .font(Typography.font(Typography.sidebar))
-      .background(C.chrome)
       .clipped()
+      .glassPanel()
       // total 1 turns SplitHandle's ratio into a width in points. Dragged under 20pt it closes like ⌘B.
       .overlay(alignment: .trailing) {
         SplitHandle(horizontal: true, ratio: sidebarWidth, total: 1, onRatio: { w in
@@ -1979,7 +1986,7 @@ import Observation
       }
       .frame(height: ChromeBudget.titlebar)
       .background(TitlebarArea())
-      .background(C.chrome)
+      .chromeBackground()
       .overlay(alignment: .bottom) { Rectangle().fill(L.hairline).frame(height: 1) }
     }
 
@@ -3461,6 +3468,7 @@ import Observation
             }
             SettingsCard(title: tr("インターフェース")) {
               choiceRow(tr("外観"), "appearance", note: tr("エディタ、ターミナル、サイドバーの配色をまとめて切り替えます。"))
+              choiceRow(tr("素材"), "material", note: tr("Liquid Glass は黒い壁紙の上にガラスのパネルを浮かべます。すぐに切り替わります。"))
               choiceRow(tr("言語"), "language")
               switchRow(tr("ステータスバーの利用枠を隠す"), "hideQuota")
             }
@@ -4154,7 +4162,7 @@ import Observation
       }
       .font(Typography.font(Typography.chrome)).monospacedDigit().foregroundStyle(C.textTertiary)
       .padding(.horizontal, 7).frame(height: ChromeBudget.statusBar)
-      .background(C.chrome.overlay(ClairChannel.current == .dev ? Color.orange.opacity(0.14) : .clear))  // Dev is told apart at a glance (owner, 2026-09-27)
+      .background(ClairChannel.current == .dev ? Color.orange.opacity(0.14) : .clear).chromeBackground()  // Dev is told apart at a glance (owner, 2026-09-27)
       .overlay(alignment: .top) { Rectangle().fill(C.surfaceActive).frame(height: 1) }
       // Here, not on `body`: its modifier chain is at the type-checker's limit. The status bar is always mounted.
       .onChange(of: store.gitRevision) { reloadChanges() }
