@@ -9,6 +9,17 @@ public struct ClairTodo: Equatable, Sendable {
   public var done: Bool
   /// Front-matter keys Clair does not own (`kr:` …), as read; `render(onto:)` keeps them in the file.
   public var extra: [String: String] = [:]
+  /// #74 workflow keys, written by the concierge and its children; Clair only shows them.
+  public var stage: String?
+  public var lane: String?
+  public var retry: Int?
+  public var branch: String?
+  public var pr: String?
+  /// The terminal key (`root#pane`) of the agent working on this stage.
+  public var agent: String?
+
+  public static let stages = ["plan", "impl", "check-A", "check-B", "submit", "done"]
+  public static let lanes = ["code", "research"]
 
   public init(path: String, title: String, priority: Int = 2, due: String? = nil, done: Bool = false) {
     self.path = path; self.title = title; self.priority = priority; self.due = due; self.done = done
@@ -34,6 +45,12 @@ public struct ClairTodo: Equatable, Sendable {
       case "due": t.due = value.isEmpty ? nil : value
       case "done": t.done = value == "true"
       case "title": break
+      case "stage": t.stage = value.isEmpty ? nil : value
+      case "lane": t.lane = value.isEmpty ? nil : value
+      case "retry": t.retry = Int(value)
+      case "branch": t.branch = value.isEmpty ? nil : value
+      case "pr": t.pr = value.isEmpty ? nil : value
+      case "agent": t.agent = value.isEmpty ? nil : value
       default: t.extra[key] = value
       }
     }
@@ -42,7 +59,13 @@ public struct ClairTodo: Equatable, Sendable {
 
   public func with(_ change: (inout ClairTodo) -> Void) -> ClairTodo { var c = self; change(&c); return c }
 
-  static let keys: Set<String> = ["title", "priority", "due", "done"]
+  static let keys: Set<String> = ["title", "priority", "due", "done", "stage", "lane", "retry", "branch", "pr", "agent"]
+
+  /// The workflow keys present, in file order.
+  var workflow: [(String, String)] {
+    [("stage", stage), ("lane", lane), ("retry", retry.map(String.init)), ("branch", branch), ("pr", pr), ("agent", agent)]
+      .compactMap { k, v in v.map { (k, $0) } }
+  }
 
   /// Front-matter lines (without the `---` fences) and the body after them.
   static func split(_ text: String) -> (meta: [Substring], body: Substring) {
@@ -60,6 +83,8 @@ public struct ClairTodo: Equatable, Sendable {
     var out = ["---", "title: \"\(line)\"", "priority: \(priority)"]
     if let due { out.append("due: \(due)") }
     out.append("done: \(done)")
+    // Quoted: a branch or PR URL can hold ` #`, which parse would read as a comment.
+    out += workflow.map { k, v in "\(k): \"\(v.split(whereSeparator: \.isNewline).joined(separator: " ").replacingOccurrences(of: "\"", with: "'"))\"" }
     out += meta.filter { line in !Self.keys.contains(line.split(separator: ":").first.map { $0.trimmingCharacters(in: .whitespaces) } ?? "") }.map(String.init)
     out.append("---")
     return out.joined(separator: "\n") + "\n" + body
@@ -76,7 +101,10 @@ public struct ClairTodo: Equatable, Sendable {
   }
 
   /// Why `priority` / `due` cannot be written, or nil when they can.
-  public static func invalid(priority: Int?, due: String?) -> String? {
+  public static func invalid(priority: Int?, due: String?, stage: String? = nil, lane: String? = nil, retry: Int? = nil) -> String? {
+    if let stage, !stage.isEmpty, !stages.contains(stage) { return "stage must be one of \(stages.joined(separator: ", "))" }
+    if let lane, !lane.isEmpty, !lanes.contains(lane) { return "lane must be code or research" }
+    if let retry, retry < 0 { return "retry must be 0 or more" }
     if let priority, !(1...3).contains(priority) { return "priority must be 1, 2 or 3" }
     if let due, !due.isEmpty {
       let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"
@@ -96,6 +124,7 @@ public struct ClairTodo: Equatable, Sendable {
   public var json: [String: Any] {
     var o: [String: Any] = extra
     o["path"] = path; o["title"] = title; o["priority"] = priority; o["due"] = due ?? NSNull(); o["done"] = done
+    for (k, v) in workflow { o[k] = k == "retry" ? retry! as Any : v }
     return o
   }
 
@@ -150,6 +179,7 @@ Use the commands (`clair todo.list` … or the `mcp__clair__todo_*` tools) rathe
 clair todo.list done=false                     # JSON: path, title, priority, due, done, extra keys; priority → due order
 clair todo.add title="Fix login" priority=1 due=2026-10-30 body="context"
 clair todo.update path=<path> done=true appendBody="result: shipped"   # also title / priority / due ("" clears)
+clair todo.update path=<path> stage=impl lane=code agent=<terminal key>          # workflow keys: stage, lane, retry, branch, pr, agent
 ```
 
 ## Add

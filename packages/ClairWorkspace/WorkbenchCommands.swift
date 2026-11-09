@@ -861,9 +861,15 @@ extension CommandRegistry {
     cmd("todo.update", "TODO を更新", .write,
         params: [CommandParam("path", .string), CommandParam("title", .string, required: false),
                  CommandParam("priority", .int, required: false), CommandParam("due", .string, required: false),
-                 CommandParam("done", .bool, required: false), CommandParam("appendBody", .string, required: false)],
+                 CommandParam("done", .bool, required: false), CommandParam("appendBody", .string, required: false),
+                 CommandParam("stage", .string, required: false), CommandParam("lane", .string, required: false),
+                 CommandParam("retry", .int, required: false), CommandParam("branch", .string, required: false),
+                 CommandParam("pr", .string, required: false), CommandParam("agent", .string, required: false)],
         palette: false,
         preflight: { _, i throws(CommandError) in
+          if let why = ClairTodo.invalid(priority: nil, due: nil, stage: i["stage"]?.string, lane: i["lane"]?.string, retry: i["retry"]?.int) {
+            throw CommandError(.invalidInput, why)
+          }
           try require(ClairTodo.isTodoFile(i["path"]!.string!), "no TODO file \(i["path"]!.string!) in ~/.clair/todo")
           if let title = i["title"]?.string { try require(!title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "title is empty") }
           if let why = ClairTodo.invalid(priority: i["priority"]?.int, due: i["due"]?.string) { throw CommandError(.invalidInput, why) }
@@ -876,6 +882,14 @@ extension CommandRegistry {
         if let v = i["priority"]?.int { t.priority = v }
         if let v = i["due"]?.string { t.due = v.isEmpty ? nil : v }  // due="" clears it
         if let v = i["done"]?.bool { t.done = v }
+        // "" clears a workflow key.
+        func text(_ k: String) -> String?? { i[k]?.string.map { $0.isEmpty ? nil : $0 } }
+        if let v = text("stage") { t.stage = v }
+        if let v = text("lane") { t.lane = v }
+        if let v = i["retry"]?.int { t.retry = v }
+        if let v = text("branch") { t.branch = v }
+        if let v = text("pr") { t.pr = v }
+        if let v = text("agent") { t.agent = v }
       }
       return try todoSave(t, appendBody: i["appendBody"]?.string)
     },

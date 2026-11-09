@@ -24,6 +24,17 @@ final class ClairTodoTests: XCTestCase {
 }
 
 final class ClairTodoWriteTests: XCTestCase {
+  func testWorkflowKeysRoundTrip() {
+    let t = ClairTodo.parse(path: "/t.md", text: "---\ntitle: x\nstage: impl\nlane: code\nretry: 2\npr: \"https://g/p#1\"\nkr: K1\n---\nbody")
+    XCTAssertEqual([t.stage, t.lane, t.pr], ["impl", "code", "https://g/p#1"])
+    XCTAssertEqual(t.retry, 2)
+    XCTAssertEqual(t.extra, ["kr": "K1"])
+    let again = ClairTodo.parse(path: "/t.md", text: t.with { $0.stage = "check-A"; $0.lane = nil }.render(onto: "---\nlane: code\nkr: K1\n---\nbody"))
+    XCTAssertEqual(again.stage, "check-A"); XCTAssertNil(again.lane); XCTAssertEqual(again.pr, "https://g/p#1"); XCTAssertEqual(again.extra, ["kr": "K1"])
+    XCTAssertNotNil(ClairTodo.invalid(priority: nil, due: nil, stage: "review"))
+    XCTAssertNil(ClairTodo.invalid(priority: nil, due: nil, stage: "check-B", lane: "research", retry: 0))
+  }
+
   func testSaveKeepsBodyAndUnknownKeys() throws {
     let home = URL.temporaryDirectory.appending(path: "clair-todo-\(UUID().uuidString)")
     defer { try? FileManager.default.removeItem(at: home) }
