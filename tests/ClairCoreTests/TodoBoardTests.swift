@@ -26,4 +26,12 @@ final class TodoBoardTests: XCTestCase {
     ]
     for c in cases { XCTAssertEqual(AgentRun.staleSandboxes(c.listed, keep: c.keep), c.want, c.name) }
   }
+
+  func testHistoryLines() {
+    let cases: [(name: String, text: String, want: [String])] = [
+      ("stage lines only", "---\nstage: impl\n---\nnote\n- plan /a#1 agreed\n- impl /b#2\n- other\n", ["plan /a#1 agreed", "impl /b#2"]),
+      ("front matter ignored", "---\n- plan x\n---\n", []),
+    ]
+    for c in cases { XCTAssertEqual(TodoBoardCard.history(c.text), c.want, c.name) }
+  }
 }

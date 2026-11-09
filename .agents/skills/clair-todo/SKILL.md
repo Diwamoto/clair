@@ -25,7 +25,11 @@ clair todo.list done=false                     # JSON: path, title, priority, du
 clair todo.add title="Fix login" priority=1 due=2026-10-30 body="context"
 clair todo.update path=<path> done=true appendBody="result: shipped"   # also title / priority / due ("" clears)
 clair todo.update path=<path> stage=impl lane=code agent=<terminal key>          # workflow keys: stage, lane, retry, branch, pr, agent
+clair todo.update path=<path> stage=impl appendBody="- impl <terminal key> <one-line note>"   # every stage change: one history line
 ```
+
+Workflow artifacts live in the Project, not in `~/.clair`, so a sandboxed child can read them: `<project root>/.clair/todo/<TODO file name without .md>/plan.md` and `review.md`. Set `project:` (Project name or path) on a staged TODO so the board knows where to look.
+
 
 ## Add
 

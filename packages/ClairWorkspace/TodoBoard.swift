@@ -9,6 +9,16 @@ public struct TodoBoardCard: Equatable, Sendable {
   /// The agent pane, when it is still open.
   public let pane: Int?
   public let state: State
+  /// `- <stage> …` lines of the TODO body, oldest first: who did each stage.
+  public var history: [String] = []
+  /// Existing `<root>/.clair/todo/<name>/{plan,review}.md` in the Project or the branch worktree.
+  public var artifacts: [String] = []
+
+  static func history(_ text: String) -> [String] {
+    ClairTodo.split(text).body.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+      .filter { line in ClairTodo.stages.contains { line.hasPrefix("- \($0) ") || line == "- \($0)" } }
+      .map { String($0.dropFirst(2)) }
+  }
 }
 
 extension WorkbenchState {
@@ -28,7 +38,13 @@ extension WorkbenchState {
         else if let s = session?.status, s == .running { .running }
         else if session?.status == .blocked || session?.status == .attention || t.stage == "plan" || t.stage == "submit" { .waiting }
         else { .running }
-      return TodoBoardCard(todo: t, project: live?.project ?? named, pane: live?.pane, state: state)
+      let project = live?.project ?? named
+      let stem = ((t.path as NSString).lastPathComponent as NSString).deletingPathExtension
+      let roots = [projects.first { $0.name == project }?.path, t.branch.flatMap { b in projects.first { $0.branch == b }?.path }].compactMap { $0 }
+      let artifacts = roots.flatMap { r in ["plan.md", "review.md"].map { "\(r)/.clair/todo/\(stem)/\($0)" } }
+        .filter { FileManager.default.fileExists(atPath: $0) }
+      let text = (try? String(contentsOfFile: t.path, encoding: .utf8)) ?? ""
+      return TodoBoardCard(todo: t, project: project, pane: live?.pane, state: state, history: TodoBoardCard.history(text), artifacts: artifacts)
     }
   }
 }

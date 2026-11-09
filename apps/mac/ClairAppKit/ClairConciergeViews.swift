@@ -488,7 +488,6 @@
   }
 
   /// #78: every staged TODO across Projects; columns are stages, rows are lanes. Clair only shows the file's keys.
-  // ponytail: no plan.md / review.md shortcuts on the card; the TODO file holds that history for now.
   struct TodoBoardView: View {
     let cards: [TodoBoardCard]
     let projects: [String]
@@ -560,6 +559,10 @@
           ForEach([("retry", c.todo.retry.map(String.init)), ("branch", c.todo.branch), ("pr", c.todo.pr), ("agent", c.todo.agent)], id: \.0) { k, v in
             if let v { Text("\(k): \(v)").font(.system(size: 11)).foregroundStyle(C.textTertiary).lineLimit(1).textSelection(.enabled) }
           }
+          ForEach(c.history, id: \.self) { Text($0).font(.system(size: 11)).foregroundStyle(C.textSecondary).lineLimit(1) }
+          HStack(spacing: 6) {
+            ForEach(c.artifacts, id: \.self) { path in Button((path as NSString).lastPathComponent) { openFile(path) } }
+          }.buttonStyle(.hoverWash).font(.system(size: 11))
           HStack(spacing: 6) {
             if c.pane != nil { Button(tr("ペインを開く")) { openPane(c) } }
             if let p = diffProject(c) { Button(tr("diff を開く")) { openDiff(p) } }
