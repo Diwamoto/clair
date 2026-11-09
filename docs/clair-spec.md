@@ -447,10 +447,10 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   作業フォルダは `concierge.cwd`(空なら起動時の active Project root。そこのプロジェクトスキルと
   `CLAUDE.md` が読まれる)。どちらも設定画面か `settings.concierge [prompt cwd]`(AI 不可。agent が
   書き換えると以後の全タスクを指揮できるため)で変え、次の起動から反映する。新しく起動する前に、
-  prompt・cwd と cwd の `CLAUDE.md` / `CLAUDE.local.md` / `.mcp.json` / `.claude/CLAUDE.md` /
+  prompt・cwd と cwd(と親ディレクトリ)の `CLAUDE.md` / `CLAUDE.local.md` / `.mcp.json` / `.claude/CLAUDE.md` /
   `.claude/settings{,.local}.json` / `.claude/{skills,agents,commands,hooks,rules}/` 配下の内容のハッシュを
-  GUI の defaults の承認済みの値と比べ、違えば承認カードを出す(`schedules.json` と同じ方式。限界も同じで、
-  shell を持つ agent は defaults を書ける。`~/.claude` は対象外)。限界: ホストの Project を閉じると
+  GUI の defaults の承認済みの値と比べ、違えば承認カードを出す。`concierge.open`(パレットには出さない)自身も新規起動の前に承認済みかを確かめるので、CLI から変更後の内容で起動することはできない(`schedules.json` と同じ方式。限界も同じで、
+  shell を持つ agent は defaults を書ける。`~/.claude` は対象外)。限界: 再起動で復元した pane はそのまま起動し直す(承認は新規起動のときだけ)。`--add-dir` の追加フォルダはハッシュしない。ホストの Project を閉じると
   コンシェルジュの pane も layout から外れる。待ち中は agent のアイコンの周囲を回る表示で示す。
   チャットは返答を Markdown(コードは言語名とコピー付きのカード)で描画し、返答待ちの間は
   作業中の行を、コンシェルジュがターミナルで承認を待つ間はターミナルを開く導線を出す。

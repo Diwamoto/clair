@@ -2139,14 +2139,15 @@ import Observation
 
     /// #76: a new concierge starts only once the user has approved what it reads (prompt, cwd, its project files).
     private func startConcierge(_ message: String? = nil) {
-      let input: CommandInput = message.map { ["message": .string($0)] } ?? [:]
+      var input: CommandInput = message.map { ["message": .string($0)] } ?? [:]
       if let c = st.concierge() {
         // Panes mount per active Project (pane ids repeat across Projects), so type only once its host is shown.
         // ponytail: fixed delay for the mount; hook the surface's mount if a slow switch drops the message.
         store.run("concierge.open", [:], confirmed: true)
         if let message, !message.isEmpty {
           DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            if ClairGhosttySurfaceView.send(message, toPane: c.pane) {
+            // Never type into the same-numbered pane of another Project.
+            if store.state.project == c.project, ClairGhosttySurfaceView.send(message, toPane: c.pane) {
               DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { ClairGhosttySurfaceView.pressReturn(inPane: c.pane) }
             }
           }
@@ -2154,10 +2155,12 @@ import Observation
         return
       }
       let cwd = st.conciergeCwd.isEmpty ? store.activeRoot ?? "" : st.conciergeCwd
+      input["cwd"] = .string(cwd)
       let fingerprint = Concierge.fingerprint(prompt: st.conciergePrompt, cwd: cwd)
       if Concierge.isApproved(fingerprint) { store.run("concierge.open", input, confirmed: true); return }
+      let prompt = st.conciergePrompt
       Task.detached { [store] in
-        let ok = store.requestMCPApproval("concierge.open", ["cwd": .string(cwd)], .external)
+        let ok = store.requestMCPApproval("concierge.open", ["cwd": .string(cwd), "prompt": .string(prompt)], .external)
         await MainActor.run {
           guard ok else { return }
           Concierge.approve(fingerprint)

@@ -6,11 +6,17 @@ import XCTest
 final class WorkbenchConciergeTests: XCTestCase {
   let r = CommandRegistry.workbench
 
+  override func setUp() {
+    Concierge.approvals = UserDefaults(suiteName: "clair-concierge-\(UUID().uuidString)")!
+  }
+  override func tearDown() { Concierge.approvals = .standard }
+
   func opened() throws -> (WorkbenchState, String) {
     let dir = URL.temporaryDirectory.appending(path: "clair-concierge-\(UUID().uuidString)").resolvingSymlinksInPath()
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     var s = WorkbenchState()
     try r.execute("project.open", ["path": .string(dir.path)], state: &s).get()
+    Concierge.approve(Concierge.fingerprint(prompt: "", cwd: dir.path))  // as the GUI does after the card
     return (s, dir.path)
   }
 
@@ -44,6 +50,7 @@ final class WorkbenchConciergeTests: XCTestCase {
   func testCommandFixesSessionAndAppendsSettingsPrompt() throws {
     var (s, root) = try opened()
     try r.execute("settings.concierge", ["prompt": .string("テストは make test で")], confirmed: true, state: &s).get()
+    Concierge.approve(Concierge.fingerprint(prompt: "テストは make test で", cwd: root))
     guard case .pane(let pane) = try r.execute("concierge.open", confirmed: true, state: &s).get() else { return XCTFail() }
     s.launches[pane]?.concierge = "abc-123"
     let cmd = try XCTUnwrap(s.launches[pane]?.command)
@@ -61,6 +68,7 @@ final class WorkbenchConciergeTests: XCTestCase {
     let other = URL.temporaryDirectory.appending(path: "clair-cwd-\(UUID().uuidString)").path
     try FileManager.default.createDirectory(atPath: other, withIntermediateDirectories: true)
     try r.execute("settings.concierge", ["cwd": .string(other)], confirmed: true, state: &s).get()
+    Concierge.approve(Concierge.fingerprint(prompt: "", cwd: other))
     guard case .pane(let pane) = try r.execute("concierge.open", confirmed: true, state: &s).get() else { return XCTFail() }
     XCTAssertEqual(s.launches[pane]?.cwd, other)
     XCTAssertNotEqual(other, root)
@@ -78,6 +86,19 @@ final class WorkbenchConciergeTests: XCTestCase {
     // Opening it again goes back to its host instead of starting a second one.
     try r.execute("concierge.open", confirmed: true, state: &s).get()
     XCTAssertEqual(s.project, host); XCTAssertEqual(s.tree.focused, pane)
+  }
+
+  func testNewConciergeNeedsTheCurrentFingerprintApproved() throws {
+    var (s, root) = try opened()
+    Concierge.approvals.removeObject(forKey: "approvedConcierge")
+    XCTAssertEqual(r.execute("concierge.open", confirmed: true, state: &s).failure?.code, .preconditionFailed)
+    Concierge.approve(Concierge.fingerprint(prompt: "", cwd: root))
+    // An approval for another folder does not carry over.
+    XCTAssertEqual(r.execute("concierge.open", ["cwd": .string("/tmp")], confirmed: true, state: &s).failure?.code, .preconditionFailed)
+    try r.execute("concierge.open", ["cwd": .string(root)], confirmed: true, state: &s).get()
+    // A changed source asks again — but only for a new concierge, not to focus the running one.
+    try r.execute("settings.concierge", ["prompt": .string("new")], confirmed: true, state: &s).get()
+    try r.execute("concierge.open", confirmed: true, state: &s).get()
   }
 
   func testFingerprintChangesWithWhatTheConciergeReads() throws {

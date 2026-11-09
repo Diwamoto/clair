@@ -797,10 +797,19 @@ extension CommandRegistry {
     },
     // ADR-0020: focus Clair's one concierge (in whichever Project hosts it), starting it if needed. GUI-only (ai: false): an agent
     // must not spawn a concierge; it launches children through agent.launch instead.
+    // #76: a new one starts only in the `cwd` the user approved, and only while that approval still matches
+    // what it would read (the GUI asks first), so the CLI cannot start one past a changed prompt source.
     cmd("concierge.open", "コンシェルジュを開く", .external, ai: false,
-        params: [CommandParam("message", .string, required: false)],
-        preflight: { s, _ throws(CommandError) in
-          _ = try s.launchHome(nil)
+        params: [CommandParam("message", .string, required: false), CommandParam("cwd", .string, required: false)],
+        palette: false,
+        preflight: { s, i throws(CommandError) in
+          let home = try s.launchHome(nil)
+          if s.concierge() == nil {
+            let cwd = i["cwd"]?.string ?? (s.conciergeCwd.isEmpty ? home.project.path : s.conciergeCwd)
+            try require(cwd == (s.conciergeCwd.isEmpty ? home.project.path : s.conciergeCwd), "the concierge folder changed; open it again")
+            try require(Concierge.isApproved(Concierge.fingerprint(prompt: s.conciergePrompt, cwd: cwd)),
+                        "what the concierge reads changed since it was approved; open it from Clair's concierge view")
+          }
           return .external
         }) { s, i in
       if let c = s.concierge() {

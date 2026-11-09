@@ -49,6 +49,11 @@ public enum Concierge {
     let fm = FileManager.default
     var files: [String] = []
     for p in readPaths.dropLast() { files.append(cwd + "/" + p) }
+    // Claude Code also loads CLAUDE.md from every parent directory.
+    var parent = (cwd as NSString).deletingLastPathComponent
+    while parent != "/" && !parent.isEmpty {
+      files.append(parent + "/CLAUDE.md"); parent = (parent as NSString).deletingLastPathComponent
+    }
     for f in ["CLAUDE.md", "settings.json", "settings.local.json"] { files.append(cwd + "/.claude/" + f) }
     for d in readDirs {
       let root = cwd + "/.claude/" + d
