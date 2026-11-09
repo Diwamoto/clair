@@ -463,7 +463,7 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   Claude の認証は sbx の global secret(sandbox 内で一度 `/login`)で、未ログインなら claude 自身のエラーが出力に残る。
   worktree は `branch=` で Clair が作り(sbx v0.32 に `--branch` はない)、それを workspace にする。
   `agent.close` や ⌘W でペインを閉じると `sbx rm --force` で sandbox を捨てる。worktree は残り、`worktree.remove` で片付ける。
-  承認の境界は通常の `agent.launch` と同じ(external)。限界: Project を閉じた・Clair が落ちたなどでペインを閉じずに残った sandbox は `sbx ls` で見て手で消す。待ち中は agent のアイコンの周囲を回る表示で示す。
+  承認の境界は通常の `agent.launch` と同じ(external)。Project を閉じた・Clair が落ちたなどで残った sandbox は、`concierge.open` のたびと `agent.sandboxes.prune`(read、AI 可、MCP からも呼べる)で、`sbx ls` の `clair-*` のうち開いているペインの launch に無いものを `sbx rm --force` で消す(`sbx` が無ければ何もしない)。待ち中は agent のアイコンの周囲を回る表示で示す。
   チャットは返答を Markdown(コードは言語名とコピー付きのカード)で描画し、返答待ちの間は
   作業中の行を、コンシェルジュがターミナルで承認を待つ間はターミナルを開く導線を出す。
   会話がまだないときは依頼の例を出し、選ぶと送信欄に入る(送信はしない)

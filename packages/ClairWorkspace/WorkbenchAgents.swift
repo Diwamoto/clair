@@ -124,6 +124,28 @@ public struct AgentRun: Sendable {
   var log: URL { Self.directory.appending(path: "\(id).log") }
   var exit: URL { Self.directory.appending(path: "\(id).exit") }
 
+  /// #75: `clair-*` names in `listed` (`sbx ls -q`) that no open pane runs in.
+  static func staleSandboxes(_ listed: String, keep: Set<String>) -> [String] {
+    listed.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
+      .filter { $0.hasPrefix("clair-") && !keep.contains($0) }
+  }
+
+  static func pruneSandboxes(keep: Set<String>) {
+    #if os(macOS)
+    DispatchQueue.global(qos: .utility).async {
+      let p = Process(), out = Pipe()
+      p.executableURL = URL(fileURLWithPath: "/bin/zsh")
+      // ponytail: skips when sbx is missing instead of starting its daemon just to find nothing.
+      p.arguments = ["-lc", "command -v sbx >/dev/null && sbx ls -q 2>/dev/null"]
+      p.standardOutput = out; p.standardError = FileHandle.nullDevice
+      guard (try? p.run()) != nil else { return }
+      let listed = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+      p.waitUntilExit()
+      staleSandboxes(listed, keep: keep).forEach(removeSandbox)
+    }
+    #endif
+  }
+
   /// #75: `sbx rm` stops the child and deletes its VM; the Clair worktree it worked in stays (worktree.remove).
   /// Login shell so sbx resolves on the user's PATH. Fire and forget: a leftover shows in `sbx ls`.
   static func removeSandbox(_ name: String) {
@@ -322,6 +344,11 @@ extension WorkbenchState {
       if let name = l.launches[t.pane]?.sandbox { AgentRun.removeSandbox(name) }
       l.tree.close(t.pane); l.launches[t.pane] = nil
     }
+  }
+
+  /// #75: sandboxes of every open pane, in every Project.
+  var openSandboxes: Set<String> {
+    Set((Array(launches.values) + layouts.filter { $0.key != project }.values.flatMap(\.launches.values)).compactMap(\.sandbox))
   }
 
   /// Drops the launches of closed panes; a closed sandboxed child takes its sandbox with it (#75).

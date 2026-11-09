@@ -766,6 +766,12 @@ extension CommandRegistry {
       s.closeTerminal(i["key"]!.string!)
       return .ok
     },
+    // #75: removes `clair-*` sandboxes no open pane runs in (left by a crash or a closed Project). Only Clair's own
+    // names, so it needs no approval. Runs in the background; `sbx ls` shows what is left.
+    cmd("agent.sandboxes.prune", "残った sandbox を片付ける", .read, palette: false) { s, _ in
+      AgentRun.pruneSandboxes(keep: s.openSandboxes)
+      return .ok
+    },
     // Every agent terminal in every Project (launched or detected), so a CLI caller can find a key without the GUI.
     cmd("agent.list", "エージェント一覧", .read, palette: false) { s, _ in .agents(s.agentList) },
     // #69: agent panes that ran in [since, until] (local days, default today), closed ones included, as JSON text.
@@ -824,6 +830,7 @@ extension CommandRegistry {
           }
           return .external
         }) { s, i in
+      AgentRun.pruneSandboxes(keep: s.openSandboxes)
       if let c = s.concierge() {
         if c.project != s.project, let p = s.projects.first(where: { $0.name == c.project }) { s.switchProject(to: p, scanFiles: false) }
         s.tree.focus(c.pane); return .pane(c.pane)
