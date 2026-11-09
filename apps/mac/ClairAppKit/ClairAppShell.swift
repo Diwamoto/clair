@@ -1584,15 +1584,12 @@ import Observation
       }
       .onChange(of: diff) { loadDiff() }
       .onAppear {
-        if st.toggles["startConcierge"] == true { sidebarMode = "concierge" }
         diff = st.activeDiff.map { DiffTarget(path: $0.path, staged: $0.staged, untracked: $0.untracked, against: $0.against, proposal: $0.proposal) }
         rebuildExplorer(); reloadChanges()
       }
       .task {
         while !Task.isCancelled {
           await store.refreshDetectedAgents()
-          // The concierge and its children rewrite the TODO files while the board is open.
-          if sidebarMode == "concierge", conciergeBoard { todos = ClairTodo.list() }
           try? await Task.sleep(for: .seconds(2))
         }
       }
@@ -1909,6 +1906,15 @@ import Observation
       .overlay(alignment: .trailing) { if !glass { Rectangle().fill(C.surfaceActive).frame(width: 1) } }
       // ⌥⌘B shows the browser's panel. Here, not on the body's modifier chain (already at the type checker's limit);
       // the activity bar is on screen even while ⌘B hides the sidebar.
+      // #77 / #78: here, not on the body's chain (at the type checker's limit).
+      .onAppear { if st.toggles["startConcierge"] == true { sidebarMode = "concierge" } }
+      .task(id: conciergeBoard) {
+        // The concierge and its children rewrite the TODO files while the board is open.
+        while conciergeBoard, !Task.isCancelled {
+          todos = ClairTodo.list()
+          try? await Task.sleep(for: .seconds(2))
+        }
+      }
       .onChange(of: st.browserNavigationGeneration) {
         sidebarMode = Self.browserMode
         if st.sidebarHidden { store.run("sidebar.toggle") }
