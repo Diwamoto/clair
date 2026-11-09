@@ -202,6 +202,43 @@ final class WorkbenchAgentLaunchTests: XCTestCase {
     XCTAssertEqual(try r.execute("agent.output", ["key": .string(key)], state: &s).get(), .text("did: say 'hi'"))
   }
 
+  // #75: a sandboxed child runs claude through sbx with the prompt as one argument; a missing sbx says so.
+  func testSandboxedRunPassesPromptThroughSbx() throws {
+    var (s, root) = try opened()
+    let parent = WorkbenchState.terminalKey(root, 2)
+    XCTAssertThrowsError(try r.preflight("agent.launch", ["profile": .string("codex"), "prompt": .string("x"), "sandbox": .bool(true)], s).get())
+    let bin = URL(fileURLWithPath: root).appending(path: "bin")
+    try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+    let cases: [(name: String, sbx: String?, exit: String, output: String)] = [
+      ("runs in the sandbox", "#!/bin/sh\n[ \"$1\" = exec ] && for a; do last=$a; done && echo \"in $5: $last\"\nexit 0\n", "exited 0", "in clair-"),
+      ("no sbx", nil, "exited 127", "sbx is not installed"),
+    ]
+    for c in cases {
+      try? FileManager.default.removeItem(at: bin.appending(path: "sbx"))
+      if let script = c.sbx {
+        try script.write(to: bin.appending(path: "sbx"), atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: bin.appending(path: "sbx").path)
+      }
+      guard case .text(let key) = try r.execute(
+        "agent.launch", ["profile": .string("claude"), "prompt": .string("say 'hi'; rm -rf $HOME"), "parent": .string(parent), "sandbox": .bool(true)],
+        confirmed: true, state: &s
+      ).get() else { return XCTFail(c.name) }
+      let l = try s.delegated(key)
+      defer { for ext in ["log", "exit"] { try? FileManager.default.removeItem(at: AgentRun.directory.appending(path: "\(l.run!).\(ext)")) } }
+      XCTAssertEqual(l.sandbox, "clair-" + l.run!, c.name)
+      let p = Process()
+      p.executableURL = URL(fileURLWithPath: "/bin/zsh")
+      p.arguments = ["-c", l.command]
+      p.environment = ["PATH": bin.path + ":/usr/bin:/bin"]
+      p.standardInput = FileHandle.nullDevice; p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
+      try p.run(); p.waitUntilExit()
+      XCTAssertEqual(try r.execute("agent.status", ["key": .string(key)], state: &s).get(), .text(c.exit), c.name)
+      guard case .text(let out) = try r.execute("agent.output", ["key": .string(key)], state: &s).get() else { return XCTFail(c.name) }
+      XCTAssertTrue(out.hasPrefix(c.output), "\(c.name): \(out)")
+      if c.sbx != nil { XCTAssertTrue(out.hasSuffix(": say 'hi'; rm -rf $HOME"), out) }
+    }
+  }
+
   // `agent.list`: every agent terminal with the key agent.status/output/close take; a run's exit file decides its status.
   func testListShowsKeysAndRecordedExit() throws {
     var (s, root) = try opened()

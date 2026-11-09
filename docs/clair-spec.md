@@ -454,7 +454,16 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   shell を持つ agent は defaults を書ける。`~/.claude` は対象外)。限界: 再起動で復元した pane はそのまま起動し直す(承認は新規起動のときだけ)。`--add-dir` の追加フォルダはハッシュしない。ホストの Project を閉じると
   コンシェルジュの pane も layout から外れる。
   コンシェルジュは `agent.launch project=` で表示中の Project を切り替えずに別の Project へ
-  子を起動できる。他の agent が `parent` 付きで別の Project を指定すると preconditionFailed になる。待ち中は agent のアイコンの周囲を回る表示で示す。
+  子を起動できる。他の agent が `parent` 付きで別の Project を指定すると preconditionFailed になる。
+  `agent.launch sandbox=true`(#75、profile は `claude`、prompt 必須)は子を Docker Sandboxes の microVM で動かす。
+  pane の PTY で `sbx diagnose`(失敗ならその出力を表示して exit 1、`sbx` が無ければ exit 127)→
+  `sbx create --name clair-<run> claude <cwd>` → `sbx exec -it -w <cwd> clair-<run> claude -p --permission-mode acceptEdits <prompt>`
+  を実行し、出力と終了は通常の子と同じく `agent.status` / `output` に出る。prompt はシェルの 1 引数として渡す。
+  sandbox から見えるのは cwd(bind mount)だけで、`~/.clair`・`~/.claude`・Clair の IPC socket は見えない。
+  Claude の認証は sbx の global secret(sandbox 内で一度 `/login`)で、未ログインなら claude 自身のエラーが出力に残る。
+  worktree は `branch=` で Clair が作り(sbx v0.32 に `--branch` はない)、それを workspace にする。
+  `agent.close` で閉じると `sbx rm --force` で sandbox を捨てる。worktree は残り、`worktree.remove` で片付ける。
+  承認の境界は通常の `agent.launch` と同じ(external)。限界: pane を UI で閉じた・Clair が落ちたなど `agent.close` を通らずに残った sandbox は `sbx ls` で見て手で消す。待ち中は agent のアイコンの周囲を回る表示で示す。
   チャットは返答を Markdown(コードは言語名とコピー付きのカード)で描画し、返答待ちの間は
   作業中の行を、コンシェルジュがターミナルで承認を待つ間はターミナルを開く導線を出す。
   会話がまだないときは依頼の例を出し、選ぶと送信欄に入る(送信はしない)

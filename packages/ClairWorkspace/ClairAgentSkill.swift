@@ -38,7 +38,7 @@ Branch on `error.code`: `error.message` follows Clair's language.
 ## 1. Launch children
 
 ```bash
-clair agent launch profile=claude prompt="<self-contained task>" [direction=right|down] [branch=<new-branch>]
+clair agent launch profile=claude prompt="<self-contained task>" [direction=right|down] [branch=<new-branch>] [sandbox=true]
 # → {"ok":true,"result":"/path/to/project#7"}   ← the child's key
 ```
 

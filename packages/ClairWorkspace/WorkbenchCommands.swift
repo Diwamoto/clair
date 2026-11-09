@@ -699,12 +699,16 @@ extension CommandRegistry {
           CommandParam("review", .bool, required: false), CommandParam("opening", .string, required: false),
           // A Project other than the shown one, without switching to it (#72 schedules).
           CommandParam("project", .string, required: false),
+          CommandParam("sandbox", .bool, required: false),
         ], palette: false,
         preflight: { s, i throws(CommandError) in
           try require(i["resume"]?.string.map(AgentProfile.isSessionID) ?? true, "invalid session id")
           if i["opening"] != nil {
             try require(i["prompt"] == nil, "prompt and opening are exclusive")
             try require(AgentProfile.named(i["profile"]!.string!)?.open != nil, "\(i["profile"]!.string!) cannot open with a message")
+          }
+          if i["sandbox"]?.bool == true {
+            try require(i["profile"]!.string! == "claude" && i["prompt"]?.string?.isEmpty == false, "sandbox needs profile=claude and a prompt")
           }
           let home = try launchHome(s, i)
           if let b = i["branch"]?.string {
@@ -720,10 +724,11 @@ extension CommandRegistry {
         guard case .success(let wt) = WorkbenchGit.createWorktree(home.project, branch: b) else { return .text("worktree add failed") }
         s.projects.append(wt); cwd = wt.path
       }
-      let launch = AgentLaunch(
+      var launch = AgentLaunch(
         profile: i["profile"]!.string!, cwd: cwd, prompt: i["prompt"]?.string.flatMap { $0.isEmpty ? nil : $0 },
         parent: i["parent"]?.string, resume: i["resume"]?.string,
         opening: i["opening"]?.string.flatMap { $0.isEmpty ? nil : $0 }, review: i["review"]?.bool == true, folders: home.project.folders)
+      if i["sandbox"]?.bool == true { launch.sandbox = "clair-" + launch.run! }
       let axis: PaneTree.Axis = i["direction"]?.string == "down" ? .vertical : .horizontal
       let pane = s.withLayout(home.project.name) { l in
         let id = home.pane.map { l.tree.split($0, axis, kind: .terminal) } ?? { l.tree.splitFocused(.vertical, kind: .terminal); return l.tree.focused }()
