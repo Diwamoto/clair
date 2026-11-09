@@ -488,12 +488,15 @@
   }
 
   /// #78: every staged TODO across Projects; columns are stages, rows are lanes. Clair only shows the file's keys.
-  // ponytail: no diff / plan.md / review.md shortcuts on the card; the TODO file holds that history for now.
+  // ponytail: no plan.md / review.md shortcuts on the card; the TODO file holds that history for now.
   struct TodoBoardView: View {
     let cards: [TodoBoardCard]
     let projects: [String]
     let openPane: (TodoBoardCard) -> Void
     let openFile: (String) -> Void
+    /// The worktree Project of the card's branch, if Clair has it open; nil hides "diff を開く".
+    let diffProject: (TodoBoardCard) -> String?
+    let openDiff: (String) -> Void
     @State private var waitingOnly = false
     @State private var project = ""
     @State private var selected: String?
@@ -559,6 +562,7 @@
           }
           HStack(spacing: 6) {
             if c.pane != nil { Button(tr("ペインを開く")) { openPane(c) } }
+            if let p = diffProject(c) { Button(tr("diff を開く")) { openDiff(p) } }
             if let pr = c.todo.pr, let url = URL(string: pr), url.scheme == "https" { Button(tr("PR を開く")) { NSWorkspace.shared.open(url) } }
             Button(tr("TODO を開く")) { openFile(c.todo.path) }
           }.buttonStyle(.hoverWash).font(.system(size: 11))

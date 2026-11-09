@@ -474,7 +474,7 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   pane が承認待ち・bell、または stage が `plan` / `submit` ならあなた待ち、`retry` が 3 を超えたら差し戻し上限超過、
   `stage: done` か `done: true` なら完了。Project は `agent` の pane の Project、無ければ `project:` key(名前かパス)。
   「あなた待ちだけ」と Project で絞り込め、カードを選ぶと retry / branch / pr / agent と「ペインを開く」(Project を切り替えて
-  その pane へ)・「PR を開く」(https のみ)・「TODO を開く」を出す。限界: plan.md / review.md / diff への直接の導線はなく、
+  その pane へ)・「diff を開く」(`branch` の worktree Project に切り替えて変更一覧へ)・「PR を開く」(https のみ)・「TODO を開く」を出す。限界: plan.md / review.md への直接の導線はなく、
   ボードは開いている間 2 秒ごとに TODO を読み直す。Design canvas にはまだ描かれていない(オーナー判断 2026-11-09)。
 - 設定の「使用状況」はユーザーが送信した依頼・追記を 1 件として集計する。
   アクティビティ(今日・直近 7 日と前週比・連続日数・よく使う時間帯、直近 1 年の

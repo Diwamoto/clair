@@ -3397,7 +3397,12 @@ import Observation
               store.run("pane.focus", ["id": .int(pane)])
               leaveConcierge()
             },
-            openFile: { path in leaveConcierge(); store.run("file.open", ["path": .string(path)]) })
+            openFile: { path in leaveConcierge(); store.run("file.open", ["path": .string(path)]) },
+            diffProject: { card in card.todo.branch.flatMap { b in st.projects.first { $0.branch == b }?.name } },
+            openDiff: { name in
+              if name != st.project { store.run("project.switch", ["name": .string(name)]) }
+              sidebarMode = "shield"; reloadChanges()
+            })
         } else if sidebarMode == "concierge" {
           let c = st.concierge()
           ConciergeChatView(
