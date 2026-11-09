@@ -467,6 +467,15 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   チャットは返答を Markdown(コードは言語名とコピー付きのカード)で描画し、返答待ちの間は
   作業中の行を、コンシェルジュがターミナルで承認を待つ間はターミナルを開く導線を出す。
   会話がまだないときは依頼の例を出し、選ぶと送信欄に入る(送信はしない)
+  設定「起動時にコンシェルジュを開く」(`startConcierge`、既定オフ = 前回の Project)がオンなら起動時にこの画面を開く(#77)。
+  ⌃⌘0 とアクティビティバーのクリックで、コンシェルジュと Project の workspace を行き来する。
+  コンシェルジュの sidebar の「ボード」(#78)は `stage` を持つ TODO を全 Project 横断で、列 = stage・行 = lane(無ければ `code`)に並べる。
+  `stage` の無い TODO はボードに出ず、TODO の sidebar は変わらない。カードの状態は、`agent` の pane が稼働中なら稼働中、
+  pane が承認待ち・bell、または stage が `plan` / `submit` ならあなた待ち、`retry` が 3 を超えたら差し戻し上限超過、
+  `stage: done` か `done: true` なら完了。Project は `agent` の pane の Project、無ければ `project:` key(名前かパス)。
+  「あなた待ちだけ」と Project で絞り込め、カードを選ぶと retry / branch / pr / agent と「ペインを開く」(Project を切り替えて
+  その pane へ)・「PR を開く」(https のみ)・「TODO を開く」を出す。限界: plan.md / review.md / diff への直接の導線はなく、
+  ボードは開いたときの TODO を出す(開き直しで更新)。Design canvas にはまだ描かれていない(オーナー判断 2026-11-09)。
 - 設定の「使用状況」はユーザーが送信した依頼・追記を 1 件として集計する。
   アクティビティ(今日・直近 7 日と前週比・連続日数・よく使う時間帯、直近 1 年の
   日別 activity calendar とエージェント別の絞り込み、時間帯ごとの合計と曜日 × 時間帯の

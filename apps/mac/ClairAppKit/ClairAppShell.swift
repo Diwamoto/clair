@@ -1407,6 +1407,7 @@ import Observation
     @State private var paletteMeasured = false
     // U05: sidebar mode + source-control view. GUI-local (no command); the stage buttons go through git.stage/unstage.
     @State private var sidebarMode = "folder"
+    @State private var conciergeBoard = false
     @AppStorage("clair.sidebarWidth") private var sidebarWidth = 242.0
     /// Width when the current drag began, so a drag that snaps the sidebar shut reopens (⌘B) at it.
     @State private var sidebarDragFrom: Double?
@@ -1583,6 +1584,7 @@ import Observation
       }
       .onChange(of: diff) { loadDiff() }
       .onAppear {
+        if st.toggles["startConcierge"] == true { sidebarMode = "concierge" }
         diff = st.activeDiff.map { DiffTarget(path: $0.path, staged: $0.staged, untracked: $0.untracked, against: $0.against, proposal: $0.proposal) }
         rebuildExplorer(); reloadChanges()
       }
@@ -1893,6 +1895,9 @@ import Observation
         ForEach(["folder", Self.browserMode, "shield", "terminal", "ladybug", "checklist", "concierge"], id: \.self) { icon in
           activityBarButton(icon)
         }
+        // #77: one shortcut back and forth between the concierge and the Project workspace.
+        Button("") { sidebarMode = sidebarMode == "concierge" ? "folder" : "concierge"; if st.sidebarHidden { store.run("sidebar.toggle") } }
+          .keyboardShortcut("0", modifiers: [.command, .control]).opacity(0).frame(width: 0, height: 0)
         // ponytail: no overflow "…" menu — the Workbench shows it only when nav items overflow; four always fit here.
         Spacer(minLength: 0)
       }
@@ -2141,7 +2146,8 @@ import Observation
         running: st.concierge() != nil,
         children: st.conciergeChildren(), start: { startConcierge() },
         openTerminal: { focusConcierge(); leaveConcierge() },
-        focus: focusConciergeChild, editInstructions: editConciergeInstructions)
+        focus: focusConciergeChild, editInstructions: editConciergeInstructions,
+        board: conciergeBoard, toggleBoard: { conciergeBoard.toggle(); if conciergeBoard { todos = ClairTodo.list() } })
     }
 
     /// #76: a new concierge starts only once the user has approved what it reads (prompt, cwd, its project files).
@@ -3380,7 +3386,17 @@ import Observation
         if let old, old != new { store.closeTerminal(old) }
       }
       .overlay {
-        if sidebarMode == "concierge" {
+        if sidebarMode == "concierge", conciergeBoard {
+          TodoBoardView(
+            cards: st.board(todos), projects: st.projects.map(\.name),
+            openPane: { card in
+              guard let p = card.project, let pane = card.pane else { return }
+              if p != st.project { store.run("project.switch", ["name": .string(p)]) }
+              store.run("pane.focus", ["id": .int(pane)])
+              leaveConcierge()
+            },
+            openFile: { path in leaveConcierge(); store.run("file.open", ["path": .string(path)]) })
+        } else if sidebarMode == "concierge" {
           let c = st.concierge()
           ConciergeChatView(
             session: c?.session, pane: c?.project == st.project ? c?.pane : nil,
@@ -3499,6 +3515,7 @@ import Observation
               }
             }
             SettingsCard(title: tr("コンシェルジュ")) {
+              switchRow(tr("起動時にコンシェルジュを開く"), "startConcierge", note: tr("オフなら前回の Project を開きます。⌃⌘0 でいつでも切り替えられます。"))
               VStack(alignment: .leading, spacing: 6) {
                 Text(tr("作業フォルダ")).font(.system(size: 13))
                 TextField(tr("空欄なら開いている Project"), text: $conciergeCwdDraft)
