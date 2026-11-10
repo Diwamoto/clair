@@ -6,6 +6,11 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.32.1] - 2026-11-10
+
+### Fixed
+- Clair 0.32.0 failed to build for release; this version ships everything listed under 0.32.0.
+
 ## [0.32.0] - 2026-11-09
 
 ### Added
@@ -631,7 +636,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.32.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.32.1...HEAD
+[0.32.1]: https://github.com/Diwamoto/clair/compare/v0.32.0...v0.32.1
 [0.32.0]: https://github.com/Diwamoto/clair/compare/v0.31.1...v0.32.0
 [0.31.1]: https://github.com/Diwamoto/clair/compare/v0.31.0...v0.31.1
 [0.31.0]: https://github.com/Diwamoto/clair/compare/v0.30.0...v0.31.0
