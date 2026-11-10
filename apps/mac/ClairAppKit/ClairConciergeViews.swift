@@ -110,6 +110,8 @@
   /// The concierge transcript as chat, over the panes (they stay mounted, so the PTY keeps running).
   /// Canvas: `Concierge` (conversation) and `Concierge — 空の状態` (no transcript yet).
   struct ConciergeChatView: View {
+    /// On: the chat sits beside the pane board so both are visible.
+    @Binding var split: Bool
     let session: String?
     let pane: Int?
     /// The concierge terminal's own state: `.blocked` is a prompt only the raw terminal can answer,
@@ -175,6 +177,15 @@
                                      startPoint: .top, endPoint: .bottom))
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity).background(C.canvas)
+      .overlay(alignment: .topTrailing) {
+        Button { split.toggle() } label: {
+          Image(systemName: split ? "rectangle" : "rectangle.split.2x1").font(.system(size: 13)).foregroundStyle(C.textTertiary)
+            .frame(width: 28, height: 28).contentShape(Rectangle())
+        }
+        .buttonStyle(.hoverWash).padding(10)
+        .help(split ? tr("チャットだけを表示") : tr("ボードと並べて表示"))
+        .accessibilityLabel(split ? tr("チャットだけを表示") : tr("ボードと並べて表示"))
+      }
       .task(id: session) { await follow() }
     }
 

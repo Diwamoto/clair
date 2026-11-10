@@ -139,7 +139,7 @@ extension LocalizedStrings {
     "設定": "Settings",
 
     // Commands (registry titles)
-    "ペインを右に分割": "Split Pane Right", "ペインを下に分割": "Split Pane Down", "ターミナルを開く": "Open Terminal",
+    "ペインを右に分割": "Split Pane Right", "ペインを下に分割": "Split Pane Down", "ターミナルを開く": "Open Terminal", "ボードと並べて表示": "Show Beside the Board", "チャットだけを表示": "Show Chat Only",
     "ペインのフォーカスを右へ": "Focus Next Pane", "ペインのフォーカスを左へ": "Focus Previous Pane", "ペインにフォーカス": "Focus Pane",
     "ペインを最大化": "Maximize Pane", "分割を均等化": "Equalize Splits", "分割比を変更": "Change Split Ratio",
     "ペインを移動": "Move Pane", "タブを分割して開く": "Open Tab in Split", "ペインの表示を入れ替え": "Swap Panes", "ペインを閉じる": "Close Pane", "ターミナルとの接続が切れました": "Lost the connection to this terminal", "ターミナルを復元": "Restore Terminal", "エージェントを再起動": "Restart Agent", "シェルを再起動": "Restart Shell", "ペインを開く": "Open Pane",
