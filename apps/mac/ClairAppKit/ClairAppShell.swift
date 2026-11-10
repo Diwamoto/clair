@@ -1421,8 +1421,8 @@ import Observation
     @State private var sidebarMode = "folder"
     @State private var conciergeBoard = false
     @AppStorage("clair.sidebarWidth") private var sidebarWidth = 242.0
-    /// The concierge chat beside the pane board instead of over it.
-    @AppStorage("clair.conciergeSplit") private var conciergeSplit = false
+    /// The concierge chat moves aside for the pane board once one of its children is live (no manual toggle).
+    private var conciergeSplit: Bool { st.conciergeChildren().contains { !$0.session.status.isExited } }
     /// Width when the current drag began, so a drag that snaps the sidebar shut reopens (⌘B) at it.
     @State private var sidebarDragFrom: Double?
     @State private var debugMode = "debug"
@@ -1939,6 +1939,12 @@ import Observation
       // the activity bar is on screen even while ⌘B hides the sidebar.
       // #77 / #78: here, not on the body's chain (at the type checker's limit).
       .onAppear { if st.toggles["startConcierge"] == true { sidebarMode = "concierge" } }
+      // A child the concierge just launched comes up on the right, beside the chat.
+      .onChange(of: st.conciergeChildren().map(\.session.id)) { old, new in
+        guard sidebarMode == "concierge", let id = new.first(where: { !old.contains($0) }),
+          let c = st.conciergeChildren().first(where: { $0.session.id == id }) else { return }
+        focusConciergeChild(c.session)
+      }
       .task(id: conciergeBoard) {
         // The concierge and its children rewrite the TODO files while the board is open.
         while conciergeBoard, !Task.isCancelled {
@@ -2214,7 +2220,8 @@ import Observation
     private func focusConciergeChild(_ s: AgentSession) {
       if s.project != st.project { store.run("project.switch", ["name": .string(s.project)]) }
       store.run("pane.focus", ["id": .int(s.pane)])
-      leaveConcierge()
+      // Beside the chat the pane is already visible; only a full-width chat has to step aside.
+      if !conciergeSplit { leaveConcierge() }
     }
 
     private func editConciergeInstructions() {
@@ -3406,13 +3413,13 @@ import Observation
         } else if sidebarMode == "concierge" {
           let c = st.concierge()
           ConciergeChatView(
-            split: $conciergeSplit,
             session: c?.session, terminal: c.map { ($0.key, $0.launch) },
             status: c.flatMap { c in st.agentSessions.first { $0.project == c.project && $0.pane == c.pane }?.status },
             children: st.conciergeChildren(), focus: focusConciergeChild,
             start: { startConcierge($0) })
           .frame(width: conciergeSplit ? 460 : nil)
           .overlay(alignment: .trailing) { if conciergeSplit { Divider() } }
+          .animation(.easeOut(duration: Motion.overlayDuration), value: conciergeSplit)
         }
       }
     }

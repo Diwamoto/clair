@@ -443,6 +443,8 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   通常の agent launch と同じく raw PTY で起動し、GUI はその session の公式 transcript を
   チャットとして描画して、送信は PTY に書き込む。コンシェルジュが起動した子 agent
   (`parent` がコンシェルジュ)は状態と pane へのリンクで示し、出力は中継しない。
+  子が一つでも動いている間はチャットが左(幅 460)に寄り、右にペインが並ぶ。新しい子が起動するとその pane を
+  右に出してフォーカスする。手動の分割切替は持たない(2026-11-10 オーナー依頼)。
   本体の terminal はどの Project の layout・タブ・ターミナル一覧にも出さない(ホスト Project の
   `launches` に layout が使わない pane id `-1` で持ち、daemon の shell key は `<root>#-1`。2026-11-10 オーナー依頼)。
   surface はチャットの裏に見えない状態でマウントし、コンシェルジュがターミナルでの承認や質問を待つ(`blocked`)
