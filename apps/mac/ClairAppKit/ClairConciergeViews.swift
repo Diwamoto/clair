@@ -11,8 +11,6 @@
 
   // The concierge is read like a conversation, not scanned like chrome: one step above the chrome scale.
   private let chatFont = Font.system(size: 15)  // Tokens: title step (15)
-  private let rowFont = SidebarStyle.title
-  private let rowStrong = SidebarStyle.titleStrong
 
   // ADR-0020: the concierge's own screen: its chat beside every Project's agent panes and the board.
 
@@ -633,6 +631,32 @@
     }
   }
 
+  /// A hairline box: the board's one surface (cards, chips, action buttons). Flat, no shadow, no tint.
+  private struct Boxed: ViewModifier {
+    var fill: Color = .clear
+    var line: Color = L.strong
+    var radius: CGFloat = Radius.card
+    func body(content: Content) -> some View {
+      content
+        .background(fill, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(line))
+        .contentShape(Rectangle())
+    }
+  }
+
+  /// The board's section and column heads: a small mono label and its count.
+  private struct BoardHead: View {
+    let title: String
+    let count: Int
+    var body: some View {
+      HStack(spacing: 6) {
+        Text(verbatim: title.uppercased()).font(.system(size: 11, weight: .medium, design: .monospaced)).kerning(0.4).foregroundStyle(C.textTertiary)
+        Text(verbatim: "\(count)").font(.system(size: 11, design: .monospaced)).foregroundStyle(C.lineNumber)
+      }
+      .accessibilityElement(children: .combine).accessibilityAddTraits(.isHeader)
+    }
+  }
+
   /// An agent pane of any Project on the concierge screen: its status and a live miniature of its screen
   /// (the data plane, read-only); a click opens the real terminal in its Project.
   private struct AgentCard: View {
@@ -649,29 +673,33 @@
       let (text, color) = statusLabel(session.status)
       let live = session.status == .running
       Button(action: open) {
-        VStack(alignment: .leading, spacing: 6) {
-          HStack(spacing: 6) {
-            Circle().fill(color).frame(width: 7, height: 7)
-              .overlay(Circle().stroke(color, lineWidth: 1.5).scaleEffect(pulse ? 2.4 : 1).opacity(pulse ? 0 : 0.8).opacity(live ? 1 : 0))
-            Text(text).font(.system(size: 11)).foregroundStyle(live ? color : C.textQuaternary)
-            Spacer(minLength: 0)
-            Image(systemName: "apple.terminal").font(.system(size: 11)).foregroundStyle(C.textQuaternary)
+      VStack(spacing: 0) {
+        HStack(alignment: .top, spacing: 10) {
+          Circle().fill(color).frame(width: 7, height: 7)
+            .overlay(Circle().stroke(color, lineWidth: 1.5).scaleEffect(pulse ? 2.4 : 1).opacity(pulse ? 0 : 0.8).opacity(live ? 1 : 0))
+            .padding(.top, 5)
+          VStack(alignment: .leading, spacing: 3) {
+            Text(title).font(.system(size: 13)).foregroundStyle(C.textPrimary).lineLimit(1)
+            Text(verbatim: "\(text) · \(session.project)").font(.system(size: 11)).foregroundStyle(C.textTertiary).lineLimit(1)
           }
-          Text(title).font(rowFont).foregroundStyle(C.textPrimary).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
-          Text(session.project).font(.system(size: 11)).foregroundStyle(C.textTertiary).lineLimit(1)
-          Group {
-            if let screen {
-              Text(verbatim: screen).font(.system(size: 9, design: .monospaced)).foregroundStyle(C.textSecondary)
-            } else {
-              Text(tr("この Project を一度開くと画面が表示されます")).font(.system(size: 11)).foregroundStyle(C.textQuaternary)
-            }
-          }
-          .lineLimit(Self.lines).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading).clipped()
+          Spacer(minLength: 0)
+          Image(systemName: "arrow.up.right").font(.system(size: 10, weight: .medium)).foregroundStyle(C.textQuaternary).padding(.top, 3)
         }
-        .padding(12).frame(height: 240)
-        .background(live ? C.success.opacity(0.08) : W.faint, in: RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous).strokeBorder(live ? C.success.opacity(0.5) : L.hairline))
-        .contentShape(Rectangle())
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        Rectangle().fill(L.hairline).frame(height: 1)
+        Group {
+          if let screen {
+            Text(verbatim: screen).font(.system(size: 9, design: .monospaced)).foregroundStyle(C.textSecondary)
+          } else {
+            Text(tr("この Project を一度開くと画面が表示されます")).font(.system(size: 11)).foregroundStyle(C.textQuaternary)
+          }
+        }
+        .lineLimit(Self.lines).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+        .padding(.horizontal, 10).padding(.vertical, 8).clipped()
+      }
+      .frame(height: 220)
+      .modifier(Boxed(fill: C.surfaceHover, radius: Radius.overlay))
       }
       .buttonStyle(HoverWashStyle(radius: Radius.overlay)).help(tr("ターミナルを開く"))
       // ponytail: 1 s text poll of the kept surface (no colour, no live surface: re-hosting it would resize the PTY).
@@ -688,7 +716,7 @@
     }
 
     static let lines = 14
-    /// The last `lines` rows of a screen read, trailing blanks dropped.
+    /// The last `lines` non-blank-tailed rows of a screen read.
     static func tail(_ text: String) -> String {
       var rows = text.split(separator: "\n", omittingEmptySubsequences: false).map { $0.replacing(/\s+$/, with: "") }
       while rows.last?.isEmpty == true { rows.removeLast() }
@@ -697,6 +725,7 @@
   }
 
   /// #78: every staged TODO across Projects; columns are stages, rows are lanes. Clair only shows the file's keys.
+  /// Drawn flat like the chat beside it: one ground, hairline boxes, mono heads, colour only on the status dots.
   struct TodoBoardView: View {
     /// Every Project's live agent panes (the concierge's children first), above the TODO columns.
     let agents: [(session: AgentSession, title: String, key: String)]
@@ -711,48 +740,127 @@
     @State private var waitingOnly = false
     @State private var project = ""
     @State private var selected: String?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private static let gap: CGFloat = 8
+    private static let pad: CGFloat = 20
 
     private var shown: [TodoBoardCard] {
       cards.filter { (!waitingOnly || $0.state == .waiting) && (project.isEmpty || $0.project == project) }
     }
 
     var body: some View {
-      VStack(alignment: .leading, spacing: 12) {
-        HStack(spacing: 12) {
-          Text(tr("ボード")).font(rowStrong).foregroundStyle(C.textPrimary)
-          Toggle(tr("あなた待ちだけ"), isOn: $waitingOnly).toggleStyle(.checkbox)
+      VStack(alignment: .leading, spacing: 0) {
+        header
+        Rectangle().fill(L.hairline).frame(height: 1)
+        if agents.isEmpty && cards.isEmpty {
+          emptyState
+        } else {
+          GeometryReader { geo in
+            // Six columns share the width; below the minimum the stages scroll sideways instead of squeezing.
+            let column = max(148, (geo.size.width - Self.pad * 2 - Self.gap * CGFloat(ClairTodo.stages.count - 1)) / CGFloat(ClairTodo.stages.count))
+            ScrollView {
+              VStack(alignment: .leading, spacing: 28) {
+                if !agents.isEmpty { agentSection }
+                if !cards.isEmpty { ScrollView(.horizontal) { stages(column: column).padding(.horizontal, Self.pad) } }
+              }.padding(.vertical, Self.pad)
+            }.clairScroller()
+          }
+        }
+      }
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).background(C.canvas)
+    }
+
+    private var header: some View {
+      let waiting = cards.filter { $0.state == .waiting }.count
+      return HStack(spacing: 8) {
+        Text(tr("ボード")).font(.system(size: 15, weight: .semibold)).foregroundStyle(C.textPrimary)
+        Text(tr("%@ 件", cards.count)).font(.system(size: 12)).foregroundStyle(C.textQuaternary)
+        Spacer(minLength: 0)
+        Button { waitingOnly.toggle() } label: {
+          HStack(spacing: 6) {
+            Circle().fill(waiting == 0 ? C.textQuaternary : C.attention).frame(width: 6, height: 6)
+            Text(tr("あなた待ち"))
+            Text(verbatim: "\(waiting)").font(.system(size: 11, design: .monospaced)).foregroundStyle(C.textQuaternary)
+          }.modifier(Chip(on: waitingOnly))
+        }
+        .buttonStyle(HoverWashStyle(radius: Radius.card)).help(tr("あなた待ちだけ表示"))
+        .accessibilityAddTraits(waitingOnly ? .isSelected : [])
+        Menu {
           Picker(tr("Project"), selection: $project) {
             Text(tr("すべての Project")).tag("")
             ForEach(projects, id: \.self) { Text($0).tag($0) }
-          }.frame(maxWidth: 240)
-          Spacer(minLength: 0)
-        }.font(rowFont)
-        if !agents.isEmpty {
-          LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 8)], spacing: 8) {
-            ForEach(agents, id: \.session.id) { a in
-              AgentCard(session: a.session, title: a.title, key: a.key) { openAgent(a.session) }
-            }
+          }.pickerStyle(.inline).labelsHidden()
+        } label: {
+          HStack(spacing: 6) {
+            Text(project.isEmpty ? tr("すべての Project") : project).lineLimit(1)
+            Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold)).foregroundStyle(C.textQuaternary)
+          }.modifier(Chip(on: !project.isEmpty))
+        }
+        .menuStyle(.button).buttonStyle(HoverWashStyle(radius: Radius.card)).menuIndicator(.hidden).fixedSize()
+        .accessibilityLabel(tr("Project"))
+      }
+      .padding(.horizontal, Self.pad).frame(height: 52)
+    }
+
+    /// A header filter: a hairline chip, filled while it narrows the board.
+    private struct Chip: ViewModifier {
+      let on: Bool
+      func body(content: Content) -> some View {
+        content.font(.system(size: 12)).foregroundStyle(on ? C.textPrimary : C.textSecondary)
+          .padding(.horizontal, 10).frame(height: 26)
+          .modifier(Boxed(fill: on ? W.strongest : .clear, line: on ? L.ring : L.strong))
+      }
+    }
+
+    private var agentSection: some View {
+      VStack(alignment: .leading, spacing: 10) {
+        BoardHead(title: tr("ペイン"), count: agents.count)
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: Self.gap)], spacing: Self.gap) {
+          ForEach(agents, id: \.session.id) { a in
+            AgentCard(session: a.session, title: a.title, key: a.key) { openAgent(a.session) }
           }
         }
-        ScrollView([.horizontal, .vertical]) {
-          Grid(alignment: .topLeading, horizontalSpacing: 8, verticalSpacing: 8) {
-            GridRow {
-              Text("")
-              ForEach(ClairTodo.stages, id: \.self) { Text($0).font(rowStrong).foregroundStyle(C.textTertiary).frame(width: 180, alignment: .leading) }
-            }
-            ForEach(ClairTodo.lanes, id: \.self) { lane in
-              GridRow {
-                Text(lane).font(rowStrong).foregroundStyle(C.textTertiary)
-                ForEach(ClairTodo.stages, id: \.self) { stage in
-                  VStack(spacing: 6) {
-                    ForEach(shown.filter { $0.todo.stage == stage && ($0.todo.lane ?? "code") == lane }, id: \.todo.path) { card($0) }
-                  }.frame(width: 180, alignment: .top)
+      }.padding(.horizontal, Self.pad)
+    }
+
+    private func stages(column: CGFloat) -> some View {
+      VStack(alignment: .leading, spacing: 10) {
+        HStack(spacing: Self.gap) {
+          ForEach(ClairTodo.stages, id: \.self) { stage in
+            BoardHead(title: stage, count: shown.filter { $0.todo.stage == stage }.count)
+              .padding(.leading, 6).frame(width: column, alignment: .leading)
+          }
+        }
+        ForEach(ClairTodo.lanes, id: \.self) { lane in
+          let inLane = shown.filter { ($0.todo.lane ?? "code") == lane }
+          VStack(alignment: .leading, spacing: 6) {
+            Text(verbatim: lane).font(.system(size: 11, design: .monospaced)).foregroundStyle(C.textQuaternary).padding(.leading, 6)
+            // Wells of one lane share its height, so a lane reads as one row.
+            HStack(alignment: .top, spacing: Self.gap) {
+              ForEach(ClairTodo.stages, id: \.self) { stage in
+                VStack(spacing: 6) {
+                  ForEach(inLane.filter { $0.todo.stage == stage }, id: \.todo.path) { card($0) }
                 }
+                .padding(6).frame(width: column).frame(minHeight: 44, maxHeight: .infinity, alignment: .top)
+                .background(W.soft, in: RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous))
               }
-            }
+            }.fixedSize(horizontal: false, vertical: true)
           }
         }
-      }.padding(20).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).background(C.panelDeep)
+      }
+    }
+
+    /// Tokens EMPTY STATE vocabulary, as in the chat: glyph, title, one line.
+    private var emptyState: some View {
+      VStack(spacing: 12) {
+        Image(systemName: "rectangle.split.3x1").font(.system(size: 22)).foregroundStyle(C.textSecondary)
+          .frame(width: 52, height: 52).modifier(Boxed(fill: W.raised, radius: Radius.overlay))
+        Text(tr("ボードはまだ空です")).font(.system(size: 15, weight: .semibold)).foregroundStyle(C.textPrimary).padding(.top, 4)
+        Text(tr("コンシェルジュに頼むと、担当するエージェントと stage 付きの TODO がここに並びます。"))
+          .font(.system(size: 13)).foregroundStyle(C.textTertiary).multilineTextAlignment(.center).frame(maxWidth: 320)
+      }
+      .padding(Self.pad).frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func label(_ s: TodoBoardCard.State) -> (String, Color) {
@@ -764,36 +872,49 @@
       }
     }
 
+    private func action(_ title: String, _ run: @escaping () -> Void) -> some View {
+      Button(action: run) {
+        Text(title).font(.system(size: 11)).foregroundStyle(C.textSecondary).lineLimit(1)
+          .padding(.horizontal, 8).frame(height: 22).modifier(Boxed(radius: Radius.control))
+      }.buttonStyle(HoverWashStyle(radius: Radius.control))
+    }
+
     private func card(_ c: TodoBoardCard) -> some View {
       let (text, color) = label(c.state)
       let open = selected == c.todo.path
-      return VStack(alignment: .leading, spacing: 4) {
-        Text(c.todo.title).font(rowFont).foregroundStyle(C.textPrimary).lineLimit(2)
-        HStack(spacing: 4) {
+      return VStack(alignment: .leading, spacing: 6) {
+        Text(c.todo.title).font(.system(size: 13)).foregroundStyle(c.state == .done ? C.textTertiary : C.textPrimary)
+          .lineLimit(open ? nil : 3).fixedSize(horizontal: false, vertical: true)
+        HStack(spacing: 5) {
           Circle().fill(color).frame(width: 6, height: 6)
           Text(text)
-          if let p = c.project { Text("· \(p)").lineLimit(1) }
+          if let p = c.project { Text(verbatim: "· \(p)").lineLimit(1) }
         }.font(.system(size: 11)).foregroundStyle(C.textTertiary)
         if open {
+          Rectangle().fill(L.hairline).frame(height: 1).padding(.vertical, 2)
           ForEach([("retry", c.todo.retry.map(String.init)), ("branch", c.todo.branch), ("pr", c.todo.pr), ("agent", c.todo.agent)], id: \.0) { k, v in
-            if let v { Text("\(k): \(v)").font(.system(size: 11)).foregroundStyle(C.textTertiary).lineLimit(1).textSelection(.enabled) }
+            if let v {
+              HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(verbatim: k).foregroundStyle(C.textQuaternary).frame(width: 44, alignment: .leading)
+                Text(verbatim: v).foregroundStyle(C.textSecondary).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+              }.font(.system(size: 11, design: .monospaced))
+            }
           }
-          ForEach(c.history, id: \.self) { Text($0).font(.system(size: 11)).foregroundStyle(C.textSecondary).lineLimit(1) }
-          HStack(spacing: 6) {
-            ForEach(c.artifacts, id: \.self) { path in Button((path as NSString).lastPathComponent) { openFile(path) } }
-          }.buttonStyle(.hoverWash).font(.system(size: 11))
-          HStack(spacing: 6) {
-            if c.pane != nil { Button(tr("ペインを開く")) { openPane(c) } }
-            if let p = diffProject(c) { Button(tr("diff を開く")) { openDiff(p) } }
-            if let pr = c.todo.pr, let url = URL(string: pr), url.scheme == "https" { Button(tr("PR を開く")) { NSWorkspace.shared.open(url) } }
-            Button(tr("TODO を開く")) { openFile(c.todo.path) }
-          }.buttonStyle(.hoverWash).font(.system(size: 11))
+          ForEach(c.history, id: \.self) { Text($0).font(.system(size: 11)).foregroundStyle(C.textTertiary).lineLimit(1) }
+          // Wraps: a card is one column wide.
+          LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: 4, alignment: .leading)], alignment: .leading, spacing: 4) {
+            ForEach(c.artifacts, id: \.self) { path in action((path as NSString).lastPathComponent) { openFile(path) } }
+            if c.pane != nil { action(tr("ペインを開く")) { openPane(c) } }
+            if let p = diffProject(c) { action(tr("diff を開く")) { openDiff(p) } }
+            if let pr = c.todo.pr, let url = URL(string: pr), url.scheme == "https" { action(tr("PR を開く")) { NSWorkspace.shared.open(url) } }
+            action(tr("TODO を開く")) { openFile(c.todo.path) }
+          }.padding(.top, 2)
         }
       }
-      .padding(8).frame(maxWidth: .infinity, alignment: .leading)
-      .background(RoundedRectangle(cornerRadius: 6).fill(open ? W.selected : C.panel))
-      .contentShape(Rectangle())
-      .onTapGesture { selected = open ? nil : c.todo.path }
+      .padding(10).frame(maxWidth: .infinity, alignment: .leading)
+      .modifier(Boxed(fill: open ? C.surfaceActive : C.canvas, line: open ? L.ring : L.strong))
+      .onTapGesture { withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration)) { selected = open ? nil : c.todo.path } }
+      .accessibilityAddTraits(.isButton)
     }
   }
 #endif

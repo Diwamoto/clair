@@ -142,6 +142,9 @@ extension LocalizedStrings {
     "設定": "Settings",
 
     // Commands (registry titles)
+    "ボード": "Board", "あなた待ち": "Waiting on you", "あなた待ちだけ表示": "Show only cards waiting on you", "すべての Project": "All Projects",
+    "稼働中": "Running", "差し戻し上限超過": "Over the send-back limit", "diff を開く": "Open Diff", "PR を開く": "Open PR", "TODO を開く": "Open TODO",
+    "ボードはまだ空です": "The board is empty", "コンシェルジュに頼むと、担当するエージェントと stage 付きの TODO がここに並びます。": "Ask the concierge, and its agents and staged TODOs line up here.",
     "ペインを右に分割": "Split Pane Right", "ペインを下に分割": "Split Pane Down", "ターミナルを開く": "Open Terminal", "ボードと並べて表示": "Show Beside the Board", "チャットだけを表示": "Show Chat Only",
     "ペインのフォーカスを右へ": "Focus Next Pane", "ペインのフォーカスを左へ": "Focus Previous Pane", "ペインにフォーカス": "Focus Pane",
     "ペインを最大化": "Maximize Pane", "分割を均等化": "Equalize Splits", "分割比を変更": "Change Split Ratio",
