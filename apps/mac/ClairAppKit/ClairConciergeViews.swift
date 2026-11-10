@@ -11,8 +11,8 @@
 
   // The concierge is read like a conversation, not scanned like chrome: one step above the chrome scale.
   private let chatFont = Font.system(size: 15)  // Tokens: title step (15)
-  private let rowFont = Font.system(size: 13)  // Tokens: body step (13)
-  private let rowStrong = Font.system(size: 13, weight: .semibold)
+  private let rowFont = SidebarStyle.title
+  private let rowStrong = SidebarStyle.titleStrong
 
   // ADR-0020: the concierge's sidebar (itself, its children, its instructions) and its chat panel.
 

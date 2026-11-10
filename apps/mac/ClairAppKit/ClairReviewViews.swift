@@ -363,7 +363,7 @@
           .textFieldStyle(.plain).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textPrimary)
           .lineLimit(3...8)
           .padding(.horizontal, 8).padding(.vertical, 6)
-          .fieldWell(C.surfaceActive, radius: Radius.control, edged: false)
+          .sidebarField()
           // ponytail: Command-Return appends at the end, not at the caret; route through NSTextView if mid-text breaks matter.
           .onKeyPress(.return, phases: .down) { press in
             guard press.modifiers.contains(.command) else { return .ignored }
@@ -376,8 +376,8 @@
             .foregroundStyle(canCommit ? C.textPrimary : C.textQuaternary)
             .frame(maxWidth: .infinity).frame(height: 26)
             .controlFill()
-        }.buttonStyle(HoverWashStyle(radius: Radius.pill(Radius.control))).disabled(!canCommit)
-      }.padding(.horizontal, SidebarStyle.lead - 4).padding(.vertical, 8)
+        }.buttonStyle(HoverWashStyle(radius: Radius.pill(Radius.control))).disabled(!canCommit).padding(.horizontal, SidebarStyle.inset)
+      }.padding(.vertical, 8)
     }
 
     private func commit() {
@@ -1109,8 +1109,7 @@
     }
 
     var body: some View {
-      Text(tr("エージェント")).font(Typography.font(Typography.sidebarStrong)).foregroundStyle(C.textTertiary)
-        .padding(.horizontal, 20).frame(height: 26)
+      SidebarHeading(tr("エージェント"))
         .task {
           histories = await AgentHistoryStore.shared.load(.recent)
           historyLoading = false
@@ -1175,7 +1174,7 @@
               // The session title leads; the provider name is already the avatar.
               Text(s.activity ?? s.title).font(Typography.font(Typography.sidebarStrong)).foregroundStyle(C.textPrimary).lineLimit(1)
               Text(([gitLabels[s.cwd] ?? URL(fileURLWithPath: s.cwd).lastPathComponent] + (s.status == .running ? [] : [text])).joined(separator: " · "))
-                .font(Typography.font(Typography.sidebar)).foregroundStyle(C.textQuaternary).lineLimit(1)
+                .font(SidebarStyle.detail).foregroundStyle(C.textQuaternary).lineLimit(1)
             }
             Spacer(minLength: 0)
             if s.status == .attention || s.status == .blocked {
@@ -1205,8 +1204,7 @@
           Button { historyQuery = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(C.textQuaternary) }
             .buttonStyle(.plain).help(tr("検索をクリア")).accessibilityLabel(tr("検索をクリア"))
         }
-      }.padding(.horizontal, 8).frame(height: 26).background(C.surfaceActive.opacity(0.6), in: RoundedRectangle(cornerRadius: Radius.control))
-        .padding(.horizontal, SidebarStyle.inset).padding(.vertical, 4)
+      }.padding(.horizontal, 8).frame(height: SidebarStyle.rowHeight).sidebarField().padding(.vertical, 4)
       if historyLoading {
         SidebarNote(tr("読み込み中…"))
       } else if histories.isEmpty {
@@ -1319,7 +1317,7 @@
                 Text(listTime(history.date)).font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textQuaternary)
               }
               HStack(alignment: .top, spacing: 6) {
-                Text(history.preview).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
+                Text(history.preview).font(SidebarStyle.detail).foregroundStyle(C.textTertiary)
                   .lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
                 if history.promptCount > 0 {
                   Text("\(history.promptCount)").font(Typography.font(Typography.sidebarMicro)).monospacedDigit()

@@ -1492,7 +1492,10 @@ import Observation
 
     public init() { _store = State(initialValue: ClairWorkbenchStore()) }
     /// Snapshot tests inject a fixture store.
-    init(store: ClairWorkbenchStore) { _store = State(initialValue: store) }
+    /// `sidebarMode`: which sidebar panel shows first — the chrome snapshot test renders each panel through it.
+    init(store: ClairWorkbenchStore, sidebarMode: String = "folder") {
+      _store = State(initialValue: store); _sidebarMode = State(initialValue: sidebarMode)
+    }
 
     @ViewBuilder private var pendingActions: some View {
       if store.pending?.id == "debug.restart" { Button(tr("再起動")) { store.confirm() } }
@@ -2635,7 +2638,7 @@ import Observation
           // section label, not one more row in the same list as its children.
           // Folds the whole tree (GUI-local); click-to-collapse is unchanged.
           treeRow(depth: 0, selected: false, action: { rootFolded.toggle() }) {
-            Text(st.project).font(.system(size: 13, weight: .semibold)).textCase(.uppercase).foregroundStyle(C.textPrimary)
+            Text(st.project).font(SidebarStyle.heading).textCase(.uppercase).foregroundStyle(C.textTertiary)
             Spacer(minLength: 0)
             if let added = currentProject?.folders?.count, added > 0 {
               Text(tr("%@ フォルダ", "\(added + 1)")).font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textTertiary)
@@ -3067,25 +3070,22 @@ import Observation
               Spacer(minLength: 0)
               Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
             }
-            .font(.system(size: 12))
+            .font(SidebarStyle.title)
             .foregroundStyle(C.textSecondary)
             .padding(.horizontal, 8)
-            .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
-            .background(C.surfaceHover, in: RoundedRectangle(cornerRadius: Radius.control))
-            .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.strong))
+            .frame(maxWidth: .infinity, minHeight: SidebarStyle.rowHeight, alignment: .leading)
+            .fieldWell(C.surfaceActive, radius: Radius.control, edged: false)
           }
           .menuStyle(.borderlessButton)
           .accessibilityLabel(tr("デバッグ構成"))
-        }.padding(.horizontal, SidebarStyle.lead - 4)
+        }.padding(.horizontal, SidebarStyle.inset)
         if debugMode == "attach" {
           TextField(tr("プロセス ID (PID)"), text: $debugPID)
             .textFieldStyle(.plain)
-            .font(.system(size: 12, design: .monospaced))
+            .font(Typography.font(Typography.sidebar, family: .mono))
             .foregroundStyle(C.textPrimary)
-            .padding(.horizontal, 8).frame(height: 28)
-            .background(C.canvas, in: RoundedRectangle(cornerRadius: Radius.control))
-            .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.strong))
-            .padding(.horizontal, SidebarStyle.lead - 4).padding(.top, 6)
+            .padding(.horizontal, 8).frame(height: SidebarStyle.rowHeight)
+            .sidebarField().padding(.top, 6)
         }
         SidebarNote(debugSetupMessage)
         debugSection(tr("ブレークポイント"))
@@ -3093,72 +3093,70 @@ import Observation
           ForEach(session.breakpoints.keys.sorted(), id: \.self) { path in
             ForEach((session.breakpoints[path] ?? []).sorted(), id: \.self) { line in
               let status = session.breakpointStatus[path]?[line]
-              HStack(spacing: 0) {
-                // The red dot removes the breakpoint; the rest of the row jumps to its line.
+              // The red dot removes the breakpoint; the rest of the row jumps to its line.
+              SidebarRow(action: {
+                let target = status?.line ?? line
+                _ = store.run("file.open", ["path": .string(path), "line": .int(target)])
+                if let rel = store.state.active { store.buffers.reveal(rel, line: target, column: -1) }  // select the line
+              }) {
                 Button { _ = store.run("debug.breakpoint", ["path": .string(path), "line": .int(line)]) } label: {
                   Image(systemName: "circle.fill").font(.system(size: 9)).foregroundStyle(C.danger)
-                    .frame(width: 24, height: 28).contentShape(Rectangle())
-                }.buttonStyle(.hoverWash).help(tr("ブレークポイントを削除"))
-                Button {
-                  let target = status?.line ?? line
-                  _ = store.run("file.open", ["path": .string(path), "line": .int(target)])
-                  if let rel = store.state.active { store.buffers.reveal(rel, line: target, column: -1) }  // select the line
-                } label: {
-                  Text("\(URL(fileURLWithPath: path).lastPathComponent):\(status?.line ?? line)")
-                    .font(.system(size: 12)).foregroundStyle(status?.verified == false ? C.attention : C.textSecondary)
-                    .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading).contentShape(Rectangle())
-                }.buttonStyle(.hoverWash).help(status?.message ?? (status == nil ? tr("未検証") : tr("検証済み")))
-              }.padding(.horizontal, 12).padding(.leading, 2)
+                    .frame(width: 16, height: SidebarStyle.rowHeight).contentShape(Rectangle())
+                }.buttonStyle(.plain).help(tr("ブレークポイントを削除")).accessibilityLabel(tr("ブレークポイントを削除"))
+                Text("\(URL(fileURLWithPath: path).lastPathComponent):\(status?.line ?? line)")
+                  .foregroundStyle(status?.verified == false ? C.attention : C.textSecondary).lineLimit(1)
+                Spacer(minLength: 0)
+              }.help(status?.message ?? (status == nil ? tr("未検証") : tr("検証済み")))
             }
           }
         } else { debugEmpty(tr("設定されていません")) }
         debugSection(tr("スレッドとコールスタック"))
         if let session = store.debugSession, !session.threads.isEmpty {
           ForEach(session.threads) { thread in
-            Button { _ = store.run("debug.selectThread", ["id": .int(thread.id)]) } label: {
-              Label(thread.name, systemImage: session.selectedThread == thread.id ? "checkmark.circle.fill" : "circle.grid.2x2")
-                .font(.system(size: 12)).foregroundStyle(session.selectedThread == thread.id ? C.textPrimary : C.textTertiary)
-            }.buttonStyle(.hoverWash).padding(.horizontal, 12).frame(minHeight: 28)
+            let on = session.selectedThread == thread.id
+            SidebarRow(selected: on, action: { _ = store.run("debug.selectThread", ["id": .int(thread.id)]) }) {
+              Image(systemName: on ? "checkmark.circle.fill" : "circle.grid.2x2").font(.system(size: 11)).foregroundStyle(C.textTertiary).frame(width: 16)
+              Text(thread.name).foregroundStyle(on ? C.textPrimary : C.textSecondary).lineLimit(1)
+              Spacer(minLength: 0)
+            }
           }
         }
         if let session = store.debugSession, !session.frames.isEmpty {
           ForEach(session.frames) { frame in
-            Button { _ = store.run("debug.selectFrame", ["id": .int(frame.id)]); openDebugFrame(frame) } label: {
+            SidebarRow(selected: session.selectedFrame == frame.id, height: nil, action: { _ = store.run("debug.selectFrame", ["id": .int(frame.id)]); openDebugFrame(frame) }) {
               VStack(alignment: .leading, spacing: 2) {
                 Text(frame.name).foregroundStyle(C.textPrimary).lineLimit(1)
                 Text(frame.path.map { "\(URL(fileURLWithPath: $0).lastPathComponent):\(frame.line)" } ?? tr("場所不明"))
-                  .foregroundStyle(C.textQuaternary)
-              }.font(.system(size: 12)).frame(maxWidth: .infinity, alignment: .leading)
-            }.buttonStyle(.hoverWash).padding(.horizontal, 12).frame(minHeight: 34)
-              .background(session.selectedFrame == frame.id ? C.debugBlue.opacity(0.08) : Color.clear)
-              .overlay(alignment: .leading) {
-                if session.selectedFrame == frame.id { C.debugBlue.frame(width: 2) }
+                  .font(SidebarStyle.detail).foregroundStyle(C.textQuaternary)
               }
+              Spacer(minLength: 0)
+            }
+            // The current frame keeps its debug-blue marker on top of the shared selection fill.
+            .overlay(alignment: .leading) {
+              if session.selectedFrame == frame.id { C.debugBlue.frame(width: 2).padding(.vertical, 4).padding(.leading, SidebarStyle.inset) }
+            }
           }
         } else { debugEmpty(tr("停止すると表示されます")) }
         debugSection(tr("変数"))
         if let session = store.debugSession, !session.variables.isEmpty {
           ForEach(session.variables) { variable in
-            Button { _ = store.run("debug.expandVariable", ["id": .string(variable.id)]) } label: {
-              HStack(alignment: .top, spacing: 4) {
-                Image(systemName: variable.reference > 0 ? "chevron.right" : "")
-                  .frame(width: 10)
-                VStack(alignment: .leading, spacing: 2) {
-                  Text(variable.name).foregroundStyle(C.textPrimary)
-                  Text(variable.value).foregroundStyle(C.textQuaternary).lineLimit(2)
-                }
-                Spacer(minLength: 0)
-              }.font(.system(size: 12)).padding(.leading, 12 + CGFloat(variable.depth * 12)).padding(.trailing, 12).padding(.vertical, 4)
-            }.buttonStyle(.hoverWash).disabled(variable.reference == 0)
+            SidebarRow(depth: variable.depth, height: nil, action: { _ = store.run("debug.expandVariable", ["id": .string(variable.id)]) }) {
+              if variable.reference > 0 { SidebarChevron(open: false) } else { Color.clear.frame(width: 10) }
+              VStack(alignment: .leading, spacing: 2) {
+                Text(variable.name).foregroundStyle(C.textPrimary)
+                Text(variable.value).font(SidebarStyle.detail).foregroundStyle(C.textQuaternary).lineLimit(2)
+              }
+              Spacer(minLength: 0)
+            }.disabled(variable.reference == 0)
           }
         } else { debugEmpty(tr("停止すると表示されます")) }
         debugSection(tr("デバッグコンソール"))
         if let session = store.debugSession, !session.console.isEmpty {
           ForEach(Array(session.console.enumerated()), id: \.offset) { _, line in
-            Text(line).font(.system(size: 12, design: .monospaced))
+            Text(line).font(Typography.font(Typography.sidebarMicro, family: .mono))
               .foregroundStyle(C.textTertiary)
               .frame(maxWidth: .infinity, alignment: .leading)
-              .padding(.horizontal, 12).padding(.vertical, 2)
+              .padding(.horizontal, SidebarStyle.lead).padding(.vertical, 2)
               .textSelection(.enabled)
           }
         } else { debugEmpty(tr("出力はありません")) }

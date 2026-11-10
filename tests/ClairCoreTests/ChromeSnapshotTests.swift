@@ -36,12 +36,15 @@
       store.run("project.switch", ["name": .string("clair")])
       store.run("tab.open", ["path": .string("apple/ClairApp/ProjectWorkspace.swift")])
       store.edited("apple/ClairApp/ProjectWorkspace.swift")
+      var mode = "folder"
       for (name, prep) in [("native", {}), ("palette", { store.run("palette.commands") }), ("quickopen", { store.run("palette.files") }), ("search", { store.run("palette.search") }),
                            ("glass", { store.run("settings.choose", ["key": .string("material"), "value": .string("Liquid Glass")], confirmed: true) }),
                            ("glass-split", { store.run("pane.splitRight"); store.run("pane.splitDown") }),
-                           ("glass-settings", { store.run("settings.open") })] as [(String, () -> Void)] {
+                           ("glass-debug", { mode = "ladybug" }), ("glass-agents", { mode = "terminal" }),
+                           ("glass-changes", { mode = "shield" }), ("glass-todo", { mode = "checklist" }),
+                           ("glass-settings", { mode = "folder"; store.run("settings.open") })] as [(String, () -> Void)] {
         prep()
-        let host = NSHostingView(rootView: ClairAppShell(store: store).frame(width: 1440, height: 900))
+        let host = NSHostingView(rootView: ClairAppShell(store: store, sidebarMode: mode).frame(width: 1440, height: 900))
         let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1440, height: 900), styleMask: [.titled], backing: .buffered, defer: false)
         win.contentView = host
         win.orderBack(nil)

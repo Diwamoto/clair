@@ -11,10 +11,11 @@ enum SidebarStyle {
   static let indent: CGFloat = 12
   /// Where a row's text (and every heading) starts: inset + inner padding.
   static let lead: CGFloat = 16
-  static let title = Font.system(size: 13)
-  static let titleStrong = Font.system(size: 13, weight: .semibold)
-  static let detail = Font.system(size: 11)
-  static let heading = Font.system(size: 11, weight: .semibold)
+  // Computed through `Typography.font`, so the 11pt step follows the material (12 under Liquid Glass) like the rest of the chrome.
+  static var title: Font { Typography.font(Typography.sidebar) }
+  static var titleStrong: Font { Typography.font(Typography.sidebarStrong) }
+  static var detail: Font { .system(size: Typography.chromeSize(Typography.sidebarMicro.size)) }
+  static var heading: Font { .system(size: Typography.chromeSize(Typography.sidebarMicro.size), weight: .semibold) }
 }
 
 /// A row: inset, rounded, hover wash, glass-aware selection. `trailing` sits over the row (not inside the
@@ -95,6 +96,13 @@ struct SidebarHeading<Accessory: View>: View {
     .padding(.leading, open == nil ? SidebarStyle.lead : SidebarStyle.lead - 14).padding(.trailing, SidebarStyle.lead)
     .padding(.top, 12).padding(.bottom, 4)
     .accessibilityAddTraits(.isHeader)
+  }
+}
+
+extension View {
+  /// A sidebar text field or picker: one ground and one inset for every panel (commit message, chat search, debug).
+  func sidebarField() -> some View {
+    fieldWell(DesignTokens.Color.surfaceActive, radius: Radius.control, edged: false).padding(.horizontal, SidebarStyle.inset)
   }
 }
 
