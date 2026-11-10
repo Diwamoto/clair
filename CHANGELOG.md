@@ -6,6 +6,20 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-11-10
+
+### Added
+- The concierge chat has a model menu that switches the running concierge's model.
+
+### Changed
+- The concierge screen keeps the chat on the left and the board on the right, with the concierge's children at the top of the board; a running child pulses, and clicking one opens its terminal. A newly started child is focused automatically.
+
+### Removed
+- The manual toggle that put the concierge chat beside the board; it now moves aside on its own.
+
+### Fixed
+- Under Liquid Glass, the titlebar tabs, traffic lights and status bar items are centred between the window edge and the panels instead of hugging the edge.
+
 ## [0.34.0] - 2026-11-10
 
 ### Added
@@ -666,7 +680,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.34.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.35.0...HEAD
+[0.35.0]: https://github.com/Diwamoto/clair/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/Diwamoto/clair/compare/v0.33.0...v0.34.0
 [0.33.0]: https://github.com/Diwamoto/clair/compare/v0.32.2...v0.33.0
 [0.32.2]: https://github.com/Diwamoto/clair/compare/v0.32.1...v0.32.2
