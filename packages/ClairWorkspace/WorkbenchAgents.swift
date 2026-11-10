@@ -73,6 +73,8 @@ public struct AgentLaunch: Sendable, Codable, Equatable {
   /// The Project's added folders when this agent started (ADR-0017). Fixed at launch: deriving them live
   /// would change `command` when a folder is added, and a changed command replaces the running shell.
   public var folders: [String]?
+  /// #75: sbx sandbox this batch run executes in (`clair-<run>`), removed by agent.close.
+  public var sandbox: String?
   public init(
     profile: String, cwd: String, prompt: String? = nil, parent: String? = nil, resume: String? = nil, concierge: String? = nil,
     opening: String? = nil, review: Bool = false, folders: [String]? = nil
@@ -96,7 +98,21 @@ public struct AgentLaunch: Sendable, Codable, Equatable {
     // Wrapped in /bin/sh so the user's login shell (zsh, fish, …) only sees one quoted argument.
     let r = AgentRun(id: run), q = AgentRun.quote
     let batch = review == true ? p.reviewBatch ?? p.batch : p.batch
-    let inner = "mkdir -p \(q(AgentRun.directory.path)); script -q \(q(r.log.path)) \(batch) \(q(prompt))\(dirs); echo $? > \(q(r.exit.path))"
+    let agent: String
+    if let sandbox {
+      // #75: the child sees only cwd (bind mount); its claude login is sbx's global secret, never on the host side.
+      // ponytail: Claude Code only and no --add-dir folders; mount folders as extra workspaces when needed.
+      let steps = """
+        command -v sbx >/dev/null || { echo 'sbx is not installed'; exit 127; }; \
+        d=$(sbx diagnose 2>&1) || { echo "$d"; exit 1; }; \
+        sbx create -q --name \(sandbox) claude \(q(cwd)) >/dev/null && \
+        sbx exec -it -w \(q(cwd)) \(sandbox) claude -p --permission-mode acceptEdits \(q(prompt))
+        """
+      agent = "/bin/sh -c \(q(steps))"
+    } else {
+      agent = "\(batch) \(q(prompt))\(dirs)"
+    }
+    let inner = "mkdir -p \(q(AgentRun.directory.path)); script -q \(q(r.log.path)) \(agent); echo $? > \(q(r.exit.path))"
     return "/bin/sh -c \(q(inner))"
   }
 }
@@ -107,6 +123,41 @@ public struct AgentRun: Sendable {
   public static var directory: URL { ClairChannel.current.dataURL.appending(path: "agents") }
   var log: URL { Self.directory.appending(path: "\(id).log") }
   var exit: URL { Self.directory.appending(path: "\(id).exit") }
+
+  /// #75: `clair-*` names in `listed` (`sbx ls -q`) that no open pane runs in.
+  static func staleSandboxes(_ listed: String, keep: Set<String>) -> [String] {
+    listed.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
+      .filter { $0.hasPrefix("clair-") && !keep.contains($0) }
+  }
+
+  static func pruneSandboxes(keep: Set<String>) {
+    #if os(macOS)
+    DispatchQueue.global(qos: .utility).async {
+      let p = Process(), out = Pipe()
+      p.executableURL = URL(fileURLWithPath: "/bin/zsh")
+      // ponytail: skips when sbx is missing instead of starting its daemon just to find nothing.
+      p.arguments = ["-lc", "command -v sbx >/dev/null && sbx ls -q 2>/dev/null"]
+      p.standardOutput = out; p.standardError = FileHandle.nullDevice
+      guard (try? p.run()) != nil else { return }
+      let listed = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+      p.waitUntilExit()
+      staleSandboxes(listed, keep: keep).forEach(removeSandbox)
+    }
+    #endif
+  }
+
+  /// #75: `sbx rm` stops the child and deletes its VM; the Clair worktree it worked in stays (worktree.remove).
+  /// Login shell so sbx resolves on the user's PATH. Fire and forget: a leftover shows in `sbx ls`.
+  static func removeSandbox(_ name: String) {
+    #if os(macOS)
+    guard name.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" }) else { return }
+    let p = Process()
+    p.executableURL = URL(fileURLWithPath: "/bin/zsh")
+    p.arguments = ["-lc", "sbx rm --force \(name)"]
+    p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
+    try? p.run()
+    #endif
+  }
 
   /// nil while running.
   public var exitCode: Int? {
@@ -290,7 +341,23 @@ extension WorkbenchState {
   /// Removes the terminal pane behind `root#pane`, in any Project, with its launch.
   public mutating func closeTerminal(_ key: String) {
     guard let t = terminal(key) else { return }
-    withLayout(t.project) { l in l.tree.close(t.pane); l.launches[t.pane] = nil }
+    withLayout(t.project) { l in
+      if let name = l.launches[t.pane]?.sandbox { AgentRun.removeSandbox(name) }
+      l.tree.close(t.pane); l.launches[t.pane] = nil
+    }
+  }
+
+  /// #75: sandboxes of every open pane, in every Project.
+  var openSandboxes: Set<String> {
+    Set((Array(launches.values) + layouts.filter { $0.key != project }.values.flatMap(\.launches.values)).compactMap(\.sandbox))
+  }
+
+  /// Drops the launches of closed panes; a closed sandboxed child takes its sandbox with it (#75).
+  mutating func pruneLaunches() {
+    for (id, l) in launches where !tree.leaves.contains(where: { $0.id == id }) {
+      if let name = l.sandbox { AgentRun.removeSandbox(name) }
+      launches[id] = nil
+    }
   }
 
   mutating func withLayout<R>(_ name: String, _ body: (inout ProjectLayout) -> R) -> R {

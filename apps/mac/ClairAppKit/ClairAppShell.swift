@@ -1407,6 +1407,7 @@ import Observation
     @State private var paletteMeasured = false
     // U05: sidebar mode + source-control view. GUI-local (no command); the stage buttons go through git.stage/unstage.
     @State private var sidebarMode = "folder"
+    @State private var conciergeBoard = false
     @AppStorage("clair.sidebarWidth") private var sidebarWidth = 242.0
     /// The concierge chat beside the pane board instead of over it.
     @AppStorage("clair.conciergeSplit") private var conciergeSplit = false
@@ -1895,6 +1896,9 @@ import Observation
         ForEach(["folder", Self.browserMode, "shield", "terminal", "ladybug", "checklist", "concierge"], id: \.self) { icon in
           activityBarButton(icon)
         }
+        // #77: one shortcut back and forth between the concierge and the Project workspace.
+        Button("") { sidebarMode = sidebarMode == "concierge" ? "folder" : "concierge"; if st.sidebarHidden { store.run("sidebar.toggle") } }
+          .keyboardShortcut("0", modifiers: [.command, .control]).opacity(0).frame(width: 0, height: 0)
         // ponytail: no overflow "…" menu — the Workbench shows it only when nav items overflow; four always fit here.
         Spacer(minLength: 0)
       }
@@ -1904,6 +1908,15 @@ import Observation
       .overlay(alignment: .trailing) { if !glass { Rectangle().fill(C.surfaceActive).frame(width: 1) } }
       // ⌥⌘B shows the browser's panel. Here, not on the body's modifier chain (already at the type checker's limit);
       // the activity bar is on screen even while ⌘B hides the sidebar.
+      // #77 / #78: here, not on the body's chain (at the type checker's limit).
+      .onAppear { if st.toggles["startConcierge"] == true { sidebarMode = "concierge" } }
+      .task(id: conciergeBoard) {
+        // The concierge and its children rewrite the TODO files while the board is open.
+        while conciergeBoard, !Task.isCancelled {
+          todos = ClairTodo.list()
+          try? await Task.sleep(for: .seconds(2))
+        }
+      }
       .onChange(of: st.browserNavigationGeneration) {
         sidebarMode = Self.browserMode
         if st.sidebarHidden { store.run("sidebar.toggle") }
@@ -2142,7 +2155,8 @@ import Observation
       ConciergeSidebar(
         running: st.concierge() != nil,
         children: st.conciergeChildren(), start: { startConcierge() },
-        focus: focusConciergeChild, editInstructions: editConciergeInstructions)
+        focus: focusConciergeChild, editInstructions: editConciergeInstructions,
+        board: conciergeBoard, toggleBoard: { conciergeBoard.toggle(); if conciergeBoard { todos = ClairTodo.list() } })
     }
 
     /// #76: a new concierge starts only once the user has approved what it reads (prompt, cwd, its project files).
@@ -3359,9 +3373,24 @@ import Observation
         if let old, old != new { store.closeTerminal(old) }
       }
       // ponytail: fixed chat width beside the board; a drag handle if owners want to resize it.
-      .padding(.leading, sidebarMode == "concierge" && conciergeSplit ? 460 : 0)
+      .padding(.leading, sidebarMode == "concierge" && !conciergeBoard && conciergeSplit ? 460 : 0)
       .overlay(alignment: .leading) {
-        if sidebarMode == "concierge" {
+        if sidebarMode == "concierge", conciergeBoard {
+          TodoBoardView(
+            cards: st.board(todos), projects: st.projects.map(\.name),
+            openPane: { card in
+              guard let p = card.project, let pane = card.pane else { return }
+              if p != st.project { store.run("project.switch", ["name": .string(p)]) }
+              store.run("pane.focus", ["id": .int(pane)])
+              leaveConcierge()
+            },
+            openFile: { path in leaveConcierge(); store.run("file.open", ["path": .string(path)]) },
+            diffProject: { card in card.todo.branch.flatMap { b in st.projects.first { $0.branch == b }?.name } },
+            openDiff: { name in
+              if name != st.project { store.run("project.switch", ["name": .string(name)]) }
+              sidebarMode = "shield"; reloadChanges()
+            })
+        } else if sidebarMode == "concierge" {
           let c = st.concierge()
           ConciergeChatView(
             split: $conciergeSplit,
@@ -3482,6 +3511,7 @@ import Observation
               }
             }
             SettingsCard(title: tr("コンシェルジュ")) {
+              switchRow(tr("起動時にコンシェルジュを開く"), "startConcierge", note: tr("オフなら前回の Project を開きます。⌃⌘0 でいつでも切り替えられます。"))
               VStack(alignment: .leading, spacing: 6) {
                 Text(tr("作業フォルダ")).font(.system(size: 13))
                 TextField(tr("空欄なら開いている Project"), text: $conciergeCwdDraft)

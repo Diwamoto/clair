@@ -57,6 +57,8 @@
     let start: () -> Void
     let focus: (AgentSession) -> Void
     let editInstructions: () -> Void
+    let board: Bool
+    let toggleBoard: () -> Void
     @State private var tasksOpen = true
 
     var body: some View {
@@ -89,6 +91,11 @@
           }.padding(.horizontal, 12).padding(.vertical, 8)
         }
         Divider()
+        Button(action: toggleBoard) {
+          Label(board ? tr("チャットに戻る") : tr("ボード"), systemImage: board ? "bubble.left" : "square.grid.3x2")
+            .font(rowFont).foregroundStyle(C.textTertiary)
+            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 14).frame(height: 36).contentShape(Rectangle())
+        }.buttonStyle(.hoverWash)
         Button(action: editInstructions) {
           Label(tr("指示と作業フォルダを設定"), systemImage: "gearshape")
             .font(rowFont).foregroundStyle(C.textTertiary)
@@ -496,6 +503,97 @@
         .overlay(RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous).strokeBorder(L.hairline))
         .contentShape(Rectangle())
       }.buttonStyle(HoverWashStyle(radius: Radius.overlay)).help(tr("ペイン %@ へ移動", session.pane))
+    }
+  }
+
+  /// #78: every staged TODO across Projects; columns are stages, rows are lanes. Clair only shows the file's keys.
+  struct TodoBoardView: View {
+    let cards: [TodoBoardCard]
+    let projects: [String]
+    let openPane: (TodoBoardCard) -> Void
+    let openFile: (String) -> Void
+    /// The worktree Project of the card's branch, if Clair has it open; nil hides "diff を開く".
+    let diffProject: (TodoBoardCard) -> String?
+    let openDiff: (String) -> Void
+    @State private var waitingOnly = false
+    @State private var project = ""
+    @State private var selected: String?
+
+    private var shown: [TodoBoardCard] {
+      cards.filter { (!waitingOnly || $0.state == .waiting) && (project.isEmpty || $0.project == project) }
+    }
+
+    var body: some View {
+      VStack(alignment: .leading, spacing: 12) {
+        HStack(spacing: 12) {
+          Text(tr("ボード")).font(rowStrong).foregroundStyle(C.textPrimary)
+          Toggle(tr("あなた待ちだけ"), isOn: $waitingOnly).toggleStyle(.checkbox)
+          Picker(tr("Project"), selection: $project) {
+            Text(tr("すべての Project")).tag("")
+            ForEach(projects, id: \.self) { Text($0).tag($0) }
+          }.frame(maxWidth: 240)
+          Spacer(minLength: 0)
+        }.font(rowFont)
+        ScrollView([.horizontal, .vertical]) {
+          Grid(alignment: .topLeading, horizontalSpacing: 8, verticalSpacing: 8) {
+            GridRow {
+              Text("")
+              ForEach(ClairTodo.stages, id: \.self) { Text($0).font(rowStrong).foregroundStyle(C.textTertiary).frame(width: 180, alignment: .leading) }
+            }
+            ForEach(ClairTodo.lanes, id: \.self) { lane in
+              GridRow {
+                Text(lane).font(rowStrong).foregroundStyle(C.textTertiary)
+                ForEach(ClairTodo.stages, id: \.self) { stage in
+                  VStack(spacing: 6) {
+                    ForEach(shown.filter { $0.todo.stage == stage && ($0.todo.lane ?? "code") == lane }, id: \.todo.path) { card($0) }
+                  }.frame(width: 180, alignment: .top)
+                }
+              }
+            }
+          }
+        }
+      }.padding(20).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).background(C.panelDeep)
+    }
+
+    private func label(_ s: TodoBoardCard.State) -> (String, Color) {
+      switch s {
+      case .running: (tr("稼働中"), C.success)
+      case .waiting: (tr("あなた待ち"), C.attention)
+      case .overLimit: (tr("差し戻し上限超過"), C.danger)
+      case .done: (tr("完了"), C.textQuaternary)
+      }
+    }
+
+    private func card(_ c: TodoBoardCard) -> some View {
+      let (text, color) = label(c.state)
+      let open = selected == c.todo.path
+      return VStack(alignment: .leading, spacing: 4) {
+        Text(c.todo.title).font(rowFont).foregroundStyle(C.textPrimary).lineLimit(2)
+        HStack(spacing: 4) {
+          Circle().fill(color).frame(width: 6, height: 6)
+          Text(text)
+          if let p = c.project { Text("· \(p)").lineLimit(1) }
+        }.font(.system(size: 11)).foregroundStyle(C.textTertiary)
+        if open {
+          ForEach([("retry", c.todo.retry.map(String.init)), ("branch", c.todo.branch), ("pr", c.todo.pr), ("agent", c.todo.agent)], id: \.0) { k, v in
+            if let v { Text("\(k): \(v)").font(.system(size: 11)).foregroundStyle(C.textTertiary).lineLimit(1).textSelection(.enabled) }
+          }
+          ForEach(c.history, id: \.self) { Text($0).font(.system(size: 11)).foregroundStyle(C.textSecondary).lineLimit(1) }
+          HStack(spacing: 6) {
+            ForEach(c.artifacts, id: \.self) { path in Button((path as NSString).lastPathComponent) { openFile(path) } }
+          }.buttonStyle(.hoverWash).font(.system(size: 11))
+          HStack(spacing: 6) {
+            if c.pane != nil { Button(tr("ペインを開く")) { openPane(c) } }
+            if let p = diffProject(c) { Button(tr("diff を開く")) { openDiff(p) } }
+            if let pr = c.todo.pr, let url = URL(string: pr), url.scheme == "https" { Button(tr("PR を開く")) { NSWorkspace.shared.open(url) } }
+            Button(tr("TODO を開く")) { openFile(c.todo.path) }
+          }.buttonStyle(.hoverWash).font(.system(size: 11))
+        }
+      }
+      .padding(8).frame(maxWidth: .infinity, alignment: .leading)
+      .background(RoundedRectangle(cornerRadius: 6).fill(open ? W.selected : C.panel))
+      .contentShape(Rectangle())
+      .onTapGesture { selected = open ? nil : c.todo.path }
     }
   }
 #endif

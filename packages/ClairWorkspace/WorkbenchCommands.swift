@@ -32,14 +32,14 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public enum Palette: String, Sendable, Codable { case commands, files, search, symbols, references, branches, compare, recent }
 
   public static let sections = ["一般", "AIプロバイダー", "使用状況", "エディタ", "ターミナル", "通知", "モバイル", "アップデート"]
-  public static let toggleKeys = ["restoreLayout", "confirmClose", "hideQuota", "preventSleepOnBattery", "formatOnSave", "showWhitespace", "softWrap", "terminalApprovals", "lineNumbers", "terminalCursorBlink", "notifyEnabled", "notifyOnBell", "notifyOnExit", "notifyWhenActive", "notifySound", "autoEqualize", "focusExpand"]
+  public static let toggleKeys = ["restoreLayout", "confirmClose", "hideQuota", "preventSleepOnBattery", "formatOnSave", "showWhitespace", "softWrap", "terminalApprovals", "lineNumbers", "terminalCursorBlink", "notifyEnabled", "notifyOnBell", "notifyOnExit", "notifyWhenActive", "notifySound", "autoEqualize", "focusExpand", "startConcierge"]
     + AgentProfile.all.map { agentKey($0.id) }
   /// Per-agent "使う" switch: off hides the agent from launch menus and the status bar's usage meter.
   public static func agentKey(_ id: String) -> String { "agent.\(id)" }
   /// Closed-set settings (the mock's segmented controls). The first option is the default.
   /// Palette titles of `toggleKeys` / `choiceOptions`, matching the settings rows, so every setting is reachable from ⌘K.
   public static let settingTitles = [
-    "restoreLayout": "前回のレイアウトを復元", "confirmClose": "閉じる前に確認", "hideQuota": "ステータスバーの利用枠を隠す",
+    "restoreLayout": "前回のレイアウトを復元", "startConcierge": "起動時にコンシェルジュを開く", "confirmClose": "閉じる前に確認", "hideQuota": "ステータスバーの利用枠を隠す",
     "preventSleepOnBattery": "バッテリー駆動中もエージェント実行中はスリープさせない", "formatOnSave": "保存時に整形",
     "showWhitespace": "空白文字を表示", "softWrap": "行の折り返し", "terminalApprovals": "コマンド実行前に確認",
     "defaultAgent": "既定のAgent", "approvalPolicy": "承認ポリシー", "tabWidth": "タブ幅", "defaultShell": "デフォルトシェル",
@@ -669,11 +669,11 @@ extension CommandRegistry {
         let last = s.tree.focused
         s.tree.ensureEditorAtLeft()
         s.tree.close(last)
-        s.launches = s.launches.filter { id, _ in id == Concierge.pane || s.tree.leaves.contains { $0.id == id } }
+        s.pruneLaunches()
         return .ok
       }
       s.tree.closeFocused()
-      s.launches = s.launches.filter { id, _ in id == Concierge.pane || s.tree.leaves.contains { $0.id == id } }
+      s.pruneLaunches()
       s.autoEqualize()
       return .ok
     },
@@ -699,12 +699,16 @@ extension CommandRegistry {
           CommandParam("review", .bool, required: false), CommandParam("opening", .string, required: false),
           // A Project other than the shown one, without switching to it (#72 schedules).
           CommandParam("project", .string, required: false),
+          CommandParam("sandbox", .bool, required: false),
         ], palette: false,
         preflight: { s, i throws(CommandError) in
           try require(i["resume"]?.string.map(AgentProfile.isSessionID) ?? true, "invalid session id")
           if i["opening"] != nil {
             try require(i["prompt"] == nil, "prompt and opening are exclusive")
             try require(AgentProfile.named(i["profile"]!.string!)?.open != nil, "\(i["profile"]!.string!) cannot open with a message")
+          }
+          if i["sandbox"]?.bool == true {
+            try require(i["profile"]!.string! == "claude" && i["prompt"]?.string?.isEmpty == false, "sandbox needs profile=claude and a prompt")
           }
           let home = try launchHome(s, i)
           if let b = i["branch"]?.string {
@@ -720,10 +724,11 @@ extension CommandRegistry {
         guard case .success(let wt) = WorkbenchGit.createWorktree(home.project, branch: b) else { return .text("worktree add failed") }
         s.projects.append(wt); cwd = wt.path
       }
-      let launch = AgentLaunch(
+      var launch = AgentLaunch(
         profile: i["profile"]!.string!, cwd: cwd, prompt: i["prompt"]?.string.flatMap { $0.isEmpty ? nil : $0 },
         parent: i["parent"]?.string, resume: i["resume"]?.string,
         opening: i["opening"]?.string.flatMap { $0.isEmpty ? nil : $0 }, review: i["review"]?.bool == true, folders: home.project.folders)
+      if i["sandbox"]?.bool == true { launch.sandbox = "clair-" + launch.run! }
       let axis: PaneTree.Axis = i["direction"]?.string == "down" ? .vertical : .horizontal
       let pane = s.withLayout(home.project.name) { l in
         let id = home.pane.map { l.tree.split($0, axis, kind: .terminal) } ?? { l.tree.splitFocused(.vertical, kind: .terminal); return l.tree.focused }()
@@ -759,6 +764,12 @@ extension CommandRegistry {
           return own ? .read : .write
         }) { s, i in
       s.closeTerminal(i["key"]!.string!)
+      return .ok
+    },
+    // #75: removes `clair-*` sandboxes no open pane runs in (left by a crash or a closed Project). Only Clair's own
+    // names, so it needs no approval. Runs in the background; `sbx ls` shows what is left.
+    cmd("agent.sandboxes.prune", "残った sandbox を片付ける", .read, palette: false) { s, _ in
+      AgentRun.pruneSandboxes(keep: s.openSandboxes)
       return .ok
     },
     // Every agent terminal in every Project (launched or detected), so a CLI caller can find a key without the GUI.
@@ -819,7 +830,11 @@ extension CommandRegistry {
           }
           return .external
         }) { s, i in
-      if s.concierge() != nil { return .ok }
+      AgentRun.pruneSandboxes(keep: s.openSandboxes)
+      if let c = s.concierge() {
+        if c.project != s.project, let p = s.projects.first(where: { $0.name == c.project }) { s.switchProject(to: p, scanFiles: false) }
+        s.tree.focus(c.pane); return .pane(c.pane)
+      }
       let home = try! s.launchHome(nil)
       let pane = Concierge.pane
       let cwd = s.conciergeCwd.isEmpty ? home.project.path : s.conciergeCwd

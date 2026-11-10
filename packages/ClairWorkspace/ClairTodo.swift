@@ -180,7 +180,11 @@ clair todo.list done=false                     # JSON: path, title, priority, du
 clair todo.add title="Fix login" priority=1 due=2026-10-30 body="context"
 clair todo.update path=<path> done=true appendBody="result: shipped"   # also title / priority / due ("" clears)
 clair todo.update path=<path> stage=impl lane=code agent=<terminal key>          # workflow keys: stage, lane, retry, branch, pr, agent
+clair todo.update path=<path> stage=impl appendBody="- impl <terminal key> <one-line note>"   # every stage change: one history line
 ```
+
+Workflow artifacts sit next to the TODO: `~/.clair/todo/<TODO file name without .md>/plan.md` and `review.md`. A sandboxed child cannot see `~/.clair`, so the concierge puts plan.md's text into the child's prompt and writes review.md itself. Set `project:` (Project name or path) on a staged TODO so the board can link its pane.
+
 
 ## Add
 

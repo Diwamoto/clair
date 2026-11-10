@@ -38,13 +38,19 @@ Branch on `error.code`: `error.message` follows Clair's language.
 ## 1. Launch children
 
 ```bash
-clair agent launch profile=claude prompt="<self-contained task>" [direction=right|down] [branch=<new-branch>]
+clair agent launch profile=claude prompt="<self-contained task>" [direction=right|down] [branch=<new-branch>] [sandbox=true]
 # → {"ok":true,"result":"/path/to/project#7"}   ← the child's key
 ```
 
 - Children open as panes split from **your** pane; the user's focus does not move.
 - `profile`: `claude`, `codex`, or `opencode`. With `prompt` the child runs non-interactively
-  (`claude -p` / `codex exec` / `opencode run`) and exits when done.
+  (`claude -p` / `codex exec` / `opencode run`) and exits when done. Its pane stays **blank
+  until the run finishes** and cannot be talked to; use it only when you collect the result
+  with `agent wait` / `agent output`.
+- `opening="<first message>"` instead of `prompt` starts the normal interactive TUI with that
+  message already sent: the user watches it work live and can keep the conversation going.
+  Use it whenever the child is for the user to see or steer. `agent wait` / `agent output`
+  do not apply to it (no recorded exit); `agent status` still does.
 - `branch=<name>` creates a Clair-managed worktree on a new branch and runs the child there.
   Use it when children edit files, so they cannot collide. The branch must not exist yet.
 - The first launch shows an approval card in Clair; after the user approves, further launches
