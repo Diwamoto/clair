@@ -831,10 +831,7 @@ extension CommandRegistry {
           return .external
         }) { s, i in
       AgentRun.pruneSandboxes(keep: s.openSandboxes)
-      if let c = s.concierge() {
-        if c.project != s.project, let p = s.projects.first(where: { $0.name == c.project }) { s.switchProject(to: p, scanFiles: false) }
-        s.tree.focus(c.pane); return .pane(c.pane)
-      }
+      if s.concierge() != nil { return .ok }
       let home = try! s.launchHome(nil)
       let pane = Concierge.pane
       let cwd = s.conciergeCwd.isEmpty ? home.project.path : s.conciergeCwd
