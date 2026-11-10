@@ -6,6 +6,19 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-11-10
+
+### Added
+- Esc or Ctrl-C in the concierge chat stops a running turn; the transcript shows it as "Stopped".
+
+### Changed
+- Under Liquid Glass, tabs are capsules in one tinted group, the search field is a well, the activity bar floats as a capsule, sidebar rows get indent guides, and buttons, segments and overlays follow the glass look. Classic is unchanged.
+- Every sidebar panel uses one type scale, heading, row and input field.
+
+### Fixed
+- Clicking any tab (terminal, graph, preview, diff, or the current one) now leaves the concierge chat that covers the panes.
+- The source-control sidebar no longer stalls or hangs on a large set of changes.
+
 ## [0.33.0] - 2026-11-10
 
 ### Added
@@ -653,7 +666,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.33.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.34.0...HEAD
+[0.34.0]: https://github.com/Diwamoto/clair/compare/v0.33.0...v0.34.0
 [0.33.0]: https://github.com/Diwamoto/clair/compare/v0.32.2...v0.33.0
 [0.32.2]: https://github.com/Diwamoto/clair/compare/v0.32.1...v0.32.2
 [0.32.1]: https://github.com/Diwamoto/clair/compare/v0.32.0...v0.32.1
