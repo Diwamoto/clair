@@ -1569,7 +1569,7 @@ import Observation
       }
       .onChange(of: st.debugNavigationGeneration) { sidebarMode = "ladybug" }
       // A file opened while the concierge chat covers the panes would land hidden behind it.
-      .onChange(of: st.active) { if sidebarMode == "concierge" && !conciergeSplit { leaveConcierge() } }
+      .onChange(of: st.active) { leaveConciergeOverlay() }
       .onChange(of: store.debugSession?.frames.first) { _, frame in
         if sidebarMode == "ladybug", let frame { openDebugFrame(frame) }
       }
@@ -1734,6 +1734,7 @@ import Observation
                 FileTabButton(
                   path: tab.dragID, name: title, selected: selectedTab == tab, dirty: false,
                   onActivate: {
+                    leaveConciergeOverlay()
                     if !active { store.run("project.switch", ["name": .string(p.name)]) }
                     store.run("pane.focus", ["id": .int(id)])
                   },
@@ -1751,6 +1752,7 @@ import Observation
                     : target.against.map { tr("比較: %@ ↔ %@", name($0), name(target.path)) } ?? tr("差分: %@", name(target.path)),
                   selected: selectedTab == tab, dirty: false,
                   onActivate: {
+                    leaveConciergeOverlay()
                     if !active { store.run("project.switch", ["name": .string(p.name)]) }
                     store.run("diff.activate", diffInput(target))
                   },
@@ -1818,6 +1820,7 @@ import Observation
       return FileTabButton(
         path: WorkbenchTab.file(path).dragID, name: label, selected: selected, dirty: dirty || proposal?.state == .pending,
         onActivate: {
+          leaveConciergeOverlay()
           if !projectActive { store.run("project.switch", ["name": .string(project)]) }
           store.run("tab.activate", ["path": .string(path)])
         },
@@ -2181,6 +2184,8 @@ import Observation
 
     /// Leaving the concierge for a pane or file hands the sidebar back to the file tree.
     private func leaveConcierge() { sidebarMode = "folder" }
+    /// A tab click must show that tab, which the full-width concierge chat would cover.
+    private func leaveConciergeOverlay() { if sidebarMode == "concierge" && (conciergeBoard || !conciergeSplit) { leaveConcierge() } }
 
     /// A child link shows the real terminal: leave the chat and focus that pane.
     private func focusConciergeChild(_ s: AgentSession) {
