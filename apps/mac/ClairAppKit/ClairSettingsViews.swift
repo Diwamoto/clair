@@ -44,6 +44,9 @@
     let options: [String]
     let value: String
     let onChange: (String) -> Void
+    @Environment(\.clairGlass) private var glass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var thumb
     var body: some View {
       HStack(spacing: 0) {
         ForEach(options, id: \.self) { o in
@@ -51,12 +54,20 @@
           Button { onChange(o) } label: {
             Text(tr(o)).font(.system(size: 14, weight: on ? .semibold : .regular))
               .foregroundStyle(on ? C.textPrimary : C.textSecondary)
-              .padding(.horizontal, 10).frame(height: 36).background(on ? C.surfaceActive : .clear)
-          }.buttonStyle(HoverWashStyle(radius: 0))
+              .padding(.horizontal, glass ? 14 : 10).frame(height: glass ? 30 : 36)
+              // Glass: a capsule thumb that glides between options inside a capsule track.
+              .background {
+                if on, glass { Capsule().fill(DesignTokens.Glass.capsuleSelected).matchedGeometryEffect(id: "thumb", in: thumb) }
+                else if on { C.surfaceActive }
+              }
+          }.buttonStyle(HoverWashStyle(radius: Radius.pill(0)))
         }
       }
-      .clipShape(RoundedRectangle(cornerRadius: Radius.control))
-      .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.hairline))
+      .padding(glass ? 3 : 0)
+      .background(glass ? DesignTokens.Glass.capsuleFill : .clear)
+      .clipShape(RoundedRectangle(cornerRadius: Radius.pill(Radius.control)))
+      .overlay(RoundedRectangle(cornerRadius: Radius.pill(Radius.control)).stroke(glass ? .clear : L.hairline))
+      .animation(reduceMotion ? nil : .snappy(duration: 0.26, extraBounce: 0.12), value: value)
     }
   }
 

@@ -47,14 +47,26 @@ import Observation
   extension View {
     /// One status-bar item: hit and hover area runs the bar's full height and a few points either side,
     /// so a popover or tooltip does not need the pointer on the glyphs themselves.
-    func footerItem() -> some View {
-      padding(.horizontal, 5).frame(maxHeight: .infinity).contentShape(Rectangle())
-    }
+    /// `capsule`: something you can press — under glass it is drawn as a capsule; what you only read stays bare text.
+    func footerItem(capsule: Bool = false) -> some View { modifier(FooterItem(capsule: capsule)) }
 
     /// A status-bar item's hover popover, shown while the pointer is on it (one at a time via `hovered`).
     /// It stays open while the pointer is on the popover itself, so its buttons can be clicked.
     func footerPopover<Content: View>(_ id: String, _ hovered: Binding<String?>, @ViewBuilder _ content: @escaping () -> Content) -> some View {
       modifier(FooterPopover(id: id, hovered: hovered, content: content))
+    }
+  }
+
+  private struct FooterItem: ViewModifier {
+    let capsule: Bool
+    @Environment(\.clairGlass) private var glass
+    func body(content: Content) -> some View {
+      if glass && capsule {
+        content.padding(.horizontal, 9).frame(height: 22).background(DesignTokens.Glass.capsuleFill, in: Capsule())
+          .padding(.horizontal, 2).frame(maxHeight: .infinity).contentShape(Rectangle())
+      } else {
+        content.padding(.horizontal, 5).frame(maxHeight: .infinity).contentShape(Rectangle())
+      }
     }
   }
 
@@ -1492,6 +1504,8 @@ import Observation
     }
 
     public var body: some View {
+      // Before any child is built: Radius and Typography read the material from here.
+      let _ = (DesignTokens.glassActive = glass)
       VStack(spacing: 0) {
         // Mock `sheet` motion: settings comes over the top (scale 1.04 → 1 + fade).
         // Settings covers the workbench instead of replacing it: tearing the
@@ -1612,9 +1626,9 @@ import Observation
         // The scroll view swallows clicks on its empty tail, so the strip itself spans the viewport and carries the titlebar area.
         GeometryReader { g in
           ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 4) {
+            HStack(spacing: glass ? 8 : 4) {
               ForEach(Array(st.projects.enumerated()), id: \.element.name) { i, p in
-                if i > 0 { Rectangle().fill(Color(white: 0.95, opacity: 0.09)).frame(width: 1, height: 22).padding(.horizontal, 4) }
+                if i > 0, !glass { Rectangle().fill(Color(white: 0.95, opacity: 0.09)).frame(width: 1, height: 22).padding(.horizontal, 4) }
                 projectGroup(p, colorKey: p.color.flatMap { DesignTokens.GroupColor.resolve($0) == nil ? nil : $0 } ?? projectColors[i % projectColors.count].rawValue)
               }
               Button { store.run("project.choose") } label: { Image(systemName: "plus").font(.system(size: 13)).foregroundStyle(C.chromeInk).frame(width: 30, height: 30) }
@@ -1632,10 +1646,9 @@ import Observation
               Spacer(minLength: 0)
               Text("⌘⇧F").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary)
             }
-            .padding(.horizontal, 8).frame(width: 200, height: 28)
-            .background(C.chrome, in: RoundedRectangle(cornerRadius: Radius.card))
-            .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(L.hairlineFaint))
-          }.buttonStyle(.hoverWash).help(tr("検索"))
+            .padding(.horizontal, glass ? 11 : 8).frame(width: 200, height: glass ? 30 : 28)
+            .fieldWell(radius: Radius.pill())
+          }.buttonStyle(HoverWashStyle(radius: Radius.pill())).help(tr("検索"))
           titlebarAction("command", tr("コマンドパレット"), on: st.palette == .commands) { store.run("palette.commands") }
           titlebarAction("gearshape", tr("設定"), on: st.settingsOpen) { store.run(st.settingsOpen ? "settings.close" : "settings.open") }
         }.padding(.horizontal, 12)
@@ -1643,14 +1656,14 @@ import Observation
       .frame(height: ChromeBudget.titlebar)
       .background(TitlebarArea())
       .chromeBackground()
-      .overlay(alignment: .bottom) { Rectangle().fill(C.surfaceActive).frame(height: 1) }
+      .overlay(alignment: .bottom) { if !glass { Rectangle().fill(C.surfaceActive).frame(height: 1) } }
     }
 
     private func titlebarAction(_ icon: String, _ help: String, on: Bool, _ action: @escaping () -> Void) -> some View {
       Button(action: action) {
         Image(systemName: icon).font(.system(size: 13)).foregroundStyle(on ? C.chromeInk : C.chromeInkMuted)
-          .frame(width: 30, height: 30).background(on ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
-      }.buttonStyle(.hoverWash).help(help)
+          .frame(width: 30, height: 30).controlFill(on: on, flatRadius: Radius.card)
+      }.buttonStyle(HoverWashStyle(radius: Radius.pill())).help(help)
     }
 
     private static func groupHelp(_ name: String, switches: Bool, folded: Bool) -> String {
@@ -1687,8 +1700,9 @@ import Observation
           // stronger alpha pair, matching the titlebar's active tab group.
           Text(p.displayName).font(.system(size: 12, weight: .semibold)).foregroundStyle(active ? C.textPrimary : C.textSecondary).lineLimit(1).fixedSize()
             .padding(.horizontal, 10).frame(height: 26)
-            .background(color.opacity(active ? 0.22 : 0.1), in: RoundedRectangle(cornerRadius: Radius.card))
-            .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(color.opacity(active ? 0.55 : 0.28)))
+            // Glass: the vessel around the whole group carries the colour, so the chip itself is bare.
+            .background(glass ? .clear : color.opacity(active ? 0.22 : 0.1), in: RoundedRectangle(cornerRadius: Radius.card))
+            .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(glass ? .clear : color.opacity(active ? 0.55 : 0.28)))
           .overlay(alignment: .topTrailing) {
             // Only agents waiting for input badge the chip; plain bells / exits stay in the notification popover.
             let waiting = st.agentSessions.filter { $0.project == p.name && $0.status == .attention }.count
@@ -1698,7 +1712,7 @@ import Observation
             }
           }
         }
-        .overlay(hoveredGroup == p.name ? DesignTokens.Wash.selected : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
+        .overlay(hoveredGroup == p.name ? DesignTokens.Wash.selected : .clear, in: RoundedRectangle(cornerRadius: Radius.pill()))
         .contentShape(Rectangle())
         .onHover { hoveredGroup = $0 ? p.name : hoveredGroup == p.name ? nil : hoveredGroup }
         .onTapGesture(perform: activate)
@@ -1706,7 +1720,7 @@ import Observation
         .help(Self.groupHelp(p.displayName, switches: switches, folded: folded))
         .background(NoWindowDrag())
         // Dropping a chip on another moves that Project's group into its place; the ring marks the drop target like a tab's.
-        .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(groupDropTarget == p.name ? L.ring : .clear, lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: Radius.pill()).stroke(groupDropTarget == p.name ? L.ring : .clear, lineWidth: 1))
         .onDrag { NSItemProvider(object: NSString(string: Self.groupDragPrefix + p.name)) }
         .onDrop(of: [.text], isTargeted: Binding(
           get: { groupDropTarget == p.name },
@@ -1720,9 +1734,9 @@ import Observation
         }
         .clairContextMenu(menus) { projectMenu(p, colorKey: colorKey, folded: folded) }
         if !folded {
-          HStack(spacing: 4) {
+          HStack(spacing: glass ? 3 : 4) {
             ForEach(Array(orderedTabs.enumerated()), id: \.element) { i, tab in
-              if i > 0 { Rectangle().fill(L.chromeSoft).frame(width: 1, height: 18) }
+              if i > 0, !glass { Rectangle().fill(L.chromeSoft).frame(width: 1, height: 18) }
               switch tab {
               case .file(let path):
                 fileTab(path, projectActive: active, project: p.name,
@@ -1768,6 +1782,10 @@ import Observation
           .transition(reduceMotion ? .opacity : .scale(scale: 0.05, anchor: .leading).combined(with: .opacity))
         }
       }
+      // Glass: one tinted vessel holds the chip and its tabs (canvas Tokens `GLASS の中身`).
+      .padding(.horizontal, glass ? 3 : 0).frame(height: glass ? 36 : nil)
+      .background(glass ? color.opacity(active ? 0.16 : 0.07) : .clear, in: Capsule())
+      .overlay(Capsule().stroke(glass ? color.opacity(active ? 0.5 : 0.24) : .clear))
     }
 
     /// Tabs drag their `dragID`; a group chip drags this prefix plus its Project name, so neither drop target takes the other.
@@ -1895,17 +1913,22 @@ import Observation
     /// `washSelected` tint instead of the old `surfaceHover`/`surfaceActive`
     /// pair, and icons are bigger now that they own a whole column.
     private var activityBar: some View {
-      VStack(spacing: 2) {
-        ForEach(["folder", Self.browserMode, "shield", "terminal", "ladybug", "checklist", "concierge"], id: \.self) { icon in
-          activityBarButton(icon)
+      VStack(spacing: 0) {
+        // Glass: the icons sit in a floating capsule only as tall as they are; the column keeps its 48pt cell.
+        VStack(spacing: glass ? 4 : 2) {
+          ForEach(["folder", Self.browserMode, "shield", "terminal", "ladybug", "checklist", "concierge"], id: \.self) { icon in
+            activityBarButton(icon)
+          }
         }
+        .padding(.vertical, glass ? 4 : 0).frame(width: glass ? DesignTokens.Glass.railWidth : nil)
+        .glassPanel(.clear, radius: DesignTokens.Glass.railWidth / 2, inset: 0)
         // #77: one shortcut back and forth between the concierge and the Project workspace.
         Button("") { sidebarMode = sidebarMode == "concierge" ? "folder" : "concierge"; if st.sidebarHidden { store.run("sidebar.toggle") } }
           .keyboardShortcut("0", modifiers: [.command, .control]).opacity(0).frame(width: 0, height: 0)
         // ponytail: no overflow "…" menu — the Workbench shows it only when nav items overflow; four always fit here.
         Spacer(minLength: 0)
       }
-      .padding(.vertical, 8)
+      .padding(.vertical, glass ? DesignTokens.Glass.inset : 8)
       .frame(width: ChromeBudget.activityBarWidth).frame(maxHeight: .infinity)
       .chromeBackground()
       .overlay(alignment: .trailing) { if !glass { Rectangle().fill(C.surfaceActive).frame(width: 1) } }
@@ -1950,10 +1973,9 @@ import Observation
             Label(tr("コミットグラフを開く"), systemImage: "point.3.connected.trianglepath.dotted")
               .foregroundStyle(C.textPrimary)
               .frame(maxWidth: .infinity).frame(height: 28)
-              .background(C.surfaceActive, in: RoundedRectangle(cornerRadius: Radius.control))
-              .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.strong))
+              .controlFill(edged: true)
           }
-            .buttonStyle(.hoverWash)
+            .buttonStyle(HoverWashStyle(radius: Radius.pill(Radius.control)))
             .padding(.horizontal, 12).padding(.vertical, 8)
         }
       }
@@ -2005,7 +2027,7 @@ import Observation
       .frame(height: ChromeBudget.titlebar)
       .background(TitlebarArea())
       .chromeBackground()
-      .overlay(alignment: .bottom) { Rectangle().fill(L.hairline).frame(height: 1) }
+      .overlay(alignment: .bottom) { if !glass { Rectangle().fill(L.hairline).frame(height: 1) } }
     }
 
     private var settingsPanel: some View {
@@ -2122,8 +2144,7 @@ import Observation
           }
         }
         .padding(14).frame(width: 300, alignment: .leading)
-        .background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.overlay))
-        .overlay(RoundedRectangle(cornerRadius: Radius.overlay).stroke(L.strong))
+        .sheetSurface()
         .transition(.opacity)
       }
     }
@@ -2146,8 +2167,7 @@ import Observation
             closeSearch(); store.run("tab.open", ["path": .string($0.path)])
             store.buffers.reveal($0.path, line: $0.line)
           })
-          .frame(width: 560).background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.overlay))
-          .overlay(RoundedRectangle(cornerRadius: Radius.overlay).stroke(L.strong))
+          .frame(width: 560).sheetSurface(palette: true)
           .transition(.scale(scale: 0.97).combined(with: .opacity))
       }
     }
@@ -3789,7 +3809,7 @@ import Observation
         }
       }
       .font(.system(size: 12)).monospacedDigit()  // one step above the bar's 11pt: the number the owner reads most (2026-10-13)
-      .footerItem()
+      .footerItem(capsule: true)
       .onHover { quotaHovered = $0 }
       .popover(isPresented: $quotaHovered, arrowEdge: .top) {
         VStack(alignment: .leading, spacing: 12) {
@@ -3866,7 +3886,7 @@ import Observation
         HStack(spacing: 3) {
           Image(systemName: unread > 0 ? "bell.badge" : "bell").font(.system(size: 11))
           if unread > 0 { Text("\(unread)").foregroundStyle(C.attention) }
-        }.footerItem()
+        }.footerItem(capsule: true)
       }
       .buttonStyle(.hoverWash).help(tr("通知") + " (⇧⌘H)").accessibilityLabel(unread > 0 ? tr("通知 未読 %@ 件", unread) : tr("通知"))
     }
@@ -3924,8 +3944,7 @@ import Observation
             Button { openNotice(n) } label: {
               noticeContent(n) { store.noticeStack.removeAll { $0 == n.id } }
                 .padding(.horizontal, 14).padding(.vertical, 12).frame(width: 340)
-                .background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.overlay))
-                .overlay(RoundedRectangle(cornerRadius: Radius.overlay).stroke(L.strong))
+                .sheetSurface()
                 .contentShape(RoundedRectangle(cornerRadius: Radius.overlay))
             }
             .buttonStyle(.plain)
@@ -4094,7 +4113,7 @@ import Observation
                 GitBranchGlyph().stroke(style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round))
                   .frame(width: 11, height: 11)
                 Text(branch)
-              }.footerItem()
+              }.footerItem(capsule: true)
             }
             .buttonStyle(.hoverWash).fixedSize(horizontal: true, vertical: false).disabled(gitOperation != nil)
             .accessibilityHint(tr("ブランチを切り替え / 作成"))
@@ -4106,7 +4125,7 @@ import Observation
               HStack(spacing: 3) {
                 Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 10))
                 if let sync, sync.behind + sync.ahead > 0 { Text("\(sync.behind)↓ \(sync.ahead)↑") }
-              }.footerItem()
+              }.footerItem(capsule: true)
             }.buttonStyle(.hoverWash).disabled(gitOperation != nil).accessibilityHint(tr("同期 (Pull → Push)"))
             .footerPopover("sync", $footerHover) { syncHover }
             if !changes.isEmpty {
@@ -4114,7 +4133,7 @@ import Observation
                 HStack(spacing: 3) {
                   Image(systemName: "plusminus").font(.system(size: 10))
                   Text("\(changes.count)")
-                }.footerItem()
+                }.footerItem(capsule: true)
               }
               .buttonStyle(.hoverWash).help(changeCounts + "\n" + tr("クリックで変更パネルを開く"))
               .accessibilityLabel(tr("未コミットの変更 %@ 件", changes.count))
@@ -4161,7 +4180,7 @@ import Observation
           HStack(spacing: 5) {
             if waiting > 0 { Circle().fill(C.attention).frame(width: 6, height: 6) }
             Text(tr("%@ セッション", agents.count) + (waiting > 0 ? tr(" · 入力待ち %@", waiting) : ""))
-          }.footerItem()
+          }.footerItem(capsule: true)
         }.buttonStyle(.hoverWash)
         .footerPopover("sessions", $footerHover) { sessionsHover(agents) }
         noticeButton
@@ -4171,7 +4190,7 @@ import Observation
       .font(Typography.font(Typography.chrome)).monospacedDigit().foregroundStyle(C.textTertiary)
       .padding(.horizontal, 7).frame(height: ChromeBudget.statusBar)
       .background(ClairChannel.current == .dev ? Color.orange.opacity(0.14) : .clear).chromeBackground()  // Dev is told apart at a glance (owner, 2026-09-27)
-      .overlay(alignment: .top) { Rectangle().fill(C.surfaceActive).frame(height: 1) }
+      .overlay(alignment: .top) { if !glass { Rectangle().fill(C.surfaceActive).frame(height: 1) } }
       // Here, not on `body`: its modifier chain is at the type-checker's limit. The status bar is always mounted.
       .onChange(of: store.gitRevision) { reloadChanges() }
       // Off the main actor, every 5 min while the toggle is on; turning it off cancels the loop.
@@ -4335,8 +4354,7 @@ import Observation
           .padding(.horizontal, 12).frame(height: 34)
           .overlay(alignment: .top) { Rectangle().fill(L.hairline).frame(height: 1) }
         }
-        .frame(width: 560).background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.overlay))
-        .overlay(RoundedRectangle(cornerRadius: Radius.overlay).stroke(L.strong))
+        .frame(width: 560).sheetSurface(palette: true)
         .transition(.scale(scale: 0.97).combined(with: .opacity))
       }
     }
@@ -4403,8 +4421,10 @@ import Observation
     let on: Bool
     let enabled: Bool
     let action: () -> Void
+    @Environment(\.clairGlass) private var glass
 
     var body: some View {
+      let side: CGFloat = glass ? 30 : ChromeBudget.cellControl
       Button(action: action) {
         Group {
           if icon == "concierge" {
@@ -4417,11 +4437,11 @@ import Observation
           }
         }
           .foregroundStyle(on ? C.chromeInk : C.chromeInkMuted)
-          .frame(width: ChromeBudget.cellControl, height: ChromeBudget.cellControl)
-          .background(on ? W.selected : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
+          .frame(width: side, height: side)
+          .background(on ? (glass ? DesignTokens.Glass.capsuleSelected : W.selected) : .clear, in: RoundedRectangle(cornerRadius: Radius.pill()))
           .opacity(enabled ? 1 : 0.35)
       }
-      .buttonStyle(.hoverWash).disabled(!enabled).help(enabled ? "" : tr("準備中"))
+      .buttonStyle(HoverWashStyle(radius: Radius.pill())).disabled(!enabled).help(enabled ? "" : tr("準備中"))
     }
   }
 
@@ -4516,12 +4536,13 @@ import Observation
     @State private var isHovered = false
     @State private var isDropTarget = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.clairGlass) private var glass
 
     var body: some View {
       let tint = selected ? C.chromeInk : C.textTertiary
       HStack(spacing: 4) {
         tabIcon(tint: tint)
-        Text(name).font(.system(size: 11, weight: selected ? .semibold : .regular)).foregroundStyle(tint).lineLimit(1).truncationMode(.tail)
+        Text(name).font(.system(size: Typography.chromeSize(11), weight: selected ? .semibold : .regular)).foregroundStyle(tint).lineLimit(1).truncationMode(.tail)
         Spacer(minLength: 0)
         if dirty { Circle().fill(selected ? C.textTertiary : C.textQuaternary).frame(width: 6, height: 6) }
         Button(action: onClose) {
@@ -4532,12 +4553,15 @@ import Observation
         .opacity((selected || isHovered) ? 1 : 0)
         .allowsHitTesting(selected || isHovered)
       }
-      .padding(.horizontal, 8).frame(width: 200, height: ChromeBudget.cellControl)
-      .background(selected ? W.selected : isHovered ? W.soft : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
+      // Glass: a 28pt capsule inside the group's vessel; flat: the 38pt cell control.
+      .padding(.horizontal, glass ? 11 : 8).frame(width: 200, height: glass ? 28 : ChromeBudget.cellControl)
+      .background(
+        selected ? (glass ? DesignTokens.Glass.capsuleSelected : W.selected) : isHovered ? (glass ? DesignTokens.Glass.capsuleFill : W.soft) : .clear,
+        in: RoundedRectangle(cornerRadius: Radius.pill()))
       .background(NoWindowDrag())
       .contentShape(Rectangle())
       // Same feel as the pane header drag: a card-shaped ghost of the tab and a ring on the drop target.
-      .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(isDropTarget ? L.ring : .clear, lineWidth: 1))
+      .overlay(RoundedRectangle(cornerRadius: Radius.pill()).stroke(isDropTarget ? L.ring : .clear, lineWidth: 1))
       .onDrag({
         onDragStart?()
         // The reorder id first: a tab bar drop loads the first string it finds.

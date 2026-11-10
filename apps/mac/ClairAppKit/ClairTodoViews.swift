@@ -52,8 +52,7 @@
           }
         }
         .padding(16)
-        .frame(width: 560).background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.overlay))
-        .overlay(RoundedRectangle(cornerRadius: Radius.overlay).stroke(L.strong))
+        .frame(width: 560).sheetSurface(palette: true)
         .padding(.top, 96)
       }
       .onAppear {

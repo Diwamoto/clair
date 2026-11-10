@@ -621,8 +621,7 @@
       if copiedAt != nil {
         Text(tr("パスをコピーしました")).font(.system(size: 12)).foregroundStyle(C.textPrimary)
           .padding(.horizontal, 10).padding(.vertical, 5)
-          .background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.overlay))
-          .overlay(RoundedRectangle(cornerRadius: Radius.overlay).stroke(L.strong))
+          .sheetSurface()
           .padding(.top, 30).transition(.opacity)
           .task(id: copiedAt) {
             try? await Task.sleep(for: .seconds(1.5))

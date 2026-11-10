@@ -11,8 +11,22 @@ public enum MaterialChoice: String, CaseIterable, Sendable {
 }
 
 extension DesignTokens {
-  /// Glass values transcribed from the canvas Tokens board (2026-11-09).
+  /// True while the shell draws Liquid Glass. `Radius` and `Typography` read it, so their couple of hundred
+  /// call sites follow the material without environment plumbing.
+  /// ponytail: a global, not an environment value — a view that is not re-evaluated when 素材 flips keeps the
+  /// old step until its next update. Thread it through the environment if a stale view ever shows.
+  nonisolated(unsafe) public static var glassActive = false
+
+  /// Glass values transcribed from the canvas Tokens board (2026-11-09; `GLASS の中身` 2026-11-10).
   public enum Glass {
+    /// An overlay sheet's ground (palette, context menu, notice, dialog): dark enough to read over anything.
+    public static let sheetFill = SwiftUI.Color(hex: "#26272a").opacity(0.78)
+    public static let sheetRadius: CGFloat = 18
+    /// Somewhere you type: a well cut into the glass, not a button raised out of it.
+    public static let wellFill = SwiftUI.Color.black.opacity(0.26)
+    public static let wellEdge = SwiftUI.Color.white.opacity(0.09)
+    public static let guide = SwiftUI.Color.white.opacity(0.07)
+    public static let railWidth: CGFloat = 38
     public static let wallpaperTop = SwiftUI.Color(hex: "#111214")
     public static let wallpaperBottom = SwiftUI.Color(hex: "#18191b")
     public static let wallpaperGlow = SwiftUI.Color(hex: "#2a2b2e")
@@ -59,8 +73,73 @@ extension View {
   }
 
   /// A chrome panel: flat `chrome`, or a floating glass panel (blur, white fill, rim) under glass.
-  public func glassPanel(_ color: SwiftUI.Color = DesignTokens.Color.chrome, radius: CGFloat = DesignTokens.Glass.panelRadius) -> some View {
-    modifier(GlassPanel(color: color, radius: radius))
+  public func glassPanel(_ color: SwiftUI.Color = DesignTokens.Color.chrome, radius: CGFloat = DesignTokens.Glass.panelRadius, inset: CGFloat = DesignTokens.Glass.inset) -> some View {
+    modifier(GlassPanel(color: color, radius: radius, inset: inset))
+  }
+
+  /// An overlay's ground and edge: opaque `chromeRaised` with a `strong` hairline, or a glass sheet under glass.
+  /// `palette`: the centred 560pt overlays, which take the larger sheet radius under glass.
+  public func sheetSurface(palette: Bool = false) -> some View { modifier(SheetSurface(palette: palette)) }
+
+  /// A text field's ground: `flat` with a hairline, or a well cut into the glass. `radius` nil is the `card` step.
+  public func fieldWell(_ flat: SwiftUI.Color = DesignTokens.Color.chrome, radius: CGFloat? = nil, edged: Bool = true) -> some View {
+    modifier(FieldWell(flat: flat, radius: radius, edged: edged))
+  }
+
+  /// A pressable control's fill. Flat: `surfaceActive` when `on` (plus a `strong` edge if `edged`), nothing otherwise.
+  /// Glass: a capsule, white 20% when `on` and 8% otherwise.
+  public func controlFill(on: Bool = true, flatRadius: CGFloat? = nil, edged: Bool = false) -> some View {
+    modifier(ControlFill(on: on, flatRadius: flatRadius, edged: edged))
+  }
+}
+
+private struct SheetSurface: ViewModifier {
+  let palette: Bool
+  @Environment(\.clairGlass) private var glass
+  func body(content: Content) -> some View {
+    let r = glass && palette ? DesignTokens.Glass.sheetRadius : Radius.overlay
+    if glass {
+      let shape = RoundedRectangle(cornerRadius: r, style: .continuous)
+      content
+        .background(DesignTokens.Glass.sheetFill, in: shape)
+        .background(.ultraThinMaterial, in: shape)
+        .overlay(shape.strokeBorder(DesignTokens.Glass.edge))
+        .overlay(alignment: .top) { shape.stroke(DesignTokens.Glass.rim, lineWidth: 1).mask(LinearGradient(colors: [.white, .clear], startPoint: .top, endPoint: .center)) }
+    } else {
+      content
+        .background(DesignTokens.Color.chromeRaised, in: RoundedRectangle(cornerRadius: r))
+        .overlay(RoundedRectangle(cornerRadius: r).stroke(DesignTokens.Line.strong))
+    }
+  }
+}
+
+private struct FieldWell: ViewModifier {
+  let flat: SwiftUI.Color
+  let radius: CGFloat?
+  let edged: Bool
+  @Environment(\.clairGlass) private var glass
+  func body(content: Content) -> some View {
+    let shape = RoundedRectangle(cornerRadius: radius ?? Radius.card, style: glass ? .continuous : .circular)
+    content
+      .background(glass ? DesignTokens.Glass.wellFill : flat, in: shape)
+      .overlay(shape.stroke(glass ? DesignTokens.Glass.wellEdge : edged ? DesignTokens.Line.hairlineFaint : .clear))
+  }
+}
+
+private struct ControlFill: ViewModifier {
+  let on: Bool
+  let flatRadius: CGFloat?
+  let edged: Bool
+  @Environment(\.clairGlass) private var glass
+  func body(content: Content) -> some View {
+    if glass {
+      content.background(on ? DesignTokens.Glass.capsuleSelected : DesignTokens.Glass.capsuleFill, in: Capsule())
+    } else {
+      let shape = RoundedRectangle(cornerRadius: flatRadius ?? Radius.control)
+      content
+        .background(on ? DesignTokens.Color.surfaceActive : .clear, in: shape)
+        .overlay(shape.stroke(on && edged ? DesignTokens.Line.strong : .clear))
+    }
   }
 }
 
@@ -115,6 +194,7 @@ private struct ChromeBackground: ViewModifier {
 private struct GlassPanel: ViewModifier {
   let color: SwiftUI.Color
   let radius: CGFloat
+  let inset: CGFloat
   @Environment(\.clairGlass) private var glass
   func body(content: Content) -> some View {
     if glass {
@@ -128,7 +208,7 @@ private struct GlassPanel: ViewModifier {
         .overlay(alignment: .top) { shape.stroke(DesignTokens.Glass.rim, lineWidth: 1).mask(LinearGradient(colors: [.white, .clear], startPoint: .top, endPoint: .center)) }
         .clipShape(shape)
         .shadow(color: .black.opacity(0.28), radius: 15, y: 10)
-        .padding(DesignTokens.Glass.inset)
+        .padding(inset)
     } else {
       content.background(color)
     }

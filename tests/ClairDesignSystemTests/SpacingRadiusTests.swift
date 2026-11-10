@@ -8,6 +8,19 @@ final class SpacingRadiusTests: XCTestCase {
     XCTAssertEqual(Radius.control, 4)
     XCTAssertEqual(Radius.card, 6)
     XCTAssertEqual(Radius.overlay, 10)
+    XCTAssertEqual(Radius.pill(), 6)
+    XCTAssertEqual(Typography.chromeSize(11), 11)
+  }
+
+  /// Canvas Tokens `GLASS の中身` (2026-11-10): radius 8 / 10 / 13, pressables are capsules, chrome type 12 / 10.
+  func testGlassStepsRadiusAndChromeType() {
+    DesignTokens.glassActive = true
+    defer { DesignTokens.glassActive = false }
+    XCTAssertEqual(Radius.control, 8)
+    XCTAssertEqual(Radius.card, 10)
+    XCTAssertEqual(Radius.overlay, 13)
+    XCTAssertEqual(Radius.pill(), 999)
+    XCTAssertEqual([9, 11, 12, 13].map(Typography.chromeSize), [10, 12, 12, 13])
   }
 
   func testDesktopSpacingScaleMatchesChecklist() {

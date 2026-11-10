@@ -28,6 +28,7 @@ struct SidebarRow<Content: View, Trailing: View>: View {
   let content: () -> Content
   let trailing: (_ hovered: Bool) -> Trailing
   @State private var hovered = false
+  @Environment(\.clairGlass) private var glass
 
   init(depth: Int = 0, selected: Bool = false, height: CGFloat? = SidebarStyle.rowHeight, action: @escaping () -> Void,
               @ViewBuilder content: @escaping () -> Content, @ViewBuilder trailing: @escaping (_ hovered: Bool) -> Trailing = { _ in EmptyView() }) {
@@ -50,6 +51,14 @@ struct SidebarRow<Content: View, Trailing: View>: View {
       HStack(spacing: 8) { trailing(hovered) }.padding(.trailing, SidebarStyle.lead - SidebarStyle.inset)
     }
     .padding(.horizontal, SidebarStyle.inset)
+    // Glass: one hairline guide per level, under each ancestor's chevron (canvas Tokens `GLASS の中身`).
+    .background(alignment: .leading) {
+      if glass, depth > 0 {
+        HStack(spacing: SidebarStyle.indent - 1) {
+          ForEach(0..<depth, id: \.self) { _ in Rectangle().fill(DesignTokens.Glass.guide).frame(width: 1) }
+        }.padding(.leading, SidebarStyle.lead + 5)
+      }
+    }
     .onHover { hovered = $0 }
   }
 }

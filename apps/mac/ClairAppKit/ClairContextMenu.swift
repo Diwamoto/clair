@@ -220,8 +220,7 @@
       }
       .padding(pad)
       .frame(minWidth: 220, maxWidth: 320, alignment: .leading)
-      .background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.overlay))
-      .overlay(RoundedRectangle(cornerRadius: Radius.overlay).stroke(L.strong))
+      .sheetSurface()
       .shadow(color: .black.opacity(0.62), radius: 24, y: 18)
       .onHover { if !$0, sub == nil { active = nil } }
     }
@@ -300,13 +299,12 @@
             Button(action: confirm) {
               Text(dialog.confirm).font(.system(size: 12, weight: .semibold)).foregroundStyle(C.textPrimary)
                 .padding(.horizontal, 12).frame(height: 26)
-                .background(C.surfaceActive, in: RoundedRectangle(cornerRadius: Radius.card))
+                .controlFill(flatRadius: Radius.card)
             }.buttonStyle(.hoverWash).keyboardShortcut(dialog.initial == nil ? .defaultAction : nil)
           }
         }
         .padding(16).frame(width: 360)
-        .background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.overlay))
-        .overlay(RoundedRectangle(cornerRadius: Radius.overlay).stroke(L.strong))
+        .sheetSurface()
         .shadow(color: .black.opacity(0.62), radius: 24, y: 18)
       }
       .onAppear {

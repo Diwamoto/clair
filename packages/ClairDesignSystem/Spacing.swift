@@ -2,10 +2,15 @@ import CoreGraphics
 
 /// Desktop corner radius — 3 steps (`radius` in `tokens.ts` / checklist
 /// §2.3).
+///
+/// Under Liquid Glass the steps are 8 / 10 / 13 (canvas Tokens `GLASS の中身`, 2026-11-10): a panel is 18,
+/// so what sits inside it is its radius minus the padding, not the flat 4-6-10.
 public enum Radius {
-  public static let control: CGFloat = 4
-  public static let card: CGFloat = 6
-  public static let overlay: CGFloat = 10
+  public static var control: CGFloat { DesignTokens.glassActive ? 8 : 4 }
+  public static var card: CGFloat { DesignTokens.glassActive ? 10 : 6 }
+  public static var overlay: CGFloat { DesignTokens.glassActive ? 13 : 10 }
+  /// A pressable control's corner: the flat step, or a capsule under glass (a rounded rectangle clamps to one).
+  public static func pill(_ flat: CGFloat = Radius.card) -> CGFloat { DesignTokens.glassActive ? 999 : flat }
 }
 
 /// Desktop spacing scale — 7 steps (`space` in `tokens.ts` / checklist

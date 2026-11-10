@@ -36,11 +36,12 @@ public enum Typography {
 
   /// Builds the `Font` for a type-scale entry in a given family.
   public static func font(_ spec: TypeSpec, family: FontFamily = .sans) -> Font {
-    switch family {
-    case .sans:
-      return .system(size: spec.size, weight: spec.weight, design: .default)
-    case .mono:
-      return .system(size: spec.size, weight: spec.weight, design: .monospaced)
-    }
+    .system(size: chromeSize(spec.size), weight: spec.weight, design: family == .sans ? .default : .monospaced)
+  }
+
+  /// A chrome type size for the current material: Liquid Glass sets chrome 11 → 12 and micro 9 → 10
+  /// (canvas Tokens `GLASS の中身`, 2026-11-10); every other size, and flat, pass through.
+  public static func chromeSize(_ size: CGFloat) -> CGFloat {
+    DesignTokens.glassActive && (size == 11 || size == 9) ? size + 1 : size
   }
 }

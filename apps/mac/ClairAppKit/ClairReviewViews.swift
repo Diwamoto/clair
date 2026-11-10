@@ -363,7 +363,7 @@
           .textFieldStyle(.plain).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textPrimary)
           .lineLimit(3...8)
           .padding(.horizontal, 8).padding(.vertical, 6)
-          .background(C.surfaceActive, in: RoundedRectangle(cornerRadius: Radius.control))
+          .fieldWell(C.surfaceActive, radius: Radius.control, edged: false)
           // ponytail: Command-Return appends at the end, not at the caret; route through NSTextView if mid-text breaks matter.
           .onKeyPress(.return, phases: .down) { press in
             guard press.modifiers.contains(.command) else { return .ignored }
@@ -375,8 +375,8 @@
           Label(tr("コミット"), systemImage: "checkmark").font(Typography.font(Typography.sidebarStrong))
             .foregroundStyle(canCommit ? C.textPrimary : C.textQuaternary)
             .frame(maxWidth: .infinity).frame(height: 26)
-            .background(C.surfaceActive, in: RoundedRectangle(cornerRadius: Radius.control))
-        }.buttonStyle(.hoverWash).disabled(!canCommit)
+            .controlFill()
+        }.buttonStyle(HoverWashStyle(radius: Radius.pill(Radius.control))).disabled(!canCommit)
       }.padding(.horizontal, SidebarStyle.lead - 4).padding(.vertical, 8)
     }
 
