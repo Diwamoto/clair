@@ -18,7 +18,7 @@ extension LocalizedStrings {
     "この Project の構成を説明して": "Explain how this Project is laid out", "残っている TODO を片付けて": "Clear the remaining TODOs",
     "考えています…": "Thinking…", "ターミナルで承認を待っています": "Waiting for approval in the terminal",
     "子エージェント · %@": "Child agents · %@", "返答をコピー": "Copy reply", "コピーしました": "Copied",
-    "⏎ 送信": "⏎ Send", "⏎ 送信 · 最初の送信で起動": "⏎ Send · starts on first send",
+    "⏎ 送信": "⏎ Send", "⏎ 送信 · 最初の送信で起動": "⏎ Send · starts on first send", "⏎ 送信 · esc 中断": "⏎ Send · esc to stop", "中断しました": "Stopped",
     "# コンシェルジュへの指示\n\nこの Project で守ってほしいことを書きます。次回の起動から反映されます。\n":
       "# Concierge instructions\n\nWrite what the concierge should follow in this Project. Applies from its next start.\n",
     // Find bar (⌘F)

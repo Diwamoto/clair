@@ -842,10 +842,13 @@ import Foundation
 
     /// Presses Return in `pane`. Text input is Ghostty's paste path, so a "\r" sent as text lands inside the
     /// bracketed paste as a newline; a TUI only reads a submit from a real key event.
-    @discardableResult public static func pressReturn(inPane pane: Int) -> Bool {
+    @discardableResult public static func pressReturn(inPane pane: Int) -> Bool { press(36, inPane: pane) }  // kVK_Return
+    /// Presses Escape in `pane`: an agent TUI's interrupt (Claude Code stops the running turn and keeps the session).
+    @discardableResult public static func pressEscape(inPane pane: Int) -> Bool { press(53, inPane: pane) }  // kVK_Escape
+    private static func press(_ keyCode: UInt32, inPane pane: Int) -> Bool {
       guard let surface = byPane[pane]?.view?.ghosttySurface else { return false }
       for action in [GhosttyKeyAction.press, .release] {
-        _ = try? surface.sendKey(GhosttyKeyEvent(action: action, mods: [], keyCode: 36, text: nil))  // kVK_Return
+        _ = try? surface.sendKey(GhosttyKeyEvent(action: action, mods: [], keyCode: keyCode, text: nil))
       }
       return true
     }

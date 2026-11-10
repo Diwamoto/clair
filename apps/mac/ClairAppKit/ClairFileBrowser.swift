@@ -612,9 +612,7 @@
         heading(tr("よく使う項目"))
         ForEach(favorites, id: \.self) { favorite($0) }
         if favorites.isEmpty {
-          Text(tr("フォルダやファイルをここへドラッグするか、右クリックの「よく使う項目に追加」で登録"))
-            .font(.system(size: 11)).foregroundStyle(C.textQuaternary).lineSpacing(2)
-            .padding(.horizontal, 16).padding(.vertical, 4)
+          SidebarNote(tr("フォルダやファイルをここへドラッグするか、右クリックの「よく使う項目に追加」で登録"))
         }
       }
       .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(favoriteDrop ? L.ring : .clear, lineWidth: 1).padding(.horizontal, 4))
@@ -681,17 +679,12 @@
     }
 
     private func row(icon: String, label: String, mono: Bool, on: Bool, _ action: @escaping () -> Void) -> some View {
-      Button(action: action) {
-        HStack(spacing: 8) {
-          Image(systemName: icon).font(.system(size: 11)).foregroundStyle(C.textTertiary).frame(width: 14)
-          Text(label).font(.system(size: mono ? 11 : 13, weight: on ? .semibold : .regular, design: mono ? .monospaced : .default))
-            .foregroundStyle(on ? C.textPrimary : C.textSecondary).lineLimit(1).truncationMode(.head)
-          Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 8).frame(height: 28).frame(maxWidth: .infinity, alignment: .leading)
-        .sidebarSelection(on)
-        .contentShape(Rectangle())
-      }.buttonStyle(.hoverWash).padding(.horizontal, 8)
+      SidebarRow(selected: on, action: action) {
+        Image(systemName: icon).font(.system(size: 11)).foregroundStyle(C.textTertiary).frame(width: 16)
+        Text(label).font(.system(size: mono ? 11 : 13, weight: on ? .semibold : .regular, design: mono ? .monospaced : .default))
+          .foregroundStyle(on ? C.textPrimary : C.textSecondary).lineLimit(1).truncationMode(.head)
+        Spacer(minLength: 0)
+      }
     }
 
     private func tilde(_ path: String) -> String {

@@ -287,24 +287,22 @@
         if let operationMessage {
           HStack(spacing: 6) {
             if busy { ProgressView().controlSize(.small) }
-            Text(operationMessage).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary).lineLimit(3)
+            Text(operationMessage).font(SidebarStyle.detail).foregroundStyle(C.textTertiary).lineLimit(3)
             Spacer(minLength: 0)
-          }.padding(.horizontal, 12).padding(.vertical, 8)
+          }.padding(.horizontal, SidebarStyle.lead).padding(.vertical, 6)
         }
         if changes.isEmpty {
-          Text(loaded == true ? tr("変更はありません") : loaded == false ? tr("変更を取得できませんでした") : tr("変更を読み込み中…")).font(Typography.font(Typography.sidebarStrong)).foregroundStyle(C.textSecondary)
-            .frame(maxWidth: .infinity).padding(16)
+          SidebarNote(loaded == true ? tr("変更はありません") : loaded == false ? tr("変更を取得できませんでした") : tr("変更を読み込み中…"))
         } else {
           CommitBox(message: $message, hasStaged: changes.contains(where: \.staged), busy: busy, onCommit: onCommit)
           ForEach(Self.entries(changes, collapsed: collapsed)) { e in
             switch e {
             case .header(let s, let rows): header(s, rows)
             case .folder(_, let id, let name, let depth, let open):
-              ChangeTreeRow(depth: depth, selected: false, action: { if open { collapsed.insert(id) } else { collapsed.remove(id) } }) {
-                Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold)).foregroundStyle(C.textTertiary)
-                  .rotationEffect(.degrees(open ? 90 : 0)).frame(width: 10)
+              SidebarRow(depth: depth + 1, selected: false, action: { if open { collapsed.insert(id) } else { collapsed.remove(id) } }) {
+                SidebarChevron(open: open)
                 FileIcon.folder(open: open).image(size: 11, ink: C.textTertiary).frame(width: 16)
-                Text(name).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textSecondary).lineLimit(1)
+                Text(name).foregroundStyle(C.textSecondary).lineLimit(1)
                 Spacer(minLength: 0)
               } trailing: { _ in EmptyView() }
             case .file(_, let c, let t, let depth): fileRow(c, t, depth: depth)
@@ -315,24 +313,22 @@
     }
 
     private func header(_ s: Section, _ rows: [GitChange]) -> some View {
-      HStack(spacing: 4) {
-        Text(s == .staged ? tr("ステージ済み") : s == .changes ? tr("変更") : tr("未追跡")).font(Typography.font(Typography.sidebarStrong)).foregroundStyle(C.textTertiary)
-        Text(tr("%@ ファイル", rows.count)).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textQuaternary)
-        Spacer()
-        let stage = s != .staged
+      let stage = s != .staged
+      return SidebarHeading(s == .staged ? tr("ステージ済み") : s == .changes ? tr("変更") : tr("未追跡")) {
+        Text(tr("%@ ファイル", rows.count))
         Button { onBulk(rows, stage) } label: {
           Text(stage ? "+" : "−").font(Typography.font(Typography.title)).foregroundStyle(C.textTertiary).frame(width: 18, height: 18)
         }.buttonStyle(.hoverWash).disabled(busy).help(stage ? tr("すべてステージに追加") : tr("すべてステージから外す"))
-      }.padding(.leading, 20).padding(.trailing, 12).frame(height: 26)
+      }
     }
 
     private func fileRow(_ c: GitChange, _ t: DiffTarget, depth: Int) -> some View {
       let on = selected == t, name = c.path.split(separator: "/").last.map(String.init) ?? c.path
       let badge = c.untracked ? "U" : c.index == "A" || c.worktree == "A" ? "A" : c.index == "D" || c.worktree == "D" ? "D" : "M"
-      return ChangeTreeRow(depth: depth, selected: on, action: { onSelect(t) }) {
+      return SidebarRow(depth: depth + 1, selected: on, action: { onSelect(t) }) {
         Color.clear.frame(width: 10)  // chevron slot: a file lines up with its sibling folders
         FileIcon.forPath(c.path).image(size: 10, ink: on ? C.textSecondary : C.textTertiary).frame(width: 16)
-        Text(name).font(.system(size: 12, weight: on ? .semibold : .regular)).foregroundStyle(on ? C.textPrimary : C.textSecondary).lineLimit(1)
+        Text(name).font(on ? SidebarStyle.titleStrong : SidebarStyle.title).foregroundStyle(on ? C.textPrimary : C.textSecondary).lineLimit(1)
         Spacer(minLength: 0)
       } trailing: { hovered in
         if hovered {
@@ -348,32 +344,6 @@
       }
       .clairContextMenu(menus) { menu(c, t.staged) }
       .help(c.path)
-    }
-  }
-
-  /// Same geometry as the explorer's treeRow in ClairAppShell: inset, rounded 28px row, 12px indent per level.
-  /// `trailing` sits over the row instead of inside the Button label, where the row's own click would swallow it.
-  /// Owns its hover state, so pointer motion re-renders one row, not the list.
-  private struct ChangeTreeRow<Content: View, Trailing: View>: View {
-    let depth: Int
-    let selected: Bool
-    let action: () -> Void
-    @ViewBuilder let content: () -> Content
-    @ViewBuilder let trailing: (_ hovered: Bool) -> Trailing
-    @State private var hovered = false
-
-    var body: some View {
-      ZStack(alignment: .trailing) {
-        Button(action: action) {
-          HStack(spacing: 10, content: content)
-            .padding(.leading, 8 + CGFloat(depth + 1) * 12).padding(.trailing, 8).frame(height: 28)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .sidebarSelection(selected)
-            .contentShape(Rectangle())
-        }.buttonStyle(.hoverWash)
-        HStack(spacing: 10) { trailing(hovered) }.padding(.trailing, 16)
-      }.padding(.horizontal, 8)
-      .onHover { hovered = $0 }
     }
   }
 
@@ -407,7 +377,7 @@
             .frame(maxWidth: .infinity).frame(height: 26)
             .background(C.surfaceActive, in: RoundedRectangle(cornerRadius: Radius.control))
         }.buttonStyle(.hoverWash).disabled(!canCommit)
-      }.padding(.horizontal, 12).padding(.vertical, 8)
+      }.padding(.horizontal, SidebarStyle.lead - 4).padding(.vertical, 8)
     }
 
     private func commit() {
@@ -1153,9 +1123,9 @@
             }.value
           }
         }
+      SidebarHeading(tr("起動中"))
       if sessions.isEmpty {
-        Text(tr("起動中のエージェントはありません")).font(Typography.font(Typography.sidebarStrong)).foregroundStyle(C.textSecondary)
-          .frame(maxWidth: .infinity).padding(16)
+        SidebarNote(tr("起動中のエージェントはありません"))
       }
       ForEach(sessionGroups, id: \.project) { group in
         projectHeader(group.project, group.sessions)
@@ -1177,27 +1147,19 @@
     private func projectHeader(_ project: String, _ sessions: [AgentSession]) -> some View {
       let collapsed = collapsedProjects.contains(project)
       let waiting = sessions.filter { $0.status == .attention || $0.status == .blocked }.count
-      return Button {
-        if collapsed { collapsedProjects.remove(project) } else { collapsedProjects.insert(project) }
-      } label: {
-        HStack(spacing: 6) {
-          Image(systemName: collapsed ? "chevron.right" : "chevron.down").frame(width: 14)
-          Text(projects.first { $0.name == project }?.displayName ?? project)
-            .font(Typography.font(Typography.sidebarStrong)).lineLimit(1)
-            .foregroundStyle(project == current ? C.textPrimary : C.textSecondary)
-          Spacer(minLength: 0)
-          if waiting > 0 {
-            Image(systemName: "bell.badge.fill").font(.system(size: 11)).foregroundStyle(C.attention)
-              .help(tr("入力待ち %@ 件", waiting)).accessibilityLabel(tr("入力待ち %@ 件", waiting))
-          }
-          Text("\(sessions.count)").font(Typography.font(Typography.sidebarMicro)).monospacedDigit().foregroundStyle(C.textQuaternary)
-        }.foregroundStyle(C.textSecondary).padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 2).contentShape(Rectangle())
-      }.buttonStyle(.hoverWash)
+      let open = Binding(get: { !collapsed }, set: { if $0 { collapsedProjects.remove(project) } else { collapsedProjects.insert(project) } })
+      return SidebarHeading(projects.first { $0.name == project }?.displayName ?? project, open: open) {
+        if waiting > 0 {
+          Image(systemName: "bell.badge.fill").foregroundStyle(C.attention)
+            .help(tr("入力待ち %@ 件", waiting)).accessibilityLabel(tr("入力待ち %@ 件", waiting))
+        }
+        Text("\(sessions.count)").monospacedDigit()
+      }
     }
 
     private func sessionRow(_ s: AgentSession) -> some View {
         let (text, color) = label(s)
-        return Button { open(s) } label: {
+        return SidebarRow(height: nil, action: { open(s) }) {
           HStack(alignment: .top, spacing: 8) {
             if let provider = AgentHistory.Provider(rawValue: s.title) {
               // Same avatar as past chats; the status dot rides its corner.
@@ -1225,18 +1187,15 @@
                 .padding(.top, 5).help(text).accessibilityLabel(text)
             }
           }
-          .padding(.leading, 34).padding(.trailing, 20).padding(.vertical, 4).contentShape(Rectangle())
-        }.buttonStyle(.hoverWash)
+        }
     }
 
     @ViewBuilder private var historySection: some View {
-      HStack {
-        Text(tr("過去のチャット")).font(Typography.font(Typography.sidebarStrong)).foregroundStyle(C.textTertiary)
-        Spacer()
+      SidebarHeading(tr("過去のチャット")) {
         Button { Task { historyLoading = true; histories = await AgentHistoryStore.shared.refresh(.recent); archive = nil; archiveOpen = false; historyLoading = false } } label: {
           Image(systemName: "arrow.clockwise")
-        }.buttonStyle(.plain).help(tr("履歴を更新"))
-      }.padding(.horizontal, 20).padding(.top, 14)
+        }.buttonStyle(.hoverWash).help(tr("履歴を更新")).accessibilityLabel(tr("履歴を更新"))
+      }
       HStack(spacing: 6) {
         Image(systemName: "magnifyingglass").foregroundStyle(C.textQuaternary)
         TextField(tr("チャットを検索"), text: $historyQuery).textFieldStyle(.plain)
@@ -1246,35 +1205,27 @@
           Button { historyQuery = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(C.textQuaternary) }
             .buttonStyle(.plain).help(tr("検索をクリア")).accessibilityLabel(tr("検索をクリア"))
         }
-      }.padding(.horizontal, 8).frame(height: 26).background(C.surfaceActive.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
-        .padding(.horizontal, 16).padding(.top, 6)
+      }.padding(.horizontal, 8).frame(height: 26).background(C.surfaceActive.opacity(0.6), in: RoundedRectangle(cornerRadius: Radius.control))
+        .padding(.horizontal, SidebarStyle.inset).padding(.vertical, 4)
       if historyLoading {
-        Text("Loading...").font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
-          .padding(.horizontal, 20).frame(height: 28)
+        SidebarNote(tr("読み込み中…"))
       } else if histories.isEmpty {
-        Text(tr("履歴はありません")).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textQuaternary).padding(16)
+        SidebarNote(tr("履歴はありません"))
       }
       // ponytail: regrouped on every render; cache in @State if history counts make this visible.
       historyDays(histories.filter { $0.matches(historyQuery) }, key: "recent")
-      Button {
-        archiveOpen.toggle()
+      SidebarHeading(tr("アーカイブ（1ヶ月以上前）"), open: Binding(get: { archiveOpen }, set: {
+        archiveOpen = $0
         if archiveOpen, archive == nil { Task { archive = await AgentHistoryStore.shared.load(.archive) } }
-      } label: {
-        HStack(spacing: 6) {
-          Image(systemName: archiveOpen ? "chevron.down" : "chevron.right").frame(width: 14)
-          Text(tr("アーカイブ（1ヶ月以上前）")).font(Typography.font(Typography.sidebarStrong))
-          Spacer(minLength: 0)
-        }.foregroundStyle(C.textTertiary).padding(.horizontal, 20).padding(.top, 14).padding(.bottom, 4).contentShape(Rectangle())
-      }.buttonStyle(.hoverWash)
+      }))
       if archiveOpen {
         if let archive {
           if archive.isEmpty {
-            Text(tr("アーカイブはありません")).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textQuaternary).padding(16)
+            SidebarNote(tr("アーカイブはありません"))
           }
           historyDays(archive.filter { $0.matches(historyQuery) }, key: "archive")
         } else {
-          Text("Loading...").font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
-          .padding(.horizontal, 20).frame(height: 28)
+          SidebarNote(tr("読み込み中…"))
         }
       }
     }
@@ -1323,15 +1274,14 @@
       ForEach(historyRows(histories, key: key)) { row in
         switch row {
         case .day(_, let date):
-          Text(dayTitle(date)).font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textQuaternary)
-            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 2)
+          SidebarHeading(dayTitle(date))
         case .group(let id, let group, let collapsed): historyGroup(group, id: id, collapsed: collapsed)
         case .chat(_, let history): historyRow(history)
         case .more(_, let key, let remaining):
-          Button { shown[key] = limit(key) + Self.page } label: {
-            Text(tr("さらに表示（残り %@ 件）", remaining)).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
-              .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20).padding(.vertical, 4).contentShape(Rectangle())
-          }.buttonStyle(.hoverWash)
+          SidebarRow(action: { shown[key] = limit(key) + Self.page }) {
+            Text(tr("さらに表示（残り %@ 件）", remaining)).font(SidebarStyle.detail).foregroundStyle(C.textTertiary)
+            Spacer(minLength: 0)
+          }
         }
       }
     }
@@ -1346,23 +1296,21 @@
 
     /// Projects start collapsed, like ccedit's project list; opening one lists its chats newest first.
     private func historyGroup(_ group: AgentHistoryGroup, id: String, collapsed: Bool) -> some View {
-          Button {
+          SidebarRow(action: {
             if collapsed { expandedGroups.insert(id) } else { expandedGroups.remove(id) }
-          } label: {
-            HStack(spacing: 6) {
-              Image(systemName: collapsed ? "chevron.right" : "chevron.down").frame(width: 14)
-              Text(group.project).font(Typography.font(Typography.sidebarStrong)).lineLimit(1)
+          }) {
+              SidebarChevron(open: !collapsed)
+              Text(group.project).foregroundStyle(C.textSecondary).lineLimit(1)
               Spacer(minLength: 0)
               Text(tr("%@ · %@ · %@ 件", group.date.formatted(date: .omitted, time: .shortened), group.estimatedUSD.formatted(.currency(code: "USD")), group.histories.count))
-                .font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textQuaternary)
-            }.foregroundStyle(C.textSecondary).padding(.horizontal, 20).padding(.vertical, 8).contentShape(Rectangle())
-          }.buttonStyle(.hoverWash)
+                .font(SidebarStyle.detail).foregroundStyle(C.textQuaternary).lineLimit(1)
+          }
     }
 
     /// LINE-style chat-list row: provider avatar, title + time, last-message preview + prompt count.
     private func historyRow(_ history: AgentHistory) -> some View {
-        Button { openHistory(history) } label: {
-          HStack(alignment: .top, spacing: 10) {
+        SidebarRow(height: nil, action: { openHistory(history) }) {
+          HStack(alignment: .top, spacing: 8) {
             ProviderAvatar(provider: history.provider, size: 30)
             VStack(alignment: .leading, spacing: 3) {
               HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -1380,8 +1328,8 @@
                 }
               }
             }
-          }.padding(.leading, 30).padding(.trailing, 16).padding(.vertical, 7).contentShape(Rectangle())
-        }.buttonStyle(.hoverWash).help("\(history.provider.rawValue) · \(history.date.formatted(date: .abbreviated, time: .shortened))")
+          }
+        }.help("\(history.provider.rawValue) · \(history.date.formatted(date: .abbreviated, time: .shortened))")
     }
   }
 

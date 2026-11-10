@@ -469,7 +469,10 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   承認の境界は通常の `agent.launch` と同じ(external)。Project を閉じた・Clair が落ちたなどで残った sandbox は、`concierge.open` のたびと `agent.sandboxes.prune`(read、AI 可、MCP からも呼べる)で、`sbx ls` の `clair-*` のうち開いているペインの launch に無いものを `sbx rm --force` で消す(`sbx` が無ければ何もしない)。待ち中は agent のアイコンの周囲を回る表示で示す。
   チャットは返答を Markdown(コードは言語名とコピー付きのカード)で描画し、返答待ちの間は
   作業中の行を、コンシェルジュがターミナルで承認を待つ間はその旨の行とターミナル本体を出す。
-  会話がまだないときは依頼の例を出し、選ぶと送信欄に入る(送信はしない)
+  会話がまだないときは依頼の例を出し、選ぶと送信欄に入る(送信はしない)。
+  返答待ちの間に送信欄で Esc か ⌃C を押すと、その応答を中断する(PTY には Esc を送る。Claude Code はアイドル時の
+  ⌃C 二度押しで終了するため ⌃C は送らない)。中断は transcript の `[Request interrupted by user]` で
+  「中断しました」と示し、作業中の行を消す(2026-11-10 オーナー依頼)
   チャット右上のボタンで、チャットを pane のボード(layout)の上に重ねる表示と、左に固定幅で並べて
   ボードを同時に見る表示を切り替える(GUI ローカルの設定として覚える)
   設定「起動時にコンシェルジュを開く」(`startConcierge`、既定オフ = 前回の Project)がオンなら起動時にこの画面を開く(#77)。

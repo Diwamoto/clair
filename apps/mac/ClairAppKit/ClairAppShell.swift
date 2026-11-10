@@ -2211,7 +2211,7 @@ import Observation
             .buttonStyle(.hoverWash).foregroundStyle(C.textSecondary).help(tr("TODO を追加")).accessibilityLabel(tr("TODO を追加"))
         }
         if todos.isEmpty {
-          Text(tr("TODO はまだありません")).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary).padding(12)
+          SidebarNote(tr("TODO はまだありません"))
         }
         ForEach(todos, id: \.path) { t in
           treeRow(depth: 0, selected: st.active == t.path, action: { store.run("file.open", ["path": .string(t.path)]) }) {
@@ -2609,8 +2609,7 @@ import Observation
       return LazyVStack(alignment: .leading, spacing: 0) {
         // Only the first scan blanks the tree; a rescan (every watcher event) swaps rows in place.
         if store.scanning && st.files.isEmpty {
-          Text("Loading...").font(.system(size: 13)).foregroundStyle(C.textTertiary)
-            .padding(.horizontal, 16).frame(height: 28)
+          SidebarNote(tr("読み込み中…"))
         } else {
           // Project root: uppercase, branch glyph, no chevron — it reads as a
           // section label, not one more row in the same list as its children.
@@ -2795,19 +2794,12 @@ import Observation
     }
 
     private func chevron(open: Bool) -> some View {
-      Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold)).foregroundStyle(C.textTertiary)
-        .rotationEffect(.degrees(open ? 90 : 0)).frame(width: 10)
+      SidebarChevron(open: open)
     }
 
     /// Explorer row: an inset, rounded 28px tab with 12px indent per level.
-    private func treeRow<Content: View>(depth: Int, selected: Bool, action: @escaping () -> Void, @ViewBuilder _ content: () -> Content) -> some View {
-      Button(action: action) {
-        HStack(spacing: 10, content: content)
-          .padding(.leading, 8 + CGFloat(depth) * 12).padding(.trailing, 8).frame(height: 28)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .sidebarSelection(selected)
-          .contentShape(Rectangle())
-      }.buttonStyle(.hoverWash).padding(.horizontal, 8)
+    private func treeRow<Content: View>(depth: Int, selected: Bool, action: @escaping () -> Void, @ViewBuilder _ content: @escaping () -> Content) -> some View {
+      SidebarRow(depth: depth, selected: selected, action: action, content: content)
     }
 
     // MARK: context menus (checklist §3.6), drawn by ClairContextMenu.swift.
@@ -3064,7 +3056,7 @@ import Observation
           }
           .menuStyle(.borderlessButton)
           .accessibilityLabel(tr("デバッグ構成"))
-        }.padding(.horizontal, 12)
+        }.padding(.horizontal, SidebarStyle.lead - 4)
         if debugMode == "attach" {
           TextField(tr("プロセス ID (PID)"), text: $debugPID)
             .textFieldStyle(.plain)
@@ -3073,11 +3065,9 @@ import Observation
             .padding(.horizontal, 8).frame(height: 28)
             .background(C.canvas, in: RoundedRectangle(cornerRadius: Radius.control))
             .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.strong))
-            .padding(.horizontal, 12).padding(.top, 6)
+            .padding(.horizontal, SidebarStyle.lead - 4).padding(.top, 6)
         }
-        Text(debugSetupMessage)
-          .font(.system(size: 12)).foregroundStyle(C.textTertiary)
-          .padding(.horizontal, 12).padding(.top, 8).fixedSize(horizontal: false, vertical: true)
+        SidebarNote(debugSetupMessage)
         debugSection(tr("ブレークポイント"))
         if let session = store.debugSession, !session.breakpoints.isEmpty {
           ForEach(session.breakpoints.keys.sorted(), id: \.self) { path in
@@ -3159,7 +3149,7 @@ import Observation
       SidebarHeading(title)
     }
     private func debugEmpty(_ text: String) -> some View {
-      Text(text).font(.system(size: 12)).foregroundStyle(C.textQuaternary).padding(.horizontal, 12)
+      SidebarNote(text)
     }
 
     private var debugSetupMessage: String {

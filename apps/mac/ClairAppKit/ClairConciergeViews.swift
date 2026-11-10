@@ -35,19 +35,13 @@
 
     var body: some View {
       let (text, color) = statusLabel(session.status)
-      Button(action: open) {
-        HStack(spacing: 8) {
-          Circle().fill(color).frame(width: 7, height: 7)
-          Image(systemName: "apple.terminal").font(.system(size: 11)).foregroundStyle(C.textTertiary)
-          Text(title).lineLimit(1).foregroundStyle(C.textSecondary)
-          Spacer(minLength: 0)
-          Text(text).foregroundStyle(C.textQuaternary)
-          Image(systemName: "arrow.right").font(.system(size: 10)).foregroundStyle(C.textQuaternary)
-        }
-        .font(rowFont)
-        .padding(.horizontal, 10).frame(height: 32).contentShape(Rectangle())
-        .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(C.divider.opacity(0.6), lineWidth: 1))
-      }.buttonStyle(.hoverWash).help(tr("ペイン %@ へ移動", session.pane))
+      SidebarRow(action: open) {
+        Image(systemName: "apple.terminal").font(.system(size: 11)).foregroundStyle(C.textTertiary).frame(width: 16)
+        Text(title).lineLimit(1).foregroundStyle(C.textSecondary)
+        Spacer(minLength: 0)
+        Circle().fill(color).frame(width: 6, height: 6)
+        Text(text).font(SidebarStyle.detail).foregroundStyle(C.textQuaternary)
+      }.help(tr("ペイン %@ へ移動", session.pane))
     }
   }
 
@@ -69,16 +63,10 @@
           Text(running ? tr("Claude Code · 実行中") : tr("未起動")).font(rowFont).foregroundStyle(C.textQuaternary)
           Spacer(minLength: 0)
           if !running { Button(tr("起動"), action: start).buttonStyle(.hoverWash) }
-        }.padding(.horizontal, 14).frame(height: 46)
-        Divider()
-        Button { tasksOpen.toggle() } label: {
-          HStack(spacing: 4) {
-            Image(systemName: tasksOpen ? "chevron.down" : "chevron.right").font(.system(size: 9))
-            Text(tr("担当中のタスク"))
-            Spacer(minLength: 0)
-            Text(tr("%@ 件実行中", children.filter { !$0.session.status.isExited }.count)).foregroundStyle(C.textQuaternary)
-          }.font(rowFont).foregroundStyle(C.textTertiary).contentShape(Rectangle())
-        }.buttonStyle(.plain).padding(.horizontal, 12).padding(.top, 10)
+        }.padding(.horizontal, SidebarStyle.lead).padding(.top, 12).padding(.bottom, 4)
+        SidebarHeading(tr("担当中のタスク"), open: $tasksOpen) {
+          Text(tr("%@ 件実行中", children.filter { !$0.session.status.isExited }.count))
+        }
         if tasksOpen {
           VStack(spacing: 4) {
             if children.isEmpty {
@@ -90,17 +78,9 @@
             }
           }.padding(.horizontal, 12).padding(.vertical, 8)
         }
-        Divider()
-        Button(action: toggleBoard) {
-          Label(board ? tr("チャットに戻る") : tr("ボード"), systemImage: board ? "bubble.left" : "square.grid.3x2")
-            .font(rowFont).foregroundStyle(C.textTertiary)
-            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 14).frame(height: 36).contentShape(Rectangle())
-        }.buttonStyle(.hoverWash)
-        Button(action: editInstructions) {
-          Label(tr("指示と作業フォルダを設定"), systemImage: "gearshape")
-            .font(rowFont).foregroundStyle(C.textTertiary)
-            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 14).frame(height: 36).contentShape(Rectangle())
-        }.buttonStyle(.hoverWash)
+        SidebarHeading(tr("操作"))
+        SidebarAction(board ? tr("チャットに戻る") : tr("ボード"), systemImage: board ? "bubble.left" : "square.grid.3x2", action: toggleBoard)
+        SidebarAction(tr("指示と作業フォルダを設定"), systemImage: "gearshape", action: editInstructions)
       }
     }
 
@@ -210,9 +190,12 @@
 
     /// Waiting on a reply: something was just sent, or the last turn is the user's and the agent has not reported finishing.
     private var working: Bool {
-      let asked = pending != nil || messages?.last?.role == "user"
+      let asked = pending != nil || messages?.last.map { $0.role == "user" && !$0.text.hasPrefix(Self.interrupted) } == true
       return asked && (status == nil || status == .running)
     }
+
+    /// What Claude Code writes to the transcript as a user turn when Esc stops it.
+    private static let interrupted = "[Request interrupted by user"
 
     private var appear: AnyTransition {
       reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 8))
@@ -221,6 +204,11 @@
     @ViewBuilder private func row(_ m: AgentHistory.Message, header: Bool) -> some View {
       if m.role != "user" {
         Reply(message: m, header: header).padding(.top, header ? 0 : -10)
+      } else if m.text.hasPrefix(Self.interrupted) {
+        Label(tr("中断しました"), systemImage: "stop.circle")
+          .font(.system(size: 12)).foregroundStyle(C.textTertiary)
+          .padding(.horizontal, 10).padding(.vertical, 3).background(W.medium, in: Capsule())
+          .frame(maxWidth: .infinity)
       } else if m.text.hasPrefix("[Skill loaded") {
         Label(String(m.text.dropFirst().dropLast()).replacing("Skill loaded", with: tr("スキル読込")), systemImage: "wand.and.stars")
           .font(.system(size: 12)).foregroundStyle(C.textTertiary)
@@ -290,6 +278,9 @@
           .textFieldStyle(.plain).lineLimit(1...10).font(chatFont)
           .focused($focused)
           .onSubmit(send)
+          // Esc / ⌃C stop the running turn. The PTY gets Escape, never ⌃C: twice on an idle Claude Code quits it.
+          .onKeyPress(.escape) { interrupt() }
+          .onKeyPress(keys: ["c"]) { $0.modifiers == .control ? interrupt() : .ignored }
         HStack(spacing: 8) {
           HStack(spacing: 6) {
             Circle().fill(pane == nil ? C.textQuaternary : C.success).frame(width: 6, height: 6)
@@ -298,7 +289,7 @@
           .font(.system(size: 12)).foregroundStyle(C.textTertiary)
           .padding(.horizontal, 9).frame(height: 24).background(W.medium, in: Capsule())
           Spacer(minLength: 0)
-          Text(pane == nil ? tr("⏎ 送信 · 最初の送信で起動") : tr("⏎ 送信")).font(.system(size: 11)).foregroundStyle(C.lineNumber)
+          Text(pane == nil ? tr("⏎ 送信 · 最初の送信で起動") : working ? tr("⏎ 送信 · esc 中断") : tr("⏎ 送信")).font(.system(size: 11)).foregroundStyle(C.lineNumber)
           Button(action: send) {
             Image(systemName: "arrow.up").font(.system(size: 14, weight: .bold)).foregroundStyle(empty ? C.textQuaternary : C.canvas)
               .frame(width: 32, height: 32).background(empty ? W.strongest : C.textPrimary, in: Circle())
@@ -324,6 +315,12 @@
       guard ClairGhosttySurfaceView.send(text, toPane: pane) else { return }
       draft = ""; show(text)
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { ClairGhosttySurfaceView.pressReturn(inPane: pane) }
+    }
+
+    private func interrupt() -> KeyPress.Result {
+      guard working, let pane, ClairGhosttySurfaceView.pressEscape(inPane: pane) else { return .ignored }
+      pending = nil
+      return .handled
     }
 
     private func show(_ text: String) {
