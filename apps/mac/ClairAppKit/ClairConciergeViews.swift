@@ -100,6 +100,7 @@
     /// Shown until the transcript catches up with what was just sent.
     @State private var pending: String?
     @FocusState private var focused: Bool
+    @State private var dropTarget = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var scheme
 
@@ -284,7 +285,17 @@
       }
       .padding(.leading, 16).padding(.trailing, 12).padding(.top, 14).padding(.bottom, 10)
       .background(C.surfaceHover, in: RoundedRectangle(cornerRadius: Self.bubbleRadius, style: .continuous))
-      .overlay(RoundedRectangle(cornerRadius: Self.bubbleRadius, style: .continuous).strokeBorder(focused ? L.ring : L.strong))
+      .overlay(RoundedRectangle(cornerRadius: Self.bubbleRadius, style: .continuous).strokeBorder(focused || dropTarget ? L.ring : L.strong))
+      // Dropped files go in as paths, escaped like a Terminal drop: Claude Code attaches an image path as an image
+      // and reads any other file (PDF, text) itself, so the chat stays plain text.
+      // ponytail: file drops only; a pasted clipboard image would need a temp PNG, add if asked.
+      .dropDestination(for: URL.self) { urls, _ in
+        let paths = urls.filter(\.isFileURL).map { $0.path.replacing(" ", with: "\\ ") }
+        guard !paths.isEmpty else { return false }
+        draft += (draft.isEmpty || draft.hasSuffix(" ") || draft.hasSuffix("\n") ? "" : " ") + paths.joined(separator: " ") + " "
+        focused = true
+        return true
+      } isTargeted: { dropTarget = $0 }
       .shadow(color: .black.opacity(scheme == .dark ? 0.3 : 0.08), radius: 12, y: 6)
       .contentShape(RoundedRectangle(cornerRadius: Self.bubbleRadius))
       .onTapGesture { focused = true }  // the whole card is the input, not just the text line
