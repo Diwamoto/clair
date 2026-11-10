@@ -438,13 +438,16 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   (`cd <directory> && <resume コマンド>`)は常にコピーできる。チャットのタブは
   ファイルタブと同じく ⌘W で閉じ、⌘⇧T で開き直せる
 - activity bar の「コンシェルジュ」は Clair 全体で一つのコンシェルジュ agent を
-  sidebar に出す([ADR-0020](decisions/0020-concierge-agent.md))。Project の切替・
+  sidebar を持たない専用画面に出す([ADR-0020](decisions/0020-concierge-agent.md)。Project の workspace がデータプレーン、
+  コンシェルジュがコントロールプレーン。2026-11-11 オーナー依頼)。Project の切替・
   close では止まらず、ユーザーが初めてこの画面を開いたときに起動する。本体は既定 Agent を
   通常の agent launch と同じく raw PTY で起動し、GUI はその session の公式 transcript を
   チャットとして描画して、送信は PTY に書き込む。コンシェルジュが起動した子 agent
   (`parent` がコンシェルジュ)は状態と pane へのリンクで示し、出力は中継しない。
-  画面は左にチャット(幅 460)、右に常にボード(#78)を置く。ボードの先頭にコンシェルジュの子を並べ、
-  実行中のものは脈打つ表示で示し、クリックでその terminal pane を開く。手動の分割切替は持たない。
+  画面は左にチャット(幅 460)、右に常にボード(#78)を置く。ボードの先頭に全 Project の agent pane(コンシェルジュの子を先に、
+  子は終了後も残し、それ以外は終了していないもの)をタイルで並べる。タイルは状態と、その pane の画面の末尾 14 行を
+  1 秒ごとに読んだ文字(色なし、読み取り専用)を出し、実行中のものは脈打つ表示で示し、クリックでその Project に切り替えて
+  terminal pane を開く。画面の文字はこの起動でその pane を一度表示したときだけ読め、まだならそう示す。手動の分割切替は持たない。
   composer の「モデル」メニューは動いているコンシェルジュに `/model <alias>` を送る(2026-11-10 オーナー依頼)。
   本体の terminal はどの Project の layout・タブ・ターミナル一覧にも出さない(ホスト Project の
   `launches` に layout が使わない pane id `-1` で持ち、daemon の shell key は `<root>#-1`。2026-11-10 オーナー依頼)。
@@ -484,11 +487,9 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   返答待ちの間に送信欄で Esc か ⌃C を押すと、その応答を中断する(PTY には Esc を送る。Claude Code はアイドル時の
   ⌃C 二度押しで終了するため ⌃C は送らない)。中断は transcript の `[Request interrupted by user]` で
   「中断しました」と示し、作業中の行を消す(2026-11-10 オーナー依頼)
-  チャット右上のボタンで、チャットを pane のボード(layout)の上に重ねる表示と、左に固定幅で並べて
-  ボードを同時に見る表示を切り替える(GUI ローカルの設定として覚える)
   設定「起動時にコンシェルジュを開く」(`startConcierge`、既定オフ = 前回の Project)がオンなら起動時にこの画面を開く(#77)。
   ⌃⌘0 とアクティビティバーのクリックで、コンシェルジュと Project の workspace を行き来する。
-  コンシェルジュの sidebar の「ボード」(#78)は `stage` を持つ TODO を全 Project 横断で、列 = stage・行 = lane(無ければ `code`)に並べる。
+  コンシェルジュの画面の「ボード」(#78)は `stage` を持つ TODO を全 Project 横断で、列 = stage・行 = lane(無ければ `code`)に並べる。
   `stage` の無い TODO はボードに出ず、TODO の sidebar は変わらない。カードの状態は、`agent` の pane が稼働中なら稼働中、
   pane が承認待ち・bell、または stage が `plan` / `submit` ならあなた待ち、`retry` が 3 を超えたら差し戻し上限超過、
   `stage: done` か `done: true` なら完了。Project は `agent` の pane の Project、無ければ `project:` key(名前かパス)。

@@ -14,7 +14,7 @@
   private let rowFont = SidebarStyle.title
   private let rowStrong = SidebarStyle.titleStrong
 
-  // ADR-0020: the concierge's sidebar (itself, its children, its instructions) and its chat panel.
+  // ADR-0020: the concierge's own screen: its chat beside every Project's agent panes and the board.
 
   func statusLabel(_ s: AgentSession.Status) -> (String, Color) {
     switch s {
@@ -27,58 +27,9 @@
     }
   }
 
-  /// A child agent as a link to its own terminal pane; its output is never relayed.
-  struct ConciergeChildLink: View {
-    let session: AgentSession
-    let title: String
-    let open: () -> Void
-
-    var body: some View {
-      let (text, color) = statusLabel(session.status)
-      SidebarRow(action: open) {
-        Image(systemName: "apple.terminal").font(.system(size: 11)).foregroundStyle(C.textTertiary).frame(width: 16)
-        Text(title).lineLimit(1).foregroundStyle(C.textSecondary)
-        Spacer(minLength: 0)
-        Circle().fill(color).frame(width: 6, height: 6)
-        Text(text).font(SidebarStyle.detail).foregroundStyle(C.textQuaternary)
-      }.help(tr("ペイン %@ へ移動", session.pane))
-    }
-  }
-
-  struct ConciergeSidebar: View {
-    let running: Bool
-    let children: [(session: AgentSession, launch: AgentLaunch)]
-    let start: () -> Void
-    let focus: (AgentSession) -> Void
-    let editInstructions: () -> Void
-    @State private var tasksOpen = true
-
-    var body: some View {
-      VStack(alignment: .leading, spacing: 0) {
-        HStack(spacing: 8) {
-          Text(tr("コンシェルジュ")).font(rowStrong).foregroundStyle(C.textPrimary)
-          Circle().fill(running ? C.success : C.textQuaternary).frame(width: 6, height: 6)
-          Text(running ? tr("Claude Code · 実行中") : tr("未起動")).font(rowFont).foregroundStyle(C.textQuaternary)
-          Spacer(minLength: 0)
-          if !running { Button(tr("起動"), action: start).buttonStyle(.hoverWash) }
-        }.padding(.horizontal, SidebarStyle.lead).padding(.top, 12).padding(.bottom, 4)
-        SidebarHeading(tr("担当中のタスク"), open: $tasksOpen) {
-          Text(tr("%@ 件実行中", children.filter { !$0.session.status.isExited }.count))
-        }
-        if tasksOpen {
-          if children.isEmpty { SidebarNote(tr("まだありません")) }
-          ForEach(children, id: \.session.id) { c in
-            ConciergeChildLink(session: c.session, title: c.launch.prompt.map(Self.shortTitle) ?? c.session.title) { focus(c.session) }
-          }
-        }
-        SidebarHeading(tr("操作"))
-        SidebarAction(tr("指示と作業フォルダを設定"), systemImage: "gearshape", action: editInstructions)
-      }
-    }
-
-    static func shortTitle(_ prompt: String) -> String {
-      String(prompt.split(whereSeparator: \.isNewline).first ?? "").prefix(40).description
-    }
+  /// The first line of a launch prompt, as a pane's title on the concierge screen.
+  func conciergeShortTitle(_ prompt: String) -> String {
+    String(prompt.split(whereSeparator: \.isNewline).first ?? "").prefix(40).description
   }
 
   /// The concierge transcript as chat, over the panes (they stay mounted, so the PTY keeps running).
@@ -682,12 +633,15 @@
     }
   }
 
-  /// A child agent in the chat: a card that opens its own terminal pane; its output is never relayed.
-  /// A concierge child on the board: a pulsing dot while it works, a click opens its terminal.
+  /// An agent pane of any Project on the concierge screen: its status and a live miniature of its screen
+  /// (the data plane, read-only); a click opens the real terminal in its Project.
   private struct AgentCard: View {
     let session: AgentSession
     let title: String
+    /// The daemon session key, to read the pane's screen.
+    let key: String
     let open: () -> Void
+    @State private var screen: String?
     @State private var pulse = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -705,24 +659,47 @@
           }
           Text(title).font(rowFont).foregroundStyle(C.textPrimary).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
           Text(session.project).font(.system(size: 11)).foregroundStyle(C.textTertiary).lineLimit(1)
+          Group {
+            if let screen {
+              Text(verbatim: screen).font(.system(size: 9, design: .monospaced)).foregroundStyle(C.textSecondary)
+            } else {
+              Text(tr("この Project を一度開くと画面が表示されます")).font(.system(size: 11)).foregroundStyle(C.textQuaternary)
+            }
+          }
+          .lineLimit(Self.lines).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading).clipped()
         }
-        .padding(12)
+        .padding(12).frame(height: 240)
         .background(live ? C.success.opacity(0.08) : W.faint, in: RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous).strokeBorder(live ? C.success.opacity(0.5) : L.hairline))
         .contentShape(Rectangle())
       }
       .buttonStyle(HoverWashStyle(radius: Radius.overlay)).help(tr("ターミナルを開く"))
+      // ponytail: 1 s text poll of the kept surface (no colour, no live surface: re-hosting it would resize the PTY).
+      .task(id: key) {
+        while !Task.isCancelled {
+          screen = ClairGhosttySurfaceView.screenText(key: key).map(Self.tail)
+          try? await Task.sleep(for: .seconds(1))
+        }
+      }
       .onAppear {
         guard !reduceMotion else { return }
         withAnimation(.easeOut(duration: 1.4).repeatForever(autoreverses: false)) { pulse = true }
       }
     }
+
+    static let lines = 14
+    /// The last `lines` rows of a screen read, trailing blanks dropped.
+    static func tail(_ text: String) -> String {
+      var rows = text.split(separator: "\n", omittingEmptySubsequences: false).map { $0.replacing(/\s+$/, with: "") }
+      while rows.last?.isEmpty == true { rows.removeLast() }
+      return rows.suffix(lines).joined(separator: "\n")
+    }
   }
 
   /// #78: every staged TODO across Projects; columns are stages, rows are lanes. Clair only shows the file's keys.
   struct TodoBoardView: View {
-    /// The concierge's children, shown above the TODO columns; a click opens the agent's terminal.
-    let agents: [(session: AgentSession, launch: AgentLaunch)]
+    /// Every Project's live agent panes (the concierge's children first), above the TODO columns.
+    let agents: [(session: AgentSession, title: String, key: String)]
     let openAgent: (AgentSession) -> Void
     let cards: [TodoBoardCard]
     let projects: [String]
@@ -751,9 +728,9 @@
           Spacer(minLength: 0)
         }.font(rowFont)
         if !agents.isEmpty {
-          LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 8)], spacing: 8) {
+          LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 8)], spacing: 8) {
             ForEach(agents, id: \.session.id) { a in
-              AgentCard(session: a.session, title: a.launch.prompt.map(ConciergeSidebar.shortTitle) ?? a.session.title) { openAgent(a.session) }
+              AgentCard(session: a.session, title: a.title, key: a.key) { openAgent(a.session) }
             }
           }
         }

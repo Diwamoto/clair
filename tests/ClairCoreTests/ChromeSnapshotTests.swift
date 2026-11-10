@@ -41,7 +41,7 @@
                            ("glass", { store.run("settings.choose", ["key": .string("material"), "value": .string("Liquid Glass")], confirmed: true) }),
                            ("glass-split", { store.run("pane.splitRight"); store.run("pane.splitDown") }),
                            ("glass-debug", { mode = "ladybug" }), ("glass-agents", { mode = "terminal" }),
-                           ("glass-changes", { mode = "shield" }), ("glass-todo", { mode = "checklist" }),
+                           ("glass-changes", { mode = "shield" }), ("glass-todo", { mode = "checklist" }), ("glass-concierge", { mode = "concierge" }),
                            ("glass-settings", { mode = "folder"; store.run("settings.open") })] as [(String, () -> Void)] {
         prep()
         let host = NSHostingView(rootView: ClairAppShell(store: store, sidebarMode: mode).frame(width: 1440, height: 900))

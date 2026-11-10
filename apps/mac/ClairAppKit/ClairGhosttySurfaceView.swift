@@ -858,6 +858,12 @@ import Foundation
       try? byPane[pane]?.view?.ghosttySurface?.readText(.screen)
     }
 
+    /// The screen of the kept surface for daemon session `key`, mounted or not (the concierge's pane grid).
+    /// nil until some window has shown that session this run.
+    public static func screenText(key: String) -> String? {
+      try? kept[key]?.ghosttySurface?.readText(.screen)
+    }
+
     /// The selected text of the terminal in `pane`, nil without a selection.
     public static func selectedText(inPane pane: Int) -> String? {
       guard let v = byPane[pane]?.view, let surface = v.ghosttySurface, (try? surface.hasSelection()) == true,

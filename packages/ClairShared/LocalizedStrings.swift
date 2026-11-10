@@ -8,6 +8,7 @@ extension LocalizedStrings {
     "ツールを %@ 回実行": "Ran %@ tools", "圧縮 (/compact)": "Compact (/compact)", "新しい会話 (/clear)": "New conversation (/clear)",
     "コンテキスト": "Context", "この会話の API 換算の推定額": "Estimated API-equivalent cost of this conversation",
     "コンシェルジュ": "Concierge", "コンシェルジュを開く": "Open Concierge", "起動": "Start", "入力待ち": "Waiting for input",
+    "ペイン": "Panes", "この Project を一度開くと画面が表示されます": "Open this Project once to show its screen",
     "終了 %@": "Exited %@", "ペイン %@ へ移動": "Go to pane %@", "Claude Code · 実行中": "Claude Code · Running",
     "未起動": "Not running", "起動中": "Running", "操作": "Actions", "コンシェルジュのターミナルを表示": "Show the concierge terminal", "チャットに戻る": "Back to chat",
     "担当中のタスク": "Tasks", "%@ 件実行中": "%@ running", "まだありません": "None yet", "%@ を編集": "Edit %@",

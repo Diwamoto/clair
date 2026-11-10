@@ -1519,7 +1519,8 @@ import Observation
             titlebar
             HStack(spacing: 0) {
               activityBar
-              if !st.sidebarHidden {
+              // The concierge is its own screen (the control plane), not a panel of a Project's workspace.
+              if !st.sidebarHidden && sidebarMode != "concierge" {
                 sidebar
                 if !glass { Rectangle().fill(C.surfaceActive).frame(width: 1) }
               }
@@ -1971,7 +1972,7 @@ import Observation
     private var sidebar: some View {
       VStack(spacing: 0) {
         // Lazy: a Project can list thousands of files, and an eager tree makes accessibility traversal (and layout) block the main thread.
-        ScrollView { LazyVStack(alignment: .leading, spacing: 0) { sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "terminal" ? AnyView(sessionList) : sidebarMode == "ladybug" ? AnyView(debugPanel) : sidebarMode == "concierge" ? AnyView(conciergeSidebar) : sidebarMode == "checklist" ? AnyView(todoList) : sidebarMode == Self.browserMode ? AnyView(browserSidebar) : AnyView(explorer) }.clairScroller() }
+        ScrollView { LazyVStack(alignment: .leading, spacing: 0) { sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "terminal" ? AnyView(sessionList) : sidebarMode == "ladybug" ? AnyView(debugPanel) : sidebarMode == "checklist" ? AnyView(todoList) : sidebarMode == Self.browserMode ? AnyView(browserSidebar) : AnyView(explorer) }.clairScroller() }
         Spacer(minLength: 0)
         if sidebarMode == "shield", st.isRepo {
           // Same filled control as the commit button, so it reads as a button and the whole box is the hit target.
@@ -2180,14 +2181,6 @@ import Observation
 
     // MARK: concierge (ADR-0020)
 
-    private var conciergeSidebar: some View {
-      ConciergeSidebar(
-        running: st.concierge() != nil,
-        children: st.conciergeChildren(), start: { startConcierge() },
-        focus: focusConciergeChild, editInstructions: editConciergeInstructions,
-        )
-    }
-
     /// #76: a new concierge starts only once the user has approved what it reads (prompt, cwd, its project files).
     private func startConcierge(_ message: String? = nil) {
       // A running concierge takes messages straight from the chat (its surface is mounted there).
@@ -2213,15 +2206,22 @@ import Observation
     /// A tab click must show that tab, which the full-width concierge chat would cover.
     private func leaveConciergeOverlay() { if sidebarMode == "concierge" { leaveConcierge() } }
 
-    /// A child link shows the real terminal: leave the chat and focus that pane.
+    /// A pane tile opens the real terminal: leave the concierge and focus that pane in its Project.
     private func focusConciergeChild(_ s: AgentSession) {
       if s.project != st.project { store.run("project.switch", ["name": .string(s.project)]) }
       store.run("pane.focus", ["id": .int(s.pane)])
       leaveConcierge()
     }
 
-    private func editConciergeInstructions() {
-      store.run("settings.open", ["section": .string("AIプロバイダー")])
+    /// The data plane on the concierge screen: every Project's agent panes, the concierge's own children first.
+    private var conciergePanes: [(session: AgentSession, title: String, key: String)] {
+      let children = st.conciergeChildren()
+      let ids = Set(children.map(\.session.id))
+      let rows = children.map { ($0.session, $0.launch.prompt.map(conciergeShortTitle) ?? $0.session.title) }
+        + st.agentSessions.filter { $0.pane != Concierge.pane && !$0.status.isExited && !ids.contains($0.id) }.map { ($0, $0.activity ?? $0.title) }
+      return rows.compactMap { s, title in
+        st.projects.first { $0.name == s.project }.map { (s, title, WorkbenchState.terminalKey($0.path, s.pane)) }
+      }
     }
 
     @State private var todos: [ClairTodo] = []
@@ -3409,7 +3409,7 @@ import Observation
             .frame(width: 460)
             Divider()
             TodoBoardView(
-              agents: st.conciergeChildren(), openAgent: focusConciergeChild,
+              agents: conciergePanes, openAgent: focusConciergeChild,
               cards: st.board(todos), projects: st.projects.map(\.name),
               openPane: { card in
                 guard let p = card.project, let pane = card.pane else { return }
