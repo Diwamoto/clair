@@ -68,15 +68,10 @@
           Text(tr("%@ 件実行中", children.filter { !$0.session.status.isExited }.count))
         }
         if tasksOpen {
-          VStack(spacing: 4) {
-            if children.isEmpty {
-              Text(tr("まだありません")).font(rowFont).foregroundStyle(C.textQuaternary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            ForEach(children, id: \.session.id) { c in
-              ConciergeChildLink(session: c.session, title: c.launch.prompt.map(Self.shortTitle) ?? c.session.title) { focus(c.session) }
-            }
-          }.padding(.horizontal, 12).padding(.vertical, 8)
+          if children.isEmpty { SidebarNote(tr("まだありません")) }
+          ForEach(children, id: \.session.id) { c in
+            ConciergeChildLink(session: c.session, title: c.launch.prompt.map(Self.shortTitle) ?? c.session.title) { focus(c.session) }
+          }
         }
         SidebarHeading(tr("操作"))
         SidebarAction(board ? tr("チャットに戻る") : tr("ボード"), systemImage: board ? "bubble.left" : "square.grid.3x2", action: toggleBoard)

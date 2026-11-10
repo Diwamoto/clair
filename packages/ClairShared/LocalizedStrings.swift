@@ -7,7 +7,7 @@ extension LocalizedStrings {
     // Concierge (ADR-0020)
     "コンシェルジュ": "Concierge", "コンシェルジュを開く": "Open Concierge", "起動": "Start", "入力待ち": "Waiting for input",
     "終了 %@": "Exited %@", "ペイン %@ へ移動": "Go to pane %@", "Claude Code · 実行中": "Claude Code · Running",
-    "未起動": "Not running", "コンシェルジュのターミナルを表示": "Show the concierge terminal", "チャットに戻る": "Back to chat",
+    "未起動": "Not running", "起動中": "Running", "操作": "Actions", "コンシェルジュのターミナルを表示": "Show the concierge terminal", "チャットに戻る": "Back to chat",
     "担当中のタスク": "Tasks", "%@ 件実行中": "%@ running", "まだありません": "None yet", "%@ を編集": "Edit %@",
     "コンシェルジュは起動していません": "The concierge is not running",
     "依頼を送ると、ここに会話が表示されます": "Send a request and the conversation appears here",
