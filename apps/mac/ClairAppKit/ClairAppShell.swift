@@ -1657,10 +1657,12 @@ import Observation
           titlebarAction("gearshape", tr("設定"), on: st.settingsOpen) { store.run(st.settingsOpen ? "settings.close" : "settings.open") }
         }.padding(.horizontal, 12)
       }
-      .frame(height: ChromeBudget.titlebar)
+      // Glass: centred in the strip down to the panels' top edge (the native lights follow, see AppDelegate).
+      .frame(height: ChromeBudget.titlebar + ChromeBudget.glassReach).padding(.bottom, -ChromeBudget.glassReach)
       .background(TitlebarArea())
       .chromeBackground()
       .overlay(alignment: .bottom) { if !glass { Rectangle().fill(C.surfaceActive).frame(height: 1) } }
+      .onChange(of: glass) { NotificationCenter.default.post(name: Notification.Name("ClairLayoutTitlebar"), object: nil) }
     }
 
     private func titlebarAction(_ icon: String, _ help: String, on: Bool, _ action: @escaping () -> Void) -> some View {
@@ -2028,7 +2030,7 @@ import Observation
             .frame(width: 26, height: 26)
         }.buttonStyle(.hoverWash).keyboardShortcut(.cancelAction).padding(.trailing, 16).help(tr("設定を閉じる"))
       }
-      .frame(height: ChromeBudget.titlebar)
+      .frame(height: ChromeBudget.titlebar + ChromeBudget.glassReach).padding(.bottom, -ChromeBudget.glassReach)
       .background(TitlebarArea())
       .chromeBackground()
       .overlay(alignment: .bottom) { if !glass { Rectangle().fill(L.hairline).frame(height: 1) } }
@@ -4187,8 +4189,10 @@ import Observation
           .footerPopover("version", $footerHover) { versionHover }
       }
       .font(Typography.font(Typography.chrome)).monospacedDigit().foregroundStyle(C.textTertiary)
-      .padding(.horizontal, 7).frame(height: ChromeBudget.statusBar)
+      // Glass: centred in the strip up to the panels' bottom edge, not pressed against the window's.
+      .padding(.horizontal, 7).frame(height: ChromeBudget.statusBar + ChromeBudget.glassReach)
       .background(ClairChannel.current == .dev ? Color.orange.opacity(0.14) : .clear).chromeBackground()  // Dev is told apart at a glance (owner, 2026-09-27)
+      .padding(.top, -ChromeBudget.glassReach)
       .overlay(alignment: .top) { if !glass { Rectangle().fill(C.surfaceActive).frame(height: 1) } }
       // Here, not on `body`: its modifier chain is at the type-checker's limit. The status bar is always mounted.
       .onChange(of: store.gitRevision) { reloadChanges() }

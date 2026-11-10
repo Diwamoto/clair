@@ -38,6 +38,9 @@ public enum ChromeBudget {
   /// 2026-09-20 amendment).
   public static let activityBarWidth: CGFloat = cell
   public static let statusBar: CGFloat = 26
+  /// Under glass the panels float `Glass.inset` clear of the bars, so a bar's items centre in the strip
+  /// between the window edge and the panels: the bar reaches this much further toward them. 0 when flat.
+  public static var glassReach: CGFloat { DesignTokens.glassActive ? DesignTokens.Glass.inset : 0 }
 }
 
 /// Mobile-only dimensions (checklist §2.6, "Tokens artboard MOBILE 節").

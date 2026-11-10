@@ -53,6 +53,10 @@ import SwiftUI
     for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResizeNotification, NSWindow.didExitFullScreenNotification] {
       NotificationCenter.default.addObserver(self, selector: #selector(layoutWindow(_:)), name: name, object: nil)
     }
+    // 素材 flipped: the lights' centre moves with the titlebar strip (ChromeBudget.glassReach).
+    NotificationCenter.default.addObserver(forName: Notification.Name("ClairLayoutTitlebar"), object: nil, queue: .main) { [weak self] _ in
+      MainActor.assumeIsolated { NSApp.windows.forEach { self?.layoutLights($0) } }
+    }
     // A bundled app's window can already be key before this runs (dev's is not), so the first
     // didBecomeKey is missed; lay out the windows that exist now.
     NSApp.windows.forEach { $0.isRestorable = false; layoutLights($0) }
@@ -90,7 +94,7 @@ import SwiftUI
     let buttons = [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].compactMap { w.standardWindowButton($0) }
     if lightsX == nil { lightsX = buttons.map { $0.frame.origin.x + 5 } }  // AppKit's own x, inset 5pt; absolute so re-layout never accumulates
     for (b, x) in zip(buttons, lightsX ?? []) {
-      b.setFrameOrigin(NSPoint(x: x, y: (h - b.frame.height) / 2))
+      b.setFrameOrigin(NSPoint(x: x, y: (h - ChromeBudget.glassReach - b.frame.height) / 2))
     }
   }
 
