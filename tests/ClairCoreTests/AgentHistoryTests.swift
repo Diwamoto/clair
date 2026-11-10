@@ -85,6 +85,22 @@ final class AgentHistoryTests: XCTestCase {
     XCTAssertFalse(lists.flatMap(\.messages).contains { $0.role == "thinking" }, "the list skim never carries thinking")
   }
 
+  func testConciergeChatListsToolCallsAndTheLatestModel() throws {
+    let file = URL.temporaryDirectory.appending(path: "clair-chat-\(UUID().uuidString).jsonl")
+    defer { try? FileManager.default.removeItem(at: file) }
+    try [
+      #"{"type":"user","timestamp":"2026-11-11T02:00:00Z","sessionId":"s","uuid":"u1","message":{"content":"Go"}}"#,
+      #"{"type":"assistant","timestamp":"2026-11-11T02:00:01Z","sessionId":"s","uuid":"a1","message":{"model":"claude-opus-5-5","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"git status\nmore","description":"Status"}}]}}"#,
+      #"{"type":"assistant","timestamp":"2026-11-11T02:00:02Z","sessionId":"s","uuid":"a2","message":{"model":"claude-opus-5-5","content":[{"type":"tool_use","id":"t2","name":"mcp__clair__agent_list","input":{}}]}}"#,
+      #"{"type":"assistant","timestamp":"2026-11-11T02:00:03Z","sessionId":"s","uuid":"a3","message":{"model":"<synthetic>","content":[{"type":"text","text":"Done"}]}}"#,
+    ].joined(separator: "\n").write(to: file, atomically: true, encoding: .utf8)
+    let chat = try XCTUnwrap(AgentHistoryReader.chat(file: file))
+    XCTAssertEqual(chat.messages.map { "\($0.role):\($0.text)" }, ["user:Go", "tool:Bash\tgit status", "tool:clair agent_list", "assistant:Done"])
+    XCTAssertEqual(chat.model, "claude-opus-5-5")
+    XCTAssertEqual(AgentHistoryReader.transcript(file: file, provider: .claude).count, 2, "other readers never see tool rows")
+    XCTAssertEqual(AgentHistoryReader.toolLine(name: "Read", input: ["file_path": "/a/b/c.swift"]), "Read\tc.swift")
+  }
+
   func testChatFoldsProgressBeforeEachRunsReply() {
     let messages = ["user:Go", "thinking:t1", "assistant:Checking", "thinking:t2", "assistant:Done", "user:More", "thinking:t3", "user:Last", "assistant:Only"]
       .enumerated().map { i, s in

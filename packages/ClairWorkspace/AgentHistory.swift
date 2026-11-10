@@ -30,6 +30,8 @@ public struct AgentHistory: Sendable, Identifiable {
   public var turns: [DateInterval] = []
   /// API-equivalent cost per model; `usd` is nil for a model with no known price.
   public var models: [ModelCost] = []
+  /// Claude Code: the model of the latest real (non-synthetic) reply.
+  public var model: String? = nil
 
   public struct ModelCost: Sendable, Equatable {
     public let name: String
@@ -427,6 +429,24 @@ public enum AgentHistoryReader {
     readFile(file, provider: provider, full: true)?.messages ?? []
   }
 
+  /// The concierge chat: a Claude Code session in full, with each tool call as a `tool` message
+  /// whose text is `name\targument` (see `toolLine`), plus the cost and latest model.
+  public static func chat(file: URL) -> AgentHistory? {
+    readFile(file, provider: .claude, full: true, tools: true)
+  }
+
+  /// One tool call as `name\targument`: MCP tools read `server tool`, the argument is the first of the usual
+  /// keys (command, file, pattern, …) on one line. `nil` argument → name only.
+  static func toolLine(name: String, input: [String: Any]) -> String {
+    var name = name
+    if name.hasPrefix("mcp__") { name = String(name.dropFirst(5)).replacing("__", with: " ") }
+    let keys = ["command", "file_path", "path", "pattern", "description", "url", "query", "prompt", "skill"]
+    guard var arg = keys.lazy.compactMap({ input[$0] as? String }).first(where: { !$0.isEmpty }) else { return name }
+    if arg.hasPrefix("/"), !arg.contains(" ") { arg = (arg as NSString).lastPathComponent }
+    let line = arg.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
+    return name + "\t" + String(line.prefix(160))
+  }
+
   private static func readJSONL(root: URL, provider: AgentHistory.Provider, period: DateInterval?, full: Bool) -> [AgentHistory] {
     guard let files = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey, .contentModificationDateKey]) else { return [] }
     let paths = (files.allObjects as? [URL] ?? []).filter { file in
@@ -443,7 +463,7 @@ public enum AgentHistoryReader {
     return slots.compactMap { $0 }
   }
 
-  private static func readFile(_ file: URL, provider: AgentHistory.Provider, full: Bool) -> AgentHistory? {
+  private static func readFile(_ file: URL, provider: AgentHistory.Provider, full: Bool, tools: Bool = false) -> AgentHistory? {
       var messages: [AgentHistory.Message] = []
       var cost: Double?
       var codexModel: String?
@@ -451,6 +471,7 @@ public enum AgentHistoryReader {
       var claudeMessageCosts: [String: Double] = [:]
       var claudeUnknownModel = false
       var claudeMessageModels: [String: String] = [:]
+      var lastModel: String?
       var claudeUnpricedModels: Set<String> = []
       var turnEvents: [(user: Bool, date: Date)] = []
       var sessionID = file.deletingPathExtension().lastPathComponent
@@ -502,6 +523,7 @@ public enum AgentHistoryReader {
           if let id = row["sessionId"] as? String { sessionID = id }
           cwd = cwd ?? row["cwd"] as? String
           let message = row["message"] as? [String: Any] ?? [:]
+          if type == "assistant", let model = message["model"] as? String, model != "<synthetic>" { lastModel = model }
           if type == "assistant", let usage = message["usage"] as? [String: Any] {
             let model = message["model"] as? String ?? ""
             if let estimated = claudeEstimatedCost(model: model, usage: usage) {
@@ -522,6 +544,14 @@ public enum AgentHistoryReader {
             text = parts.filter { ($0["type"] as? String) == "text" }.compactMap { $0["text"] as? String }.joined(separator: "\n")
             // Claude Code often stores thinking redacted (empty); only readable thinking reaches the chat.
             if full { thinking = parts.filter { ($0["type"] as? String) == "thinking" }.compactMap { $0["thinking"] as? String }.joined(separator: "\n\n") }
+            if tools, type == "assistant" {
+              for (i, part) in parts.enumerated() where part["type"] as? String == "tool_use" {
+                let id = part["id"] as? String ?? "\(row["uuid"] as? String ?? file.path):tool\(i)"
+                guard claudeMessageIndex[id] == nil else { continue }
+                claudeMessageIndex[id] = messages.count
+                messages.append(.init(id: id, role: "tool", text: toolLine(name: part["name"] as? String ?? "?", input: part["input"] as? [String: Any] ?? [:]), date: date))
+              }
+            }
           } else { text = "" }
           if type == "user" { text = formatUserText(text) ?? "" }
           let id = row["uuid"] as? String ?? "\(file.path):\(messages.count)"
@@ -562,7 +592,7 @@ public enum AgentHistoryReader {
       return AgentHistory(id: "\(provider.rawValue):\(sessionID)", provider: provider,
                           title: String(title.prefix(100)), date: messages.last?.date ?? .distantPast,
                           messages: messages, estimatedUSD: cost, project: cwd, source: full ? nil : file,
-                          turns: turns(turnEvents), models: models)
+                          turns: turns(turnEvents), models: models, model: lastModel)
   }
 
   /// Pairs each prompt with the last provider activity before the next prompt. Unanswered prompts are dropped.

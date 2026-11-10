@@ -5,6 +5,8 @@
 extension LocalizedStrings {
   static let english: [String: String] = [
     // Concierge (ADR-0020)
+    "ツールを %@ 回実行": "Ran %@ tools", "圧縮 (/compact)": "Compact (/compact)", "新しい会話 (/clear)": "New conversation (/clear)",
+    "コンテキスト": "Context", "この会話の API 換算の推定額": "Estimated API-equivalent cost of this conversation",
     "コンシェルジュ": "Concierge", "コンシェルジュを開く": "Open Concierge", "起動": "Start", "入力待ち": "Waiting for input",
     "終了 %@": "Exited %@", "ペイン %@ へ移動": "Go to pane %@", "Claude Code · 実行中": "Claude Code · Running",
     "未起動": "Not running", "起動中": "Running", "操作": "Actions", "コンシェルジュのターミナルを表示": "Show the concierge terminal", "チャットに戻る": "Back to chat",

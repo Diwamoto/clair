@@ -101,6 +101,16 @@
     @State private var pending: String?
     @FocusState private var focused: Bool
     @State private var dropTarget = false
+    /// The conversation's API-equivalent cost and latest model, and its context size / window (`agent.list`'s numbers).
+    @State private var chat: (cost: Double?, model: String?) = (nil, nil)
+    @State private var context: (tokens: Int?, limit: Int?) = (nil, nil)
+    /// `/clear` starts a new session, but the chat follows it only once the hook reports it (next prompt);
+    /// until then, turns before this time stay hidden.
+    @SceneStorage("concierge.clearedAt") private var clearedAt: Double = 0
+    /// Files under the concierge's folder for `@` completion, scanned on the first `@`.
+    @State private var files: [WorkbenchFile]?
+    @State private var mentionIndex = 0
+    @State private var pasteMonitor: Any?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var scheme
 
@@ -117,7 +127,14 @@
             LazyVStack(alignment: .leading, spacing: 22) {
               let all = messages ?? []
               ForEach(Array(all.enumerated()), id: \.element.id) { i, m in
-                row(m, header: i == 0 || all[i - 1].role == "user").transition(appear)
+                let header = i == 0 || all[i - 1].role == "user"
+                if m.role != "tool" {
+                  row(m, header: header).transition(appear)
+                } else if i == 0 || all[i - 1].role != "tool" {
+                  // A run of tool calls folds into one row, drawn at its first call.
+                  ToolGroup(lines: all[i...].prefix { $0.role == "tool" }.map(\.text), date: m.date, header: header)
+                    .padding(.top, header ? 0 : -10).transition(appear)
+                }
               }
               if let pending { userBubble(pending).opacity(0.6).transition(appear) }
               if status == .blocked {
@@ -161,7 +178,7 @@
 
     /// Waiting on a reply: something was just sent, or the last turn is the user's and the agent has not reported finishing.
     private var working: Bool {
-      let asked = pending != nil || messages?.last.map { $0.role == "user" && !$0.text.hasPrefix(Self.interrupted) } == true
+      let asked = pending != nil || messages?.last(where: { $0.role != "tool" }).map { $0.role == "user" && !$0.text.hasPrefix(Self.interrupted) } == true
       return asked && (status == nil || status == .running)
     }
 
@@ -253,8 +270,21 @@
           .focused($focused)
           .onSubmit(send)
           // Esc / ⌃C stop the running turn. The PTY gets Escape, never ⌃C: twice on an idle Claude Code quits it.
-          .onKeyPress(.escape) { interrupt() }
+          .onKeyPress(.escape) { mentionHits.isEmpty ? interrupt() : { draft += " "; return .handled }() }  // a space ends the `@` word, closing the list
           .onKeyPress(keys: ["c"]) { $0.modifiers == .control ? interrupt() : .ignored }
+          // `@` completion: ↑↓ moves, ⏎ / ⇥ inserts the highlighted path.
+          .onKeyPress(keys: [.upArrow, .downArrow, .return, .tab]) { key in
+            let hits = mentionHits
+            guard !hits.isEmpty else { return .ignored }
+            switch key.key {
+            case .upArrow: mentionIndex = max(mentionIndex - 1, 0)
+            case .downArrow: mentionIndex = min(mentionIndex + 1, hits.count - 1)
+            default: insertMention(hits[min(mentionIndex, hits.count - 1)].path)
+            }
+            return .handled
+          }
+          .onChange(of: mention) { mentionIndex = 0; if mention != nil, files == nil { loadFiles() } }
+          .onAppear(perform: watchPaste).onDisappear(perform: unwatchPaste)
         HStack(spacing: 8) {
           HStack(spacing: 6) {
             Circle().fill(pane == nil ? C.textQuaternary : C.success).frame(width: 6, height: 6)
@@ -265,15 +295,22 @@
           // Switches the running concierge's model with Claude Code's own `/model <alias>`.
           if let pane {
             Menu {
-              ForEach(Self.models, id: \.self) { m in
-                Button(m) { if ClairGhosttySurfaceView.send("/model \(m)", toPane: pane) {
-                  DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { ClairGhosttySurfaceView.pressReturn(inPane: pane) } } }
-              }
+              ForEach(Self.models, id: \.self) { m in Button(m) { command("/model \(m)", pane) } }
             } label: {
-              Text(tr("モデル")).font(.system(size: 12)).foregroundStyle(C.textTertiary)
+              Text(chat.model.map(Self.shortModel) ?? tr("モデル")).font(.system(size: 12)).foregroundStyle(C.textTertiary)
             }.menuStyle(.borderlessButton).fixedSize().help(tr("コンシェルジュのモデルを切り替え"))
+            Menu {
+              Button(tr("圧縮 (/compact)")) { command("/compact", pane) }
+              Button(tr("新しい会話 (/clear)")) { newConversation(pane) }
+            } label: {
+              contextLabel
+            }.menuStyle(.borderlessButton).fixedSize().help(tr("コンテキスト"))
           }
           Spacer(minLength: 0)
+          if let cost = chat.cost {
+            Text(cost, format: .currency(code: "USD").precision(.fractionLength(2))).font(.system(size: 11)).foregroundStyle(C.lineNumber)
+              .help(tr("この会話の API 換算の推定額"))
+          }
           Text(pane == nil ? tr("⏎ 送信 · 最初の送信で起動") : working ? tr("⏎ 送信 · esc 中断") : tr("⏎ 送信")).font(.system(size: 11)).foregroundStyle(C.lineNumber)
           Button(action: send) {
             Image(systemName: "arrow.up").font(.system(size: 14, weight: .bold)).foregroundStyle(empty ? C.textQuaternary : C.canvas)
@@ -299,7 +336,114 @@
       .shadow(color: .black.opacity(scheme == .dark ? 0.3 : 0.08), radius: 12, y: 6)
       .contentShape(RoundedRectangle(cornerRadius: Self.bubbleRadius))
       .onTapGesture { focused = true }  // the whole card is the input, not just the text line
+      .overlay(alignment: .topLeading) { mentionPopover }
       .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: focused)
+    }
+
+    /// "42k / 200k" beside a ring filled to the share used (warning ink from 80 %); "コンテキスト" while unknown.
+    @ViewBuilder private var contextLabel: some View {
+      if let tokens = context.tokens {
+        let share = context.limit.map { min(Double(tokens) / Double(max($0, 1)), 1) }
+        HStack(spacing: 5) {
+          if let share {
+            ZStack {
+              Circle().stroke(W.strongest, lineWidth: 1.6)
+              Circle().trim(from: 0, to: share).stroke(share >= 0.8 ? C.attention : C.textTertiary, lineWidth: 1.6).rotationEffect(.degrees(-90))
+            }.frame(width: 10, height: 10)
+          }
+          Text(verbatim: ([tokens] + (context.limit.map { [$0] } ?? [])).map(Self.kilo).joined(separator: " / "))
+        }
+        .font(.system(size: 12)).foregroundStyle(C.textTertiary)
+        .accessibilityLabel(tr("コンテキスト") + " " + (share.map { "\(Int($0 * 100))%" } ?? Self.kilo(tokens)))
+      } else {
+        Text(tr("コンテキスト")).font(.system(size: 12)).foregroundStyle(C.textTertiary)
+      }
+    }
+
+    static func kilo(_ n: Int) -> String { n >= 1000 ? "\(n / 1000)k" : "\(n)" }
+    /// `claude-opus-4-5-20251101` → `opus-4-5`.
+    static func shortModel(_ m: String) -> String {
+      m.replacing(/^claude-/, with: "").replacing(/-\d{8}$/, with: "")
+    }
+
+    /// A Claude Code slash command typed into the concierge, then a real Return.
+    private func command(_ text: String, _ pane: Int) {
+      guard ClairGhosttySurfaceView.send(text, toPane: pane) else { return }
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { ClairGhosttySurfaceView.pressReturn(inPane: pane) }
+    }
+
+    private func newConversation(_ pane: Int) {
+      command("/clear", pane)
+      clearedAt = Date().timeIntervalSince1970
+      withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration)) { messages = []; chat = (nil, nil) }
+    }
+
+    /// The `@word` being typed at the end of the draft, or nil.
+    private var mention: String? {
+      draft.firstMatch(of: /(?:^|\s)@([^\s@]*)$/).map { String($0.1) }
+    }
+
+    private var mentionHits: [WorkbenchFile] {
+      guard let mention, let files else { return [] }
+      return QuickOpen.rank(mention, files, limit: 8)
+    }
+
+    @ViewBuilder private var mentionPopover: some View {
+      let hits = mentionHits
+      if !hits.isEmpty {
+        VStack(alignment: .leading, spacing: 0) {
+          ForEach(Array(hits.enumerated()), id: \.element.path) { i, f in
+            Button { insertMention(f.path) } label: { MentionRow(path: f.path, selected: i == mentionIndex) }.buttonStyle(.plain)
+          }
+        }
+        .padding(4).frame(width: 360)
+        .background(C.surfaceHover, in: RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous).strokeBorder(L.strong))
+        .shadow(color: .black.opacity(scheme == .dark ? 0.3 : 0.08), radius: 12, y: 6)
+        .alignmentGuide(.top) { $0[.bottom] + 8 }
+      }
+    }
+
+    private func insertMention(_ path: String) {
+      guard let range = draft.firstRange(of: /@[^\s@]*$/) else { return }
+      draft.replaceSubrange(range, with: "@" + path.replacing(" ", with: "\\ ") + " ")
+    }
+
+    private func loadFiles() {
+      let root = terminal?.launch.cwd ?? ""
+      guard !root.isEmpty else { files = []; return }
+      Task { files = await Task.detached { WorkbenchFiles.scan(root).filter { $0.status != "D" && $0.status != "!" } }.value }
+    }
+
+    /// ⌘V with an image (a screenshot) or copied Finder files on the pasteboard: the text field would paste nothing
+    /// or only a name, so the image is saved as a temporary PNG and the paths go into the draft instead.
+    private func watchPaste() {
+      guard pasteMonitor == nil else { return }
+      pasteMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+        guard focused, event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
+              event.charactersIgnoringModifiers == "v", let paths = Self.pastedPaths() else { return event }
+        draft += (draft.isEmpty || draft.hasSuffix(" ") || draft.hasSuffix("\n") ? "" : " ") + paths.joined(separator: " ") + " "
+        return nil
+      }
+    }
+
+    private func unwatchPaste() {
+      if let pasteMonitor { NSEvent.removeMonitor(pasteMonitor) }
+      pasteMonitor = nil
+    }
+
+    // ponytail: pasted images pile up in the temp folder until macOS cleans it; prune them if that ever matters.
+    static func pastedPaths(_ pb: NSPasteboard = .general) -> [String]? {
+      if let urls = pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL], !urls.isEmpty {
+        return urls.map { $0.path.replacing(" ", with: "\\ ") }
+      }
+      guard pb.string(forType: .string) == nil, let image = NSImage(pasteboard: pb), let tiff = image.tiffRepresentation,
+            let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else { return nil }
+      let dir = FileManager.default.temporaryDirectory.appending(path: "clair-concierge")
+      try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+      let file = dir.appending(path: "paste-\(UUID().uuidString.prefix(8)).png")
+      guard (try? png.write(to: file)) != nil else { return nil }
+      return [file.path]
     }
 
     /// Types the text into the concierge PTY, then a real Return key press so the TUI reads it as a submit, not a pasted newline.
@@ -332,7 +476,13 @@
           let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
           if modified != seen {
             seen = modified
-            let read = await Task.detached { AgentHistoryReader.transcript(file: file, provider: .claude).filter { $0.role != "thinking" } }.value
+            let cwd = terminal?.launch.cwd ?? "", since = clearedAt
+            let (chat, read, context) = await Task.detached {
+              let h = AgentHistoryReader.chat(file: file)
+              let read = (h?.messages ?? []).filter { $0.role != "thinking" && $0.date.timeIntervalSince1970 >= since }
+              return ((h?.estimatedUSD, h?.model), read, AgentContext.claude(session: session, cwd: cwd))
+            }.value
+            self.chat = chat; self.context = context
             // The first read lands as is; later ones slide new turns in.
             withAnimation(messages == nil || reduceMotion ? nil : .easeOut(duration: Motion.screenDuration)) {
               messages = read
@@ -391,6 +541,71 @@
     }
   }
 
+  private struct MentionRow: View {
+    let path: String
+    let selected: Bool
+    var body: some View {
+      let name = (path as NSString).lastPathComponent
+      let dir = (path as NSString).deletingLastPathComponent
+      HStack(spacing: 8) {
+        Text(verbatim: name).font(.system(size: 12, design: .monospaced)).foregroundStyle(selected ? C.textPrimary : C.textSecondary)
+        Text(verbatim: dir).font(.system(size: 12)).foregroundStyle(C.textQuaternary).lineLimit(1).truncationMode(.head)
+        Spacer(minLength: 0)
+      }
+      .padding(.horizontal, 8).frame(height: 26)
+      .background(selected ? C.surfaceActive : Color.clear, in: RoundedRectangle(cornerRadius: Radius.card))
+      .contentShape(Rectangle())
+    }
+  }
+
+  private struct ReplyHeader: View {
+    let date: Date
+    var body: some View {
+      HStack(spacing: 8) {
+        ConciergeAvatar()
+        Text(tr("コンシェルジュ")).font(.system(size: 13, weight: .semibold)).foregroundStyle(C.textPrimary)
+        Text(date.formatted(date: .omitted, time: .shortened)).font(.system(size: 12)).foregroundStyle(C.textQuaternary)
+      }
+    }
+  }
+
+  /// A run of tool calls (canvas `Concierge`): "ツールを N 回実行" and the distinct names, folded by default;
+  /// open, one line per call — name and main argument (`AgentHistoryReader.toolLine`).
+  private struct ToolGroup: View {
+    let lines: [String]
+    let date: Date
+    let header: Bool
+    @State private var open = false
+
+    var body: some View {
+      let calls = lines.map { $0.split(separator: "\t", maxSplits: 1).map(String.init) }
+      VStack(alignment: .leading, spacing: 6) {
+        if header { ReplyHeader(date: date).padding(.bottom, 4) }
+        Button { open.toggle() } label: {
+          HStack(spacing: 6) {
+            Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).rotationEffect(.degrees(open ? 90 : 0))
+            Text(tr("ツールを %@ 回実行", lines.count))
+            if !open {
+              Text(verbatim: "· " + calls.map { $0[0] }.reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }.prefix(3).joined(separator: ", "))
+                .lineLimit(1).foregroundStyle(C.textQuaternary)
+            }
+          }.contentShape(Rectangle())
+        }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(C.textTertiary)
+        if open {
+          VStack(alignment: .leading, spacing: 2) {
+            ForEach(Array(calls.enumerated()), id: \.offset) { _, c in
+              HStack(spacing: 8) {
+                Text(verbatim: c[0]).foregroundStyle(C.textSecondary)
+                if c.count > 1 { Text(verbatim: c[1]).foregroundStyle(C.textTertiary).lineLimit(1).truncationMode(.middle) }
+              }.font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
+            }
+          }.padding(.leading, 15)
+        }
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+    }
+  }
+
   /// One assistant message: bubble-less Markdown under the avatar header (once per run), copy on hover.
   private struct Reply: View {
     let message: AgentHistory.Message
@@ -399,13 +614,7 @@
 
     var body: some View {
       VStack(alignment: .leading, spacing: 10) {
-        if header {
-          HStack(spacing: 8) {
-            ConciergeAvatar()
-            Text(tr("コンシェルジュ")).font(.system(size: 13, weight: .semibold)).foregroundStyle(C.textPrimary)
-            Text(message.date.formatted(date: .omitted, time: .shortened)).font(.system(size: 12)).foregroundStyle(C.textQuaternary)
-          }
-        }
+        if header { ReplyHeader(date: message.date) }
         ForEach(Array(MarkdownPreview.parse(message.text).enumerated()), id: \.offset) { _, b in ChatBlock(block: b.block, size: 15) }
         Button { copyToPasteboard(message.text) } label: { Image(systemName: "doc.on.doc").frame(width: 24, height: 22) }
           .buttonStyle(.hoverWash).font(.system(size: 11)).foregroundStyle(C.textQuaternary)
