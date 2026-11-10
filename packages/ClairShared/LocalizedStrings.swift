@@ -53,6 +53,8 @@ extension LocalizedStrings {
     "分割（⌘D / ⌘⇧D）や閉じたあと、ペインを等分の大きさに並べ直します。": "After a split (⌘D / ⌘⇧D) or close, resizes panes to equal shares.",
     "インターフェース": "Interface",
     "外観": "Appearance",
+    "素材": "Material", "クラシック": "Classic",
+    "Liquid Glass は黒い壁紙の上にガラスのパネルを浮かべます。すぐに切り替わります。": "Liquid Glass floats glass panels over a black wallpaper. Takes effect immediately.",
     "エディタ、ターミナル、サイドバーの配色をまとめて切り替えます。": "Switches the colors of the editor, terminal, and sidebar together.",
     "言語": "Language",
     "ステータスバーの利用枠を隠す": "Hide usage quota in the status bar",

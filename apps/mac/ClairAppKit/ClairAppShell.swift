@@ -1512,11 +1512,11 @@ import Observation
               settingsHeader
               HStack(spacing: 0) {
                 settingsPanel
-                Rectangle().fill(L.hairline).frame(width: 1)
-                settingsMain
+                if !glass { Rectangle().fill(L.hairline).frame(width: 1) }
+                settingsMain.readingPanel()
               }
             }
-            .background(C.canvas)
+            .background { if glass { GlassWallpaper() } else { C.canvas } }
             .background(ResignWorkbenchFocus())
             .transition(.opacity.combined(with: .scale(scale: 1.04)))
             // A ZStack child being removed loses its place on top, so closing played behind the workbench (unseen).
@@ -2014,8 +2014,8 @@ import Observation
       }
       .padding(.horizontal, 8).padding(.vertical, 16)
       .frame(width: 240)
-      .background(C.chrome)
-      .overlay(alignment: .trailing) { Rectangle().fill(L.chrome).frame(width: 1) }
+      .glassPanel()
+      .overlay(alignment: .trailing) { if !glass { Rectangle().fill(L.chrome).frame(width: 1) } }
     }
 
     private var searchPattern: SearchPattern {
@@ -2204,12 +2204,10 @@ import Observation
     // ponytail: reloads on activity-bar click and after an edit here only, add a directory watcher if live refresh matters.
     private var todoList: some View {
       VStack(alignment: .leading, spacing: 0) {
-        HStack {
-          Text(tr("TODO")).font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textTertiary)
-          Spacer()
+        SidebarHeading(tr("TODO")) {
           Button { todoDraft = (ClairTodo(path: "", title: ""), true) } label: { Image(systemName: "plus").font(.system(size: 11)) }
             .buttonStyle(.hoverWash).foregroundStyle(C.textSecondary).help(tr("TODO を追加")).accessibilityLabel(tr("TODO を追加"))
-        }.padding(.horizontal, 12).padding(.vertical, 6)
+        }
         if todos.isEmpty {
           Text(tr("TODO はまだありません")).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary).padding(12)
         }
@@ -2805,7 +2803,7 @@ import Observation
         HStack(spacing: 10, content: content)
           .padding(.leading, 8 + CGFloat(depth) * 12).padding(.trailing, 8).frame(height: 28)
           .frame(maxWidth: .infinity, alignment: .leading)
-          .background(selected ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
+          .sidebarSelection(selected)
           .contentShape(Rectangle())
       }.buttonStyle(.hoverWash).padding(.horizontal, 8)
     }
@@ -3033,8 +3031,7 @@ import Observation
 
     private var debugPanel: some View {
       VStack(alignment: .leading, spacing: 0) {
-        Text(tr("実行とデバッグ")).font(.system(size: 12, weight: .semibold)).foregroundStyle(C.textTertiary)
-          .padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 8)
+        SidebarHeading(tr("実行とデバッグ")).padding(.bottom, 4)
         HStack(spacing: 4) {
           Button { startDebugFromUI() } label: {
             Image(systemName: "play.fill")
@@ -3157,8 +3154,7 @@ import Observation
     }
 
     private func debugSection(_ title: String) -> some View {
-      Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(C.textTertiary)
-        .padding(.horizontal, 12).padding(.top, 16).padding(.bottom, 5)
+      SidebarHeading(title)
     }
     private func debugEmpty(_ text: String) -> some View {
       Text(text).font(.system(size: 12)).foregroundStyle(C.textQuaternary).padding(.horizontal, 12)
