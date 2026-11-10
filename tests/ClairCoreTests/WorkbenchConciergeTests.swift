@@ -20,26 +20,32 @@ final class WorkbenchConciergeTests: XCTestCase {
     return (s, dir.path)
   }
 
-  func testOpenIsGUIOnlyStartsOnceThenFocuses() throws {
+  func testOpenIsGUIOnlyStartsOnceOffTheLayout() throws {
     var (s, root) = try opened()
     XCTAssertEqual(r.commands.first { $0.id == "concierge.open" }?.aiAvailable, false)
     XCTAssertEqual(r.execute("concierge.open", state: &s).failure?.code, .confirmationRequired)
-    guard case .pane(let pane) = try r.execute("concierge.open", confirmed: true, state: &s).get() else { return XCTFail() }
+    let tree = s.tree
+    try r.execute("concierge.open", confirmed: true, state: &s).get()
     let c = try XCTUnwrap(s.concierge())
-    XCTAssertEqual(c.pane, pane)
-    XCTAssertEqual(s.launches[pane]?.cwd, root)
+    XCTAssertEqual(c.pane, Concierge.pane)
+    XCTAssertEqual(c.key, WorkbenchState.terminalKey(root, Concierge.pane))
+    XCTAssertEqual(s.launches[Concierge.pane]?.cwd, root)
     XCTAssertTrue(AgentProfile.isSessionID(c.session))
-    // Already running: focuses the same pane, no second concierge.
-    s.tree.splitFocused(.horizontal, kind: .terminal)
-    guard case .pane(let again) = try r.execute("concierge.open", confirmed: true, state: &s).get() else { return XCTFail() }
-    XCTAssertEqual(again, pane)
-    XCTAssertEqual(s.tree.focused, pane)
+    // Never drawn: the layout is untouched, and closing panes or re-entering the Project keeps it.
+    XCTAssertEqual(s.tree, tree)
+    XCTAssertNotNil(s.terminal(c.key))
+    try r.execute("terminal.show", state: &s).get()
+    try r.execute("pane.close", confirmed: true, state: &s).get()
+    XCTAssertEqual(s.concierge()?.session, c.session)
+    // Already running: no second concierge.
+    try r.execute("concierge.open", confirmed: true, state: &s).get()
     XCTAssertEqual(s.launches.values.filter { $0.concierge != nil }.count, 1)
   }
 
   func testChildrenAreAgentsWhoseParentIsTheConcierge() throws {
     var (s, root) = try opened()
-    guard case .pane(let pane) = try r.execute("concierge.open", confirmed: true, state: &s).get() else { return XCTFail() }
+    try r.execute("concierge.open", confirmed: true, state: &s).get()
+    let pane = Concierge.pane
     let key = WorkbenchState.terminalKey(root, pane)
     try r.execute("agent.launch", ["profile": .string("codex"), "prompt": .string("fix login"), "parent": .string(key)], confirmed: true, state: &s).get()
     try r.execute("agent.launch", ["profile": .string("claude")], confirmed: true, state: &s).get()  // not a child
@@ -49,7 +55,8 @@ final class WorkbenchConciergeTests: XCTestCase {
 
   func testOnlyTheConciergeLaunchesIntoAnotherProject() throws {
     var (s, root) = try opened()
-    guard case .pane(let pane) = try r.execute("concierge.open", confirmed: true, state: &s).get() else { return XCTFail() }
+    try r.execute("concierge.open", confirmed: true, state: &s).get()
+    let pane = Concierge.pane
     guard case .pane(let plain) = try r.execute("agent.launch", ["profile": .string("claude")], confirmed: true, state: &s).get() else { return XCTFail() }
     let home = s.project
     let other = URL.temporaryDirectory.appending(path: "clair-concierge-\(UUID().uuidString)").resolvingSymlinksInPath()
@@ -77,7 +84,8 @@ final class WorkbenchConciergeTests: XCTestCase {
     var (s, root) = try opened()
     try r.execute("settings.concierge", ["prompt": .string("テストは make test で")], confirmed: true, state: &s).get()
     Concierge.approve(Concierge.fingerprint(prompt: "テストは make test で", cwd: root))
-    guard case .pane(let pane) = try r.execute("concierge.open", confirmed: true, state: &s).get() else { return XCTFail() }
+    try r.execute("concierge.open", confirmed: true, state: &s).get()
+    let pane = Concierge.pane
     s.launches[pane]?.concierge = "abc-123"
     let cmd = try XCTUnwrap(s.launches[pane]?.command)
     XCTAssertTrue(cmd.hasPrefix("claude --session-id abc-123 --append-system-prompt '"), cmd)
@@ -95,23 +103,26 @@ final class WorkbenchConciergeTests: XCTestCase {
     try FileManager.default.createDirectory(atPath: other, withIntermediateDirectories: true)
     try r.execute("settings.concierge", ["cwd": .string(other)], confirmed: true, state: &s).get()
     Concierge.approve(Concierge.fingerprint(prompt: "", cwd: other))
-    guard case .pane(let pane) = try r.execute("concierge.open", confirmed: true, state: &s).get() else { return XCTFail() }
+    try r.execute("concierge.open", confirmed: true, state: &s).get()
+    let pane = Concierge.pane
     XCTAssertEqual(s.launches[pane]?.cwd, other)
     XCTAssertNotEqual(other, root)
   }
 
   func testConciergeIsFoundFromAnotherProject() throws {
     var (s, root) = try opened()
-    guard case .pane(let pane) = try r.execute("concierge.open", confirmed: true, state: &s).get() else { return XCTFail() }
+    try r.execute("concierge.open", confirmed: true, state: &s).get()
+    let pane = Concierge.pane
     let second = URL.temporaryDirectory.appending(path: "clair-concierge-\(UUID().uuidString)").resolvingSymlinksInPath()
     try FileManager.default.createDirectory(at: second, withIntermediateDirectories: true)
     try r.execute("project.open", ["path": .string(second.path)], state: &s).get()
     let host = try XCTUnwrap(s.projects.first { $0.path == root }?.name)
     XCTAssertNotEqual(s.project, host)
     XCTAssertEqual(s.concierge()?.project, host)
-    // Opening it again goes back to its host instead of starting a second one.
+    // Opening it again neither switches Project nor starts a second one.
+    let shown = s.project
     try r.execute("concierge.open", confirmed: true, state: &s).get()
-    XCTAssertEqual(s.project, host); XCTAssertEqual(s.tree.focused, pane)
+    XCTAssertEqual(s.project, shown); XCTAssertEqual(s.concierge()?.pane, pane)
   }
 
   func testNewConciergeNeedsTheCurrentFingerprintApproved() throws {
@@ -144,8 +155,8 @@ final class WorkbenchConciergeTests: XCTestCase {
 
   func testMessageSentBeforeStartBecomesTheOpeningPrompt() throws {
     var (s, _) = try opened()
-    guard case .pane(let pane) = try r.execute("concierge.open", ["message": .string("README を直して")], confirmed: true, state: &s).get()
-    else { return XCTFail() }
+    try r.execute("concierge.open", ["message": .string("README を直して")], confirmed: true, state: &s).get()
+    let pane = Concierge.pane
     let cmd = try XCTUnwrap(s.launches[pane]?.command)
     XCTAssertTrue(cmd.hasSuffix(" 'README を直して'"), cmd)
     XCTAssertFalse(AgentLaunch(profile: "claude", cwd: "/x", concierge: "abc").command.hasSuffix("'README を直して'"))

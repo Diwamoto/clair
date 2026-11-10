@@ -14,7 +14,8 @@ activity bar の 5 つ目「コンシェルジュ」から sidebar に開く。
 
 - 本体は既定 Agent の CLI を通常の agent launch と同じく raw PTY で起動する。
   cwd は設定の `concierge.cwd`(空なら active Project root)、承認境界も `agent.launch` と同じ。
-  pane はどこかの Project の layout に置き、どの Project からも同じ一つを開く。
+  terminal はどの Project の layout にも置かず(2026-11-10 改訂)、チャットの裏に見えない surface として
+  マウントする。承認や質問を待つ間だけチャットの上に出す。どの Project からも同じ一つを開く。
 - GUI はその session の provider 公式 transcript(Claude Code / Codex の JSONL、
   OpenCode の DB。`AgentHistoryReader` が読むもの)をチャットとして描画する。
   送信欄の入力はその PTY に書き込む。TUI の画面は解析しない。
@@ -25,6 +26,12 @@ activity bar の 5 つ目「コンシェルジュ」から sidebar に開く。
 - 指示は設定の `concierge.prompt` に置き、起動時に固定の役割の後ろに足して渡す。
   `settings.concierge` は AI 不可。prompt・cwd・cwd のプロジェクトファイルのハッシュが前回の
   承認から変わっていたら、起動前に承認カードを出す。
+
+## 改訂の理由(2026-11-10)
+
+オーナーの依頼で、コンシェルジュの Claude Code をユーザーが知覚しない存在にする。layout の pane は
+Project の切替や pane 操作の対象になり、チャットが窓口であることを崩していた。raw PTY は正本のまま
+残るので、承認待ちのときだけ本物のターミナルを出せば原則 3 は保たれる。
 
 ## 改訂の理由(2026-11-09)
 

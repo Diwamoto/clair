@@ -55,7 +55,6 @@
     let running: Bool
     let children: [(session: AgentSession, launch: AgentLaunch)]
     let start: () -> Void
-    let openTerminal: () -> Void
     let focus: (AgentSession) -> Void
     let editInstructions: () -> Void
     @State private var tasksOpen = true
@@ -67,11 +66,7 @@
           Circle().fill(running ? C.success : C.textQuaternary).frame(width: 6, height: 6)
           Text(running ? tr("Claude Code · 実行中") : tr("未起動")).font(rowFont).foregroundStyle(C.textQuaternary)
           Spacer(minLength: 0)
-          if running {
-            Button(tr("ターミナル"), action: openTerminal).buttonStyle(.hoverWash).help(tr("コンシェルジュのターミナルを表示"))
-          } else {
-            Button(tr("起動"), action: start).buttonStyle(.hoverWash)
-          }
+          if !running { Button(tr("起動"), action: start).buttonStyle(.hoverWash) }
         }.padding(.horizontal, 14).frame(height: 46)
         Divider()
         Button { tasksOpen.toggle() } label: {
@@ -113,13 +108,14 @@
     /// On: the chat sits beside the pane board so both are visible.
     @Binding var split: Bool
     let session: String?
-    let pane: Int?
+    /// The concierge's daemon shell and launch. Its surface lives here, out of sight, and surfaces only while it is blocked.
+    let terminal: (key: String, launch: AgentLaunch)?
+    private var pane: Int? { terminal == nil ? nil : Concierge.pane }
     /// The concierge terminal's own state: `.blocked` is a prompt only the raw terminal can answer,
     /// and a finished turn (`done` / `idle` / `attention`) ends the working indicator.
     let status: AgentSession.Status?
     let children: [(session: AgentSession, launch: AgentLaunch)]
     let focus: (AgentSession) -> Void
-    let openTerminal: () -> Void
     /// Starts the concierge with `message` as its first request (the one undecided thing is decided on send).
     let start: (String) -> Void
     /// nil until the transcript has been read once, so the empty state never flashes over a loading chat.
@@ -186,7 +182,23 @@
         .help(split ? tr("チャットだけを表示") : tr("ボードと並べて表示"))
         .accessibilityLabel(split ? tr("チャットだけを表示") : tr("ボードと並べて表示"))
       }
+      .overlay { hiddenTerminal }
       .task(id: session) { await follow() }
+    }
+
+    /// The concierge's raw terminal: mounted (so the composer can type into it) but invisible, except while it waits
+    /// on a permission or question only the terminal can answer.
+    @ViewBuilder private var hiddenTerminal: some View {
+      if let terminal {
+        let blocked = status == .blocked
+        ClairGhosttySurface(launch: (terminal.launch.command, terminal.launch.cwd), pane: Concierge.pane, sessionKey: terminal.key, focused: blocked)
+          .id(terminal.key)
+          .clipShape(RoundedRectangle(cornerRadius: Self.bubbleRadius, style: .continuous))
+          .overlay(RoundedRectangle(cornerRadius: Self.bubbleRadius, style: .continuous).strokeBorder(L.strong))
+          .padding(.horizontal, 24).padding(.top, 48).padding(.bottom, 24)
+          .opacity(blocked ? 1 : 0).allowsHitTesting(blocked).accessibilityHidden(!blocked)
+          .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: blocked)
+      }
     }
 
     /// Waiting on a reply: something was just sent, or the last turn is the user's and the agent has not reported finishing.
@@ -227,10 +239,6 @@
         ConciergeAvatar()
         Circle().fill(C.attention).frame(width: 6, height: 6)
         Text(tr("ターミナルで承認を待っています")).font(.system(size: 14)).foregroundStyle(C.textSecondary)
-        Button(tr("ターミナルを開く"), action: openTerminal)
-          .buttonStyle(.plain).font(.system(size: 12, weight: .medium)).foregroundStyle(C.textPrimary)
-          .padding(.horizontal, 10).frame(height: 24)
-          .background(W.strong, in: Capsule()).overlay(Capsule().strokeBorder(L.stronger))
       }
     }
 

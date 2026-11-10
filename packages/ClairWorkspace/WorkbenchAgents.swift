@@ -282,8 +282,9 @@ extension WorkbenchState {
     guard let i = key.lastIndex(of: "#"), let pane = Int(key[key.index(after: i)...]),
       let p = projects.first(where: { $0.path == String(key[..<i]) })
     else { return nil }
-    let tree = p.name == project ? tree : layouts[p.name]?.tree
-    return tree?.leaves.contains { $0.id == pane && $0.kind == .terminal } == true ? (p.name, pane) : nil
+    let l = withLayoutCopy(p.name)
+    let open = l.tree.leaves.contains { $0.id == pane && $0.kind == .terminal } || (pane == Concierge.pane && l.launches[pane]?.concierge != nil)
+    return open ? (p.name, pane) : nil
   }
 
   /// Removes the terminal pane behind `root#pane`, in any Project, with its launch.
@@ -305,7 +306,7 @@ extension WorkbenchState {
       guard let t = terminal(parent), let p = projects.first(where: { $0.name == t.project }) else {
         throw CommandError(.preconditionFailed, "calling terminal \(parent) is not open in Clair")
       }
-      return (p, t.pane)
+      return (p, t.pane == Concierge.pane ? nil : t.pane)  // the concierge has no pane to split; children open in its Project
     }
     guard let p = projects.first(where: { $0.name == project }) else { throw CommandError(.preconditionFailed, "no active project") }
     return (p, nil)

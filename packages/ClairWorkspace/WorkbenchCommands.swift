@@ -669,11 +669,11 @@ extension CommandRegistry {
         let last = s.tree.focused
         s.tree.ensureEditorAtLeft()
         s.tree.close(last)
-        s.launches = s.launches.filter { id, _ in s.tree.leaves.contains { $0.id == id } }
+        s.launches = s.launches.filter { id, _ in id == Concierge.pane || s.tree.leaves.contains { $0.id == id } }
         return .ok
       }
       s.tree.closeFocused()
-      s.launches = s.launches.filter { id, _ in s.tree.leaves.contains { $0.id == id } }
+      s.launches = s.launches.filter { id, _ in id == Concierge.pane || s.tree.leaves.contains { $0.id == id } }
       s.autoEqualize()
       return .ok
     },
@@ -802,7 +802,7 @@ extension CommandRegistry {
       }
       return .ok
     },
-    // ADR-0020: focus Clair's one concierge (in whichever Project hosts it), starting it if needed. GUI-only (ai: false): an agent
+    // ADR-0020: start Clair's one concierge if it is not running. It stays off every layout (`Concierge.pane`); the chat shows it. GUI-only (ai: false): an agent
     // must not spawn a concierge; it launches children through agent.launch instead.
     // #76: a new one starts only in the `cwd` the user approved, and only while that approval still matches
     // what it would read (the GUI asks first), so the CLI cannot start one past a changed prompt source.
@@ -819,20 +819,15 @@ extension CommandRegistry {
           }
           return .external
         }) { s, i in
-      if let c = s.concierge() {
-        if c.project != s.project, let p = s.projects.first(where: { $0.name == c.project }) { s.switchProject(to: p, scanFiles: false) }
-        s.tree.focus(c.pane); return .pane(c.pane)
-      }
+      if s.concierge() != nil { return .ok }
       let home = try! s.launchHome(nil)
-      s.tree.splitFocused(.horizontal, kind: .terminal)
-      let pane = s.tree.focused
+      let pane = Concierge.pane
       let cwd = s.conciergeCwd.isEmpty ? home.project.path : s.conciergeCwd
       s.launches[pane] = AgentLaunch(
         profile: "claude", cwd: cwd, concierge: UUID().uuidString.lowercased(),
         opening: i["message"]?.string.flatMap { $0.isEmpty ? nil : $0 }, folders: cwd == home.project.path ? home.project.folders : [])
       s.launches[pane]?.conciergePrompt = s.conciergePrompt
-      s.panesClosed = false
-      return .pane(pane)
+      return .ok
     },
     cmd("tab.open", "ファイルを開く", .read, params: [CommandParam("path", .string)],
         preflight: { s, i throws(CommandError) in

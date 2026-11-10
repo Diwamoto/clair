@@ -1,13 +1,17 @@
 import CryptoKit
 import Foundation
 
-// ADR-0020: one concierge agent for all of Clair, hosted in some Project's layout. It is an ordinary raw-PTY agent terminal; the GUI draws
+// ADR-0020: one concierge agent for all of Clair, kept in some Project's `launches` under `Concierge.pane`, a pane id no tree uses,
+// so it never shows in a layout. It is an ordinary raw-PTY agent terminal (daemon shell `root#-1`); the GUI draws
 // its official Claude Code transcript (found by the session id fixed at launch) as chat, and types the
 // composer's text into its PTY. Children are agents launched with `parent` = the concierge's terminal key.
 // ponytail: Claude Code only — it is the one provider whose session id can be fixed at launch
 // (`--session-id`); Codex/OpenCode need a session-discovery step before they can be a concierge.
 
 public enum Concierge {
+  /// The concierge's pane id: off every tree (`PaneTree` ids start at 1), so no layout draws it. The chat mounts its surface.
+  public static let pane = -1
+
   static let basePrompt = """
     あなたは Clair 全体のコンシェルジュです。ユーザーの依頼を受け、Clair の操作と作業の割り振りを担当します。自分で大きな実装はしません。
 
@@ -92,20 +96,18 @@ public enum Concierge {
 }
 
 extension WorkbenchState {
-  /// Clair's concierge terminal, in whichever Project's layout hosts it.
-  public func concierge() -> (project: String, pane: Int, session: String)? {
-    projects.lazy.compactMap { p -> (String, Int, String)? in
-      let l = withLayoutCopy(p.name)
-      return l.launches.sorted { $0.key < $1.key }.lazy.compactMap { pane, launch in
-        launch.concierge.map { (p.name, pane, $0) }
-      }.first { _, pane, _ in l.tree.leaves.contains { $0.id == pane } }
+  /// Clair's concierge terminal, in whichever Project's `launches` holds it.
+  public func concierge() -> (project: String, pane: Int, session: String, key: String, launch: AgentLaunch)? {
+    projects.lazy.compactMap { p in
+      withLayoutCopy(p.name).launches[Concierge.pane].flatMap { l in
+        l.concierge.map { (p.name, Concierge.pane, $0, Self.terminalKey(p.path, Concierge.pane), l) }
+      }
     }.first
   }
 
   /// Agents the concierge launched (their `parent` is the concierge terminal).
   public func conciergeChildren() -> [(session: AgentSession, launch: AgentLaunch)] {
-    guard let c = concierge(), let root = projects.first(where: { $0.name == c.project })?.path else { return [] }
-    let key = Self.terminalKey(root, c.pane)
+    guard let key = concierge()?.key else { return [] }
     // Children can live in the worktree Projects agent.launch creates, so search every Project.
     return agentSessions.compactMap { s in
       guard let l = withLayoutCopy(s.project).launches[s.pane], l.parent == key else { return nil }

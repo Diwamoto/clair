@@ -339,7 +339,7 @@ extension WorkbenchState {
     }
     if l.activeDiff.map(l.diffTabs.contains) != true { l.activeDiff = nil }
     if !l.tree.isValid { l.tree = PaneTree(single: .editor) }
-    l.launches = l.launches.filter { id, _ in l.tree.leaves.contains { $0.id == id } }
+    l.launches = l.launches.filter { id, _ in id == Concierge.pane || l.tree.leaves.contains { $0.id == id } }
     l.previews = l.previews.filter { id, _ in l.tree.leaves.contains { $0.id == id } }
     l.editorFiles = l.editorFiles.filter { id, file in l.tabs.contains(file) && l.tree.leaves.contains { $0.id == id && $0.kind == .editor } }
     layout = l

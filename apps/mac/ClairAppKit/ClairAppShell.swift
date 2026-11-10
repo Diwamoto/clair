@@ -297,7 +297,7 @@ import Observation
             store.state.projects.flatMap { p in
               let tree = p.name == store.state.project ? store.state.tree : store.state.layouts[p.name]?.tree
               return (tree?.leaves ?? []).filter { $0.kind == .terminal }.map { ClairWorkbenchStore.terminalKey(root: p.path, pane: $0.id) }
-            }
+            } + [store.state.concierge()?.key].compactMap { $0 }
           }
         }
         return ClairCLIProcessScanner.terminal(of: pid, keys: keys)
@@ -2142,27 +2142,14 @@ import Observation
       ConciergeSidebar(
         running: st.concierge() != nil,
         children: st.conciergeChildren(), start: { startConcierge() },
-        openTerminal: { focusConcierge(); leaveConcierge() },
         focus: focusConciergeChild, editInstructions: editConciergeInstructions)
     }
 
     /// #76: a new concierge starts only once the user has approved what it reads (prompt, cwd, its project files).
     private func startConcierge(_ message: String? = nil) {
+      // A running concierge takes messages straight from the chat (its surface is mounted there).
+      guard st.concierge() == nil else { return }
       var input: CommandInput = message.map { ["message": .string($0)] } ?? [:]
-      if let c = st.concierge() {
-        // Panes mount per active Project (pane ids repeat across Projects), so type only once its host is shown.
-        // ponytail: fixed delay for the mount; hook the surface's mount if a slow switch drops the message.
-        store.run("concierge.open", [:], confirmed: true)
-        if let message, !message.isEmpty {
-          DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            // Never type into the same-numbered pane of another Project.
-            if store.state.project == c.project, ClairGhosttySurfaceView.send(message, toPane: c.pane) {
-              DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { ClairGhosttySurfaceView.pressReturn(inPane: c.pane) }
-            }
-          }
-        }
-        return
-      }
       let cwd = st.conciergeCwd.isEmpty ? store.activeRoot ?? "" : st.conciergeCwd
       input["cwd"] = .string(cwd)
       let fingerprint = Concierge.fingerprint(prompt: st.conciergePrompt, cwd: cwd)
@@ -2176,12 +2163,6 @@ import Observation
           store.run("concierge.open", input, confirmed: true)
         }
       }
-    }
-
-    private func focusConcierge() {
-      guard let c = st.concierge() else { return }
-      if c.project != st.project { store.run("project.switch", ["name": .string(c.project)]) }
-      store.run("pane.focus", ["id": .int(c.pane)])
     }
 
     /// Leaving the concierge for a pane or file hands the sidebar back to the file tree.
@@ -2254,7 +2235,7 @@ import Observation
     }
 
     private var sessionList: some View {
-      SessionList(sessions: st.agentSessions, current: st.project, projects: st.projects) { s in
+      SessionList(sessions: st.agentSessions.filter { $0.pane != Concierge.pane }, current: st.project, projects: st.projects) { s in
         if s.project != st.project { store.run("project.switch", ["name": .string(s.project)]) }
         store.run("pane.focus", ["id": .int(s.pane)])
       } openHistory: { historyTabs[$0.id] = $0; store.run("history.open", ["id": .string($0.id)]) }
@@ -3384,10 +3365,9 @@ import Observation
           let c = st.concierge()
           ConciergeChatView(
             split: $conciergeSplit,
-            session: c?.session, pane: c?.project == st.project ? c?.pane : nil,
+            session: c?.session, terminal: c.map { ($0.key, $0.launch) },
             status: c.flatMap { c in st.agentSessions.first { $0.project == c.project && $0.pane == c.pane }?.status },
             children: st.conciergeChildren(), focus: focusConciergeChild,
-            openTerminal: { focusConcierge(); leaveConcierge() },
             start: { startConcierge($0) })
           .frame(width: conciergeSplit ? 460 : nil)
           .overlay(alignment: .trailing) { if conciergeSplit { Divider() } }
