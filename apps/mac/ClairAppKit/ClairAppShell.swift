@@ -1504,7 +1504,7 @@ import Observation
                 sidebar
                 if !glass { Rectangle().fill(C.surfaceActive).frame(width: 1) }
               }
-              main.readingPanel()
+              main.readingPanel(tiled: review == nil && diff == nil && !st.panesClosed && sidebarMode != "concierge")
             }
           }
           .allowsHitTesting(!st.settingsOpen)
@@ -4750,6 +4750,7 @@ import Observation
     /// Only first children all the way down: the anchored editor slot (`PaneTree.replaceFocusedEditor`).
     var leftmost = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.clairGlass) private var glass
     @State private var shown = false
 
     /// The pane just before a divider names it (`PaneTree.setRatio`).
@@ -4765,7 +4766,8 @@ import Observation
       let h = axis == .horizontal
       PaneView(node: a, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onTitle: onTitle, title: title, onRatio: onRatio, editor: editor, run: run, dragging: $dragging, draggingTab: $draggingTab, leftmost: leftmost)
         .frame(width: h ? total * ratio : nil, height: h ? nil : total * ratio)
-      Rectangle().fill(L.paneDivider).frame(width: h ? 1 : nil, height: h ? nil : 1)
+      // Glass: the wallpaper shows between pane cards instead of a hairline.
+      Rectangle().fill(glass ? .clear : L.paneDivider).frame(width: h ? (glass ? DesignTokens.Glass.inset : 1) : nil, height: h ? nil : (glass ? DesignTokens.Glass.inset : 1))
       PaneView(node: b, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onTitle: onTitle, title: title, onRatio: onRatio, editor: editor, run: run, dragging: $dragging, draggingTab: $draggingTab, leftmost: false)
     }
 
@@ -4811,6 +4813,7 @@ import Observation
             }
           }
         }
+        .paneCard(focused: id == focused)
         // Keep the editor and preview panes fully legible even when another pane is focused.
         .opacity(kind == .editor || kind == .preview || id == focused ? 1 : 0.75)
         // A split focuses the new pane, so the focused leaf fades in when it appears.

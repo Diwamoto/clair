@@ -38,6 +38,7 @@
       store.edited("apple/ClairApp/ProjectWorkspace.swift")
       for (name, prep) in [("native", {}), ("palette", { store.run("palette.commands") }), ("quickopen", { store.run("palette.files") }), ("search", { store.run("palette.search") }),
                            ("glass", { store.run("settings.choose", ["key": .string("material"), "value": .string("Liquid Glass")], confirmed: true) }),
+                           ("glass-split", { store.run("pane.splitRight"); store.run("pane.splitDown") }),
                            ("glass-settings", { store.run("settings.open") })] as [(String, () -> Void)] {
         prep()
         let host = NSHostingView(rootView: ClairAppShell(store: store).frame(width: 1440, height: 900))

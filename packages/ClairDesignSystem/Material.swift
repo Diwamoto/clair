@@ -67,13 +67,35 @@ extension View {
 extension View {
   /// The reading ground (editor, terminal): always opaque `canvas`; under glass it becomes a rounded
   /// card on the wallpaper, so the text itself is never see-through.
-  public func readingPanel() -> some View { modifier(ReadingPanel()) }
+  /// `tiled`: the content is a pane tree whose leaves draw their own `paneCard()`, so under glass
+  /// only the inset is applied and the wallpaper shows between the panes.
+  public func readingPanel(tiled: Bool = false) -> some View { modifier(ReadingPanel(tiled: tiled)) }
+
+  /// One pane of a split under glass: its own rounded canvas card, rim-lit while focused. Flat: unchanged.
+  public func paneCard(focused: Bool) -> some View { modifier(PaneCard(focused: focused)) }
 }
 
-private struct ReadingPanel: ViewModifier {
+private struct PaneCard: ViewModifier {
+  let focused: Bool
   @Environment(\.clairGlass) private var glass
   func body(content: Content) -> some View {
     if glass {
+      let shape = RoundedRectangle(cornerRadius: DesignTokens.Glass.panelRadius, style: .continuous)
+      content.background(DesignTokens.Color.canvas).clipShape(shape)
+        .overlay(shape.strokeBorder(focused ? DesignTokens.Glass.rim : DesignTokens.Glass.edge))
+    } else {
+      content
+    }
+  }
+}
+
+private struct ReadingPanel: ViewModifier {
+  let tiled: Bool
+  @Environment(\.clairGlass) private var glass
+  func body(content: Content) -> some View {
+    if glass && tiled {
+      content.padding([.vertical, .trailing], DesignTokens.Glass.inset)
+    } else if glass {
       let shape = RoundedRectangle(cornerRadius: DesignTokens.Glass.panelRadius, style: .continuous)
       content.background(DesignTokens.Color.canvas).clipShape(shape)
         .overlay(shape.strokeBorder(DesignTokens.Glass.edge))
