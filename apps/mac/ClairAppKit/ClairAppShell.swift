@@ -1419,10 +1419,11 @@ import Observation
     @State private var paletteMeasured = false
     // U05: sidebar mode + source-control view. GUI-local (no command); the stage buttons go through git.stage/unstage.
     @State private var sidebarMode = "folder"
-    @State private var conciergeBoard = false
+    /// The concierge screen is the chat beside the board; the board's TODOs are polled while it is up.
+    private var conciergeBoard: Bool { sidebarMode == "concierge" }
     @AppStorage("clair.sidebarWidth") private var sidebarWidth = 242.0
     /// The concierge chat moves aside for the pane board once one of its children is live (no manual toggle).
-    private var conciergeSplit: Bool { st.conciergeChildren().contains { !$0.session.status.isExited } }
+
     /// Width when the current drag began, so a drag that snaps the sidebar shut reopens (⌘B) at it.
     @State private var sidebarDragFrom: Double?
     @State private var debugMode = "debug"
@@ -1939,12 +1940,6 @@ import Observation
       // the activity bar is on screen even while ⌘B hides the sidebar.
       // #77 / #78: here, not on the body's chain (at the type checker's limit).
       .onAppear { if st.toggles["startConcierge"] == true { sidebarMode = "concierge" } }
-      // A child the concierge just launched comes up on the right, beside the chat.
-      .onChange(of: st.conciergeChildren().map(\.session.id)) { old, new in
-        guard sidebarMode == "concierge", let id = new.first(where: { !old.contains($0) }),
-          let c = st.conciergeChildren().first(where: { $0.session.id == id }) else { return }
-        focusConciergeChild(c.session)
-      }
       .task(id: conciergeBoard) {
         // The concierge and its children rewrite the TODO files while the board is open.
         while conciergeBoard, !Task.isCancelled {
@@ -2188,7 +2183,7 @@ import Observation
         running: st.concierge() != nil,
         children: st.conciergeChildren(), start: { startConcierge() },
         focus: focusConciergeChild, editInstructions: editConciergeInstructions,
-        board: conciergeBoard, toggleBoard: { conciergeBoard.toggle(); if conciergeBoard { todos = ClairTodo.list() } })
+        )
     }
 
     /// #76: a new concierge starts only once the user has approved what it reads (prompt, cwd, its project files).
@@ -2214,14 +2209,13 @@ import Observation
     /// Leaving the concierge for a pane or file hands the sidebar back to the file tree.
     private func leaveConcierge() { sidebarMode = "folder" }
     /// A tab click must show that tab, which the full-width concierge chat would cover.
-    private func leaveConciergeOverlay() { if sidebarMode == "concierge" && (conciergeBoard || !conciergeSplit) { leaveConcierge() } }
+    private func leaveConciergeOverlay() { if sidebarMode == "concierge" { leaveConcierge() } }
 
     /// A child link shows the real terminal: leave the chat and focus that pane.
     private func focusConciergeChild(_ s: AgentSession) {
       if s.project != st.project { store.run("project.switch", ["name": .string(s.project)]) }
       store.run("pane.focus", ["id": .int(s.pane)])
-      // Beside the chat the pane is already visible; only a full-width chat has to step aside.
-      if !conciergeSplit { leaveConcierge() }
+      leaveConcierge()
     }
 
     private func editConciergeInstructions() {
@@ -3393,33 +3387,33 @@ import Observation
         if let old, old != new { store.closeTerminal(old) }
       }
       // ponytail: fixed chat width beside the board; a drag handle if owners want to resize it.
-      .padding(.leading, sidebarMode == "concierge" && !conciergeBoard && conciergeSplit ? 460 : 0)
       .overlay(alignment: .leading) {
-        if sidebarMode == "concierge", conciergeBoard {
-          TodoBoardView(
-            cards: st.board(todos), projects: st.projects.map(\.name),
-            openPane: { card in
-              guard let p = card.project, let pane = card.pane else { return }
-              if p != st.project { store.run("project.switch", ["name": .string(p)]) }
-              store.run("pane.focus", ["id": .int(pane)])
-              leaveConcierge()
-            },
-            openFile: { path in leaveConcierge(); store.run("file.open", ["path": .string(path)]) },
-            diffProject: { card in card.todo.branch.flatMap { b in st.projects.first { $0.branch == b }?.name } },
-            openDiff: { name in
-              if name != st.project { store.run("project.switch", ["name": .string(name)]) }
-              sidebarMode = "shield"; reloadChanges()
-            })
-        } else if sidebarMode == "concierge" {
+        // The concierge screen: chat on the left, the board on the right (running agents first; a click opens the terminal).
+        if sidebarMode == "concierge" {
           let c = st.concierge()
-          ConciergeChatView(
-            session: c?.session, terminal: c.map { ($0.key, $0.launch) },
-            status: c.flatMap { c in st.agentSessions.first { $0.project == c.project && $0.pane == c.pane }?.status },
-            children: st.conciergeChildren(), focus: focusConciergeChild,
-            start: { startConcierge($0) })
-          .frame(width: conciergeSplit ? 460 : nil)
-          .overlay(alignment: .trailing) { if conciergeSplit { Divider() } }
-          .animation(.easeOut(duration: Motion.overlayDuration), value: conciergeSplit)
+          HStack(spacing: 0) {
+            ConciergeChatView(
+              session: c?.session, terminal: c.map { ($0.key, $0.launch) },
+              status: c.flatMap { c in st.agentSessions.first { $0.project == c.project && $0.pane == c.pane }?.status },
+              start: { startConcierge($0) })
+            .frame(width: 460)
+            Divider()
+            TodoBoardView(
+              agents: st.conciergeChildren(), openAgent: focusConciergeChild,
+              cards: st.board(todos), projects: st.projects.map(\.name),
+              openPane: { card in
+                guard let p = card.project, let pane = card.pane else { return }
+                if p != st.project { store.run("project.switch", ["name": .string(p)]) }
+                store.run("pane.focus", ["id": .int(pane)])
+                leaveConcierge()
+              },
+              openFile: { path in leaveConcierge(); store.run("file.open", ["path": .string(path)]) },
+              diffProject: { card in card.todo.branch.flatMap { b in st.projects.first { $0.branch == b }?.name } },
+              openDiff: { name in
+                if name != st.project { store.run("project.switch", ["name": .string(name)]) }
+                sidebarMode = "shield"; reloadChanges()
+              })
+          }
         }
       }
     }

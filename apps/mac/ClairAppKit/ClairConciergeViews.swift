@@ -51,8 +51,6 @@
     let start: () -> Void
     let focus: (AgentSession) -> Void
     let editInstructions: () -> Void
-    let board: Bool
-    let toggleBoard: () -> Void
     @State private var tasksOpen = true
 
     var body: some View {
@@ -74,7 +72,6 @@
           }
         }
         SidebarHeading(tr("操作"))
-        SidebarAction(board ? tr("チャットに戻る") : tr("ボード"), systemImage: board ? "bubble.left" : "square.grid.3x2", action: toggleBoard)
         SidebarAction(tr("指示と作業フォルダを設定"), systemImage: "gearshape", action: editInstructions)
       }
     }
@@ -94,8 +91,6 @@
     /// The concierge terminal's own state: `.blocked` is a prompt only the raw terminal can answer,
     /// and a finished turn (`done` / `idle` / `attention`) ends the working indicator.
     let status: AgentSession.Status?
-    let children: [(session: AgentSession, launch: AgentLaunch)]
-    let focus: (AgentSession) -> Void
     /// Starts the concierge with `message` as its first request (the one undecided thing is decided on send).
     let start: (String) -> Void
     /// nil until the transcript has been read once, so the empty state never flashes over a loading chat.
@@ -114,7 +109,7 @@
 
     var body: some View {
       Group {
-        if messages?.isEmpty == true && pending == nil && children.isEmpty {
+        if messages?.isEmpty == true && pending == nil {
           emptyState
         } else {
           ScrollView {
@@ -128,15 +123,6 @@
                 blockedRow.transition(appear)
               } else if working {
                 WorkingRow().transition(appear)
-              }
-              // Children are shown as links after the conversation, never as relayed output.
-              if !children.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                  Text(tr("子エージェント · %@", children.count)).font(.system(size: 12)).foregroundStyle(C.textTertiary)
-                  ForEach(children, id: \.session.id) { c in
-                    ChildCard(session: c.session, title: c.launch.prompt.map(ConciergeSidebar.shortTitle) ?? c.session.title) { focus(c.session) }
-                  }
-                }
               }
             }
             .padding(.horizontal, 24).padding(.top, 32).padding(.bottom, 8)
@@ -250,6 +236,9 @@
       .padding(.horizontal, 24).frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    // ponytail: Claude Code's model aliases; read them from the CLI if it grows a way to list them.
+    private static let models = ["default", "opus", "sonnet", "haiku"]
+
     private static let starters: [(icon: String, text: String)] = [
       ("checkmark.seal", "未コミットの変更をレビューして"), ("testtube.2", "テストを実行して、失敗を直して"),
       ("map", "この Project の構成を説明して"), ("checklist", "残っている TODO を片付けて"),
@@ -272,6 +261,17 @@
           }
           .font(.system(size: 12)).foregroundStyle(C.textTertiary)
           .padding(.horizontal, 9).frame(height: 24).background(W.medium, in: Capsule())
+          // Switches the running concierge's model with Claude Code's own `/model <alias>`.
+          if let pane {
+            Menu {
+              ForEach(Self.models, id: \.self) { m in
+                Button(m) { if ClairGhosttySurfaceView.send("/model \(m)", toPane: pane) {
+                  DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { ClairGhosttySurfaceView.pressReturn(inPane: pane) } } }
+              }
+            } label: {
+              Text(tr("モデル")).font(.system(size: 12)).foregroundStyle(C.textTertiary)
+            }.menuStyle(.borderlessButton).fixedSize().help(tr("コンシェルジュのモデルを切り替え"))
+          }
           Spacer(minLength: 0)
           Text(pane == nil ? tr("⏎ 送信 · 最初の送信で起動") : working ? tr("⏎ 送信 · esc 中断") : tr("⏎ 送信")).font(.system(size: 11)).foregroundStyle(C.lineNumber)
           Button(action: send) {
@@ -463,32 +463,47 @@
   }
 
   /// A child agent in the chat: a card that opens its own terminal pane; its output is never relayed.
-  private struct ChildCard: View {
+  /// A concierge child on the board: a pulsing dot while it works, a click opens its terminal.
+  private struct AgentCard: View {
     let session: AgentSession
     let title: String
     let open: () -> Void
+    @State private var pulse = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
       let (text, color) = statusLabel(session.status)
+      let live = session.status == .running
       Button(action: open) {
-        HStack(spacing: 10) {
-          Circle().fill(color).frame(width: 6, height: 6)
-          Text(title).lineLimit(1).foregroundStyle(C.textSecondary)
-          Spacer(minLength: 0)
-          Text(text).foregroundStyle(C.textQuaternary)
-          Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(C.textQuaternary)
+        VStack(alignment: .leading, spacing: 6) {
+          HStack(spacing: 6) {
+            Circle().fill(color).frame(width: 7, height: 7)
+              .overlay(Circle().stroke(color, lineWidth: 1.5).scaleEffect(pulse ? 2.4 : 1).opacity(pulse ? 0 : 0.8).opacity(live ? 1 : 0))
+            Text(text).font(.system(size: 11)).foregroundStyle(live ? color : C.textQuaternary)
+            Spacer(minLength: 0)
+            Image(systemName: "apple.terminal").font(.system(size: 11)).foregroundStyle(C.textQuaternary)
+          }
+          Text(title).font(rowFont).foregroundStyle(C.textPrimary).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+          Text(session.project).font(.system(size: 11)).foregroundStyle(C.textTertiary).lineLimit(1)
         }
-        .font(rowFont)
-        .padding(.horizontal, 14).frame(height: 40)
-        .background(W.faint, in: RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous).strokeBorder(L.hairline))
+        .padding(12)
+        .background(live ? C.success.opacity(0.08) : W.faint, in: RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous).strokeBorder(live ? C.success.opacity(0.5) : L.hairline))
         .contentShape(Rectangle())
-      }.buttonStyle(HoverWashStyle(radius: Radius.overlay)).help(tr("ペイン %@ へ移動", session.pane))
+      }
+      .buttonStyle(HoverWashStyle(radius: Radius.overlay)).help(tr("ターミナルを開く"))
+      .onAppear {
+        guard !reduceMotion else { return }
+        withAnimation(.easeOut(duration: 1.4).repeatForever(autoreverses: false)) { pulse = true }
+      }
     }
   }
 
   /// #78: every staged TODO across Projects; columns are stages, rows are lanes. Clair only shows the file's keys.
   struct TodoBoardView: View {
+    /// The concierge's children, shown above the TODO columns; a click opens the agent's terminal.
+    let agents: [(session: AgentSession, launch: AgentLaunch)]
+    let openAgent: (AgentSession) -> Void
     let cards: [TodoBoardCard]
     let projects: [String]
     let openPane: (TodoBoardCard) -> Void
@@ -515,6 +530,13 @@
           }.frame(maxWidth: 240)
           Spacer(minLength: 0)
         }.font(rowFont)
+        if !agents.isEmpty {
+          LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 8)], spacing: 8) {
+            ForEach(agents, id: \.session.id) { a in
+              AgentCard(session: a.session, title: a.launch.prompt.map(ConciergeSidebar.shortTitle) ?? a.session.title) { openAgent(a.session) }
+            }
+          }
+        }
         ScrollView([.horizontal, .vertical]) {
           Grid(alignment: .topLeading, horizontalSpacing: 8, verticalSpacing: 8) {
             GridRow {
