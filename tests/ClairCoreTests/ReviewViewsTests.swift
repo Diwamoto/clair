@@ -8,6 +8,28 @@
   @testable import ClairWorkspace
 
   @MainActor final class ReviewViewsTests: XCTestCase {
+    func testChangesListFlattensSectionsIntoATreeAndHidesCollapsedFolders() {
+      let changes = [
+        GitChange(path: "a/b/x.swift", index: "M", worktree: "M"),
+        GitChange(path: "a/b/y.swift", index: " ", worktree: "M"),
+        GitChange(path: "a/z.swift", index: " ", worktree: "M"),
+        GitChange(path: "new.txt", index: "?", worktree: "?"),
+      ]
+      let ids = { (collapsed: Set<String>) in ChangesList.entries(changes, collapsed: collapsed).map(\.id) }
+      // x.swift is both staged and changed: one row in each section, ids kept distinct.
+      XCTAssertEqual(ids([]), [
+        "staged#", "staged/d/a", "staged/d/a/b", "staged/f/a/b/x.swift",
+        "changes#", "changes/d/a", "changes/d/a/b", "changes/f/a/b/x.swift", "changes/f/a/b/y.swift", "changes/f/a/z.swift",
+        "untracked#", "untracked/f/new.txt",
+      ])
+      XCTAssertEqual(ids(["a/b"]), [
+        "staged#", "staged/d/a", "staged/d/a/b",
+        "changes#", "changes/d/a", "changes/d/a/b", "changes/f/a/z.swift",
+        "untracked#", "untracked/f/new.txt",
+      ])
+      XCTAssertEqual(ids(["a"]), ["staged#", "staged/d/a", "changes#", "changes/d/a", "untracked#", "untracked/f/new.txt"])
+    }
+
     func testDiffRowsNumberNewSideOnly() {
       let d = "diff --git a/f b/f\nindex 1..2\n--- a/f\n+++ b/f\n@@ -1,2 +5,3 @@\n ctx\n-old\n+new\n+more"
       let r = DiffView.rows(d)
@@ -63,6 +85,15 @@
       let elapsed = Date().timeIntervalSince(start)
       XCTAssertGreaterThan(rows.count, files.count)
       XCTAssertLessThan(elapsed, 0.2, "20,000-file explorer model took \(elapsed)s")
+    }
+
+    func testTwentyThousandChangeListModelStaysWithinInteractionBudget() {
+      let changes = (0..<20_000).map { GitChange(path: "Sources/G\($0 % 100)/file\($0).swift", index: " ", worktree: "M") }
+      let start = Date()
+      let rows = ChangesList.entries(changes, collapsed: [])
+      let elapsed = Date().timeIntervalSince(start)
+      XCTAssertEqual(rows.count, 1 + 1 + 100 + changes.count)  // header, Sources, G0…G99, files
+      XCTAssertLessThan(elapsed, 0.2, "20,000-change list model took \(elapsed)s")
     }
 
     func testExplorerMultiSelection() {

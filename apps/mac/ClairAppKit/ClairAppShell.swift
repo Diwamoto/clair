@@ -2256,7 +2256,7 @@ import Observation
     }
 
     private var changesList: some View {
-      VStack(alignment: .leading, spacing: 0) {
+      Group {
         if st.isRepo { ChangesList(
           changes: changes, loaded: changesLoaded, selected: diff, onSelect: { openDiff($0) },
           onToggle: { change, stage in

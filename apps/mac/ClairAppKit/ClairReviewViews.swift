@@ -214,6 +214,8 @@
   }
 
   /// Source-control sidebar: staged / changes / untracked sections with a stage toggle per row.
+  /// Rows are flattened once per `changes`/`collapsed` change and laid out lazily; hover and the commit
+  /// message live in child views, so neither re-lays out the whole list (a big change set hung the UI).
   struct ChangesList: View {
     let changes: [GitChange]
     /// nil while `git status` is loading, false when it failed: neither may claim "no changes".
@@ -232,12 +234,135 @@
     let busy: Bool
     let operationMessage: String?
     @State private var message = ""
-    @State private var hovered: DiffTarget?
     @State private var collapsed: Set<String> = []
 
-    /// Same geometry as the explorer's treeRow in ClairAppShell: inset, rounded 28px row, 12px indent per level.
-    /// `trailing` sits over the row instead of inside the Button label, where the row's own click would swallow it.
-    private func treeRow<Content: View, Trailing: View>(depth: Int, selected: Bool, action: @escaping () -> Void, @ViewBuilder trailing: () -> Trailing = { EmptyView() }, @ViewBuilder _ content: () -> Content) -> some View {
+    enum Section: String { case staged, changes, untracked }
+
+    /// One visible row. Ids carry the section: a path can be both staged and changed.
+    enum Entry: Identifiable {
+      case header(Section, [GitChange])
+      case folder(Section, id: String, name: String, depth: Int, open: Bool)
+      case file(Section, GitChange, DiffTarget, depth: Int)
+      var id: String {
+        switch self {
+        case .header(let s, _): "\(s.rawValue)#"
+        case .folder(let s, let id, _, _, _): "\(s.rawValue)/d/\(id)"
+        case .file(let s, let c, _, _): "\(s.rawValue)/f/\(c.path)"
+        }
+      }
+    }
+
+    /// Tree styled like the explorer: a folder row is emitted wherever a directory component first differs
+    /// from the previous sorted path; anything under a collapsed folder is left out.
+    nonisolated static func entries(_ changes: [GitChange], collapsed: Set<String>) -> [Entry] {
+      let sections: [(Section, [GitChange])] = [
+        (.staged, changes.filter(\.staged)),
+        (.changes, changes.filter { $0.unstaged && !$0.untracked }),
+        (.untracked, changes.filter(\.untracked)),
+      ]
+      var out: [Entry] = []
+      for (s, rows) in sections where !rows.isEmpty {
+        out.append(.header(s, rows))
+        var prev: [Substring] = []
+        for c in rows.sorted(by: { $0.path < $1.path }) {
+          let dirs = Array(c.path.split(separator: "/").dropLast())
+          let shared = zip(dirs, prev).prefix { $0 == $1 }.count
+          prev = dirs
+          let ids = dirs.indices.map { dirs[0...$0].joined(separator: "/") }
+          // First collapsed ancestor depth; rows deeper than it are hidden.
+          let hiddenBelow = ids.firstIndex(where: collapsed.contains) ?? dirs.count
+          for d in shared..<dirs.count where d <= hiddenBelow {
+            out.append(.folder(s, id: ids[d], name: String(dirs[d]), depth: d, open: !collapsed.contains(ids[d])))
+          }
+          guard hiddenBelow == dirs.count else { continue }
+          let target = DiffTarget(path: c.path, staged: s == .staged, untracked: s == .untracked)
+          out.append(.file(s, c, target, depth: dirs.count))
+        }
+      }
+      return out
+    }
+
+    var body: some View {
+      LazyVStack(spacing: 0) {
+        if let operationMessage {
+          HStack(spacing: 6) {
+            if busy { ProgressView().controlSize(.small) }
+            Text(operationMessage).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary).lineLimit(3)
+            Spacer(minLength: 0)
+          }.padding(.horizontal, 12).padding(.vertical, 8)
+        }
+        if changes.isEmpty {
+          Text(loaded == true ? tr("変更はありません") : loaded == false ? tr("変更を取得できませんでした") : tr("変更を読み込み中…")).font(Typography.font(Typography.sidebarStrong)).foregroundStyle(C.textSecondary)
+            .frame(maxWidth: .infinity).padding(16)
+        } else {
+          CommitBox(message: $message, hasStaged: changes.contains(where: \.staged), busy: busy, onCommit: onCommit)
+          ForEach(Self.entries(changes, collapsed: collapsed)) { e in
+            switch e {
+            case .header(let s, let rows): header(s, rows)
+            case .folder(_, let id, let name, let depth, let open):
+              ChangeTreeRow(depth: depth, selected: false, action: { if open { collapsed.insert(id) } else { collapsed.remove(id) } }) {
+                Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold)).foregroundStyle(C.textTertiary)
+                  .rotationEffect(.degrees(open ? 90 : 0)).frame(width: 10)
+                FileIcon.folder(open: open).image(size: 11, ink: C.textTertiary).frame(width: 16)
+                Text(name).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textSecondary).lineLimit(1)
+                Spacer(minLength: 0)
+              } trailing: { _ in EmptyView() }
+            case .file(_, let c, let t, let depth): fileRow(c, t, depth: depth)
+            }
+          }
+        }
+      }
+    }
+
+    private func header(_ s: Section, _ rows: [GitChange]) -> some View {
+      HStack(spacing: 4) {
+        Text(s == .staged ? tr("ステージ済み") : s == .changes ? tr("変更") : tr("未追跡")).font(Typography.font(Typography.sidebarStrong)).foregroundStyle(C.textTertiary)
+        Text(tr("%@ ファイル", rows.count)).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textQuaternary)
+        Spacer()
+        let stage = s != .staged
+        Button { onBulk(rows, stage) } label: {
+          Text(stage ? "+" : "−").font(Typography.font(Typography.title)).foregroundStyle(C.textTertiary).frame(width: 18, height: 18)
+        }.buttonStyle(.hoverWash).disabled(busy).help(stage ? tr("すべてステージに追加") : tr("すべてステージから外す"))
+      }.padding(.leading, 20).padding(.trailing, 12).frame(height: 26)
+    }
+
+    private func fileRow(_ c: GitChange, _ t: DiffTarget, depth: Int) -> some View {
+      let on = selected == t, name = c.path.split(separator: "/").last.map(String.init) ?? c.path
+      let badge = c.untracked ? "U" : c.index == "A" || c.worktree == "A" ? "A" : c.index == "D" || c.worktree == "D" ? "D" : "M"
+      return ChangeTreeRow(depth: depth, selected: on, action: { onSelect(t) }) {
+        Color.clear.frame(width: 10)  // chevron slot: a file lines up with its sibling folders
+        FileIcon.forPath(c.path).image(size: 10, ink: on ? C.textSecondary : C.textTertiary).frame(width: 16)
+        Text(name).font(.system(size: 12, weight: on ? .semibold : .regular)).foregroundStyle(on ? C.textPrimary : C.textSecondary).lineLimit(1)
+        Spacer(minLength: 0)
+      } trailing: { hovered in
+        if hovered {
+          Button { onDiscard(c, t.staged) } label: {
+            Image(systemName: "arrow.uturn.backward").font(.system(size: 10, weight: .semibold)).foregroundStyle(C.textTertiary).frame(width: 18, height: 18)
+          }.buttonStyle(.hoverWash).disabled(busy).help(c.untracked ? tr("ファイルを削除") : tr("変更を元に戻す"))
+          Button { onToggle(c, !t.staged) } label: {
+            Text(t.staged ? "−" : "+").font(Typography.font(Typography.title)).foregroundStyle(C.textTertiary).frame(width: 18, height: 18)
+          }.buttonStyle(.hoverWash).disabled(busy).help(t.staged ? tr("ステージを取り消す") : tr("ステージに追加"))
+        }
+        Text(badge).font(.system(size: 12, weight: .semibold)).foregroundStyle(badge == "A" || badge == "U" ? C.success : badge == "D" ? C.danger : C.attention)
+          .allowsHitTesting(false)
+      }
+      .clairContextMenu(menus) { menu(c, t.staged) }
+      .help(c.path)
+    }
+  }
+
+  /// Same geometry as the explorer's treeRow in ClairAppShell: inset, rounded 28px row, 12px indent per level.
+  /// `trailing` sits over the row instead of inside the Button label, where the row's own click would swallow it.
+  /// Owns its hover state, so pointer motion re-renders one row, not the list.
+  private struct ChangeTreeRow<Content: View, Trailing: View>: View {
+    let depth: Int
+    let selected: Bool
+    let action: () -> Void
+    @ViewBuilder let content: () -> Content
+    @ViewBuilder let trailing: (_ hovered: Bool) -> Trailing
+    @State private var hovered = false
+
+    var body: some View {
       ZStack(alignment: .trailing) {
         Button(action: action) {
           HStack(spacing: 10, content: content)
@@ -246,13 +371,22 @@
             .sidebarSelection(selected)
             .contentShape(Rectangle())
         }.buttonStyle(.hoverWash)
-        HStack(spacing: 10, content: trailing).padding(.trailing, 16)
+        HStack(spacing: 10) { trailing(hovered) }.padding(.trailing, 16)
       }.padding(.horizontal, 8)
+      .onHover { hovered = $0 }
     }
+  }
 
-    private var canCommit: Bool { !busy && changes.contains(where: \.staged) && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+  /// The commit message box. Its own view so typing re-renders only the box, not every change row.
+  private struct CommitBox: View {
+    @Binding var message: String
+    let hasStaged: Bool
+    let busy: Bool
+    let onCommit: (String) -> Void
 
-    private var commitBox: some View {
+    private var canCommit: Bool { !busy && hasStaged && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    var body: some View {
       VStack(alignment: .leading, spacing: 6) {
         // Multi-line box, distinct from the button: Return commits, Command- or Option-Return inserts a newline.
         TextField(tr("コミットメッセージ"), text: $message, axis: .vertical)
@@ -279,87 +413,6 @@
     private func commit() {
       guard canCommit else { return }
       onCommit(message)
-    }
-
-    var body: some View {
-      VStack(spacing: 0) {
-        if let operationMessage {
-          HStack(spacing: 6) {
-            if busy { ProgressView().controlSize(.small) }
-            Text(operationMessage).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary).lineLimit(3)
-            Spacer(minLength: 0)
-          }.padding(.horizontal, 12).padding(.vertical, 8)
-        }
-        if changes.isEmpty {
-          Text(loaded == true ? tr("変更はありません") : loaded == false ? tr("変更を取得できませんでした") : tr("変更を読み込み中…")).font(Typography.font(Typography.sidebarStrong)).foregroundStyle(C.textSecondary)
-            .frame(maxWidth: .infinity).padding(16)
-        } else {
-          commitBox
-          section(tr("ステージ済み"), changes.filter(\.staged)) { DiffTarget(path: $0.path, staged: true, untracked: false) }
-          section(tr("変更"), changes.filter { $0.unstaged && !$0.untracked }) { DiffTarget(path: $0.path, staged: false, untracked: false) }
-          section(tr("未追跡"), changes.filter(\.untracked)) { DiffTarget(path: $0.path, staged: false, untracked: true) }
-        }
-      }
-    }
-
-    @ViewBuilder
-    private func section(_ title: String, _ rows: [GitChange], _ target: @escaping (GitChange) -> DiffTarget) -> some View {
-      if !rows.isEmpty {
-        HStack(spacing: 4) {
-          Text(title).font(Typography.font(Typography.sidebarStrong)).foregroundStyle(C.textTertiary)
-          Text(tr("%@ ファイル", rows.count)).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textQuaternary)
-          Spacer()
-          let stage = title != tr("ステージ済み")
-          Button { onBulk(rows, stage) } label: {
-            Text(stage ? "+" : "−").font(Typography.font(Typography.title)).foregroundStyle(C.textTertiary).frame(width: 18, height: 18)
-          }.buttonStyle(.hoverWash).disabled(busy).help(stage ? tr("すべてステージに追加") : tr("すべてステージから外す"))
-        }.padding(.leading, 20).padding(.trailing, 12).frame(height: 26)
-        // Tree styled like the explorer (28px rows, 12px indent, chevron + folder). A folder row is emitted
-        // wherever a directory component first differs from the previous sorted path.
-        let sorted = rows.sorted { $0.path < $1.path }
-        ForEach(Array(sorted.enumerated()), id: \.element.path) { i, c in
-          let dirs = c.path.split(separator: "/").dropLast().map(String.init)
-          let prev = i > 0 ? sorted[i - 1].path.split(separator: "/").dropLast().map(String.init) : []
-          let shared = zip(dirs, prev).prefix { $0 == $1 }.count
-          let ids = dirs.indices.map { dirs[0...$0].joined(separator: "/") }
-          ForEach(shared..<dirs.count, id: \.self) { d in
-            if !ids[..<d].contains(where: collapsed.contains) {
-              let open = !collapsed.contains(ids[d])
-              treeRow(depth: d, selected: false, action: { if open { collapsed.insert(ids[d]) } else { collapsed.remove(ids[d]) } }) {
-                Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold)).foregroundStyle(C.textTertiary)
-                  .rotationEffect(.degrees(open ? 90 : 0)).frame(width: 10)
-                FileIcon.folder(open: open).image(size: 11, ink: C.textTertiary).frame(width: 16)
-                Text(dirs[d]).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textSecondary).lineLimit(1)
-                Spacer(minLength: 0)
-              }
-            }
-          }
-          if !ids.contains(where: collapsed.contains) {
-            let t = target(c), on = selected == t, name = c.path.split(separator: "/").last.map(String.init) ?? c.path
-            let badge = c.untracked ? "U" : c.index == "A" || c.worktree == "A" ? "A" : c.index == "D" || c.worktree == "D" ? "D" : "M"
-            treeRow(depth: dirs.count, selected: on, action: { onSelect(t) }, trailing: {
-              if hovered == t {
-                Button { onDiscard(c, t.staged) } label: {
-                  Image(systemName: "arrow.uturn.backward").font(.system(size: 10, weight: .semibold)).foregroundStyle(C.textTertiary).frame(width: 18, height: 18)
-                }.buttonStyle(.hoverWash).disabled(busy).help(c.untracked ? tr("ファイルを削除") : tr("変更を元に戻す"))
-                Button { onToggle(c, !t.staged) } label: {
-                  Text(t.staged ? "−" : "+").font(Typography.font(Typography.title)).foregroundStyle(C.textTertiary).frame(width: 18, height: 18)
-                }.buttonStyle(.hoverWash).disabled(busy).help(t.staged ? tr("ステージを取り消す") : tr("ステージに追加"))
-              }
-              Text(badge).font(.system(size: 12, weight: .semibold)).foregroundStyle(badge == "A" || badge == "U" ? C.success : badge == "D" ? C.danger : C.attention)
-                .allowsHitTesting(false)
-            }) {
-              Color.clear.frame(width: 10)  // chevron slot: a file lines up with its sibling folders
-              FileIcon.forPath(c.path).image(size: 10, ink: on ? C.textSecondary : C.textTertiary).frame(width: 16)
-              Text(name).font(.system(size: 12, weight: on ? .semibold : .regular)).foregroundStyle(on ? C.textPrimary : C.textSecondary).lineLimit(1)
-              Spacer(minLength: 0)
-            }
-            .onHover { hovered = $0 ? t : (hovered == t ? nil : hovered) }
-            .clairContextMenu(menus) { menu(c, t.staged) }
-            .help(c.path)
-          }
-        }
-      }
     }
   }
 
