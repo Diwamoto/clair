@@ -1408,6 +1408,8 @@ import Observation
     // U05: sidebar mode + source-control view. GUI-local (no command); the stage buttons go through git.stage/unstage.
     @State private var sidebarMode = "folder"
     @AppStorage("clair.sidebarWidth") private var sidebarWidth = 242.0
+    /// The concierge chat beside the pane board instead of over it.
+    @AppStorage("clair.conciergeSplit") private var conciergeSplit = false
     /// Width when the current drag began, so a drag that snaps the sidebar shut reopens (⌘B) at it.
     @State private var sidebarDragFrom: Double?
     @State private var debugMode = "debug"
@@ -1566,7 +1568,7 @@ import Observation
       }
       .onChange(of: st.debugNavigationGeneration) { sidebarMode = "ladybug" }
       // A file opened while the concierge chat covers the panes would land hidden behind it.
-      .onChange(of: st.active) { if sidebarMode == "concierge" { leaveConcierge() } }
+      .onChange(of: st.active) { if sidebarMode == "concierge" && !conciergeSplit { leaveConcierge() } }
       .onChange(of: store.debugSession?.frames.first) { _, frame in
         if sidebarMode == "ladybug", let frame { openDebugFrame(frame) }
       }
@@ -3375,15 +3377,20 @@ import Observation
       .onChange(of: review?.chatKey) { old, new in
         if let old, old != new { store.closeTerminal(old) }
       }
-      .overlay {
+      // ponytail: fixed chat width beside the board; a drag handle if owners want to resize it.
+      .padding(.leading, sidebarMode == "concierge" && conciergeSplit ? 460 : 0)
+      .overlay(alignment: .leading) {
         if sidebarMode == "concierge" {
           let c = st.concierge()
           ConciergeChatView(
+            split: $conciergeSplit,
             session: c?.session, pane: c?.project == st.project ? c?.pane : nil,
             status: c.flatMap { c in st.agentSessions.first { $0.project == c.project && $0.pane == c.pane }?.status },
             children: st.conciergeChildren(), focus: focusConciergeChild,
             openTerminal: { focusConcierge(); leaveConcierge() },
             start: { startConcierge($0) })
+          .frame(width: conciergeSplit ? 460 : nil)
+          .overlay(alignment: .trailing) { if conciergeSplit { Divider() } }
         }
       }
     }

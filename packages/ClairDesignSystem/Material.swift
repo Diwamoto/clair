@@ -112,3 +112,38 @@ private struct GlassPanel: ViewModifier {
     }
   }
 }
+
+extension View {
+  /// A selected sidebar row's fill: `surfaceActive` on flat, the canvas' glass `cardSelected` on glass.
+  /// Every sidebar panel (explorer, changes, file browser, TODO) uses this so selection reads the same.
+  public func sidebarSelection(_ on: Bool) -> some View { modifier(SidebarSelection(on: on)) }
+}
+
+private struct SidebarSelection: ViewModifier {
+  let on: Bool
+  @Environment(\.clairGlass) private var glass
+  func body(content: Content) -> some View {
+    content.background(
+      on ? (glass ? DesignTokens.Glass.cardSelected : DesignTokens.Color.surfaceActive) : .clear,
+      in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+  }
+}
+
+/// The one section heading every sidebar panel uses: 11pt semibold tertiary, inset to the row text (16pt).
+public struct SidebarHeading<Accessory: View>: View {
+  let title: String
+  let accessory: Accessory
+  public init(_ title: String, @ViewBuilder accessory: () -> Accessory = { EmptyView() }) {
+    self.title = title; self.accessory = accessory()
+  }
+  public var body: some View {
+    HStack(spacing: 6) {
+      Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(DesignTokens.Color.textTertiary).lineLimit(1)
+      Spacer(minLength: 0)
+      accessory
+    }
+    .padding(.leading, 16).padding(.trailing, 12).padding(.top, 12).padding(.bottom, 4)
+    .frame(minHeight: 28, alignment: .bottom)
+    .accessibilityAddTraits(.isHeader)
+  }
+}

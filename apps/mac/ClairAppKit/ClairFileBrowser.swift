@@ -666,7 +666,7 @@
     }
 
     private func heading(_ text: String) -> some View {
-      Text(text).font(.system(size: 11)).foregroundStyle(C.textQuaternary).padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 4)
+      SidebarHeading(text)
     }
 
     private func place(_ label: String, _ path: String) -> some View {
@@ -689,7 +689,7 @@
           Spacer(minLength: 0)
         }
         .padding(.horizontal, 8).frame(height: 28).frame(maxWidth: .infinity, alignment: .leading)
-        .background(on ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
+        .sidebarSelection(on)
         .contentShape(Rectangle())
       }.buttonStyle(.hoverWash).padding(.horizontal, 8)
     }

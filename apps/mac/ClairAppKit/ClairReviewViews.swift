@@ -243,7 +243,7 @@
           HStack(spacing: 10, content: content)
             .padding(.leading, 8 + CGFloat(depth + 1) * 12).padding(.trailing, 8).frame(height: 28)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(selected ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
+            .sidebarSelection(selected)
             .contentShape(Rectangle())
         }.buttonStyle(.hoverWash)
         HStack(spacing: 10, content: trailing).padding(.trailing, 16)
