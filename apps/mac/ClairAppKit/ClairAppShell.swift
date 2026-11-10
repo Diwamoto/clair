@@ -3290,7 +3290,15 @@ import Observation
         async let prefetched: Void = store.buffers.prefetch(target.path, root: root)
         let snapshot = await (rendered, lines, prefetched)
         guard !Task.isCancelled, diff == target, store.activeRoot == root else { return }
-        loadedDiff = LoadedDiff(target: target, root: root, model: snapshot.0, fileLines: snapshot.1)
+        // Syntax colours are a second pass (a 5,000-line diff takes about a second): a first open shows the
+        // plain diff at once, a refresh keeps the old coloured one until the new colours are ready.
+        if clear { loadedDiff = LoadedDiff(target: target, root: root, model: snapshot.0, fileLines: snapshot.1) }
+        let rows = snapshot.0.rows
+        let colours = await Task.detached(priority: .userInitiated) { DiffView.highlight(rows, path: target.path) }.value
+        guard !Task.isCancelled, diff == target, store.activeRoot == root else { return }
+        var model = snapshot.0
+        model.highlighted = colours
+        loadedDiff = LoadedDiff(target: target, root: root, model: model, fileLines: snapshot.1)
       }
     }
 

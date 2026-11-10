@@ -447,6 +447,8 @@
       let visibleLines: Set<Int>
       /// Per row: the start index of the folded unchanged run it belongs to (nil = always shown).
       let fold: [Int?]
+      /// Per row: its code (sign dropped) in the editor's syntax colours; headers stay plain.
+      var highlighted: [AttributedString] = []
     }
 
     nonisolated static let context = 3
@@ -465,7 +467,7 @@
       return out
     }
 
-    nonisolated static func model(_ text: String) -> Model {
+    nonisolated static func model(_ text: String, path: String? = nil) -> Model {
       let parsed = rows(text)
       let counts = stats(parsed)
       let blocks = GitPatch.blocks(parsed.map { DiffLine(text: $0.text, oldLine: $0.oldLine, newLine: $0.newLine) })
@@ -473,7 +475,20 @@
         text: text, rows: parsed, added: counts.added, removed: counts.removed,
         hunks: parsed.indices.filter { parsed[$0].text.hasPrefix("@@") },
         blocks: Dictionary(uniqueKeysWithValues: blocks.map { ($0.lowerBound, $0) }),
-        visibleLines: Set(parsed.compactMap(\.newLine)), fold: folds(parsed))
+        visibleLines: Set(parsed.compactMap(\.newLine)), fold: folds(parsed), highlighted: highlight(parsed, path: path))
+    }
+
+    /// Highlights the old side (context + removed) and the new side (context + added) as two runs of source,
+    /// so a token split across a removed/added pair still parses; each row takes its colours from its own side.
+    nonisolated static func highlight(_ rows: [Row], path: String?) -> [AttributedString] {
+      let code = rows.map { r in r.oldLine == nil && r.newLine == nil ? r.text : String(r.text.dropFirst()) }
+      guard let path else { return code.map(CodeReviewView.flagged) }
+      let old = rows.indices.filter { rows[$0].oldLine != nil }, new = rows.indices.filter { rows[$0].newLine != nil }
+      var out = code.map { AttributedString($0) }
+      for side in [old, new] {
+        for (i, a) in zip(side, CodeReviewView.highlight(side.map { code[$0] }, path: path)) { out[i] = a }
+      }
+      return out
     }
 
     /// Parses `@@ -a,b +c,d @@` for `a` and `c`, then numbers old (context/removed) and new (context/added) lines.
@@ -506,18 +521,18 @@
 
     /// Side-by-side pairing: a run of removed lines is zipped with the added run that follows it;
     /// context and hunk headers sit on both sides. `id` is the first source row's index (hunk scroll targets).
-    struct Pair { let id: Int; let left: Row?; let right: Row? }
+    struct Pair { let id: Int; let left: Row?; let right: Row?; var leftIndex: Int? = nil; var rightIndex: Int? = nil }
     nonisolated static func pairs(_ rows: [Row]) -> [Pair] {
       var out: [Pair] = [], i = 0
       while i < rows.count {
         let t = rows[i].text
-        guard t.hasPrefix("-") || t.hasPrefix("+") else { out.append(Pair(id: i, left: rows[i], right: rows[i])); i += 1; continue }
+        guard t.hasPrefix("-") || t.hasPrefix("+") else { out.append(Pair(id: i, left: rows[i], right: rows[i], leftIndex: i, rightIndex: i)); i += 1; continue }
         var del: [Int] = [], add: [Int] = []
         while i < rows.count, rows[i].text.hasPrefix("-") { del.append(i); i += 1 }
         while i < rows.count, rows[i].text.hasPrefix("+") { add.append(i); i += 1 }
         for k in 0..<max(del.count, add.count) {
           let l = k < del.count ? del[k] : nil, a = k < add.count ? add[k] : nil
-          out.append(Pair(id: l ?? a!, left: l.map { rows[$0] }, right: a.map { rows[$0] }))
+          out.append(Pair(id: l ?? a!, left: l.map { rows[$0] }, right: a.map { rows[$0] }, leftIndex: l, rightIndex: a))
         }
       }
       return out
@@ -539,15 +554,22 @@
       let suggestionsByLine = Dictionary(grouping: suggestions, by: \.line)
       ScrollViewReader { proxy in
       VStack(spacing: 0) {
-        if showsHeader { HStack {
-          Text(target.path).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary)
-          Text(label ?? (target.against.map { "\($0) → \(target.path)" } ?? (target.staged ? "HEAD → index" : target.untracked ? tr("未追跡ファイル") : tr("index → 作業ツリー"))))
-            .font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary)
+        if showsHeader { HStack(spacing: 9) {
+          // Canvas SourceControl file heading: icon, mono path, counts; which side it is sits in a pill at the end.
+          FileIcon.forPath(target.path).image(size: 11, ink: C.textTertiary)
+          Text(target.path).font(.system(size: 11, design: .monospaced)).foregroundStyle(C.textSecondary).lineLimit(1).truncationMode(.head)
           if added + removed > 0 {
-            Text("+\(added)").font(Typography.font(Typography.chrome)).foregroundStyle(C.success)
-            Text("−\(removed)").font(Typography.font(Typography.chrome)).foregroundStyle(C.danger)
+            HStack(spacing: 4) {
+              Text("+\(added)").foregroundStyle(C.success)
+              Text("−\(removed)").foregroundStyle(C.danger)
+            }.font(.system(size: 10, design: .monospaced))
           }
           Spacer()
+          let side = label ?? target.against ?? (target.staged ? tr("ステージ済み") : target.untracked ? tr("未追跡") : tr("変更"))
+          let tint = target.staged || target.untracked ? C.success : C.textTertiary
+          Text(side).font(.system(size: 9, weight: .semibold)).foregroundStyle(tint).lineLimit(1)
+            .padding(.horizontal, 6).frame(height: 18).background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 3))
+            .help(target.against.map { "\($0) → \(target.path)" } ?? (target.staged ? "HEAD → index" : target.untracked ? tr("未追跡ファイル") : tr("index → 作業ツリー")))
           if editor != nil {
             Button(editing ? tr("差分") : tr("編集")) { editing.toggle() }
               .font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary).buttonStyle(.hoverWash)
@@ -664,7 +686,18 @@
       }
     }
 
-    private func line(_ r: Row, width: CGFloat) -> some View {
+    /// The canvas diff marks each changed line with a coloured + / − before its code.
+    private func signMark(_ text: String) -> some View {
+      let added = text.hasPrefix("+"), removed = text.hasPrefix("-")
+      return Text(added ? "+" : removed ? "−" : " ").font(.system(size: 12, design: .monospaced))
+        .foregroundStyle(added ? C.success : C.danger).frame(width: 12, alignment: .leading)
+    }
+
+    private func codeText(_ i: Int, _ text: String) -> Text {
+      i < model.highlighted.count ? Text(model.highlighted[i]) : Text(CodeReviewView.flagged(String(text.dropFirst())))
+    }
+
+    private func line(_ i: Int, _ r: Row, width: CGFloat) -> some View {
       // Mock Review diff: editor metrics (12px mono, 19px rows, canvas) with old/new 44px number gutters.
       let l = r.text, sign = l.first.map(String.init) ?? " "
       let added = sign == "+", removed = sign == "-", header = l.hasPrefix("@@")
@@ -679,9 +712,9 @@
         gutter(r.newLine)
         Group {
           if header { Text(l).foregroundStyle(C.textQuaternary) }
-          else { Text(CodeReviewView.flagged(String(l.dropFirst()))).foregroundStyle(C.code) }  // the tint already marks +/−
+          else { HStack(spacing: 0) { signMark(l); codeText(i, l).foregroundStyle(C.code) } }
         }
-        .font(mono).padding(.horizontal, 12)
+        .font(mono).padding(.leading, 6).padding(.trailing, 12)
       }
       // Rows fill the viewport (the lazy stack proposes no width) and grow for long lines.
       .frame(minWidth: width, alignment: .leading).frame(height: 19).background(tint)
@@ -691,7 +724,7 @@
     private func overflowWidth(_ viewport: CGFloat) -> CGFloat {
       guard split else { return 0 }
       let longest = model.rows.lazy.map { $0.text.count }.max() ?? 0
-      return max(0, 68 + 7.3 * CGFloat(longest) - (viewport - 1) / 2)
+      return max(0, 74 + 7.3 * CGFloat(longest) - (viewport - 1) / 2)
     }
 
     @ViewBuilder private func pairRow(_ p: Pair, half: CGFloat, width: CGFloat) -> some View {
@@ -699,12 +732,12 @@
       Group {
         if split {
           HStack(spacing: 0) {
-            cell(p.left, number: p.left?.oldLine, width: half)
+            cell(p.left, p.leftIndex, number: p.left?.oldLine, width: half)
             Rectangle().fill(L.hairline).frame(width: 1)
-            cell(p.right, number: p.right?.newLine, width: width - half - 1)
+            cell(p.right, p.rightIndex, number: p.right?.newLine, width: width - half - 1)
           }.frame(height: 19)
         } else {
-          line(r, width: width)
+          line(p.id, r, width: width)
         }
       }
       .contentShape(Rectangle())
@@ -713,7 +746,7 @@
     }
 
     /// One side of the split view: its own number gutter, the line, and the line's tint; nil is the empty filler.
-    private func cell(_ r: Row?, number: Int?, width: CGFloat) -> some View {
+    private func cell(_ r: Row?, _ i: Int?, number: Int?, width: CGFloat) -> some View {
       let l = r?.text ?? "", sign = l.first.map(String.init) ?? " "
       let added = sign == "+", removed = sign == "-"
       let mono = Font.system(size: 12, design: .monospaced)
@@ -721,8 +754,8 @@
         Text(number.map(String.init) ?? "").font(mono).foregroundStyle(C.lineNumber).padding(.trailing, 8).frame(width: 44, alignment: .trailing)
         Group {
           if l.hasPrefix("@@") { Text(l).foregroundStyle(C.textQuaternary) }
-          else { Text(CodeReviewView.flagged(String(l.dropFirst()))).foregroundStyle(C.code) }  // the tint already marks +/−
-        }.font(mono).fixedSize().padding(.horizontal, 12).offset(x: -hScroll)
+          else if let i { HStack(spacing: 0) { signMark(l); codeText(i, l).foregroundStyle(C.code) } }
+        }.font(mono).fixedSize().padding(.leading, 6).padding(.trailing, 12).offset(x: -hScroll)
         .frame(maxWidth: .infinity, alignment: .leading).clipped()
       }
       .frame(width: width, alignment: .leading).frame(maxHeight: .infinity)

@@ -69,6 +69,24 @@
       XCTAssertEqual(f, [nil, nil, nil, nil, 4, 4, 4, 4, nil, nil, nil, nil, nil])
     }
 
+    func testDiffHighlightsEachSideWithoutTheSign() {
+      let m = DiffView.model("@@ -1,2 +1,2 @@\n let a = 1\n-var b = 2\n+let b = 3", path: "x.swift")
+      XCTAssertEqual(m.highlighted.map { String($0.characters) }, ["@@ -1,2 +1,2 @@", "let a = 1", "var b = 2", "let b = 3"])
+      // `var` on the removed row and `let` on the added row are keywords, coloured from their own side.
+      XCTAssertNotNil(m.highlighted[2].runs.first?.foregroundColor)
+      XCTAssertNotNil(m.highlighted[3].runs.first?.foregroundColor)
+      XCTAssertNil(m.highlighted[0].runs.first?.foregroundColor)
+    }
+
+    func testLargeHighlightedDiffStaysWithinBudget() {
+      let text = "@@ -1,5000 +1,5000 @@\n" + (0..<5000).map { $0.isMultiple(of: 3) ? "+let x\($0) = \($0)" : " let y\($0) = 0" }.joined(separator: "\n")
+      let start = Date()
+      _ = DiffView.model(text, path: "x.swift")
+      let elapsed = Date().timeIntervalSince(start)
+      // Off the main actor and after the plain diff is shown (loadDiff), so this guards regressions, not frame time.
+      XCTAssertLessThan(elapsed, 3, "5,000-line highlighted diff took \(elapsed)s")
+    }
+
     func testLargeDiffParsingStaysWithinInteractionBudget() {
       let text = "@@ -1,5000 +1,5000 @@\n" + (0..<5000).map { $0.isMultiple(of: 3) ? "+line \($0)" : " line \($0)" }.joined(separator: "\n")
       let start = Date()

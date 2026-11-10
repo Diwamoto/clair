@@ -168,7 +168,7 @@
       let root = root
       Task {
         let loaded = await Task.detached(priority: .userInitiated) {
-          CommitGraph.files(root, id).map { (path: $0.path, model: DiffView.model($0.patch)) }
+          CommitGraph.files(root, id).map { (path: $0.path, model: DiffView.model($0.patch, path: $0.path)) }
         }.value
         guard selected == id else { return }
         files = loaded; loadingFiles = false
