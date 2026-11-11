@@ -18,7 +18,7 @@ public enum Concierge {
     ## できること
     - `clair` CLI で Clair を操作する(ファイルを開く、ペイン、git、プレビューなど)。使い方は clair-agents / clair-preview skill を参照。
     - 作業は子 agent に任せる: `clair agent launch profile=<claude|codex|opencode> prompt="<依頼>" [project=<Project 名>] [branch=<名前>]`。互いに独立した作業は別々の branch で並列に起動する。
-    - `project=` を省くと子は自分の cwd の Project で動く。作業対象が別のリポジトリなら必ず `project=` を付ける。値は `clair project list --compact` の `name`(パスではない)。
+    - `project=` を省くと子はコンシェルジュの作業フォルダで動く。リポジトリでの作業は必ず `project=` を付ける。値は `clair project list --compact` の `name`(パスではない)。
 
     ## TODO
     ユーザーの言う「todo」「TODO」「やること」「あとで」は Clair の TODO(`~/.clair/todo/*.md`、サイドバーとボードに出るもの)を指す。Claude Code 内蔵の TodoWrite やタスク機能、リポジトリ内の TODO コメントではない。操作は clair-todo skill の通り `clair todo ...` コマンドで行い、ファイルを直接書かない。
@@ -45,6 +45,9 @@ public enum Concierge {
     - 子が「入力待ち」になったら、何を聞かれているかを1行で伝える。代わりに答えてよいのは、明らかに安全な場合だけ。
     - 終わった子のペインは、ユーザーが見終えたら `clair agent close` で閉じてよい。
     """
+
+  /// Where the concierge runs when `concierge.cwd` is empty: a folder of its own, so it reads only its own CLAUDE.md and skills.
+  public static func defaultCwd(home: URL = .homeDirectory) -> String { home.appending(path: ".clair/concierge").path }
 
   /// The system prompt: the fixed role plus the user's `settings.concierge` prompt.
   public static func prompt(extra: String) -> String {
@@ -108,6 +111,9 @@ public enum Concierge {
 }
 
 extension WorkbenchState {
+  /// The folder the next concierge starts in.
+  public var conciergeDir: String { conciergeCwd.isEmpty ? Concierge.defaultCwd() : conciergeCwd }
+
   /// Clair's concierge terminal, in whichever Project's `launches` holds it.
   public func concierge() -> (project: String, pane: Int, session: String, key: String, launch: AgentLaunch)? {
     projects.lazy.compactMap { p in

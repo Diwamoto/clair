@@ -2186,7 +2186,7 @@ import Observation
       // A running concierge takes messages straight from the chat (its surface is mounted there).
       guard st.concierge() == nil else { return }
       var input: CommandInput = message.map { ["message": .string($0)] } ?? [:]
-      let cwd = st.conciergeCwd.isEmpty ? store.activeRoot ?? "" : st.conciergeCwd
+      let cwd = st.conciergeDir
       input["cwd"] = .string(cwd)
       let fingerprint = Concierge.fingerprint(prompt: st.conciergePrompt, cwd: cwd)
       if Concierge.isApproved(fingerprint) { store.run("concierge.open", input, confirmed: true); return }
@@ -2199,6 +2199,13 @@ import Observation
           store.run("concierge.open", input, confirmed: true)
         }
       }
+    }
+
+    /// A changed prompt or folder ends the running concierge, so the next open starts one with them.
+    private func saveConcierge(_ input: CommandInput) {
+      let before = (st.conciergePrompt, st.conciergeDir)
+      store.run("settings.concierge", input)
+      if let c = st.concierge(), before != (st.conciergePrompt, st.conciergeDir) { store.closeTerminal(c.key) }
     }
 
     /// Leaving the concierge for a pane or file hands the sidebar back to the file tree.
@@ -3540,18 +3547,18 @@ import Observation
               switchRow(tr("起動時にコンシェルジュを開く"), "startConcierge", note: tr("オフなら前回の Project を開きます。⌃⌘0 でいつでも切り替えられます。"))
               VStack(alignment: .leading, spacing: 6) {
                 Text(tr("作業フォルダ")).font(.system(size: 13))
-                TextField(tr("空欄なら開いている Project"), text: $conciergeCwdDraft)
+                TextField(tr("空欄なら ~/.clair/concierge"), text: $conciergeCwdDraft)
                   .textFieldStyle(.roundedBorder).accessibilityLabel(tr("作業フォルダ"))
-                  .onSubmit { store.run("settings.concierge", ["cwd": .string(conciergeCwdDraft)]) }
+                  .onSubmit { saveConcierge(["cwd": .string(conciergeCwdDraft)]) }
                 Text(tr("そのフォルダのプロジェクトスキルと CLAUDE.md が読み込まれます。")).font(.system(size: 11)).foregroundStyle(C.textTertiary)
                 Text(tr("指示")).font(.system(size: 13)).padding(.top, 6)
                 TextEditor(text: $conciergePromptDraft)
                   .font(.system(size: 12)).frame(height: 120)
                   .overlay(RoundedRectangle(cornerRadius: 6).stroke(L.strong)).accessibilityLabel(tr("指示"))
                 Button(tr("保存")) {
-                  store.run("settings.concierge", ["prompt": .string(conciergePromptDraft), "cwd": .string(conciergeCwdDraft)])
+                  saveConcierge(["prompt": .string(conciergePromptDraft), "cwd": .string(conciergeCwdDraft)])
                 }
-                Text(tr("次にコンシェルジュを起動したときから反映されます。内容が変わると起動前に確認します。")).font(.system(size: 11)).foregroundStyle(C.textTertiary)
+                Text(tr("変えて保存すると今のコンシェルジュを終了し、次に開いたときに新しい内容で起動します。内容が変わると起動前に確認します。")).font(.system(size: 11)).foregroundStyle(C.textTertiary)
               }
               .padding(.vertical, 8)
               .onAppear { conciergePromptDraft = st.conciergePrompt; conciergeCwdDraft = st.conciergeCwd }

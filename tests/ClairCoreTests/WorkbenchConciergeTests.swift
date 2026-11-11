@@ -16,6 +16,7 @@ final class WorkbenchConciergeTests: XCTestCase {
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     var s = WorkbenchState()
     try r.execute("project.open", ["path": .string(dir.path)], state: &s).get()
+    s.conciergeCwd = dir.path
     Concierge.approve(Concierge.fingerprint(prompt: "", cwd: dir.path))  // as the GUI does after the card
     return (s, dir.path)
   }
@@ -40,6 +41,21 @@ final class WorkbenchConciergeTests: XCTestCase {
     // Already running: no second concierge.
     try r.execute("concierge.open", confirmed: true, state: &s).get()
     XCTAssertEqual(s.launches.values.filter { $0.concierge != nil }.count, 1)
+  }
+
+  func testItsFolderBecomesAProjectWhereChildrenStart() throws {
+    var (s, root) = try opened()
+    let shown = s.project
+    let folder = URL(fileURLWithPath: root).deletingLastPathComponent().appending(path: "concierge-\(UUID().uuidString)").path
+    s.conciergeCwd = folder
+    Concierge.approve(Concierge.fingerprint(prompt: "", cwd: folder))
+    try r.execute("concierge.open", confirmed: true, state: &s).get()
+    let c = try XCTUnwrap(s.concierge())
+    XCTAssertEqual(s.project, shown)
+    XCTAssertEqual(s.projects.first { $0.name == c.project }?.path, c.launch.cwd)
+    try r.execute("agent.launch", ["profile": .string("claude"), "prompt": .string("x"), "parent": .string(c.key)], confirmed: true, state: &s).get()
+    XCTAssertEqual(s.conciergeChildren().map(\.launch.cwd), [c.launch.cwd])
+    XCTAssertEqual(WorkbenchState().conciergeDir, Concierge.defaultCwd())
   }
 
   func testChildrenAreAgentsWhoseParentIsTheConcierge() throws {

@@ -453,9 +453,10 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   `launches` に layout が使わない pane id `-1` で持ち、daemon の shell key は `<root>#-1`。2026-11-10 オーナー依頼)。
   surface はチャットの裏に見えない状態でマウントし、コンシェルジュがターミナルでの承認や質問を待つ(`blocked`)
   間だけチャットの上に一時表示してそこで答えさせる。どの Project からも Project を切り替えずに同じ一つを開く。指示は設定の `concierge.prompt`(固定の役割の後ろに足す自由記述)、
-  作業フォルダは `concierge.cwd`(空なら起動時の active Project root。そこのプロジェクトスキルと
-  `CLAUDE.md` が読まれる)。どちらも設定画面か `settings.concierge [prompt cwd]`(AI 不可。agent が
-  書き換えると以後の全タスクを指揮できるため)で変え、次の起動から反映する。新しく起動する前に、
+  作業フォルダは `concierge.cwd`(空ならコンシェルジュ専用の `~/.clair/concierge`。無ければ作る。そこのプロジェクトスキルと
+  `CLAUDE.md` が読まれる。2026-11-11 オーナー依頼)。起動時に作業フォルダを、表示中の Project を切り替えずに Project として開き、
+  そこをホスト Project にする。`project=` を付けずに起動した子はこのフォルダで動く。どちらも設定画面か `settings.concierge [prompt cwd]`(AI 不可。agent が
+  書き換えると以後の全タスクを指揮できるため)で変える。設定画面で値を変えて保存すると動いているコンシェルジュを終了し、次に開いたときに新しい値で起動する。新しく起動する前に、
   prompt・cwd と cwd(と親ディレクトリ)の `CLAUDE.md` / `CLAUDE.local.md` / `.mcp.json` / `.claude/CLAUDE.md` /
   `.claude/settings{,.local}.json` / `.claude/{skills,agents,commands,hooks,rules}/` 配下の内容のハッシュを
   GUI の defaults の承認済みの値と比べ、違えば承認カードを出す。`concierge.open`(パレットには出さない)自身も新規起動の前に承認済みかを確かめるので、CLI から変更後の内容で起動することはできない(`schedules.json` と同じ方式。限界も同じで、

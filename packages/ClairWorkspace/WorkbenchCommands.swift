@@ -821,10 +821,9 @@ extension CommandRegistry {
         params: [CommandParam("message", .string, required: false), CommandParam("cwd", .string, required: false)],
         palette: false,
         preflight: { s, i throws(CommandError) in
-          let home = try s.launchHome(nil)
           if s.concierge() == nil {
-            let cwd = i["cwd"]?.string ?? (s.conciergeCwd.isEmpty ? home.project.path : s.conciergeCwd)
-            try require(cwd == (s.conciergeCwd.isEmpty ? home.project.path : s.conciergeCwd), "the concierge folder changed; open it again")
+            let cwd = i["cwd"]?.string ?? s.conciergeDir
+            try require(cwd == s.conciergeDir, "the concierge folder changed; open it again")
             try require(Concierge.isApproved(Concierge.fingerprint(prompt: s.conciergePrompt, cwd: cwd)),
                         "what the concierge reads changed since it was approved; open it from Clair's concierge view")
           }
@@ -832,13 +831,15 @@ extension CommandRegistry {
         }) { s, i in
       AgentRun.pruneSandboxes(keep: s.openSandboxes)
       if s.concierge() != nil { return .ok }
-      let home = try! s.launchHome(nil)
-      let pane = Concierge.pane
-      let cwd = s.conciergeCwd.isEmpty ? home.project.path : s.conciergeCwd
-      s.launches[pane] = AgentLaunch(
-        profile: "claude", cwd: cwd, concierge: UUID().uuidString.lowercased(),
-        opening: i["message"]?.string.flatMap { $0.isEmpty ? nil : $0 }, folders: cwd == home.project.path ? home.project.folders : [])
-      s.launches[pane]?.conciergePrompt = s.conciergePrompt
+      // Its folder is a Project (added without switching to it), so children launched without `project=` start there too.
+      try? FileManager.default.createDirectory(atPath: s.conciergeDir, withIntermediateDirectories: true)
+      let path = WorkbenchProject.normalized(s.conciergeDir) ?? s.conciergeDir
+      let host = s.addProject(WorkbenchProject(name: URL(fileURLWithPath: path).lastPathComponent, path: path))
+      var launch = AgentLaunch(
+        profile: "claude", cwd: path, concierge: UUID().uuidString.lowercased(),
+        opening: i["message"]?.string.flatMap { $0.isEmpty ? nil : $0 }, folders: host.folders)
+      launch.conciergePrompt = s.conciergePrompt
+      s.withLayout(host.name) { $0.launches[Concierge.pane] = launch }
       return .ok
     },
     cmd("tab.open", "ファイルを開く", .read, params: [CommandParam("path", .string)],

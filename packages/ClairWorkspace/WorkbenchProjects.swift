@@ -182,12 +182,18 @@ extension WorkbenchState {
 
   /// Switches to the Project at `p.path`, adding it (under a unique name) if it is not open yet.
   public mutating func openProject(_ p: WorkbenchProject, scanFiles: Bool = true) {
-    if let open = projects.first(where: { $0.path == p.path }) { switchProject(to: open, scanFiles: scanFiles); return }
+    switchProject(to: addProject(p), scanFiles: scanFiles)
+  }
+
+  /// The open Project at `p.path`, else `p` added under a free name, without switching to it.
+  mutating func addProject(_ p: WorkbenchProject) -> WorkbenchProject {
+    if let open = projects.first(where: { $0.path == p.path }) { return open }
     var name = p.name, n = 2
     while projects.contains(where: { $0.name == name }) { name = "\(p.name) \(n)"; n += 1 }
     var added = WorkbenchProject(name: name, path: p.path)
     added.color = WorkbenchProject.randomColor()
-    projects.append(added); switchProject(to: added, scanFiles: scanFiles)
+    projects.append(added)
+    return added
   }
 
   /// Opens an absolute, normalized file path in its owning Project. The requested file opens immediately;

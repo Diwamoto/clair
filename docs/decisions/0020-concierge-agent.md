@@ -13,7 +13,8 @@ Clair 全体に一つ、Clair の操作と子 agent の管理を任せるコン�
 activity bar の「コンシェルジュ」から、sidebar を持たない専用画面として開く(2026-11-11 改訂)。
 
 - 本体は既定 Agent の CLI を通常の agent launch と同じく raw PTY で起動する。
-  cwd は設定の `concierge.cwd`(空なら active Project root)、承認境界も `agent.launch` と同じ。
+  cwd は設定の `concierge.cwd`(空ならコンシェルジュ専用の `~/.clair/concierge`。2026-11-11 改訂)、承認境界も `agent.launch` と同じ。
+  cwd は Project として開いてホスト Project にするので、`project=` の無い子もそこで動く。
   terminal はどの Project の layout にも置かず(2026-11-10 改訂)、チャットの裏に見えない surface として
   マウントする。承認や質問を待つ間だけチャットの上に出す。どの Project からも同じ一つを開く。
 - GUI はその session の provider 公式 transcript(Claude Code / Codex の JSONL、
@@ -26,6 +27,11 @@ activity bar の「コンシェルジュ」から、sidebar を持たない専�
 - 指示は設定の `concierge.prompt` に置き、起動時に固定の役割の後ろに足して渡す。
   `settings.concierge` は AI 不可。prompt・cwd・cwd のプロジェクトファイルのハッシュが前回の
   承認から変わっていたら、起動前に承認カードを出す。
+
+## 改訂の理由(2026-11-11、作業フォルダ)
+
+active Project root を既定にすると、コンシェルジュはたまたま開いていたリポジトリの `CLAUDE.md` と skill を読み、
+`project=` を省いた子もそのリポジトリで動いていた。オーナーの依頼で、コンシェルジュ用のコンテキストだけを置く専用フォルダを既定にする。
 
 ## 改訂の理由(2026-11-11)
 
