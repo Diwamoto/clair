@@ -3424,6 +3424,8 @@ import Observation
                 sidebarMode = "shield"; reloadChanges()
               })
           }
+          // Opaque: the panes stay mounted underneath, and the translucent divider let their terminal text show through.
+          .background(C.canvas)
         }
       }
     }
