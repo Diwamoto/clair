@@ -4934,14 +4934,6 @@ import Observation
         .onAppear { withAnimation(.easeOut(duration: Motion.screenDuration)) { shown = true } }
         // Simultaneous, so a click on selectable text or a button inside the pane (a history chat's bubbles) still focuses it.
         .simultaneousGesture(TapGesture().onEnded { if id != focused { onFocus(id) } })
-        // ponytail: the libghostty NSView may consume right-clicks, so terminal panes might not show this; copy/paste/clear items wait on U06 surface commands.
-        .contextMenu {
-          Button(tr("右に分割")) { run("pane.focus", ["id": .int(id)]); run("pane.splitRight", [:]) }
-          Button(tr("下に分割")) { run("pane.focus", ["id": .int(id)]); run("pane.splitDown", [:]) }
-          Button(tr("最大化")) { run("pane.focus", ["id": .int(id)]); run("pane.maximize", [:]) }
-          Divider()
-          Button(tr("ペインを閉じる"), role: .destructive) { run("pane.focus", ["id": .int(id)]); run("pane.close", [:]) }
-        }
       case .split(let axis, let ratio, let a, let b):
         GeometryReader { g in
           let h = axis == .horizontal
