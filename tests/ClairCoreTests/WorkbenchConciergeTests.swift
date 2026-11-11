@@ -177,6 +177,34 @@ final class WorkbenchConciergeTests: XCTestCase {
     XCTAssertFalse(AgentLaunch(profile: "claude", cwd: "/x", concierge: "abc").command.hasSuffix("'README を直して'"))
   }
 
+  func testNextConciergeKeepsTheChatOfItsFolderAcrossRestarts() throws {
+    var (s, root) = try opened()
+    try r.execute("concierge.open", confirmed: true, state: &s).get()
+    let first = try XCTUnwrap(s.concierge())
+    XCTAssertEqual(s.conciergeSession, first.session)
+    // Launches are not persisted: a restart (or a settings change) drops the running concierge.
+    let file = URL.temporaryDirectory.appending(path: "clair-ws-\(UUID().uuidString).json")
+    try s.save(to: file)
+    var restored = try XCTUnwrap(WorkbenchState.restore(from: file, scanFiles: false))
+    XCTAssertNil(restored.concierge())
+    XCTAssertEqual(restored.conciergeSession, first.session)
+    try r.execute("concierge.open", ["message": .string("続けて")], confirmed: true, state: &restored).get()
+    XCTAssertEqual(restored.concierge()?.session, first.session)
+    // Another folder has its own chat.
+    restored.withLayout(first.project) { $0.launches[Concierge.pane] = nil }
+    let other = URL(fileURLWithPath: root).deletingLastPathComponent().appending(path: "concierge-\(UUID().uuidString)").path
+    restored.conciergeCwd = other
+    Concierge.approve(Concierge.fingerprint(prompt: "", cwd: other))
+    try r.execute("concierge.open", confirmed: true, state: &restored).get()
+    XCTAssertNotEqual(restored.concierge()?.session, first.session)
+  }
+
+  func testResumedChatCarriesTheRequestThatWokeIt() {
+    let resumed = AgentLaunch(profile: "claude", cwd: "/x", resume: "abc", concierge: "abc", opening: "続けて").command
+    XCTAssertTrue(resumed.hasPrefix("claude --resume abc "), resumed)
+    XCTAssertTrue(resumed.hasSuffix(" '続けて'"), resumed)
+  }
+
   func testTranscriptFileIsFoundByIdUnderAnyProjectSlug() throws {
     let home = URL.temporaryDirectory.appending(path: "clair-home-\(UUID().uuidString)")
     let dir = home.appending(path: ".claude/projects/-Users-x-repo")

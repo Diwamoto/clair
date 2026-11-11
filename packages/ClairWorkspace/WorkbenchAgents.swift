@@ -90,7 +90,7 @@ public struct AgentLaunch: Sendable, Codable, Equatable {
     // Last on the line: `--add-dir` is variadic and would swallow a prompt after it.
     // ponytail: Claude Code only; other CLIs still see just the cwd until their flags are verified.
     let dirs = profile == "claude" ? (folders ?? []).map { " --add-dir \(AgentRun.quote($0))" }.joined() : ""
-    if let concierge, AgentProfile.isSessionID(concierge) { return Concierge.command(session: concierge, extra: conciergePrompt ?? "", opening: opening) + dirs }
+    if let concierge, AgentProfile.isSessionID(concierge) { return Concierge.command(session: concierge, extra: conciergePrompt ?? "", opening: opening, resumed: resume == concierge) + dirs }
     if let resume, let prefix = p.resume, AgentProfile.isSessionID(resume) { return "\(prefix) \(resume)\(dirs)" }
     if prompt == nil, let opening, let open = p.open { return "\(open) \(AgentRun.quote(opening))\(dirs)" }
     guard let prompt, let run else { return p.command + dirs }

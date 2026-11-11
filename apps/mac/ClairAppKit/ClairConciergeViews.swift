@@ -50,6 +50,9 @@
     @SceneStorage("concierge.draft") private var draft = ""
     /// Shown until the transcript catches up with what was just sent.
     @State private var pending: String?
+    /// The first request of a new chat has not reached the transcript a few seconds after sending: Claude Code is
+    /// stuck before its hooks run (folder trust dialog, login, a startup error), so its terminal must be seen.
+    @State private var stalled = false
     @FocusState private var focused: Bool
     @State private var dropTarget = false
     /// The conversation's API-equivalent cost and latest model, and its context size / window (`agent.list`'s numbers).
@@ -110,6 +113,12 @@
       .frame(maxWidth: .infinity, maxHeight: .infinity).background(C.canvas)
       .overlay { hiddenTerminal }
       .task(id: session) { await follow() }
+      .task(id: pending) {
+        stalled = false
+        guard pending != nil, messages?.contains(where: { $0.role == "user" }) != true else { return }
+        try? await Task.sleep(for: .seconds(3))
+        if !Task.isCancelled, pending != nil, messages?.contains(where: { $0.role == "user" }) != true { stalled = true }
+      }
       .onChange(of: ask, initial: true) { _, text in
         guard let text else { return }
         draft = text; focused = true; ask = nil
@@ -120,7 +129,7 @@
     /// on a permission or question only the terminal can answer.
     @ViewBuilder private var hiddenTerminal: some View {
       if let terminal {
-        let blocked = status == .blocked
+        let blocked = status == .blocked || stalled
         ClairGhosttySurface(launch: (terminal.launch.command, terminal.launch.cwd), pane: Concierge.pane, sessionKey: terminal.key, focused: blocked)
           .id(terminal.key)
           .clipShape(RoundedRectangle(cornerRadius: Self.bubbleRadius, style: .continuous))
@@ -133,7 +142,7 @@
 
     /// Waiting on a reply: something was just sent, or the last turn is the user's and the agent has not reported finishing.
     private var working: Bool {
-      let asked = pending != nil || messages?.last(where: { $0.role != "tool" }).map { $0.role == "user" && !$0.text.hasPrefix(Self.interrupted) } == true
+      let asked = pending != nil || pane != nil && messages?.last(where: { $0.role != "tool" }).map { $0.role == "user" && !$0.text.hasPrefix(Self.interrupted) } == true
       return asked && (status == nil || status == .running)
     }
 
@@ -229,6 +238,10 @@
           .onKeyPress(keys: ["c"]) { $0.modifiers == .control ? interrupt() : .ignored }
           // `@` completion: ↑↓ moves, ⏎ / ⇥ inserts the highlighted path.
           .onKeyPress(keys: [.upArrow, .downArrow, .return, .tab]) { key in
+            if key.key == .return, key.modifiers.contains(.shift) {
+              (NSApp.keyWindow?.firstResponder as? NSTextView)?.insertNewlineIgnoringFieldEditor(nil)
+              return .handled
+            }
             let hits = mentionHits
             guard !hits.isEmpty else { return .ignored }
             switch key.key {

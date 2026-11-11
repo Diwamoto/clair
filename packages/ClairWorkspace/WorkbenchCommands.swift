@@ -217,6 +217,9 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   /// ("" = the active Project root). User-only (`settings.concierge` is ai: false).
   public var conciergePrompt = ""
   public var conciergeCwd = ""
+  /// The concierge's latest Claude Code session per folder. Launches are never persisted, so this is what lets
+  /// the next concierge, after a Clair restart or a settings change, resume the same chat.
+  public var conciergeSessions: [String: String] = [:]
   /// `"tpl=terraform,j2=python"` ⇄ the map (the settings list sends this). Malformed or empty pairs are dropped.
   public static func parseAssociations(_ text: String) -> [String: String] {
     var map: [String: String] = [:]
@@ -810,6 +813,7 @@ extension CommandRegistry {
       // The provider session to reopen after a restart; an empty or odd id (hook could not read it) is ignored.
       if let session = i["session"]?.string, AgentProfile.isSessionID(session) {
         s.withLayout(t.project) { $0.launches[t.pane]?.session = session }
+        if t.pane == Concierge.pane, let cwd = s.withLayoutCopy(t.project).launches[t.pane]?.cwd { s.conciergeSessions[cwd] = session }
       }
       return .ok
     },
@@ -835,8 +839,10 @@ extension CommandRegistry {
       try? FileManager.default.createDirectory(atPath: s.conciergeDir, withIntermediateDirectories: true)
       let path = WorkbenchProject.normalized(s.conciergeDir) ?? s.conciergeDir
       let host = s.addProject(WorkbenchProject(name: URL(fileURLWithPath: path).lastPathComponent, path: path))
+      let session = s.conciergeSessions[path] ?? UUID().uuidString.lowercased()
+      s.conciergeSessions[path] = session
       var launch = AgentLaunch(
-        profile: "claude", cwd: path, concierge: UUID().uuidString.lowercased(),
+        profile: "claude", cwd: path, resume: Concierge.transcriptFile(session: session) == nil ? nil : session, concierge: session,
         opening: i["message"]?.string.flatMap { $0.isEmpty ? nil : $0 }, folders: host.folders)
       launch.conciergePrompt = s.conciergePrompt
       s.withLayout(host.name) { $0.launches[Concierge.pane] = launch }

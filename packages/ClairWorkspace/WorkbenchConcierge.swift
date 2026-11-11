@@ -102,17 +102,21 @@ public enum Concierge {
   }
 
   /// `opening` rides as Claude's initial prompt, so a request sent before the TUI was up is never lost.
-  static func command(session: String, extra: String, opening: String? = nil) -> String {
-    // A restored pane reopens the same chat; a new one starts it under the fixed id.
-    let start = transcriptFile(session: session) == nil ? "--session-id" : "--resume"
-    let first = start == "--session-id" ? opening.map { " " + AgentRun.quote($0) } ?? "" : ""
-    return "claude \(start) \(session) --append-system-prompt \(AgentRun.quote(prompt(extra: extra)))\(first)"
+  /// `resumed`: launched onto an existing chat (the previous concierge's), so the request that woke it rides along.
+  /// A fresh one flips to `--resume` once its transcript exists and must not repeat its opening then.
+  static func command(session: String, extra: String, opening: String? = nil, resumed: Bool = false) -> String {
+    let fresh = !resumed && transcriptFile(session: session) == nil
+    let first = fresh || resumed ? opening.map { " " + AgentRun.quote($0) } ?? "" : ""
+    return "claude \(fresh ? "--session-id" : "--resume") \(session) --append-system-prompt \(AgentRun.quote(prompt(extra: extra)))\(first)"
   }
 }
 
 extension WorkbenchState {
   /// The folder the next concierge starts in.
   public var conciergeDir: String { conciergeCwd.isEmpty ? Concierge.defaultCwd() : conciergeCwd }
+
+  /// The chat the next concierge in `conciergeDir` resumes, so the screen shows it before anything is sent.
+  public var conciergeSession: String? { conciergeSessions[WorkbenchProject.normalized(conciergeDir) ?? conciergeDir] }
 
   /// Clair's concierge terminal, in whichever Project's `launches` holds it.
   public func concierge() -> (project: String, pane: Int, session: String, key: String, launch: AgentLaunch)? {

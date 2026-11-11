@@ -3413,7 +3413,7 @@ import Observation
           let c = st.concierge()
           HStack(spacing: 0) {
             ConciergeChatView(
-              session: c.map { $0.launch.session ?? $0.session }, terminal: c.map { ($0.key, $0.launch) },
+              session: c.map { $0.launch.session ?? $0.session } ?? st.conciergeSession, terminal: c.map { ($0.key, $0.launch) },
               status: c.flatMap { c in st.agentSessions.first { $0.project == c.project && $0.pane == c.pane }?.status },
               start: { startConcierge($0) }, ask: $conciergeAsk)
             .frame(width: 460)
