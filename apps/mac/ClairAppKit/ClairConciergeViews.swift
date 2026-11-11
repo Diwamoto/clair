@@ -63,11 +63,8 @@
     @State private var mentionIndex = 0
     @State private var pasteMonitor: Any?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.colorScheme) private var scheme
 
     private static let column: CGFloat = 760
-    /// Chat surfaces (user bubble, composer) round past the 3-step chrome radius on purpose; canvas `Concierge`.
-    private static let bubbleRadius: CGFloat = 16
 
     var body: some View {
       Group {
@@ -75,7 +72,7 @@
           emptyState
         } else {
           ScrollView {
-            LazyVStack(alignment: .leading, spacing: 22) {
+            LazyVStack(alignment: .leading, spacing: 24) {
               let all = messages ?? []
               ForEach(Array(all.enumerated()), id: \.element.id) { i, m in
                 let header = i == 0 || all[i - 1].role == "user"
@@ -101,7 +98,7 @@
       }
       .safeAreaInset(edge: .bottom, spacing: 0) {
         composer
-          .padding(.horizontal, 24).padding(.top, 20).padding(.bottom, 18)
+          .padding(.horizontal, 24).padding(.top, 24).padding(.bottom, 16)
           .frame(maxWidth: Self.column).frame(maxWidth: .infinity)
           // The conversation scrolls under the composer and fades out above it.
           .background(LinearGradient(stops: [.init(color: C.canvas.opacity(0), location: 0), .init(color: C.canvas, location: 0.3)],
@@ -129,8 +126,8 @@
         let blocked = status == .blocked || stalled
         ClairGhosttySurface(launch: (terminal.launch.command, terminal.launch.cwd), pane: terminal.pane, sessionKey: terminal.key, focused: blocked)
           .id(terminal.key)
-          .clipShape(RoundedRectangle(cornerRadius: Self.bubbleRadius, style: .continuous))
-          .overlay(RoundedRectangle(cornerRadius: Self.bubbleRadius, style: .continuous).strokeBorder(L.strong))
+          .clipShape(RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous))
+          .overlay(RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous).strokeBorder(L.strong))
           .padding(.horizontal, 24).padding(.top, 48).padding(.bottom, 24)
           .opacity(blocked ? 1 : 0).allowsHitTesting(blocked).accessibilityHidden(!blocked)
           .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: blocked)
@@ -155,13 +152,13 @@
         Reply(message: m, header: header).padding(.top, header ? 0 : -10)
       } else if m.text.hasPrefix(Self.interrupted) {
         Label(tr("中断しました"), systemImage: "stop.circle")
-          .font(.system(size: 12)).foregroundStyle(C.textTertiary)
-          .padding(.horizontal, 10).padding(.vertical, 3).background(W.medium, in: Capsule())
+          .font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+          .padding(.horizontal, 10).padding(.vertical, 4).background(W.medium, in: Capsule())
           .frame(maxWidth: .infinity)
       } else if m.text.hasPrefix("[Skill loaded") {
         Label(String(m.text.dropFirst().dropLast()).replacing("Skill loaded", with: tr("スキル読込")), systemImage: "wand.and.stars")
-          .font(.system(size: 12)).foregroundStyle(C.textTertiary)
-          .padding(.horizontal, 10).padding(.vertical, 3).background(W.medium, in: Capsule())
+          .font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+          .padding(.horizontal, 10).padding(.vertical, 4).background(W.medium, in: Capsule())
           .frame(maxWidth: .infinity)
       } else {
         userBubble(m.text)
@@ -173,7 +170,7 @@
         Spacer(minLength: 120)
         Text(inline(body)).font(chatFont).lineSpacing(3).foregroundStyle(C.textPrimary).textSelection(.enabled)
           .padding(.horizontal, 16).padding(.vertical, 10)
-          .background(C.surfaceActive, in: RoundedRectangle(cornerRadius: Self.bubbleRadius, style: .continuous))
+          .background(C.surfaceActive, in: RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous))
       }
     }
 
@@ -182,7 +179,7 @@
       HStack(spacing: 10) {
         ConciergeAvatar()
         Circle().fill(C.attention).frame(width: 6, height: 6)
-        Text(tr("ターミナルで承認を待っています")).font(.system(size: 14)).foregroundStyle(C.textSecondary)
+        Text(tr("ターミナルで承認を待っています")).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textSecondary)
       }
     }
 
@@ -193,24 +190,24 @@
           .frame(width: 56, height: 56)
           .background(W.raised, in: RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous))
           .overlay(RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous).strokeBorder(L.strong.opacity(0.6)))
-        Text(tr("何をお任せしますか?")).font(.system(size: 22, weight: .semibold)).foregroundStyle(C.textPrimary).padding(.top, 6)
-        Text(tr("依頼を子エージェントに割り振り、進み具合をここにまとめます。")).font(.system(size: 14)).foregroundStyle(C.textTertiary)
+        Text(tr("何をお任せしますか?")).font(Typography.font(Typography.title)).foregroundStyle(C.textPrimary).padding(.top, 6)
+        Text(tr("依頼を子エージェントに割り振り、進み具合をここにまとめます。")).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
           .multilineTextAlignment(.center)
         LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
           ForEach(Self.starters, id: \.text) { s in
             Button { draft = tr(s.text); focused = true } label: {
               HStack(spacing: 10) {
-                Image(systemName: s.icon).font(.system(size: 12)).foregroundStyle(C.textTertiary).frame(width: 16)
-                Text(tr(s.text)).font(.system(size: 13)).foregroundStyle(C.textSecondary).lineLimit(1)
+                Image(systemName: s.icon).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).frame(width: 16)
+                Text(tr(s.text)).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textSecondary).lineLimit(1)
                 Spacer(minLength: 0)
               }
-              .padding(.horizontal, 14).frame(height: 44)
+              .padding(.horizontal, 12).frame(height: RowHeight.control)
               .background(W.faint, in: RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous))
               .overlay(RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous).strokeBorder(L.hairline))
               .contentShape(Rectangle())
             }.buttonStyle(HoverWashStyle(radius: Radius.overlay))
           }
-        }.frame(maxWidth: 560).padding(.top, 18)
+        }.frame(maxWidth: 560).padding(.top, 16)
       }
       .padding(.horizontal, 24).frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -255,14 +252,14 @@
             Circle().fill(pane == nil ? C.textMuted : C.success).frame(width: 6, height: 6)
             Text(verbatim: "Claude Code")
           }
-          .font(.system(size: 12)).foregroundStyle(C.textTertiary)
-          .padding(.horizontal, 9).frame(height: 24).background(W.medium, in: Capsule())
+          .font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+          .padding(.horizontal, 8).frame(height: RowHeight.default).background(W.medium, in: Capsule())
           // Switches the running concierge's model with Claude Code's own `/model <alias>`.
           if let pane {
             Menu {
               ForEach(Self.models, id: \.self) { m in Button(m) { command("/model \(m)", pane) } }
             } label: {
-              Text(chat.model.map(Self.shortModel) ?? tr("モデル")).font(.system(size: 12)).foregroundStyle(C.textTertiary)
+              Text(chat.model.map(Self.shortModel) ?? tr("モデル")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
             }.menuStyle(.borderlessButton).fixedSize().help(tr("コンシェルジュのモデルを切り替え"))
             Menu {
               Button(tr("圧縮 (/compact)")) { command("/compact", pane) }
@@ -272,21 +269,21 @@
           }
           Spacer(minLength: 0)
           if let cost = chat.cost {
-            Text(cost, format: .currency(code: "USD").precision(.fractionLength(2))).font(.system(size: 11)).foregroundStyle(C.lineNumber)
+            Text(cost, format: .currency(code: "USD").precision(.fractionLength(2))).font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted)
               .help(tr("この会話の API 換算の推定額"))
           }
-          Text(pane == nil ? tr("⏎ 送信 · 最初の送信で起動") : working ? tr("⏎ 送信 · esc 中断") : tr("⏎ 送信")).font(.system(size: 11)).foregroundStyle(C.lineNumber)
+          Text(pane == nil ? tr("⏎ 送信 · 最初の送信で起動") : working ? tr("⏎ 送信 · esc 中断") : tr("⏎ 送信")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted)
           Button(action: send) {
-            Image(systemName: "arrow.up").font(.system(size: 14, weight: .bold)).foregroundStyle(empty ? C.textMuted : C.canvas)
-              .frame(width: 32, height: 32).background(empty ? W.strongest : C.textPrimary, in: Circle())
+            Image(systemName: "arrow.up").font(Typography.font(Typography.title)).foregroundStyle(empty ? C.textMuted : C.canvas)
+              .frame(width: RowHeight.control, height: RowHeight.control).background(empty ? W.strongest : C.textPrimary, in: Circle())
           }
           .buttonStyle(.plain).disabled(empty).help(tr("送信")).accessibilityLabel(tr("送信"))
           .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: empty)
         }
       }
-      .padding(.leading, 16).padding(.trailing, 12).padding(.top, 14).padding(.bottom, 10)
-      .background(C.surfaceHover, in: RoundedRectangle(cornerRadius: Self.bubbleRadius, style: .continuous))
-      .overlay(RoundedRectangle(cornerRadius: Self.bubbleRadius, style: .continuous).strokeBorder(focused || dropTarget ? L.ring : L.strong))
+      .padding(.leading, 16).padding(.trailing, 12).padding(.top, 12).padding(.bottom, 10)
+      .background(C.surfaceHover, in: RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous))
+      .overlay(RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous).strokeBorder(focused || dropTarget ? L.ring : L.strong))
       // Dropped files go in as paths, escaped like a Terminal drop: Claude Code attaches an image path as an image
       // and reads any other file (PDF, text) itself, so the chat stays plain text.
       // ponytail: file drops only; a pasted clipboard image would need a temp PNG, add if asked.
@@ -297,8 +294,8 @@
         focused = true
         return true
       } isTargeted: { dropTarget = $0 }
-      .shadow(color: .black.opacity(scheme == .dark ? 0.3 : 0.08), radius: 12, y: 6)
-      .contentShape(RoundedRectangle(cornerRadius: Self.bubbleRadius))
+      .overlayShadow()
+      .contentShape(RoundedRectangle(cornerRadius: Radius.overlay))
       .onTapGesture { focused = true }  // the whole card is the input, not just the text line
       .overlay(alignment: .topLeading) { mentionPopover }
       .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: focused)
@@ -308,7 +305,7 @@
     @ViewBuilder private var contextLabel: some View {
       if let tokens = context.tokens {
         let share = context.limit.map { min(Double(tokens) / Double(max($0, 1)), 1) }
-        HStack(spacing: 5) {
+        HStack(spacing: 6) {
           if let share {
             ZStack {
               Circle().stroke(W.strongest, lineWidth: 1.6)
@@ -317,10 +314,10 @@
           }
           Text(verbatim: ([tokens] + (context.limit.map { [$0] } ?? [])).map(Self.kilo).joined(separator: " / "))
         }
-        .font(.system(size: 12)).foregroundStyle(C.textTertiary)
+        .font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
         .accessibilityLabel(tr("コンテキスト") + " " + (share.map { "\(Int($0 * 100))%" } ?? Self.kilo(tokens)))
       } else {
-        Text(tr("コンテキスト")).font(.system(size: 12)).foregroundStyle(C.textTertiary)
+        Text(tr("コンテキスト")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
       }
     }
 
@@ -357,7 +354,7 @@
         .padding(4).frame(width: 360)
         .background(C.surfaceHover, in: RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous).strokeBorder(L.strong))
-        .shadow(color: .black.opacity(scheme == .dark ? 0.3 : 0.08), radius: 12, y: 6)
+        .overlayShadow()
         .alignmentGuide(.top) { $0[.bottom] + 8 }
       }
     }
@@ -519,34 +516,28 @@
   /// The concierge's mark: its activity-bar glyph on a raised tile.
   private struct ConciergeAvatar: View {
     var body: some View {
-      Image(systemName: "brain.head.profile").font(.system(size: 12)).foregroundStyle(C.textSecondary)
+      Image(systemName: "brain.head.profile").font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary)
         .frame(width: 24, height: 24)
         .background(W.strong, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(L.strong.opacity(0.6)))
     }
   }
 
-  /// The reply is pending: a comet orbits the avatar and the label shimmers (both still under Reduce Motion).
+  /// The reply is pending: a comet orbits the avatar (still under Reduce Motion); the label stays still.
   private struct WorkingRow: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
       TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { context in
         let t = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
-        let sweep = (t.truncatingRemainder(dividingBy: 1.8) / 1.8) * 1.6 - 0.3  // -0.3…1.3 so the highlight enters and leaves
         HStack(spacing: 10) {
           ConciergeAvatar().overlay {
-            RoundedRectangle(cornerRadius: Radius.card + 3, style: .continuous)
+            RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous)
               .strokeBorder(AngularGradient(colors: [C.textSecondary.opacity(0), C.textSecondary], center: .center,
                                             angle: .degrees(t * 300)), lineWidth: 1.5)
-              .padding(-3)
+              .padding(-4)
           }
-          Text(tr("考えています…")).font(.system(size: 14))
-            .foregroundStyle(LinearGradient(stops: [
-              .init(color: C.textMuted, location: min(max(sweep - 0.25, 0), 1)),
-              .init(color: C.textPrimary, location: min(max(sweep, 0), 1)),
-              .init(color: C.textMuted, location: min(max(sweep + 0.25, 0), 1)),
-            ], startPoint: .leading, endPoint: .trailing))
+          Text(tr("考えています…")).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
         }
       }
       .accessibilityElement(children: .combine)
@@ -560,11 +551,11 @@
       let name = (path as NSString).lastPathComponent
       let dir = (path as NSString).deletingLastPathComponent
       HStack(spacing: 8) {
-        Text(verbatim: name).font(.system(size: 12, design: .monospaced)).foregroundStyle(selected ? C.textPrimary : C.textSecondary)
-        Text(verbatim: dir).font(.system(size: 12)).foregroundStyle(C.textMuted).lineLimit(1).truncationMode(.head)
+        Text(verbatim: name).font(Typography.font(Typography.chrome, family: .mono)).foregroundStyle(selected ? C.textPrimary : C.textSecondary)
+        Text(verbatim: dir).font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted).lineLimit(1).truncationMode(.head)
         Spacer(minLength: 0)
       }
-      .padding(.horizontal, 8).frame(height: 26)
+      .padding(.horizontal, 8).frame(height: RowHeight.default)
       .background(selected ? C.surfaceActive : Color.clear, in: RoundedRectangle(cornerRadius: Radius.card))
       .contentShape(Rectangle())
     }
@@ -575,8 +566,8 @@
     var body: some View {
       HStack(spacing: 8) {
         ConciergeAvatar()
-        Text(tr("コンシェルジュ")).font(.system(size: 13, weight: .semibold)).foregroundStyle(C.textPrimary)
-        Text(date.formatted(date: .omitted, time: .shortened)).font(.system(size: 12)).foregroundStyle(C.textMuted)
+        Text(tr("コンシェルジュ")).font(Typography.font(Typography.title)).foregroundStyle(C.textPrimary)
+        Text(date.formatted(date: .omitted, time: .shortened)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted)
       }
     }
   }
@@ -595,23 +586,23 @@
         if header { ReplyHeader(date: date).padding(.bottom, 4) }
         Button { open.toggle() } label: {
           HStack(spacing: 6) {
-            Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).rotationEffect(.degrees(open ? 90 : 0))
+            Image(systemName: "chevron.right").font(.system(size: Typography.chromeSize(9), weight: .semibold)).rotationEffect(.degrees(open ? 90 : 0))
             Text(tr("ツールを %@ 回実行", lines.count))
             if !open {
               Text(verbatim: "· " + calls.map { $0[0] }.reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }.prefix(3).joined(separator: ", "))
                 .lineLimit(1).foregroundStyle(C.textMuted)
             }
           }.contentShape(Rectangle())
-        }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(C.textTertiary)
+        }.buttonStyle(.plain).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
         if open {
           VStack(alignment: .leading, spacing: 2) {
             ForEach(Array(calls.enumerated()), id: \.offset) { _, c in
               HStack(spacing: 8) {
                 Text(verbatim: c[0]).foregroundStyle(C.textSecondary)
                 if c.count > 1 { Text(verbatim: c[1]).foregroundStyle(C.textTertiary).lineLimit(1).truncationMode(.middle) }
-              }.font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
+              }.font(Typography.font(Typography.chrome, family: .mono)).textSelection(.enabled)
             }
-          }.padding(.leading, 15)
+          }.padding(.leading, 16)
         }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
@@ -629,7 +620,7 @@
         if header { ReplyHeader(date: message.date) }
         ForEach(Array(MarkdownPreview.parse(message.text).enumerated()), id: \.offset) { _, b in ChatBlock(block: b.block, size: 15) }
         Button { copyToPasteboard(message.text) } label: { Image(systemName: "doc.on.doc").frame(width: 24, height: 22) }
-          .buttonStyle(.hoverWash).font(.system(size: 11)).foregroundStyle(C.textMuted)
+          .buttonStyle(.hoverWash).font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted)
           .help(tr("返答をコピー")).accessibilityLabel(tr("返答をコピー"))
           .opacity(hovered ? 1 : 0).padding(.leading, -5)
       }
@@ -664,14 +655,14 @@
   private struct CodeCard: View {
     let language: String
     let text: String
-    /// Code size; the header stays one step below it.
+    /// Code size; the header is chrome type.
     let size: CGFloat
     @State private var copied = false
 
     var body: some View {
       VStack(alignment: .leading, spacing: 0) {
         HStack {
-          Text(verbatim: language.isEmpty ? "code" : language).font(.system(size: size - 1, design: .monospaced)).foregroundStyle(C.textTertiary)
+          Text(verbatim: language.isEmpty ? "code" : language).font(Typography.font(Typography.chrome, family: .mono)).foregroundStyle(C.textTertiary)
           Spacer(minLength: 0)
           Button {
             copyToPasteboard(text); copied = true
@@ -679,13 +670,13 @@
           } label: {
             Label(copied ? tr("コピーしました") : tr("コピー"), systemImage: copied ? "checkmark" : "doc.on.doc")
               .padding(.horizontal, 6).frame(height: 22)
-          }.buttonStyle(.hoverWash).font(.system(size: size - 1)).foregroundStyle(C.textTertiary)
+          }.buttonStyle(.hoverWash).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
         }
-        .padding(.leading, 12).padding(.trailing, 6).frame(height: 30).background(W.soft)
+        .padding(.leading, 12).padding(.trailing, 6).frame(height: RowHeight.control).background(W.soft)
         Rectangle().fill(L.hairline).frame(height: 1)
         ScrollView(.horizontal, showsIndicators: false) {
           Text(verbatim: text).font(.system(size: size, design: .monospaced)).lineSpacing(3).foregroundStyle(C.code)
-            .padding(.horizontal, 14).padding(.vertical, 12)
+            .padding(.horizontal, 12).padding(.vertical, 12)
         }
       }
       .background(C.panel)
@@ -713,8 +704,8 @@
     let count: Int
     var body: some View {
       HStack(spacing: 6) {
-        Text(verbatim: title.uppercased()).font(.system(size: 11, weight: .medium, design: .monospaced)).kerning(0.4).foregroundStyle(C.textTertiary)
-        Text(verbatim: "\(count)").font(.system(size: 11, design: .monospaced)).foregroundStyle(C.lineNumber)
+        Text(verbatim: title).font(Typography.font(Typography.sidebarMicro, family: .mono)).foregroundStyle(C.textTertiary)
+        Text(verbatim: "\(count)").font(Typography.font(Typography.chrome, family: .mono)).foregroundStyle(C.textMuted)
       }
       .accessibilityElement(children: .combine).accessibilityAddTraits(.isHeader)
     }
@@ -741,12 +732,12 @@
           Circle().fill(color).frame(width: 7, height: 7)
             .overlay(Circle().stroke(color, lineWidth: 1.5).scaleEffect(pulse ? 2.4 : 1).opacity(pulse ? 0 : 0.8).opacity(live ? 1 : 0))
             .padding(.top, 5)
-          VStack(alignment: .leading, spacing: 3) {
-            Text(title).font(.system(size: 13)).foregroundStyle(C.textPrimary).lineLimit(1)
-            Text(verbatim: "\(text) · \(session.project)").font(.system(size: 11)).foregroundStyle(C.textTertiary).lineLimit(1)
+          VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textPrimary).lineLimit(1)
+            Text(verbatim: "\(text) · \(session.project)").font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).lineLimit(1)
           }
           Spacer(minLength: 0)
-          Image(systemName: "arrow.up.right").font(.system(size: 10, weight: .medium)).foregroundStyle(C.textMuted).padding(.top, 3)
+          Image(systemName: "arrow.up.right").font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textMuted).padding(.top, 3)
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -755,7 +746,7 @@
           if let screen {
             Text(verbatim: screen).font(.system(size: 9, design: .monospaced)).foregroundStyle(C.textSecondary)
           } else {
-            Text(tr("この Project を一度開くと画面が表示されます")).font(.system(size: 11)).foregroundStyle(C.textMuted)
+            Text(tr("この Project を一度開くと画面が表示されます")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted)
           }
         }
         .lineLimit(Self.lines).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
@@ -807,7 +798,7 @@
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let gap: CGFloat = 8
-    private static let pad: CGFloat = 20
+    private static let pad: CGFloat = 24
 
     private var shown: [TodoBoardCard] {
       cards.filter { (!waitingOnly || $0.state == .waiting) && (project.isEmpty || $0.project == project) }
@@ -824,7 +815,7 @@
             // Six columns share the width; below the minimum the stages scroll sideways instead of squeezing.
             let column = max(148, (geo.size.width - Self.pad * 2 - Self.gap * CGFloat(ClairTodo.stages.count - 1)) / CGFloat(ClairTodo.stages.count))
             ScrollView {
-              VStack(alignment: .leading, spacing: 28) {
+              VStack(alignment: .leading, spacing: 24) {
                 if !agents.isEmpty { agentSection }
                 if !cards.isEmpty { ScrollView(.horizontal) { stages(column: column).padding(.horizontal, Self.pad) } }
               }.padding(.vertical, Self.pad)
@@ -838,14 +829,14 @@
     private var header: some View {
       let waiting = cards.filter { $0.state == .waiting }.count
       return HStack(spacing: 8) {
-        Text(tr("ボード")).font(.system(size: 15, weight: .semibold)).foregroundStyle(C.textPrimary)
-        Text(tr("%@ 件", cards.count)).font(.system(size: 12)).foregroundStyle(C.textMuted)
+        Text(tr("ボード")).font(Typography.font(Typography.title)).foregroundStyle(C.textPrimary)
+        Text(tr("%@ 件", cards.count)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted)
         Spacer(minLength: 0)
         Button { waitingOnly.toggle() } label: {
           HStack(spacing: 6) {
             Circle().fill(waiting == 0 ? C.textMuted : C.attention).frame(width: 6, height: 6)
             Text(tr("あなた待ち"))
-            Text(verbatim: "\(waiting)").font(.system(size: 11, design: .monospaced)).foregroundStyle(C.textMuted)
+            Text(verbatim: "\(waiting)").font(Typography.font(Typography.chrome, family: .mono)).foregroundStyle(C.textMuted)
           }.modifier(Chip(on: waitingOnly))
         }
         .buttonStyle(HoverWashStyle(radius: Radius.card)).help(tr("あなた待ちだけ表示"))
@@ -858,7 +849,7 @@
         } label: {
           HStack(spacing: 6) {
             Text(project.isEmpty ? tr("すべての Project") : project).lineLimit(1)
-            Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold)).foregroundStyle(C.textMuted)
+            Image(systemName: "chevron.down").font(.system(size: Typography.chromeSize(9), weight: .semibold)).foregroundStyle(C.textMuted)
           }.modifier(Chip(on: !project.isEmpty))
         }
         .menuStyle(.button).buttonStyle(HoverWashStyle(radius: Radius.card)).menuIndicator(.hidden).fixedSize()
@@ -871,8 +862,8 @@
     fileprivate struct Chip: ViewModifier {
       let on: Bool
       func body(content: Content) -> some View {
-        content.font(.system(size: 12)).foregroundStyle(on ? C.textPrimary : C.textSecondary)
-          .padding(.horizontal, 10).frame(height: 26)
+        content.font(Typography.font(Typography.chrome)).foregroundStyle(on ? C.textPrimary : C.textSecondary)
+          .padding(.horizontal, 10).frame(height: RowHeight.default)
           .modifier(Boxed(fill: on ? W.strongest : .clear, line: on ? L.ring : L.strong))
       }
     }
@@ -899,7 +890,7 @@
         ForEach(ClairTodo.lanes, id: \.self) { lane in
           let inLane = shown.filter { ($0.todo.lane ?? "code") == lane }
           VStack(alignment: .leading, spacing: 6) {
-            Text(verbatim: lane).font(.system(size: 11, design: .monospaced)).foregroundStyle(C.textMuted).padding(.leading, 6)
+            Text(verbatim: lane).font(Typography.font(Typography.chrome, family: .mono)).foregroundStyle(C.textMuted).padding(.leading, 6)
             // Wells of one lane share its height, so a lane reads as one row.
             HStack(alignment: .top, spacing: Self.gap) {
               ForEach(ClairTodo.stages, id: \.self) { stage in
@@ -920,9 +911,9 @@
       VStack(spacing: 12) {
         Image(systemName: "rectangle.split.3x1").font(.system(size: 22)).foregroundStyle(C.textSecondary)
           .frame(width: 52, height: 52).modifier(Boxed(fill: W.raised, radius: Radius.overlay))
-        Text(tr("ボードはまだ空です")).font(.system(size: 15, weight: .semibold)).foregroundStyle(C.textPrimary).padding(.top, 4)
+        Text(tr("ボードはまだ空です")).font(Typography.font(Typography.title)).foregroundStyle(C.textPrimary).padding(.top, 4)
         Text(tr("コンシェルジュに頼むと、担当するエージェントと stage 付きの TODO がここに並びます。"))
-          .font(.system(size: 13)).foregroundStyle(C.textTertiary).multilineTextAlignment(.center).frame(maxWidth: 320)
+          .font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary).multilineTextAlignment(.center).frame(maxWidth: 320)
       }
       .padding(Self.pad).frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -938,8 +929,8 @@
 
     private func action(_ title: String, _ run: @escaping () -> Void) -> some View {
       Button(action: run) {
-        Text(title).font(.system(size: 11)).foregroundStyle(C.textSecondary).lineLimit(1)
-          .padding(.horizontal, 8).frame(height: 22).modifier(Boxed(radius: Radius.control))
+        Text(title).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary).lineLimit(1)
+          .padding(.horizontal, 8).frame(height: RowHeight.compact).modifier(Boxed(radius: Radius.control))
       }.buttonStyle(HoverWashStyle(radius: Radius.control))
     }
 
@@ -947,13 +938,13 @@
       let (text, color) = label(c.state)
       let open = selected == c.todo.path
       return VStack(alignment: .leading, spacing: 6) {
-        Text(c.todo.title).font(.system(size: 13)).foregroundStyle(c.state == .done ? C.textTertiary : C.textPrimary)
+        Text(c.todo.title).font(Typography.font(Typography.sidebar)).foregroundStyle(c.state == .done ? C.textTertiary : C.textPrimary)
           .lineLimit(open ? nil : 3).fixedSize(horizontal: false, vertical: true)
-        HStack(spacing: 5) {
+        HStack(spacing: 6) {
           Circle().fill(color).frame(width: 6, height: 6)
           Text(text)
           if let p = c.project { Text(verbatim: "· \(p)").lineLimit(1) }
-        }.font(.system(size: 11)).foregroundStyle(C.textTertiary)
+        }.font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
         if open {
           Rectangle().fill(L.hairline).frame(height: 1).padding(.vertical, 2)
           ForEach([("retry", c.todo.retry.map(String.init)), ("branch", c.todo.branch), ("pr", c.todo.pr), ("agent", c.todo.agent)], id: \.0) { k, v in
@@ -961,10 +952,10 @@
               HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(verbatim: k).foregroundStyle(C.textMuted).frame(width: 44, alignment: .leading)
                 Text(verbatim: v).foregroundStyle(C.textSecondary).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
-              }.font(.system(size: 11, design: .monospaced))
+              }.font(Typography.font(Typography.chrome, family: .mono))
             }
           }
-          ForEach(c.history, id: \.self) { Text($0).font(.system(size: 11)).foregroundStyle(C.textTertiary).lineLimit(1) }
+          ForEach(c.history, id: \.self) { Text($0).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).lineLimit(1) }
           // Wraps: a card is one column wide.
           LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: 4, alignment: .leading)], alignment: .leading, spacing: 4) {
             ForEach(c.artifacts, id: \.self) { path in action((path as NSString).lastPathComponent) { openFile(path) } }
