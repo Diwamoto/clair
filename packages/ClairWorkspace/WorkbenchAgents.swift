@@ -334,7 +334,7 @@ extension WorkbenchState {
       let p = projects.first(where: { $0.path == String(key[..<i]) })
     else { return nil }
     let l = withLayoutCopy(p.name)
-    let open = l.tree.leaves.contains { $0.id == pane && $0.kind == .terminal } || (pane == Concierge.pane && l.launches[pane]?.concierge != nil)
+    let open = l.tree.leaves.contains { $0.id == pane && $0.kind == .terminal } || (Concierge.isPane(pane) && l.launches[pane]?.concierge != nil)
     return open ? (p.name, pane) : nil
   }
 
@@ -354,7 +354,7 @@ extension WorkbenchState {
 
   /// Drops the launches of closed panes; a closed sandboxed child takes its sandbox with it (#75).
   mutating func pruneLaunches() {
-    for (id, l) in launches where id != Concierge.pane && !tree.leaves.contains(where: { $0.id == id }) {
+    for (id, l) in launches where !Concierge.isPane(id) && !tree.leaves.contains(where: { $0.id == id }) {
       if let name = l.sandbox { AgentRun.removeSandbox(name) }
       launches[id] = nil
     }
@@ -373,7 +373,7 @@ extension WorkbenchState {
       guard let t = terminal(parent), let p = projects.first(where: { $0.name == t.project }) else {
         throw CommandError(.preconditionFailed, "calling terminal \(parent) is not open in Clair")
       }
-      return (p, t.pane == Concierge.pane ? nil : t.pane)  // the concierge has no pane to split; children open in its Project
+      return (p, Concierge.isPane(t.pane) ? nil : t.pane)  // the concierge has no pane to split; children open in its Project
     }
     guard let p = projects.first(where: { $0.name == project }) else { throw CommandError(.preconditionFailed, "no active project") }
     return (p, nil)

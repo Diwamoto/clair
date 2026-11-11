@@ -217,9 +217,9 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   /// ("" = the active Project root). User-only (`settings.concierge` is ai: false).
   public var conciergePrompt = ""
   public var conciergeCwd = ""
-  /// The concierge's latest Claude Code session per folder. Launches are never persisted, so this is what lets
-  /// the next concierge, after a Clair restart or a settings change, resume the same chat.
-  public var conciergeSessions: [String: String] = [:]
+  /// Each folder's concierge chats by their latest Claude Code session. Launches are never persisted, so this is
+  /// what lets a chat resume after a Clair restart. A changed prompt or folder starts over.
+  public var conciergeSessions: [String: [String]] = [:]
   /// `"tpl=terraform,j2=python"` ⇄ the map (the settings list sends this). Malformed or empty pairs are dropped.
   public static func parseAssociations(_ text: String) -> [String: String] {
     var map: [String: String] = [:]
@@ -812,20 +812,26 @@ extension CommandRegistry {
       s.agentReports[NotificationLog.paneKey(t.project, t.pane)] = AgentReport(state: AgentReport.State(rawValue: i["state"]!.string!)!)
       // The provider session to reopen after a restart; an empty or odd id (hook could not read it) is ignored.
       if let session = i["session"]?.string, AgentProfile.isSessionID(session) {
+        if Concierge.isPane(t.pane), let l = s.withLayoutCopy(t.project).launches[t.pane], let old = l.session ?? l.concierge {
+          s.conciergeSessions[l.cwd] = s.conciergeSessions[l.cwd]?.map { $0 == old ? session : $0 }
+        }
         s.withLayout(t.project) { $0.launches[t.pane]?.session = session }
-        if t.pane == Concierge.pane, let cwd = s.withLayoutCopy(t.project).launches[t.pane]?.cwd { s.conciergeSessions[cwd] = session }
       }
       return .ok
     },
-    // ADR-0020: start Clair's one concierge if it is not running. It stays off every layout (`Concierge.pane`); the chat shows it. GUI-only (ai: false): an agent
+    // ADR-0020: start the concierge of `chat` (a session id; a new one starts a new chat) unless it runs. It stays off every
+    // layout (a negative pane); the chat shows it. GUI-only (ai: false): an agent
     // must not spawn a concierge; it launches children through agent.launch instead.
     // #76: a new one starts only in the `cwd` the user approved, and only while that approval still matches
     // what it would read (the GUI asks first), so the CLI cannot start one past a changed prompt source.
     cmd("concierge.open", "コンシェルジュを開く", .external, ai: false,
-        params: [CommandParam("message", .string, required: false), CommandParam("cwd", .string, required: false)],
+        params: [CommandParam("message", .string, required: false), CommandParam("cwd", .string, required: false),
+                 CommandParam("chat", .string, required: false)],
         palette: false,
         preflight: { s, i throws(CommandError) in
-          if s.concierge() == nil {
+          let chat = i["chat"]?.string
+          try require(chat.map(AgentProfile.isSessionID) != false, "chat is not a session id")
+          if chat.flatMap({ s.concierge(chat: $0) }) == nil {
             let cwd = i["cwd"]?.string ?? s.conciergeDir
             try require(cwd == s.conciergeDir, "the concierge folder changed; open it again")
             try require(Concierge.isApproved(Concierge.fingerprint(prompt: s.conciergePrompt, cwd: cwd)),
@@ -834,18 +840,26 @@ extension CommandRegistry {
           return .external
         }) { s, i in
       AgentRun.pruneSandboxes(keep: s.openSandboxes)
-      if s.concierge() != nil { return .ok }
+      if let chat = i["chat"]?.string, s.concierge(chat: chat) != nil { return .ok }
       // Its folder is a Project (added without switching to it), so children launched without `project=` start there too.
       try? FileManager.default.createDirectory(atPath: s.conciergeDir, withIntermediateDirectories: true)
       let path = WorkbenchProject.normalized(s.conciergeDir) ?? s.conciergeDir
       let host = s.addProject(WorkbenchProject(name: URL(fileURLWithPath: path).lastPathComponent, path: path))
-      let session = s.conciergeSessions[path] ?? UUID().uuidString.lowercased()
-      s.conciergeSessions[path] = session
+      let session = i["chat"]?.string ?? UUID().uuidString.lowercased()
+      if s.conciergeSessions[path]?.contains(session) != true { s.conciergeSessions[path, default: []].append(session) }
+      let pane = (s.concierges().map(\.pane).min() ?? 0) - 1
       var launch = AgentLaunch(
         profile: "claude", cwd: path, resume: Concierge.transcriptFile(session: session) == nil ? nil : session, concierge: session,
         opening: i["message"]?.string.flatMap { $0.isEmpty ? nil : $0 }, folders: host.folders)
       launch.conciergePrompt = s.conciergePrompt
-      s.withLayout(host.name) { $0.launches[Concierge.pane] = launch }
+      s.withLayout(host.name) { $0.launches[pane] = launch }
+      return .ok
+    },
+    // Forgets a chat; the GUI ends its shell first (`closeTerminal` also kills the daemon session).
+    cmd("concierge.close", "コンシェルジュの会話を閉じる", .write, ai: false, params: [CommandParam("chat", .string)], palette: false) { s, i in
+      let chat = i["chat"]!.string!
+      if let c = s.concierge(chat: chat) { s.closeTerminal(c.key) }
+      for k in s.conciergeSessions.keys { s.conciergeSessions[k]?.removeAll { $0 == chat } }
       return .ok
     },
     cmd("tab.open", "ファイルを開く", .read, params: [CommandParam("path", .string)],
@@ -1395,8 +1409,10 @@ extension CommandRegistry {
           }
           return .write
         }) { s, i in
+      let before = (s.conciergePrompt, s.conciergeCwd)
       if let v = i["prompt"]?.string { s.conciergePrompt = v }
       if let v = i["cwd"]?.string { s.conciergeCwd = v }
+      if before != (s.conciergePrompt, s.conciergeCwd) { s.conciergeSessions = [:] }
       return .ok
     },
     cmd("sidebar.toggle", "サイドバーの表示切替", .read, ai: false, shortcut: "⌘B") { s, _ in s.sidebarHidden.toggle(); return .ok },

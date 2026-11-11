@@ -345,7 +345,7 @@ extension WorkbenchState {
     }
     if l.activeDiff.map(l.diffTabs.contains) != true { l.activeDiff = nil }
     if !l.tree.isValid { l.tree = PaneTree(single: .editor) }
-    l.launches = l.launches.filter { id, _ in id == Concierge.pane || l.tree.leaves.contains { $0.id == id } }
+    l.launches = l.launches.filter { id, _ in Concierge.isPane(id) || l.tree.leaves.contains { $0.id == id } }
     l.previews = l.previews.filter { id, _ in l.tree.leaves.contains { $0.id == id } }
     l.editorFiles = l.editorFiles.filter { id, file in l.tabs.contains(file) && l.tree.leaves.contains { $0.id == id && $0.kind == .editor } }
     layout = l
@@ -507,7 +507,7 @@ private struct WorkspaceSnapshot: Codable {
   var favorites: [String]?
   var conciergePrompt: String?
   var conciergeCwd: String?
-  var conciergeSessions: [String: String]?
+  var conciergeSessions: [String: [String]]?
 }
 
 extension WorkbenchState {
@@ -530,7 +530,7 @@ extension WorkbenchState {
     if let a = snap.fileAssociations { s.fileAssociations = a }
     s.conciergePrompt = snap.conciergePrompt ?? ""
     s.conciergeCwd = snap.conciergeCwd ?? ""
-    s.conciergeSessions = (snap.conciergeSessions ?? [:]).filter { AgentProfile.isSessionID($0.value) }
+    s.conciergeSessions = (snap.conciergeSessions ?? [:]).mapValues { $0.filter(AgentProfile.isSessionID) }
     // A pin whose item is gone stays (dimmed in the column) until the user removes it, like Finder's.
     s.favorites = (snap.favorites ?? []).filter { $0.hasPrefix("/") }
     for (k, v) in snap.fonts ?? [:] where s.fonts[k] != nil && WorkbenchState.isValidFontFamily(v) { s.fonts[k] = v }

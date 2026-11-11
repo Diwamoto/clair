@@ -309,7 +309,7 @@ import Observation
             store.state.projects.flatMap { p in
               let tree = p.name == store.state.project ? store.state.tree : store.state.layouts[p.name]?.tree
               return (tree?.leaves ?? []).filter { $0.kind == .terminal }.map { ClairWorkbenchStore.terminalKey(root: p.path, pane: $0.id) }
-            } + [store.state.concierge()?.key].compactMap { $0 }
+            } + store.state.concierges().map(\.key)
           }
         }
         return ClairCLIProcessScanner.terminal(of: pid, keys: keys)
@@ -1437,6 +1437,10 @@ import Observation
     @State private var associationRows: [AssociationDraft] = []
     @State private var conciergePromptDraft = ""
     @State private var conciergeAsk: String?
+    /// The shown concierge chat; one not (or no longer) in `conciergeChats` falls back to the latest.
+    @State private var conciergeChat: String?
+    /// The chat ＋ opened: shown as a tab until its first send makes it one of `conciergeChats`.
+    @State private var conciergeDraft = UUID().uuidString.lowercased()
     @State private var conciergeCwdDraft = ""
     @State private var notificationTestResult: String?
     @State private var quota: [ProviderQuota] = []
@@ -2191,10 +2195,10 @@ import Observation
     // MARK: concierge (ADR-0020)
 
     /// #76: a new concierge starts only once the user has approved what it reads (prompt, cwd, its project files).
-    private func startConcierge(_ message: String? = nil) {
+    private func startConcierge(chat: String, _ message: String) {
       // A running concierge takes messages straight from the chat (its surface is mounted there).
-      guard st.concierge() == nil else { return }
-      var input: CommandInput = message.map { ["message": .string($0)] } ?? [:]
+      guard st.concierge(chat: chat) == nil else { return }
+      var input: CommandInput = ["message": .string(message), "chat": .string(chat)]
       let cwd = st.conciergeDir
       input["cwd"] = .string(cwd)
       let fingerprint = Concierge.fingerprint(prompt: st.conciergePrompt, cwd: cwd)
@@ -2214,7 +2218,7 @@ import Observation
     private func saveConcierge(_ input: CommandInput) {
       let before = (st.conciergePrompt, st.conciergeDir)
       store.run("settings.concierge", input)
-      if let c = st.concierge(), before != (st.conciergePrompt, st.conciergeDir) { store.closeTerminal(c.key) }
+      if before != (st.conciergePrompt, st.conciergeDir) { for c in st.concierges() { store.closeTerminal(c.key) } }
     }
 
     /// Leaving the concierge for a pane or file hands the sidebar back to the file tree.
@@ -2234,7 +2238,7 @@ import Observation
       let children = st.conciergeChildren()
       let ids = Set(children.map(\.session.id))
       let rows = children.map { ($0.session, $0.launch.prompt.map(conciergeShortTitle) ?? $0.session.title) }
-        + st.agentSessions.filter { $0.pane != Concierge.pane && !$0.status.isExited && !ids.contains($0.id) }.map { ($0, $0.activity ?? $0.title) }
+        + st.agentSessions.filter { !Concierge.isPane($0.pane) && !$0.status.isExited && !ids.contains($0.id) }.map { ($0, $0.activity ?? $0.title) }
       return rows.compactMap { s, title in
         st.projects.first { $0.name == s.project }.map { (s, title, WorkbenchState.terminalKey($0.path, s.pane)) }
       }
@@ -2296,7 +2300,7 @@ import Observation
     }
 
     private var sessionList: some View {
-      SessionList(sessions: st.agentSessions.filter { $0.pane != Concierge.pane }, current: st.project, projects: st.projects) { s in
+      SessionList(sessions: st.agentSessions.filter { !Concierge.isPane($0.pane) }, current: st.project, projects: st.projects) { s in
         if s.project != st.project { store.run("project.switch", ["name": .string(s.project)]) }
         store.run("pane.focus", ["id": .int(s.pane)])
       } openHistory: { historyTabs[$0.id] = $0; store.run("history.open", ["id": .string($0.id)]) }
@@ -3416,12 +3420,26 @@ import Observation
       .overlay(alignment: .leading) {
         // The concierge screen: chat on the left, the board on the right (running agents first; a click opens the terminal).
         if sidebarMode == "concierge" {
-          let c = st.concierge()
+          let chats = st.conciergeChats
+          let chat = conciergeChat.flatMap { chats.contains($0) || $0 == conciergeDraft ? $0 : nil } ?? chats.last ?? conciergeDraft
+          let status = { (id: String) in st.concierge(chat: id).flatMap { c in st.agentSessions.first { $0.project == c.project && $0.pane == c.pane }?.status } }
+          let c = st.concierge(chat: chat)
           HStack(spacing: 0) {
-            ConciergeChatView(
-              session: c.map { $0.launch.session ?? $0.session } ?? st.conciergeSession, terminal: c.map { ($0.key, $0.launch) },
-              status: c.flatMap { c in st.agentSessions.first { $0.project == c.project && $0.pane == c.pane }?.status },
-              start: { startConcierge($0) }, ask: $conciergeAsk)
+            VStack(spacing: 0) {
+              ConciergeTabs(
+                chats: (chats.contains(chat) ? chats : chats + [chat]).map { ($0, status($0)) }, selected: chat,
+                select: { conciergeChat = $0 },
+                close: { id in
+                  if let c = st.concierge(chat: id) { store.closeTerminal(c.key) }
+                  store.run("concierge.close", ["chat": .string(id)], confirmed: true)
+                  conciergeChat = nil
+                },
+                new: { conciergeDraft = UUID().uuidString.lowercased(); conciergeChat = conciergeDraft })
+              ConciergeChatView(
+                session: chat, terminal: c.map { ($0.key, $0.pane, $0.launch) }, status: status(chat),
+                start: { startConcierge(chat: chat, $0); conciergeChat = chat }, ask: $conciergeAsk)
+              .id(chat)
+            }
             .frame(width: 460)
             Divider()
             TodoBoardView(

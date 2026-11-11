@@ -35,8 +35,8 @@
   struct ConciergeChatView: View {
     let session: String?
     /// The concierge's daemon shell and launch. Its surface lives here, out of sight, and surfaces only while it is blocked.
-    let terminal: (key: String, launch: AgentLaunch)?
-    private var pane: Int? { terminal == nil ? nil : Concierge.pane }
+    let terminal: (key: String, pane: Int, launch: AgentLaunch)?
+    private var pane: Int? { terminal?.pane }
     /// The concierge terminal's own state: `.blocked` is a prompt only the raw terminal can answer,
     /// and a finished turn (`done` / `idle` / `attention`) ends the working indicator.
     let status: AgentSession.Status?
@@ -58,9 +58,6 @@
     /// The conversation's API-equivalent cost and latest model, and its context size / window (`agent.list`'s numbers).
     @State private var chat: (cost: Double?, model: String?) = (nil, nil)
     @State private var context: (tokens: Int?, limit: Int?) = (nil, nil)
-    /// `/clear` starts a new session, but the chat follows it only once the hook reports it (next prompt);
-    /// until then, turns before this time stay hidden.
-    @SceneStorage("concierge.clearedAt") private var clearedAt: Double = 0
     /// Files under the concierge's folder for `@` completion, scanned on the first `@`.
     @State private var files: [WorkbenchFile]?
     @State private var mentionIndex = 0
@@ -130,7 +127,7 @@
     @ViewBuilder private var hiddenTerminal: some View {
       if let terminal {
         let blocked = status == .blocked || stalled
-        ClairGhosttySurface(launch: (terminal.launch.command, terminal.launch.cwd), pane: Concierge.pane, sessionKey: terminal.key, focused: blocked)
+        ClairGhosttySurface(launch: (terminal.launch.command, terminal.launch.cwd), pane: terminal.pane, sessionKey: terminal.key, focused: blocked)
           .id(terminal.key)
           .clipShape(RoundedRectangle(cornerRadius: Self.bubbleRadius, style: .continuous))
           .overlay(RoundedRectangle(cornerRadius: Self.bubbleRadius, style: .continuous).strokeBorder(L.strong))
@@ -269,7 +266,6 @@
             }.menuStyle(.borderlessButton).fixedSize().help(tr("コンシェルジュのモデルを切り替え"))
             Menu {
               Button(tr("圧縮 (/compact)")) { command("/compact", pane) }
-              Button(tr("新しい会話 (/clear)")) { newConversation(pane) }
             } label: {
               contextLabel
             }.menuStyle(.borderlessButton).fixedSize().help(tr("コンテキスト"))
@@ -338,12 +334,6 @@
     private func command(_ text: String, _ pane: Int) {
       guard ClairGhosttySurfaceView.send(text, toPane: pane) else { return }
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { ClairGhosttySurfaceView.pressReturn(inPane: pane) }
-    }
-
-    private func newConversation(_ pane: Int) {
-      command("/clear", pane)
-      clearedAt = Date().timeIntervalSince1970
-      withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration)) { messages = []; chat = (nil, nil) }
     }
 
     /// The `@word` being typed at the end of the draft, or nil.
@@ -444,10 +434,10 @@
           let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
           if modified != seen {
             seen = modified
-            let cwd = terminal?.launch.cwd ?? "", since = clearedAt
+            let cwd = terminal?.launch.cwd ?? ""
             let (chat, read, context) = await Task.detached {
               let h = AgentHistoryReader.chat(file: file)
-              let read = (h?.messages ?? []).filter { $0.role != "thinking" && $0.date.timeIntervalSince1970 >= since }
+              let read = (h?.messages ?? []).filter { $0.role != "thinking" }
               return ((h?.estimatedUSD, h?.model), read, AgentContext.claude(session: session, cwd: cwd))
             }.value
             self.chat = chat; self.context = context
@@ -460,6 +450,60 @@
         } else if messages == nil { messages = [] }
         try? await Task.sleep(for: .seconds(1))
       }
+    }
+  }
+
+  /// The concierge's chats as tabs over the chat, as tall as the board's header so the two line up; ＋ starts a new one.
+  struct ConciergeTabs: View {
+    /// Each chat by its session id, with its terminal's state while it runs.
+    let chats: [(id: String, status: AgentSession.Status?)]
+    let selected: String
+    let select: (String) -> Void
+    let close: (String) -> Void
+    let new: () -> Void
+    @State private var titles: [String: String] = [:]
+
+    var body: some View {
+      HStack(spacing: 6) {
+        ScrollView(.horizontal) {
+          HStack(spacing: 6) { ForEach(chats, id: \.id) { tab($0.id, $0.status) } }
+        }.scrollIndicators(.never)
+        Button(action: new) {
+          Image(systemName: "plus").font(.system(size: 12)).foregroundStyle(C.textSecondary).frame(width: 26, height: 26)
+        }.buttonStyle(HoverWashStyle(radius: Radius.card)).help(tr("新しい会話")).accessibilityLabel(tr("新しい会話"))
+      }
+      .padding(.horizontal, 16).frame(height: 52)
+      // A chat's title is its first request, so it is read once its transcript exists and never changes.
+      .task(id: chats.map(\.id)) {
+        while !Task.isCancelled {
+          let missing = chats.map(\.id).filter { titles[$0] == nil }
+          let found = await Task.detached {
+            missing.compactMap { id in
+              Concierge.transcriptFile(session: id).flatMap { AgentHistoryReader.chat(file: $0)?.title }.map { (id, $0) }
+            }
+          }.value
+          for (id, title) in found { titles[id] = conciergeShortTitle(title) }
+          try? await Task.sleep(for: .seconds(3))
+        }
+      }
+    }
+
+    private func tab(_ id: String, _ status: AgentSession.Status?) -> some View {
+      let on = id == selected
+      return HStack(spacing: 6) {
+        Button { select(id) } label: {
+          HStack(spacing: 6) {
+            Circle().fill(status.map { statusLabel($0).1 } ?? C.textQuaternary).frame(width: 6, height: 6)
+            Text(titles[id] ?? tr("新しい会話")).lineLimit(1).frame(maxWidth: 140, alignment: .leading)
+          }
+        }.buttonStyle(.plain)
+        if on && chats.count > 1 {
+          Button { close(id) } label: { Image(systemName: "xmark").font(.system(size: 9, weight: .semibold)).foregroundStyle(C.textTertiary) }
+            .buttonStyle(.plain).help(tr("会話を閉じる")).accessibilityLabel(tr("会話を閉じる"))
+        }
+      }
+      .modifier(TodoBoardView.Chip(on: on))
+      .accessibilityAddTraits(on ? .isSelected : [])
     }
   }
 
@@ -824,7 +868,7 @@
     }
 
     /// A header filter: a hairline chip, filled while it narrows the board.
-    private struct Chip: ViewModifier {
+    fileprivate struct Chip: ViewModifier {
       let on: Bool
       func body(content: Content) -> some View {
         content.font(.system(size: 12)).foregroundStyle(on ? C.textPrimary : C.textSecondary)

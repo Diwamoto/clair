@@ -5,7 +5,7 @@
 extension LocalizedStrings {
   static let english: [String: String] = [
     // Concierge (ADR-0020)
-    "ツールを %@ 回実行": "Ran %@ tools", "圧縮 (/compact)": "Compact (/compact)", "新しい会話 (/clear)": "New conversation (/clear)",
+    "ツールを %@ 回実行": "Ran %@ tools", "圧縮 (/compact)": "Compact (/compact)", "新しい会話": "New conversation", "会話を閉じる": "Close conversation",
     "コンテキスト": "Context", "この会話の API 換算の推定額": "Estimated API-equivalent cost of this conversation",
     "コンシェルジュ": "Concierge", "コンシェルジュを開く": "Open Concierge", "起動": "Start", "入力待ち": "Waiting for input",
     "ペイン": "Panes", "この Project を一度開くと画面が表示されます": "Open this Project once to show its screen",

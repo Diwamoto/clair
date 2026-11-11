@@ -437,10 +437,12 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   実行し、どの Project でもないときは無効にする。再開コマンド
   (`cd <directory> && <resume コマンド>`)は常にコピーできる。チャットのタブは
   ファイルタブと同じく ⌘W で閉じ、⌘⇧T で開き直せる
-- activity bar の「コンシェルジュ」は Clair 全体で一つのコンシェルジュ agent を
+- activity bar の「コンシェルジュ」はコンシェルジュ agent の会話を
   sidebar を持たない専用画面に出す([ADR-0020](decisions/0020-concierge-agent.md)。Project の workspace がデータプレーン、
   コンシェルジュがコントロールプレーン。2026-11-11 オーナー依頼)。Project の切替・
-  close では止まらず、ユーザーが初めてこの画面を開いたときに起動する。本体は既定 Agent を
+  close では止まらず、会話ごとに最初の送信で起動する。会話は複数持て、チャットの上のタブ(ボードの見出しと同じ高さ 52。
+  状態の点と最初の依頼の先頭、選択中のタブに閉じる、右端の ＋ で新しい会話)で切り替え、それぞれが別の Claude Code として同時に動く
+  (一つの会話は一度に一つの依頼しか処理しないため。2026-11-11 オーナー依頼)。本体は既定 Agent を
   通常の agent launch と同じく raw PTY で起動し、GUI はその session の公式 transcript を
   チャットとして描画して、送信は PTY に書き込む。コンシェルジュが起動した子 agent
   (`parent` がコンシェルジュ)は状態と pane へのリンクで示し、出力は中継しない。
@@ -450,18 +452,18 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   terminal pane を開く。画面の文字はこの起動でその pane を一度表示したときだけ読め、まだならそう示す。手動の分割切替は持たない。
   composer の「モデル」メニューは動いているコンシェルジュに `/model <alias>` を送る(2026-11-10 オーナー依頼)。
   本体の terminal はどの Project の layout・タブ・ターミナル一覧にも出さない(ホスト Project の
-  `launches` に layout が使わない pane id `-1` で持ち、daemon の shell key は `<root>#-1`。2026-11-10 オーナー依頼)。
+  `launches` に layout が使わない負の pane id(`-1`, `-2`, …)で持ち、daemon の shell key は `<root>#-1` など。2026-11-10 オーナー依頼)。
   surface はチャットの裏に見えない状態でマウントし、コンシェルジュがターミナルでの承認や質問を待つ(`blocked`)
-  間と、新しい会話の最初の依頼が送信から 3 秒たっても transcript に現れない間(フォルダの信頼確認・ログイン・起動エラーなど hook が動く前に止まっている)だけチャットの上に一時表示してそこで答えさせる。どの Project からも Project を切り替えずに同じ一つを開く。指示は設定の `concierge.prompt`(固定の役割の後ろに足す自由記述)、
+  間と、新しい会話の最初の依頼が送信から 3 秒たっても transcript に現れない間(フォルダの信頼確認・ログイン・起動エラーなど hook が動く前に止まっている)だけチャットの上に一時表示してそこで答えさせる。マウントするのは表示中の会話だけ。どの Project からも Project を切り替えずに同じ画面を開く。指示は設定の `concierge.prompt`(固定の役割の後ろに足す自由記述)、
   作業フォルダは `concierge.cwd`(空ならコンシェルジュ専用の `~/.clair/concierge`。無ければ作る。そこのプロジェクトスキルと
   `CLAUDE.md` が読まれる。2026-11-11 オーナー依頼)。起動時に作業フォルダを、表示中の Project を切り替えずに Project として開き、
   そこをホスト Project にする。`project=` を付けずに起動した子はこのフォルダで動く。どちらも設定画面か `settings.concierge [prompt cwd]`(AI 不可。agent が
-  書き換えると以後の全タスクを指揮できるため)で変える。設定画面で値を変えて保存すると動いているコンシェルジュを終了し、次に開いたときに新しい値で起動する。コンシェルジュの session は作業フォルダごとに最新のもの(hook が報告した session)を workspace に保存し、Clair の再起動・設定変更・ホスト Project を閉じた後に起動するコンシェルジュはそのフォルダの会話を `--resume` で続け、起動のきっかけになった依頼をそのまま渡す。チャットは起動前からその会話を表示する(2026-11-11 オーナー依頼)。新しく起動する前に、
+  書き換えると以後の全タスクを指揮できるため)で変える。設定画面で値を変えて保存すると動いているコンシェルジュをすべて終了して会話の一覧を空にし、次の送信で新しい値の新しい会話を起動する。会話の一覧は作業フォルダごとに各会話の最新の session(hook が報告したもの。`/clear` で変わる)を workspace に保存し、Clair の再起動やホスト Project を閉じた後に送信した会話は `--resume` で続け、送信した依頼をそのまま渡す。タブとチャットは起動前からその会話を表示する。タブを閉じると、その会話のコンシェルジュを終了して一覧から外す(transcript は残る。2026-11-11 オーナー依頼)。新しく起動する前に、
   prompt・cwd と cwd(と親ディレクトリ)の `CLAUDE.md` / `CLAUDE.local.md` / `.mcp.json` / `.claude/CLAUDE.md` /
   `.claude/settings{,.local}.json` / `.claude/{skills,agents,commands,hooks,rules}/` 配下の内容のハッシュを
   GUI の defaults の承認済みの値と比べ、違えば承認カードを出す。`concierge.open`(パレットには出さない)自身も新規起動の前に承認済みかを確かめるので、CLI から変更後の内容で起動することはできない(`schedules.json` と同じ方式。限界も同じで、
   shell を持つ agent は defaults を書ける。`~/.claude` は対象外)。限界: 再起動で復元した pane はそのまま起動し直す(承認は新規起動のときだけ)。`--add-dir` の追加フォルダはハッシュしない。ホストの Project を閉じると
-  コンシェルジュも外れる(次に開くと同じ会話で起動し直す)。チャットを開いていない間は surface がマウントされないので、
+  コンシェルジュも外れる(次の送信で同じ会話を起動し直す)。チャットを開いていない間は surface がマウントされないので、
   `agent.output` / `agent.send` はコンシェルジュの画面を読めない。
   コンシェルジュは `agent.launch project=` で表示中の Project を切り替えずに別の Project へ
   子を起動できる。他の agent が `parent` 付きで別の Project を指定すると preconditionFailed になる。
@@ -482,9 +484,8 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   そのパスを足す。送信欄で `@` に続けて打つと、コンシェルジュの作業フォルダのファイル(Quick Open と同じ走査と順位)を上に出し、
   ↑↓ で選んで ⏎ / ⇥ で `@<相対パス>` を入れる(Esc で閉じる)。チャットは連続したツール呼び出しを「ツールを N 回実行」の一行に畳み、
   開くと一行ずつ名前と主な引数(command / file / pattern など)を出す。送信欄の下には、最新の返答のモデル名を付けた「モデル」メニュー、
-  `agent.list` と同じ計算のコンテキスト使用量(使用量 / 上限と割合の輪、8 割から警告色。メニューで `/compact` と、
-  新しい会話の `/clear`)、この会話の API 換算の推定額を出す。`/clear` の後、チャットは hook が新しい session を報告するまで
-  それより前の発言を隠す(2026-11-11 オーナー依頼)。
+  `agent.list` と同じ計算のコンテキスト使用量(使用量 / 上限と割合の輪、8 割から警告色。メニューで `/compact`)、
+  この会話の API 換算の推定額を出す。
   返答待ちの間に送信欄で Esc か ⌃C を押すと、その応答を中断する(PTY には Esc を送る。Claude Code はアイドル時の
   ⌃C 二度押しで終了するため ⌃C は送らない)。中断は transcript の `[Request interrupted by user]` で
   「中断しました」と示し、作業中の行を消す(2026-11-10 オーナー依頼)

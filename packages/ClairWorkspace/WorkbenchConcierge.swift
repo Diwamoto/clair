@@ -1,16 +1,18 @@
 import CryptoKit
 import Foundation
 
-// ADR-0020: one concierge agent for all of Clair, kept in some Project's `launches` under `Concierge.pane`, a pane id no tree uses,
-// so it never shows in a layout. It is an ordinary raw-PTY agent terminal (daemon shell `root#-1`); the GUI draws
+// ADR-0020: Clair's concierge chats, each kept in its folder Project's `launches` under a negative pane id no tree uses,
+// so none shows in a layout. Each is an ordinary raw-PTY agent terminal (daemon shell `root#-1`, `root#-2`, …); the GUI draws
 // its official Claude Code transcript (found by the session id fixed at launch) as chat, and types the
 // composer's text into its PTY. Children are agents launched with `parent` = the concierge's terminal key.
 // ponytail: Claude Code only — it is the one provider whose session id can be fixed at launch
 // (`--session-id`); Codex/OpenCode need a session-discovery step before they can be a concierge.
 
 public enum Concierge {
-  /// The concierge's pane id: off every tree (`PaneTree` ids start at 1), so no layout draws it. The chat mounts its surface.
+  /// The first concierge chat's pane id. Every concierge pane is negative: off every tree (`PaneTree` ids start at 1),
+  /// so no layout draws it. The chat mounts its surface.
   public static let pane = -1
+  public static func isPane(_ id: Int) -> Bool { id < 0 }
 
   static let basePrompt = """
     あなたは Clair 全体のコンシェルジュです。ユーザーの依頼を受け、Clair の操作と作業の割り振りを担当します。自分で大きな実装はしません。
@@ -19,6 +21,7 @@ public enum Concierge {
     - `clair` CLI で Clair を操作する(ファイルを開く、ペイン、git、プレビューなど)。使い方は clair-agents / clair-preview skill を参照。
     - 作業は子 agent に任せる: `clair agent launch profile=<claude|codex|opencode> prompt="<依頼>" [project=<Project 名>] [branch=<名前>]`。互いに独立した作業は別々の branch で並列に起動する。
     - `project=` を省くと子はコンシェルジュの作業フォルダで動く。リポジトリでの作業は必ず `project=` を付ける。値は `clair project list --compact` の `name`(パスではない)。
+    - 別の会話のコンシェルジュも同時に子を起動している。リポジトリを変更する子には必ず `branch=` を付け、同じ作業ツリーを共有させない。
 
     ## TODO
     ユーザーの言う「todo」「TODO」「やること」「あとで」は Clair の TODO(`~/.clair/todo/*.md`、サイドバーとボードに出るもの)を指す。Claude Code 内蔵の TodoWrite やタスク機能、リポジトリ内の TODO コメントではない。操作は clair-todo skill の通り `clair todo ...` コマンドで行い、ファイルを直接書かない。
@@ -115,24 +118,29 @@ extension WorkbenchState {
   /// The folder the next concierge starts in.
   public var conciergeDir: String { conciergeCwd.isEmpty ? Concierge.defaultCwd() : conciergeCwd }
 
-  /// The chat the next concierge in `conciergeDir` resumes, so the screen shows it before anything is sent.
-  public var conciergeSession: String? { conciergeSessions[WorkbenchProject.normalized(conciergeDir) ?? conciergeDir] }
+  /// The chats of `conciergeDir`, oldest first, each by its current session id; shown before any of them runs.
+  public var conciergeChats: [String] { conciergeSessions[WorkbenchProject.normalized(conciergeDir) ?? conciergeDir] ?? [] }
 
-  /// Clair's concierge terminal, in whichever Project's `launches` holds it.
-  public func concierge() -> (project: String, pane: Int, session: String, key: String, launch: AgentLaunch)? {
-    projects.lazy.compactMap { p in
-      withLayoutCopy(p.name).launches[Concierge.pane].flatMap { l in
-        l.concierge.map { (p.name, Concierge.pane, $0, Self.terminalKey(p.path, Concierge.pane), l) }
-      }
-    }.first
+  /// Running concierge terminals, first chat first.
+  public func concierges() -> [(project: String, pane: Int, session: String, key: String, launch: AgentLaunch)] {
+    projects.flatMap { p in
+      withLayoutCopy(p.name).launches.filter { Concierge.isPane($0.key) }.compactMap { pane, l in
+        l.concierge.map { (p.name, pane, $0, Self.terminalKey(p.path, pane), l) }
+      }.sorted { $0.pane > $1.pane }
+    }
   }
 
-  /// Agents the concierge launched (their `parent` is the concierge terminal).
+  /// The running terminal of `chat` (its current session id), or the first running one.
+  public func concierge(chat: String? = nil) -> (project: String, pane: Int, session: String, key: String, launch: AgentLaunch)? {
+    concierges().first { c in chat.map { (c.launch.session ?? c.session) == $0 } ?? true }
+  }
+
+  /// Agents a concierge launched (their `parent` is a concierge terminal).
   public func conciergeChildren() -> [(session: AgentSession, launch: AgentLaunch)] {
-    guard let key = concierge()?.key else { return [] }
+    let keys = Set(concierges().map(\.key))
     // Children can live in the worktree Projects agent.launch creates, so search every Project.
     return agentSessions.compactMap { s in
-      guard let l = withLayoutCopy(s.project).launches[s.pane], l.parent == key else { return nil }
+      guard let l = withLayoutCopy(s.project).launches[s.pane], let parent = l.parent, keys.contains(parent) else { return nil }
       return (s, l)
     }
   }

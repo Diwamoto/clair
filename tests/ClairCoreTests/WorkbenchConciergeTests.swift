@@ -38,8 +38,8 @@ final class WorkbenchConciergeTests: XCTestCase {
     try r.execute("terminal.show", state: &s).get()
     try r.execute("pane.close", confirmed: true, state: &s).get()
     XCTAssertEqual(s.concierge()?.session, c.session)
-    // Already running: no second concierge.
-    try r.execute("concierge.open", confirmed: true, state: &s).get()
+    // Its chat already runs: no second terminal for it.
+    try r.execute("concierge.open", ["chat": .string(c.session)], confirmed: true, state: &s).get()
     XCTAssertEqual(s.launches.values.filter { $0.concierge != nil }.count, 1)
   }
 
@@ -181,14 +181,14 @@ final class WorkbenchConciergeTests: XCTestCase {
     var (s, root) = try opened()
     try r.execute("concierge.open", confirmed: true, state: &s).get()
     let first = try XCTUnwrap(s.concierge())
-    XCTAssertEqual(s.conciergeSession, first.session)
+    XCTAssertEqual(s.conciergeChats, [first.session])
     // Launches are not persisted: a restart (or a settings change) drops the running concierge.
     let file = URL.temporaryDirectory.appending(path: "clair-ws-\(UUID().uuidString).json")
     try s.save(to: file)
     var restored = try XCTUnwrap(WorkbenchState.restore(from: file, scanFiles: false))
     XCTAssertNil(restored.concierge())
-    XCTAssertEqual(restored.conciergeSession, first.session)
-    try r.execute("concierge.open", ["message": .string("続けて")], confirmed: true, state: &restored).get()
+    XCTAssertEqual(restored.conciergeChats, [first.session])
+    try r.execute("concierge.open", ["message": .string("続けて"), "chat": .string(first.session)], confirmed: true, state: &restored).get()
     XCTAssertEqual(restored.concierge()?.session, first.session)
     // Another folder has its own chat.
     restored.withLayout(first.project) { $0.launches[Concierge.pane] = nil }
@@ -197,6 +197,28 @@ final class WorkbenchConciergeTests: XCTestCase {
     Concierge.approve(Concierge.fingerprint(prompt: "", cwd: other))
     try r.execute("concierge.open", confirmed: true, state: &restored).get()
     XCTAssertNotEqual(restored.concierge()?.session, first.session)
+  }
+
+  func testChatsRunSideBySideAndAChangedSettingStartsOver() throws {
+    var (s, _) = try opened()
+    try r.execute("concierge.open", confirmed: true, state: &s).get()
+    try r.execute("concierge.open", confirmed: true, state: &s).get()
+    let both = s.concierges()
+    XCTAssertEqual(both.map(\.pane), [-1, -2])
+    XCTAssertEqual(s.conciergeChats, both.map(\.session))
+    XCTAssertNotNil(s.terminal(both[1].key))
+    try r.execute("agent.launch", ["profile": .string("claude"), "prompt": .string("x"), "parent": .string(both[1].key)], confirmed: true, state: &s).get()
+    XCTAssertEqual(s.conciergeChildren().map(\.launch.parent), [both[1].key])
+    // `/clear` in one chat: the hook's new session replaces that chat's entry only.
+    let cleared = UUID().uuidString.lowercased()
+    try r.execute("agent.report", ["state": .string("done"), "session": .string(cleared), "parent": .string(both[0].key)], state: &s).get()
+    XCTAssertEqual(s.conciergeChats, [cleared, both[1].session])
+    XCTAssertEqual(s.concierge(chat: cleared)?.pane, -1)
+    try r.execute("concierge.close", ["chat": .string(both[1].session)], confirmed: true, state: &s).get()
+    XCTAssertEqual(s.conciergeChats, [cleared])
+    XCTAssertEqual(s.concierges().map(\.pane), [-1])
+    try r.execute("settings.concierge", ["prompt": .string("new")], confirmed: true, state: &s).get()
+    XCTAssertEqual(s.conciergeChats, [])
   }
 
   func testResumedChatCarriesTheRequestThatWokeIt() {
