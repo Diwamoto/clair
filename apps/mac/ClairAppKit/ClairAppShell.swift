@@ -1526,7 +1526,7 @@ import Observation
                 sidebar
                 if !glass { Rectangle().fill(C.surfaceActive).frame(width: 1) }
               }
-              main.readingPanel(tiled: review == nil && diff == nil && !st.panesClosed && sidebarMode != "concierge")
+              main.readingPanel(tiled: review == nil && diff == nil && !st.panesClosed)
                 .padding(.leading, glass && !sidebarShown ? DesignTokens.Glass.inset : 0)
             }
           }
@@ -3437,6 +3437,7 @@ import Observation
           }
           // Opaque: the panes stay mounted underneath, and the translucent divider let their terminal text show through.
           .background(C.canvas)
+          .paneCard(focused: false)
         }
       }
     }
