@@ -87,13 +87,15 @@
       XCTAssertLessThan(elapsed, 3, "5,000-line highlighted diff took \(elapsed)s")
     }
 
+    // 0.5 s, not 0.2: CI runs these in a debug build beside heavier tests (`--parallel`), and wall time there
+    // swings 2–3x; locally they take under 0.1 s, so this still catches a several-fold regression.
     func testLargeDiffParsingStaysWithinInteractionBudget() {
       let text = "@@ -1,5000 +1,5000 @@\n" + (0..<5000).map { $0.isMultiple(of: 3) ? "+line \($0)" : " line \($0)" }.joined(separator: "\n")
       let start = Date()
       let model = DiffView.model(text)
       let elapsed = Date().timeIntervalSince(start)
       XCTAssertEqual(model.rows.count, DiffView.maxLines)
-      XCTAssertLessThan(elapsed, 0.2, "5,000-line diff parsing took \(elapsed)s")
+      XCTAssertLessThan(elapsed, 0.5, "5,000-line diff parsing took \(elapsed)s")
     }
 
     func testTwentyThousandFileExplorerModelStaysWithinInteractionBudget() {
@@ -102,7 +104,7 @@
       let rows = ClairAppShell.explorerRows(for: files)
       let elapsed = Date().timeIntervalSince(start)
       XCTAssertGreaterThan(rows.count, files.count)
-      XCTAssertLessThan(elapsed, 0.2, "20,000-file explorer model took \(elapsed)s")
+      XCTAssertLessThan(elapsed, 0.5, "20,000-file explorer model took \(elapsed)s")
     }
 
     func testTwentyThousandChangeListModelStaysWithinInteractionBudget() {
@@ -111,7 +113,7 @@
       let rows = ChangesList.entries(changes, collapsed: [])
       let elapsed = Date().timeIntervalSince(start)
       XCTAssertEqual(rows.count, 1 + 1 + 100 + changes.count)  // header, Sources, G0…G99, files
-      XCTAssertLessThan(elapsed, 0.2, "20,000-change list model took \(elapsed)s")
+      XCTAssertLessThan(elapsed, 0.5, "20,000-change list model took \(elapsed)s")
     }
 
     func testExplorerMultiSelection() {
