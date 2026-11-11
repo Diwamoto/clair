@@ -6,6 +6,17 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.36.0] - 2026-11-11
+
+### Added
+- Drop files into the concierge composer to send them as paths; Cmd-V pastes a clipboard image, and @ completes files from the concierge's folder.
+- The concierge chat folds each run of tool calls into one expandable row, and the composer shows the running model, context usage with /compact and /clear, and the conversation's estimated cost.
+- The diff view colours code by syntax, marks changed lines with + / −, and heads each file with its icon, path, counts and side.
+
+### Changed
+- The concierge has its own screen: the sidebar is hidden there, and the board shows every Project's agent panes as read-only tiles with the last lines of their screen.
+- The board is drawn flat on the same ground as the chat, with hairline cards, mono column heads, filter chips for "Waiting on you" and the Project, and an empty state.
+
 ## [0.35.0] - 2026-11-10
 
 ### Added
@@ -680,7 +691,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.35.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.36.0...HEAD
+[0.36.0]: https://github.com/Diwamoto/clair/compare/v0.35.0...v0.36.0
 [0.35.0]: https://github.com/Diwamoto/clair/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/Diwamoto/clair/compare/v0.33.0...v0.34.0
 [0.33.0]: https://github.com/Diwamoto/clair/compare/v0.32.2...v0.33.0
