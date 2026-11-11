@@ -490,7 +490,7 @@
       return HStack(spacing: 6) {
         Button { select(id) } label: {
           HStack(spacing: 6) {
-            Circle().fill(status.map { statusLabel($0).1 } ?? C.textQuaternary).frame(width: 6, height: 6)
+            Circle().fill(status.map { statusLabel($0).1 } ?? C.textMuted).frame(width: 6, height: 6)
             Text(titles[id] ?? tr("新しい会話")).lineLimit(1).frame(maxWidth: 140, alignment: .leading)
           }
         }.buttonStyle(.plain)
