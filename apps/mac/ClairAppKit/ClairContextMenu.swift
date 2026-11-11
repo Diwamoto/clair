@@ -144,7 +144,7 @@
           MenuPanel(spec: open.spec, active: $active, sub: $sub, close: close)
             .fixedSize()
             .onGeometryChange(for: CGSize.self, of: { $0.size }) { size = $0 }
-            .scaleEffect(shown || reduceMotion ? 1 : 0.97, anchor: UnitPoint(x: flipX ? 1 : 0, y: flipY ? 1 : 0))
+            .scaleEffect(shown || reduceMotion ? 1 : Motion.overlayOpenScale, anchor: UnitPoint(x: flipX ? 1 : 0, y: flipY ? 1 : 0))
             .opacity(size == nil ? 0 : shown || reduceMotion ? 1 : 0)
             .offset(x: left, y: top)
             .focusable().focusEffectDisabled().focused($focused)
@@ -202,9 +202,9 @@
       VStack(alignment: .leading, spacing: 0) {
         if let title = spec.title {
           VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(C.textPrimary)
+            Text(title).font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textPrimary)
             if let s = spec.sub {
-              Text(s).font(.system(size: 11)).truncationMode(.head).foregroundStyle(C.textMuted)
+              Text(s).font(Typography.font(Typography.chrome)).truncationMode(.head).foregroundStyle(C.textMuted)
             }
           }
           .lineLimit(1).padding(.horizontal, 8).padding(.vertical, 4)
@@ -221,7 +221,7 @@
       .padding(pad)
       .frame(minWidth: 220, maxWidth: 320, alignment: .leading)
       .sheetSurface()
-      .shadow(color: .black.opacity(0.62), radius: 24, y: 18)
+      .overlayShadow()
       .onHover { if !$0, sub == nil { active = nil } }
     }
 
@@ -237,16 +237,16 @@
       let on = active == i && !it.disabled
       let quiet = it.disabled ? C.textMuted : on ? C.textSecondary : C.textMuted
       return HStack(spacing: 8) {
-        Text(it.label).font(.system(size: 12, weight: it.destructive ? .semibold : .regular))
+        Text(it.label).font(Typography.font(it.destructive ? Typography.chromeStrong : Typography.chrome))
           .foregroundStyle(it.disabled ? C.textMuted : on || it.destructive ? C.textPrimary : C.textSecondary)
           .lineLimit(1)
         Spacer(minLength: 0)
-        if let s = it.shortcut { Text(s).font(.system(size: 11).monospacedDigit()).foregroundStyle(quiet).padding(.leading, 12) }
+        if let s = it.shortcut { Text(s).font(Typography.font(Typography.chrome).monospacedDigit()).foregroundStyle(quiet).padding(.leading, 12) }
         if it.submenu != nil {
-          Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(quiet).padding(.leading, 12)
+          Image(systemName: "chevron.right").font(.system(size: Typography.chromeSize(9), weight: .semibold)).foregroundStyle(quiet).padding(.leading, 12)
         }
       }
-      .padding(.horizontal, 8).frame(height: 26)
+      .padding(.horizontal, 8).frame(height: RowHeight.default)
       .background(on ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.card))
       .contentShape(Rectangle())
       .onTapGesture {
@@ -281,11 +281,11 @@
         Color.black.opacity(0.32).contentShape(Rectangle()).onTapGesture(perform: dismiss)
         VStack(alignment: .leading, spacing: 12) {
           Text(dialog.title).font(Typography.font(Typography.title)).foregroundStyle(C.textPrimary)
-          if let m = dialog.message { Text(m).font(.system(size: 12)).foregroundStyle(C.textSecondary) }
+          if let m = dialog.message { Text(m).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary) }
           if dialog.initial != nil {
-            TextField("", text: $text).textFieldStyle(.plain).font(.system(size: 12))
+            TextField("", text: $text).textFieldStyle(.plain).font(Typography.font(Typography.chrome))
               .foregroundStyle(C.textPrimary)
-              .padding(.horizontal, 8).frame(height: 28)
+              .padding(.horizontal, 8).frame(height: RowHeight.default)
               .background(C.chrome, in: RoundedRectangle(cornerRadius: Radius.control))
               .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(fieldFocused ? L.ring : L.hairline))
               .focused($fieldFocused)
@@ -294,18 +294,18 @@
           HStack(spacing: 8) {
             Spacer(minLength: 0)
             Button(action: dismiss) {
-              Text(tr("キャンセル")).font(.system(size: 12)).foregroundStyle(C.textSecondary).padding(.horizontal, 12).frame(height: 26)
+              Text(tr("キャンセル")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary).padding(.horizontal, 12).frame(height: RowHeight.default)
             }.buttonStyle(.hoverWash).keyboardShortcut(.cancelAction)
             Button(action: confirm) {
-              Text(dialog.confirm).font(.system(size: 12, weight: .semibold)).foregroundStyle(C.textPrimary)
-                .padding(.horizontal, 12).frame(height: 26)
+              Text(dialog.confirm).font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textPrimary)
+                .padding(.horizontal, 12).frame(height: RowHeight.default)
                 .controlFill(flatRadius: Radius.card)
             }.buttonStyle(.hoverWash).keyboardShortcut(dialog.initial == nil ? .defaultAction : nil)
           }
         }
         .padding(16).frame(width: 360)
         .sheetSurface()
-        .shadow(color: .black.opacity(0.62), radius: 24, y: 18)
+        .overlayShadow()
       }
       .onAppear {
         text = dialog.initial ?? ""
@@ -339,9 +339,9 @@
         Button { open.toggle() } label: {
           HStack(spacing: 8) {
             RoundedRectangle(cornerRadius: Radius.control).fill(Color(hue: h, saturation: s, brightness: b)).frame(width: 18, height: 12)
-            Text(tr("色を変更")).font(.system(size: 12)).foregroundStyle(C.textSecondary)
+            Text(tr("色を変更")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary)
             Spacer(minLength: 0)
-            Image(systemName: open ? "chevron.up" : "chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(C.textMuted)
+            Image(systemName: open ? "chevron.up" : "chevron.down").font(.system(size: Typography.chromeSize(9), weight: .semibold)).foregroundStyle(C.textMuted)
           }
           .contentShape(Rectangle())
         }

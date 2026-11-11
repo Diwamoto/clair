@@ -143,7 +143,7 @@
             if let p = model.picked, !p.isDirectory {
               FileBrowserPreview(entry: p, open: { open(p) }, openElsewhere: { openWithDefault(p) }).id("preview")
             } else if model.location.selection.count > 1 {
-              Text(tr("%@ 項目を選択", model.location.selection.count)).font(.system(size: 12)).foregroundStyle(C.textTertiary)
+              Text(tr("%@ 項目を選択", model.location.selection.count)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
                 .frame(width: 240).frame(maxHeight: .infinity).id("preview")
             }
             Color.clear.frame(width: 1).id("end")
@@ -170,17 +170,17 @@
                 .padding(.horizontal, 4).padding(.vertical, 1)
             }.buttonStyle(HoverWashStyle(radius: Radius.control))
           }
-        }.font(.system(size: 11, design: .monospaced)).padding(.leading, 4)
+        }.font(Typography.font(Typography.chrome, family: .mono)).padding(.leading, 4)
         Spacer(minLength: 0)
         Button { menus.open(sortMenu, at: CGPoint(x: sortFrame.minX, y: sortFrame.maxY + 4)) } label: {
           HStack(spacing: 4) {
-            Image(systemName: "arrow.up.arrow.down").font(.system(size: 10, weight: .semibold))
-            Text(sortLabel(model.sort)).font(.system(size: 11))
-          }.foregroundStyle(C.textTertiary).padding(.horizontal, 6).frame(height: 22)
+            Image(systemName: "arrow.up.arrow.down").font(.system(size: Typography.chromeSize(11), weight: .semibold))
+            Text(sortLabel(model.sort)).font(Typography.font(Typography.chrome))
+          }.foregroundStyle(C.textTertiary).padding(.horizontal, 6).frame(height: RowHeight.compact)
         }
         .buttonStyle(HoverWashStyle(radius: Radius.control)).help(tr("並べ替え"))
         .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { sortFrame = $0 }
-      }.padding(.horizontal, 8).frame(height: 28)
+      }.padding(.horizontal, 8).frame(height: RowHeight.default)
     }
 
     private func sortLabel(_ sort: FileBrowser.Sort) -> String {
@@ -210,7 +210,7 @@
 
     private func navButton(_ symbol: String, _ label: String, enabled: Bool, _ action: @escaping () -> Void) -> some View {
       Button(action: action) {
-        Image(systemName: symbol).font(.system(size: 10, weight: .semibold)).frame(width: 22, height: 22)
+        Image(systemName: symbol).font(.system(size: Typography.chromeSize(11), weight: .semibold)).frame(width: RowHeight.compact, height: RowHeight.compact)
           .foregroundStyle(enabled ? C.textTertiary : C.textMuted)
       }.buttonStyle(HoverWashStyle(radius: Radius.control)).disabled(!enabled).opacity(enabled ? 1 : 0.5).help(label)
     }
@@ -227,8 +227,8 @@
       let text = model.notice
         ?? [tr("%@ 項目", count), selected > 0 ? tr("%@ 項目を選択", selected) : nil, model.showHidden ? tr("隠しファイルを表示中") : nil]
           .compactMap { $0 }.joined(separator: " · ")
-      return Text(text).font(.system(size: 11)).foregroundStyle(model.notice == nil ? C.textMuted : C.textSecondary)
-        .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).frame(height: 22)
+      return Text(text).font(Typography.font(Typography.chrome)).foregroundStyle(model.notice == nil ? C.textMuted : C.textSecondary)
+        .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).frame(height: RowHeight.compact)
     }
 
     // MARK: columns
@@ -257,7 +257,7 @@
     }
 
     private func note(_ text: String) -> some View {
-      Text(text).font(.system(size: 12)).foregroundStyle(C.textTertiary).padding(.horizontal, 16).frame(height: 24)
+      Text(text).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).padding(.horizontal, 16).frame(height: RowHeight.default)
     }
 
     private func row(_ e: FileBrowser.Entry, column: Int) -> some View {
@@ -265,16 +265,16 @@
       let trail = !selected && model.location.columns.dropFirst(column + 1).first == e.path
       return HStack(spacing: 8) {
         (e.isDirectory ? FileIcon.folder(open: false) : FileIcon.forPath(e.name)).image(size: 11, ink: C.textTertiary).frame(width: 14)
-        Text(e.name).font(.system(size: 12)).lineLimit(1).truncationMode(.middle)
+        Text(e.name).font(Typography.font(Typography.sidebar)).lineLimit(1).truncationMode(.middle)
           .foregroundStyle(e.isHidden ? C.textMuted : selected || trail ? C.textPrimary : C.textSecondary)
         Spacer(minLength: 4)
         if let m = e.modified {
-          Text(Self.shortDate(m)).font(.system(size: 10)).monospacedDigit().foregroundStyle(C.textMuted).lineLimit(1)
+          Text(Self.shortDate(m)).font(Typography.font(Typography.chrome)).monospacedDigit().foregroundStyle(C.textMuted).lineLimit(1)
         }
-        Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold)).foregroundStyle(C.textMuted)
+        Image(systemName: "chevron.right").font(.system(size: Typography.chromeSize(9), weight: .semibold)).foregroundStyle(C.textMuted)
           .opacity(e.isDirectory ? 1 : 0)
       }
-      .padding(.horizontal, 8).frame(height: 24)
+      .padding(.horizontal, 8).frame(height: RowHeight.default)
       .background(selected ? C.surfaceActive : trail ? C.surfaceHover : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
       .rowHover(radius: Radius.control)
       .contentShape(Rectangle())
@@ -517,15 +517,15 @@
       VStack(alignment: .leading, spacing: 8) {
         HStack(spacing: 8) {
           FileIcon.forPath(entry.name).image(size: 13, ink: C.textTertiary)
-          Text(entry.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(C.textPrimary).lineLimit(2)
+          Text(entry.name).font(Typography.font(Typography.title)).foregroundStyle(C.textPrimary).lineLimit(2)
         }
-        Text(details).font(.system(size: 11)).foregroundStyle(C.textTertiary).lineSpacing(2).textSelection(.enabled)
+        Text(details).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).lineSpacing(2).textSelection(.enabled)
         Group {
           if let head {
-            Text(head).font(.system(size: 11, design: .monospaced)).foregroundStyle(C.code)
+            Text(head).font(Typography.font(Typography.chrome, family: .mono)).foregroundStyle(C.code)
               .frame(maxWidth: .infinity, alignment: .topLeading).lineLimit(14)
           } else {
-            Text(tr("Clair ではプレビューできません")).font(.system(size: 11)).foregroundStyle(C.textMuted)
+            Text(tr("Clair ではプレビューできません")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted)
               .frame(maxWidth: .infinity, minHeight: 100)
           }
         }
@@ -555,9 +555,9 @@
 
     private func button(_ label: String, primary: Bool, _ action: @escaping () -> Void) -> some View {
       Button(action: action) {
-        Text(label).font(.system(size: 12, weight: primary ? .semibold : .regular))
+        Text(label).font(Typography.font(primary ? Typography.chromeStrong : Typography.chrome))
           .foregroundStyle(primary ? C.canvas : C.textSecondary)
-          .padding(.horizontal, 10).frame(height: 26)
+          .padding(.horizontal, 10).frame(height: RowHeight.default)
           .background(primary ? C.textPrimary : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
           .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(primary ? .clear : L.strong))
       }.buttonStyle(.plain)
@@ -680,8 +680,8 @@
 
     private func row(icon: String, label: String, mono: Bool, on: Bool, _ action: @escaping () -> Void) -> some View {
       SidebarRow(selected: on, action: action) {
-        Image(systemName: icon).font(.system(size: 11)).foregroundStyle(C.textTertiary).frame(width: 16)
-        Text(label).font(.system(size: mono ? 11 : 13, weight: on ? .semibold : .regular, design: mono ? .monospaced : .default))
+        Image(systemName: icon).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).frame(width: 16)
+        Text(label).font(Typography.font(mono ? (on ? Typography.chromeStrong : Typography.chrome) : (on ? Typography.sidebarStrong : Typography.sidebar), family: mono ? .mono : .sans))
           .foregroundStyle(on ? C.textPrimary : C.textSecondary).lineLimit(1).truncationMode(.head)
         Spacer(minLength: 0)
       }
@@ -730,13 +730,13 @@
       VStack(alignment: .leading, spacing: 0) {
         VStack(alignment: .leading, spacing: 4) {
           HStack(spacing: 8) {
-            Image(systemName: "sparkles").font(.system(size: 13)).foregroundStyle(C.textTertiary)
-            Text(tr("整理の提案")).font(.system(size: 15, weight: .semibold)).foregroundStyle(C.textPrimary)
-            Text(short(proposal.folder)).font(.system(size: 11, design: .monospaced)).foregroundStyle(C.textTertiary)
+            Image(systemName: "sparkles").font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
+            Text(tr("整理の提案")).font(Typography.font(Typography.title)).foregroundStyle(C.textPrimary)
+            Text(short(proposal.folder)).font(Typography.font(Typography.chrome, family: .mono)).foregroundStyle(C.textTertiary)
           }
           Text(tr("Agent から · %@ 件の操作。適用するまでディスクは変わりません。", proposal.ops.count))
-            .font(.system(size: 12)).foregroundStyle(C.textTertiary)
-        }.padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 12)
+            .font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+        }.padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 12)
         Rectangle().fill(L.hairlineFaint).frame(height: 1)
         ScrollView {
           LazyVStack(alignment: .leading, spacing: 0) {
@@ -748,13 +748,13 @@
           if pending {
             button(tr("選択した %@ 件を適用", checked.count), primary: true, enabled: !checked.isEmpty) { apply(checked.sorted()) }
             button(tr("却下"), primary: false) { reject() }
-            Text(tr("結果は Agent に返ります")).font(.system(size: 11)).foregroundStyle(C.textMuted)
+            Text(tr("結果は Agent に返ります")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted)
           } else {
-            Text(outcome).font(.system(size: 12)).foregroundStyle(proposal.state == .failed ? C.danger : C.textSecondary).lineLimit(2)
+            Text(outcome).font(Typography.font(Typography.chrome)).foregroundStyle(proposal.state == .failed ? C.danger : C.textSecondary).lineLimit(2)
             button(tr("ファイルブラウザで表示"), primary: false) { reveal() }
           }
           Spacer(minLength: 0)
-        }.padding(.horizontal, 20).frame(height: 52)
+        }.padding(.horizontal, 16).frame(height: 52)
       }
       .background(C.canvas)
     }
@@ -787,17 +787,17 @@
         if on { checked.remove(i) } else { checked.insert(i) }
       } label: {
         HStack(spacing: 12) {
-          Image(systemName: on ? "checkmark.square.fill" : "square").font(.system(size: 13))
+          Image(systemName: on ? "checkmark.square.fill" : "square").font(Typography.font(Typography.sidebar))
             .foregroundStyle(on ? C.textPrimary : C.textTertiary)
-          Text(verb).font(.system(size: 12, weight: .semibold)).foregroundStyle(tint).frame(width: 96, alignment: .leading)
-          Text(target).font(.system(size: 12, design: .monospaced)).foregroundStyle(C.textSecondary).lineLimit(1).truncationMode(.middle)
+          Text(verb).font(Typography.font(Typography.chromeStrong)).foregroundStyle(tint).frame(width: 96, alignment: .leading)
+          Text(target).font(Typography.font(Typography.chrome, family: .mono)).foregroundStyle(C.textSecondary).lineLimit(1).truncationMode(.middle)
           Spacer(minLength: 8)
-          if let why = op.why { Text(why).font(.system(size: 11)).foregroundStyle(C.textMuted).lineLimit(1) }
+          if let why = op.why { Text(why).font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted).lineLimit(1) }
         }
-        .padding(.horizontal, 12).frame(minHeight: 28).contentShape(Rectangle())
+        .padding(.horizontal, 12).frame(minHeight: RowHeight.default).contentShape(Rectangle())
         .opacity(!pending && !proposal.applied.contains(i) ? 0.5 : 1)
       }
-      .buttonStyle(HoverWashStyle(radius: Radius.control)).disabled(!pending).padding(.horizontal, 8)
+      .buttonStyle(HoverWashStyle(radius: Radius.control)).disabled(!pending).padding(.horizontal, 4)
     }
 
     private func rel(_ path: String) -> String { path.hasPrefix(proposal.folder + "/") ? String(path.dropFirst(proposal.folder.count + 1)) : short(path) }
@@ -808,9 +808,9 @@
 
     private func button(_ label: String, primary: Bool, enabled: Bool = true, _ action: @escaping () -> Void) -> some View {
       Button(action: action) {
-        Text(label).font(.system(size: 12, weight: primary ? .semibold : .regular))
+        Text(label).font(Typography.font(primary ? Typography.chromeStrong : Typography.chrome))
           .foregroundStyle(primary ? C.canvas : C.textSecondary)
-          .padding(.horizontal, 12).frame(height: 28)
+          .padding(.horizontal, 12).frame(height: RowHeight.default)
           .background(primary ? C.textPrimary : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
           .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(primary ? .clear : L.strong))
       }.buttonStyle(.plain).disabled(!enabled).opacity(enabled ? 1 : 0.4)

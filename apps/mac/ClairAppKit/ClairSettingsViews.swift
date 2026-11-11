@@ -12,10 +12,10 @@
     @ViewBuilder var content: Content
     var body: some View {
       VStack(alignment: .leading, spacing: 16) {
-        Text(title).font(.system(size: 18, weight: .semibold)).foregroundStyle(C.textPrimary)
+        Text(title).font(Typography.font(Typography.title)).foregroundStyle(C.textPrimary)
         VStack(spacing: 0) { content }
       }
-      .padding(.horizontal, 22).padding(.vertical, 20)
+      .padding(24)
       .frame(maxWidth: .infinity, alignment: .leading)
       .background(C.chrome, in: RoundedRectangle(cornerRadius: Radius.card))
     }
@@ -28,13 +28,13 @@
     var body: some View {
       HStack(spacing: 12) {
         VStack(alignment: .leading, spacing: 2) {
-          Text(title).font(.system(size: 15, weight: .semibold)).foregroundStyle(C.textPrimary)
-          if let note { Text(note).font(.system(size: 14)).foregroundStyle(C.textTertiary).fixedSize(horizontal: false, vertical: true) }
+          Text(title).font(Typography.font(Typography.sidebarStrong)).foregroundStyle(C.textPrimary)
+          if let note { Text(note).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary).fixedSize(horizontal: false, vertical: true) }
         }
         Spacer(minLength: 0)
         control
       }
-      .frame(minHeight: 52).padding(.vertical, 12)
+      .frame(minHeight: RowHeight.control).padding(.vertical, 12)
       .overlay(alignment: .top) { Rectangle().fill(L.hairlineSoft).frame(height: 1) }
     }
   }
@@ -52,9 +52,9 @@
         ForEach(options, id: \.self) { o in
           let on = o == value
           Button { onChange(o) } label: {
-            Text(tr(o)).font(.system(size: 14, weight: on ? .semibold : .regular))
+            Text(tr(o)).font(Typography.font(on ? Typography.sidebarStrong : Typography.sidebar))
               .foregroundStyle(on ? C.textPrimary : C.textSecondary)
-              .padding(.horizontal, glass ? 14 : 10).frame(height: glass ? 30 : 36)
+              .padding(.horizontal, glass ? 12 : 10).frame(height: glass ? RowHeight.default : RowHeight.control)
               // Glass: a capsule thumb that glides between options inside a capsule track.
               .background {
                 if on, glass { Capsule().fill(DesignTokens.Glass.capsuleSelected).matchedGeometryEffect(id: "thumb", in: thumb) }
@@ -63,11 +63,11 @@
           }.buttonStyle(HoverWashStyle(radius: Radius.pill(0)))
         }
       }
-      .padding(glass ? 3 : 0)
+      .padding(glass ? 4 : 0)
       .background(glass ? DesignTokens.Glass.capsuleFill : .clear)
       .clipShape(RoundedRectangle(cornerRadius: Radius.pill(Radius.control)))
       .overlay(RoundedRectangle(cornerRadius: Radius.pill(Radius.control)).stroke(glass ? .clear : L.hairline))
-      .animation(reduceMotion ? nil : .snappy(duration: 0.26, extraBounce: 0.12), value: value)
+      .animation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration), value: value)
     }
   }
 
@@ -90,8 +90,8 @@
   struct SettingsField: View {
     let text: String
     var body: some View {
-      Text(text).font(.system(size: 14)).foregroundStyle(C.textSecondary).lineLimit(1)
-        .padding(.horizontal, 8).frame(minHeight: 36)
+      Text(text).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textSecondary).lineLimit(1)
+        .padding(.horizontal, 8).frame(minHeight: RowHeight.control)
         .background(C.chrome, in: RoundedRectangle(cornerRadius: Radius.control))
         .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.hairline))
     }

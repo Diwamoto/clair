@@ -49,13 +49,13 @@ struct AgentUsageView: View {
       HStack(spacing: 10) {
         Spacer()
         if let at = loaded?.at {
-          Text(tr("%@ に集計", at.formatted(date: .omitted, time: .shortened))).font(.system(size: 13)).foregroundStyle(C.textTertiary)
+          Text(tr("%@ に集計", at.formatted(date: .omitted, time: .shortened))).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
         }
-        Button(tr("再集計")) { Task { await reload(refresh: true) } }.font(.system(size: 13))
+        Button(tr("再集計")) { Task { await reload(refresh: true) } }.font(Typography.font(Typography.sidebar))
       }
       if let summary, summary.histories.isEmpty {
         Text(tr("まだ依頼がありません。ターミナルで Claude Code・Codex・OpenCode を使うと、ここに集計されます。"))
-          .font(.system(size: 14)).foregroundStyle(C.textTertiary).multilineTextAlignment(.center)
+          .font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary).multilineTextAlignment(.center)
           .frame(maxWidth: .infinity).padding(24)
           .overlay(RoundedRectangle(cornerRadius: Radius.card).strokeBorder(L.strong, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
       } else {
@@ -99,17 +99,17 @@ struct AgentUsageView: View {
   }
 
   private func group(_ title: String) -> some View {
-    Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(C.textTertiary).padding(.top, 8)
+    Text(title).font(Typography.font(Typography.sidebarStrong)).foregroundStyle(C.textTertiary).padding(.top, 8)
   }
 
   private func placeholder(_ text: String) -> some View {
-    Text(text).font(.system(size: 14)).foregroundStyle(C.textTertiary).multilineTextAlignment(.center)
-      .frame(maxWidth: .infinity).padding(18)
+    Text(text).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary).multilineTextAlignment(.center)
+      .frame(maxWidth: .infinity).padding(16)
       .overlay(RoundedRectangle(cornerRadius: Radius.card).strokeBorder(L.strong, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
   }
 
   private func note(_ text: String) -> some View {
-    Text(text).font(.system(size: 13)).foregroundStyle(C.textTertiary).fixedSize(horizontal: false, vertical: true)
+    Text(text).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary).fixedSize(horizontal: false, vertical: true)
   }
 
   // MARK: ① 概要
@@ -189,13 +189,13 @@ struct AgentUsageView: View {
       .chartXScale(domain: -0.6...23.9)
       .chartXAxis {
         AxisMarks(values: labeledHours) { value in
-          AxisValueLabel { Text(tr("%@時", value.as(Int.self) ?? 0)).font(.system(size: 11)).foregroundStyle(C.textTertiary) }
+          AxisValueLabel { Text(tr("%@時", value.as(Int.self) ?? 0)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary) }
         }
       }
       .chartYAxis {
         AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { _ in
           AxisGridLine().foregroundStyle(L.hairlineSoft)
-          AxisValueLabel().font(.system(size: 11)).foregroundStyle(C.textTertiary)
+          AxisValueLabel().font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
         }
       }
       .frame(height: 90)
@@ -204,7 +204,7 @@ struct AgentUsageView: View {
           GridRow {
             // Labels overflow their narrow cells (e.g. "Sun") instead of wrapping or truncating.
             Color.clear.frame(width: 12, height: 10)
-              .overlay(alignment: .trailing) { Text(names[day]).font(.system(size: 10)).foregroundStyle(C.textTertiary).fixedSize() }
+              .overlay(alignment: .trailing) { Text(names[day]).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).fixedSize() }
             ForEach(0..<24, id: \.self) { hour in
               RoundedRectangle(cornerRadius: 2)
                 .fill(Self.heatFill(Self.heatLevel(grid[day][hour])))
@@ -220,7 +220,7 @@ struct AgentUsageView: View {
             Color.clear.frame(width: 10, height: 12)
               .overlay {
                 if labeledHours.contains(hour) {
-                  Text("\(hour)").font(.system(size: 9)).foregroundStyle(C.textTertiary).fixedSize()
+                  Text("\(hour)").font(Typography.font(Typography.micro)).foregroundStyle(C.textTertiary).fixedSize()
                 }
               }
           }
@@ -233,7 +233,7 @@ struct AgentUsageView: View {
         ForEach(0..<5, id: \.self) { RoundedRectangle(cornerRadius: 2).fill(Self.heatFill($0)).frame(width: 10, height: 10) }
         Text(tr("多"))
       }
-      .font(.system(size: 13)).foregroundStyle(C.textTertiary)
+      .font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
     }
   }
 
@@ -261,14 +261,14 @@ struct AgentUsageView: View {
     let then = lastMonth.isEmpty ? nil : lastMonth[min(max(thisMonth.count - 1, 0), lastMonth.count - 1)]
     let unpriced = summary?.sessionsWithoutCost(month: .now, calendar: calendar) ?? 0
     return VStack(alignment: .leading, spacing: 8) {
-      HStack(spacing: 14) {
+      HStack(spacing: 12) {
         legendLine(thisName, dashed: false)
         legendLine(lastName, dashed: true)
         Spacer()
         if let now, let then {
           let diff = now - then
           Text(tr("今日まで %@(先月同日 %@)", format(now), (diff >= 0 ? "+" : "−") + format(abs(diff))))
-            .font(.system(size: 13)).foregroundStyle(C.textSecondary).monospacedDigit()
+            .font(Typography.font(Typography.sidebar)).foregroundStyle(C.textSecondary).monospacedDigit()
         }
       }
       Chart(points) { point in
@@ -279,13 +279,13 @@ struct AgentUsageView: View {
       .chartXScale(domain: 1...31)
       .chartXAxis {
         AxisMarks(values: [1, 10, 20, 31]) { value in
-          AxisValueLabel { Text(tr("%@日", value.as(Int.self) ?? 0)).font(.system(size: 11)).foregroundStyle(C.textTertiary) }
+          AxisValueLabel { Text(tr("%@日", value.as(Int.self) ?? 0)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary) }
         }
       }
       .chartYAxis {
         AxisMarks(position: .leading) { _ in
           AxisGridLine().foregroundStyle(L.hairlineSoft)
-          AxisValueLabel().font(.system(size: 11)).foregroundStyle(C.textTertiary)
+          AxisValueLabel().font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
         }
       }
       .frame(height: 170)
@@ -302,7 +302,7 @@ struct AgentUsageView: View {
       Path { $0.move(to: .init(x: 0, y: 1)); $0.addLine(to: .init(x: 16, y: 1)) }
         .stroke(dashed ? C.textTertiary : C.textPrimary, style: StrokeStyle(lineWidth: 2, dash: dashed ? [4, 3] : []))
         .frame(width: 16, height: 2)
-      Text(title).font(.system(size: 13)).foregroundStyle(C.textSecondary)
+      Text(title).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textSecondary)
     }
   }
 
@@ -319,7 +319,7 @@ struct AgentUsageView: View {
         Button(project.label ?? project.name) { commitProject = project.name }
       }
     }
-    .menuStyle(.borderlessButton).fixedSize().font(.system(size: 13)).disabled(projects.isEmpty)
+    .menuStyle(.borderlessButton).fixedSize().font(Typography.font(Typography.sidebar)).disabled(projects.isEmpty)
   }
 
   private struct DayCount: Identifiable {
@@ -366,7 +366,7 @@ struct AgentUsageView: View {
 
   private func dayBars(_ title: String, _ values: [DayCount], ink: Color, start: Date) -> some View {
     VStack(alignment: .leading, spacing: 4) {
-      Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(C.textSecondary)
+      Text(title).font(Typography.font(Typography.sidebarStrong)).foregroundStyle(C.textSecondary)
       Chart(values) { value in
         BarMark(x: .value(tr("日"), value.date, unit: .day), y: .value(tr("件"), value.count))
           .foregroundStyle(ink).cornerRadius(2)
@@ -374,13 +374,13 @@ struct AgentUsageView: View {
       .chartXScale(domain: start...(calendar.date(byAdding: .day, value: 1, to: today) ?? today))
       .chartXAxis {
         AxisMarks(values: .stride(by: .day, count: 7)) { _ in
-          AxisValueLabel(format: .dateTime.month(.defaultDigits).day()).font(.system(size: 11)).foregroundStyle(C.textTertiary)
+          AxisValueLabel(format: .dateTime.month(.defaultDigits).day()).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
         }
       }
       .chartYAxis {
         AxisMarks(position: .leading, values: .automatic(desiredCount: 2)) { _ in
           AxisGridLine().foregroundStyle(L.hairlineSoft)
-          AxisValueLabel().font(.system(size: 11)).foregroundStyle(C.textTertiary)
+          AxisValueLabel().font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
         }
       }
       .frame(height: 80)
@@ -420,12 +420,12 @@ struct AgentUsageView: View {
         }
         .chartXScale(domain: Self.binTitles.map { tr($0) })
         .chartXAxis {
-          AxisMarks { _ in AxisValueLabel().font(.system(size: 11)).foregroundStyle(C.textTertiary) }
+          AxisMarks { _ in AxisValueLabel().font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary) }
         }
         .chartYAxis {
           AxisMarks(position: .leading) { _ in
             AxisGridLine().foregroundStyle(L.hairlineSoft)
-            AxisValueLabel().font(.system(size: 11)).foregroundStyle(C.textTertiary)
+            AxisValueLabel().font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
           }
         }
         .frame(height: 150)
@@ -469,13 +469,13 @@ struct AgentUsageView: View {
         .chartYScale(domain: 0...max(ceil(peak?.value ?? 1), 1))
         .chartXAxis {
           AxisMarks(values: [0.0, 6, 12, 18, 24]) { value in
-            AxisValueLabel { Text(tr("%@時", Int(value.as(Double.self) ?? 0))).font(.system(size: 11)).foregroundStyle(C.textTertiary) }
+            AxisValueLabel { Text(tr("%@時", Int(value.as(Double.self) ?? 0))).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary) }
           }
         }
         .chartYAxis {
           AxisMarks(position: .leading) { _ in
             AxisGridLine().foregroundStyle(L.hairlineSoft)
-            AxisValueLabel().font(.system(size: 11)).foregroundStyle(C.textTertiary)
+            AxisValueLabel().font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
           }
         }
         .frame(height: 140)
@@ -498,13 +498,13 @@ struct AgentUsageView: View {
         VStack(alignment: .leading, spacing: 4) {
           HStack(spacing: 6) {
             ProviderBrandIcon(provider: item.provider.rawValue, size: 16)
-            Text(item.provider.rawValue).font(.system(size: 14)).foregroundStyle(C.textSecondary)
+            Text(item.provider.rawValue).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textSecondary)
           }
-          Text(tr("%@ 件", item.prompts)).font(.system(size: 18, weight: .semibold)).foregroundStyle(C.textPrimary).monospacedDigit()
+          Text(tr("%@ 件", item.prompts)).font(Typography.font(Typography.title)).foregroundStyle(C.textPrimary).monospacedDigit()
           Text(item.sessionsWithoutCost > 0
             ? tr("推定 %@ · 費用不明 %@ セッション", String(format: "$%.2f", item.estimatedUSD), item.sessionsWithoutCost)
             : tr("推定 %@", String(format: "$%.2f", item.estimatedUSD)))
-            .font(.system(size: 13)).foregroundStyle(C.textTertiary)
+            .font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
@@ -530,21 +530,21 @@ struct AgentUsageView: View {
             Text("#"); Text(tr("モデル")); Text(tr("セッション")).gridColumnAlignment(.trailing)
             Text(tr("推定費用")).gridColumnAlignment(.trailing); Text(tr("割合"))
           }
-          .font(.system(size: 13)).foregroundStyle(C.textTertiary)
+          .font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
           ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
             Divider().overlay(L.hairlineSoft)
             GridRow {
               Text(row.usd == nil ? "—" : "\(index + 1)").foregroundStyle(C.textTertiary)
               HStack(spacing: 6) {
                 ProviderBrandIcon(provider: row.provider.rawValue, size: 14)
-                Text(row.name).font(.system(size: 14, design: .monospaced)).lineLimit(1).truncationMode(.middle)
+                Text(row.name).font(Typography.font(Typography.sidebar, family: .mono)).lineLimit(1).truncationMode(.middle)
               }
               Text("\(row.sessions)").monospacedDigit()
               Text(row.usd.map { String(format: "$%.2f", $0) } ?? tr("算出不可"))
                 .foregroundStyle(row.usd == nil ? C.textTertiary : C.textPrimary).monospacedDigit()
               shareBar(row.usd.map { total > 0 ? $0 / total : 0 })
             }
-            .font(.system(size: 14))
+            .font(Typography.font(Typography.sidebar))
           }
         }
       }
@@ -577,7 +577,7 @@ struct AgentUsageView: View {
             Text("#"); Text(tr("セッション")); Text("Project")
             Text(tr("依頼")).gridColumnAlignment(.trailing); Text(tr("推定")).gridColumnAlignment(.trailing); Text("")
           }
-          .font(.system(size: 13)).foregroundStyle(C.textTertiary)
+          .font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
           ForEach(Array(rows.enumerated()), id: \.element.id) { index, history in
             let resumable = projects.contains { $0.path == history.project }
             Divider().overlay(L.hairlineSoft)
@@ -591,11 +591,11 @@ struct AgentUsageView: View {
               Text("\(history.promptCount)").monospacedDigit()
               Text(String(format: "$%.2f", history.estimatedUSD ?? 0)).monospacedDigit()
               Button(tr("再開")) { onResume(history) }
-                .font(.system(size: 13)).disabled(!resumable)
+                .font(Typography.font(Typography.sidebar)).disabled(!resumable)
                 .help(resumable ? tr("%@ をターミナルで開き、このチャットを再開", history.provider.rawValue)
                   : tr("このチャットのディレクトリを Project に追加すると再開できます"))
             }
-            .font(.system(size: 14))
+            .font(Typography.font(Typography.sidebar))
           }
         }
       }
@@ -660,7 +660,7 @@ private struct ActivityCalendar: View {
             VStack(spacing: 2) {
               let firstOfMonth = columns[index].compactMap { $0 }.first { calendar.component(.day, from: $0) == 1 }
               Text(firstOfMonth.map { AgentUsageView.monthName(calendar.component(.month, from: $0)) } ?? " ")
-                .font(.system(size: 10)).foregroundStyle(C.textTertiary).fixedSize().frame(width: 10, height: 14, alignment: .leading)
+                .font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).fixedSize().frame(width: 10, height: 14, alignment: .leading)
               ForEach(0..<7, id: \.self) { row in
                 if row < columns[index].count, let date = columns[index][row] {
                   RoundedRectangle(cornerRadius: 2)
@@ -693,11 +693,11 @@ private struct ActivityCalendar: View {
           if let anchor, let hoveredDate {
             let cell = proxy[anchor]
             Text(detail(for: hoveredDate))
-              .font(.system(size: 13))
+              .font(Typography.font(Typography.sidebar))
               .padding(12)
               .frame(minWidth: 190, alignment: .leading)
-              .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-              .shadow(radius: 4)
+              .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Radius.overlay))
+              .overlayShadow()
               .fixedSize()
               .frame(width: 1, height: 1, alignment: .bottom)  // grows upward from the point below
               .position(x: cell.midX, y: cell.minY - 6)
@@ -712,7 +712,7 @@ private struct ActivityCalendar: View {
         ForEach(0..<5, id: \.self) { RoundedRectangle(cornerRadius: 2).fill(Self.fill($0)).frame(width: 10, height: 10) }
         Text(tr("多"))
       }
-      .font(.system(size: 13)).foregroundStyle(C.textTertiary)
+      .font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
     }
   }
 }
@@ -758,14 +758,14 @@ private struct UsageCard<Accessory: View, Content: View>: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
       HStack(alignment: .center, spacing: 12) {
-        Text(title).font(.system(size: 18, weight: .semibold)).foregroundStyle(C.textPrimary)
+        Text(title).font(Typography.font(Typography.title)).foregroundStyle(C.textPrimary)
         Spacer(minLength: 0)
-        if let note { Text(note).font(.system(size: 13)).foregroundStyle(C.textTertiary).lineLimit(1) }
+        if let note { Text(note).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary).lineLimit(1) }
         accessory
       }
       content
     }
-    .padding(.horizontal, 22).padding(.vertical, 20)
+    .padding(24)
     .frame(maxWidth: .infinity, alignment: .leading)
     .background(C.chrome, in: RoundedRectangle(cornerRadius: Radius.card))
   }
@@ -786,17 +786,17 @@ private struct UsageTile<Extra: View>: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
-      Text(title).font(.system(size: 13, weight: .medium)).foregroundStyle(C.textTertiary)
+      Text(title).font(.system(size: Typography.sidebar.size, weight: .medium)).foregroundStyle(C.textTertiary)
       HStack(alignment: .firstTextBaseline, spacing: 4) {
         Text(value).font(.system(size: 28, weight: .semibold, design: .rounded)).foregroundStyle(C.textPrimary)
           .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
-        if let unit { Text(unit).font(.system(size: 13)).foregroundStyle(C.textTertiary) }
+        if let unit { Text(unit).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary) }
       }
-      if let sub { Text(sub).font(.system(size: 13)).foregroundStyle(C.textTertiary).monospacedDigit() }
+      if let sub { Text(sub).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary).monospacedDigit() }
       extra
     }
     .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(14)
+    .padding(12)
     .background(C.canvas, in: RoundedRectangle(cornerRadius: Radius.card))
   }
 }
