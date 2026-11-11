@@ -1196,8 +1196,9 @@ import Observation
       return (name, session)
     }
 
-    /// Notices shown as bottom-left cards, oldest first. Only while Clair is frontmost; in the background the
-    /// macOS notification does that job. A card leaves on ×, or when its notice is read.
+    /// Notices shown as bottom-right cards, oldest first. Only while Clair is frontmost; in the background the
+    /// macOS notification does that job. A card leaves after 10 s, on × or a swipe right, or when its notice is
+    /// read; leaving the stack does not mark it read (owner, 2026-11-11).
     public var noticeStack: [Int] = []
 
     private func announce(_ n: WorkbenchNotice, _ kindEnabled: Bool) {
@@ -1205,6 +1206,10 @@ import Observation
       if NSApp.isActive, !state.noticesOpen {
         let unread = Set(state.notices.items.lazy.filter { !$0.read }.map(\.id))
         noticeStack = noticeStack.filter(unread.contains) + [n.id]
+        Task { [weak self] in
+          try? await Task.sleep(for: .seconds(10))
+          self?.noticeStack.removeAll { $0 == n.id }
+        }
       }
       guard !NSApp.isActive || state.toggles["notifyWhenActive"] == true else { return }
       let agent = noticeSource(n.project, n.pane).agent
@@ -1441,6 +1446,7 @@ import Observation
     @State private var headInfo: WorkbenchGit.HeadInfo?
     @State private var groupDropTarget: String?
     @State private var hoveredGroup: String?
+    @State private var noticeDrag: (id: Int, x: CGFloat)?
     @State private var rootFolded = false
     @State private var menus = ClairMenuController()
     @State private var changes: [GitChange] = []
@@ -1577,7 +1583,7 @@ import Observation
           }
           updateToast
         }.onChange(of: store.nameRequest) { nameUntitled() }.padding(.trailing, 16).padding(.bottom, ChromeBudget.statusBar + 12) }
-      .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: store.noticeStack)
+      .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: stackedNotices.map(\.id))
       .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: store.update)
       // The glass wallpaper is black, so 素材 = Liquid Glass draws in the dark scheme whatever 外観 says.
       .onChange(of: [st.choices["appearance"], st.choices["material"]], initial: true) { _, _ in
@@ -3952,28 +3958,39 @@ import Observation
     }
 
     /// Bottom-right cards (canvas `NoticeStack`): newest at the bottom, at most 4, the rest folded into a chip.
+    /// Laid straight into the corner's VStack so each card slides in and out from the right on its own.
+    private var stackedNotices: [WorkbenchNotice] {
+      st.noticesOpen ? [] : store.noticeStack.compactMap { id in st.notices.items.first { $0.id == id && !$0.read } }
+    }
+
     @ViewBuilder private var noticeStackView: some View {
-      let cards = store.noticeStack.compactMap { id in st.notices.items.first { $0.id == id && !$0.read } }
-      if !cards.isEmpty, !st.noticesOpen {
-        VStack(alignment: .trailing, spacing: 8) {
-          if cards.count > 4 {
-            Button { store.run("notice.toggle") } label: {
-              Text(tr("ほか %@ 件 · ⇧⌘H で一覧", cards.count - 4)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
-                .padding(.horizontal, 10).frame(height: 24)
-                .background(C.chromeRaised, in: Capsule()).overlay(Capsule().stroke(L.strong))
-            }.buttonStyle(.plain)
-          }
-          ForEach(cards.suffix(4)) { n in
-            Button { openNotice(n) } label: {
-              noticeContent(n) { store.noticeStack.removeAll { $0 == n.id } }
-                .padding(.horizontal, 14).padding(.vertical, 12).frame(width: 340)
-                .sheetSurface()
-                .contentShape(RoundedRectangle(cornerRadius: Radius.overlay))
-            }
-            .buttonStyle(.plain)
-            .transition(.move(edge: .trailing).combined(with: .opacity))
-          }
+      let cards = stackedNotices
+      if cards.count > 4 {
+        Button { store.run("notice.toggle") } label: {
+          Text(tr("ほか %@ 件 · ⇧⌘H で一覧", cards.count - 4)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+            .padding(.horizontal, 10).frame(height: 24)
+            .background(C.chromeRaised, in: Capsule()).overlay(Capsule().stroke(L.strong))
+        }.buttonStyle(.plain)
+      }
+      ForEach(cards.suffix(4)) { n in
+        Button { openNotice(n) } label: {
+          noticeContent(n) { store.noticeStack.removeAll { $0 == n.id } }
+            .padding(.horizontal, 14).padding(.vertical, 12).frame(width: 340)
+            .sheetSurface()
+            .contentShape(RoundedRectangle(cornerRadius: Radius.overlay))
         }
+        .buttonStyle(.plain)
+        .offset(x: noticeDrag?.id == n.id ? noticeDrag!.x : 0)
+        .highPriorityGesture(
+          DragGesture(minimumDistance: 6)
+            .onChanged { noticeDrag = (n.id, max(0, $0.translation.width)) }
+            .onEnded { v in
+              withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration)) {
+                if max(v.translation.width, v.predictedEndTranslation.width) > 100 { store.noticeStack.removeAll { $0 == n.id } }
+                noticeDrag = nil
+              }
+            })
+        .transition(.move(edge: .trailing).combined(with: .opacity))
       }
     }
 

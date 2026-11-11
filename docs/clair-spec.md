@@ -595,7 +595,7 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   表示する。AI の自己申告 risk を authorization に使わない
 - Clair の terminal で起動した agent の bell / 通知要求 / 終了を記録し、Clair が前面にないとき macOS notification を送る。通知要求の title / body と、terminal が報告する session title は Mac 上の通知と履歴に表示する。通常の terminal は通知しない
 - 通知一覧は右端からスライドする通知パネルに置く(⇧⌘H か status bar 右端の通知ボタンで開閉、Esc でも閉じる。2026-11-05 オーナー依頼で popover から移した)。行から対象 terminal へ移動し既読にする。記録は session 状態と Project badge にも使う
-- Clair が前面のあいだに記録した通知は右下(承認カード・更新トーストの上)にカードとして積む(新しいものが下、最大 4 枚、残りは「ほか N 件」)。× か、カードのクリック、対象 pane の focus で消える。背面のときは macOS notification を使う。カードとパネルの行は terminal のタイトル、Project・agent・terminal・事実、agent の言葉(OSC の本文か、下記の完了時の返答)の先頭数行を出す
+- Clair が前面のあいだに記録した通知は右下(承認カード・更新トーストの上)にカードとして積む(新しいものが下、最大 4 枚、残りは「ほか N 件」)。カードは右から入り、10 秒たつか、×・右へのドラッグ・カードのクリック・対象 pane の focus で右へ消える。時間切れ・×・ドラッグで消えても既読にはならず、パネルと badge には未読で残る(2026-11-11 オーナー依頼)。背面のときは macOS notification を使う。カードとパネルの行は terminal のタイトル、Project・agent・terminal・事実、agent の言葉(OSC の本文か、下記の完了時の返答)の先頭数行を出す
 - Claude Code の hooks が `agent.report state=done` に添える最後の返答(Stop の `last_assistant_message`)は、GUI が「完了」通知の本文として記録する。報告できるのは Clair の terminal だけで、OSC の本文と同じく terminal から来たテキストとして扱う。未読の「完了」がある pane の入力待ちベルは重ねて記録せず、その pane が working に戻ると「完了」は既読になる
 - Project / terminal 単位で notification を mute できる
 - agent は `notice.post title= [body=] [project=] [open=]` で通知を出せる(#71)。mute と履歴は terminal の通知と同じに従い、全体で 1 分 5 件まで(超えると preconditionFailed)。クリックで `open` の Project 内ファイルかチャット履歴 id を開く
