@@ -33,7 +33,22 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
 
   public static let sections = ["一般", "AIプロバイダー", "使用状況", "エディタ", "ターミナル", "通知", "モバイル", "アップデート"]
   public static let toggleKeys = ["restoreLayout", "confirmClose", "hideQuota", "preventSleepOnBattery", "formatOnSave", "showWhitespace", "softWrap", "terminalApprovals", "lineNumbers", "terminalCursorBlink", "notifyEnabled", "notifyOnBell", "notifyOnExit", "notifyWhenActive", "notifySound", "autoEqualize", "focusExpand", "startConcierge"]
-    + AgentProfile.all.map { agentKey($0.id) }
+    + AgentProfile.all.map { agentKey($0.id) } + autoApproveCommands.keys.sorted().map(autoApproveKey)
+  /// ADR-0027: commands the owner may let an agent in a Clair terminal run without the approval card. Off by default.
+  public static let autoApproveCommands = [
+    "agent.launch": "エージェントの起動", "agent.send": "エージェントへの入力", "pane.close": "ペインを閉じる",
+    "pane.move": "ペインの移動", "pane.swap": "ペインの入れ替え", "tab.close": "タブを閉じる", "diff.close": "差分タブを閉じる",
+    "notice.markRead": "通知の既読", "todo.update": "TODO の更新",
+  ]
+  public static func autoApproveKey(_ id: String) -> String { "autoApprove.\(id)" }
+  /// True when `id` may skip the card: the owner turned it on, the caller is a Clair terminal, and the runtime risk
+  /// is no higher than the command's fixed risk (a dirty `tab.close` is destructive and still asks).
+  public func autoApproves(_ id: String, risk: CommandRisk, caller: String?, registry: CommandRegistry = .workbench) -> Bool {
+    guard caller != nil, toggles[Self.autoApproveKey(id)] == true, Self.autoApproveCommands[id] != nil,
+      let fixed = registry.commands.first(where: { $0.id == id })?.risk
+    else { return false }
+    return risk <= fixed
+  }
   /// Per-agent "使う" switch: off hides the agent from launch menus and the status bar's usage meter.
   public static func agentKey(_ id: String) -> String { "agent.\(id)" }
   /// Closed-set settings (the mock's segmented controls). The first option is the default.
@@ -51,6 +66,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
     "autoEqualize": "ペインを均等に再配置", "focusExpand": "フォーカスしたペインを拡大", "focusExpandRatio": "拡大したペインの割合",
     "previewTheme": "Markdown プレビューのテーマ", "previewFontSize": "Markdown プレビューの文字サイズ",
   ].merging(AgentProfile.all.map { (agentKey($0.id), "\($0.title) を使う") }) { a, _ in a }
+    .merging(autoApproveCommands.map { (autoApproveKey($0.key), "承認なしで許可: \($0.value)") }) { a, _ in a }
   // agent registry: `defaultAgent` reads its choices from the `AgentProfile` registry instead of
   // a literal list, so switching to a newly registered agent needs no change here.
   public static let choiceOptions: [String: [String]] = [

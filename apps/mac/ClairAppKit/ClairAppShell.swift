@@ -1251,6 +1251,7 @@ import Observation
     // ponytail: the card does not say so yet; show the grant on the card when U07 reworks approval UI.
     private var fanOutGrants: [String: Date] = [:]
     nonisolated func approve(_ id: String, _ input: CommandInput, _ risk: CommandRisk, caller: String?) -> Bool {
+      if DispatchQueue.main.sync(execute: { MainActor.assumeIsolated { state.autoApproves(id, risk: risk, caller: caller) } }) { return true }
       let fanOut = id == "agent.launch" ? caller : nil
       if let fanOut, DispatchQueue.main.sync(execute: { MainActor.assumeIsolated { fanOutGrants[fanOut].map { $0 > Date() } ?? false } }) {
         return true
@@ -3672,7 +3673,7 @@ import Observation
     }
 
     /// V16: lets agents in Clair terminals drive Clair (`clair agent launch` …) and know how (the clair-agents skill).
-    private var integrationCard: some View {
+    @ViewBuilder private var integrationCard: some View {
       SettingsCard(title: tr("連携")) {
         SettingsRow(
           title: tr("clair コマンドをインストール"),
@@ -3729,6 +3730,12 @@ import Observation
               integrationNotes["hooks"] = installed ? tr("アンインストールしました。") : tr("インストールしました。Claude Code を再起動すると有効になります。")
             } catch { integrationNotes["hooks"] = tr("インストールできません: %@", error.localizedDescription) }
           }
+        }
+      }
+      // ADR-0027: per-command opt-out of the MCP/CLI approval card, for agents in Clair terminals only.
+      SettingsCard(title: tr("エージェントの操作を承認なしで許可")) {
+        ForEach(WorkbenchState.autoApproveCommands.sorted { $0.key < $1.key }, id: \.key) { id, title in
+          switchRow(tr(title), WorkbenchState.autoApproveKey(id), note: id)
         }
       }
     }
