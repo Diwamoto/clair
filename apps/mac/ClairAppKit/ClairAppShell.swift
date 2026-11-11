@@ -1521,11 +1521,13 @@ import Observation
             HStack(spacing: 0) {
               activityBar
               // The concierge is its own screen (the control plane), not a panel of a Project's workspace.
-              if !st.sidebarHidden && sidebarMode != "concierge" {
+              let sidebarShown = !st.sidebarHidden && sidebarMode != "concierge"
+              if sidebarShown {
                 sidebar
                 if !glass { Rectangle().fill(C.surfaceActive).frame(width: 1) }
               }
               main.readingPanel(tiled: review == nil && diff == nil && !st.panesClosed && sidebarMode != "concierge")
+                .padding(.leading, glass && !sidebarShown ? DesignTokens.Glass.inset : 0)
             }
           }
           .allowsHitTesting(!st.settingsOpen)
