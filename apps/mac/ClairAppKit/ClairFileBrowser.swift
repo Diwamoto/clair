@@ -163,10 +163,10 @@
         // Path bar: `/`, then each folder down to what is selected; a segment starts the columns there.
         HStack(spacing: 4) {
           ForEach(Array(crumbs.enumerated()), id: \.offset) { i, c in
-            if i > 0 { Text("›").foregroundStyle(C.textQuaternary) }
+            if i > 0 { Text("›").foregroundStyle(C.textMuted) }
             Button { if FileBrowser.isFolder(c.path) { model.go(.init(columns: [c.path], selection: [])); model.load() } } label: {
               Text(c.label).fontWeight(i == crumbs.count - 1 ? .semibold : .regular)
-                .foregroundStyle(i == crumbs.count - 1 ? C.textSecondary : C.textQuaternary).lineLimit(1)
+                .foregroundStyle(i == crumbs.count - 1 ? C.textSecondary : C.textMuted).lineLimit(1)
                 .padding(.horizontal, 4).padding(.vertical, 1)
             }.buttonStyle(HoverWashStyle(radius: Radius.control))
           }
@@ -211,7 +211,7 @@
     private func navButton(_ symbol: String, _ label: String, enabled: Bool, _ action: @escaping () -> Void) -> some View {
       Button(action: action) {
         Image(systemName: symbol).font(.system(size: 10, weight: .semibold)).frame(width: 22, height: 22)
-          .foregroundStyle(enabled ? C.textTertiary : C.textQuaternary)
+          .foregroundStyle(enabled ? C.textTertiary : C.textMuted)
       }.buttonStyle(HoverWashStyle(radius: Radius.control)).disabled(!enabled).opacity(enabled ? 1 : 0.5).help(label)
     }
 
@@ -227,7 +227,7 @@
       let text = model.notice
         ?? [tr("%@ 項目", count), selected > 0 ? tr("%@ 項目を選択", selected) : nil, model.showHidden ? tr("隠しファイルを表示中") : nil]
           .compactMap { $0 }.joined(separator: " · ")
-      return Text(text).font(.system(size: 11)).foregroundStyle(model.notice == nil ? C.textQuaternary : C.textSecondary)
+      return Text(text).font(.system(size: 11)).foregroundStyle(model.notice == nil ? C.textMuted : C.textSecondary)
         .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).frame(height: 22)
     }
 
@@ -266,12 +266,12 @@
       return HStack(spacing: 8) {
         (e.isDirectory ? FileIcon.folder(open: false) : FileIcon.forPath(e.name)).image(size: 11, ink: C.textTertiary).frame(width: 14)
         Text(e.name).font(.system(size: 12)).lineLimit(1).truncationMode(.middle)
-          .foregroundStyle(e.isHidden ? C.textQuaternary : selected || trail ? C.textPrimary : C.textSecondary)
+          .foregroundStyle(e.isHidden ? C.textMuted : selected || trail ? C.textPrimary : C.textSecondary)
         Spacer(minLength: 4)
         if let m = e.modified {
-          Text(Self.shortDate(m)).font(.system(size: 10)).monospacedDigit().foregroundStyle(C.textQuaternary).lineLimit(1)
+          Text(Self.shortDate(m)).font(.system(size: 10)).monospacedDigit().foregroundStyle(C.textMuted).lineLimit(1)
         }
-        Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold)).foregroundStyle(C.textQuaternary)
+        Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold)).foregroundStyle(C.textMuted)
           .opacity(e.isDirectory ? 1 : 0)
       }
       .padding(.horizontal, 8).frame(height: 24)
@@ -525,7 +525,7 @@
             Text(head).font(.system(size: 11, design: .monospaced)).foregroundStyle(C.code)
               .frame(maxWidth: .infinity, alignment: .topLeading).lineLimit(14)
           } else {
-            Text(tr("Clair ではプレビューできません")).font(.system(size: 11)).foregroundStyle(C.textQuaternary)
+            Text(tr("Clair ではプレビューできません")).font(.system(size: 11)).foregroundStyle(C.textMuted)
               .frame(maxWidth: .infinity, minHeight: 100)
           }
         }
@@ -748,7 +748,7 @@
           if pending {
             button(tr("選択した %@ 件を適用", checked.count), primary: true, enabled: !checked.isEmpty) { apply(checked.sorted()) }
             button(tr("却下"), primary: false) { reject() }
-            Text(tr("結果は Agent に返ります")).font(.system(size: 11)).foregroundStyle(C.textQuaternary)
+            Text(tr("結果は Agent に返ります")).font(.system(size: 11)).foregroundStyle(C.textMuted)
           } else {
             Text(outcome).font(.system(size: 12)).foregroundStyle(proposal.state == .failed ? C.danger : C.textSecondary).lineLimit(2)
             button(tr("ファイルブラウザで表示"), primary: false) { reveal() }
@@ -792,7 +792,7 @@
           Text(verb).font(.system(size: 12, weight: .semibold)).foregroundStyle(tint).frame(width: 96, alignment: .leading)
           Text(target).font(.system(size: 12, design: .monospaced)).foregroundStyle(C.textSecondary).lineLimit(1).truncationMode(.middle)
           Spacer(minLength: 8)
-          if let why = op.why { Text(why).font(.system(size: 11)).foregroundStyle(C.textQuaternary).lineLimit(1) }
+          if let why = op.why { Text(why).font(.system(size: 11)).foregroundStyle(C.textMuted).lineLimit(1) }
         }
         .padding(.horizontal, 12).frame(minHeight: 28).contentShape(Rectangle())
         .opacity(!pending && !proposal.applied.contains(i) ? 0.5 : 1)

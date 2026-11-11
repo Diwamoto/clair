@@ -382,7 +382,7 @@
         (Text(head).foregroundStyle(C.textSecondary) + Text(param).foregroundStyle(C.textPrimary).bold() + Text(tail).foregroundStyle(C.textSecondary))
           .font(.system(size: 12, design: .monospaced)).lineLimit(1)
         if let doc = s.documentation {
-          Text(doc).font(.system(size: 11)).foregroundStyle(C.textQuaternary).lineLimit(4)
+          Text(doc).font(.system(size: 11)).foregroundStyle(C.textMuted).lineLimit(4)
         }
       }
       .padding(.horizontal, 10).padding(.vertical, 6).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

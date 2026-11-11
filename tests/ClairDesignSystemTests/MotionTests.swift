@@ -35,6 +35,7 @@ final class MotionTests: XCTestCase {
 
   func testOverlayOpenScaleMatchesChecklist() {
     XCTAssertEqual(Motion.overlayOpenScale, 0.97)
+    XCTAssertEqual(Motion.pressScale, 0.97)
   }
 
   // MARK: - transition(from:to:)

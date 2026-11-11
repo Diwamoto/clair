@@ -204,7 +204,7 @@
           VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(C.textPrimary)
             if let s = spec.sub {
-              Text(s).font(.system(size: 11)).truncationMode(.head).foregroundStyle(C.textQuaternary)
+              Text(s).font(.system(size: 11)).truncationMode(.head).foregroundStyle(C.textMuted)
             }
           }
           .lineLimit(1).padding(.horizontal, 8).padding(.vertical, 4)
@@ -235,10 +235,10 @@
 
     private func row(_ i: Int, _ it: ClairMenuItem) -> some View {
       let on = active == i && !it.disabled
-      let quiet = it.disabled ? C.textQuaternary : on ? C.textSecondary : C.textQuaternary
+      let quiet = it.disabled ? C.textMuted : on ? C.textSecondary : C.textMuted
       return HStack(spacing: 8) {
         Text(it.label).font(.system(size: 12, weight: it.destructive ? .semibold : .regular))
-          .foregroundStyle(it.disabled ? C.textQuaternary : on || it.destructive ? C.textPrimary : C.textSecondary)
+          .foregroundStyle(it.disabled ? C.textMuted : on || it.destructive ? C.textPrimary : C.textSecondary)
           .lineLimit(1)
         Spacer(minLength: 0)
         if let s = it.shortcut { Text(s).font(.system(size: 11).monospacedDigit()).foregroundStyle(quiet).padding(.leading, 12) }
@@ -341,7 +341,7 @@
             RoundedRectangle(cornerRadius: Radius.control).fill(Color(hue: h, saturation: s, brightness: b)).frame(width: 18, height: 12)
             Text(tr("色を変更")).font(.system(size: 12)).foregroundStyle(C.textSecondary)
             Spacer(minLength: 0)
-            Image(systemName: open ? "chevron.up" : "chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(C.textQuaternary)
+            Image(systemName: open ? "chevron.up" : "chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(C.textMuted)
           }
           .contentShape(Rectangle())
         }

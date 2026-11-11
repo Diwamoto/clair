@@ -20,8 +20,8 @@
     case .attention: (tr("入力待ち"), C.attention)
     case .blocked: (tr("承認・回答待ち"), C.attention)
     case .done: (tr("完了"), C.success)
-    case .idle: (tr("待機中"), C.textQuaternary)
-    case .exited(let c): (tr("終了 %@", c.map(String.init) ?? "?"), c == 0 ? C.textQuaternary : C.danger)
+    case .idle: (tr("待機中"), C.textMuted)
+    case .exited(let c): (tr("終了 %@", c.map(String.init) ?? "?"), c == 0 ? C.textMuted : C.danger)
     }
   }
 
@@ -226,7 +226,7 @@
     private var composer: some View {
       let empty = draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
       return VStack(alignment: .leading, spacing: 12) {
-        TextField("", text: $draft, prompt: Text(tr("コンシェルジュに頼む…")).foregroundStyle(C.textQuaternary), axis: .vertical)
+        TextField("", text: $draft, prompt: Text(tr("コンシェルジュに頼む…")).foregroundStyle(C.textMuted), axis: .vertical)
           .textFieldStyle(.plain).lineLimit(1...10).font(chatFont)
           .focused($focused)
           .onSubmit(send)
@@ -252,7 +252,7 @@
           .onAppear(perform: watchPaste).onDisappear(perform: unwatchPaste)
         HStack(spacing: 8) {
           HStack(spacing: 6) {
-            Circle().fill(pane == nil ? C.textQuaternary : C.success).frame(width: 6, height: 6)
+            Circle().fill(pane == nil ? C.textMuted : C.success).frame(width: 6, height: 6)
             Text(verbatim: "Claude Code")
           }
           .font(.system(size: 12)).foregroundStyle(C.textTertiary)
@@ -277,7 +277,7 @@
           }
           Text(pane == nil ? tr("⏎ 送信 · 最初の送信で起動") : working ? tr("⏎ 送信 · esc 中断") : tr("⏎ 送信")).font(.system(size: 11)).foregroundStyle(C.lineNumber)
           Button(action: send) {
-            Image(systemName: "arrow.up").font(.system(size: 14, weight: .bold)).foregroundStyle(empty ? C.textQuaternary : C.canvas)
+            Image(systemName: "arrow.up").font(.system(size: 14, weight: .bold)).foregroundStyle(empty ? C.textMuted : C.canvas)
               .frame(width: 32, height: 32).background(empty ? W.strongest : C.textPrimary, in: Circle())
           }
           .buttonStyle(.plain).disabled(empty).help(tr("送信")).accessibilityLabel(tr("送信"))
@@ -543,9 +543,9 @@
           }
           Text(tr("考えています…")).font(.system(size: 14))
             .foregroundStyle(LinearGradient(stops: [
-              .init(color: C.textQuaternary, location: min(max(sweep - 0.25, 0), 1)),
+              .init(color: C.textMuted, location: min(max(sweep - 0.25, 0), 1)),
               .init(color: C.textPrimary, location: min(max(sweep, 0), 1)),
-              .init(color: C.textQuaternary, location: min(max(sweep + 0.25, 0), 1)),
+              .init(color: C.textMuted, location: min(max(sweep + 0.25, 0), 1)),
             ], startPoint: .leading, endPoint: .trailing))
         }
       }
@@ -561,7 +561,7 @@
       let dir = (path as NSString).deletingLastPathComponent
       HStack(spacing: 8) {
         Text(verbatim: name).font(.system(size: 12, design: .monospaced)).foregroundStyle(selected ? C.textPrimary : C.textSecondary)
-        Text(verbatim: dir).font(.system(size: 12)).foregroundStyle(C.textQuaternary).lineLimit(1).truncationMode(.head)
+        Text(verbatim: dir).font(.system(size: 12)).foregroundStyle(C.textMuted).lineLimit(1).truncationMode(.head)
         Spacer(minLength: 0)
       }
       .padding(.horizontal, 8).frame(height: 26)
@@ -576,7 +576,7 @@
       HStack(spacing: 8) {
         ConciergeAvatar()
         Text(tr("コンシェルジュ")).font(.system(size: 13, weight: .semibold)).foregroundStyle(C.textPrimary)
-        Text(date.formatted(date: .omitted, time: .shortened)).font(.system(size: 12)).foregroundStyle(C.textQuaternary)
+        Text(date.formatted(date: .omitted, time: .shortened)).font(.system(size: 12)).foregroundStyle(C.textMuted)
       }
     }
   }
@@ -599,7 +599,7 @@
             Text(tr("ツールを %@ 回実行", lines.count))
             if !open {
               Text(verbatim: "· " + calls.map { $0[0] }.reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }.prefix(3).joined(separator: ", "))
-                .lineLimit(1).foregroundStyle(C.textQuaternary)
+                .lineLimit(1).foregroundStyle(C.textMuted)
             }
           }.contentShape(Rectangle())
         }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(C.textTertiary)
@@ -629,7 +629,7 @@
         if header { ReplyHeader(date: message.date) }
         ForEach(Array(MarkdownPreview.parse(message.text).enumerated()), id: \.offset) { _, b in ChatBlock(block: b.block, size: 15) }
         Button { copyToPasteboard(message.text) } label: { Image(systemName: "doc.on.doc").frame(width: 24, height: 22) }
-          .buttonStyle(.hoverWash).font(.system(size: 11)).foregroundStyle(C.textQuaternary)
+          .buttonStyle(.hoverWash).font(.system(size: 11)).foregroundStyle(C.textMuted)
           .help(tr("返答をコピー")).accessibilityLabel(tr("返答をコピー"))
           .opacity(hovered ? 1 : 0).padding(.leading, -5)
       }
@@ -654,7 +654,7 @@
         CodeCard(language: language, text: text, size: size - 2)
       case .image(let alt, let source):
         // The chat has no Project file to resolve against, so images stay what they are.
-        Label(alt.isEmpty ? source : alt, systemImage: "photo").font(.system(size: size - 2)).foregroundStyle(C.textQuaternary)
+        Label(alt.isEmpty ? source : alt, systemImage: "photo").font(.system(size: size - 2)).foregroundStyle(C.textMuted)
       default:
         MarkdownBlockView(block: block, root: "", path: "", scale: size / 13).lineSpacing(4)
       }
@@ -746,7 +746,7 @@
             Text(verbatim: "\(text) · \(session.project)").font(.system(size: 11)).foregroundStyle(C.textTertiary).lineLimit(1)
           }
           Spacer(minLength: 0)
-          Image(systemName: "arrow.up.right").font(.system(size: 10, weight: .medium)).foregroundStyle(C.textQuaternary).padding(.top, 3)
+          Image(systemName: "arrow.up.right").font(.system(size: 10, weight: .medium)).foregroundStyle(C.textMuted).padding(.top, 3)
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -755,7 +755,7 @@
           if let screen {
             Text(verbatim: screen).font(.system(size: 9, design: .monospaced)).foregroundStyle(C.textSecondary)
           } else {
-            Text(tr("この Project を一度開くと画面が表示されます")).font(.system(size: 11)).foregroundStyle(C.textQuaternary)
+            Text(tr("この Project を一度開くと画面が表示されます")).font(.system(size: 11)).foregroundStyle(C.textMuted)
           }
         }
         .lineLimit(Self.lines).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
@@ -839,13 +839,13 @@
       let waiting = cards.filter { $0.state == .waiting }.count
       return HStack(spacing: 8) {
         Text(tr("ボード")).font(.system(size: 15, weight: .semibold)).foregroundStyle(C.textPrimary)
-        Text(tr("%@ 件", cards.count)).font(.system(size: 12)).foregroundStyle(C.textQuaternary)
+        Text(tr("%@ 件", cards.count)).font(.system(size: 12)).foregroundStyle(C.textMuted)
         Spacer(minLength: 0)
         Button { waitingOnly.toggle() } label: {
           HStack(spacing: 6) {
-            Circle().fill(waiting == 0 ? C.textQuaternary : C.attention).frame(width: 6, height: 6)
+            Circle().fill(waiting == 0 ? C.textMuted : C.attention).frame(width: 6, height: 6)
             Text(tr("あなた待ち"))
-            Text(verbatim: "\(waiting)").font(.system(size: 11, design: .monospaced)).foregroundStyle(C.textQuaternary)
+            Text(verbatim: "\(waiting)").font(.system(size: 11, design: .monospaced)).foregroundStyle(C.textMuted)
           }.modifier(Chip(on: waitingOnly))
         }
         .buttonStyle(HoverWashStyle(radius: Radius.card)).help(tr("あなた待ちだけ表示"))
@@ -858,7 +858,7 @@
         } label: {
           HStack(spacing: 6) {
             Text(project.isEmpty ? tr("すべての Project") : project).lineLimit(1)
-            Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold)).foregroundStyle(C.textQuaternary)
+            Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold)).foregroundStyle(C.textMuted)
           }.modifier(Chip(on: !project.isEmpty))
         }
         .menuStyle(.button).buttonStyle(HoverWashStyle(radius: Radius.card)).menuIndicator(.hidden).fixedSize()
@@ -899,7 +899,7 @@
         ForEach(ClairTodo.lanes, id: \.self) { lane in
           let inLane = shown.filter { ($0.todo.lane ?? "code") == lane }
           VStack(alignment: .leading, spacing: 6) {
-            Text(verbatim: lane).font(.system(size: 11, design: .monospaced)).foregroundStyle(C.textQuaternary).padding(.leading, 6)
+            Text(verbatim: lane).font(.system(size: 11, design: .monospaced)).foregroundStyle(C.textMuted).padding(.leading, 6)
             // Wells of one lane share its height, so a lane reads as one row.
             HStack(alignment: .top, spacing: Self.gap) {
               ForEach(ClairTodo.stages, id: \.self) { stage in
@@ -932,7 +932,7 @@
       case .running: (tr("稼働中"), C.success)
       case .waiting: (tr("あなた待ち"), C.attention)
       case .overLimit: (tr("差し戻し上限超過"), C.danger)
-      case .done: (tr("完了"), C.textQuaternary)
+      case .done: (tr("完了"), C.textMuted)
       }
     }
 
@@ -959,7 +959,7 @@
           ForEach([("retry", c.todo.retry.map(String.init)), ("branch", c.todo.branch), ("pr", c.todo.pr), ("agent", c.todo.agent)], id: \.0) { k, v in
             if let v {
               HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(verbatim: k).foregroundStyle(C.textQuaternary).frame(width: 44, alignment: .leading)
+                Text(verbatim: k).foregroundStyle(C.textMuted).frame(width: 44, alignment: .leading)
                 Text(verbatim: v).foregroundStyle(C.textSecondary).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
               }.font(.system(size: 11, design: .monospaced))
             }

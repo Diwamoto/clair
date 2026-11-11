@@ -96,6 +96,9 @@ public enum Motion {
   /// `overlayDuration`; closing is not animated (checklist §2.5, §3.6).
   public static let overlayOpenScale: Double = 0.97
 
+  /// A pressed control scales to this (eased, no bounce).
+  public static let pressScale: Double = 0.97
+
   /// Native equivalent of `prefers-reduced-motion: reduce` (checklist
   /// §2.5: "全て停止する" — everything above should stop, not just slow
   /// down, when this is `true`). Consulting this is the caller's

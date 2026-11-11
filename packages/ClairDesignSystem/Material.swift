@@ -66,7 +66,19 @@ public struct GlassWallpaper: View {
   }
 }
 
+/// The one shadow an overlay (palette, menu, popover, notice) casts: black 40%, radius 12, y 6.
+public enum Elevation {
+  public static let overlayColor = SwiftUI.Color.black.opacity(0.4)
+  public static let overlayRadius: CGFloat = 12
+  public static let overlayY: CGFloat = 6
+}
+
 extension View {
+  /// The overlay shadow (`Elevation`). The only shadow chrome casts outside the glass panel's own.
+  public func overlayShadow() -> some View {
+    shadow(color: Elevation.overlayColor, radius: Elevation.overlayRadius, y: Elevation.overlayY)
+  }
+
   /// A chrome ground: the flat `chrome` colour, or nothing under glass (the wallpaper shows through).
   public func chromeBackground(_ color: SwiftUI.Color = DesignTokens.Color.chrome) -> some View {
     modifier(ChromeBackground(color: color))

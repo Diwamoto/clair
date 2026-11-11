@@ -594,9 +594,9 @@
         Button { copy(path); copiedAt = .now } label: {
           HStack(spacing: 4) {
             ForEach(Array(parts.enumerated()), id: \.offset) { i, part in
-              if i > 0 { Text("›").font(.system(size: 11)).foregroundStyle(C.textQuaternary) }
+              if i > 0 { Text("›").font(.system(size: 11)).foregroundStyle(C.textMuted) }
               Text(part).font(.system(size: 11, weight: i == parts.count - 1 ? .semibold : .regular))
-                .foregroundStyle(i == parts.count - 1 ? C.textSecondary : C.textQuaternary).lineLimit(1)
+                .foregroundStyle(i == parts.count - 1 ? C.textSecondary : C.textMuted).lineLimit(1)
             }
           }.padding(.horizontal, 4).padding(.vertical, 2)
         }
@@ -760,7 +760,7 @@
       view.selectionColor = resolved { NSColor(C.debugBlue).withAlphaComponent(0.3) }
       view.gutterWidth = style.gutterWidth; view.showsLineNumbers = style.lineNumbers; view.showsWhitespace = style.showWhitespace
       view.lineNumberColor = NSColor(C.lineNumber); view.currentLineNumberColor = NSColor(C.textTertiary)
-      view.blameAnnotation = blame; view.blameColor = NSColor(C.textQuaternary)
+      view.blameAnnotation = blame; view.blameColor = NSColor(C.textMuted)
       view.debugStoppedLine = debugLine; view.debugBreakpoints = debugBreakpoints
       view.debugLineColor = NSColor(C.debugBlue).withAlphaComponent(0.14)
       view.debugBreakpointColor = NSColor(C.danger)
@@ -916,7 +916,7 @@
             .buttonStyle(.hoverWash).foregroundStyle(C.textSecondary)
         }
         Button(tr("解決済みにする")) { buffers.onMarkResolved?(path) }
-          .buttonStyle(.hoverWash).foregroundStyle(conflicts.isEmpty ? C.textPrimary : C.textQuaternary)
+          .buttonStyle(.hoverWash).foregroundStyle(conflicts.isEmpty ? C.textPrimary : C.textMuted)
           .disabled(!conflicts.isEmpty).help(tr("保存して git add します"))
       }
       .font(Typography.font(Typography.chrome)).lineLimit(1)

@@ -13,10 +13,17 @@ public enum Radius {
   public static func pill(_ flat: CGFloat = Radius.card) -> CGFloat { DesignTokens.glassActive ? 999 : flat }
 }
 
-/// Desktop spacing scale — 7 steps (`space` in `tokens.ts` / checklist
-/// §2.3).
+/// Desktop spacing scale — 8 steps (`space` in `tokens.ts` / checklist
+/// §2.3; 10 added 2026-11-11).
 public enum Spacing {
-  public static let scale: [CGFloat] = [2, 4, 6, 8, 12, 16, 24]
+  public static let scale: [CGFloat] = [2, 4, 6, 8, 10, 12, 16, 24]
+}
+
+/// Row and control heights — the only three a list row or control may take.
+public enum RowHeight {
+  public static let compact: CGFloat = 22
+  public static let `default`: CGFloat = 26
+  public static let control: CGFloat = 32
 }
 
 /// Vertical chrome budget shared by every Mac IDE screen: titlebar + status

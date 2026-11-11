@@ -21,12 +21,10 @@ final class ColorTokenTests: XCTestCase {
     ("surfaceActive", DesignTokens.Color.surfaceActive, "#383d47"),
     // Chrome ink
     ("chromeInk", DesignTokens.Color.chromeInk, "#b7bac1"),
-    ("chromeInkMuted", DesignTokens.Color.chromeInkMuted, "#81858d"),
     // Text
     ("textPrimary", DesignTokens.Color.textPrimary, "#f1f2f6"),
     ("textSecondary", DesignTokens.Color.textSecondary, "#caccd2"),
     ("textTertiary", DesignTokens.Color.textTertiary, "#9b9fa6"),
-    ("textQuaternary", DesignTokens.Color.textQuaternary, "#81858d"),
     ("textMuted", DesignTokens.Color.textMuted, "#81858d"),
     // Line/rule
     ("lineNumber", DesignTokens.Color.lineNumber, "#5f636d"),
@@ -65,9 +63,9 @@ final class ColorTokenTests: XCTestCase {
 
   func testAllChecklistColorNamesAreCovered() {
     // Guards against silently losing coverage if a case above is deleted
-    // without noticing — the checklist table has exactly 34 color entries.
-    XCTAssertEqual(Self.cases.count, 34)
-    XCTAssertEqual(Set(Self.cases.map(\.name)).count, 34, "duplicate token name in test table")
+    // without noticing — the checklist table has 32 color entries (textQuaternary and chromeInkMuted merged into textMuted 2026-11-11).
+    XCTAssertEqual(Self.cases.count, 32)
+    XCTAssertEqual(Set(Self.cases.map(\.name)).count, 32, "duplicate token name in test table")
   }
 
   // MARK: - Generic hex -> Color conversion

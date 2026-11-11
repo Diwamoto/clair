@@ -100,11 +100,11 @@
       case .image(let alt, let source):
         if let url = MarkdownPreview.localImage(source, root: root, file: path) {
           AsyncImage(url: url) { image in image.resizable().scaledToFit().frame(maxWidth: 640, alignment: .leading) }
-            placeholder: { Text(alt).foregroundStyle(C.textQuaternary) }
+            placeholder: { Text(alt).foregroundStyle(C.textMuted) }
             .accessibilityLabel(alt)
         } else {
           // Remote images are never fetched; show what they are instead.
-          Label(alt.isEmpty ? source : alt, systemImage: "photo").font(.system(size: 12 * scale)).foregroundStyle(C.textQuaternary)
+          Label(alt.isEmpty ? source : alt, systemImage: "photo").font(.system(size: 12 * scale)).foregroundStyle(C.textMuted)
         }
       case .rule:
         Rectangle().fill(C.divider).frame(height: 1)

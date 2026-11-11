@@ -56,7 +56,7 @@
       return Button { open(c.id) } label: {
         HStack(spacing: 10) {
           lanes(row).frame(width: CGFloat(row.width) * Self.laneWidth, height: Self.rowHeight)
-          Text(c.id.prefix(8)).font(.system(size: 11, design: .monospaced)).foregroundStyle(C.textQuaternary)
+          Text(c.id.prefix(8)).font(.system(size: 11, design: .monospaced)).foregroundStyle(C.textMuted)
           ForEach(c.refs, id: \.self) { ref in
             Text(ref).font(.system(size: 10, weight: .semibold)).lineLimit(1)
               .foregroundStyle(ref.hasPrefix("tag: ") ? C.codeType : C.textPrimary)
@@ -66,7 +66,7 @@
           Text(c.subject).font(.system(size: 12, weight: c.isHead ? .semibold : .regular)).lineLimit(1)
             .foregroundStyle(on ? C.textPrimary : C.textSecondary)
           Spacer(minLength: 8)
-          Text("\(c.author) · \(c.date)").font(.system(size: 11)).lineLimit(1).foregroundStyle(C.textQuaternary)
+          Text("\(c.author) · \(c.date)").font(.system(size: 11)).lineLimit(1).foregroundStyle(C.textMuted)
         }
         .padding(.horizontal, 12).frame(maxWidth: .infinity, minHeight: Self.rowHeight, maxHeight: Self.rowHeight)
         .background(on ? C.surfaceActive : .clear)

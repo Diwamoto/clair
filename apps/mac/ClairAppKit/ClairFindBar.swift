@@ -80,7 +80,7 @@
 
     private func toggle(_ glyph: String, _ help: String, _ on: Binding<Bool>) -> some View {
       Button { on.wrappedValue.toggle() } label: { Text(glyph).font(.system(size: 11, weight: .semibold, design: .monospaced)) }
-        .buttonStyle(.hoverWash).foregroundStyle(on.wrappedValue ? C.textPrimary : C.textQuaternary)
+        .buttonStyle(.hoverWash).foregroundStyle(on.wrappedValue ? C.textPrimary : C.textMuted)
         .background(on.wrappedValue ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
         .help(help).accessibilityLabel(help).accessibilityAddTraits(on.wrappedValue ? .isSelected : [])
     }

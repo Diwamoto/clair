@@ -91,7 +91,7 @@ struct SidebarHeading<Accessory: View>: View {
           Spacer(minLength: 0)
         }.contentShape(Rectangle())
       }.buttonStyle(.plain).disabled(open == nil)
-      accessory.font(SidebarStyle.detail).foregroundStyle(DesignTokens.Color.textQuaternary)
+      accessory.font(SidebarStyle.detail).foregroundStyle(DesignTokens.Color.textMuted)
     }
     .padding(.leading, open == nil ? SidebarStyle.lead : SidebarStyle.lead - 14).padding(.trailing, SidebarStyle.lead)
     .padding(.top, 12).padding(.bottom, 4)
@@ -111,7 +111,7 @@ struct SidebarNote: View {
   let text: String
   init(_ text: String) { self.text = text }
   var body: some View {
-    Text(text).font(SidebarStyle.detail).foregroundStyle(DesignTokens.Color.textQuaternary).lineSpacing(2)
+    Text(text).font(SidebarStyle.detail).foregroundStyle(DesignTokens.Color.textMuted).lineSpacing(2)
       .fixedSize(horizontal: false, vertical: true)
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(.horizontal, SidebarStyle.lead).padding(.vertical, 6)

@@ -199,7 +199,7 @@
                   .foregroundStyle(i == controller.selected ? C.textPrimary : C.textSecondary)
                 Spacer(minLength: 0)
                 if let detail = item.detail {
-                  Text(detail).font(.system(size: 11)).lineLimit(1).truncationMode(.tail).foregroundStyle(C.textQuaternary)
+                  Text(detail).font(.system(size: 11)).lineLimit(1).truncationMode(.tail).foregroundStyle(C.textMuted)
                 }
               }
               .padding(.horizontal, 8).frame(height: Self.row)

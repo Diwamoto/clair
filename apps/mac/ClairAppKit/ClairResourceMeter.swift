@@ -153,7 +153,7 @@ struct ClairResourceMeter: View {
           GridRow {
             VStack(alignment: .leading, spacing: 1) {
               Text(p.pid == getpid() ? "Clair" : p.name).lineLimit(1).truncationMode(.middle)
-              if let where_ = owner(p.pid) { Text(where_).foregroundStyle(C.textQuaternary).lineLimit(1).truncationMode(.middle) }
+              if let where_ = owner(p.pid) { Text(where_).foregroundStyle(C.textMuted).lineLimit(1).truncationMode(.middle) }
             }.help("pid \(p.pid)")
             Text(String(format: "%.1f%%", p.cpu) + " · " + Self.bytes(p.bytes)).gridColumnAlignment(.trailing)
           }

@@ -18,13 +18,11 @@ extension DesignTokens {
 
     // CHROME INK
     public static let chromeInk = SwiftUI.Color(hex: "#b7bac1", light: "#4f525a")
-    public static let chromeInkMuted = SwiftUI.Color(hex: "#81858d", light: "#6b6e76")
 
     // TEXT
     public static let textPrimary = SwiftUI.Color(hex: "#f1f2f6", light: "#1f2126")
     public static let textSecondary = SwiftUI.Color(hex: "#caccd2", light: "#383a42")
     public static let textTertiary = SwiftUI.Color(hex: "#9b9fa6", light: "#595c64")
-    public static let textQuaternary = SwiftUI.Color(hex: "#81858d", light: "#6b6e76")
     public static let textMuted = SwiftUI.Color(hex: "#81858d", light: "#6b6e76")
 
     // LINE / RULE

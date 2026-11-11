@@ -1659,10 +1659,10 @@ import Observation
         HStack(spacing: 4) {
           Button { store.run("palette.search") } label: {
             HStack(spacing: 4) {
-              Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(C.textQuaternary)
+              Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(C.textMuted)
               Text(tr("ファイル、シンボル")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
               Spacer(minLength: 0)
-              Text("⌘⇧F").font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary)
+              Text("⌘⇧F").font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted)
             }
             .padding(.horizontal, glass ? 11 : 8).frame(width: 200, height: glass ? 30 : 28)
             .fieldWell(radius: Radius.pill())
@@ -1681,7 +1681,7 @@ import Observation
 
     private func titlebarAction(_ icon: String, _ help: String, on: Bool, _ action: @escaping () -> Void) -> some View {
       Button(action: action) {
-        Image(systemName: icon).font(.system(size: 13)).foregroundStyle(on ? C.chromeInk : C.chromeInkMuted)
+        Image(systemName: icon).font(.system(size: 13)).foregroundStyle(on ? C.chromeInk : C.textMuted)
           .frame(width: 30, height: 30).controlFill(on: on, flatRadius: Radius.card)
       }.buttonStyle(HoverWashStyle(radius: Radius.pill())).help(help)
     }
@@ -2040,7 +2040,7 @@ import Observation
         Text(tr("設定")).font(.system(size: 16, weight: .semibold)).foregroundStyle(C.textPrimary)
         Spacer(minLength: 0)
         Button { store.run("settings.close") } label: {
-          Image(systemName: "xmark").font(.system(size: 13, weight: .medium)).foregroundStyle(C.chromeInkMuted)
+          Image(systemName: "xmark").font(.system(size: 13, weight: .medium)).foregroundStyle(C.textMuted)
             .frame(width: 26, height: 26)
         }.buttonStyle(.hoverWash).keyboardShortcut(.cancelAction).padding(.trailing, 16).help(tr("設定を閉じる"))
       }
@@ -2052,7 +2052,7 @@ import Observation
 
     private var settingsPanel: some View {
       VStack(alignment: .leading, spacing: 12) {
-        Text(tr("設定を検索")).font(.system(size: 15)).foregroundStyle(C.textQuaternary)
+        Text(tr("設定を検索")).font(.system(size: 15)).foregroundStyle(C.textMuted)
           .padding(.horizontal, 8).frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
           .background(C.chrome, in: RoundedRectangle(cornerRadius: Radius.control))
           .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.hairline))
@@ -2539,7 +2539,7 @@ import Observation
           Image(systemName: "chevron.up").font(.system(size: 8, weight: .semibold))
         }
         .foregroundStyle(C.canvas).padding(.horizontal, 14).frame(height: 32)
-        .background(count > 0 ? C.textSecondary : C.textQuaternary, in: Capsule())
+        .background(count > 0 ? C.textSecondary : C.textMuted, in: Capsule())
         .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
         .contentShape(Capsule())
       }
@@ -2678,7 +2678,7 @@ import Observation
                 treeRow(depth: r.depth, selected: on || explorerSel.contains(r.id), action: { explorerClick(r.id) { store.run("tab.open", ["path": .string(f.path)]) } }) {
                   Color.clear.frame(width: 10)  // chevron slot: a file lines up with its sibling folders
                   FileIcon.forPath(f.path).image(size: 10, ink: on ? C.textSecondary : C.textTertiary).frame(width: 16)
-                  Text(r.label).font(.system(size: 13, weight: on ? .semibold : .regular)).foregroundStyle(Self.changeColor(ranks[f.path]) ?? (r.ignored ? C.textQuaternary : on ? C.textPrimary : C.textSecondary)).lineLimit(1)
+                  Text(r.label).font(.system(size: 13, weight: on ? .semibold : .regular)).foregroundStyle(Self.changeColor(ranks[f.path]) ?? (r.ignored ? C.textMuted : on ? C.textPrimary : C.textSecondary)).lineLimit(1)
                   Spacer(minLength: 0)
                   if let tint = Self.changeColor(ranks[f.path]) {
                     Text(st.dirty.contains(f.path) ? "M" : f.status ?? "M").font(.system(size: 12, weight: .semibold)).foregroundStyle(tint)
@@ -2692,7 +2692,7 @@ import Observation
                 treeRow(depth: r.depth, selected: explorerSel.contains(r.id), action: { explorerClick(r.id) { store.run("explorer.toggle", ["path": .string(r.id)]) } }) {
                   chevron(open: open)
                   FileIcon.folder(open: open).image(size: 11, ink: C.textTertiary).frame(width: 16)
-                  Text(r.label).font(.system(size: 13, weight: r.section ? .semibold : .regular)).foregroundStyle(Self.changeColor(ranks[r.id]) ?? (r.section ? C.textPrimary : r.ignored ? C.textQuaternary : C.textSecondary)).lineLimit(1)
+                  Text(r.label).font(.system(size: 13, weight: r.section ? .semibold : .regular)).foregroundStyle(Self.changeColor(ranks[r.id]) ?? (r.section ? C.textPrimary : r.ignored ? C.textMuted : C.textSecondary)).lineLimit(1)
                   Spacer(minLength: 0)
                   if let tint = Self.changeColor(ranks[r.id]) { Circle().fill(tint).frame(width: 6, height: 6) }
                 }
@@ -3150,7 +3150,7 @@ import Observation
               VStack(alignment: .leading, spacing: 2) {
                 Text(frame.name).foregroundStyle(C.textPrimary).lineLimit(1)
                 Text(frame.path.map { "\(URL(fileURLWithPath: $0).lastPathComponent):\(frame.line)" } ?? tr("場所不明"))
-                  .font(SidebarStyle.detail).foregroundStyle(C.textQuaternary)
+                  .font(SidebarStyle.detail).foregroundStyle(C.textMuted)
               }
               Spacer(minLength: 0)
             }
@@ -3167,7 +3167,7 @@ import Observation
               if variable.reference > 0 { SidebarChevron(open: false) } else { Color.clear.frame(width: 10) }
               VStack(alignment: .leading, spacing: 2) {
                 Text(variable.name).foregroundStyle(C.textPrimary)
-                Text(variable.value).font(SidebarStyle.detail).foregroundStyle(C.textQuaternary).lineLimit(2)
+                Text(variable.value).font(SidebarStyle.detail).foregroundStyle(C.textMuted).lineLimit(2)
               }
               Spacer(minLength: 0)
             }.disabled(variable.reference == 0)
@@ -3233,7 +3233,7 @@ import Observation
     private var debugToolbar: some View {
         HStack(spacing: 2) {
           Image(systemName: "line.3.horizontal")
-            .font(.system(size: 10)).foregroundStyle(C.textQuaternary)
+            .font(.system(size: 10)).foregroundStyle(C.textMuted)
             .frame(width: 14, height: 20)
           Rectangle().fill(L.strong).frame(width: 1, height: 18).padding(.horizontal, 4)
           debugAction("play.fill", tr("続行"), "debug.continue", enabled: store.debugSession?.phase == .stopped)
@@ -3845,14 +3845,14 @@ import Observation
       let stale = quota.contains { $0.isStale(now: now) }
       return HStack(spacing: 6) {
         if let top {
-          let tint = stale ? C.textQuaternary : quotaTint(top.window.usedPercent)
+          let tint = stale ? C.textMuted : quotaTint(top.window.usedPercent)
           quotaProviderIcon(top.provider, size: 17)
           Text("\(top.provider) \(top.window.label)").foregroundStyle(C.textTertiary)
           Capsule().fill(L.strong).frame(width: 48, height: 5)
             .overlay(alignment: .leading) { Capsule().fill(tint).frame(width: 48 * min(max(1 - top.window.usedPercent / 100, 0), 1)) }
           Text(tr("残り%@%", top.window.remainingPercent)).fontWeight(.semibold).foregroundStyle(tint)
         } else {
-          Text(quota.isEmpty ? tr("利用枠を取得中…") : tr("利用枠 —")).foregroundStyle(C.textQuaternary)
+          Text(quota.isEmpty ? tr("利用枠を取得中…") : tr("利用枠 —")).foregroundStyle(C.textMuted)
         }
       }
       .font(.system(size: 12)).monospacedDigit()  // one step above the bar's 11pt: the number the owner reads most (2026-10-13)
@@ -3871,7 +3871,7 @@ import Observation
                 Spacer()
                 if case .ok = provider.state {
                   Text(provider.isStale(now: now) ? tr("古い値 · %@ 取得", provider.fetchedAt.formatted(date: .omitted, time: .shortened)) : tr("%@ 取得", provider.fetchedAt.formatted(date: .omitted, time: .shortened)))
-                    .foregroundStyle(C.textQuaternary)
+                    .foregroundStyle(C.textMuted)
                 }
               }
               switch provider.state {
@@ -3881,13 +3881,13 @@ import Observation
                     HStack(spacing: 8) {
                       Text(window.label)
                       Spacer(minLength: 8)
-                      Text(window.resetText(now: now)).foregroundStyle(C.textQuaternary)
+                      Text(window.resetText(now: now)).foregroundStyle(C.textMuted)
                       Text(tr("残り%@%", window.remainingPercent)).fontWeight(.semibold)
                     }
                     GeometryReader { geometry in
                       Capsule().fill(L.strong)
                         .overlay(alignment: .leading) {
-                          Capsule().fill(provider.isStale(now: now) ? C.textQuaternary : quotaTint(window.usedPercent))
+                          Capsule().fill(provider.isStale(now: now) ? C.textMuted : quotaTint(window.usedPercent))
                             .frame(width: geometry.size.width * min(max(1 - window.usedPercent / 100, 0), 1))
                         }
                     }
@@ -3914,7 +3914,7 @@ import Observation
       if let rel = st.active, let root = store.activeRoot {
         let path = root + "/" + rel
         if let server = store.buffers.language.statusText(path, root: root) {
-          Text(server.text).foregroundStyle(server.failed ? C.attention : C.textQuaternary).lineLimit(1)
+          Text(server.text).foregroundStyle(server.failed ? C.attention : C.textMuted).lineLimit(1)
         }
         if let spans = store.buffers.language.diagnostics[path]?.spans, !spans.isEmpty {
           let errors = spans.filter { $0.severity == .error }.count
@@ -3922,7 +3922,7 @@ import Observation
           Text([errors > 0 ? tr("エラー %@", errors) : nil, warnings > 0 ? tr("警告 %@", warnings) : nil].compactMap { $0 }.joined(separator: " · "))
             .foregroundStyle(errors > 0 ? C.attention : C.textTertiary)
         }
-        if let notice = store.languageNotice { Text(notice).foregroundStyle(C.textQuaternary).lineLimit(1) }
+        if let notice = store.languageNotice { Text(notice).foregroundStyle(C.textMuted).lineLimit(1) }
       }
     }
 
@@ -3960,10 +3960,10 @@ import Observation
           Circle().fill(n.read ? Color.clear : n.kind == .exited && n.exitCode != 0 ? C.danger : C.attention).frame(width: 6, height: 6)
           Text(n.sessionTitle ?? tr("ターミナル %@", n.pane)).font(.system(size: 13, weight: .semibold)).foregroundStyle(C.textPrimary).lineLimit(1)
           Spacer(minLength: 8)
-          Text(n.at.formatted(date: .omitted, time: .shortened)).foregroundStyle(C.textQuaternary)
+          Text(n.at.formatted(date: .omitted, time: .shortened)).foregroundStyle(C.textMuted)
           if let close {
             Button(action: close) { Image(systemName: "xmark").font(.system(size: 9, weight: .semibold)).frame(width: 16, height: 16) }
-              .buttonStyle(.hoverWash).foregroundStyle(C.textQuaternary).help(tr("閉じる")).accessibilityLabel(tr("閉じる"))
+              .buttonStyle(.hoverWash).foregroundStyle(C.textMuted).help(tr("閉じる")).accessibilityLabel(tr("閉じる"))
           }
         }
         Group {
@@ -4029,7 +4029,7 @@ import Observation
         .buttonStyle(.borderless).font(Typography.font(Typography.chrome)).padding(.horizontal, 14).padding(.vertical, 12)
         Divider()
         if st.notices.items.isEmpty {
-          Text(tr("通知はありません")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textQuaternary).padding(14)
+          Text(tr("通知はありません")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted).padding(14)
           Spacer()
         } else {
           ScrollView {
@@ -4067,7 +4067,7 @@ import Observation
       Text(headInfo?.upstream.map { tr("追跡: %@", $0) } ?? tr("追跡ブランチなし")).foregroundStyle(C.textTertiary)
       if let head = headInfo?.head { Text(head).lineLimit(2) }
       if st.isRepo { Text(changes.isEmpty ? tr("未コミットの変更なし") : changeCounts).foregroundStyle(C.textTertiary) }
-      Text(tr("クリックでブランチを切り替え / 作成")).foregroundStyle(C.textQuaternary)
+      Text(tr("クリックでブランチを切り替え / 作成")).foregroundStyle(C.textMuted)
         .task { await loadHeadInfo() }
     }
 
@@ -4077,16 +4077,16 @@ import Observation
                  (tr("Push %@ 件", sync?.ahead ?? info.outgoing.count), info.outgoing, sync?.ahead ?? 0)], id: \.0) { title, commits, total in
           Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(C.textPrimary)
           ForEach(commits, id: \.self) { Text($0).lineLimit(1).truncationMode(.tail) }
-          if total > commits.count { Text(tr("ほか %@ 件", total - commits.count)).foregroundStyle(C.textQuaternary) }
+          if total > commits.count { Text(tr("ほか %@ 件", total - commits.count)).foregroundStyle(C.textMuted) }
         }
         Text(info.fetchedAt.map { tr("最終 fetch: %@", $0.formatted(.relative(presentation: .named))) } ?? tr("まだ fetch していません"))
           .foregroundStyle(C.textTertiary)
       } else if headInfo != nil {
         Text(tr("追跡ブランチがありません")).foregroundStyle(C.textTertiary)
       } else {
-        Text(tr("読み込み中…")).foregroundStyle(C.textQuaternary)
+        Text(tr("読み込み中…")).foregroundStyle(C.textMuted)
       }
-      Text(tr("クリックで Pull → Push")).foregroundStyle(C.textQuaternary)
+      Text(tr("クリックで Pull → Push")).foregroundStyle(C.textMuted)
         .task { await loadHeadInfo() }
     }
 
@@ -4106,12 +4106,12 @@ import Observation
             HStack(alignment: .firstTextBaseline, spacing: 6) {
               Image(systemName: span.severity == .error ? "xmark.circle.fill" : "exclamationmark.triangle.fill")
                 .foregroundStyle(span.severity == .error ? C.danger : C.attention)
-              Text(line.map { "L\($0)" } ?? "").foregroundStyle(C.textQuaternary)
+              Text(line.map { "L\($0)" } ?? "").foregroundStyle(C.textMuted)
               Text(span.message).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
             }.contentShape(Rectangle())
           }.buttonStyle(.hoverWash)
         }
-        if spans.count > 8 { Text(tr("ほか %@ 件", spans.count - 8)).foregroundStyle(C.textQuaternary) }
+        if spans.count > 8 { Text(tr("ほか %@ 件", spans.count - 8)).foregroundStyle(C.textMuted) }
       }
     }
 
@@ -4132,7 +4132,7 @@ import Observation
           }.contentShape(Rectangle())
         }.buttonStyle(.hoverWash)
       }
-      Text(tr("クリックでセッション一覧")).foregroundStyle(C.textQuaternary)
+      Text(tr("クリックでセッション一覧")).foregroundStyle(C.textMuted)
     }
 
     @ViewBuilder private var versionHover: some View {
@@ -4299,7 +4299,7 @@ import Observation
         Button("") { store.run("palette.close") }.keyboardShortcut(.cancelAction).opacity(0).frame(width: 0, height: 0)
         VStack(spacing: 0) {
           HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass").font(.system(size: 14)).foregroundStyle(C.textQuaternary)
+            Image(systemName: "magnifyingglass").font(.system(size: 14)).foregroundStyle(C.textMuted)
             TextField("", text: Binding(get: { query }, set: { v in
               // arc's GLIDE_ROWS rule: surviving rows close their gaps with a
               // glide when every one lands within a viewport of its old place;
@@ -4317,7 +4317,7 @@ import Observation
               .onKeyPress(.downArrow) { moveSelection(min(selection + 1, max(list.count - 1, 0))); return .handled }
               .onKeyPress(.upArrow) { moveSelection(max(selection - 1, 0)); return .handled }
               .onKeyPress(.escape) { store.run("palette.close"); return .handled }
-            Text(tr("%@ 件", list.count)).font(.system(size: 11)).foregroundStyle(C.textQuaternary)
+            Text(tr("%@ 件", list.count)).font(.system(size: 11)).foregroundStyle(C.textMuted)
           }
           // ⌘T: ask the language servers as the query changes (debounced; a newer query cancels this one).
           .task(id: p == .symbols ? query : nil) {
@@ -4357,13 +4357,13 @@ import Observation
                   }
                   Text(p == .files || p == .compare || p == .recent ? name(it.title) : it.title).font(.system(size: 12)).lineLimit(1)
                     .foregroundStyle(on ? C.textPrimary : C.textSecondary)
-                  if !it.detail.isEmpty { Text(it.detail).font(.system(size: 11)).lineLimit(1).foregroundStyle(C.textQuaternary) }
+                  if !it.detail.isEmpty { Text(it.detail).font(.system(size: 11)).lineLimit(1).foregroundStyle(C.textMuted) }
                   Spacer(minLength: 0)
                   if p == .files || p == .compare || p == .recent {
-                    Text(it.title).font(.system(size: 11)).lineLimit(1).truncationMode(.head).foregroundStyle(C.textQuaternary)
+                    Text(it.title).font(.system(size: 11)).lineLimit(1).truncationMode(.head).foregroundStyle(C.textMuted)
                   }
                   if p == .symbols || p == .references || p == .branches {
-                    Text(it.hint).font(.system(size: 11)).lineLimit(1).truncationMode(.head).foregroundStyle(C.textQuaternary)
+                    Text(it.hint).font(.system(size: 11)).lineLimit(1).truncationMode(.head).foregroundStyle(C.textMuted)
                   } else { HStack(spacing: 2) {
                     ForEach(Array(it.hint), id: \.self) { k in
                       Text(String(k)).font(.system(size: 11)).monospacedDigit().foregroundStyle(on ? C.textSecondary : C.textTertiary)
@@ -4496,7 +4496,7 @@ import Observation
             Image(systemName: icon).font(.system(size: 16))
           }
         }
-          .foregroundStyle(on ? C.chromeInk : C.chromeInkMuted)
+          .foregroundStyle(on ? C.chromeInk : C.textMuted)
           .frame(width: side, height: side)
           .background(on ? (glass ? DesignTokens.Glass.capsuleSelected : W.selected) : .clear, in: RoundedRectangle(cornerRadius: Radius.pill()))
           .opacity(enabled ? 1 : 0.35)
@@ -4604,7 +4604,7 @@ import Observation
         tabIcon(tint: tint)
         Text(name).font(.system(size: Typography.chromeSize(11), weight: selected ? .semibold : .regular)).foregroundStyle(tint).lineLimit(1).truncationMode(.tail)
         Spacer(minLength: 0)
-        if dirty { Circle().fill(selected ? C.textTertiary : C.textQuaternary).frame(width: 6, height: 6) }
+        if dirty { Circle().fill(selected ? C.textTertiary : C.textMuted).frame(width: 6, height: 6) }
         Button(action: onClose) {
           Image(systemName: "xmark").font(.system(size: 9, weight: .medium)).foregroundStyle(C.textTertiary)
         }
@@ -4686,14 +4686,14 @@ import Observation
       // always laid out so this never becomes a permanent line of chrome.
       HStack(spacing: Spacing.scale[0]) {
         // Title top-left so a running agent's task stays readable; drag handle top-centre.
-        Text(label).font(Typography.font(Typography.chrome)).foregroundStyle(focused ? C.textTertiary : C.textQuaternary)
+        Text(label).font(Typography.font(Typography.chrome)).foregroundStyle(focused ? C.textTertiary : C.textMuted)
           .lineLimit(1).truncationMode(.tail).padding(.leading, 6).frame(maxWidth: .infinity, alignment: .leading)
           .overlay {
-            Image(systemName: "ellipsis").font(.system(size: 11)).foregroundStyle(C.textQuaternary)
+            Image(systemName: "ellipsis").font(.system(size: 11)).foregroundStyle(C.textMuted)
               .opacity(isHovered ? 1 : 0).accessibilityHidden(true)
           }
         Button(action: onClose) {
-          Image(systemName: "xmark").font(.system(size: 9, weight: .medium)).foregroundStyle(C.textQuaternary)
+          Image(systemName: "xmark").font(.system(size: 9, weight: .medium)).foregroundStyle(C.textMuted)
         }.buttonStyle(.hoverWash).help(tr("パネルを閉じる")).opacity((isHovered || focused) ? 1 : 0)
       }
       .padding(.horizontal, 8).frame(height: 24).frame(maxWidth: .infinity)
@@ -4728,7 +4728,7 @@ import Observation
             .opacity(0.9)
         } else {
         VStack(spacing: 0) {
-          Image(systemName: "ellipsis").font(.system(size: 11)).foregroundStyle(C.textQuaternary)
+          Image(systemName: "ellipsis").font(.system(size: 11)).foregroundStyle(C.textMuted)
             .frame(maxWidth: .infinity).frame(height: 24).background(C.canvas)
           Image(systemName: "terminal").font(.system(size: 28, weight: .light)).foregroundStyle(C.textTertiary)
             .frame(maxWidth: .infinity, maxHeight: .infinity).background(C.surface)

@@ -24,7 +24,9 @@ final class SpacingRadiusTests: XCTestCase {
   }
 
   func testDesktopSpacingScaleMatchesChecklist() {
-    XCTAssertEqual(Spacing.scale, [2, 4, 6, 8, 12, 16, 24])
+    XCTAssertEqual(Spacing.scale, [2, 4, 6, 8, 10, 12, 16, 24])
+    XCTAssertEqual([Elevation.overlayRadius, Elevation.overlayY], [12, 6])
+    XCTAssertEqual([RowHeight.compact, RowHeight.default, RowHeight.control], [22, 26, 32])
   }
 
   func testChromeBudgetMatchesChecklist() {
