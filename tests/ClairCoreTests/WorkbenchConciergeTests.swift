@@ -120,8 +120,7 @@ final class WorkbenchConciergeTests: XCTestCase {
     try r.execute("settings.concierge", ["cwd": .string(other)], confirmed: true, state: &s).get()
     Concierge.approve(Concierge.fingerprint(prompt: "", cwd: other))
     try r.execute("concierge.open", confirmed: true, state: &s).get()
-    let pane = Concierge.pane
-    XCTAssertEqual(s.launches[pane]?.cwd, other)
+    XCTAssertEqual(s.concierge()?.launch.cwd, WorkbenchProject.normalized(other))
     XCTAssertNotEqual(other, root)
   }
 
