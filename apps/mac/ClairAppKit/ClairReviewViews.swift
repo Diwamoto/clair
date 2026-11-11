@@ -333,13 +333,13 @@
       } trailing: { hovered in
         if hovered {
           Button { onDiscard(c, t.staged) } label: {
-            Image(systemName: "arrow.uturn.backward").font(.system(size: 10, weight: .semibold)).foregroundStyle(C.textTertiary).frame(width: 18, height: 18)
+            Image(systemName: "arrow.uturn.backward").font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textTertiary).frame(width: 18, height: 18)
           }.buttonStyle(.hoverWash).disabled(busy).help(c.untracked ? tr("ファイルを削除") : tr("変更を元に戻す"))
           Button { onToggle(c, !t.staged) } label: {
             Text(t.staged ? "−" : "+").font(Typography.font(Typography.title)).foregroundStyle(C.textTertiary).frame(width: 18, height: 18)
           }.buttonStyle(.hoverWash).disabled(busy).help(t.staged ? tr("ステージを取り消す") : tr("ステージに追加"))
         }
-        Text(badge).font(.system(size: 12, weight: .semibold)).foregroundStyle(badge == "A" || badge == "U" ? C.success : badge == "D" ? C.danger : C.attention)
+        Text(badge).font(Typography.font(Typography.chromeStrong)).foregroundStyle(badge == "A" || badge == "U" ? C.success : badge == "D" ? C.danger : C.attention)
           .allowsHitTesting(false)
       }
       .clairContextMenu(menus) { menu(c, t.staged) }
@@ -374,7 +374,7 @@
         Button(action: commit) {
           Label(tr("コミット"), systemImage: "checkmark").font(Typography.font(Typography.sidebarStrong))
             .foregroundStyle(canCommit ? C.textPrimary : C.textMuted)
-            .frame(maxWidth: .infinity).frame(height: 26)
+            .frame(maxWidth: .infinity).frame(height: RowHeight.default)
             .controlFill()
         }.buttonStyle(HoverWashStyle(radius: Radius.pill(Radius.control))).disabled(!canCommit).padding(.horizontal, SidebarStyle.inset)
       }.padding(.vertical, 8)
@@ -554,21 +554,21 @@
       let suggestionsByLine = Dictionary(grouping: suggestions, by: \.line)
       ScrollViewReader { proxy in
       VStack(spacing: 0) {
-        if showsHeader { HStack(spacing: 9) {
+        if showsHeader { HStack(spacing: 8) {
           // Canvas SourceControl file heading: icon, mono path, counts; which side it is sits in a pill at the end.
           FileIcon.forPath(target.path).image(size: 11, ink: C.textTertiary)
-          Text(target.path).font(.system(size: 11, design: .monospaced)).foregroundStyle(C.textSecondary).lineLimit(1).truncationMode(.head)
+          Text(target.path).font(Typography.font(Typography.chrome, family: .mono)).foregroundStyle(C.textSecondary).lineLimit(1).truncationMode(.head)
           if added + removed > 0 {
             HStack(spacing: 4) {
               Text("+\(added)").foregroundStyle(C.success)
               Text("−\(removed)").foregroundStyle(C.danger)
-            }.font(.system(size: 10, design: .monospaced))
+            }.font(Typography.font(Typography.chrome, family: .mono))
           }
           Spacer()
           let side = label ?? target.against ?? (target.staged ? tr("ステージ済み") : target.untracked ? tr("未追跡") : tr("変更"))
           let tint = target.staged || target.untracked ? C.success : C.textTertiary
-          Text(side).font(.system(size: 9, weight: .semibold)).foregroundStyle(tint).lineLimit(1)
-            .padding(.horizontal, 6).frame(height: 18).background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 3))
+          Text(side).font(.system(size: Typography.chromeSize(9), weight: .semibold)).foregroundStyle(tint).lineLimit(1)
+            .padding(.horizontal, 6).frame(height: 18).background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: Radius.control))
             .help(target.against.map { "\($0) → \(target.path)" } ?? (target.staged ? "HEAD → index" : target.untracked ? tr("未追跡ファイル") : tr("index → 作業ツリー")))
           if editor != nil {
             Button(editing ? tr("差分") : tr("編集")) { editing.toggle() }
@@ -595,7 +595,7 @@
             ForEach([-1, 1], id: \.self) { d in
               Button {
                 hunk = min(max(hunk + d, 0), hunks.count - 1)
-                withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(hunks[hunk], anchor: .top) }
+                withAnimation(.easeOut(duration: Motion.overlayDuration)) { proxy.scrollTo(hunks[hunk], anchor: .top) }
               } label: { Image(systemName: d < 0 ? "chevron.up" : "chevron.down").foregroundStyle(C.chromeInk) }
                 .buttonStyle(.hoverWash).keyboardShortcut(d < 0 ? .upArrow : .downArrow, modifiers: .option)
                 .help(d < 0 ? tr("前の hunk (⌥↑)") : tr("次の hunk (⌥↓)"))
@@ -607,7 +607,7 @@
             }.buttonStyle(.hoverWash).help(tr("未解決コメントをプロンプトとしてコピーし、agent のターミナルへ移動"))
           }
           Button(action: onClose) { Image(systemName: "xmark").foregroundStyle(C.chromeInk) }.buttonStyle(.hoverWash)
-        }.padding(.horizontal, 16).frame(height: 30).background(C.canvas)
+        }.padding(.horizontal, 16).frame(height: RowHeight.control).background(C.canvas)
           .overlay(alignment: .bottom) { Rectangle().fill(L.hairline).frame(height: 1) } }
         if editing, let editor {
           editor
@@ -640,7 +640,7 @@
                     let count = fold[s...].prefix { $0 == s }.count
                     Button { expanded.insert(s) } label: {
                       Text(tr("⋯ 変更のない %@ 行を表示", count)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
-                        .padding(.leading, 100).frame(minWidth: viewport.size.width, alignment: .leading).frame(height: 22)
+                        .padding(.leading, 100).frame(minWidth: viewport.size.width, alignment: .leading).frame(height: RowHeight.compact)
                         .background(C.surface).contentShape(Rectangle())
                     }.buttonStyle(.plain).help(tr("折りたたまれた行を展開"))
                   }
@@ -848,10 +848,10 @@
     var body: some View {
       VStack(spacing: 0) {
         HStack(spacing: 12) {
-          Text(tr("AI が実行を求めています")).font(.system(size: 13, weight: .semibold)).foregroundStyle(C.textPrimary)
+          Text(tr("AI が実行を求めています")).font(Typography.font(Typography.title)).foregroundStyle(C.textPrimary)
           Spacer(minLength: 0)
           TimelineView(.periodic(from: .now, by: 1)) { c in
-            Text(tr("残り %@ 秒", max(0, Int(deadline.timeIntervalSince(c.date).rounded(.up))))).font(.system(size: 11)).monospacedDigit().foregroundStyle(C.textMuted)
+            Text(tr("残り %@ 秒", max(0, Int(deadline.timeIntervalSince(c.date).rounded(.up))))).font(Typography.font(Typography.chrome)).monospacedDigit().foregroundStyle(C.textMuted)
           }
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
@@ -861,10 +861,10 @@
             Text(id).foregroundStyle(C.textSecondary)
             ForEach(input.keys.sorted(), id: \.self) { k in Text("\(k): \(value(input[k]!))").foregroundStyle(C.textTertiary).lineLimit(2) }
           }
-          .font(.system(size: 12, design: .monospaced)).frame(maxWidth: .infinity, alignment: .leading).padding(8)
+          .font(Typography.font(Typography.chrome, family: .mono)).frame(maxWidth: .infinity, alignment: .leading).padding(8)
           .background(C.canvas, in: RoundedRectangle(cornerRadius: Radius.card))
           .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(L.hairline))
-          Text(tr("リスク %@", risk.label)).font(.system(size: 11)).foregroundStyle(risk >= .destructive ? C.danger : C.textMuted)
+          Text(tr("リスク %@", risk.label)).font(Typography.font(Typography.chrome)).foregroundStyle(risk >= .destructive ? C.danger : C.textMuted)
         }
         .padding(.horizontal, 16).padding(.vertical, 12).frame(maxWidth: .infinity, alignment: .leading)
         HStack(spacing: 8) {
@@ -877,14 +877,14 @@
       .background(W.faint).background(C.canvas, in: RoundedRectangle(cornerRadius: Radius.card))
       .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(L.stronger))
       .clipShape(RoundedRectangle(cornerRadius: Radius.card))
-      .shadow(color: .black.opacity(0.35), radius: 12, y: 4)
+      .overlayShadow()
     }
 
     private func approvalButton(_ title: String, primary: Bool, _ action: @escaping () -> Void) -> some View {
       Button(action: action) {
-        Text(title).font(.system(size: 11, weight: primary ? .semibold : .regular))
+        Text(title).font(Typography.font(primary ? Typography.chromeStrong : Typography.chrome))
           .foregroundStyle(primary ? C.canvas : C.textSecondary)
-          .padding(.horizontal, 12).frame(minHeight: 30)
+          .padding(.horizontal, 12).frame(minHeight: RowHeight.control)
           .background(primary ? C.textSecondary : W.medium, in: RoundedRectangle(cornerRadius: Radius.control))
       }.buttonStyle(.hoverWash)
     }
@@ -925,17 +925,17 @@
     var body: some View {
       VStack(alignment: .leading, spacing: 0) {
         HStack(spacing: 8) {
-          Image(systemName: "magnifyingglass").font(.system(size: 13)).foregroundStyle(C.textMuted)
+          Image(systemName: "magnifyingglass").font(Typography.font(Typography.sidebar)).foregroundStyle(C.textMuted)
           TextField(tr("Projectを検索"), text: $query)
             .focused($queryFocused).task { await focusField { queryFocused = true } }
-            .textFieldStyle(.plain).font(.system(size: 13)).foregroundStyle(C.textPrimary)
+            .textFieldStyle(.plain).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textPrimary)
             .onSubmit(openSelected)
             .onKeyPress(.downArrow) { step(1); return .handled }
             .onKeyPress(.upArrow) { step(-1); return .handled }
             .onKeyPress(.escape) { close(); return .handled }
             .onChange(of: query) { selection = 0; search() }
           if searching { ProgressView().controlSize(.small) }
-          Text(tr("%@件 · %@ファイル", hits.count, Set(hits.map(\.path)).count)).font(.system(size: 11)).foregroundStyle(C.textMuted)
+          Text(tr("%@件 · %@ファイル", hits.count, Set(hits.map(\.path)).count)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted)
           chip(Text(Image(systemName: "list.bullet.indent")), on: $tree, help: tr("ツリー表示"))
           chip(Text(".*"), on: $regex, help: tr("正規表現"))
           chip(Text("Aa"), on: $caseSensitive, help: tr("大文字小文字を区別"))
@@ -952,17 +952,17 @@
         if replaceMode {
           HStack(spacing: 6) {
             HStack(spacing: 8) {
-              Image(systemName: "arrow.2.squarepath").font(.system(size: 13)).foregroundStyle(C.textMuted)
-              TextField(tr("置換"), text: $replacement).textFieldStyle(.plain).font(.system(size: 13)).foregroundStyle(C.textPrimary)
+              Image(systemName: "arrow.2.squarepath").font(Typography.font(Typography.sidebar)).foregroundStyle(C.textMuted)
+              TextField(tr("置換"), text: $replacement).textFieldStyle(.plain).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textPrimary)
             }
-            .padding(.horizontal, 8).frame(height: 32)
+            .padding(.horizontal, 8).frame(height: RowHeight.control)
             .background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.control))
             .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.hairline))
             let canReplace = !hits.isEmpty && !replacing && !searching
             Button(action: replaceAll) {
-              Text(replacing ? tr("置換中…") : tr("すべて置換")).font(.system(size: 11, weight: .semibold))
+              Text(replacing ? tr("置換中…") : tr("すべて置換")).font(Typography.font(Typography.chromeStrong))
                 .foregroundStyle(canReplace ? C.canvas : C.textMuted)
-                .padding(.horizontal, 12).frame(height: 32)
+                .padding(.horizontal, 12).frame(height: RowHeight.control)
                 .background(canReplace ? C.textSecondary : W.medium, in: RoundedRectangle(cornerRadius: Radius.control))
             }.buttonStyle(.hoverWash).disabled(!canReplace)
           }
@@ -978,11 +978,11 @@
               ForEach(history, id: \.self) { q in
                 Button { query = q } label: {
                   HStack(spacing: 8) {
-                    Image(systemName: "clock.arrow.circlepath").font(.system(size: 11)).foregroundStyle(C.textMuted).frame(width: 14)
+                    Image(systemName: "clock.arrow.circlepath").font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted).frame(width: 14)
                     Text(q).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary).lineLimit(1)
                     Spacer(minLength: 0)
                   }
-                  .padding(.horizontal, 8).frame(height: 28).contentShape(Rectangle())
+                  .padding(.horizontal, 8).frame(height: RowHeight.default).contentShape(Rectangle())
                 }.buttonStyle(.hoverWash).help(tr("この語で検索"))
               }
             } else if tree {
@@ -998,12 +998,12 @@
               ForEach(indexedGroups, id: \.path) { group in
                 HStack(spacing: 6) {
                   FileIcon.forPath(group.path).image(size: 11, ink: C.textTertiary)
-                  Text(URL(fileURLWithPath: group.path).lastPathComponent).font(.system(size: 11, weight: .semibold)).foregroundStyle(C.textTertiary)
+                  Text(URL(fileURLWithPath: group.path).lastPathComponent).font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textTertiary)
                   Spacer(minLength: 0)
                   Text(group.path.split(separator: "/").dropLast().joined(separator: "/"))
                     .font(Typography.font(Typography.micro)).foregroundStyle(C.textMuted).lineLimit(1)
                 }
-                .padding(.horizontal, 8).frame(height: 26)
+                .padding(.horizontal, 8).frame(height: RowHeight.default)
                 ForEach(group.hits, id: \.index) { item in hitRow(item.index, item.hit, depth: 0) }
               }
             }
@@ -1012,9 +1012,9 @@
         HStack(spacing: 8) {
           ForEach([(tr("検索"), false), (tr("置換 ⌥⌘F"), true)], id: \.1) { label, mode in
             Button { replaceMode = mode } label: {
-              Text(label).font(.system(size: 11, weight: .semibold))
+              Text(label).font(Typography.font(Typography.chromeStrong))
                 .foregroundStyle(replaceMode == mode ? C.textPrimary : C.textTertiary)
-                .padding(.horizontal, 8).frame(height: 20)
+                .padding(.horizontal, 8).frame(height: RowHeight.compact)
                 .background(replaceMode == mode ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
             }.buttonStyle(.hoverWash)
           }
@@ -1022,7 +1022,7 @@
           Button { replaceMode.toggle() } label: { EmptyView() }
             .keyboardShortcut("f", modifiers: [.command, .option]).hidden()
         }
-        .padding(.horizontal, 12).frame(height: 34)
+        .padding(.horizontal, 12).frame(height: RowHeight.control)
         .overlay(alignment: .top) { Rectangle().fill(L.hairline).frame(height: 1) }
       }
     }
@@ -1036,7 +1036,7 @@
             .foregroundStyle(selected ? C.textPrimary : C.textSecondary).lineLimit(1)
           Spacer(minLength: 0)
         }
-        .padding(.leading, 8 + CGFloat(depth) * 12).padding(.trailing, 8).frame(height: 28)
+        .padding(.leading, 8 + CGFloat(depth) * 12).padding(.trailing, 8).frame(height: RowHeight.default)
         .background(selected ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
         .contentShape(Rectangle())
       }
@@ -1051,14 +1051,14 @@
         if open { collapsed.insert(row.path) } else { collapsed.remove(row.path) }
       } label: {
         HStack(spacing: 6) {
-          Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold)).foregroundStyle(C.textTertiary)
+          Image(systemName: "chevron.right").font(.system(size: Typography.chromeSize(9), weight: .semibold)).foregroundStyle(C.textTertiary)
             .rotationEffect(.degrees(open ? 90 : 0)).frame(width: 10)
           if row.kind == .file { FileIcon.forPath(row.path).image(size: 11, ink: C.textTertiary) }
-          Text(row.name).font(.system(size: 11, weight: .semibold)).foregroundStyle(C.textTertiary).lineLimit(1)
+          Text(row.name).font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textTertiary).lineLimit(1)
           Spacer(minLength: 0)
           Text("\(row.count)").font(Typography.font(Typography.micro)).monospacedDigit().foregroundStyle(C.textMuted)
         }
-        .padding(.leading, 8 + CGFloat(row.depth) * 12).padding(.trailing, 8).frame(height: 26)
+        .padding(.leading, 8 + CGFloat(row.depth) * 12).padding(.trailing, 8).frame(height: RowHeight.default)
         .contentShape(Rectangle())
       }.buttonStyle(.hoverWash).accessibilityHint(open ? tr("折りたたむ") : tr("展開する"))
     }
@@ -1066,9 +1066,9 @@
     /// Option toggle drawn as a code-styled chip (VS Code idiom) instead of a system checkbox.
     private func chip(_ label: Text, on: Binding<Bool>, help: String) -> some View {
       Button { on.wrappedValue.toggle() } label: {
-        label.font(.system(size: 11, weight: .semibold, design: .monospaced))
+        label.font(Typography.font(Typography.chromeStrong, family: .mono))
           .foregroundStyle(on.wrappedValue ? C.textPrimary : C.textMuted)
-          .frame(width: 30, height: 30)
+          .frame(width: RowHeight.control, height: RowHeight.control)
           .background(on.wrappedValue ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
           .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(on.wrappedValue ? L.ring : L.hairline))
       }.buttonStyle(.hoverWash).help(help).accessibilityLabel(help).accessibilityAddTraits(on.wrappedValue ? .isSelected : [])
@@ -1211,11 +1211,11 @@
             }
             Spacer(minLength: 0)
             if s.status == .attention || s.status == .blocked {
-              Image(systemName: "bell.badge.fill").font(.system(size: 13)).foregroundStyle(C.attention)
+              Image(systemName: "bell.badge.fill").font(Typography.font(Typography.sidebar)).foregroundStyle(C.attention)
                 .symbolEffect(.pulse).padding(.top, 5)
                 .help(text).accessibilityLabel(text)
             } else if s.status == .done {
-              Image(systemName: "checkmark.circle.fill").font(.system(size: 13)).foregroundStyle(C.success)
+              Image(systemName: "checkmark.circle.fill").font(Typography.font(Typography.sidebar)).foregroundStyle(C.success)
                 .padding(.top, 5).help(text).accessibilityLabel(text)
             }
           }
@@ -1343,7 +1343,7 @@
         SidebarRow(height: nil, action: { openHistory(history) }) {
           HStack(alignment: .top, spacing: 8) {
             ProviderAvatar(provider: history.provider, size: 30)
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
               HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(history.title).font(Typography.font(Typography.sidebarStrong)).foregroundStyle(C.textPrimary).lineLimit(1)
                 Spacer(minLength: 0)
@@ -1424,7 +1424,7 @@
           ProviderAvatar(provider: history.provider, size: 28)
           VStack(alignment: .leading, spacing: 4) {
             Text(history.title).font(.system(size: fontSize, weight: .semibold)).foregroundStyle(C.textPrimary).lineLimit(1)
-            HStack(spacing: 5) {
+            HStack(spacing: 4) {
               chip(history.provider.rawValue, tint: history.provider.tint)
               if let project = history.project { chip(URL(filePath: project).lastPathComponent, tint: projectTint(URL(filePath: project).lastPathComponent)) }
               chip(tr("依頼 %@ 件", history.promptCount))
@@ -1442,7 +1442,7 @@
             } label: { Image(systemName: "doc.on.doc").foregroundStyle(C.chromeInk) }
               .buttonStyle(.hoverWash).help(tr("再開コマンドをコピー: %@", command)).accessibilityLabel(tr("再開コマンドをコピー"))
           }
-        }.padding(.horizontal, 14).padding(.vertical, 8).background(C.chromeRaised)
+        }.padding(.horizontal, 12).padding(.vertical, 8).background(C.chromeRaised)
         ScrollView {
           LazyVStack(alignment: .leading, spacing: 0) {
             let items = AgentHistory.chatItems(transcript ?? [])
@@ -1457,8 +1457,8 @@
               // Progress sits on the agent's side, so it neither splits a run nor repeats the header.
               let side = { (m: AgentHistory.Message?) in m.map { $0.role == "user" } }
               let header = message.role != "user" && (newDay || side(previous) != false)
-              let top: CGFloat = previous == nil || newDay ? 0 : side(previous) == side(message) ? 10 : 22
-              if newDay { daySeparator(message.date).padding(.top, previous == nil ? 0 : 22).padding(.bottom, 16) }
+              let top: CGFloat = previous == nil || newDay ? 0 : side(previous) == side(message) ? 10 : 24
+              if newDay { daySeparator(message.date).padding(.top, previous == nil ? 0 : 24).padding(.bottom, 16) }
               if case .progress(let steps) = item {
                 ProgressRow(steps: steps, provider: history.provider, fontSize: fontSize, header: header).padding(.top, top)
               } else if message.text.hasPrefix("[Skill loaded") {
@@ -1480,7 +1480,7 @@
 
     private func systemPill(_ text: String, icon: String) -> some View {
       Label(text, systemImage: icon).font(.system(size: fontSize - 2)).foregroundStyle(C.textTertiary)
-        .padding(.horizontal, 10).padding(.vertical, 3).background(C.surfaceActive.opacity(0.7), in: Capsule())
+        .padding(.horizontal, 10).padding(.vertical, 4).background(C.surfaceActive.opacity(0.7), in: Capsule())
         .frame(maxWidth: .infinity)
     }
 
@@ -1489,16 +1489,16 @@
         if let tint { Circle().fill(tint).frame(width: 6, height: 6) }
         Text(text).lineLimit(1)
       }.font(.system(size: fontSize - 2)).foregroundStyle(C.textTertiary)
-        .padding(.horizontal, 7).padding(.vertical, 2)
-        .background(C.canvas, in: RoundedRectangle(cornerRadius: 4))
-        .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(C.divider.opacity(0.6), lineWidth: 1))
+        .padding(.horizontal, 8).padding(.vertical, 2)
+        .background(C.canvas, in: RoundedRectangle(cornerRadius: Radius.control))
+        .overlay(RoundedRectangle(cornerRadius: Radius.control).strokeBorder(C.divider.opacity(0.6), lineWidth: 1))
     }
 
     /// Centred day pill between turns from different days.
     private func daySeparator(_ date: Date) -> some View {
       Text(date.formatted(.dateTime.month().day().weekday(.abbreviated)))
         .font(.system(size: fontSize - 2)).foregroundStyle(C.textTertiary)
-        .padding(.horizontal, 10).padding(.vertical, 3).background(C.surfaceActive.opacity(0.7), in: Capsule())
+        .padding(.horizontal, 10).padding(.vertical, 4).background(C.surfaceActive.opacity(0.7), in: Capsule())
         .frame(maxWidth: .infinity)
     }
 
@@ -1577,7 +1577,7 @@
             VStack(alignment: .trailing, spacing: 4) {
               Text(inline(text)).font(.system(size: fontSize)).lineSpacing(3).foregroundStyle(C.textPrimary).textSelection(.enabled)
                 .padding(.horizontal, 16).padding(.vertical, 10)
-                .background(C.surfaceActive, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .background(C.surfaceActive, in: RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous))
               HStack(spacing: 6) {
                 if long { more }
                 if showTime || hovered {

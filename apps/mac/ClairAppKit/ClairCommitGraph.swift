@@ -20,12 +20,12 @@
 
     nonisolated static let pageSize = 400
     private static let laneWidth: CGFloat = 12
-    private static let rowHeight: CGFloat = 34
+    private static let rowHeight: CGFloat = RowHeight.control
     private static let lanePalette: [Color] = [C.debugBlue, C.codeString, C.codeKeyword, C.codeType, C.codeFunc, C.codeNumber, C.danger]
 
     var body: some View {
       if !FileManager.default.fileExists(atPath: root + "/.git") {
-        Text(tr("Git リポジトリではありません。")).font(.system(size: 12)).foregroundStyle(C.textTertiary)
+        Text(tr("Git リポジトリではありません。")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
           .frame(maxWidth: .infinity, maxHeight: .infinity).background(C.canvas)
       } else {
         Group { if let selected { detailView(selected) } else { list } }
@@ -45,7 +45,7 @@
               .onAppear { if i == graph.rows.count - 1 { Task { await loadMore() } } }
           }
           if loading { ProgressView().controlSize(.small).padding(8) }
-          if graph.rows.isEmpty, exhausted { Text(tr("コミットがありません")).font(.system(size: 12)).foregroundStyle(C.textTertiary).padding(12) }
+          if graph.rows.isEmpty, exhausted { Text(tr("コミットがありません")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).padding(12) }
         }.clairScroller()
       }
     }
@@ -56,17 +56,17 @@
       return Button { open(c.id) } label: {
         HStack(spacing: 10) {
           lanes(row).frame(width: CGFloat(row.width) * Self.laneWidth, height: Self.rowHeight)
-          Text(c.id.prefix(8)).font(.system(size: 11, design: .monospaced)).foregroundStyle(C.textMuted)
+          Text(c.id.prefix(8)).font(Typography.font(Typography.chrome, family: .mono)).foregroundStyle(C.textMuted)
           ForEach(c.refs, id: \.self) { ref in
-            Text(ref).font(.system(size: 10, weight: .semibold)).lineLimit(1)
+            Text(ref).font(Typography.font(Typography.chromeStrong)).lineLimit(1)
               .foregroundStyle(ref.hasPrefix("tag: ") ? C.codeType : C.textPrimary)
               .padding(.horizontal, 6).padding(.vertical, 2)
-              .background(C.surfaceActive, in: RoundedRectangle(cornerRadius: 4))
+              .background(C.surfaceActive, in: RoundedRectangle(cornerRadius: Radius.control))
           }
-          Text(c.subject).font(.system(size: 12, weight: c.isHead ? .semibold : .regular)).lineLimit(1)
+          Text(c.subject).font(Typography.font(c.isHead ? Typography.chromeStrong : Typography.chrome)).lineLimit(1)
             .foregroundStyle(on ? C.textPrimary : C.textSecondary)
           Spacer(minLength: 8)
-          Text("\(c.author) · \(c.date)").font(.system(size: 11)).lineLimit(1).foregroundStyle(C.textMuted)
+          Text("\(c.author) · \(c.date)").font(Typography.font(Typography.chrome)).lineLimit(1).foregroundStyle(C.textMuted)
         }
         .padding(.horizontal, 12).frame(maxWidth: .infinity, minHeight: Self.rowHeight, maxHeight: Self.rowHeight)
         .background(on ? C.surfaceActive : .clear)
@@ -106,17 +106,17 @@
       return VStack(alignment: .leading, spacing: 0) {
         Button { selected = nil } label: {
           Label(tr("グラフに戻る"), systemImage: "chevron.left")
-            .padding(.horizontal, 12).frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+            .padding(.horizontal, 12).frame(maxWidth: .infinity, minHeight: RowHeight.control, alignment: .leading)
         }
-        .buttonStyle(HoverWashStyle(radius: 0)).font(.system(size: 12)).foregroundStyle(C.textSecondary)
-        Text(subject).font(.system(size: 12, weight: .semibold)).foregroundStyle(C.textPrimary)
+        .buttonStyle(HoverWashStyle(radius: 0)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary)
+        Text(subject).font(Typography.font(Typography.title)).foregroundStyle(C.textPrimary)
           .lineLimit(3).help(subject).padding(.horizontal, 12).padding(.top, 4).padding(.bottom, 10)
       ScrollView {
         LazyVStack(alignment: .leading, spacing: 0, pinnedViews: .sectionHeaders) {
           if loadingFiles {
             ProgressView().frame(maxWidth: .infinity).padding(24)
           } else if files.isEmpty {
-            Text(tr("差分はありません。")).font(.system(size: 12)).foregroundStyle(C.textTertiary).frame(maxWidth: .infinity).padding(24)
+            Text(tr("差分はありません。")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).frame(maxWidth: .infinity).padding(24)
           }
           // Every file of the commit stacked; each DiffView gets its full height (19px rows) so only the outer
           // view scrolls vertically, and each file's header stays pinned until the next one pushes it off.
@@ -147,7 +147,7 @@
           .foregroundStyle(C.textSecondary).buttonStyle(.hoverWash)
           .help(split ? tr("差分を 1 列で表示") : tr("変更前と変更後を左右に並べて表示"))
       }
-      .padding(.horizontal, 16).frame(height: 30).background(C.canvas)
+      .padding(.horizontal, 16).frame(height: RowHeight.control).background(C.canvas)
       .overlay(alignment: .bottom) { Rectangle().fill(DesignTokens.Line.hairline).frame(height: 1) }
     }
 

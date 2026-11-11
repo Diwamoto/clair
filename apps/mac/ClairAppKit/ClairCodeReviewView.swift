@@ -60,7 +60,7 @@
       var out = AttributedString(text)
       for r in suspiciousCharacterRanges(in: text) {
         guard let range = Range(r, in: out) else { continue }
-        out[range].underlineStyle = Text.LineStyle(pattern: .solid, color: .red)
+        out[range].underlineStyle = Text.LineStyle(pattern: .solid, color: DesignTokens.Color.danger)
       }
       return out
     }
@@ -117,14 +117,14 @@
     private func addButton(_ n: Int, indent: CGFloat) -> some View {
       Button { composing = n; draft = "" } label: {
         HStack(spacing: 4) {
-          Image(systemName: "plus").font(.system(size: 10, weight: .bold))
+          Image(systemName: "plus").font(Typography.font(Typography.chromeStrong))
           Text(tr("コメント")).font(Typography.font(Typography.chrome))
         }
-        .foregroundStyle(C.textSecondary).padding(.horizontal, 8).frame(height: 22)
+        .foregroundStyle(C.textSecondary).padding(.horizontal, 8).frame(height: RowHeight.compact)
         .background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.control))
       }
       .buttonStyle(.hoverWash).accessibilityLabel(tr("%@ 行目にコメント", n))
-      .padding(.leading, indent).padding(.vertical, 3)
+      .padding(.leading, indent).padding(.vertical, 4)
     }
 
     private func composer(_ n: Int) -> some View {
