@@ -35,9 +35,8 @@ extension WorkbenchState {
       let state: TodoBoardCard.State =
         if t.done || t.stage == "done" { .done }
         else if (t.retry ?? 0) > Self.boardRetryLimit { .overLimit }
-        else if let s = session?.status, s == .running { .running }
-        else if session?.status == .blocked || session?.status == .attention || t.stage == "plan" || t.stage == "submit" { .waiting }
-        else { .running }
+        else if session?.status == .running { .running }
+        else { .waiting }  // blocked / bell / finished, or no live agent pane: nothing moves it until someone acts
       let project = live?.project ?? named
       let dir = (t.path as NSString).deletingPathExtension
       let artifacts = ["plan.md", "review.md"].map { "\(dir)/\($0)" }.filter { FileManager.default.fileExists(atPath: $0) }

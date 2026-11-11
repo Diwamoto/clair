@@ -1431,6 +1431,7 @@ import Observation
     struct AssociationDraft: Identifiable, Equatable { let id = UUID(); var ext: String; var lang: String }
     @State private var associationRows: [AssociationDraft] = []
     @State private var conciergePromptDraft = ""
+    @State private var conciergeAsk: String?
     @State private var conciergeCwdDraft = ""
     @State private var notificationTestResult: String?
     @State private var quota: [ProviderQuota] = []
@@ -3412,7 +3413,7 @@ import Observation
             ConciergeChatView(
               session: c.map { $0.launch.session ?? $0.session }, terminal: c.map { ($0.key, $0.launch) },
               status: c.flatMap { c in st.agentSessions.first { $0.project == c.project && $0.pane == c.pane }?.status },
-              start: { startConcierge($0) })
+              start: { startConcierge($0) }, ask: $conciergeAsk)
             .frame(width: 460)
             Divider()
             TodoBoardView(
@@ -3425,6 +3426,7 @@ import Observation
                 leaveConcierge()
               },
               openFile: { path in leaveConcierge(); store.run("file.open", ["path": .string(path)]) },
+              ask: { card in conciergeAsk = tr("TODO「%@」(%@)を進めて。", card.todo.title, card.todo.path) + "\n" },
               diffProject: { card in card.todo.branch.flatMap { b in st.projects.first { $0.branch == b }?.name } },
               openDiff: { name in
                 if name != st.project { store.run("project.switch", ["name": .string(name)]) }

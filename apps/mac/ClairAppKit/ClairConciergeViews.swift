@@ -42,6 +42,8 @@
     let status: AgentSession.Status?
     /// Starts the concierge with `message` as its first request (the one undecided thing is decided on send).
     let start: (String) -> Void
+    /// Text put into the composer from outside (a board card's "コンシェルジュに頼む"); cleared once taken.
+    @Binding var ask: String?
     /// nil until the transcript has been read once, so the empty state never flashes over a loading chat.
     @State private var messages: [AgentHistory.Message]?
     /// Kept across leaving and reopening the chat (the view is rebuilt each time).
@@ -108,6 +110,10 @@
       .frame(maxWidth: .infinity, maxHeight: .infinity).background(C.canvas)
       .overlay { hiddenTerminal }
       .task(id: session) { await follow() }
+      .onChange(of: ask, initial: true) { _, text in
+        guard let text else { return }
+        draft = text; focused = true; ask = nil
+      }
     }
 
     /// The concierge's raw terminal: mounted (so the composer can type into it) but invisible, except while it waits
@@ -734,6 +740,7 @@
     let projects: [String]
     let openPane: (TodoBoardCard) -> Void
     let openFile: (String) -> Void
+    let ask: (TodoBoardCard) -> Void
     /// The worktree Project of the card's branch, if Clair has it open; nil hides "diff を開く".
     let diffProject: (TodoBoardCard) -> String?
     let openDiff: (String) -> Void
@@ -908,6 +915,7 @@
             if let p = diffProject(c) { action(tr("diff を開く")) { openDiff(p) } }
             if let pr = c.todo.pr, let url = URL(string: pr), url.scheme == "https" { action(tr("PR を開く")) { NSWorkspace.shared.open(url) } }
             action(tr("TODO を開く")) { openFile(c.todo.path) }
+            if c.state != .done { action(tr("コンシェルジュに頼む")) { ask(c) } }
           }.padding(.top, 2)
         }
       }

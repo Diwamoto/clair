@@ -491,11 +491,11 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   設定「起動時にコンシェルジュを開く」(`startConcierge`、既定オフ = 前回の Project)がオンなら起動時にこの画面を開く(#77)。
   ⌃⌘0 とアクティビティバーのクリックで、コンシェルジュと Project の workspace を行き来する。
   コンシェルジュの画面の「ボード」(#78)は `stage` を持つ TODO を全 Project 横断で、列 = stage・行 = lane(無ければ `code`)に並べる。
-  `stage` の無い TODO はボードに出ず、TODO の sidebar は変わらない。カードの状態は、`agent` の pane が稼働中なら稼働中、
-  pane が承認待ち・bell、または stage が `plan` / `submit` ならあなた待ち、`retry` が 3 を超えたら差し戻し上限超過、
-  `stage: done` か `done: true` なら完了。Project は `agent` の pane の Project、無ければ `project:` key(名前かパス)。
+  `stage` の無い TODO はボードに出ず、TODO の sidebar は変わらない。カードの状態は、`stage: done` か `done: true` なら完了、`retry` が 3 を超えたら差し戻し上限超過、
+  `agent` の pane が稼働中なら稼働中、それ以外(pane が承認待ち・bell・終了、または担当の pane が無い)はあなた待ち(2026-11-11 オーナー依頼。
+  指示が無く止まっている TODO を稼働中と見せない)。Project は `agent` の pane の Project、無ければ `project:` key(名前かパス)。
   「あなた待ちだけ」と Project で絞り込め、カードを選ぶと retry / branch / pr / agent、工程の履歴(TODO 本文の `- <stage> <担当 terminal key> …` 行)、成果物(TODO の隣の `~/.clair/todo/<TODO 名>/plan.md` / `review.md` のうち在るもの。sandbox の子は `~/.clair` を見られないので、コンシェルジュが plan.md の中身を子の prompt に入れ、review.md もコンシェルジュが書く)と「ペインを開く」(Project を切り替えて
-  その pane へ)・「diff を開く」(`branch` の worktree Project に切り替えて変更一覧へ)・「PR を開く」(https のみ)・「TODO を開く」を出す。ボードは開いている間 2 秒ごとに TODO を読み直す。Design canvas にはまだ描かれていない(オーナー判断 2026-11-09)。
+  その pane へ)・「diff を開く」(`branch` の worktree Project に切り替えて変更一覧へ)・「PR を開く」(https のみ)・「TODO を開く」と、完了していないカードには「コンシェルジュに頼む」(チャットの送信欄に TODO のタイトルとパスを入れてフォーカスする。続けて指示を書き足して送る)を出す。ボードは開いている間 2 秒ごとに TODO を読み直す。Design canvas にはまだ描かれていない(オーナー判断 2026-11-09)。
 - 設定の「使用状況」はユーザーが送信した依頼・追記を 1 件として集計する。
   アクティビティ(今日・直近 7 日と前週比・連続日数・よく使う時間帯、直近 1 年の
   日別 activity calendar とエージェント別の絞り込み、時間帯ごとの合計と曜日 × 時間帯の
