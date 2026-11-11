@@ -186,7 +186,7 @@
   }
 
   struct CompletionList: View {
-    static let row: CGFloat = 22
+    static let row: CGFloat = RowHeight.compact
     let controller: CompletionController
 
     var body: some View {
@@ -195,11 +195,11 @@
           LazyVStack(spacing: 0) {
             ForEach(Array(controller.shown.enumerated()), id: \.offset) { i, item in
               HStack(spacing: 8) {
-                Text(item.label).font(.system(size: 12, design: .monospaced)).lineLimit(1)
+                Text(item.label).font(Typography.font(Typography.chrome, family: .mono)).lineLimit(1)
                   .foregroundStyle(i == controller.selected ? C.textPrimary : C.textSecondary)
                 Spacer(minLength: 0)
                 if let detail = item.detail {
-                  Text(detail).font(.system(size: 11)).lineLimit(1).truncationMode(.tail).foregroundStyle(C.textMuted)
+                  Text(detail).font(Typography.font(Typography.chrome)).lineLimit(1).truncationMode(.tail).foregroundStyle(C.textMuted)
                 }
               }
               .padding(.horizontal, 8).frame(height: Self.row)

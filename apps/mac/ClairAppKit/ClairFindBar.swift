@@ -33,7 +33,7 @@
       HStack(alignment: .top, spacing: 4) {
         if replacement != nil {
           Button { showReplace.toggle() } label: { Image(systemName: showReplace ? "chevron.down" : "chevron.right") }
-            .buttonStyle(.hoverWash).foregroundStyle(C.textTertiary).frame(width: 16, height: 24)
+            .buttonStyle(.hoverWash).foregroundStyle(C.textTertiary).frame(width: 16, height: RowHeight.default)
             .help(tr("置換の切り替え")).accessibilityLabel(tr("置換の切り替え"))
         }
         VStack(alignment: .leading, spacing: 4) {
@@ -72,14 +72,14 @@
 
     private func input(_ label: String, _ text: Binding<String>, _ f: Field) -> some View {
       TextField(label, text: text).textFieldStyle(.plain).foregroundStyle(C.textPrimary)
-        .focused($field, equals: f).frame(width: 200, height: 24).padding(.horizontal, 6)
+        .focused($field, equals: f).frame(width: 200, height: RowHeight.default).padding(.horizontal, 6)
         .background(C.canvas, in: RoundedRectangle(cornerRadius: Radius.control))
         .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(field == f ? L.ring : L.strong))
         .accessibilityLabel(label)
     }
 
     private func toggle(_ glyph: String, _ help: String, _ on: Binding<Bool>) -> some View {
-      Button { on.wrappedValue.toggle() } label: { Text(glyph).font(.system(size: 11, weight: .semibold, design: .monospaced)) }
+      Button { on.wrappedValue.toggle() } label: { Text(glyph).font(Typography.font(Typography.chromeStrong, family: .mono)) }
         .buttonStyle(.hoverWash).foregroundStyle(on.wrappedValue ? C.textPrimary : C.textMuted)
         .background(on.wrappedValue ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
         .help(help).accessibilityLabel(help).accessibilityAddTraits(on.wrappedValue ? .isSelected : [])

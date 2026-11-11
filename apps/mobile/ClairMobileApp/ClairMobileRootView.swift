@@ -995,7 +995,7 @@ struct ClairMobileRootView: View {
 
     var body: some View {
       VStack(spacing: 0) {
-        HStack(spacing: 7) {
+        HStack(spacing: 8) {
           Text(target.scope.projectID.description)
           Text("·").foregroundStyle(.tertiary)
           Text(target.scope.worktreeID?.description ?? "Project root")
@@ -1031,10 +1031,10 @@ struct ClairMobileRootView: View {
           .foregroundStyle(.secondary)
           .frame(maxWidth: .infinity, alignment: .leading)
           .padding(.horizontal, 16)
-          .padding(.vertical, 7)
+          .padding(.vertical, 8)
 
-        VStack(spacing: 9) {
-          HStack(spacing: 7) {
+        VStack(spacing: 8) {
+          HStack(spacing: 8) {
             keyButton("esc", .escape)
             keyButton("tab", .tab)
             keyButton("^C", .control("c"))
@@ -1057,7 +1057,7 @@ struct ClairMobileRootView: View {
           }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 9)
+        .padding(.vertical, 8)
         .background(.thinMaterial)
       }
       .navigationTitle(target.scope.sessionID?.description ?? "terminal")

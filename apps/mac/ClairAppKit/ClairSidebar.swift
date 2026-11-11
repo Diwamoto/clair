@@ -4,9 +4,9 @@ import ClairDesignSystem
 
 /// The sidebar's one design system: every panel (explorer, changes, file browser, sessions, concierge,
 /// TODO, debug) builds its rows, headings and empty states from these, so geometry and type match.
-/// Geometry: an 8pt inset, a rounded 28pt row with 8pt inner padding (text starts at 16pt), 12pt per level.
+/// Geometry: an 8pt inset, a rounded 26pt row with 8pt inner padding (text starts at 16pt), 12pt per level.
 enum SidebarStyle {
-  static let rowHeight: CGFloat = 28
+  static let rowHeight: CGFloat = RowHeight.default
   static let inset: CGFloat = 8
   static let indent: CGFloat = 12
   /// Where a row's text (and every heading) starts: inset + inner padding.
@@ -14,8 +14,8 @@ enum SidebarStyle {
   // Computed through `Typography.font`, so the 11pt step follows the material (12 under Liquid Glass) like the rest of the chrome.
   static var title: Font { Typography.font(Typography.sidebar) }
   static var titleStrong: Font { Typography.font(Typography.sidebarStrong) }
-  static var detail: Font { .system(size: Typography.chromeSize(Typography.sidebarMicro.size)) }
-  static var heading: Font { .system(size: Typography.chromeSize(Typography.sidebarMicro.size), weight: .semibold) }
+  static var detail: Font { Typography.font(Typography.chrome) }
+  static var heading: Font { Typography.font(Typography.chromeStrong) }
 }
 
 /// A row: inset, rounded, hover wash, glass-aware selection. `trailing` sits over the row (not inside the
@@ -69,7 +69,7 @@ struct SidebarChevron: View {
   let open: Bool
   init(open: Bool) { self.open = open }
   var body: some View {
-    Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold)).foregroundStyle(DesignTokens.Color.textTertiary)
+    Image(systemName: "chevron.right").font(.system(size: Typography.chromeSize(9), weight: .semibold)).foregroundStyle(DesignTokens.Color.textTertiary)
       .rotationEffect(.degrees(open ? 90 : 0)).frame(width: 10)
   }
 }
@@ -128,7 +128,7 @@ struct SidebarAction: View {
   }
   var body: some View {
     SidebarRow(action: action) {
-      Image(systemName: systemImage).font(.system(size: 11)).foregroundStyle(DesignTokens.Color.textTertiary).frame(width: 16)
+      Image(systemName: systemImage).font(Typography.font(Typography.chrome)).foregroundStyle(DesignTokens.Color.textTertiary).frame(width: 16)
       Text(title).foregroundStyle(DesignTokens.Color.textSecondary).lineLimit(1)
       Spacer(minLength: 0)
     }

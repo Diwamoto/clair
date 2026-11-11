@@ -48,10 +48,10 @@
         Button { zoom = 1; pan = .zero } label: { Image(systemName: "arrow.counterclockwise") }
           .help(tr("元のサイズに戻す")).accessibilityLabel(tr("元のサイズに戻す")).disabled(zoom == 1)
       }
-      .buttonStyle(.borderless).font(.system(size: 11)).foregroundStyle(C.textSecondary)
-      .padding(.horizontal, 6).padding(.vertical, 3)
-      .background(C.panel, in: RoundedRectangle(cornerRadius: 5))
-      .overlay(RoundedRectangle(cornerRadius: 5).stroke(C.divider))
+      .buttonStyle(.borderless).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary)
+      .padding(.horizontal, 6).padding(.vertical, 4)
+      .background(C.panel, in: RoundedRectangle(cornerRadius: Radius.control))
+      .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(C.divider))
     }
 
     /// Zooms about the viewport center: the pan scales with the diagram so the same spot stays in view.

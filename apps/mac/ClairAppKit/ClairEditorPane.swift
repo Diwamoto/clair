@@ -594,8 +594,8 @@
         Button { copy(path); copiedAt = .now } label: {
           HStack(spacing: 4) {
             ForEach(Array(parts.enumerated()), id: \.offset) { i, part in
-              if i > 0 { Text("›").font(.system(size: 11)).foregroundStyle(C.textMuted) }
-              Text(part).font(.system(size: 11, weight: i == parts.count - 1 ? .semibold : .regular))
+              if i > 0 { Text("›").font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted) }
+              Text(part).font(Typography.font(i == parts.count - 1 ? Typography.chromeStrong : Typography.chrome))
                 .foregroundStyle(i == parts.count - 1 ? C.textSecondary : C.textMuted).lineLimit(1)
             }
           }.padding(.horizontal, 4).padding(.vertical, 2)
@@ -604,12 +604,12 @@
         .help(tr("クリックで相対パスをコピー")).accessibilityLabel(tr("相対パスをコピー"))
         Spacer(minLength: 0)
         if let onPreview, TableFile.separator(path) != nil {
-          Button(action: onPreview) { Image(systemName: "tablecells").font(.system(size: 11)) }
+          Button(action: onPreview) { Image(systemName: "tablecells").font(Typography.font(Typography.chrome)) }
             .buttonStyle(.borderless).foregroundStyle(C.textSecondary)
             .help(tr("表で編集 (⌘⇧V)")).accessibilityLabel(tr("表エディタを開く"))
         }
         if let onClose {
-          Button(action: onClose) { Image(systemName: "xmark").font(.system(size: 10)) }
+          Button(action: onClose) { Image(systemName: "xmark").font(Typography.font(Typography.chrome)) }
             .buttonStyle(.borderless).foregroundStyle(C.textSecondary)
             .help(tr("分割を閉じる (⌘W)")).accessibilityLabel(tr("分割を閉じる"))
         }
@@ -619,10 +619,10 @@
     /// The breadcrumb's "copied" toast, under the 24px row; fades after 1.5s.
     @ViewBuilder private var copiedToast: some View {
       if copiedAt != nil {
-        Text(tr("パスをコピーしました")).font(.system(size: 12)).foregroundStyle(C.textPrimary)
-          .padding(.horizontal, 10).padding(.vertical, 5)
+        Text(tr("パスをコピーしました")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textPrimary)
+          .padding(.horizontal, 10).padding(.vertical, 4)
           .sheetSurface()
-          .padding(.top, 30).transition(.opacity)
+          .padding(.top, 32).transition(.opacity)
           .task(id: copiedAt) {
             try? await Task.sleep(for: .seconds(1.5))
             if !Task.isCancelled { copiedAt = nil }
@@ -654,7 +654,7 @@
     ]
 
     var body: some View {
-      VStack(spacing: 28) {
+      VStack(spacing: 24) {
         Canvas { ctx, size in
           let u = size.width / 20
           for (r, color) in Self.mark {
@@ -894,7 +894,7 @@
 
     var body: some View {
       HStack(spacing: 8) {
-        Image(systemName: "arrow.triangle.merge").font(.system(size: 11)).foregroundStyle(C.attention)
+        Image(systemName: "arrow.triangle.merge").font(Typography.font(Typography.chrome)).foregroundStyle(C.attention)
         if conflicts.isEmpty {
           Text(tr("競合はすべて解決されました")).foregroundStyle(C.textSecondary)
         } else {
@@ -920,7 +920,7 @@
           .disabled(!conflicts.isEmpty).help(tr("保存して git add します"))
       }
       .font(Typography.font(Typography.chrome)).lineLimit(1)
-      .padding(.horizontal, 12).frame(height: 30)
+      .padding(.horizontal, 12).frame(height: RowHeight.control)
       .background(C.attention.opacity(0.08))
       .overlay(alignment: .bottom) { Rectangle().fill(DesignTokens.Line.hairline).frame(height: 1) }
       .accessibilityElement(children: .contain).accessibilityLabel(tr("マージ競合"))

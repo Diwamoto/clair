@@ -33,7 +33,7 @@
                 MarkdownBlockView(block: b.block, root: root, path: path, scale: fontSize / 13).id(i)
               }
             }
-            .padding(20)
+            .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
           }
           .background(C.canvas)
@@ -50,7 +50,7 @@
         .environment(\.colorScheme, theme == "ライト" ? .light : theme == "ダーク" ? .dark : colorScheme)
       } else {
         Text(tr("Markdown ファイルを開くとプレビューを表示します。"))
-          .font(.system(size: 12)).foregroundStyle(C.textTertiary)
+          .font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
           .frame(maxWidth: .infinity, maxHeight: .infinity).background(C.canvas)
       }
     }
@@ -84,12 +84,12 @@
           Text(text).font(.system(size: 12 * scale, design: .monospaced)).foregroundStyle(C.code).padding(10)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(C.panel, in: RoundedRectangle(cornerRadius: 6))
+        .background(C.panel, in: RoundedRectangle(cornerRadius: Radius.card))
       case .quote(let text):
         inline(text).font(.system(size: 13 * scale)).foregroundStyle(C.textTertiary)
           .padding(.leading, 12).overlay(alignment: .leading) { Rectangle().fill(C.divider).frame(width: 3) }
       case .table(let header, let rows):
-        Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+        Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
           GridRow { ForEach(Array(header.enumerated()), id: \.offset) { inline($1).fontWeight(.semibold) } }
           Divider()
           ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
@@ -170,7 +170,7 @@
             Button(tr("行を追加")) { mutate(m, sep) { $0.append(Array(repeating: "", count: width)) } }
             Button(tr("列を追加")) { mutate(m, sep) { rs in for i in rs.indices { rs[i].append("") } } }
           }
-          .buttonStyle(.borderless).font(.system(size: 11)).padding(.horizontal, 10).padding(.vertical, 5).background(C.chrome)
+          .buttonStyle(.borderless).font(Typography.font(Typography.chrome)).padding(.horizontal, 10).padding(.vertical, 4).background(C.chrome)
         }
         .defaultScrollAnchor(.topLeading)
         .background(C.canvas)
@@ -179,7 +179,7 @@
         .onChange(of: cell) { old, _ in if old != nil { commit(m, sep) } }
       } else {
         Text(tr("CSV / TSV ファイルを開くと表で編集できます。"))
-          .font(.system(size: 12)).foregroundStyle(C.textTertiary)
+          .font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
           .frame(maxWidth: .infinity, maxHeight: .infinity).background(C.canvas)
       }
     }
@@ -188,9 +188,9 @@
 
     /// Row/column header cell: grey band like a spreadsheet, highlighted on the selected row/column.
     private func gutter(_ label: String, width: CGFloat, active: Bool) -> some View {
-      Text(label).font(.system(size: 10, weight: active ? .semibold : .regular).monospacedDigit())
+      Text(label).font(Typography.font(active ? Typography.chromeStrong : Typography.chrome).monospacedDigit())
         .foregroundStyle(active ? C.debugBlueText : C.textTertiary)
-        .frame(width: width, height: 22).background(active ? C.surfaceActive : C.chrome)
+        .frame(width: width, height: RowHeight.compact).background(active ? C.surfaceActive : C.chrome)
         .overlay(alignment: .trailing) { C.divider.frame(width: 0.5) }
         .overlay(alignment: .bottom) { C.divider.frame(height: 0.5) }
     }
@@ -199,11 +199,11 @@
       let selected = cell == Cell(r: r, c: c)
       let numeric = Double(binding(r, c).wrappedValue.trimmingCharacters(in: .whitespaces)) != nil
       return TextField("", text: binding(r, c))
-        .textFieldStyle(.plain).font(.system(size: 12, weight: r == 0 ? .semibold : .regular).monospacedDigit())
+        .textFieldStyle(.plain).font(Typography.font(r == 0 ? Typography.chromeStrong : Typography.chrome).monospacedDigit())
         .multilineTextAlignment(numeric && r > 0 ? .trailing : .leading)
         .focused($cell, equals: Cell(r: r, c: c))
         .onSubmit { commit(m, sep); if r + 1 < rows.count { cell = Cell(r: r + 1, c: c) } }  // Return moves down, as in Excel
-        .padding(.horizontal, 6).frame(width: Self.colWidth, height: 22)
+        .padding(.horizontal, 6).frame(width: Self.colWidth, height: RowHeight.compact)
         .background(r == 0 ? C.surfaceActive : r % 2 == 0 ? C.surfaceHover : C.canvas)
         .overlay(alignment: .trailing) { C.divider.opacity(0.6).frame(width: 0.5) }
         .overlay(alignment: .bottom) { C.divider.opacity(0.6).frame(height: 0.5) }

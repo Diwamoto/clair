@@ -254,7 +254,7 @@
 
     var body: some View {
       HStack(spacing: 8) {
-        Image(systemName: "sparkles").font(.system(size: 11)).foregroundStyle(C.textTertiary)
+        Image(systemName: "sparkles").font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
         Text(tr("Claude Code が %@ の変更を提案しています", path)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary)
           .lineLimit(1).truncationMode(.middle)
         Spacer(minLength: 8)
@@ -264,7 +264,7 @@
           .keyboardShortcut(.return, modifiers: [.command])
       }
       .font(Typography.font(Typography.chrome))
-      .padding(.horizontal, 12).frame(height: 34)
+      .padding(.horizontal, 12).frame(height: RowHeight.control)
       .background(C.chromeRaised)
       .overlay(alignment: .bottom) { Rectangle().fill(L.hairline).frame(height: 1) }
       .accessibilityElement(children: .contain).accessibilityLabel(tr("Claude Code の提案"))

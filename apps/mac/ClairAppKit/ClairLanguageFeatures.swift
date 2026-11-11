@@ -297,7 +297,7 @@
   struct LanguagePopupView: View {
     let features: LanguageFeatures
     @FocusState private var fieldFocused: Bool
-    static let row: CGFloat = 22
+    static let row: CGFloat = RowHeight.compact
 
     /// Width and height for `popup`; text is measured roughly (12pt mono ≈ 7.3pt/char) and capped.
     static func size(_ popup: LanguageFeatures.Popup) -> CGSize {
@@ -314,7 +314,7 @@
       case .actions(let actions):
         let rows = CGFloat(actions.count + 1)  // room for the "Agent で直す" row when there is one
         return CGSize(width: 380, height: min(rows * row + 8, 8 * row + 8))
-      case .rename: return CGSize(width: 280, height: 36)
+      case .rename: return CGSize(width: 280, height: RowHeight.control)
       }
     }
 
@@ -353,14 +353,14 @@
         case .none: EmptyView()
         case .info(let text):
           ScrollView {
-            Text(Self.hoverMarkdown(text)).font(.system(size: 12, design: .monospaced)).foregroundStyle(C.textSecondary)
-              .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).padding(9)
+            Text(Self.hoverMarkdown(text)).font(Typography.font(Typography.chrome, family: .mono)).foregroundStyle(C.textSecondary)
+              .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).padding(8)
           }.accessibilityLabel(tr("ホバー情報"))
         case .signature(let s): signature(s)
         case .actions(let actions): list(actions)
         case .rename:
           TextField("", text: Binding(get: { features.name }, set: { features.name = $0 }))
-            .textFieldStyle(.plain).font(.system(size: 12, design: .monospaced)).foregroundStyle(C.textPrimary)
+            .textFieldStyle(.plain).font(Typography.font(Typography.chrome, family: .mono)).foregroundStyle(C.textPrimary)
             .focused($fieldFocused).onAppear { fieldFocused = true }
             .onSubmit { features.submitRename() }
             .onExitCommand { features.close() }
@@ -379,10 +379,10 @@
       let param = active.map { String(label[$0]) } ?? ""
       let tail = active.map { String(label[$0.upperBound...]) } ?? ""
       return VStack(alignment: .leading, spacing: 2) {
-        (Text(head).foregroundStyle(C.textSecondary) + Text(param).foregroundStyle(C.textPrimary).bold() + Text(tail).foregroundStyle(C.textSecondary))
-          .font(.system(size: 12, design: .monospaced)).lineLimit(1)
+        (Text(head).foregroundStyle(C.textSecondary) + Text(param).foregroundStyle(C.textPrimary).fontWeight(.semibold) + Text(tail).foregroundStyle(C.textSecondary))
+          .font(Typography.font(Typography.chrome, family: .mono)).lineLimit(1)
         if let doc = s.documentation {
-          Text(doc).font(.system(size: 11)).foregroundStyle(C.textMuted).lineLimit(4)
+          Text(doc).font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted).lineLimit(4)
         }
       }
       .padding(.horizontal, 10).padding(.vertical, 6).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -396,8 +396,8 @@
             ForEach(Array(actions.enumerated()), id: \.offset) { i, action in
               HStack(spacing: 8) {
                 Image(systemName: action.kind?.hasPrefix("quickfix") == true ? "wrench.adjustable" : "lightbulb")
-                  .font(.system(size: 10)).foregroundStyle(C.textTertiary).frame(width: 14)
-                Text(action.title).font(.system(size: 12)).lineLimit(1)
+                  .font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).frame(width: 14)
+                Text(action.title).font(Typography.font(Typography.chrome)).lineLimit(1)
                   .foregroundStyle(i == features.selected ? C.textPrimary : C.textSecondary)
                 Spacer(minLength: 0)
               }
@@ -410,8 +410,8 @@
             if features.agentPrompt != nil {
               let i = actions.count
               HStack(spacing: 8) {
-                Image(systemName: "sparkles").font(.system(size: 10)).foregroundStyle(C.textTertiary).frame(width: 14)
-                Text(tr("Agent で直す")).font(.system(size: 12)).lineLimit(1)
+                Image(systemName: "sparkles").font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).frame(width: 14)
+                Text(tr("Agent で直す")).font(Typography.font(Typography.chrome)).lineLimit(1)
                   .foregroundStyle(i == features.selected ? C.textPrimary : C.textSecondary)
                 Spacer(minLength: 0)
               }

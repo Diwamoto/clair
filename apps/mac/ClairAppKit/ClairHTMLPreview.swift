@@ -20,7 +20,7 @@
           .accessibilityLabel(tr("HTML プレビュー"))
       } else {
         Text(tr("HTML ファイルを開くとプレビューを表示します。"))
-          .font(.system(size: 12)).foregroundStyle(DesignTokens.Color.textTertiary)
+          .font(Typography.font(Typography.chrome)).foregroundStyle(DesignTokens.Color.textTertiary)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
           .background(DesignTokens.Color.canvas)
       }

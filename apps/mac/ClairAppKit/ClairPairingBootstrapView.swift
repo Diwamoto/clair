@@ -5,6 +5,7 @@ import Foundation
 #if os(macOS)
   import CoreImage
   import CoreImage.CIFilterBuiltins
+  import ClairDesignSystem
   import SwiftUI
 
   /// N09: the Mac-side half of the pairing bootstrap gap N08 found. This is
@@ -26,7 +27,7 @@ import Foundation
 
     public var body: some View {
       VStack(alignment: .leading, spacing: 12) {
-        Text("Pair a device").font(.headline)
+        Text("Pair a device").font(Typography.font(Typography.title))
         Button(issuance == nil ? "Pair a device" : "Issue a new code") {
           issue()
         }
@@ -34,8 +35,8 @@ import Foundation
 
         if let errorMessage {
           Text(errorMessage)
-            .foregroundStyle(.red)
-            .font(.callout)
+            .foregroundStyle(DesignTokens.Color.danger)
+            .font(Typography.font(Typography.chrome))
         }
 
         if let issuance {
@@ -47,16 +48,16 @@ import Foundation
               .frame(width: 180, height: 180)
           }
           Text(issuance.code)
-            .font(.footnote.monospaced())
+            .font(Typography.font(Typography.chrome, family: .mono))
             .textSelection(.enabled)
           Text("Fingerprint: \(issuance.fingerprint.description.prefix(16))…")
-            .font(.caption.monospaced())
+            .font(Typography.font(Typography.chrome, family: .mono))
             .foregroundStyle(.secondary)
           Text("Expires \(issuance.expiresAt.formatted(date: .omitted, time: .standard))")
-            .font(.caption)
+            .font(Typography.font(Typography.chrome))
             .foregroundStyle(.secondary)
           Text("Confirm this fingerprint matches the pairing device before trusting it.")
-            .font(.footnote)
+            .font(Typography.font(Typography.chrome))
             .foregroundStyle(.secondary)
         }
       }

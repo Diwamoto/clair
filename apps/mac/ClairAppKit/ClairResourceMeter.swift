@@ -129,17 +129,17 @@ struct ClairResourceMeter: View {
   var body: some View {
     let memory = Self.bytes(sample.totalFootprint)
     HStack(spacing: 6) {
-      Image(systemName: "gauge.with.dots.needle.33percent").font(.system(size: 12))
+      Image(systemName: "gauge.with.dots.needle.33percent").font(Typography.font(Typography.chrome))
       Text("CPU \(Int(cpu.rounded()))% · \(memory)")
     }
-    .font(.system(size: 12)).monospacedDigit()  // same step as the quota meter beside it
+    .font(Typography.font(Typography.chrome)).monospacedDigit()  // same step as the quota meter beside it
     .foregroundStyle(C.textTertiary)
     .footerItem()
     .onHover { hovered = $0 }
     .popover(isPresented: $hovered, arrowEdge: .top) {
       let app = sample.footprintBytes[getpid()] ?? 0
       Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
-        GridRow { Text("Clair 全体").font(.system(size: 14, weight: .semibold)); Text("") }
+        GridRow { Text("Clair 全体").font(Typography.font(Typography.title)); Text("") }
         row("CPU", String(format: "%.1f%%", cpu))
         GridRow { spark(history.map(\.cpu), tint: C.debugBlue).frame(height: 36).gridCellColumns(2) }
         row("メモリ", memory)
@@ -148,10 +148,10 @@ struct ClairResourceMeter: View {
         row("　子プロセス", Self.bytes(sample.totalFootprint - app))
         row("プロセス数", "\(sample.footprintBytes.count)")
         Divider().gridCellColumns(2)
-        GridRow { Text("上位プロセス").font(.system(size: 13, weight: .semibold)); Text("") }
+        GridRow { Text("上位プロセス").font(Typography.font(Typography.title)); Text("") }
         ForEach(ProcessSample.top(sample, cpu: perProcess), id: \.pid) { p in
           GridRow {
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
               Text(p.pid == getpid() ? "Clair" : p.name).lineLimit(1).truncationMode(.middle)
               if let where_ = owner(p.pid) { Text(where_).foregroundStyle(C.textMuted).lineLimit(1).truncationMode(.middle) }
             }.help("pid \(p.pid)")

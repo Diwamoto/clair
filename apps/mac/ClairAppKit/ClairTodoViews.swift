@@ -29,10 +29,10 @@
       ZStack(alignment: .top) {
         Color(red: 8 / 255, green: 10 / 255, blue: 12 / 255).opacity(0.68).onTapGesture(perform: cancel)
         VStack(alignment: .leading, spacing: 12) {
-          Text(isNew ? tr("TODO を追加") : tr("TODO を編集")).font(.system(size: 13, weight: .semibold)).foregroundStyle(C.textPrimary)
+          Text(isNew ? tr("TODO を追加") : tr("TODO を編集")).font(Typography.font(Typography.title)).foregroundStyle(C.textPrimary)
           TextField(tr("タイトル"), text: $title)
-            .focused($focused).textFieldStyle(.plain).font(.system(size: 13)).foregroundStyle(C.textPrimary)
-            .padding(.horizontal, 8).frame(height: 32)
+            .focused($focused).textFieldStyle(.plain).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textPrimary)
+            .padding(.horizontal, 8).frame(height: RowHeight.control)
             .background(C.canvas, in: RoundedRectangle(cornerRadius: Radius.control))
             .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.hairline))
             .onSubmit(commit)
@@ -43,7 +43,7 @@
             Toggle(tr("期限"), isOn: $hasDue)
             DatePicker("", selection: $due, displayedComponents: .date).labelsHidden().disabled(!hasDue)
             Spacer(minLength: 0)
-          }.font(.system(size: 12)).foregroundStyle(C.textSecondary)
+          }.font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary)
           HStack {
             Spacer()
             Button(tr("キャンセル"), action: cancel).keyboardShortcut(.cancelAction)

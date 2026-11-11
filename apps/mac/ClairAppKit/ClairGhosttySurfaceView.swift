@@ -1101,10 +1101,10 @@ import Foundation
         Text(tr("ターミナルとの接続が切れました")).foregroundStyle(C.textPrimary)
         Button(action, action: onTap)
       }
-      .font(.system(size: 12))
+      .font(Typography.font(Typography.chrome))
       .padding(.horizontal, 12).padding(.vertical, 8)
-      .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-      .overlay(RoundedRectangle(cornerRadius: 8).stroke(C.divider))
+      .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Radius.overlay))
+      .overlay(RoundedRectangle(cornerRadius: Radius.overlay).stroke(C.divider))
       .accessibilityElement(children: .contain)
     }
   }
