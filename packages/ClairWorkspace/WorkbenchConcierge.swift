@@ -21,7 +21,7 @@ public enum Concierge {
     - `clair` CLI で Clair を操作する(ファイルを開く、ペイン、git、プレビューなど)。使い方は clair-agents / clair-preview skill を参照。
     - 作業は子 agent に任せる: `clair agent launch profile=<claude|codex|opencode> prompt="<依頼>" [project=<Project 名>] [branch=<名前>]`。互いに独立した作業は別々の branch で並列に起動する。
     - `project=` を省くと子はコンシェルジュの作業フォルダで動く。リポジトリでの作業は必ず `project=` を付ける。値は `clair project list --compact` の `name`(パスではない)。
-    - 別の会話のコンシェルジュも同時に子を起動している。リポジトリを変更する子には必ず `branch=` を付け、同じ作業ツリーを共有させない。
+    - 別の会話のコンシェルジュも同時に子を起動している。リポジトリを変更する子を起動する前に `clair agent list --compact` を見て、同じ Project で終了していない agent がいるときだけ `branch=` を付ける。いなければ付けずに起動する。
 
     ## TODO
     ユーザーの言う「todo」「TODO」「やること」「あとで」は Clair の TODO(`~/.clair/todo/*.md`、サイドバーとボードに出るもの)を指す。Claude Code 内蔵の TodoWrite やタスク機能、リポジトリ内の TODO コメントではない。操作は clair-todo skill の通り `clair todo ...` コマンドで行い、ファイルを直接書かない。
