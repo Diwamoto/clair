@@ -31,7 +31,7 @@ import Observation
         configuration.label
           // Pressed is a deeper wash plus a slight sink, so a click reads distinctly from a hover.
           .overlay(configuration.isPressed ? DesignTokens.Wash.strongest : (hovered && enabled) ? DesignTokens.Wash.selected : .clear, in: RoundedRectangle(cornerRadius: radius))
-          .scaleEffect(configuration.isPressed && !reduceMotion ? 0.92 : 1)
+          .scaleEffect(configuration.isPressed && !reduceMotion ? CGFloat(Motion.pressScale) : 1)
           .contentShape(Rectangle())
           .onHover { hovered = $0 }
           .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: hovered)
@@ -62,10 +62,10 @@ import Observation
     @Environment(\.clairGlass) private var glass
     func body(content: Content) -> some View {
       if glass && capsule {
-        content.padding(.horizontal, 9).frame(height: 22).background(DesignTokens.Glass.capsuleFill, in: Capsule())
+        content.padding(.horizontal, 8).frame(height: RowHeight.compact).background(DesignTokens.Glass.capsuleFill, in: Capsule())
           .padding(.horizontal, 2).frame(maxHeight: .infinity).contentShape(Rectangle())
       } else {
-        content.padding(.horizontal, 5).frame(maxHeight: .infinity).contentShape(Rectangle())
+        content.padding(.horizontal, 4).frame(maxHeight: .infinity).contentShape(Rectangle())
       }
     }
   }
@@ -1649,7 +1649,7 @@ import Observation
                 if i > 0, !glass { Rectangle().fill(Color(white: 0.95, opacity: 0.09)).frame(width: 1, height: 22).padding(.horizontal, 4) }
                 projectGroup(p, colorKey: p.color.flatMap { DesignTokens.GroupColor.resolve($0) == nil ? nil : $0 } ?? projectColors[i % projectColors.count].rawValue)
               }
-              Button { store.run("project.choose") } label: { Image(systemName: "plus").font(.system(size: 13)).foregroundStyle(C.chromeInk).frame(width: 30, height: 30) }
+              Button { store.run("project.choose") } label: { Image(systemName: "plus").font(Typography.font(Typography.sidebar)).foregroundStyle(C.chromeInk).frame(width: RowHeight.control, height: RowHeight.control) }
                 .buttonStyle(.hoverWash).help(tr("フォルダを開く"))
             }
             .frame(minWidth: g.size.width, minHeight: g.size.height, alignment: .leading)
@@ -1659,12 +1659,12 @@ import Observation
         HStack(spacing: 4) {
           Button { store.run("palette.search") } label: {
             HStack(spacing: 4) {
-              Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(C.textMuted)
+              Image(systemName: "magnifyingglass").font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted)
               Text(tr("ファイル、シンボル")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
               Spacer(minLength: 0)
               Text("⌘⇧F").font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted)
             }
-            .padding(.horizontal, glass ? 11 : 8).frame(width: 200, height: glass ? 30 : 28)
+            .padding(.horizontal, glass ? 12 : 8).frame(width: 200, height: glass ? RowHeight.control : RowHeight.default)
             .fieldWell(radius: Radius.pill())
           }.buttonStyle(HoverWashStyle(radius: Radius.pill())).help(tr("検索"))
           titlebarAction("command", tr("コマンドパレット"), on: st.palette == .commands) { store.run("palette.commands") }
@@ -1681,8 +1681,8 @@ import Observation
 
     private func titlebarAction(_ icon: String, _ help: String, on: Bool, _ action: @escaping () -> Void) -> some View {
       Button(action: action) {
-        Image(systemName: icon).font(.system(size: 13)).foregroundStyle(on ? C.chromeInk : C.textMuted)
-          .frame(width: 30, height: 30).controlFill(on: on, flatRadius: Radius.card)
+        Image(systemName: icon).font(Typography.font(Typography.sidebar)).foregroundStyle(on ? C.chromeInk : C.textMuted)
+          .frame(width: RowHeight.control, height: RowHeight.control).controlFill(on: on, flatRadius: Radius.card)
       }.buttonStyle(HoverWashStyle(radius: Radius.pill())).help(help)
     }
 
@@ -1706,7 +1706,7 @@ import Observation
         if switches { store.state.collapsedGroups.remove(p.name); store.run("project.switch", ["name": .string(p.name)]) }
         else {
           // Folding sucks the tabs back into the chip; unfolding pours them out of it.
-          withAnimation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.86)) {
+          withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration)) {
             if folded { store.state.collapsedGroups.remove(p.name) } else { store.state.collapsedGroups.insert(p.name) }
           }
         }
@@ -1718,8 +1718,8 @@ import Observation
           // review feedback: a small dot beside the label read as an
           // afterthought), not a separate dot — active groups get the
           // stronger alpha pair, matching the titlebar's active tab group.
-          Text(p.displayName).font(.system(size: 12, weight: .semibold)).foregroundStyle(active ? C.textPrimary : C.textSecondary).lineLimit(1).fixedSize()
-            .padding(.horizontal, 10).frame(height: 26)
+          Text(p.displayName).font(Typography.font(Typography.chromeStrong)).foregroundStyle(active ? C.textPrimary : C.textSecondary).lineLimit(1).fixedSize()
+            .padding(.horizontal, 10).frame(height: RowHeight.default)
             // Glass: the vessel around the whole group carries the colour, so the chip itself is bare.
             .background(glass ? .clear : color.opacity(active ? 0.22 : 0.1), in: RoundedRectangle(cornerRadius: Radius.card))
             .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(glass ? .clear : color.opacity(active ? 0.55 : 0.28)))
@@ -1727,7 +1727,7 @@ import Observation
             // Only agents waiting for input badge the chip; plain bells / exits stay in the notification popover.
             let waiting = st.agentSessions.filter { $0.project == p.name && $0.status == .attention }.count
             if waiting > 0 {
-              Text("\(waiting)").font(.system(size: 9, weight: .bold)).foregroundStyle(C.textPrimary)
+              Text("\(waiting)").font(.system(size: Typography.chromeSize(9), weight: .semibold)).foregroundStyle(C.textPrimary)
                 .padding(.horizontal, 4).background(color, in: Capsule()).offset(x: 2, y: -4)
             }
           }
@@ -1754,7 +1754,7 @@ import Observation
         }
         .clairContextMenu(menus) { projectMenu(p, colorKey: colorKey, folded: folded) }
         if !folded {
-          HStack(spacing: glass ? 3 : 4) {
+          HStack(spacing: 4) {
             ForEach(Array(orderedTabs.enumerated()), id: \.element) { i, tab in
               if i > 0, !glass { Rectangle().fill(L.chromeSoft).frame(width: 1, height: 18) }
               switch tab {
@@ -1803,7 +1803,7 @@ import Observation
         }
       }
       // Glass: one tinted vessel holds the chip and its tabs (canvas Tokens `GLASS の中身`).
-      .padding(.horizontal, glass ? 3 : 0).frame(height: glass ? 36 : nil)
+      .padding(.horizontal, glass ? 4 : 0).frame(height: glass ? 36 : nil)
       .background(glass ? color.opacity(active ? 0.16 : 0.07) : .clear, in: Capsule())
       .overlay(Capsule().stroke(glass ? color.opacity(active ? 0.5 : 0.24) : .clear))
     }
@@ -1992,7 +1992,7 @@ import Observation
           Button { store.run("git.graph") } label: {
             Label(tr("コミットグラフを開く"), systemImage: "point.3.connected.trianglepath.dotted")
               .foregroundStyle(C.textPrimary)
-              .frame(maxWidth: .infinity).frame(height: 28)
+              .frame(maxWidth: .infinity).frame(height: RowHeight.default)
               .controlFill(edged: true)
           }
             .buttonStyle(HoverWashStyle(radius: Radius.pill(Radius.control)))
@@ -2037,11 +2037,11 @@ import Observation
     private var settingsHeader: some View {
       HStack(spacing: 0) {
         Color.clear.frame(width: 76 + 25)  // room for the native traffic lights (inset 5pt by AppDelegate)
-        Text(tr("設定")).font(.system(size: 16, weight: .semibold)).foregroundStyle(C.textPrimary)
+        Text(tr("設定")).font(Typography.font(Typography.title)).foregroundStyle(C.textPrimary)
         Spacer(minLength: 0)
         Button { store.run("settings.close") } label: {
-          Image(systemName: "xmark").font(.system(size: 13, weight: .medium)).foregroundStyle(C.textMuted)
-            .frame(width: 26, height: 26)
+          Image(systemName: "xmark").font(.system(size: Typography.chromeSize(13), weight: .medium)).foregroundStyle(C.textMuted)
+            .frame(width: RowHeight.default, height: RowHeight.default)
         }.buttonStyle(.hoverWash).keyboardShortcut(.cancelAction).padding(.trailing, 16).help(tr("設定を閉じる"))
       }
       .frame(height: ChromeBudget.titlebar + ChromeBudget.glassReach).padding(.bottom, -ChromeBudget.glassReach)
@@ -2052,8 +2052,8 @@ import Observation
 
     private var settingsPanel: some View {
       VStack(alignment: .leading, spacing: 12) {
-        Text(tr("設定を検索")).font(.system(size: 15)).foregroundStyle(C.textMuted)
-          .padding(.horizontal, 8).frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+        Text(tr("設定を検索")).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textMuted)
+          .padding(.horizontal, 8).frame(maxWidth: .infinity, minHeight: RowHeight.control, alignment: .leading)
           .background(C.chrome, in: RoundedRectangle(cornerRadius: Radius.control))
           .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.hairline))
         VStack(alignment: .leading, spacing: 0) {
@@ -2061,9 +2061,9 @@ import Observation
             let selected = st.section == section
             Button { store.run("settings.open", ["section": .string(section)]) } label: {
               Text(tr(section))
-                .font(.system(size: 15, weight: selected ? .semibold : .regular))
+                .font(Typography.font(selected ? Typography.sidebarStrong : Typography.sidebar))
                 .foregroundStyle(selected ? C.textPrimary : C.textSecondary)
-                .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: RowHeight.control, alignment: .leading)
                 .padding(.horizontal, 8)
                 .background(selected ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
             }
@@ -2154,8 +2154,8 @@ import Observation
       }
       if let body {
         VStack(alignment: .leading, spacing: 10) {
-          Text(body.title).font(.system(size: 14, weight: .semibold)).foregroundStyle(C.textPrimary)
-          if let note = body.note { Text(note).font(.system(size: 13)).foregroundStyle(C.textTertiary) }
+          Text(body.title).font(Typography.font(Typography.title)).foregroundStyle(C.textPrimary)
+          if let note = body.note { Text(note).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary) }
           if body.actions, case .available(let u) = store.update {
             HStack(spacing: 8) {
               Button(tr("あとで")) { store.dismissedUpdate = u.version }
@@ -2163,7 +2163,7 @@ import Observation
             }
           }
         }
-        .padding(14).frame(width: 300, alignment: .leading)
+        .padding(12).frame(width: 300, alignment: .leading)
         .sheetSurface()
         .transition(.opacity)
       }
@@ -2253,7 +2253,7 @@ import Observation
     private var todoList: some View {
       VStack(alignment: .leading, spacing: 0) {
         SidebarHeading(tr("TODO")) {
-          Button { todoDraft = (ClairTodo(path: "", title: ""), true) } label: { Image(systemName: "plus").font(.system(size: 11)) }
+          Button { todoDraft = (ClairTodo(path: "", title: ""), true) } label: { Image(systemName: "plus").font(Typography.font(Typography.chrome)) }
             .buttonStyle(.hoverWash).foregroundStyle(C.textSecondary).help(tr("TODO を追加")).accessibilityLabel(tr("TODO を追加"))
         }
         if todos.isEmpty {
@@ -2262,7 +2262,7 @@ import Observation
         ForEach(todos, id: \.path) { t in
           treeRow(depth: 0, selected: st.active == t.path, action: { store.run("file.open", ["path": .string(t.path)]) }) {
             Button { saveTodo(t.with { $0.done.toggle() }) } label: {
-              Image(systemName: t.done ? "checkmark.circle.fill" : "circle").font(.system(size: 12))
+              Image(systemName: t.done ? "checkmark.circle.fill" : "circle").font(Typography.font(Typography.sidebar))
             }.buttonStyle(.plain).foregroundStyle(C.textTertiary).accessibilityLabel(t.done ? tr("未完了に戻す") : tr("完了にする"))
             Text("P\(t.priority)").font(Typography.font(Typography.sidebarMicro))
               .foregroundStyle(t.priority == 1 && !t.done ? C.danger : C.textTertiary)
@@ -2438,7 +2438,7 @@ import Observation
           Spacer()
           Button { review = nil } label: { Image(systemName: "xmark").foregroundStyle(C.chromeInk) }.buttonStyle(.hoverWash)
             .help(tr("レビューを閉じる（コメントは残ります）"))
-        }.padding(.horizontal, 16).frame(height: 30).background(C.canvas)
+        }.padding(.horizontal, 16).frame(height: RowHeight.control).background(C.canvas)
           .overlay(alignment: .bottom) { Rectangle().fill(L.hairline).frame(height: 1) }
         HStack(spacing: 0) {
           if r.files.count > 1 {
@@ -2503,11 +2503,11 @@ import Observation
               treeRow(depth: row.depth - 1, selected: on, action: { reviewFile = nil; review?.selected = f.path }) {
                 Color.clear.frame(width: 10)
                 FileIcon.forPath(f.path).image(size: 10, ink: on ? C.textSecondary : C.textTertiary).frame(width: 16)
-                Text(row.label).font(.system(size: 13, weight: on ? .semibold : .regular)).foregroundStyle(on ? C.textPrimary : C.textSecondary).lineLimit(1)
+                Text(row.label).font(Typography.font(on ? Typography.sidebarStrong : Typography.sidebar)).foregroundStyle(on ? C.textPrimary : C.textSecondary).lineLimit(1)
                 Spacer(minLength: 0)
                 if let n = counts[f.path] {
-                  Text("\(n)").font(.system(size: 11, weight: .semibold)).foregroundStyle(C.textSecondary)
-                    .padding(.horizontal, 5).frame(minWidth: 16, minHeight: 16).background(C.surfaceActive, in: Capsule())
+                  Text("\(n)").font(Typography.font(Typography.chromeStrong)).foregroundStyle(C.textSecondary)
+                    .padding(.horizontal, 4).frame(minWidth: 16, minHeight: 16).background(C.surfaceActive, in: Capsule())
                 }
               }
             } else {
@@ -2517,7 +2517,7 @@ import Observation
               }) {
                 chevron(open: open)
                 FileIcon.folder(open: open).image(size: 11, ink: C.textTertiary).frame(width: 16)
-                Text(row.label).font(.system(size: 13)).foregroundStyle(C.textSecondary).lineLimit(1)
+                Text(row.label).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textSecondary).lineLimit(1)
                 Spacer(minLength: 0)
               }
             }
@@ -2533,14 +2533,14 @@ import Observation
           at: CGPoint(x: sendFrame.maxX, y: sendFrame.minY - 4))
       } label: {
         HStack(spacing: 6) {
-          Image(systemName: "paperplane.fill").font(.system(size: 11))
-          Text(tr("送信先")).font(.system(size: 12, weight: .semibold))
-          if count > 0 { Text("\(count)").font(.system(size: 11, weight: .semibold)).monospacedDigit() }
-          Image(systemName: "chevron.up").font(.system(size: 8, weight: .semibold))
+          Image(systemName: "paperplane.fill").font(Typography.font(Typography.chrome))
+          Text(tr("送信先")).font(Typography.font(Typography.chromeStrong))
+          if count > 0 { Text("\(count)").font(Typography.font(Typography.chromeStrong)).monospacedDigit() }
+          Image(systemName: "chevron.up").font(.system(size: Typography.chromeSize(9), weight: .semibold))
         }
-        .foregroundStyle(C.canvas).padding(.horizontal, 14).frame(height: 32)
+        .foregroundStyle(C.canvas).padding(.horizontal, 12).frame(height: RowHeight.control)
         .background(count > 0 ? C.textSecondary : C.textMuted, in: Capsule())
-        .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
+        .overlayShadow()
         .contentShape(Capsule())
       }
       .buttonStyle(.plain).disabled(count == 0)
@@ -2657,11 +2657,11 @@ import Observation
         if store.scanning && st.files.isEmpty {
           SidebarNote(tr("読み込み中…"))
         } else {
-          // Project root: uppercase, branch glyph, no chevron — it reads as a
+          // Project root: heading type, branch glyph, no chevron — it reads as a
           // section label, not one more row in the same list as its children.
           // Folds the whole tree (GUI-local); click-to-collapse is unchanged.
           treeRow(depth: 0, selected: false, action: { rootFolded.toggle() }) {
-            Text(st.project).font(SidebarStyle.heading).textCase(.uppercase).foregroundStyle(C.textTertiary)
+            Text(st.project).font(SidebarStyle.heading).foregroundStyle(C.textTertiary)
             Spacer(minLength: 0)
             if let added = currentProject?.folders?.count, added > 0 {
               Text(tr("%@ フォルダ", "\(added + 1)")).font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textTertiary)
@@ -2678,10 +2678,10 @@ import Observation
                 treeRow(depth: r.depth, selected: on || explorerSel.contains(r.id), action: { explorerClick(r.id) { store.run("tab.open", ["path": .string(f.path)]) } }) {
                   Color.clear.frame(width: 10)  // chevron slot: a file lines up with its sibling folders
                   FileIcon.forPath(f.path).image(size: 10, ink: on ? C.textSecondary : C.textTertiary).frame(width: 16)
-                  Text(r.label).font(.system(size: 13, weight: on ? .semibold : .regular)).foregroundStyle(Self.changeColor(ranks[f.path]) ?? (r.ignored ? C.textMuted : on ? C.textPrimary : C.textSecondary)).lineLimit(1)
+                  Text(r.label).font(Typography.font(on ? Typography.sidebarStrong : Typography.sidebar)).foregroundStyle(Self.changeColor(ranks[f.path]) ?? (r.ignored ? C.textMuted : on ? C.textPrimary : C.textSecondary)).lineLimit(1)
                   Spacer(minLength: 0)
                   if let tint = Self.changeColor(ranks[f.path]) {
-                    Text(st.dirty.contains(f.path) ? "M" : f.status ?? "M").font(.system(size: 12, weight: .semibold)).foregroundStyle(tint)
+                    Text(st.dirty.contains(f.path) ? "M" : f.status ?? "M").font(Typography.font(Typography.chromeStrong)).foregroundStyle(tint)
                   }
                 }
                 .clairContextMenu(menus) { multiMenu(r.id) ?? fileMenu(f.path, tab: false) }
@@ -2692,7 +2692,7 @@ import Observation
                 treeRow(depth: r.depth, selected: explorerSel.contains(r.id), action: { explorerClick(r.id) { store.run("explorer.toggle", ["path": .string(r.id)]) } }) {
                   chevron(open: open)
                   FileIcon.folder(open: open).image(size: 11, ink: C.textTertiary).frame(width: 16)
-                  Text(r.label).font(.system(size: 13, weight: r.section ? .semibold : .regular)).foregroundStyle(Self.changeColor(ranks[r.id]) ?? (r.section ? C.textPrimary : r.ignored ? C.textMuted : C.textSecondary)).lineLimit(1)
+                  Text(r.label).font(Typography.font(r.section ? Typography.sidebarStrong : Typography.sidebar)).foregroundStyle(Self.changeColor(ranks[r.id]) ?? (r.section ? C.textPrimary : r.ignored ? C.textMuted : C.textSecondary)).lineLimit(1)
                   Spacer(minLength: 0)
                   if let tint = Self.changeColor(ranks[r.id]) { Circle().fill(tint).frame(width: 6, height: 6) }
                 }
@@ -3038,7 +3038,7 @@ import Observation
       }
       guard let id = FileProposal.id(tab: path) else { return nil }
       guard let p = st.fileProposals[id] else {
-        return AnyView(Text(tr("この提案は Clair の再起動で失われました")).font(.system(size: 12)).foregroundStyle(C.textTertiary)
+        return AnyView(Text(tr("この提案は Clair の再起動で失われました")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
           .frame(maxWidth: .infinity, maxHeight: .infinity).background(C.canvas))
       }
       return AnyView(FileProposalView(
@@ -3075,9 +3075,9 @@ import Observation
         HStack(spacing: 4) {
           Button { startDebugFromUI() } label: {
             Image(systemName: "play.fill")
-              .font(.system(size: 12))
+              .font(Typography.font(Typography.chrome))
               .foregroundStyle(C.debugBlueText)
-              .frame(width: 28, height: 28)
+              .frame(width: SidebarStyle.rowHeight, height: SidebarStyle.rowHeight)
               .background(C.debugBlue.opacity(0.16), in: RoundedRectangle(cornerRadius: Radius.control))
           }
           .buttonStyle(.hoverWash).help(tr("デバッグを開始"))
@@ -3091,7 +3091,7 @@ import Observation
               Text(debugMode == "test" ? tr("Go: package テスト") : debugMode == "attach" ? tr("プロセスに attach") : tr("Go: 現在のファイル"))
                 .lineLimit(1)
               Spacer(minLength: 0)
-              Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
+              Image(systemName: "chevron.down").font(.system(size: Typography.chromeSize(9), weight: .semibold))
             }
             .font(SidebarStyle.title)
             .foregroundStyle(C.textSecondary)
@@ -3123,7 +3123,7 @@ import Observation
                 if let rel = store.state.active { store.buffers.reveal(rel, line: target, column: -1) }  // select the line
               }) {
                 Button { _ = store.run("debug.breakpoint", ["path": .string(path), "line": .int(line)]) } label: {
-                  Image(systemName: "circle.fill").font(.system(size: 9)).foregroundStyle(C.danger)
+                  Image(systemName: "circle.fill").font(Typography.font(Typography.micro)).foregroundStyle(C.danger)
                     .frame(width: 16, height: SidebarStyle.rowHeight).contentShape(Rectangle())
                 }.buttonStyle(.plain).help(tr("ブレークポイントを削除")).accessibilityLabel(tr("ブレークポイントを削除"))
                 Text("\(URL(fileURLWithPath: path).lastPathComponent):\(status?.line ?? line)")
@@ -3138,7 +3138,7 @@ import Observation
           ForEach(session.threads) { thread in
             let on = session.selectedThread == thread.id
             SidebarRow(selected: on, action: { _ = store.run("debug.selectThread", ["id": .int(thread.id)]) }) {
-              Image(systemName: on ? "checkmark.circle.fill" : "circle.grid.2x2").font(.system(size: 11)).foregroundStyle(C.textTertiary).frame(width: 16)
+              Image(systemName: on ? "checkmark.circle.fill" : "circle.grid.2x2").font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).frame(width: 16)
               Text(thread.name).foregroundStyle(on ? C.textPrimary : C.textSecondary).lineLimit(1)
               Spacer(minLength: 0)
             }
@@ -3233,7 +3233,7 @@ import Observation
     private var debugToolbar: some View {
         HStack(spacing: 2) {
           Image(systemName: "line.3.horizontal")
-            .font(.system(size: 10)).foregroundStyle(C.textMuted)
+            .font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted)
             .frame(width: 14, height: 20)
           Rectangle().fill(L.strong).frame(width: 1, height: 18).padding(.horizontal, 4)
           debugAction("play.fill", tr("続行"), "debug.continue", enabled: store.debugSession?.phase == .stopped)
@@ -3245,18 +3245,18 @@ import Observation
           debugAction("arrow.clockwise", tr("再起動"), "debug.restart", enabled: store.debugSession != nil)
           debugAction("stop.fill", tr("終了"), "debug.stop", enabled: store.debugSession != nil)
         }
-        .padding(.horizontal, 4).frame(height: 34)
+        .padding(.horizontal, 4).frame(height: RowHeight.control)
         .background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.card))
         .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(L.strong))
-        .shadow(color: .black.opacity(0.4), radius: 10, y: 8)
+        .overlayShadow()
         .accessibilityElement(children: .contain)
         .accessibilityLabel(tr("デバッグ操作"))
     }
 
     private func debugAction(_ symbol: String, _ title: String, _ command: String, enabled: Bool) -> some View {
       Button { _ = store.run(command, confirmed: command == "debug.restart") } label: {
-        Image(systemName: symbol).font(.system(size: 12)).foregroundStyle(command == "debug.stop" ? C.danger : command == "debug.continue" ? C.debugBlueText : C.textSecondary)
-          .frame(width: 28, height: 28)
+        Image(systemName: symbol).font(Typography.font(Typography.chrome)).foregroundStyle(command == "debug.stop" ? C.danger : command == "debug.continue" ? C.debugBlueText : C.textSecondary)
+          .frame(width: RowHeight.default, height: RowHeight.default)
           .background(command == "debug.continue" && enabled ? C.debugBlue.opacity(0.16) : Color.clear,
             in: RoundedRectangle(cornerRadius: Radius.control))
       }.buttonStyle(.hoverWash).help(title).disabled(!enabled)
@@ -3522,8 +3522,8 @@ import Observation
     private var settingsMain: some View {
       ScrollView {
         VStack(alignment: .leading, spacing: 8) {
-          Text(tr(st.section)).font(.system(size: 25, weight: .semibold)).foregroundStyle(C.textPrimary)
-          Text(Self.sectionNotes[st.section].map { tr($0) } ?? tr("%@ の設定です。", tr(st.section))).font(.system(size: 15)).foregroundStyle(C.textTertiary)
+          Text(tr(st.section)).font(Typography.font(Typography.title)).foregroundStyle(C.textPrimary)
+          Text(Self.sectionNotes[st.section].map { tr($0) } ?? tr("%@ の設定です。", tr(st.section))).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
             .padding(.bottom, 16)
           switch st.section {
           case "使用状況":
@@ -3575,19 +3575,19 @@ import Observation
             SettingsCard(title: tr("コンシェルジュ")) {
               switchRow(tr("起動時にコンシェルジュを開く"), "startConcierge", note: tr("オフなら前回の Project を開きます。⌃⌘0 でいつでも切り替えられます。"))
               VStack(alignment: .leading, spacing: 6) {
-                Text(tr("作業フォルダ")).font(.system(size: 13))
+                Text(tr("作業フォルダ")).font(Typography.font(Typography.sidebar))
                 TextField(tr("空欄なら ~/.clair/concierge"), text: $conciergeCwdDraft)
                   .textFieldStyle(.roundedBorder).accessibilityLabel(tr("作業フォルダ"))
                   .onSubmit { saveConcierge(["cwd": .string(conciergeCwdDraft)]) }
-                Text(tr("そのフォルダのプロジェクトスキルと CLAUDE.md が読み込まれます。")).font(.system(size: 11)).foregroundStyle(C.textTertiary)
-                Text(tr("指示")).font(.system(size: 13)).padding(.top, 6)
+                Text(tr("そのフォルダのプロジェクトスキルと CLAUDE.md が読み込まれます。")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+                Text(tr("指示")).font(Typography.font(Typography.sidebar)).padding(.top, 6)
                 TextEditor(text: $conciergePromptDraft)
-                  .font(.system(size: 12)).frame(height: 120)
-                  .overlay(RoundedRectangle(cornerRadius: 6).stroke(L.strong)).accessibilityLabel(tr("指示"))
+                  .font(Typography.font(Typography.sidebar)).frame(height: 120)
+                  .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.strong)).accessibilityLabel(tr("指示"))
                 Button(tr("保存")) {
                   saveConcierge(["prompt": .string(conciergePromptDraft), "cwd": .string(conciergeCwdDraft)])
                 }
-                Text(tr("変えて保存すると今のコンシェルジュを終了し、次に開いたときに新しい内容で起動します。内容が変わると起動前に確認します。")).font(.system(size: 11)).foregroundStyle(C.textTertiary)
+                Text(tr("変えて保存すると今のコンシェルジュを終了し、次に開いたときに新しい内容で起動します。内容が変わると起動前に確認します。")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
               }
               .padding(.vertical, 8)
               .onAppear { conciergePromptDraft = st.conciergePrompt; conciergeCwdDraft = st.conciergeCwd }
@@ -3614,8 +3614,8 @@ import Observation
                 ForEach($associationRows) { $row in
                   HStack(spacing: 8) {
                     TextField("tpl", text: $row.ext).textFieldStyle(.plain)
-                      .padding(.horizontal, 8).frame(width: 160, height: 28)
-                      .background(RoundedRectangle(cornerRadius: 6).fill(C.surfaceActive))
+                      .padding(.horizontal, 8).frame(width: 160, height: RowHeight.default)
+                      .background(RoundedRectangle(cornerRadius: Radius.control).fill(C.surfaceActive))
                       .accessibilityLabel(tr("拡張子"))
                     Picker(tr("言語"), selection: $row.lang) {
                       ForEach(EditorLanguageID.allCases, id: \.rawValue) { Text($0.rawValue).tag($0.rawValue) }
@@ -3662,8 +3662,8 @@ import Observation
             EmptyView()
           }
         }
-        .font(.system(size: 15))
-        .padding(.horizontal, 40).padding(.vertical, 40).frame(maxWidth: 880, alignment: .leading).frame(maxWidth: .infinity, alignment: .leading)
+        .font(Typography.font(Typography.sidebar))
+        .padding(.horizontal, 24).padding(.vertical, 24).frame(maxWidth: 880, alignment: .leading).frame(maxWidth: .infinity, alignment: .leading)
         // Destination change: short cross-fade on the screen token; SwiftUI retargets it mid-flight (interruptible), and reduce motion swaps instantly.
         .id(st.section).transition(.opacity)
       }
@@ -3738,16 +3738,16 @@ import Observation
       SettingsCard(title: tr("バージョン")) {
         SettingsRow(title: tr("現在のバージョン"), note: "\(c.channel.displayName) \(c.currentVersion)") {
           if c.channel == .dev {
-            Text(tr("Dev ビルドは更新フィードを持ちません。")).font(.system(size: 14)).foregroundStyle(C.textMuted)
+            Text(tr("Dev ビルドは更新フィードを持ちません。")).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textMuted)
           } else {
             switch store.update {
-            case .idle: Text(tr("最新の状態です。")).font(.system(size: 14)).foregroundStyle(C.textTertiary)
-            case .checking: Text(tr("確認中…")).font(.system(size: 14)).foregroundStyle(C.textTertiary)
-            case .installing: Text(tr("更新を適用しています。完了後に再起動します。")).font(.system(size: 14)).foregroundStyle(C.textTertiary)
-            case .failed(let m): Text(m).font(.system(size: 14)).foregroundStyle(C.textTertiary)
+            case .idle: Text(tr("最新の状態です。")).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
+            case .checking: Text(tr("確認中…")).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
+            case .installing: Text(tr("更新を適用しています。完了後に再起動します。")).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
+            case .failed(let m): Text(m).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
             case .available(let u):
               HStack(spacing: 8) {
-                Text(tr("%@ が利用できます", u.version)).font(.system(size: 14)).foregroundStyle(C.textSecondary)
+                Text(tr("%@ が利用できます", u.version)).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textSecondary)
                 Button(tr("適用して再起動")) { Task { await store.installUpdate() } }
               }
             }
@@ -3814,7 +3814,7 @@ import Observation
           }
         } label: {
           Text(AgentProfile.named(st.choices["defaultAgent"] ?? "")?.title ?? "Agent")
-            .font(.system(size: 14)).foregroundStyle(C.textSecondary)
+            .font(Typography.font(Typography.sidebar)).foregroundStyle(C.textSecondary)
         }
       }
     }
@@ -3855,7 +3855,7 @@ import Observation
           Text(quota.isEmpty ? tr("利用枠を取得中…") : tr("利用枠 —")).foregroundStyle(C.textMuted)
         }
       }
-      .font(.system(size: 12)).monospacedDigit()  // one step above the bar's 11pt: the number the owner reads most (2026-10-13)
+      .font(Typography.font(Typography.sidebar)).monospacedDigit()  // one step above the bar's 11pt: the number the owner reads most (2026-10-13)
       .footerItem(capsule: true)
       .onHover { quotaHovered = $0 }
       .popover(isPresented: $quotaHovered, arrowEdge: .top) {
@@ -3864,10 +3864,10 @@ import Observation
             Text(tr("利用枠を取得中…")).foregroundStyle(C.textTertiary)
           }
           ForEach(quota, id: \.provider) { provider in
-            VStack(alignment: .leading, spacing: 7) {
+            VStack(alignment: .leading, spacing: 8) {
               HStack {
                 quotaProviderIcon(provider.provider, size: 20)
-                Text(provider.provider).font(.system(size: 14, weight: .semibold))
+                Text(provider.provider).font(Typography.font(Typography.title))
                 Spacer()
                 if case .ok = provider.state {
                   Text(provider.isStale(now: now) ? tr("古い値 · %@ 取得", provider.fetchedAt.formatted(date: .omitted, time: .shortened)) : tr("%@ 取得", provider.fetchedAt.formatted(date: .omitted, time: .shortened)))
@@ -3930,8 +3930,8 @@ import Observation
     private var noticeButton: some View {
       let unread = st.notices.unread()
       return Button { store.run("notice.toggle") } label: {
-        HStack(spacing: 3) {
-          Image(systemName: unread > 0 ? "bell.badge" : "bell").font(.system(size: 11))
+        HStack(spacing: 4) {
+          Image(systemName: unread > 0 ? "bell.badge" : "bell").font(Typography.font(Typography.chrome))
           if unread > 0 { Text("\(unread)").foregroundStyle(C.attention) }
         }.footerItem(capsule: true)
       }
@@ -3955,20 +3955,20 @@ import Observation
 
     /// One notice: the terminal's title, Project · agent · terminal · fact, then what the agent said.
     private func noticeContent(_ n: WorkbenchNotice, close: (() -> Void)? = nil) -> some View {
-      VStack(alignment: .leading, spacing: 3) {
+      VStack(alignment: .leading, spacing: 4) {
         HStack(spacing: 8) {
           Circle().fill(n.read ? Color.clear : n.kind == .exited && n.exitCode != 0 ? C.danger : C.attention).frame(width: 6, height: 6)
-          Text(n.sessionTitle ?? tr("ターミナル %@", n.pane)).font(.system(size: 13, weight: .semibold)).foregroundStyle(C.textPrimary).lineLimit(1)
+          Text(n.sessionTitle ?? tr("ターミナル %@", n.pane)).font(Typography.font(Typography.title)).foregroundStyle(C.textPrimary).lineLimit(1)
           Spacer(minLength: 8)
           Text(n.at.formatted(date: .omitted, time: .shortened)).foregroundStyle(C.textMuted)
           if let close {
-            Button(action: close) { Image(systemName: "xmark").font(.system(size: 9, weight: .semibold)).frame(width: 16, height: 16) }
+            Button(action: close) { Image(systemName: "xmark").font(.system(size: Typography.chromeSize(9), weight: .semibold)).frame(width: 16, height: 16) }
               .buttonStyle(.hoverWash).foregroundStyle(C.textMuted).help(tr("閉じる")).accessibilityLabel(tr("閉じる"))
           }
         }
         Group {
           Text(n.kind == .posted ? tr("%@ · %@", n.project, n.title) : tr("%@ · ターミナル %@ · %@", n.project, n.pane, n.title)).foregroundStyle(n.kind == .exited && n.exitCode != 0 ? C.attention : C.textTertiary).lineLimit(1)
-          if let body = n.sourceBody, !body.isEmpty { Text(body).font(.system(size: 12)).foregroundStyle(C.textSecondary).lineLimit(3) }
+          if let body = n.sourceBody, !body.isEmpty { Text(body).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary).lineLimit(3) }
         }.padding(.leading, 14)
       }
       .font(Typography.font(Typography.chrome)).monospacedDigit()
@@ -3986,14 +3986,14 @@ import Observation
       if cards.count > 4 {
         Button { store.run("notice.toggle") } label: {
           Text(tr("ほか %@ 件 · ⇧⌘H で一覧", cards.count - 4)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
-            .padding(.horizontal, 10).frame(height: 24)
+            .padding(.horizontal, 10).frame(height: RowHeight.default)
             .background(C.chromeRaised, in: Capsule()).overlay(Capsule().stroke(L.strong))
         }.buttonStyle(.plain)
       }
       ForEach(cards.suffix(4)) { n in
         Button { openNotice(n) } label: {
           noticeContent(n) { store.noticeStack.removeAll { $0 == n.id } }
-            .padding(.horizontal, 14).padding(.vertical, 12).frame(width: 340)
+            .padding(.horizontal, 12).padding(.vertical, 12).frame(width: 340)
             .sheetSurface()
             .contentShape(RoundedRectangle(cornerRadius: Radius.overlay))
         }
@@ -4020,23 +4020,23 @@ import Observation
         // Esc closes even when focus stayed in the terminal (a key equivalent runs before keyDown).
         Button("") { store.run("notice.toggle") }.keyboardShortcut(.cancelAction).opacity(0).frame(width: 0, height: 0)
         HStack(spacing: 10) {
-          Text(tr("通知")).font(.system(size: 13, weight: .semibold)).foregroundStyle(C.textPrimary)
+          Text(tr("通知")).font(Typography.font(Typography.title)).foregroundStyle(C.textPrimary)
           if unread > 0 { Text(tr("未読 %@", unread)).foregroundStyle(C.attention) }
           Spacer()
           Button(tr("すべて既読")) { store.run("notice.markRead", [:]) }.disabled(unread == 0)
           Button(tr("消去")) { store.run("notice.clear", [:]) }.disabled(st.notices.items.isEmpty)
         }
-        .buttonStyle(.borderless).font(Typography.font(Typography.chrome)).padding(.horizontal, 14).padding(.vertical, 12)
+        .buttonStyle(.borderless).font(Typography.font(Typography.chrome)).padding(.horizontal, 12).padding(.vertical, 12)
         Divider()
         if st.notices.items.isEmpty {
-          Text(tr("通知はありません")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted).padding(14)
+          Text(tr("通知はありません")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted).padding(12)
           Spacer()
         } else {
           ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
               ForEach(st.notices.items) { n in
                 Button { openNotice(n) } label: {
-                  noticeContent(n).padding(.horizontal, 14).padding(.vertical, 10).contentShape(Rectangle())
+                  noticeContent(n).padding(.horizontal, 12).padding(.vertical, 10).contentShape(Rectangle())
                 }
                 .buttonStyle(.hoverWash)
                 Divider().opacity(0.5)
@@ -4063,7 +4063,7 @@ import Observation
     }
 
     @ViewBuilder private func branchHover(_ branch: String) -> some View {
-      Text(branch).font(.system(size: 13, weight: .semibold)).foregroundStyle(C.textPrimary)
+      Text(branch).font(Typography.font(Typography.title)).foregroundStyle(C.textPrimary)
       Text(headInfo?.upstream.map { tr("追跡: %@", $0) } ?? tr("追跡ブランチなし")).foregroundStyle(C.textTertiary)
       if let head = headInfo?.head { Text(head).lineLimit(2) }
       if st.isRepo { Text(changes.isEmpty ? tr("未コミットの変更なし") : changeCounts).foregroundStyle(C.textTertiary) }
@@ -4075,7 +4075,7 @@ import Observation
       if let info = headInfo, info.upstream != nil {
         ForEach([(tr("Pull %@ 件", sync?.behind ?? info.incoming.count), info.incoming, sync?.behind ?? 0),
                  (tr("Push %@ 件", sync?.ahead ?? info.outgoing.count), info.outgoing, sync?.ahead ?? 0)], id: \.0) { title, commits, total in
-          Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(C.textPrimary)
+          Text(title).font(Typography.font(Typography.title)).foregroundStyle(C.textPrimary)
           ForEach(commits, id: \.self) { Text($0).lineLimit(1).truncationMode(.tail) }
           if total > commits.count { Text(tr("ほか %@ 件", total - commits.count)).foregroundStyle(C.textMuted) }
         }
@@ -4095,7 +4095,7 @@ import Observation
       if let rel = st.active, let root = store.activeRoot {
         let path = root + "/" + rel
         if let server = store.buffers.language.statusText(path, root: root) {
-          Text(server.text).font(.system(size: 13, weight: .semibold)).foregroundStyle(server.failed ? C.attention : C.textPrimary)
+          Text(server.text).font(Typography.font(Typography.title)).foregroundStyle(server.failed ? C.attention : C.textPrimary)
         }
         let spans = (store.buffers.language.diagnostics[path]?.spans ?? []).sorted { ($0.severity == .error ? 0 : 1) < ($1.severity == .error ? 0 : 1) }
         let snapshot = store.buffers.view(rel)?.snapshot
@@ -4123,7 +4123,7 @@ import Observation
         Button { footerHover = nil; store.run("pane.focus", ["id": .int(a.pane)]) } label: {
           HStack(alignment: .firstTextBaseline, spacing: 6) {
             Circle().fill(tint).frame(width: 6, height: 6)
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
               Text(terminalTabTitle(a.project, a.pane)).foregroundStyle(C.textPrimary).lineLimit(1)
               if let activity = a.activity, !activity.isEmpty { Text(activity).foregroundStyle(C.textTertiary).lineLimit(1) }
             }
@@ -4137,7 +4137,7 @@ import Observation
 
     @ViewBuilder private var versionHover: some View {
       let c = store.updateConfig
-      Text("\(c.channel.displayName) \(c.currentVersion)").font(.system(size: 13, weight: .semibold)).foregroundStyle(C.textPrimary)
+      Text("\(c.channel.displayName) \(c.currentVersion)").font(Typography.font(Typography.title)).foregroundStyle(C.textPrimary)
       if c.channel.hasUpdateFeed {
         switch store.update {
         case .available(let u):
@@ -4160,8 +4160,8 @@ import Observation
       let agents = st.agentSessions.filter { $0.project == st.project && !$0.status.isExited }
       let waiting = agents.filter { $0.status == .attention }.count
       let caret = st.active.flatMap { store.buffers.caret[$0] }
-      // Items pad themselves (`footerItem`), so 2 + 5 + 5 keeps the old 12pt gap with hover areas almost touching.
-      return HStack(spacing: 2) {
+      // Items pad themselves (`footerItem`), so 4 + 4 + 4 keeps the old 12pt gap with hover areas almost touching.
+      return HStack(spacing: 4) {
         if st.settingsOpen {
           Text(tr("設定 · %@", tr(st.section))).footerItem()
         } else {
@@ -4180,16 +4180,16 @@ import Observation
           if st.isRepo {
             // VS Code-style sync: one button shows ↓behind ↑ahead and runs pull then push.
             Button { runGit([("git.pull", [:]), ("git.push", [:])], label: "Sync", confirmed: true) } label: {
-              HStack(spacing: 3) {
-                Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 10))
+              HStack(spacing: 4) {
+                Image(systemName: "arrow.triangle.2.circlepath").font(Typography.font(Typography.chrome))
                 if let sync, sync.behind + sync.ahead > 0 { Text("\(sync.behind)↓ \(sync.ahead)↑") }
               }.footerItem(capsule: true)
             }.buttonStyle(.hoverWash).disabled(gitOperation != nil).accessibilityHint(tr("同期 (Pull → Push)"))
             .footerPopover("sync", $footerHover) { syncHover }
             if !changes.isEmpty {
               Button { sidebarMode = "shield" } label: {
-                HStack(spacing: 3) {
-                  Image(systemName: "plusminus").font(.system(size: 10))
+                HStack(spacing: 4) {
+                  Image(systemName: "plusminus").font(Typography.font(Typography.chrome))
                   Text("\(changes.count)")
                 }.footerItem(capsule: true)
               }
@@ -4235,7 +4235,7 @@ import Observation
         ClairResourceMeter { terminalTabTitle($0, $1) }  // same name as the terminal's tab
         if !quotaAgents.isEmpty { quotaMeter }
         Button { sidebarMode = "terminal" } label: {
-          HStack(spacing: 5) {
+          HStack(spacing: 4) {
             if waiting > 0 { Circle().fill(C.attention).frame(width: 6, height: 6) }
             Text(tr("%@ セッション", agents.count) + (waiting > 0 ? tr(" · 入力待ち %@", waiting) : ""))
           }.footerItem(capsule: true)
@@ -4247,7 +4247,7 @@ import Observation
       }
       .font(Typography.font(Typography.chrome)).monospacedDigit().foregroundStyle(C.textTertiary)
       // Glass: centred in the strip up to the panels' bottom edge, not pressed against the window's.
-      .padding(.horizontal, 7).frame(height: ChromeBudget.statusBar + ChromeBudget.glassReach)
+      .padding(.horizontal, 8).frame(height: ChromeBudget.statusBar + ChromeBudget.glassReach)
       .background(ClairChannel.current == .dev ? Color.orange.opacity(0.14) : .clear).chromeBackground()  // Dev is told apart at a glance (owner, 2026-09-27)
       .padding(.top, -ChromeBudget.glassReach)
       .overlay(alignment: .top) { if !glass { Rectangle().fill(C.surfaceActive).frame(height: 1) } }
@@ -4299,7 +4299,7 @@ import Observation
         Button("") { store.run("palette.close") }.keyboardShortcut(.cancelAction).opacity(0).frame(width: 0, height: 0)
         VStack(spacing: 0) {
           HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass").font(.system(size: 14)).foregroundStyle(C.textMuted)
+            Image(systemName: "magnifyingglass").font(Typography.font(Typography.sidebar)).foregroundStyle(C.textMuted)
             TextField("", text: Binding(get: { query }, set: { v in
               // arc's GLIDE_ROWS rule: surviving rows close their gaps with a
               // glide when every one lands within a viewport of its old place;
@@ -4312,12 +4312,12 @@ import Observation
               paletteHighlight = 0
             }))
               .focused($paletteFocused).task(id: p) { await focusField { paletteFocused = true } }
-              .textFieldStyle(.plain).font(.system(size: 13)).foregroundStyle(C.textPrimary)
+              .textFieldStyle(.plain).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textPrimary)
               .onSubmit { run(p) }
               .onKeyPress(.downArrow) { moveSelection(min(selection + 1, max(list.count - 1, 0))); return .handled }
               .onKeyPress(.upArrow) { moveSelection(max(selection - 1, 0)); return .handled }
               .onKeyPress(.escape) { store.run("palette.close"); return .handled }
-            Text(tr("%@ 件", list.count)).font(.system(size: 11)).foregroundStyle(C.textMuted)
+            Text(tr("%@ 件", list.count)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted)
           }
           // ⌘T: ask the language servers as the query changes (debounced; a newer query cancels this one).
           .task(id: p == .symbols ? query : nil) {
@@ -4326,7 +4326,7 @@ import Observation
             guard !Task.isCancelled else { return }
             await store.searchSymbols(query)
           }
-          .padding(.horizontal, 8).frame(height: 40)
+          .padding(.horizontal, 8).frame(height: RowHeight.control)
           .background(C.chromeRaised, in: RoundedRectangle(cornerRadius: Radius.control))
           .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.hairline))
           .contentShape(Rectangle()).onTapGesture { paletteFocused = true }
@@ -4334,14 +4334,14 @@ import Observation
           ScrollViewReader { proxy in ScrollView {
             ZStack(alignment: .topLeading) {
               // One highlight follows the selection (arc's command palette):
-              // it springs behind the pointer, slides in 70ms behind the arrow
+              // it glides behind the pointer, slides in 70ms behind the arrow
               // keys, snaps to the top on a fresh query, and fades out when the
               // list empties. Rows are a fixed 32px, so its place is arithmetic.
               RoundedRectangle(cornerRadius: Radius.control)
                 .fill(C.surfaceActive)
-                .frame(height: 32)
+                .frame(height: RowHeight.control)
                 .padding(.horizontal, 8)
-                .offset(y: CGFloat(min(paletteHighlight, max(list.count - 1, 0))) * 32)
+                .offset(y: CGFloat(min(paletteHighlight, max(list.count - 1, 0))) * RowHeight.control)
                 .opacity(list.isEmpty ? 0 : 1)
                 .animation(reduceMotion ? nil : .easeOut(duration: list.isEmpty ? 0.1 : 0.08), value: list.isEmpty)
               LazyVStack(spacing: 0) {
@@ -4351,33 +4351,33 @@ import Observation
                   if p == .files || p == .compare || p == .recent { FileIcon.forPath(it.title).image(size: 11, ink: C.textTertiary).frame(width: 14) }
                   if p == .branches {
                     Group {
-                      if it.id == "git.branchCreate" { Image(systemName: "plus").font(.system(size: 10)) }
+                      if it.id == "git.branchCreate" { Image(systemName: "plus").font(Typography.font(Typography.chrome)) }
                       else { GitBranchGlyph().stroke(style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round)).frame(width: 11, height: 11) }
                     }.foregroundStyle(C.textTertiary).frame(width: 14)
                   }
-                  Text(p == .files || p == .compare || p == .recent ? name(it.title) : it.title).font(.system(size: 12)).lineLimit(1)
+                  Text(p == .files || p == .compare || p == .recent ? name(it.title) : it.title).font(Typography.font(Typography.sidebar)).lineLimit(1)
                     .foregroundStyle(on ? C.textPrimary : C.textSecondary)
-                  if !it.detail.isEmpty { Text(it.detail).font(.system(size: 11)).lineLimit(1).foregroundStyle(C.textMuted) }
+                  if !it.detail.isEmpty { Text(it.detail).font(Typography.font(Typography.chrome)).lineLimit(1).foregroundStyle(C.textMuted) }
                   Spacer(minLength: 0)
                   if p == .files || p == .compare || p == .recent {
-                    Text(it.title).font(.system(size: 11)).lineLimit(1).truncationMode(.head).foregroundStyle(C.textMuted)
+                    Text(it.title).font(Typography.font(Typography.chrome)).lineLimit(1).truncationMode(.head).foregroundStyle(C.textMuted)
                   }
                   if p == .symbols || p == .references || p == .branches {
-                    Text(it.hint).font(.system(size: 11)).lineLimit(1).truncationMode(.head).foregroundStyle(C.textMuted)
+                    Text(it.hint).font(Typography.font(Typography.chrome)).lineLimit(1).truncationMode(.head).foregroundStyle(C.textMuted)
                   } else { HStack(spacing: 2) {
                     ForEach(Array(it.hint), id: \.self) { k in
-                      Text(String(k)).font(.system(size: 11)).monospacedDigit().foregroundStyle(on ? C.textSecondary : C.textTertiary)
+                      Text(String(k)).font(Typography.font(Typography.chrome)).monospacedDigit().foregroundStyle(on ? C.textSecondary : C.textTertiary)
                         .frame(minWidth: 20, minHeight: 20).padding(.horizontal, 4)
                         .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.hairline))
                     }
                   } }
                 }
-                .padding(.horizontal, 8).frame(height: 32)
+                .padding(.horizontal, 8).frame(height: RowHeight.control)
                 .contentShape(Rectangle())
                 .onHover { over in
                   guard over, i != selection else { return }
                   selection = i
-                  withAnimation(reduceMotion ? nil : .spring(duration: 0.26, bounce: 0.12)) { paletteHighlight = i }
+                  withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration)) { paletteHighlight = i }
                 }
                 .onTapGesture { selection = i; run(p) }
                 }
@@ -4403,15 +4403,15 @@ import Observation
           HStack(spacing: 8) {
             ForEach([(tr("コマンド"), WorkbenchState.Palette.commands), (tr("ファイルへ移動"), .files)], id: \.1) { label, mode in
               Button { store.run(mode == .commands ? "palette.commands" : "palette.files") } label: {
-                Text(label).font(.system(size: 11, weight: .semibold))
+                Text(label).font(Typography.font(Typography.chromeStrong))
                   .foregroundStyle(p == mode ? C.textPrimary : C.textTertiary)
-                  .padding(.horizontal, 8).frame(height: 20)
+                  .padding(.horizontal, 8).frame(height: RowHeight.compact)
                   .background(p == mode ? C.surfaceActive : .clear, in: RoundedRectangle(cornerRadius: Radius.control))
               }.buttonStyle(.hoverWash)
             }
             Spacer()
           }
-          .padding(.horizontal, 12).frame(height: 34)
+          .padding(.horizontal, 12).frame(height: RowHeight.control)
           .overlay(alignment: .top) { Rectangle().fill(L.hairline).frame(height: 1) }
         }
         .frame(width: 560).sheetSurface(palette: true)
@@ -4484,7 +4484,7 @@ import Observation
     @Environment(\.clairGlass) private var glass
 
     var body: some View {
-      let side: CGFloat = glass ? 30 : ChromeBudget.cellControl
+      let side: CGFloat = glass ? RowHeight.control : ChromeBudget.cellControl
       Button(action: action) {
         Group {
           if icon == "concierge" {
@@ -4602,19 +4602,19 @@ import Observation
       let tint = selected ? C.chromeInk : C.textTertiary
       HStack(spacing: 4) {
         tabIcon(tint: tint)
-        Text(name).font(.system(size: Typography.chromeSize(11), weight: selected ? .semibold : .regular)).foregroundStyle(tint).lineLimit(1).truncationMode(.tail)
+        Text(name).font(Typography.font(selected ? Typography.chromeStrong : Typography.chrome)).foregroundStyle(tint).lineLimit(1).truncationMode(.tail)
         Spacer(minLength: 0)
         if dirty { Circle().fill(selected ? C.textTertiary : C.textMuted).frame(width: 6, height: 6) }
         Button(action: onClose) {
-          Image(systemName: "xmark").font(.system(size: 9, weight: .medium)).foregroundStyle(C.textTertiary)
+          Image(systemName: "xmark").font(Typography.font(Typography.micro)).foregroundStyle(C.textTertiary)
         }
         .buttonStyle(.hoverWash)
         .help(tr("閉じる"))
         .opacity((selected || isHovered) ? 1 : 0)
         .allowsHitTesting(selected || isHovered)
       }
-      // Glass: a 28pt capsule inside the group's vessel; flat: the 38pt cell control.
-      .padding(.horizontal, glass ? 11 : 8).frame(width: 200, height: glass ? 28 : ChromeBudget.cellControl)
+      // Glass: a 26pt capsule inside the group's vessel; flat: the 38pt cell control.
+      .padding(.horizontal, glass ? 12 : 8).frame(width: 200, height: glass ? RowHeight.default : ChromeBudget.cellControl)
       .background(
         selected ? (glass ? DesignTokens.Glass.capsuleSelected : W.selected) : isHovered ? (glass ? DesignTokens.Glass.capsuleFill : W.soft) : .clear,
         in: RoundedRectangle(cornerRadius: Radius.pill()))
@@ -4631,9 +4631,9 @@ import Observation
       }, preview: {
         HStack(spacing: 4) {
           tabIcon(tint: C.chromeInk)
-          Text(name).font(.system(size: 11, weight: .semibold)).lineLimit(1)
+          Text(name).font(Typography.font(Typography.chromeStrong)).lineLimit(1)
         }
-        .foregroundStyle(C.chromeInk).padding(.horizontal, 10).frame(height: 30)
+        .foregroundStyle(C.chromeInk).padding(.horizontal, 10).frame(height: RowHeight.control)
         .background(C.surface, in: RoundedRectangle(cornerRadius: Radius.card))
         .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(L.ring, lineWidth: 1))
         .opacity(0.9)
@@ -4657,7 +4657,7 @@ import Observation
         ProviderBrandIcon(provider: providerIcon, size: 13)
       } else {
         if let icon {
-          Image(systemName: icon).font(.system(size: 11)).foregroundStyle(tint)
+          Image(systemName: icon).font(Typography.font(Typography.chrome)).foregroundStyle(tint)
         } else {
           FileIcon.forPath(path).image(size: 11, ink: tint)
         }
@@ -4689,11 +4689,11 @@ import Observation
         Text(label).font(Typography.font(Typography.chrome)).foregroundStyle(focused ? C.textTertiary : C.textMuted)
           .lineLimit(1).truncationMode(.tail).padding(.leading, 6).frame(maxWidth: .infinity, alignment: .leading)
           .overlay {
-            Image(systemName: "ellipsis").font(.system(size: 11)).foregroundStyle(C.textMuted)
+            Image(systemName: "ellipsis").font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted)
               .opacity(isHovered ? 1 : 0).accessibilityHidden(true)
           }
         Button(action: onClose) {
-          Image(systemName: "xmark").font(.system(size: 9, weight: .medium)).foregroundStyle(C.textMuted)
+          Image(systemName: "xmark").font(Typography.font(Typography.micro)).foregroundStyle(C.textMuted)
         }.buttonStyle(.hoverWash).help(tr("パネルを閉じる")).opacity((isHovered || focused) ? 1 : 0)
       }
       .padding(.horizontal, 8).frame(height: 24).frame(maxWidth: .infinity)
@@ -4728,7 +4728,7 @@ import Observation
             .opacity(0.9)
         } else {
         VStack(spacing: 0) {
-          Image(systemName: "ellipsis").font(.system(size: 11)).foregroundStyle(C.textMuted)
+          Image(systemName: "ellipsis").font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted)
             .frame(maxWidth: .infinity).frame(height: 24).background(C.canvas)
           Image(systemName: "terminal").font(.system(size: 28, weight: .light)).foregroundStyle(C.textTertiary)
             .frame(maxWidth: .infinity, maxHeight: .infinity).background(C.surface)
