@@ -72,6 +72,14 @@ ui-monospace, "JetBrains Mono", Menlo, monospace`）の2種類のみ。
 - `space`: `[2, 4, 6, 8, 12, 16, 24]`。
 - モバイルは別ルール（2.6参照）: card 10 / button・field 8。
 
+> **2026-11-11 amendment（token sweep）**: `space` は 10 を足した 8 段
+> `[2, 4, 6, 8, 10, 12, 16, 24]`。行高は `RowHeight` の 22 compact / 26 default /
+> 32 control の 3 種だけ。影は overlay 用の 1 種（`Elevation`: black 40% / radius 12 /
+> y 6、`.overlayShadow()`）。押下スケールは `Motion.pressScale` 0.97、動きは easeOut の
+> 1 種で bounce なし。文字色ロールは primary / secondary / tertiary / muted の 4 つで、
+> `textQuaternary` と `chromeInkMuted`（同値）は `textMuted` に統合して削除した。
+> chrome の文字は 13 / 11 / 9、ウェイトは 400 / 500 / 600（bold・大文字化・字間なし）。
+
 ### 2.4 Chrome budget
 
 `chrome = { cell: 48, cellControl: 38, titlebar: 48, activityBarWidth: 48, statusBar: 26 }`。縦 chrome 予算は
