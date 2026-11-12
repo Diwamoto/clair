@@ -172,7 +172,7 @@ extension WorkbenchState {
       l.previews = previews; l.editorFiles = editorFiles; l.recent = recent
       return l
     }
-    set { tree = newValue.tree; tabs = newValue.tabs; active = newValue.active; dirty = newValue.dirty; expanded = newValue.expanded; launches = newValue.launches; previews = newValue.previews; editorFiles = newValue.editorFiles; panesClosed = newValue.panesClosed; diffTabs = newValue.diffTabs; activeDiff = newValue.activeDiff; tabOrder = newValue.tabOrder; recent = newValue.recent }
+    set { tree = newValue.tree; tabs = newValue.tabs; activeDiff = newValue.activeDiff; active = newValue.active; dirty = newValue.dirty; expanded = newValue.expanded; launches = newValue.launches; previews = newValue.previews; editorFiles = newValue.editorFiles; panesClosed = newValue.panesClosed; diffTabs = newValue.diffTabs; tabOrder = newValue.tabOrder; recent = newValue.recent }
   }
 
   /// The open Project with the deepest root containing `file` (a nested Project wins over its parent).
@@ -239,11 +239,19 @@ extension WorkbenchState {
   /// The focused editor shows the active file; split editors' files are ordinary file tabs, not extra ones.
   public var titlebarTabs: [WorkbenchTab] { layout.titlebarTabs }
 
+  /// The editor pane showing `activeDiff` in place of its file: the current (unpinned) editor. Other panes stay on screen.
+  public var diffPane: Int? {
+    guard activeDiff != nil else { return nil }
+    let editors = tree.leaves.filter { $0.kind == .editor }
+    return (editors.first { editorFiles[$0.id] == nil } ?? editors.first)?.id
+  }
+
   public var selectedTitlebarTab: WorkbenchTab? {
-    if let activeDiff { return .diff(activeDiff) }
     guard let pane = tree.leaves.first(where: { $0.id == tree.focused }) else { return nil }
     switch pane.kind {
-    case .editor: return active.flatMap { tabs.contains($0) ? .file($0) : nil }
+    case .editor:
+      if let activeDiff, pane.id == diffPane { return .diff(activeDiff) }
+      return active.flatMap { tabs.contains($0) ? .file($0) : nil }
     case .preview: return .preview(pane.id)
     case .terminal: return .terminal(pane.id)
     case .graph: return .graph(pane.id)
@@ -264,20 +272,26 @@ extension WorkbenchState {
     case .terminal(let id):
       guard tree.leaves.contains(where: { $0.id == id && $0.kind == .terminal }) else { return }
       tree.focus(id)
-      activeDiff = nil
     case .graph(let id), .preview(let id):
       guard tree.leaves.contains(where: { $0.id == id && $0.kind == (tab == .graph(id) ? .graph : .preview) }) else { return }
       tree.focus(id)
-      activeDiff = nil
     case .diff(let target):
       guard diffTabs.contains(target) else { return }
-      activeDiff = target
+      showDiff(target)
     }
   }
 
   mutating func openDiff(_ target: WorkbenchDiffTab) {
     if !diffTabs.contains(target) { diffTabs.append(target) }
-    activeDiff = target; settingsOpen = false; palette = nil
+    showDiff(target); settingsOpen = false; palette = nil
+  }
+
+  /// A diff is shown by an editor pane, so one must exist and take focus (which also un-hides it under a maximized pane).
+  private mutating func showDiff(_ target: WorkbenchDiffTab) {
+    activeDiff = target
+    panesClosed = false
+    tree.ensureEditorAtLeft()
+    if let diffPane { tree.focus(diffPane) }
   }
 
   mutating func closeDiff(_ target: WorkbenchDiffTab) {
@@ -290,6 +304,7 @@ extension WorkbenchState {
       activeDiff = nil
       let remaining = titlebarTabs
       if !remaining.isEmpty { selectTab(remaining[min(position, remaining.count - 1)]) }
+      if activeDiff == nil { dropEmptyEditors() }
     }
   }
 
@@ -345,6 +360,7 @@ extension WorkbenchState {
     }
     if l.activeDiff.map(l.diffTabs.contains) != true { l.activeDiff = nil }
     if !l.tree.isValid { l.tree = PaneTree(single: .editor) }
+    if l.activeDiff != nil { l.tree.ensureEditorAtLeft() }  // layouts saved while a diff covered the whole pane area may have no editor
     l.launches = l.launches.filter { id, _ in Concierge.isPane(id) || l.tree.leaves.contains { $0.id == id } }
     l.previews = l.previews.filter { id, _ in l.tree.leaves.contains { $0.id == id } }
     l.editorFiles = l.editorFiles.filter { id, file in l.tabs.contains(file) && l.tree.leaves.contains { $0.id == id && $0.kind == .editor } }

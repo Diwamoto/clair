@@ -510,6 +510,9 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   請求額と区別して表示する。欠損分をゼロ扱いしない(料金の分からないモデルは
   「算出不可」とし、合計や割合に入れない)
 - editor / terminal / diff を同じ tab group へ置ける任意 split
+- diff タブは editor pane の中に表示する(pane 領域全体を覆わない)。表示するのは現在の editor(分割時はファイルを固定して
+  いない editor)で、terminal / preview / graph など他の pane は並んだまま操作できる。editor pane が無ければ左端に戻す。
+  他の pane にフォーカスしても diff は残り、diff を表示中の editor での ⌘W はその diff タブを閉じる
 - 分割した editor はそれぞれ自分のファイルを表示する。フォーカス中の editor がアクティブタブを表示し、タブの切替はその editor
   だけを変える(ほかの editor が表示中のファイルのタブを選ぶとその editor にフォーカスする)。titlebar のファイルタブを
   editor へドラッグすると、カーソルに近い上下左右の半分に分割して開く(`tab.split`)。⌘D / ⌘⇧D で分けた editor は同じ

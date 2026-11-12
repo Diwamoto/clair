@@ -738,15 +738,8 @@ import Observation
     /// Menu/palette entry point. Saving may materialise and write a 10 MiB snapshot, so the native
     /// UI acknowledges the shortcut immediately and completes the durable write off-main.
     public func performFromUI(_ id: String, _ input: CommandInput = [:]) {
-      if id == "pane.close", let target = state.activeDiff {
-        var input: CommandInput = ["path": .string(target.path), "staged": .bool(target.staged), "untracked": .bool(target.untracked)]
-        if let against = target.against { input["against"] = .string(against) }
-        if let proposal = target.proposal { input["proposal"] = .string(proposal) }
-        _ = run("diff.close", input)
-        return
-      }
       // Nothing but the empty editor (or the home screen) left: ⌘W quits like ⌘Q, confirmation included.
-      if id == "pane.close", state.panesClosed || (state.active == nil && state.tree.leaves.map(\.kind) == [.editor]) {
+      if id == "pane.close", state.panesClosed || (state.active == nil && state.activeDiff == nil && state.tree.leaves.map(\.kind) == [.editor]) {
         NSApp.terminate(nil); return
       }
       if id == "pane.close", state.tree.leaves.first?.id != state.tree.focused,
@@ -1537,7 +1530,7 @@ import Observation
                 sidebar
                 if !glass { Rectangle().fill(C.surfaceActive).frame(width: 1) }
               }
-              main.readingPanel(tiled: review == nil && diff == nil && !st.panesClosed)
+              main.readingPanel(tiled: review == nil && !st.panesClosed)
                 .padding(.leading, glass && !sidebarShown ? DesignTokens.Glass.inset : 0)
             }
           }
@@ -3323,11 +3316,9 @@ import Observation
       }
     }
 
-    private var main: some View {
-      VStack(spacing: 0) {
-        if let r = review, let root = store.activeRoot {
-          reviewScreen(r, root: root)
-        } else if let d = diff, let root = store.activeRoot, let loaded = loadedDiff,
+    /// The active diff tab, drawn by the editor pane that hosts it (`WorkbenchState.diffPane`).
+    @ViewBuilder private var diffContent: some View {
+        if let d = diff, let root = store.activeRoot, let loaded = loadedDiff,
           loaded.target == d, loaded.root == root
         {
           let fileLines = loaded.fileLines
@@ -3364,12 +3355,12 @@ import Observation
               {
                 NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text, forType: .string)
                 // Paste is left to the user: a review comment must not run as an agent command unseen.
-                if let a = st.agentSessions.first(where: { $0.project == st.project && !$0.status.isExited }) { store.run("pane.focus", ["id": .int(a.pane)]); diff = nil }
+                if let a = st.agentSessions.first(where: { $0.project == st.project && !$0.status.isExited }) { store.run("pane.focus", ["id": .int(a.pane)]) }
               }
             },
             onClose: { closeDiff() },
             editor: d.staged ? nil : EditorPane(
-              buffers: store.buffers, root: root, path: d.path, focused: !st.settingsOpen,
+              buffers: store.buffers, root: root, path: d.path, focused: !st.settingsOpen && st.tree.focused == st.diffPane,
               softWrap: st.toggles["softWrap"] == true, style: editorStyle,
               onEdit: { store.edited($0) },
               onCaret: { store.editorSelectionChanged($0, $1, in: $2) }),
@@ -3385,8 +3376,15 @@ import Observation
             })
           .id(d)
           }
-        } else if diff != nil {
+        } else {
           ProgressView { Text(tr("差分を読み込み中…")) }.frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private var main: some View {
+      VStack(spacing: 0) {
+        if let r = review, let root = store.activeRoot {
+          reviewScreen(r, root: root)
         } else if st.panesClosed {
           HomeView(shortcuts: homeShortcuts(st))
         } else {
@@ -3399,6 +3397,7 @@ import Observation
           title: { terminalTabTitle(st.project, $0) },
           onRatio: { store.run("pane.setRatio", ["id": .int($0), "ratio": .double($1)]) },
           editor: activeEditor,
+          diff: diff == nil ? nil : st.diffPane.map { ($0, AnyView(VStack(spacing: 0) { diffContent })) },
           run: { _ = store.run($0, $1) }, dragging: $draggingPane, draggingTab: $draggingTab)
           // A drag dropped outside every pane (or on the tab bar) never reaches a zone: clear it once the mouse is up.
           // ponytail: polls the button while a drag is live; an NSDraggingSource end hook would be exact.
@@ -4838,6 +4837,8 @@ import Observation
     let title: (Int) -> String
     let onRatio: (Int, Double) -> Void
     let editor: EditorPane
+    /// The editor pane showing the active diff tab instead of its file, and that diff.
+    var diff: (pane: Int, view: AnyView)? = nil
     let run: (String, CommandInput) -> Void
     /// Pane whose header handle is being dragged; other panes show edge drop zones meanwhile.
     @Binding var dragging: Int?
@@ -4860,11 +4861,11 @@ import Observation
     @ViewBuilder
     private func parts(_ axis: PaneTree.Axis, _ total: CGFloat, _ a: PaneTree.Node, _ b: PaneTree.Node, ratio: Double) -> some View {
       let h = axis == .horizontal
-      PaneView(node: a, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onTitle: onTitle, title: title, onRatio: onRatio, editor: editor, run: run, dragging: $dragging, draggingTab: $draggingTab, leftmost: leftmost)
+      PaneView(node: a, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onTitle: onTitle, title: title, onRatio: onRatio, editor: editor, diff: diff, run: run, dragging: $dragging, draggingTab: $draggingTab, leftmost: leftmost)
         .frame(width: h ? total * ratio : nil, height: h ? nil : total * ratio)
       // Glass: the wallpaper shows between pane cards instead of a hairline.
       Rectangle().fill(glass ? .clear : L.paneDivider).frame(width: h ? (glass ? DesignTokens.Glass.inset : 1) : nil, height: h ? nil : (glass ? DesignTokens.Glass.inset : 1))
-      PaneView(node: b, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onTitle: onTitle, title: title, onRatio: onRatio, editor: editor, run: run, dragging: $dragging, draggingTab: $draggingTab, leftmost: false)
+      PaneView(node: b, focused: focused, launches: launches, project: project, onFocus: onFocus, onFacts: onFacts, onTitle: onTitle, title: title, onRatio: onRatio, editor: editor, diff: diff, run: run, dragging: $dragging, draggingTab: $draggingTab, leftmost: false)
     }
 
     var body: some View {
@@ -4891,6 +4892,7 @@ import Observation
             else if kind == .preview, let path = editor.previews[id] ?? editor.path, path.lowercased().hasSuffix(".html") || path.lowercased().hasSuffix(".htm") { HTMLPreviewPane(buffers: editor.buffers, root: editor.root, path: path) }
             else if kind == .preview { MarkdownPreviewPane(buffers: editor.buffers, root: editor.root, path: editor.previews[id] ?? editor.path,
               theme: editor.previewTheme, fontSize: editor.previewFontSize) }
+            else if let diff, diff.pane == id { diff.view }
             else { editor.inPane(id, focused: id == focused, onFocus: { if id != focused { onFocus(id) } },
               // Split editors have no pane header; the leftmost one is anchored (`pane.close` replaces it).
               onClose: leftmost ? nil : { run("pane.focus", ["id": .int(id)]); run("pane.close", [:]) }) }

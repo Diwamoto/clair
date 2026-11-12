@@ -145,7 +145,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   /// The home screen (an empty editor) shows only when nothing else is on screen: with no file
   /// open, empty editors beside any other pane go away, and opening a file brings one back.
   public mutating func dropEmptyEditors() {
-    guard active == nil else { return }
+    guard active == nil, activeDiff == nil else { return }  // an editor showing a diff is not empty
     tree.closeExtraEditors()
     guard tree.leaves.contains(where: { $0.kind != .editor }), let editor = tree.leaves.first(where: { $0.kind == .editor }) else { return }
     tree.close(editor.id)
@@ -160,6 +160,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
     guard let current, let file = editorFiles.removeValue(forKey: current) else { return }
     if let active { for e in editors where e != current && editorFiles[e] == nil { editorFiles[e] = active } }
     if active != file { editorContext = nil }
+    activeDiff = nil  // the editor that becomes current shows its own file, not the diff the previous one had
     active = file
   }
   /// Recently opened files in this Project, newest first; persisted with the layout.
@@ -623,7 +624,6 @@ extension CommandRegistry {
           try require(s.tree.leaves.contains { $0.id == i["id"]?.int }, "no pane \(i["id"]!)"); return .read
         }) { s, i in
       s.tree.focus(i["id"]!.int!)
-      s.activeDiff = nil
       s.agentReports[NotificationLog.paneKey(s.project, i["id"]!.int!)]?.seen = true
       return .ok
     },
@@ -674,6 +674,11 @@ extension CommandRegistry {
           try require(!s.panesClosed, "no pane to close")
           return .write
         }) { s, _ in
+      // The editor showing a diff closes that diff tab, like a file tab; closing any other pane leaves the diff open.
+      if let target = s.activeDiff, s.tree.focused == s.diffPane {
+        s.recordClosed(.diff(target)); s.closeDiff(target)
+        return .ok
+      }
       switch s.tree.leaves.first(where: { $0.id == s.tree.focused })?.kind {
       case .terminal: s.recordClosed(.terminal(s.tree.focused))
       case .graph: s.recordClosed(.graph(s.tree.focused))

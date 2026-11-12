@@ -308,14 +308,44 @@ final class WorkbenchCommandTests: XCTestCase {
     XCTAssertTrue(decoded.previews.isEmpty)
   }
 
-  func testFocusingAPaneClearsDiffTabSelection() throws {
+  func testDiffSharesTheScreenWithOtherPanes() throws {
     var state = WorkbenchState()
     state.tree = PaneTree()  // editor | agent / terminal: the layout these tests place into, not the single-editor default
     let diff = WorkbenchDiffTab(path: "first.swift", staged: false, untracked: false)
     state.openDiff(diff)
+    let editor = try XCTUnwrap(state.diffPane)
     XCTAssertEqual(state.selectedTitlebarTab, .diff(diff))
+    // Focusing or closing another pane leaves the diff in its editor.
     _ = try r.execute("pane.focus", ["id": .int(2)], state: &state).get()
     XCTAssertEqual(state.selectedTitlebarTab, .terminal(2))
+    XCTAssertEqual(state.activeDiff, diff)
+    _ = try r.execute("pane.close", state: &state).get()
+    XCTAssertEqual(state.activeDiff, diff)
+    _ = try r.execute("pane.focus", ["id": .int(editor)], state: &state).get()
+    XCTAssertEqual(state.selectedTitlebarTab, .diff(diff))
+    // ⌘W on the editor showing the diff closes the diff tab, not the pane.
+    _ = try r.execute("pane.close", state: &state).get()
+    XCTAssertNil(state.activeDiff)
+    XCTAssertFalse(state.diffTabs.contains(diff))
+  }
+
+  func testOpeningADiffBringsBackAnEditorPane() throws {
+    var state = WorkbenchState()
+    state.tree = PaneTree(single: .terminal)
+    state.tabs = []; state.active = nil
+    let diff = WorkbenchDiffTab(path: "first.swift", staged: false, untracked: false)
+    state.openDiff(diff)
+    XCTAssertEqual(state.tree.leaves.map(\.kind), [.editor, .terminal])
+    XCTAssertEqual(state.tree.focused, state.diffPane)
+    state.dropEmptyEditors()
+    XCTAssertNotNil(state.diffPane, "an editor showing a diff is not empty")
+    state.closeDiff(diff)
+    XCTAssertEqual(state.tree.leaves.map(\.kind), [.terminal])
+
+    state.panesClosed = true
+    state.openDiff(diff)
+    XCTAssertFalse(state.panesClosed)
+    XCTAssertNotNil(state.diffPane)
   }
 
   func testUsageSectionIsReachableThroughSettingsCommand() throws {

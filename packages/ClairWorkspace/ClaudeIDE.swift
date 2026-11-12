@@ -203,7 +203,7 @@ extension WorkbenchState {
   /// Proposal tabs belong to the Claude Code call that is waiting on them; after a relaunch nobody is, so they go.
   public mutating func dropProposalTabs() {
     diffTabs.removeAll { $0.proposal != nil }
-    if activeDiff?.proposal != nil { activeDiff = nil }
+    if activeDiff?.proposal != nil { activeDiff = nil; dropEmptyEditors() }
     tabOrder.removeAll { if case .diff(let t) = $0 { t.proposal != nil } else { false } }
     for name in layouts.keys {
       layouts[name]?.diffTabs.removeAll { $0.proposal != nil }
