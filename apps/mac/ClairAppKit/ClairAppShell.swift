@@ -739,7 +739,9 @@ import Observation
     /// UI acknowledges the shortcut immediately and completes the durable write off-main.
     public func performFromUI(_ id: String, _ input: CommandInput = [:]) {
       // Nothing but the empty editor (or the home screen) left: ⌘W quits like ⌘Q, confirmation included.
-      if id == "pane.close", state.panesClosed || (state.active == nil && state.activeDiff == nil && state.tree.leaves.map(\.kind) == [.editor]) {
+      // The editor showing a diff: ⌘W closes that diff tab (the command does it), never the file tab behind it.
+      if id == "pane.close", state.tree.focused == state.diffPane { _ = run("pane.close"); return }
+      if id == "pane.close", state.panesClosed || (state.active == nil && state.tree.leaves.map(\.kind) == [.editor]) {
         NSApp.terminate(nil); return
       }
       if id == "pane.close", state.tree.leaves.first?.id != state.tree.focused,
@@ -3330,7 +3332,7 @@ import Observation
             DiffView(
               target: d, model: loaded.model, threads: [:], suggestions: [], onComment: { _, _, _ in }, onSuggest: { _, _ in },
               onResolve: { _ in }, onApply: { _ in nil }, onReject: { _ in }, onSend: nil, onClose: { closeDiff() }, editor: nil,
-              onSave: nil, isDirty: false, label: tr("Claude の提案"), commentable: false)
+              onSave: nil, isDirty: false, label: tr("Claude の提案"), commentable: false, keys: st.tree.focused == st.diffPane)
             .id(d)
           } else {
           DiffView(
@@ -3367,7 +3369,7 @@ import Observation
             onSave: d.staged ? nil : {
               Task { if await store.saveFile(d.path) { loadDiff(clear: false) } }
             },
-            isDirty: st.dirty.contains(d.path),
+            isDirty: st.dirty.contains(d.path), keys: st.tree.focused == st.diffPane,
             onStageBlock: d.untracked || d.against != nil ? nil : { patch, reverse in
               if case .success(.text(let message)) = store.run("git.stagePatch", ["patch": .string(patch), "reverse": .bool(reverse)]) {
                 store.languageNotice = message

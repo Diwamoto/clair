@@ -412,6 +412,8 @@
     var commentable = true
     /// The commit view pins its own per-file header instead.
     var showsHeader = true
+    /// ⌘S / ⌥↑↓ belong to this diff only while its pane has focus; beside a focused terminal they stay with the terminal.
+    var keys = true
     /// Stages one change block (unstages it in a staged diff): the block's patch and whether to apply it in reverse.
     var onStageBlock: ((_ patch: String, _ reverse: Bool) -> Void)? = nil
     @State private var composing: Int?
@@ -577,7 +579,7 @@
             if editing, let onSave {
               Button(isDirty ? tr("保存 ●") : tr("保存"), action: onSave)
                 .font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary).buttonStyle(.hoverWash)
-                .keyboardShortcut("s", modifiers: .command)
+                .keyboardShortcut(keys ? KeyboardShortcut("s", modifiers: .command) : nil)
                 .help(tr("このファイルを保存する"))
             }
           }
@@ -597,7 +599,7 @@
                 hunk = min(max(hunk + d, 0), hunks.count - 1)
                 withAnimation(.easeOut(duration: Motion.overlayDuration)) { proxy.scrollTo(hunks[hunk], anchor: .top) }
               } label: { Image(systemName: d < 0 ? "chevron.up" : "chevron.down").foregroundStyle(C.chromeInk) }
-                .buttonStyle(.hoverWash).keyboardShortcut(d < 0 ? .upArrow : .downArrow, modifiers: .option)
+                .buttonStyle(.hoverWash).keyboardShortcut(keys ? KeyboardShortcut(d < 0 ? .upArrow : .downArrow, modifiers: .option) : nil)
                 .help(d < 0 ? tr("前の hunk (⌥↑)") : tr("次の hunk (⌥↓)"))
             }
           }

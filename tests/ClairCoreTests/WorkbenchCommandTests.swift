@@ -327,6 +327,17 @@ final class WorkbenchCommandTests: XCTestCase {
     _ = try r.execute("pane.close", state: &state).get()
     XCTAssertNil(state.activeDiff)
     XCTAssertFalse(state.diffTabs.contains(diff))
+
+    // A pinned split editor taking focus becomes the current editor and shows its file; the diff tab stays.
+    state.tabs = ["first.swift"]; state.active = "first.swift"
+    state.tree.ensureEditorAtLeft()
+    let pinned = state.tree.split(state.tree.focused, .horizontal, kind: .editor)
+    state.editorFiles = [pinned: "first.swift"]
+    state.openDiff(diff)
+    XCTAssertNotEqual(state.diffPane, pinned)
+    _ = try r.execute("pane.focus", ["id": .int(pinned)], state: &state).get()
+    XCTAssertNil(state.activeDiff)
+    XCTAssertTrue(state.diffTabs.contains(diff))
   }
 
   func testOpeningADiffBringsBackAnEditorPane() throws {
