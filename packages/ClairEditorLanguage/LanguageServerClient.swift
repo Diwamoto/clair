@@ -37,7 +37,7 @@ extension EditorLanguageID {
     case .yaml: LanguageServerCommand(executable: "yaml-language-server", arguments: ["--stdio"])
     case .toml: LanguageServerCommand(executable: "taplo", arguments: ["lsp", "stdio"])
     case .markdown: LanguageServerCommand(executable: "marksman", arguments: ["server"])
-    case .sql: nil
+    case .sql: LanguageServerCommand(executable: "sqls")
     }
   }
 
