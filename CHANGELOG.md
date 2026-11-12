@@ -6,6 +6,18 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.40.0] - 2026-11-12
+
+### Added
+- Clicking an agent tile on the concierge screen opens a quick look of that pane's live terminal, so you can type to the agent or answer its prompt without leaving the concierge. The arrow on the tile still opens the pane in its Project.
+- The concierge screen, its chat tabs, the agent tiles and the board cards now animate as they appear, change and move.
+
+### Changed
+- When the concierge waits on a permission or question, its terminal docks above the composer and takes the keyboard, so arrow keys and Return answer it while the conversation stays visible.
+
+### Fixed
+- A concierge chat no longer goes blank or drops a just-sent request when you switch chat tabs or leave and return to the concierge screen; a new chat waiting on its approval keeps its tab, and a refused approval puts the request back in the composer.
+
 ## [0.39.0] - 2026-11-12
 
 ### Changed
@@ -747,7 +759,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.39.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.40.0...HEAD
+[0.40.0]: https://github.com/Diwamoto/clair/compare/v0.39.0...v0.40.0
 [0.39.0]: https://github.com/Diwamoto/clair/compare/v0.38.1...v0.39.0
 [0.38.1]: https://github.com/Diwamoto/clair/compare/v0.38.0...v0.38.1
 [0.38.0]: https://github.com/Diwamoto/clair/compare/v0.37.1...v0.38.0
