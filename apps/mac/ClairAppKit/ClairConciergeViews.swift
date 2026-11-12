@@ -80,6 +80,8 @@
 
     /// Whether `chat` has a request sent but not yet in its transcript (the shell keeps such a new chat's tab).
     static func isSending(_ chat: String) -> Bool { sent[chat] != nil }
+    /// The start was refused (approval denied): forget the request; the shell puts it back through `ask`.
+    static func unsend(_ chat: String) { sent[chat] = nil }
 
     /// The terminal must be answered: a permission or question, or a new chat stuck before its hooks run.
     private var blocked: Bool { terminal != nil && (status == .blocked || stalled) }
@@ -139,6 +141,8 @@
       .animation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration), value: blocked)
       .onChange(of: ask, initial: true) { _, text in
         guard let text else { return }
+        // A refused start hands its request back: it was never sent.
+        if pending.map({ text.hasPrefix($0) }) == true { pending = nil }
         draft = text; focused = true; ask = nil
       }
     }
@@ -832,8 +836,9 @@
     @State private var waitingOnly = false
     @State private var project = ""
     @State private var selected: String?
-    /// The agent pane in quick look, by session id.
+    /// The agent pane in quick look, by session id, and whether its terminal can be shown (a live shell).
     @State private var peeked: String?
+    @State private var peekLive = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let gap: CGFloat = 8
@@ -896,7 +901,12 @@
             }
             .padding(.horizontal, 12).frame(height: 40)
             Rectangle().fill(L.hairline).frame(height: 1)
-            BorrowedGhosttySurface(key: a.key, cwd: a.session.cwd).id(a.key)
+            if peekLive {
+              BorrowedGhosttySurface(key: a.key, cwd: a.session.cwd).id(a.key)
+            } else {
+              Text(tr("このペインのターミナルはもう動いていません")).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
           }
           .background(C.canvas)
           .clipShape(RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous))
@@ -956,7 +966,10 @@
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: Self.gap)], spacing: Self.gap) {
           ForEach(agents, id: \.session.id) { a in
             AgentCard(session: a.session, title: a.title, key: a.key,
-                      peek: { withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration)) { peeked = a.session.id } },
+                      peek: {
+                        peekLive = ClairGhosttySurfaceView.canBorrow(key: a.key)
+                        withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration)) { peeked = a.session.id }
+                      },
                       open: { openAgent(a.session) })
               .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: Motion.overlayOpenScale)))
           }

@@ -393,7 +393,7 @@ extension LocalizedStrings {
     "ブランチ切替": "Branch switch",
     "ブランチ作成": "Branch creation",
     "準備中": "Coming soon",
-    "閉じる": "Close", "クイックルック": "Quick Look",
+    "閉じる": "Close", "クイックルック": "Quick Look", "このペインのターミナルはもう動いていません": "This pane's terminal is no longer running",
     "パネルを閉じる": "Close Panel",
     "開いているペインはありません": "No open panes",
     "エディタを開く": "Open Editor",

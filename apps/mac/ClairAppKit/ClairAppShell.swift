@@ -2203,7 +2203,7 @@ import Observation
       Task.detached { [store] in
         let ok = store.requestMCPApproval("concierge.open", ["cwd": .string(cwd), "prompt": .string(prompt)], .external)
         await MainActor.run {
-          guard ok else { return }
+          guard ok else { ConciergeChatView.unsend(chat); conciergeAsk = message; return }
           Concierge.approve(fingerprint)
           store.run("concierge.open", input, confirmed: true)
         }

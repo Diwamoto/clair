@@ -811,6 +811,10 @@ import Foundation
       v.removeFromSuperview()
       return v
     }
+    /// Whether `borrow` has something to show: a kept surface, or a shell the daemon still runs for `key`
+    /// (attaching to a dead key would start a bare shell under the agent's key).
+    static func canBorrow(key: String) -> Bool { kept[key] != nil || ClairDaemonLauncher.hasLiveShell(key: key) }
+
     /// Lends `key`'s surface to a temporary host (the concierge's quick look), or attaches a new one if none is kept.
     /// `home` is the pane host it was taken from, for `giveBack`. The PTY follows the borrower's size meanwhile.
     static func borrow(key: String, cwd: String) -> (view: ClairGhosttySurfaceView, home: NSView?) {
@@ -1182,21 +1186,32 @@ import Foundation
   struct BorrowedGhosttySurface: NSViewRepresentable {
     let key: String
     let cwd: String
-    final class Coordinator { var home: NSView?; var wantedFocus = false }
+    final class Coordinator {
+      var home: NSView?
+      /// The quick look's own host, so a surface the pane already took back is left alone.
+      weak var host: NSView?
+      var wantedFocus = false
+      var onFocus: (() -> Void)?
+    }
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> ClairGhosttySurfaceView {
       let (v, home) = ClairGhosttySurfaceView.borrow(key: key, cwd: cwd)
       context.coordinator.home = home
       context.coordinator.wantedFocus = v.wantsFocus
+      // Its pane's focus callback would focus that pane id in whatever Project is active.
+      context.coordinator.onFocus = v.onFocus; v.onFocus = nil
       v.wantsFocus = false; v.wantsFocus = true  // an edge, so it takes the keyboard even if its pane had it
       return v
     }
 
-    func updateNSView(_ nsView: ClairGhosttySurfaceView, context: Context) {}
+    func updateNSView(_ nsView: ClairGhosttySurfaceView, context: Context) { context.coordinator.host = nsView.superview }
 
     static func dismantleNSView(_ nsView: ClairGhosttySurfaceView, coordinator: Coordinator) {
+      // "Open the terminal" switches Project in the same update: the pane may have re-taken it already.
+      guard nsView.superview == nil || nsView.superview === coordinator.host else { return }
       nsView.wantsFocus = coordinator.wantedFocus
+      nsView.onFocus = coordinator.onFocus
       nsView.giveBack(to: coordinator.home)
     }
   }
