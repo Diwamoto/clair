@@ -177,6 +177,7 @@ let clairTargets: [Target] = [
       "ClairEditorLanguageCSS",
       "ClairEditorLanguageTOML",
       "ClairEditorLanguageC",
+      "ClairEditorLanguageSQL",
       .product(name: "SwiftTreeSitter", package: "SwiftTreeSitter"),
       .product(name: "TreeSitter", package: "tree-sitter"),
       .product(name: "LanguageServerProtocol", package: "LanguageServerProtocol"),
@@ -275,6 +276,11 @@ let clairTargets: [Target] = [
   ),
   .target(
     name: "ClairEditorLanguageC", path: "packages/ClairEditorLanguageC",
+    publicHeadersPath: "include",
+    cSettings: [.headerSearchPath("src")]
+  ),
+  .target(
+    name: "ClairEditorLanguageSQL", path: "packages/ClairEditorLanguageSQL",
     publicHeadersPath: "include",
     cSettings: [.headerSearchPath("src")]
   ),

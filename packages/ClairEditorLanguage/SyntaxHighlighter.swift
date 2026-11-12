@@ -23,6 +23,10 @@ enum CaptureMapping {
     if language == .terraform, nameComponents == ["variable", "member"] { return .tag }
     // YAML / TOML mapping keys: One Dark paints them red, like JSON keys.
     if language == .yaml || language == .toml, first == "property" { return .tag }
+    // tree-sitter-sql: CASE/WHEN, TEMPORARY, UNIQUE/CASCADE are keywords too.
+    if language == .sql, ["conditional", "storageclass"].contains(first) || nameComponents == ["type", "qualifier"] {
+      return .keyword
+    }
     switch first {
     case "keyword": return .keyword
     // JSON object keys, Markdown headings/markers, JSX tags: One Dark red.
@@ -203,6 +207,7 @@ public final class SyntaxHighlighter {
     case .c:
       return ["compound_statement", "struct_specifier", "enum_specifier", "union_specifier",
               "initializer_list", "preproc_if", "preproc_ifdef"].contains(type)
+    case .sql: return ["statement", "subquery", "cte"].contains(type)
     }
   }
 

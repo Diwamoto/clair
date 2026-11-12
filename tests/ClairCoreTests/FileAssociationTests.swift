@@ -35,9 +35,15 @@ final class AddedLanguageHighlightTests: XCTestCase {
   func testDetectsAddedExtensions() {
     let cases: [(String, EditorLanguageID)] = [
       ("a.html", .html), ("a.htm", .html), ("ci.yml", .yaml), ("a.yaml", .yaml),
-      ("a.css", .css), ("Cargo.toml", .toml), ("a.c", .c), ("a.h", .c),
+      ("a.css", .css), ("Cargo.toml", .toml), ("a.c", .c), ("a.h", .c), ("schema.SQL", .sql),
     ]
     for (path, id) in cases { XCTAssertEqual(EditorLanguageID.detect(path: path), id, path) }
+  }
+
+  /// Upstream's Lua `%d` in `#match?` never matched, leaving SQL numbers string-colored.
+  func testSQLNumberLiteralIsNumber() throws {
+    let spans = try SyntaxHighlighter(languageID: .sql).reset(to: TextBuffer("SELECT 42;\n").snapshot)
+    XCTAssertEqual(spans.filter { $0.range.lowerBound.value == 7 }.map(\.kind), [.number])
   }
 
   /// Every added grammar compiles its query and paints the sample's first token.
@@ -48,6 +54,7 @@ final class AddedLanguageHighlightTests: XCTestCase {
       (.css, "a { color: red; }\n", .tag),
       (.toml, "key = \"value\"\n", .tag),
       (.c, "int main(void) { return 0; }\n", .type),
+      (.sql, "SELECT id FROM users WHERE id = 1;\n", .keyword),
     ]
     for (id, text, kind) in samples {
       XCTAssertNotNil(id.grammar.query, "\(id) query failed to compile")

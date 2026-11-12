@@ -10,6 +10,7 @@ import ClairEditorLanguagePHP
 import ClairEditorLanguagePython
 import ClairEditorLanguageRuby
 import ClairEditorLanguageRust
+import ClairEditorLanguageSQL
 import ClairEditorLanguageShell
 import ClairEditorLanguageSwift
 import ClairEditorLanguageTOML
@@ -23,7 +24,7 @@ import SwiftTreeSitter
 /// file's extension (or, for shell, its shebang) — see `detect(path:contents:)`.
 public enum EditorLanguageID: String, Sendable, CaseIterable {
   case swift, go, typescript, javascript, python, json, markdown, rust, shell, ruby, java, php, terraform,
-    html, yaml, css, toml, c
+    html, yaml, css, toml, c, sql
 
   /// The grammar + query pair for this language, built once and cached
   /// (`Query` compilation is expensive — E05's `SyntaxParser` doc comment on
@@ -75,6 +76,7 @@ public enum EditorLanguageID: String, Sendable, CaseIterable {
     case "css": return .css
     case "toml": return .toml
     case "c", "h": return .c
+    case "sql": return .sql
     case "":
       // No extension: only shell identifies itself this way, via shebang.
       if let shebangLine, shebangLine.hasPrefix("#!"), shebangLine.contains("sh") {
@@ -154,6 +156,8 @@ public struct EditorGrammar: Sendable {
       return EditorGrammar(language: Language(tree_sitter_toml()), queryText: HighlightQueries.toml)
     case .c:
       return EditorGrammar(language: Language(tree_sitter_c()), queryText: HighlightQueries.c)
+    case .sql:
+      return EditorGrammar(language: Language(tree_sitter_sql()), queryText: HighlightQueries.sql)
     }
   }
 }
