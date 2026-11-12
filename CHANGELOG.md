@@ -6,6 +6,23 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.38.0] - 2026-11-12
+
+### Added
+- The concierge can run several chats side by side, as tabs; ＋ starts a new one, and each chat resumes after a restart.
+- Settings has a card where you can let agents in Clair terminals run chosen commands (launching or messaging agents, closing panes and tabs, and so on) without the approval card. Each command is off by default.
+
+### Changed
+- Notice cards slide in from the right, retract after 10 seconds and can be swiped right to dismiss; a dismissed card stays unread in the notice panel.
+- Spacing, row heights, text colours and motion follow one consistent scale across the app, settings, review and the mobile app.
+- The concierge's "thinking" label no longer shimmers.
+
+### Fixed
+- The concierge keeps its chat across Clair restarts.
+- The concierge shows when a new chat's first request seems stuck, instead of silently waiting.
+- Shift-Return in the concierge composer inserts a newline.
+- The concierge asks for a branch only when another agent is working in the same Project.
+
 ## [0.37.1] - 2026-11-11
 
 ### Fixed
@@ -720,7 +737,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.37.1...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.38.0...HEAD
+[0.38.0]: https://github.com/Diwamoto/clair/compare/v0.37.1...v0.38.0
 [0.37.1]: https://github.com/Diwamoto/clair/compare/v0.37.0...v0.37.1
 [0.37.0]: https://github.com/Diwamoto/clair/compare/v0.36.2...v0.37.0
 [0.36.2]: https://github.com/Diwamoto/clair/compare/v0.36.1...v0.36.2
