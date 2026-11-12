@@ -6,6 +6,14 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.41.0] - 2026-11-12
+
+### Added
+- SQL files (`.sql`) get syntax highlighting and folding for statements, subqueries and CTEs.
+
+### Removed
+- The right-click menu on panes (split, maximize, close), which ctrl+return also opened by accident. Those actions stay in the command palette and on their shortcuts.
+
 ## [0.40.0] - 2026-11-12
 
 ### Added
@@ -759,7 +767,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.40.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.41.0...HEAD
+[0.41.0]: https://github.com/Diwamoto/clair/compare/v0.40.0...v0.41.0
 [0.40.0]: https://github.com/Diwamoto/clair/compare/v0.39.0...v0.40.0
 [0.39.0]: https://github.com/Diwamoto/clair/compare/v0.38.1...v0.39.0
 [0.38.1]: https://github.com/Diwamoto/clair/compare/v0.38.0...v0.38.1
