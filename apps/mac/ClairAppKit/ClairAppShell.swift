@@ -3421,6 +3421,8 @@ import Observation
       // ponytail: fixed chat width beside the board; a drag handle if owners want to resize it.
       .overlay(alignment: .leading) {
         // The concierge screen: chat on the left, the board on the right (running agents first; a click opens the terminal).
+        // A persistent ZStack so the screen recedes and emerges (Motion `depth`) instead of popping.
+        ZStack {
         if sidebarMode == "concierge" {
           let chats = st.conciergeChats
           let chat = conciergeChat.flatMap { chats.contains($0) || $0 == conciergeDraft ? $0 : nil } ?? chats.last ?? conciergeDraft
@@ -3429,18 +3431,25 @@ import Observation
           HStack(spacing: 0) {
             VStack(spacing: 0) {
               ConciergeTabs(
-                chats: (chats.contains(chat) ? chats : chats + [chat]).map { ($0, status($0)) }, selected: chat,
-                select: { conciergeChat = $0 },
+                // A new chat stays a tab while its first request waits on the approval card.
+                chats: (chats + [chat, conciergeDraft].filter { !chats.contains($0) && ($0 == chat || ConciergeChatView.isSending($0)) })
+                  .reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }.map { ($0, status($0)) }, selected: chat,
+                select: { id in withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration)) { conciergeChat = id } },
                 close: { id in
                   if let c = st.concierge(chat: id) { store.closeTerminal(c.key) }
                   store.run("concierge.close", ["chat": .string(id)], confirmed: true)
                   conciergeChat = nil
                 },
-                new: { conciergeDraft = UUID().uuidString.lowercased(); conciergeChat = conciergeDraft })
+                new: {
+                  withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration)) {
+                    conciergeDraft = UUID().uuidString.lowercased(); conciergeChat = conciergeDraft
+                  }
+                })
               ConciergeChatView(
                 session: chat, terminal: c.map { ($0.key, $0.pane, $0.launch) }, status: status(chat),
                 start: { startConcierge(chat: chat, $0); conciergeChat = chat }, ask: $conciergeAsk)
               .id(chat)
+              .transition(reduceMotion ? .opacity : .asymmetric(insertion: .opacity.combined(with: .offset(y: 8)), removal: .opacity))
             }
             .frame(width: 460)
             Divider()
@@ -3464,7 +3473,10 @@ import Observation
           // Opaque: the panes stay mounted underneath, and the translucent divider let their terminal text show through.
           .background(C.canvas)
           .paneCard(focused: false)
+          .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98)))
         }
+        }
+        .animation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration), value: sidebarMode == "concierge")
       }
     }
 

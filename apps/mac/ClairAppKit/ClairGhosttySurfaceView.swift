@@ -811,6 +811,25 @@ import Foundation
       v.removeFromSuperview()
       return v
     }
+    /// Lends `key`'s surface to a temporary host (the concierge's quick look), or attaches a new one if none is kept.
+    /// `home` is the pane host it was taken from, for `giveBack`. The PTY follows the borrower's size meanwhile.
+    static func borrow(key: String, cwd: String) -> (view: ClairGhosttySurfaceView, home: NSView?) {
+      let home = kept[key]?.superview
+      if let v = reusable(key: key) { return (v, home) }
+      // No `--command`: the agent's shell already runs in the daemon; this only attaches to it.
+      let v = ClairGhosttySurfaceView(launch: (ClairDaemonLauncher.attachCommand(key: key, cwd: cwd, command: nil), cwd))
+      keep(v, key: key)
+      return (v, nil)
+    }
+
+    /// Returns a borrowed surface to the pane host it came from, which SwiftUI never re-fills on its own.
+    func giveBack(to home: NSView?) {
+      removeFromSuperview()
+      guard let home, home.window != nil, home.subviews.isEmpty else { return }
+      frame = home.bounds; autoresizingMask = [.width, .height]
+      home.addSubview(self)
+    }
+
     static func keep(_ v: ClairGhosttySurfaceView, key: String) {
       guard kept[key] == nil else { return }  // another window shows this key; the extra view stays unkept
       v.keptKey = key; kept[key] = v
@@ -1155,6 +1174,30 @@ import Foundation
       nsView.onOpenFile = onOpenFile
       nsView.onFocus = onFocus
       nsView.wantsFocus = focused
+    }
+  }
+
+  /// The concierge's quick look: a pane's live terminal lent from its Project (typing and approvals work here),
+  /// handed back to the pane when the quick look closes.
+  struct BorrowedGhosttySurface: NSViewRepresentable {
+    let key: String
+    let cwd: String
+    final class Coordinator { var home: NSView?; var wantedFocus = false }
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> ClairGhosttySurfaceView {
+      let (v, home) = ClairGhosttySurfaceView.borrow(key: key, cwd: cwd)
+      context.coordinator.home = home
+      context.coordinator.wantedFocus = v.wantsFocus
+      v.wantsFocus = false; v.wantsFocus = true  // an edge, so it takes the keyboard even if its pane had it
+      return v
+    }
+
+    func updateNSView(_ nsView: ClairGhosttySurfaceView, context: Context) {}
+
+    static func dismantleNSView(_ nsView: ClairGhosttySurfaceView, coordinator: Coordinator) {
+      nsView.wantsFocus = coordinator.wantedFocus
+      nsView.giveBack(to: coordinator.home)
     }
   }
 #endif

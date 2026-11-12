@@ -65,6 +65,24 @@
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let column: CGFloat = 760
+    /// Each chat's last transcript read and unanswered request, by session: the view is rebuilt on every tab switch
+    /// and every return to the screen, and starting blank (or dropping what was just sent) read as a lost conversation.
+    // ponytail: process-lifetime caches, never pruned; a closed chat's entry lingers until quit.
+    @MainActor private static var read: [String: [AgentHistory.Message]] = [:]
+    @MainActor private static var sent: [String: String] = [:]
+
+    init(session: String?, terminal: (key: String, pane: Int, launch: AgentLaunch)?, status: AgentSession.Status?,
+         start: @escaping (String) -> Void, ask: Binding<String?>) {
+      self.session = session; self.terminal = terminal; self.status = status; self.start = start; _ask = ask
+      _messages = State(initialValue: session.flatMap { Self.read[$0] })
+      _pending = State(initialValue: session.flatMap { Self.sent[$0] })
+    }
+
+    /// Whether `chat` has a request sent but not yet in its transcript (the shell keeps such a new chat's tab).
+    static func isSending(_ chat: String) -> Bool { sent[chat] != nil }
+
+    /// The terminal must be answered: a permission or question, or a new chat stuck before its hooks run.
+    private var blocked: Bool { terminal != nil && (status == .blocked || stalled) }
 
     var body: some View {
       Group {
@@ -85,8 +103,10 @@
                 }
               }
               if let pending { userBubble(pending).opacity(0.6).transition(appear) }
-              if status == .blocked {
+              if blocked {
                 blockedRow.transition(appear)
+                // Room to scroll the latest turn above the terminal docked over the composer.
+                Color.clear.frame(height: Self.terminalHeight - 100)
               } else if working {
                 WorkingRow().transition(appear)
               }
@@ -110,9 +130,13 @@
       .task(id: pending) {
         stalled = false
         guard pending != nil, messages?.contains(where: { $0.role == "user" }) != true else { return }
-        try? await Task.sleep(for: .seconds(3))
+        try? await Task.sleep(for: .seconds(5))
         if !Task.isCancelled, pending != nil, messages?.contains(where: { $0.role == "user" }) != true { stalled = true }
       }
+      .onChange(of: pending) { _, text in if let session { Self.sent[session] = text } }
+      // The keyboard goes where the answer is: the terminal while it waits, the composer once it is done.
+      .onChange(of: blocked) { _, now in focused = !now }
+      .animation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration), value: blocked)
       .onChange(of: ask, initial: true) { _, text in
         guard let text else { return }
         draft = text; focused = true; ask = nil
@@ -120,19 +144,24 @@
     }
 
     /// The concierge's raw terminal: mounted (so the composer can type into it) but invisible, except while it waits
-    /// on a permission or question only the terminal can answer.
+    /// on a permission or question only the terminal can answer. It then docks over the composer with the keyboard,
+    /// leaving the conversation readable above it. Always this size, so showing it never resizes the PTY.
     @ViewBuilder private var hiddenTerminal: some View {
       if let terminal {
-        let blocked = status == .blocked || stalled
         ClairGhosttySurface(launch: (terminal.launch.command, terminal.launch.cwd), pane: terminal.pane, sessionKey: terminal.key, focused: blocked)
           .id(terminal.key)
           .clipShape(RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous))
-          .overlay(RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous).strokeBorder(L.strong))
-          .padding(.horizontal, 24).padding(.top, 48).padding(.bottom, 24)
-          .opacity(blocked ? 1 : 0).allowsHitTesting(blocked).accessibilityHidden(!blocked)
-          .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: blocked)
+          .overlay(RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous).strokeBorder(blocked ? L.ring : L.strong))
+          .overlayShadow()
+          .frame(height: Self.terminalHeight)
+          .padding(.horizontal, 24).padding(.bottom, 16)
+          .frame(maxHeight: .infinity, alignment: .bottom)
+          .opacity(blocked ? 1 : 0).offset(y: blocked || reduceMotion ? 0 : 12)
+          .allowsHitTesting(blocked).accessibilityHidden(!blocked)
       }
     }
+
+    private static let terminalHeight: CGFloat = 380
 
     /// Waiting on a reply: something was just sent, or the last turn is the user's and the agent has not reported finishing.
     private var working: Bool {
@@ -179,7 +208,7 @@
       HStack(spacing: 10) {
         ConciergeAvatar()
         Circle().fill(C.attention).frame(width: 6, height: 6)
-        Text(tr("ターミナルで承認を待っています")).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textSecondary)
+        Text(tr("下のターミナルで答えてください")).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textSecondary)
       }
     }
 
@@ -438,6 +467,7 @@
               return ((h?.estimatedUSD, h?.model), read, AgentContext.claude(session: session, cwd: cwd))
             }.value
             self.chat = chat; self.context = context
+            Self.read[session] = read
             // The first read lands as is; later ones slide new turns in.
             withAnimation(messages == nil || reduceMotion ? nil : .easeOut(duration: Motion.screenDuration)) {
               messages = read
@@ -711,13 +741,14 @@
     }
   }
 
-  /// An agent pane of any Project on the concierge screen: its status and a live miniature of its screen
-  /// (the data plane, read-only); a click opens the real terminal in its Project.
+  /// An agent pane of any Project on the concierge screen: its status and a live miniature of its screen;
+  /// a click opens its quick look (the live terminal, typeable), the arrow opens the pane in its Project.
   private struct AgentCard: View {
     let session: AgentSession
     let title: String
     /// The daemon session key, to read the pane's screen.
     let key: String
+    let peek: () -> Void
     let open: () -> Void
     @State private var screen: String?
     @State private var pulse = false
@@ -726,7 +757,7 @@
     var body: some View {
       let (text, color) = statusLabel(session.status)
       let live = session.status == .running
-      Button(action: open) {
+      Button(action: peek) {
       VStack(spacing: 0) {
         HStack(alignment: .top, spacing: 10) {
           Circle().fill(color).frame(width: 7, height: 7)
@@ -737,7 +768,7 @@
             Text(verbatim: "\(text) · \(session.project)").font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).lineLimit(1)
           }
           Spacer(minLength: 0)
-          Image(systemName: "arrow.up.right").font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textMuted).padding(.top, 3)
+          Color.clear.frame(width: 22, height: 22)  // under the open button, which sits outside this one
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -755,7 +786,13 @@
       .frame(height: 220)
       .modifier(Boxed(fill: C.surfaceHover, radius: Radius.overlay))
       }
-      .buttonStyle(HoverWashStyle(radius: Radius.overlay)).help(tr("ターミナルを開く"))
+      .buttonStyle(HoverWashStyle(radius: Radius.overlay)).help(tr("クイックルック"))
+      .overlay(alignment: .topTrailing) {
+        Button(action: open) {
+          Image(systemName: "arrow.up.right").font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textMuted).frame(width: 22, height: 22)
+        }.buttonStyle(HoverWashStyle(radius: Radius.control)).padding(.top, 6).padding(.trailing, 8)
+          .help(tr("ターミナルを開く")).accessibilityLabel(tr("ターミナルを開く"))
+      }
       // ponytail: 1 s text poll of the kept surface (no colour, no live surface: re-hosting it would resize the PTY).
       .task(id: key) {
         while !Task.isCancelled {
@@ -795,6 +832,8 @@
     @State private var waitingOnly = false
     @State private var project = ""
     @State private var selected: String?
+    /// The agent pane in quick look, by session id.
+    @State private var peeked: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let gap: CGFloat = 8
@@ -817,13 +856,56 @@
             ScrollView {
               VStack(alignment: .leading, spacing: 24) {
                 if !agents.isEmpty { agentSection }
-                if !cards.isEmpty { ScrollView(.horizontal) { stages(column: column).padding(.horizontal, Self.pad) } }
+                if !cards.isEmpty {
+                  ScrollView(.horizontal) { stages(column: column).padding(.horizontal, Self.pad) }
+                    // An agent moving a TODO to the next stage slides its card there instead of it jumping.
+                    .animation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration),
+                               value: shown.map { "\($0.todo.path)\($0.todo.stage ?? "")\($0.todo.lane ?? "")\($0.state)" })
+                }
               }.padding(.vertical, Self.pad)
             }.clairScroller()
           }
         }
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).background(C.canvas)
+      .overlay { quickLook }
+      // An exited agent leaves the list, and its quick look with it.
+      .onChange(of: agents.map(\.session.id)) { _, ids in if let peeked, !ids.contains(peeked) { self.peeked = nil } }
+    }
+
+    /// A pane's live terminal over the board: type to the agent or answer its prompt without leaving the concierge.
+    /// Opens like every overlay (0.97 → 1, overlay duration); closing is not animated.
+    @ViewBuilder private var quickLook: some View {
+      if let a = agents.first(where: { $0.session.id == peeked }) {
+        let (text, color) = statusLabel(a.session.status)
+        ZStack {
+          Color.black.opacity(0.32).contentShape(Rectangle()).onTapGesture { peeked = nil }
+          VStack(spacing: 0) {
+            HStack(spacing: 10) {
+              Circle().fill(color).frame(width: 7, height: 7)
+              Text(a.title).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textPrimary).lineLimit(1)
+              Text(verbatim: "\(text) · \(a.session.project)").font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).lineLimit(1)
+              Spacer(minLength: 0)
+              Button { peeked = nil; openAgent(a.session) } label: {
+                Label(tr("ターミナルを開く"), systemImage: "arrow.up.right").padding(.horizontal, 8).frame(height: RowHeight.compact)
+              }.buttonStyle(HoverWashStyle(radius: Radius.control)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary)
+              Button { peeked = nil } label: {
+                Image(systemName: "xmark").font(.system(size: 10, weight: .semibold)).frame(width: 24, height: 24)
+              }.buttonStyle(HoverWashStyle(radius: Radius.control)).foregroundStyle(C.textTertiary)
+                .help(tr("閉じる")).accessibilityLabel(tr("閉じる"))
+            }
+            .padding(.horizontal, 12).frame(height: 40)
+            Rectangle().fill(L.hairline).frame(height: 1)
+            BorrowedGhosttySurface(key: a.key, cwd: a.session.cwd).id(a.key)
+          }
+          .background(C.canvas)
+          .clipShape(RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous))
+          .overlay(RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous).strokeBorder(L.strong))
+          .overlayShadow()
+          .padding(Self.pad)
+        }
+        .transition(.asymmetric(insertion: reduceMotion ? .identity : .opacity.combined(with: .scale(scale: Motion.overlayOpenScale)), removal: .identity))
+      }
     }
 
     private var header: some View {
@@ -873,9 +955,14 @@
         BoardHead(title: tr("ペイン"), count: agents.count)
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: Self.gap)], spacing: Self.gap) {
           ForEach(agents, id: \.session.id) { a in
-            AgentCard(session: a.session, title: a.title, key: a.key) { openAgent(a.session) }
+            AgentCard(session: a.session, title: a.title, key: a.key,
+                      peek: { withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration)) { peeked = a.session.id } },
+                      open: { openAgent(a.session) })
+              .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: Motion.overlayOpenScale)))
           }
         }
+        // Tiles come and go, and change state, in place rather than by jumps.
+        .animation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration), value: agents.map { "\($0.session.id)\(statusLabel($0.session.status).0)" })
       }.padding(.horizontal, Self.pad)
     }
 
@@ -895,7 +982,7 @@
             HStack(alignment: .top, spacing: Self.gap) {
               ForEach(ClairTodo.stages, id: \.self) { stage in
                 VStack(spacing: 6) {
-                  ForEach(inLane.filter { $0.todo.stage == stage }, id: \.todo.path) { card($0) }
+                  ForEach(inLane.filter { $0.todo.stage == stage }, id: \.todo.path) { card($0).transition(.opacity) }
                 }
                 .padding(6).frame(width: column).frame(minHeight: 44, maxHeight: .infinity, alignment: .top)
                 .background(W.soft, in: RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous))
