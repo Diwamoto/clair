@@ -149,8 +149,10 @@ final class WorkbenchConciergeTests: XCTestCase {
     XCTAssertEqual(r.execute("concierge.open", ["cwd": .string("/tmp")], confirmed: true, state: &s).failure?.code, .preconditionFailed)
     try r.execute("concierge.open", ["cwd": .string(root)], confirmed: true, state: &s).get()
     // A changed source asks again — but only for a new concierge, not to focus the running one.
+    let chat = try XCTUnwrap(s.concierge()?.launch.concierge)
     try r.execute("settings.concierge", ["prompt": .string("new")], confirmed: true, state: &s).get()
-    try r.execute("concierge.open", confirmed: true, state: &s).get()
+    try r.execute("concierge.open", ["chat": .string(chat)], confirmed: true, state: &s).get()
+    XCTAssertEqual(r.execute("concierge.open", confirmed: true, state: &s).failure?.code, .preconditionFailed)
   }
 
   func testFingerprintChangesWithWhatTheConciergeReads() throws {
