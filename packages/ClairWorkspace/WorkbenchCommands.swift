@@ -32,7 +32,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public enum Palette: String, Sendable, Codable { case commands, files, search, symbols, references, branches, compare, recent }
 
   public static let sections = ["一般", "AIプロバイダー", "使用状況", "エディタ", "ターミナル", "通知", "モバイル", "アップデート"]
-  public static let toggleKeys = ["restoreLayout", "confirmClose", "hideQuota", "preventSleepOnBattery", "formatOnSave", "showWhitespace", "softWrap", "terminalApprovals", "lineNumbers", "terminalCursorBlink", "notifyEnabled", "notifyOnBell", "notifyOnExit", "notifyWhenActive", "notifySound", "autoEqualize", "focusExpand", "startConcierge"]
+  public static let toggleKeys = ["restoreLayout", "confirmClose", "hideQuota", "preventSleepOnBattery", "formatOnSave", "showWhitespace", "softWrap", "terminalApprovals", "lineNumbers", "terminalCursorBlink", "notifyEnabled", "notifyOnBell", "notifyOnExit", "notifyWhenActive", "notifySound", "autoEqualize", "focusExpand"]
     + AgentProfile.all.map { agentKey($0.id) } + autoApproveCommands.keys.sorted().map(autoApproveKey)
   /// ADR-0027: commands the owner may let an agent in a Clair terminal run without the approval card. Off by default.
   public static let autoApproveCommands = [
@@ -54,7 +54,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   /// Closed-set settings (the mock's segmented controls). The first option is the default.
   /// Palette titles of `toggleKeys` / `choiceOptions`, matching the settings rows, so every setting is reachable from ⌘K.
   public static let settingTitles = [
-    "restoreLayout": "前回のレイアウトを復元", "startConcierge": "起動時にコンシェルジュを開く", "confirmClose": "閉じる前に確認", "hideQuota": "ステータスバーの利用枠を隠す",
+    "restoreLayout": "前回のレイアウトを復元", "confirmClose": "閉じる前に確認", "hideQuota": "ステータスバーの利用枠を隠す",
     "preventSleepOnBattery": "バッテリー駆動中もエージェント実行中はスリープさせない", "formatOnSave": "保存時に整形",
     "showWhitespace": "空白文字を表示", "softWrap": "行の折り返し", "terminalApprovals": "コマンド実行前に確認",
     "defaultAgent": "既定のAgent", "approvalPolicy": "承認ポリシー", "tabWidth": "タブ幅", "defaultShell": "デフォルトシェル",

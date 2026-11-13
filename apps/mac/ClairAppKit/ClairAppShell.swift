@@ -1423,6 +1423,8 @@ import Observation
     /// The concierge screen is the chat beside the board; the board's TODOs are polled while it is up.
     private var conciergeBoard: Bool { sidebarMode == "concierge" }
     @AppStorage("clair.sidebarWidth") private var sidebarWidth = 242.0
+    /// The concierge chat column; 0 = folded away.
+    @AppStorage("clair.conciergeChatWidth") private var conciergeChatWidth = 460.0
     /// The concierge chat moves aside for the pane board once one of its children is live (no manual toggle).
 
     /// Width when the current drag began, so a drag that snaps the sidebar shut reopens (⌘B) at it.
@@ -1501,7 +1503,8 @@ import Observation
     public init() { _store = State(initialValue: ClairWorkbenchStore()) }
     /// Snapshot tests inject a fixture store.
     /// `sidebarMode`: which sidebar panel shows first — the chrome snapshot test renders each panel through it.
-    init(store: ClairWorkbenchStore, sidebarMode: String = "folder") {
+    /// ADR-0028: Clair opens on the concierge, the control plane; a Project workspace is where you drill down.
+    init(store: ClairWorkbenchStore, sidebarMode: String = "concierge") {
       _store = State(initialValue: store); _sidebarMode = State(initialValue: sidebarMode)
     }
 
@@ -1525,7 +1528,7 @@ import Observation
           VStack(spacing: 0) {
             titlebar
             HStack(spacing: 0) {
-              activityBar
+              if sidebarMode != "concierge" { activityBar }
               // The concierge is its own screen (the control plane), not a panel of a Project's workspace.
               let sidebarShown = !st.sidebarHidden && sidebarMode != "concierge"
               if sidebarShown {
@@ -1663,6 +1666,10 @@ import Observation
             .padding(.horizontal, glass ? 12 : 8).frame(width: 200, height: glass ? RowHeight.control : RowHeight.default)
             .fieldWell(radius: Radius.pill())
           }.buttonStyle(HoverWashStyle(radius: Radius.pill())).help(tr("検索"))
+          ScreenSwitch(concierge: conciergeBoard, waiting: st.agentSessions.contains { $0.status == .blocked && !Concierge.isPane($0.pane) }) {
+            sidebarMode = conciergeBoard ? "folder" : "concierge"
+            if !conciergeBoard, st.sidebarHidden { store.run("sidebar.toggle") }
+          }
           titlebarAction("command", tr("コマンドパレット"), on: st.palette == .commands) { store.run("palette.commands") }
           titlebarAction("gearshape", tr("設定"), on: st.settingsOpen) { store.run(st.settingsOpen ? "settings.close" : "settings.open") }
         }.padding(.horizontal, 12)
@@ -1673,6 +1680,14 @@ import Observation
       .chromeBackground()
       .overlay(alignment: .bottom) { if !glass { Rectangle().fill(C.surfaceActive).frame(height: 1) } }
       .onChange(of: glass) { NotificationCenter.default.post(name: Notification.Name("ClairLayoutTitlebar"), object: nil) }
+      // #78: here, not on the body's chain (at the type checker's limit). The titlebar stays mounted on both screens.
+      .task(id: conciergeBoard) {
+        // The concierge and its children rewrite the TODO files while the board is open.
+        while conciergeBoard, !Task.isCancelled {
+          todos = ClairTodo.list()
+          try? await Task.sleep(for: .seconds(2))
+        }
+      }
     }
 
     private func titlebarAction(_ icon: String, _ help: String, on: Bool, _ action: @escaping () -> Void) -> some View {
@@ -1932,15 +1947,12 @@ import Observation
       VStack(spacing: 0) {
         // Glass: the icons sit in a floating capsule only as tall as they are; the column keeps its 48pt cell.
         VStack(spacing: glass ? 4 : 2) {
-          ForEach(["folder", Self.browserMode, "shield", "terminal", "ladybug", "checklist", "concierge"], id: \.self) { icon in
+          ForEach(["folder", Self.browserMode, "shield", "terminal", "ladybug"], id: \.self) { icon in
             activityBarButton(icon)
           }
         }
         .padding(.vertical, glass ? 4 : 0).frame(width: glass ? DesignTokens.Glass.railWidth : nil)
         .glassPanel(.clear, radius: DesignTokens.Glass.railWidth / 2, inset: 0)
-        // #77: one shortcut back and forth between the concierge and the Project workspace.
-        Button("") { sidebarMode = sidebarMode == "concierge" ? "folder" : "concierge"; if st.sidebarHidden { store.run("sidebar.toggle") } }
-          .keyboardShortcut("0", modifiers: [.command, .control]).opacity(0).frame(width: 0, height: 0)
         // ponytail: no overflow "…" menu — the Workbench shows it only when nav items overflow; four always fit here.
         Spacer(minLength: 0)
       }
@@ -1950,15 +1962,6 @@ import Observation
       .overlay(alignment: .trailing) { if !glass { Rectangle().fill(C.surfaceActive).frame(width: 1) } }
       // ⌥⌘B shows the browser's panel. Here, not on the body's modifier chain (already at the type checker's limit);
       // the activity bar is on screen even while ⌘B hides the sidebar.
-      // #77 / #78: here, not on the body's chain (at the type checker's limit).
-      .onAppear { if st.toggles["startConcierge"] == true { sidebarMode = "concierge" } }
-      .task(id: conciergeBoard) {
-        // The concierge and its children rewrite the TODO files while the board is open.
-        while conciergeBoard, !Task.isCancelled {
-          todos = ClairTodo.list()
-          try? await Task.sleep(for: .seconds(2))
-        }
-      }
       .onChange(of: st.browserNavigationGeneration) {
         sidebarMode = Self.browserMode
         if st.sidebarHidden { store.run("sidebar.toggle") }
@@ -1974,14 +1977,13 @@ import Observation
         }
         if icon == "shield" { reloadChanges() }
         if icon == "ladybug" { store.run("debug.open") }
-        if icon == "checklist" { todos = ClairTodo.list() }
       }
     }
 
     private var sidebar: some View {
       VStack(spacing: 0) {
         // Lazy: a Project can list thousands of files, and an eager tree makes accessibility traversal (and layout) block the main thread.
-        ScrollView { LazyVStack(alignment: .leading, spacing: 0) { sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "terminal" ? AnyView(sessionList) : sidebarMode == "ladybug" ? AnyView(debugPanel) : sidebarMode == "checklist" ? AnyView(todoList) : sidebarMode == Self.browserMode ? AnyView(browserSidebar) : AnyView(explorer) }.clairScroller() }
+        ScrollView { LazyVStack(alignment: .leading, spacing: 0) { sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "terminal" ? AnyView(sessionList) : sidebarMode == "ladybug" ? AnyView(debugPanel) : sidebarMode == Self.browserMode ? AnyView(browserSidebar) : AnyView(explorer) }.clairScroller() }
         Spacer(minLength: 0)
         if sidebarMode == "shield", st.isRepo {
           // Same filled control as the commit button, so it reads as a button and the whole box is the hit target.
@@ -2243,42 +2245,6 @@ import Observation
     @State private var todos: [ClairTodo] = []
     /// The TODO in the add / edit modal, and whether it is a new one.
     @State private var todoDraft: (todo: ClairTodo, isNew: Bool)?
-
-    /// `~/.clair/todo/*.md`, written by agents through the clair-todo skill or here; a row opens the file in the editor.
-    // ponytail: reloads on activity-bar click and after an edit here only, add a directory watcher if live refresh matters.
-    private var todoList: some View {
-      VStack(alignment: .leading, spacing: 0) {
-        SidebarHeading(tr("TODO")) {
-          Button { todoDraft = (ClairTodo(path: "", title: ""), true) } label: { Image(systemName: "plus").font(Typography.font(Typography.chrome)) }
-            .buttonStyle(.hoverWash).foregroundStyle(C.textSecondary).help(tr("TODO を追加")).accessibilityLabel(tr("TODO を追加"))
-        }
-        if todos.isEmpty {
-          SidebarNote(tr("TODO はまだありません"))
-        }
-        ForEach(todos, id: \.path) { t in
-          treeRow(depth: 0, selected: st.active == t.path, action: { store.run("file.open", ["path": .string(t.path)]) }) {
-            Button { saveTodo(t.with { $0.done.toggle() }) } label: {
-              Image(systemName: t.done ? "checkmark.circle.fill" : "circle").font(Typography.font(Typography.sidebar))
-            }.buttonStyle(.plain).foregroundStyle(C.textTertiary).accessibilityLabel(t.done ? tr("未完了に戻す") : tr("完了にする"))
-            Text("P\(t.priority)").font(Typography.font(Typography.sidebarMicro))
-              .foregroundStyle(t.priority == 1 && !t.done ? C.danger : C.textTertiary)
-            Text(t.title).font(Typography.font(Typography.sidebar)).strikethrough(t.done)
-              .foregroundStyle(t.done ? C.textTertiary : C.textPrimary).lineLimit(1)
-            Spacer(minLength: 0)
-            if let due = t.due { Text(due).font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textTertiary) }
-          }
-          .clairContextMenu(menus) {
-            ClairMenuSpec(title: t.title, sub: t.path, entries: [
-              .item(tr("開く")) { store.run("file.open", ["path": .string(t.path)]) },
-              .item(tr("編集…")) { todoDraft = (t, false) },
-              .item(t.done ? tr("未完了に戻す") : tr("完了にする")) { saveTodo(t.with { $0.done.toggle() }) },
-              .separator,
-              .item(tr("削除…"), destructive: true) { deleteTodo(t) },
-            ])
-          }
-        }
-      }
-    }
 
     private func saveTodo(_ t: ClairTodo) {
       var t = t
@@ -3418,7 +3384,6 @@ import Observation
       .onChange(of: review?.chatKey) { old, new in
         if let old, old != new { store.closeTerminal(old) }
       }
-      // ponytail: fixed chat width beside the board; a drag handle if owners want to resize it.
       .overlay(alignment: .leading) {
         // The concierge screen: chat on the left, the board on the right (running agents first; a click opens the terminal).
         // A persistent ZStack so the screen recedes and emerges (Motion `depth`) instead of popping.
@@ -3451,8 +3416,14 @@ import Observation
               .id(chat)
               .transition(reduceMotion ? .opacity : .asymmetric(insertion: .opacity.combined(with: .offset(y: 8)), removal: .opacity))
             }
-            .frame(width: 460)
-            Divider()
+            .frame(width: conciergeChatWidth < 20 ? 0 : conciergeChatWidth).clipped()
+            // Dragged under 160pt the chat folds away; drag the edge back out to reopen it.
+            Divider().overlay {
+              SplitHandle(horizontal: true, ratio: conciergeChatWidth, total: 1, onRatio: { w in
+                conciergeChatWidth = w < 160 ? 0 : min(w, 1200)
+              }, onDoubleClick: { conciergeChatWidth = conciergeChatWidth < 20 ? 460 : 0 })
+                .frame(width: 8)
+            }
             TodoBoardView(
               agents: conciergePanes, openAgent: focusConciergeChild,
               cards: st.board(todos), projects: st.projects.map(\.name),
@@ -3587,7 +3558,6 @@ import Observation
               }
             }
             SettingsCard(title: tr("コンシェルジュ")) {
-              switchRow(tr("起動時にコンシェルジュを開く"), "startConcierge", note: tr("オフなら前回の Project を開きます。⌃⌘0 でいつでも切り替えられます。"))
               VStack(alignment: .leading, spacing: 6) {
                 Text(tr("作業フォルダ")).font(Typography.font(Typography.sidebar))
                 TextField(tr("空欄なら ~/.clair/concierge"), text: $conciergeCwdDraft)
@@ -4496,6 +4466,44 @@ import Observation
   /// the rule read as a stray line rather than a state (mock review
   /// feedback). Both now share the `washSelected` tint and there is no
   /// rule; see checklist §2.4, 2026-09-20 amendment.
+  /// ADR-0028: the titlebar switch between the concierge (control plane) and the IDE (a Project workspace).
+  /// A lens slides between the two icons; a dot on the concierge side while an agent waits on you. ⌃⌘0 flips it.
+  // ponytail: matchedGeometryEffect approximates the Liquid Glass morph; use `glassEffect` once the minimum macOS is 26.
+  private struct ScreenSwitch: View {
+    let concierge: Bool
+    let waiting: Bool
+    let toggle: () -> Void
+    @Namespace private var lens
+    @Environment(\.clairGlass) private var glass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+      Button { withAnimation(reduceMotion ? nil : .spring(duration: Motion.screenDuration, bounce: 0.25)) { toggle() } } label: {
+        HStack(spacing: 0) {
+          icon("brain.head.profile", on: concierge)
+            .overlay(alignment: .topTrailing) { if waiting && !concierge { Circle().fill(C.attention).frame(width: 6, height: 6).offset(x: -3, y: 3) } }
+          icon("chevron.left.forwardslash.chevron.right", on: !concierge)
+        }
+        .padding(2).fieldWell(radius: Radius.pill())
+      }
+      .buttonStyle(.plain)
+      .keyboardShortcut("0", modifiers: [.command, .control])
+      .help(concierge ? tr("IDE に切り替え (⌃⌘0)") : tr("コンシェルジュに切り替え (⌃⌘0)"))
+      .accessibilityLabel(concierge ? tr("IDE に切り替え") : tr("コンシェルジュに切り替え"))
+    }
+
+    private func icon(_ name: String, on: Bool) -> some View {
+      Image(systemName: name).font(.system(size: 13))
+        .foregroundStyle(on ? C.chromeInk : C.textMuted)
+        .frame(width: 28, height: RowHeight.control - 4)
+        .background {
+          if on {
+            Capsule().fill(glass ? DesignTokens.Glass.capsuleSelected : W.selected).matchedGeometryEffect(id: "lens", in: lens)
+          }
+        }
+    }
+  }
+
   private struct ActivityBarButton: View {
     let icon: String
     let on: Bool

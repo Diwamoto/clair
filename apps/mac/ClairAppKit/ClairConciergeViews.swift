@@ -250,7 +250,7 @@
 
     private static let starters: [(icon: String, text: String)] = [
       ("checkmark.seal", "未コミットの変更をレビューして"), ("testtube.2", "テストを実行して、失敗を直して"),
-      ("map", "この Project の構成を説明して"), ("checklist", "残っている TODO を片付けて"),
+      ("map", "この Project の構成を説明して"), ("checklist", "看板のカードを片付けて"),
     ]
 
     private var composer: some View {
