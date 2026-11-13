@@ -143,6 +143,11 @@ Project の workspace を「実際に編集・実行する場所(データプレ
 - `todo.update` は承認なしなので、`stage` の変更で起動できる呼び出し元を限る。起動するのは、GUI の操作と、
   `caller` がコンシェルジュの terminal の `todo.update` だけ。子 agent や Clair の外からの `stage` の変更は
   記録だけして起動しない(承認なしの `todo.update` が、承認の要る `agent.launch` の抜け道にならないように)。
+- コンシェルジュが読んだ外部の文章に誘導されて起動する(プロンプトインジェクション)ことへの対策として、
+  コンシェルジュは `--disallowedTools WebFetch,WebSearch` で起動し、Web とリポジトリの調査は子に任せる。
+  承認なしで起動できるのはチャットの依頼1件につき3体までで、超えたら承認カードを出す(依頼1件 = hook の
+  `UserPromptSubmit` から `Stop` まで)。子は Claude Code の通常の権限確認つきで動くので、誘導された子の
+  書き込みとコマンド実行には ⌥⌘Y が要る。
 - 通知は今の仕組みのまま(前面なら Clair 内のカード、背面なら macOS notification)。
 
 ## 範囲外
@@ -184,6 +189,7 @@ Project の workspace を「実際に編集・実行する場所(データプレ
 - Done の後片付け、7 日の表示期間、検索。
 - `stage` の読み替え(`submit` / `check-*` / `review` → Review)。
 - コンシェルジュの固定の役割と承認の既定値(ADR-0027 の追記)。
+- コンシェルジュの `--disallowedTools WebFetch,WebSearch` と、依頼1件あたり3体の承認なし起動の上限。
 
 ## Slice 3: カードのライブ画面と承認キー
 
