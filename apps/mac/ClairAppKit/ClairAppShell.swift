@@ -1719,6 +1719,11 @@ import Observation
           try? await Task.sleep(for: .seconds(2))
         }
       }
+      .background {
+        BoardApprovalKeys(
+          blocked: st.board(todos, now: Date()).cards.filter { $0.state == .blocked }.map(\.todo.path),
+          onBoard: conciergeBoard, selected: $boardSelected, answer: answerApproval)
+      }
     }
 
     private func titlebarAction(_ icon: String, _ help: String, on: Bool, _ action: @escaping () -> Void) -> some View {
@@ -2262,16 +2267,34 @@ import Observation
       leaveConcierge()
     }
 
-    /// The data plane on the concierge screen: every Project's agent panes, the concierge's own children first.
-    private var conciergePanes: [(session: AgentSession, title: String, key: String)] {
-      let children = st.conciergeChildren()
-      let ids = Set(children.map(\.session.id))
-      let rows = children.map { ($0.session, $0.launch.prompt.map(conciergeShortTitle) ?? $0.session.title) }
-        + st.agentSessions.filter { !Concierge.isPane($0.pane) && !$0.status.isExited && !ids.contains($0.id) }.map { ($0, $0.activity ?? $0.title) }
-      return rows.compactMap { s, title in
-        st.projects.first { $0.name == s.project }.map { (s, title, WorkbenchState.terminalKey($0.path, s.pane)) }
+    /// A card's agent pane: the live terminal its `agent` key names, with the key that reads its screen.
+    private func boardAgent(_ card: TodoBoardCard) -> BoardAgent? {
+      guard let name = card.project, let pane = card.pane, let project = st.projects.first(where: { $0.name == name }),
+            let s = st.agentSessions.first(where: { $0.project == name && $0.pane == pane }) else { return nil }
+      return (s, card.todo.title, WorkbenchState.terminalKey(project.path, pane))
+    }
+
+    /// Manual agent panes: on no card and not started by the concierge (those always have a card).
+    private func otherAgents(_ cards: [TodoBoardCard]) -> [BoardAgent] {
+      let owned = Set(cards.compactMap { boardAgent($0)?.session.id } + st.conciergeChildren().map(\.session.id))
+      return st.agentSessions.filter { !Concierge.isPane($0.pane) && !$0.status.isExited && !owned.contains($0.id) }.compactMap { s in
+        st.projects.first { $0.name == s.project }.map { (s, s.activity ?? s.title, WorkbenchState.terminalKey($0.path, s.pane)) }
       }
     }
+
+    /// ⌥⌘Y / ⌥⌘N: Return accepts Claude Code's highlighted "Yes", Escape declines.
+    private func answerApproval(_ path: String, yes: Bool) {
+      guard let card = st.board(todos, now: Date()).cards.first(where: { $0.todo.path == path }), let a = boardAgent(card) else { return }
+      let sent = yes ? ClairGhosttySurfaceView.pressReturn(key: a.key) : ClairGhosttySurfaceView.pressEscape(key: a.key)
+      guard sent else { return }
+      withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration)) { boardFlash = path }
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+        withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration)) { if boardFlash == path { boardFlash = nil } }
+      }
+    }
+
+    @State private var boardSelected: String?
+    @State private var boardFlash: String?
 
     @State private var todos: [ClairTodo] = []
     /// The TODO in the add / edit modal, and whether it is a new one.
@@ -3455,9 +3478,13 @@ import Observation
               }, onDoubleClick: { conciergeChatWidth = conciergeChatWidth < 20 ? 460 : 0 })
                 .frame(width: 8)
             }
+            let board = st.board(todos, now: Date())
             TodoBoardView(
-              agents: conciergePanes, openAgent: focusConciergeChild,
-              cards: st.board(todos), projects: st.projects.map(\.name),
+              cards: board.cards, archived: board.archived, others: otherAgents(board.cards),
+              agent: boardAgent, projects: Array(st.projects.map(\.name).reversed()),
+              run: { store.run($0, $1) }, confirm: { menus.ask($0) }, reload: { todos = ClairTodo.list() },
+              newCard: { todoDraft = (ClairTodo(path: "", title: ""), true) },
+              openAgent: focusConciergeChild,
               openPane: { card in
                 guard let p = card.project, let pane = card.pane else { return }
                 if p != st.project { store.run("project.switch", ["name": .string(p)]) }
@@ -3466,11 +3493,13 @@ import Observation
               },
               openFile: { path in store.run("file.open", ["path": .string(path)]) },
               ask: { card in conciergeAsk = tr("TODO「%@」(%@)を進めて。", card.todo.title, card.todo.path) + "\n" },
+              makePR: { card in conciergeAsk = tr("TODO「%@」(%@) の PR を作って。", card.todo.title, card.todo.path) },
               diffProject: { card in card.todo.branch.flatMap { b in st.projects.first { $0.branch == b }?.name } },
               openDiff: { name in
                 if name != st.project { store.run("project.switch", ["name": .string(name)]) }
                 sidebarMode = "shield"; reloadChanges()
-              })
+              },
+              selected: $boardSelected, flash: boardFlash)
             if !store.conciergeFiles.isEmpty {
               Divider()
               conciergeEditorColumn

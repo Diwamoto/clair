@@ -868,8 +868,14 @@ import Foundation
     @discardableResult public static func pressReturn(inPane pane: Int) -> Bool { press(36, inPane: pane) }  // kVK_Return
     /// Presses Escape in `pane`: an agent TUI's interrupt (Claude Code stops the running turn and keeps the session).
     @discardableResult public static func pressEscape(inPane pane: Int) -> Bool { press(53, inPane: pane) }  // kVK_Escape
-    private static func press(_ keyCode: UInt32, inPane pane: Int) -> Bool {
-      guard let surface = byPane[pane]?.view?.ghosttySurface else { return false }
+    private static func press(_ keyCode: UInt32, inPane pane: Int) -> Bool { press(keyCode, on: byPane[pane]?.view?.ghosttySurface) }
+
+    /// Return / Escape on the kept surface of daemon session `key`, mounted or not: the board's approval keys.
+    @discardableResult static func pressReturn(key: String) -> Bool { press(36, on: kept[key]?.ghosttySurface) }
+    @discardableResult static func pressEscape(key: String) -> Bool { press(53, on: kept[key]?.ghosttySurface) }
+
+    private static func press(_ keyCode: UInt32, on surface: GhosttySurfaceHandle?) -> Bool {
+      guard let surface else { return false }
       for action in [GhosttyKeyAction.press, .release] {
         _ = try? surface.sendKey(GhosttyKeyEvent(action: action, mods: [], keyCode: keyCode, text: nil))
       }
