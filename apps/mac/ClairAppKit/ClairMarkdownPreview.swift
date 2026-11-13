@@ -132,6 +132,7 @@
     @State private var cell: Cell?
     @FocusState private var editing: Cell?
     @State private var grab = false  // focus the field only when the user picked the cell, not when it scrolls back in
+    @State private var dirty = false  // a cell move fires commit up to three times; only a real edit pays for the 1 MB re-serialize
     private struct Cell: Hashable { let r: Int, c: Int }
 
     var body: some View {
@@ -238,19 +239,21 @@
       Binding(get: { r < rows.count && c < rows[r].count ? rows[r][c] : "" }, set: { v in
         guard r < rows.count else { return }
         while rows[r].count <= c { rows[r].append("") }  // ragged rows grow only when typed into
-        rows[r][c] = v
+        rows[r][c] = v; dirty = true
       })
     }
 
     private func reload(_ m: EditorTransactionManager, _ sep: Character) {
-      rows = TableFile.parse(m.buffer.snapshot.string(), separator: sep)
+      rows = TableFile.parse(m.buffer.snapshot.string(), separator: sep); dirty = false
     }
 
     private func mutate(_ m: EditorTransactionManager, _ sep: Character, _ f: (inout [[String]]) -> Void) {
-      f(&rows); commit(m, sep)
+      f(&rows); dirty = true; commit(m, sep)
     }
 
     private func commit(_ m: EditorTransactionManager, _ sep: Character) {
+      guard dirty else { return }
+      dirty = false
       let snap = m.buffer.snapshot, old = snap.string()
       let text = TableFile.serialize(rows, separator: sep, lineEnding: old.contains("\r\n") ? "\r\n" : "\n",
                                      trailingNewline: old.isEmpty || old.hasSuffix("\n"))
