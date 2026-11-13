@@ -437,8 +437,30 @@ import Observation
       return ProcessInfo.processInfo.environment["CLAIR_PROJECT_ROOT"] ?? (cwd == "/" ? NSHomeDirectory() : cwd)
     }
 
+    struct ConciergeFile: Hashable { let project: String, root: String, path: String }
+    /// The concierge screen's editor column: files of any Project, shown with the Project's own buffers.
+    var conciergeFiles: [ConciergeFile] = []
+    var conciergeFile: ConciergeFile?
+    /// Set by the shell while the concierge screen is up: `file.open` then lands in the column instead of the IDE.
+    var conciergeShown = false
+
+    func selectConciergeFile(_ f: ConciergeFile) {
+      run("file.open", ["path": .string(URL(fileURLWithPath: f.root).appending(path: f.path).standardizedFileURL.path)])
+    }
+
+    func closeConciergeFile(_ f: ConciergeFile) {
+      guard let i = conciergeFiles.firstIndex(of: f) else { return }
+      conciergeFiles.remove(at: i)
+      if conciergeFile == f {
+        conciergeFile = nil
+        if !conciergeFiles.isEmpty { selectConciergeFile(conciergeFiles[max(i - 1, 0)]) }
+      }
+    }
+
     @discardableResult
     public func run(_ id: String, _ input: CommandInput = [:], confirmed: Bool = false) -> Result<CommandResult, CommandError> {
+      // ⌘W on the concierge screen closes the column's tab; the file stays open in its Project.
+      if id == "pane.close", conciergeShown, let f = conciergeFile { closeConciergeFile(f); return .success(.ok) }
       let previousEditor = (state.project, state.active)
       if id.hasPrefix("debug.") { syncDebugPhase() }
       // `file.save` from any caller (⌘S, CLI, MCP) writes the buffer first; a failed write keeps the dirty marker.
@@ -486,6 +508,11 @@ import Observation
         if id == "file.open" || id == "file.preview" {
           NSApp?.activate(ignoringOtherApps: true)
           if let w = NSApp?.windows.first(where: { $0.isMiniaturized && $0.title != "Pair a device" }) { w.deminiaturize(nil) }
+        }
+        if id == "file.open", conciergeShown, let p = state.active, let root = activeRoot {
+          let f = ConciergeFile(project: state.project, root: root, path: p)
+          if !conciergeFiles.contains(f) { conciergeFiles.append(f) }
+          conciergeFile = f
         }
         if id == "file.open", case .int(let line)? = input["line"], let p = state.active {
           let column: Int = if case .int(let c)? = input["column"] { c } else { 0 }
@@ -1425,6 +1452,7 @@ import Observation
     @AppStorage("clair.sidebarWidth") private var sidebarWidth = 242.0
     /// The concierge chat column; 0 = folded away.
     @AppStorage("clair.conciergeChatWidth") private var conciergeChatWidth = 460.0
+    @AppStorage("clair.conciergeEditorWidth") private var conciergeEditorWidth = 560.0
     /// The concierge chat moves aside for the pane board once one of its children is live (no manual toggle).
 
     /// Width when the current drag began, so a drag that snaps the sidebar shut reopens (⌘B) at it.
@@ -1600,7 +1628,10 @@ import Observation
       }
       .onChange(of: st.debugNavigationGeneration) { sidebarMode = "ladybug" }
       // A file opened while the concierge chat covers the panes would land hidden behind it.
-      .onChange(of: st.active) { leaveConciergeOverlay() }
+      .onChange(of: sidebarMode, initial: true) { _, mode in store.conciergeShown = mode == "concierge" }
+      .onChange(of: st.active) {
+        if !store.conciergeFiles.contains(where: { $0.project == st.project && $0.path == st.active }) { leaveConciergeOverlay() }
+      }
       .onChange(of: store.debugSession?.frames.first) { _, frame in
         if sidebarMode == "ladybug", let frame { openDebugFrame(frame) }
       }
@@ -3433,13 +3464,17 @@ import Observation
                 store.run("pane.focus", ["id": .int(pane)])
                 leaveConcierge()
               },
-              openFile: { path in leaveConcierge(); store.run("file.open", ["path": .string(path)]) },
+              openFile: { path in store.run("file.open", ["path": .string(path)]) },
               ask: { card in conciergeAsk = tr("TODO「%@」(%@)を進めて。", card.todo.title, card.todo.path) + "\n" },
               diffProject: { card in card.todo.branch.flatMap { b in st.projects.first { $0.branch == b }?.name } },
               openDiff: { name in
                 if name != st.project { store.run("project.switch", ["name": .string(name)]) }
                 sidebarMode = "shield"; reloadChanges()
               })
+            if !store.conciergeFiles.isEmpty {
+              Divider()
+              conciergeEditorColumn
+            }
           }
           // Opaque: the panes stay mounted underneath, and the translucent divider let their terminal text show through.
           .background(C.canvas)
@@ -3448,6 +3483,30 @@ import Observation
         }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration), value: sidebarMode == "concierge")
+      }
+    }
+
+    /// Right of the board: tabs for the files opened from the concierge screen, over the real editor. ponytail: language
+    /// features use the file's Project root, but the buffers are keyed by relative path, so two Projects' same-named files collide.
+    private var conciergeEditorColumn: some View {
+      VStack(spacing: 0) {
+        ScrollView(.horizontal) {
+          HStack(spacing: 4) {
+            ForEach(store.conciergeFiles, id: \.self) { f in
+              FileTabButton(
+                path: f.path, name: name(f.path), selected: f == store.conciergeFile,
+                dirty: f.project == st.project && st.dirty.contains(f.path),
+                onActivate: { store.selectConciergeFile(f) }, onClose: { store.closeConciergeFile(f) })
+            }
+          }.padding(.horizontal, 8)
+        }.scrollIndicators(.never).frame(height: 44)
+        Divider()
+        if let f = store.conciergeFile, f.project == st.project, f.path == st.active { activeEditor } else { C.canvas }
+      }
+      .frame(width: max(conciergeEditorWidth, 320))
+      .overlay(alignment: .leading) {
+        SplitHandle(horizontal: true, ratio: -conciergeEditorWidth, total: 1, onRatio: { conciergeEditorWidth = min(max(-$0, 320), 1400) })
+          .frame(width: 6).offset(x: -3)
       }
     }
 

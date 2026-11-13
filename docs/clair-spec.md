@@ -446,7 +446,10 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   通常の agent launch と同じく raw PTY で起動し、GUI はその session の公式 transcript を
   チャットとして描画して、送信は PTY に書き込む。コンシェルジュが起動した子 agent
   (`parent` がコンシェルジュ)は状態と pane へのリンクで示し、出力は中継しない。
-  画面は左にチャット(既定の幅 460。境界のドラッグで幅を変えて保存し、160 未満にするかダブルクリックで畳む)、右に常にボード(#78)を置く([ADR-0028](decisions/0028-concierge-control-plane.md)、[計画](plans/concierge-control-plane.md))。ボードの先頭に全 Project の agent pane(コンシェルジュの子を先に、
+  画面は左にチャット(既定の幅 460。境界のドラッグで幅を変えて保存し、160 未満にするかダブルクリックで畳む)、中央に常にボード(#78)を置き([ADR-0028](decisions/0028-concierge-control-plane.md)、[計画](plans/concierge-control-plane.md))、ファイルを開くと右にエディタ列が加わる(閉じると消えて幅はボードに戻る。
+  幅はドラッグで変えられ保存する)。エディタ列は本物のエディタをファイルタブ付きで出し、Project のバッファを共有するため同じファイルを Project 側で
+  開いていても編集・保存が衝突しない。コンシェルジュ画面の間は GUI・`clair open`・MCP の `file.open` もこの列に開き、画面を離れない
+  (IDE 画面では従来どおり)。列のタブを閉じても Project 側のタブは残り、⌘W で選択中のタブを閉じる。ボードの先頭に全 Project の agent pane(コンシェルジュの子を先に、
   子は終了後も残し、それ以外は終了していないもの)をタイルで並べる。タイルは状態と、その pane の画面の末尾 14 行を
   1 秒ごとに読んだ文字(色なし、読み取り専用)を出し、実行中のものは脈打つ表示で示す。クリックでボードの上にその pane の
   本物のターミナルをクイックルックとして重ね、コンシェルジュの画面のまま子 agent に直接入力・承認できる(その pane の surface を
