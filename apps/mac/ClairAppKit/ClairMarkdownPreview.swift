@@ -122,18 +122,22 @@
 #if os(macOS)
   /// CSV / TSV opened in the preview pane as an editable grid. Each committed cell (Return or focus
   /// leaving it) rewrites the buffer as one undo unit, so ⌘Z, dirty and ⌘S work as in the text editor.
+  /// Cells draw as plain `Text`; only the selected one is a live `TextField`. A field per cell meant
+  /// an NSTextField per visible cell, which made a 6 000-row file crawl on every scroll.
   struct TablePane: View {
     let buffers: EditorBuffers
     let path: String
     let onEdit: (String) -> Void
     @State private var rows: [[String]] = []
-    @FocusState private var cell: Cell?
+    @State private var cell: Cell?
+    @FocusState private var editing: Cell?
+    @State private var grab = false  // focus the field only when the user picked the cell, not when it scrolls back in
     private struct Cell: Hashable { let r: Int, c: Int }
 
     var body: some View {
       if case .ready(let m)? = buffers.peek(path), let sep = TableFile.separator(path) {
         let edit = buffers.edits[path, default: 0]
-        let width = max(rows.map(\.count).max() ?? 0, 1)
+        let width = width(rows)
         VStack(spacing: 0) {
           ScrollView([.horizontal, .vertical]) {
             LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
@@ -175,8 +179,9 @@
         .defaultScrollAnchor(.topLeading)
         .background(C.canvas)
         .onAppear { reload(m, sep) }
-        .onChange(of: edit) { _, _ in if cell == nil { reload(m, sep) } }  // outside edits land when no cell is being typed in
+        .onChange(of: edit) { _, _ in if editing == nil { reload(m, sep) } }  // outside edits land when no cell is being typed in
         .onChange(of: cell) { old, _ in if old != nil { commit(m, sep) } }
+        .onChange(of: editing) { _, now in if now == nil { commit(m, sep) } }  // focus left the pane or the row scrolled away
       } else {
         Text(tr("CSV / TSV ファイルを開くと表で編集できます。"))
           .font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
@@ -185,6 +190,7 @@
     }
 
     private static let colWidth: CGFloat = 120
+    private func width(_ rows: [[String]]) -> Int { max(rows.map(\.count).max() ?? 0, 1) }
 
     /// Row/column header cell: grey band like a spreadsheet, highlighted on the selected row/column.
     private func gutter(_ label: String, width: CGFloat, active: Bool) -> some View {
@@ -197,18 +203,36 @@
 
     private func cellView(_ m: EditorTransactionManager, _ sep: Character, _ r: Int, _ c: Int) -> some View {
       let selected = cell == Cell(r: r, c: c)
-      let numeric = Double(binding(r, c).wrappedValue.trimmingCharacters(in: .whitespaces)) != nil
-      return TextField("", text: binding(r, c))
-        .textFieldStyle(.plain).font(Typography.font(r == 0 ? Typography.chromeStrong : Typography.chrome).monospacedDigit())
-        .multilineTextAlignment(numeric && r > 0 ? .trailing : .leading)
-        .focused($cell, equals: Cell(r: r, c: c))
-        .onSubmit { commit(m, sep); if r + 1 < rows.count { cell = Cell(r: r + 1, c: c) } }  // Return moves down, as in Excel
+      let value = binding(r, c)
+      let numeric = r > 0 && Double(value.wrappedValue.trimmingCharacters(in: .whitespaces)) != nil
+      let font = Typography.font(r == 0 ? Typography.chromeStrong : Typography.chrome).monospacedDigit()
+      return Group {
+        if selected {
+          TextField("", text: value)
+            .textFieldStyle(.plain).font(font).multilineTextAlignment(numeric ? .trailing : .leading)
+            .focused($editing, equals: Cell(r: r, c: c))
+            .onAppear { if grab { grab = false; editing = Cell(r: r, c: c) } }
+            .onSubmit { commit(m, sep); if r + 1 < rows.count { select(r + 1, c) } }  // Return moves down, as in Excel
+            .onKeyPress(.tab, phases: .down) { key in  // the only field, so Tab no longer walks cells by itself
+              let i = r * width(rows) + c + (key.modifiers.contains(.shift) ? -1 : 1)
+              guard i >= 0, i < rows.count * width(rows) else { return .ignored }
+              select(i / width(rows), i % width(rows)); return .handled
+            }
+        } else {
+          Text(value.wrappedValue).font(font).lineLimit(1)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: numeric ? .trailing : .leading)
+            .contentShape(Rectangle()).onTapGesture { select(r, c) }  // not a Button: that is an NSView per cell again
+            .accessibilityAddTraits(.isButton).accessibilityAction { select(r, c) }
+        }
+      }
         .padding(.horizontal, 6).frame(width: Self.colWidth, height: RowHeight.compact)
         .background(r == 0 ? C.surfaceActive : r % 2 == 0 ? C.surfaceHover : C.canvas)
         .overlay(alignment: .trailing) { C.divider.opacity(0.6).frame(width: 0.5) }
         .overlay(alignment: .bottom) { C.divider.opacity(0.6).frame(height: 0.5) }
         .overlay { if selected { Rectangle().stroke(C.debugBlue, lineWidth: 2) } }
     }
+
+    private func select(_ r: Int, _ c: Int) { cell = Cell(r: r, c: c); grab = true }
 
     private func binding(_ r: Int, _ c: Int) -> Binding<String> {
       Binding(get: { r < rows.count && c < rows[r].count ? rows[r][c] : "" }, set: { v in
