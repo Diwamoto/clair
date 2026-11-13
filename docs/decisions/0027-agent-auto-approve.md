@@ -33,3 +33,9 @@ AI 向け command のうち risk が write 以上のもの（`agent.launch`、`a
 
 - 承認なしで許可した agent は、子エージェントを起動できるし、他の pane へ入力することもできる。これはオーナーが自分で選んだ範囲のリスクとして受け入れる。
 - 判定は `WorkbenchState.autoApproves` の一か所で行い、MCP と CLI の両方の gate がそこを通る。
+
+## 追記(2026-11-13、ADR-0028)
+
+- `todo.update` のトグルの初期値をオンにする(`todo.add` は risk が additive で、もともと承認なし)。
+- `todo.update` による `stage` の変更で列の agent を起動できるのは、GUI の操作と `caller` がコンシェルジュの terminal のときだけ。
+  それ以外の呼び出し元からの `stage` の変更は記録だけして起動しない。承認なしの `todo.update` が `agent.launch` の承認の抜け道にならないようにする。

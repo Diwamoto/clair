@@ -1,7 +1,8 @@
 ---
 title: "コンシェルジュ agent を raw PTY + transcript の GUI チャットで出す"
-status: accepted
+status: superseded
 date: 2026-09-30
+superseded_by: [ADR-0028]
 ---
 
 # ADR-0020: コンシェルジュ agent
