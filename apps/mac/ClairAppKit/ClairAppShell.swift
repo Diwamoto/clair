@@ -1608,6 +1608,12 @@ import Observation
       .overlay(alignment: .bottomTrailing) {
         VStack(alignment: .trailing, spacing: 8) {
           noticeStackView
+          if let p = approvalPreview {
+            AgentApprovalPreview(title: p.title, project: p.project, screen: p.screen,
+              dismiss: { withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration)) { approvalPreview = nil } })
+              .id(p.path)
+              .transition(.move(edge: .trailing).combined(with: .opacity))
+          }
           if let a = store.mcpApproval {
             ApprovalCard(id: a.id, input: a.input, risk: a.risk, deadline: store.mcpApprovalDeadline, decide: store.resolveMCPApproval)
               .transition(.move(edge: .trailing).combined(with: .opacity))
@@ -1723,6 +1729,10 @@ import Observation
         BoardApprovalKeys(
           blocked: st.board(todos, now: Date()).cards.filter { $0.state == .blocked }.map(\.todo.path),
           onBoard: conciergeBoard, selected: $boardSelected, answer: answerApproval)
+          .onChange(of: st.board(todos, now: Date()).cards.filter { $0.state == .blocked }.map(\.todo.path)) { _, blocked in
+            // The agent moved on (answered in its own terminal, or exited): the preview no longer describes a question.
+            if let p = approvalPreview, !blocked.contains(p.path) { approvalPreview = nil }
+          }
       }
     }
 
@@ -2282,10 +2292,18 @@ import Observation
       }
     }
 
-    /// ⌥⌘Y / ⌥⌘N: Return accepts Claude Code's highlighted "Yes", Escape declines.
+    /// ⌥⌘N declines at once (Escape). ⌥⌘Y first shows what the agent asks (`approvalPreview`); only a second ⌥⌘Y on
+    /// that same card answers, with "1" — Claude Code's "Yes" whichever option happens to be highlighted.
     private func answerApproval(_ path: String, yes: Bool) {
       guard let card = st.board(todos, now: Date()).cards.first(where: { $0.todo.path == path }), let a = boardAgent(card) else { return }
-      let sent = yes ? ClairGhosttySurfaceView.pressReturn(key: a.key) : ClairGhosttySurfaceView.pressEscape(key: a.key)
+      if yes, approvalPreview?.path != path {
+        withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration)) {
+          approvalPreview = (path, card.todo.title, a.session.project, ClairGhosttySurfaceView.screenText(key: a.key) ?? "")
+        }
+        return
+      }
+      withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration)) { approvalPreview = nil }
+      let sent = yes ? ClairGhosttySurfaceView.pressYes(key: a.key) : ClairGhosttySurfaceView.pressEscape(key: a.key)
       guard sent else { return }
       withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration)) { boardFlash = path }
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
@@ -2295,6 +2313,8 @@ import Observation
 
     @State private var boardSelected: String?
     @State private var boardFlash: String?
+    /// The blocked card ⌥⌘Y is about to answer, with its screen as read when the key was first pressed.
+    @State private var approvalPreview: (path: String, title: String, project: String, screen: String)?
 
     @State private var todos: [ClairTodo] = []
     /// The TODO in the add / edit modal, and whether it is a new one.

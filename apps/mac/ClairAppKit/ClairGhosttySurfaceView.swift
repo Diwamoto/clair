@@ -871,7 +871,11 @@ import Foundation
     private static func press(_ keyCode: UInt32, inPane pane: Int) -> Bool { press(keyCode, on: byPane[pane]?.view?.ghosttySurface) }
 
     /// Return / Escape on the kept surface of daemon session `key`, mounted or not: the board's approval keys.
-    @discardableResult static func pressReturn(key: String) -> Bool { press(36, on: kept[key]?.ghosttySurface) }
+    /// Types "1": Claude Code's numbered "Yes" in its permission prompt, independent of the highlighted option.
+    @discardableResult static func pressYes(key: String) -> Bool {
+      guard let surface = kept[key]?.ghosttySurface else { return false }
+      return (try? surface.sendText("1")) != nil
+    }
     @discardableResult static func pressEscape(key: String) -> Bool { press(53, on: kept[key]?.ghosttySurface) }
 
     private static func press(_ keyCode: UInt32, on surface: GhosttySurfaceHandle?) -> Bool {

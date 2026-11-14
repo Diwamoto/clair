@@ -825,6 +825,38 @@
 
   /// ⌥⌘Y / ⌥⌘N answer the Claude Code permission prompt of the oldest card waiting on you, from either screen;
   /// ⌘] selects the next waiting card on the board. Lives in the titlebar so both screens have it.
+  /// What the first ⌥⌘Y shows before anything is sent: whose prompt it is and the end of its screen (the question itself).
+  /// A second ⌥⌘Y answers it; untouched for 15 seconds, it goes away and the next ⌥⌘Y shows it again.
+  struct AgentApprovalPreview: View {
+    let title: String
+    let project: String
+    let screen: String
+    let dismiss: () -> Void
+
+    var body: some View {
+      let lines = screen.split(separator: "\n", omittingEmptySubsequences: false)
+        .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.suffix(12)
+      VStack(alignment: .leading, spacing: 8) {
+        HStack(spacing: 8) {
+          Text(tr("入力待ち")).font(Typography.font(Typography.title)).foregroundStyle(C.attention)
+          Text("\(project) · \(title)").font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary).lineLimit(1)
+          Spacer(minLength: 0)
+          Button(action: dismiss) { Image(systemName: "xmark").font(Typography.font(Typography.chrome)) }
+            .buttonStyle(.hoverWash).foregroundStyle(C.textMuted).accessibilityLabel(tr("閉じる"))
+        }
+        Text(lines.isEmpty ? tr("画面を読めませんでした。カードを開いて確認してください。") : lines.joined(separator: "\n"))
+          .font(Typography.font(Typography.chrome, family: .mono)).foregroundStyle(C.textPrimary)
+          .frame(maxWidth: .infinity, alignment: .leading).padding(8)
+          .background(C.canvas, in: RoundedRectangle(cornerRadius: Radius.card))
+        Text(tr("もう一度 ⌥⌘Y で許可、⌥⌘N で拒否")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted)
+      }
+      .padding(12).frame(width: 420)
+      .background(W.faint).background(C.canvas, in: RoundedRectangle(cornerRadius: Radius.card))
+      .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(L.stronger))
+      .task { try? await Task.sleep(for: .seconds(15)); dismiss() }
+    }
+  }
+
   struct BoardApprovalKeys: View {
     /// Paths of the cards whose agent is blocked.
     let blocked: [String]

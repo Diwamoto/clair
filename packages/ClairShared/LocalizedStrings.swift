@@ -19,6 +19,7 @@ extension LocalizedStrings {
     "依頼を子エージェントに割り振り、進み具合をここにまとめます。": "I hand requests to child agents and sum up their progress here.",
     "未コミットの変更をレビューして": "Review the uncommitted changes", "テストを実行して、失敗を直して": "Run the tests and fix failures",
     "この Project の構成を説明して": "Explain how this Project is laid out", "看板のカードを片付けて": "Work through the board's cards",
+    "画面を読めませんでした。カードを開いて確認してください。": "Couldn't read the screen. Open the card to check.", "もう一度 ⌥⌘Y で許可、⌥⌘N で拒否": "Press ⌥⌘Y again to allow, ⌥⌘N to deny",
     "IDE に切り替え (⌃⌘0)": "Switch to the IDE (⌃⌘0)", "コンシェルジュに切り替え (⌃⌘0)": "Switch to the concierge (⌃⌘0)", "IDE に切り替え": "Switch to the IDE", "コンシェルジュに切り替え": "Switch to the concierge",
     "考えています…": "Thinking…", "下のターミナルで答えてください": "Answer in the terminal below",
     "子エージェント · %@": "Child agents · %@", "返答をコピー": "Copy reply", "コピーしました": "Copied",
