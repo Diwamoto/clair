@@ -1274,7 +1274,8 @@ import Observation
     private var fanOutGrants: [String: Date] = [:]
     nonisolated func approve(_ id: String, _ input: CommandInput, _ risk: CommandRisk, caller: String?) -> Bool {
       if DispatchQueue.main.sync(execute: { MainActor.assumeIsolated { state.autoApproves(id, risk: risk, caller: caller) } }) { return true }
-      let fanOut = id == "agent.launch" ? caller : nil
+      // Not for the concierge: a grant would lift its per-request launch cap (ADR-0028), the guard against an injected concierge.
+      let fanOut = id == "agent.launch" && !DispatchQueue.main.sync(execute: { MainActor.assumeIsolated { state.isConcierge(caller) } }) ? caller : nil
       if let fanOut, DispatchQueue.main.sync(execute: { MainActor.assumeIsolated { fanOutGrants[fanOut].map { $0 > Date() } ?? false } }) {
         return true
       }
@@ -3486,7 +3487,9 @@ import Observation
                 })
               ConciergeChatView(
                 session: chat, terminal: c.map { ($0.key, $0.pane, $0.launch) }, status: status(chat),
-                start: { startConcierge(chat: chat, $0); conciergeChat = chat }, ask: $conciergeAsk)
+                start: { startConcierge(chat: chat, $0); conciergeChat = chat }, ask: $conciergeAsk,
+                // A new chat request is the only thing that resets the concierge's launch cap: an owner action, not an agent report.
+                sent: { if let c { store.state.conciergeLaunches[c.key] = nil } })
               .id(chat)
               .transition(reduceMotion ? .opacity : .asymmetric(insertion: .opacity.combined(with: .offset(y: 8)), removal: .opacity))
             }

@@ -848,8 +848,6 @@ extension CommandRegistry {
         }) { s, i in
       let t = s.terminal(i["parent"]!.string!)!
       s.agentReports[NotificationLog.paneKey(t.project, t.pane)] = AgentReport(state: AgentReport.State(rawValue: i["state"]!.string!)!)
-      // ponytail: advisory, like `Concierge.approvals`: a concierge that runs `clair agent.report state=done` itself resets its own cap.
-      if i["state"]!.string! == AgentReport.State.done.rawValue { s.conciergeLaunches[i["parent"]!.string!] = nil }
       // The provider session to reopen after a restart; an empty or odd id (hook could not read it) is ignored.
       if let session = i["session"]?.string, AgentProfile.isSessionID(session) {
         if Concierge.isPane(t.pane), let l = s.withLayoutCopy(t.project).launches[t.pane], let old = l.session ?? l.concierge {

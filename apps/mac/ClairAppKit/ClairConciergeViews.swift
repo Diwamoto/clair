@@ -44,6 +44,8 @@
     let start: (String) -> Void
     /// Text put into the composer from outside (a board card's "コンシェルジュに頼む"); cleared once taken.
     @Binding var ask: String?
+    /// A request typed into a running concierge (resets its per-request launch cap).
+    var sent: () -> Void = {}
     /// nil until the transcript has been read once, so the empty state never flashes over a loading chat.
     @State private var messages: [AgentHistory.Message]?
     /// Kept across leaving and reopening the chat (the view is rebuilt each time).
@@ -440,6 +442,7 @@
       guard !text.isEmpty else { return }
       guard let pane else { draft = ""; show(text); return start(text) }
       guard ClairGhosttySurfaceView.send(text, toPane: pane) else { return }
+      sent()
       draft = ""; show(text)
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { ClairGhosttySurfaceView.pressReturn(inPane: pane) }
     }

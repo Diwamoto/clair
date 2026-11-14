@@ -1,11 +1,11 @@
 ---
 name: clair-todo
-description: Clair's TODO list — one Markdown file per TODO in ~/.clair/todo, shown in Clair's sidebar. Use whenever the user asks to remember, defer, or add something as a TODO ("あとで", "todoに追加", "やること"), asks what is left to do, or asks to work on / finish a TODO.
+description: Clair's TODO list — one Markdown file per TODO in ~/.clair/todo, shown as cards on the concierge board. Use whenever the user asks to remember, defer, or add something as a TODO ("あとで", "todoに追加", "やること"), asks what is left to do, or asks to work on / finish a TODO.
 ---
 
 # Clair TODO
 
-Each TODO is one file `~/.clair/todo/<slug>.md` (slug: short, lowercase, `-`-joined). Clair's sidebar lists them.
+Each TODO is one file `~/.clair/todo/<slug>.md` (slug: short, lowercase, `-`-joined). The concierge board shows them as cards (no stage = Inbox).
 
 ```markdown
 ---
