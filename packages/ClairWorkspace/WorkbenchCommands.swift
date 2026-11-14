@@ -55,6 +55,12 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
     return risk <= fixed
   }
 
+  /// A concierge `todo.update` whose stage would start an agent past the per-request cap: that needs the approval card.
+  func conciergeOverCap(_ i: CommandInput) -> Bool {
+    guard let stage = i["stage"]?.string, let parent = i["parent"]?.string, isConcierge(parent) else { return false }
+    return ["plan", "impl", "review"].contains(ClairTodo.column(stage: stage)) && conciergeLaunches[parent, default: 0] >= Self.conciergeLaunchCap
+  }
+
   /// `key` is a running concierge terminal.
   public func isConcierge(_ key: String?) -> Bool {
     key.flatMap(terminal).flatMap { withLayoutCopy($0.project).launches[$0.pane] }?.concierge != nil
@@ -967,16 +973,11 @@ extension CommandRegistry {
           if let p = i["project"]?.string, !p.isEmpty {
             try require(p == ClairTodo.noProject || s.projects.contains { $0.name == p }, "no project \(p)")
           }
-          // A stage change from the concierge starts an agent; past its cap that needs the approval card.
-          if let stage = i["stage"]?.string, let parent = i["parent"]?.string, s.isConcierge(parent),
-             ["plan", "impl", "review"].contains(ClairTodo.column(stage: stage)),
-             s.conciergeLaunches[parent, default: 0] >= WorkbenchState.conciergeLaunchCap {
-            return .external
-          }
           try require(ClairTodo.isTodoFile(i["path"]!.string!), "no TODO file \(i["path"]!.string!) in ~/.clair/todo")
           if let title = i["title"]?.string { try require(!title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "title is empty") }
           if let why = ClairTodo.invalid(priority: i["priority"]?.int, due: i["due"]?.string) { throw CommandError(.invalidInput, why) }
-          return .write
+          // Decided after every check: an approved card must not let the run write a file that is not a TODO.
+          return s.conciergeOverCap(i) ? .external : .write
         }) { s, i throws(CommandError) in
       let path = i["path"]!.string!
       guard let text = try? String(contentsOf: URL(fileURLWithPath: path), encoding: .utf8) else { throw CommandError(.preconditionFailed, "cannot read \(path)") }

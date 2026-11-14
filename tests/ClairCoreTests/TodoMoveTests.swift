@@ -118,17 +118,21 @@ import Testing
     let registry = CommandRegistry.workbench
     s.toggles[WorkbenchState.autoApproveKey("agent.launch")] = true
     let path = try Self.card(home, "capped", project: "p")
-    func risk(_ stage: String) -> CommandRisk? {
-      try? registry.preflight("todo.update", ["path": .string(path), "stage": .string(stage), "parent": .string(concierge)], s).get()
-    }
+    func overCap(_ stage: String) -> Bool { s.conciergeOverCap(["path": .string(path), "stage": .string(stage), "parent": .string(concierge)]) }
     for n in 0..<WorkbenchState.conciergeLaunchCap {
       #expect(s.autoApproves("agent.launch", risk: .external, caller: concierge), "launch \(n + 1) skips the card")
-      #expect(risk("plan") != .external, "launch \(n + 1) skips the card via todo.update")
+      #expect(!overCap("plan"), "launch \(n + 1) skips the card via todo.update")
       s.conciergeLaunches[concierge, default: 0] += 1
     }
     #expect(!s.autoApproves("agent.launch", risk: .external, caller: concierge))
-    #expect(risk("plan") == .external)
-    #expect(risk("done") != .external)
+    #expect(overCap("plan"))
+    #expect(!overCap("done"))
+    // Over the cap, a path that is not a TODO is still refused before any card: approving it must not write that file.
+    let outside = home.appending(path: "notes.md").path
+    try "keep".write(toFile: outside, atomically: true, encoding: .utf8)
+    #expect(throws: CommandError.self) {
+      try registry.preflight("todo.update", ["path": .string(outside), "stage": .string("plan"), "parent": .string(concierge)], s).get()
+    }
     s.conciergeLaunches[concierge] = nil
     #expect(s.autoApproves("agent.launch", risk: .external, caller: concierge))
   }
