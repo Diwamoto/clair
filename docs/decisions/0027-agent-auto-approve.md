@@ -39,3 +39,5 @@ AI 向け command のうち risk が write 以上のもの（`agent.launch`、`a
 - `todo.update` のトグルの初期値をオンにする(`todo.add` は risk が additive で、もともと承認なし)。
 - `todo.update` による `stage` の変更で列の agent を起動できるのは、GUI の操作と `caller` がコンシェルジュの terminal のときだけ。
   それ以外の呼び出し元からの `stage` の変更は記録だけして起動しない。承認なしの `todo.update` が `agent.launch` の承認の抜け道にならないようにする。
+- `todo.skill`(列の skill の選択の記録)も既定で承認なしにする(設定で戻せる)。
+- コンシェルジュの `agent.launch` と `stage` による起動は、チャットの依頼 1 件につき 4 体目から、この設定にかかわらず承認カードを出す。

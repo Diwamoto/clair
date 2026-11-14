@@ -24,11 +24,11 @@ Use the commands (`clair todo.list` … or the `mcp__clair__todo_*` tools) rathe
 clair todo.list done=false                     # JSON: path, title, priority, due, done, extra keys; priority → due order
 clair todo.add title="Fix login" priority=1 due=2026-10-30 body="context"
 clair todo.update path=<path> done=true appendBody="result: shipped"   # also title / priority / due ("" clears)
-clair todo.update path=<path> stage=impl lane=code agent=<terminal key>          # workflow keys: stage, lane, retry, branch, pr, agent
-clair todo.update path=<path> stage=impl appendBody="- impl <terminal key> <one-line note>"   # every stage change: one history line
+clair todo.update path=<path> project=<Project name | none>      # the Project a card belongs to ("none" = no Project, "" clears)
+clair todo.update path=<path> result=ok note="<one line>"       # a column's agent reports when it finishes (result ok|failed)
 ```
 
-Workflow artifacts sit next to the TODO: `~/.clair/todo/<TODO file name without .md>/plan.md` and `review.md`. A sandboxed child cannot see `~/.clair`, so the concierge puts plan.md's text into the child's prompt and writes review.md itself. Set `project:` (Project name or path) on a staged TODO so the board can link its pane.
+A TODO is a card on Clair's board. Its `stage` is its column: none = inbox, then plan, impl, review, done. The owner drags a card to a column and Clair starts that column's agent. Only the concierge's own `todo.update stage=` starts one too; from any other caller `stage` is only recorded. Workflow artifacts sit next to the TODO: `~/.clair/todo/<TODO file name without .md>/plan.md` and `review.md` (starting with a `## 要約` section). Other keys: `lane`, `retry` (shown only), `branch`, `pr`, `agent`.
 
 
 ## Add

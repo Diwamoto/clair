@@ -104,7 +104,7 @@ final class WorkbenchConciergeTests: XCTestCase {
     let pane = Concierge.pane
     s.launches[pane]?.concierge = "abc-123"
     let cmd = try XCTUnwrap(s.launches[pane]?.command)
-    XCTAssertTrue(cmd.hasPrefix("claude --session-id abc-123 --append-system-prompt '"), cmd)
+    XCTAssertTrue(cmd.hasPrefix("claude --session-id abc-123 --disallowedTools WebFetch,WebSearch --append-system-prompt '"), cmd)
     XCTAssertTrue(cmd.contains("テストは make test で"))
     XCTAssertTrue(cmd.contains("agent output lines=40"))
     // A hostile session id never reaches the shell.

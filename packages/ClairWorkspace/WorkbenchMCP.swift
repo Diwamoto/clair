@@ -68,10 +68,10 @@ public enum MCPGate {
 }
 
 extension WorkbenchIPCRequest {
-  /// V16: an agent.* command's `parent` is whoever called, never what the client claims. Only commands that take a
+  /// V16: an agent.* command's (and todo.update's) `parent` is whoever called, never what the client claims. Only commands that take a
   /// `parent` get one: the rest (agent.status / output / list) would refuse it as an unknown argument.
   public func callerAsParent(_ registry: CommandRegistry = .workbench) -> Self {
-    guard command.hasPrefix("agent.") || command == "notice.post" else { return self }
+    guard command.hasPrefix("agent.") || command == "notice.post" || command == "todo.update" else { return self }
     var r = self
     let takesParent = registry.commands.first { $0.id == command }?.params.contains { $0.name == "parent" } == true
     r.input["parent"] = takesParent ? caller.map(CommandArg.string) : nil

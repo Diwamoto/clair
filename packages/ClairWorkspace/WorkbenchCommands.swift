@@ -38,8 +38,12 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public static let autoApproveCommands = [
     "agent.launch": "エージェントの起動", "agent.send": "エージェントへの入力", "pane.close": "ペインを閉じる",
     "pane.move": "ペインの移動", "pane.swap": "ペインの入れ替え", "tab.close": "タブを閉じる", "diff.close": "差分タブを閉じる",
-    "notice.markRead": "通知の既読", "todo.update": "TODO の更新",
+    "notice.markRead": "通知の既読", "todo.update": "TODO の更新", "todo.skill": "列の skill の記録",
   ]
+  /// ADR-0027 addendum: on until the owner turns them off. A `todo.update` that would start an agent is gated separately.
+  static let autoApproveDefaults = ["todo.update", "todo.skill"]
+  /// Concierge-started agents allowed without a card per chat request.
+  public static let conciergeLaunchCap = 3
   public static func autoApproveKey(_ id: String) -> String { "autoApprove.\(id)" }
   /// True when `id` may skip the card: the owner turned it on, the caller is a Clair terminal, and the runtime risk
   /// is no higher than the command's fixed risk (a dirty `tab.close` is destructive and still asks).
@@ -47,7 +51,13 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
     guard caller != nil, toggles[Self.autoApproveKey(id)] == true, Self.autoApproveCommands[id] != nil,
       let fixed = registry.commands.first(where: { $0.id == id })?.risk
     else { return false }
+    if id == "agent.launch", isConcierge(caller), conciergeLaunches[caller!, default: 0] >= Self.conciergeLaunchCap { return false }
     return risk <= fixed
+  }
+
+  /// `key` is a running concierge terminal.
+  public func isConcierge(_ key: String?) -> Bool {
+    key.flatMap(terminal).flatMap { withLayoutCopy($0.project).launches[$0.pane] }?.concierge != nil
   }
   /// Per-agent "使う" switch: off hides the agent from launch menus and the status bar's usage meter.
   public static func agentKey(_ id: String) -> String { "agent.\(id)" }
@@ -64,7 +74,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
     "notifyEnabled": "通知を有効にする", "notifyOnBell": "入力待ち・通知要求で通知", "notifyOnExit": "終了で通知",
     "notifyWhenActive": "Clair が前面のときも通知", "notifySound": "通知のサウンド", "language": "言語",
     "autoEqualize": "ペインを均等に再配置", "focusExpand": "フォーカスしたペインを拡大", "focusExpandRatio": "拡大したペインの割合",
-    "previewTheme": "Markdown プレビューのテーマ", "previewFontSize": "Markdown プレビューの文字サイズ",
+    "previewTheme": "Markdown プレビューのテーマ", "board.doneDays": "Done に出す日数", "previewFontSize": "Markdown プレビューの文字サイズ",
   ].merging(AgentProfile.all.map { (agentKey($0.id), "\($0.title) を使う") }) { a, _ in a }
     .merging(autoApproveCommands.map { (autoApproveKey($0.key), "承認なしで許可: \($0.value)") }) { a, _ in a }
   // agent registry: `defaultAgent` reads its choices from the `AgentProfile` registry instead of
@@ -83,6 +93,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
     "language": ClairLanguage.allCases.map(\.rawValue),  // English is the default
     "focusExpandRatio": ["50", "60", "70", "80", "90"],
     "previewTheme": ["アプリに合わせる", "ライト", "ダーク"],
+    "board.doneDays": ["7", "14", "30", "3"],
     "previewFontSize": ["11", "12", "13", "14", "16", "18"],
   ]
   /// Font family per surface (`editor`, `terminal`); "" is the system monospaced font.
@@ -223,6 +234,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var navigation = NavigationHistory()
   public var toggles = ["restoreLayout": true, "confirmClose": true, "hideQuota": false, "preventSleepOnBattery": false, "formatOnSave": false, "showWhitespace": false, "softWrap": false, "terminalApprovals": true, "lineNumbers": true, "terminalCursorBlink": true, "notifyEnabled": true, "notifyOnBell": true, "notifyOnExit": true, "notifyWhenActive": false, "notifySound": false, "autoEqualize": false, "focusExpand": false]
     .merging(AgentProfile.all.map { (WorkbenchState.agentKey($0.id), true) }) { a, _ in a }
+    .merging(WorkbenchState.autoApproveDefaults.map { (WorkbenchState.autoApproveKey($0), true) }) { a, _ in a }
   // Font sizes default to what Clair shipped with (mock editor 12px, terminal 13pt), not the smallest option.
   public var choices = WorkbenchState.choiceOptions.mapValues { $0[0] }.merging(["editorFontSize": "12", "terminalFontSize": "13", "focusExpandRatio": "60", "previewFontSize": "13"]) { $1 }
   public var fonts = ["editor": "", "terminal": ""]
@@ -234,6 +246,10 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   /// ("" = the active Project root). User-only (`settings.concierge` is ai: false).
   public var conciergePrompt = ""
   public var conciergeCwd = ""
+  /// Where a card without a Project starts its agent ("" = `~/Projects`).
+  public var conciergeWorkdir = ""
+  /// Concierge terminal key → agents it started in the current chat request; cleared when its turn ends (`agent.report done`).
+  public var conciergeLaunches: [String: Int] = [:]
   /// Each folder's concierge chats by their latest Claude Code session. Launches are never persisted, so this is
   /// what lets a chat resume after a Clair restart. A changed prompt or folder starts over.
   public var conciergeSessions: [String: [String]] = [:]
@@ -760,6 +776,7 @@ extension CommandRegistry {
         return id
       }
       if home.project.name == s.project { s.panesClosed = false }
+      if let parent = i["parent"]?.string, s.isConcierge(parent) { s.conciergeLaunches[parent, default: 0] += 1 }
       return i["parent"] == nil ? .pane(pane) : .text(WorkbenchState.terminalKey(home.project.path, pane))
     },
     // V16: fan-in. `key` is the `root#pane` terminal key agent.launch returned.
@@ -831,6 +848,8 @@ extension CommandRegistry {
         }) { s, i in
       let t = s.terminal(i["parent"]!.string!)!
       s.agentReports[NotificationLog.paneKey(t.project, t.pane)] = AgentReport(state: AgentReport.State(rawValue: i["state"]!.string!)!)
+      // ponytail: advisory, like `Concierge.approvals`: a concierge that runs `clair agent.report state=done` itself resets its own cap.
+      if i["state"]!.string! == AgentReport.State.done.rawValue { s.conciergeLaunches[i["parent"]!.string!] = nil }
       // The provider session to reopen after a restart; an empty or odd id (hook could not read it) is ignored.
       if let session = i["session"]?.string, AgentProfile.isSessionID(session) {
         if Concierge.isPane(t.pane), let l = s.withLayoutCopy(t.project).launches[t.pane], let old = l.session ?? l.concierge {
@@ -938,19 +957,34 @@ extension CommandRegistry {
                  CommandParam("done", .bool, required: false), CommandParam("appendBody", .string, required: false),
                  CommandParam("stage", .string, required: false), CommandParam("lane", .string, required: false),
                  CommandParam("retry", .int, required: false), CommandParam("branch", .string, required: false),
-                 CommandParam("pr", .string, required: false), CommandParam("agent", .string, required: false)],
+                 CommandParam("pr", .string, required: false), CommandParam("agent", .string, required: false),
+                 CommandParam("project", .string, required: false), CommandParam("result", .string, required: false),
+                 CommandParam("note", .string, required: false),
+                 CommandParam("parent", .string, required: false)],  // the calling terminal, set by the IPC layer (callerAsParent)
         palette: false,
-        preflight: { _, i throws(CommandError) in
-          if let why = ClairTodo.invalid(priority: nil, due: nil, stage: i["stage"]?.string, lane: i["lane"]?.string, retry: i["retry"]?.int) {
+        preflight: { s, i throws(CommandError) in
+          if let why = ClairTodo.invalid(priority: nil, due: nil, stage: i["stage"]?.string, lane: i["lane"]?.string, retry: i["retry"]?.int, result: i["result"]?.string) {
             throw CommandError(.invalidInput, why)
+          }
+          if let p = i["project"]?.string, !p.isEmpty {
+            try require(p == ClairTodo.noProject || s.projects.contains { $0.name == p }, "no project \(p)")
+          }
+          // A stage change from the concierge starts an agent; past its cap that needs the approval card.
+          if let stage = i["stage"]?.string, let parent = i["parent"]?.string, s.isConcierge(parent),
+             ["plan", "impl", "review"].contains(ClairTodo.column(stage: stage)),
+             s.conciergeLaunches[parent, default: 0] >= WorkbenchState.conciergeLaunchCap {
+            return .external
           }
           try require(ClairTodo.isTodoFile(i["path"]!.string!), "no TODO file \(i["path"]!.string!) in ~/.clair/todo")
           if let title = i["title"]?.string { try require(!title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "title is empty") }
           if let why = ClairTodo.invalid(priority: i["priority"]?.int, due: i["due"]?.string) { throw CommandError(.invalidInput, why) }
           return .write
-        }) { _, i throws(CommandError) in
+        }) { s, i throws(CommandError) in
       let path = i["path"]!.string!
       guard let text = try? String(contentsOf: URL(fileURLWithPath: path), encoding: .utf8) else { throw CommandError(.preconditionFailed, "cannot read \(path)") }
+      // Only the concierge's own terminal may start an agent through a stage change; every other caller just records it.
+      let concierge = i["parent"]?.string.flatMap { s.isConcierge($0) ? $0 : nil }
+      var move: String?
       let t = ClairTodo.parse(path: path, text: text).with { t in
         if let v = i["title"]?.string { t.title = v }
         if let v = i["priority"]?.int { t.priority = v }
@@ -958,14 +992,51 @@ extension CommandRegistry {
         if let v = i["done"]?.bool { t.done = v }
         // "" clears a workflow key.
         func text(_ k: String) -> String?? { i[k]?.string.map { $0.isEmpty ? nil : $0 } }
-        if let v = text("stage") { t.stage = v }
+        if let v = text("stage") {
+          if concierge != nil { move = ClairTodo.column(stage: v) } else { t.stage = v == "inbox" ? nil : v }
+        }
         if let v = text("lane") { t.lane = v }
         if let v = i["retry"]?.int { t.retry = v }
         if let v = text("branch") { t.branch = v }
         if let v = text("pr") { t.pr = v }
         if let v = text("agent") { t.agent = v }
+        if let v = text("project") { t.project = v }
+        if let v = text("result") { t.result = v }
+        if let v = text("note") { t.note = v }
       }
-      return try todoSave(t, appendBody: i["appendBody"]?.string)
+      let saved = try todoSave(t, appendBody: i["appendBody"]?.string)
+      guard let move, let concierge else { return saved }
+      try s.moveTodo(path: path, stage: move, concierge: concierge)
+      return try todoSave(ClairTodo.parse(path: path, text: (try? String(contentsOfFile: path, encoding: .utf8)) ?? text), appendBody: nil)
+    },
+    // The single entry point that starts column agents; GUI-only, so any other caller gets the approval card.
+    cmd("todo.move", "カードを列へ移す", .write, ai: false,
+        params: [CommandParam("path", .string), CommandParam("stage", .string, allowed: ClairTodo.columns),
+                 CommandParam("force", .bool, required: false)],
+        palette: false,
+        preflight: { _, i throws(CommandError) in
+          try require(ClairTodo.isTodoFile(i["path"]!.string!), "no TODO file \(i["path"]!.string!) in ~/.clair/todo")
+          return .write
+        }) { s, i throws(CommandError) in
+      let path = i["path"]!.string!
+      try s.moveTodo(path: path, stage: i["stage"]!.string!, force: i["force"]?.bool == true)
+      return try todoSave(ClairTodo.parse(path: path, text: (try? String(contentsOfFile: path, encoding: .utf8)) ?? ""), appendBody: nil)
+    },
+    // Records which skill a column uses for a Project (the agent asked the owner in its terminal first).
+    cmd("todo.skill", "列の skill を記録", .write,
+        params: [CommandParam("project", .string), CommandParam("stage", .string, allowed: ["plan", "impl", "review"]),
+                 CommandParam("skill", .string)],
+        palette: false,
+        preflight: { s, i throws(CommandError) in
+          let project = i["project"]!.string!
+          guard let root = s.columnRoot(project) else { throw CommandError(.preconditionFailed, "no project \(project)") }
+          try require(ClairColumnSkills.isValid(i["skill"]!.string!, root: root), "no skill \(i["skill"]!.string!)")
+          return .write
+        }) { s, i throws(CommandError) in
+      let project = i["project"]!.string!
+      do { try ClairColumnSkills.record(project: project, stage: i["stage"]!.string!, skill: i["skill"]!.string!, root: s.columnRoot(project)!) }
+      catch { throw CommandError(.preconditionFailed, error.localizedDescription) }
+      return .ok
     },
     // #72: the GUI fires these (ClairWorkbenchStore.runSchedules). add/remove are user-only: an agent must not
     // schedule itself to run later.
@@ -1421,15 +1492,19 @@ extension CommandRegistry {
     },
     // #76: ai: false — an agent that rewrote these would direct every later task.
     cmd("settings.concierge", "コンシェルジュの指示と作業フォルダを設定", .write, ai: false,
-        params: [CommandParam("prompt", .string, required: false), CommandParam("cwd", .string, required: false)],
+        params: [CommandParam("prompt", .string, required: false), CommandParam("cwd", .string, required: false),
+                 CommandParam("workdir", .string, required: false)],
         palette: false,
         preflight: { _, i throws(CommandError) in
-          if let cwd = i["cwd"]?.string, !cwd.isEmpty {
-            var dir: ObjCBool = false
-            try require(cwd.hasPrefix("/") && FileManager.default.fileExists(atPath: cwd, isDirectory: &dir) && dir.boolValue, "cwd is not an absolute directory")
+          for key in ["cwd", "workdir"] {
+            if let dirPath = i[key]?.string, !dirPath.isEmpty {
+              var dir: ObjCBool = false
+              try require(dirPath.hasPrefix("/") && FileManager.default.fileExists(atPath: dirPath, isDirectory: &dir) && dir.boolValue, "\(key) is not an absolute directory")
+            }
           }
           return .write
         }) { s, i in
+      if let v = i["workdir"]?.string { s.conciergeWorkdir = v }
       let before = (s.conciergePrompt, s.conciergeCwd)
       if let v = i["prompt"]?.string { s.conciergePrompt = v }
       if let v = i["cwd"]?.string { s.conciergeCwd = v }

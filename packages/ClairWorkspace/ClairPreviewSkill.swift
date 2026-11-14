@@ -45,19 +45,24 @@ Use the requested browser when the user explicitly asks for one, or when a runni
 }
 
 public enum ClairSkills {
+  /// The skills that are one plain `SKILL.md`: the TODO skill and the board columns' skills.
+  static let plain: [(name: String, markdown: String)] = [(ClairTodoSkill.name, ClairTodoSkill.markdown)] + ClairColumnSkill.all
+
   public static func isInstalled(home: URL = .homeDirectory) -> Bool {
     ClairAgentSkill.isInstalled(home: home) && ClairPreviewSkill.isInstalled(home: home)
-      && todoTargets(home).allSatisfy { (try? String(contentsOf: $0, encoding: .utf8)) == ClairTodoSkill.markdown }
+      && plain.allSatisfy { s in targets(home, s.name).allSatisfy { (try? String(contentsOf: $0, encoding: .utf8)) == s.markdown } }
   }
 
-  static func todoTargets(_ home: URL) -> [URL] {
-    [".claude/skills", ".agents/skills"].map { home.appending(path: $0).appending(path: ClairTodoSkill.name).appending(path: "SKILL.md") }
+  static func targets(_ home: URL, _ name: String) -> [URL] {
+    [".claude/skills", ".agents/skills"].map { home.appending(path: $0).appending(path: name).appending(path: "SKILL.md") }
   }
+
+  static func todoTargets(_ home: URL) -> [URL] { targets(home, ClairTodoSkill.name) }
 
   public static func install(home: URL = .homeDirectory) throws {
     for (skill, targets) in [(ClairAgentSkill.markdown, ClairAgentSkill.targets(home: home)),
-                             (ClairPreviewSkill.markdown, ClairPreviewSkill.targets(home: home)),
-                             (ClairTodoSkill.markdown, todoTargets(home))] {
+                             (ClairPreviewSkill.markdown, ClairPreviewSkill.targets(home: home))]
+                            + plain.map({ ($0.markdown, targets(home, $0.name)) }) {
       // An older shipped version and a user edit look the same, so keep any differing file as SKILL.md.bak and update.
       for url in targets where FileManager.default.fileExists(atPath: url.path) && (try? String(contentsOf: url, encoding: .utf8)) != skill {
         let backup = url.appendingPathExtension("bak")
@@ -67,17 +72,21 @@ public enum ClairSkills {
     }
     try ClairAgentSkill.install(home: home)
     try ClairPreviewSkill.install(home: home)
-    for url in todoTargets(home) {
-      try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-      try ClairTodoSkill.markdown.write(to: url, atomically: true, encoding: .utf8)
+    for s in plain {
+      for url in targets(home, s.name) {
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try s.markdown.write(to: url, atomically: true, encoding: .utf8)
+      }
     }
   }
 
   public static func uninstall(home: URL = .homeDirectory) throws {
     try ClairAgentSkill.uninstall(home: home)
     try ClairPreviewSkill.uninstall(home: home)
-    for url in todoTargets(home) where (try? String(contentsOf: url, encoding: .utf8)) == ClairTodoSkill.markdown {
-      try FileManager.default.removeItem(at: url.deletingLastPathComponent())
+    for s in plain {
+      for url in targets(home, s.name) where (try? String(contentsOf: url, encoding: .utf8)) == s.markdown {
+        try FileManager.default.removeItem(at: url.deletingLastPathComponent())
+      }
     }
   }
 }

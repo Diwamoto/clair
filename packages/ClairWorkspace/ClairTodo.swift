@@ -9,17 +9,39 @@ public struct ClairTodo: Equatable, Sendable {
   public var done: Bool
   /// Front-matter keys Clair does not own (`kr:` …), as read; `render(onto:)` keeps them in the file.
   public var extra: [String: String] = [:]
-  /// #74 workflow keys, written by the concierge and its children; Clair only shows them.
+  /// #74 workflow keys, written by the concierge and its children.
   public var stage: String?
   public var lane: String?
+  /// Shown only; nothing limits it any more.
   public var retry: Int?
   public var branch: String?
   public var pr: String?
   /// The terminal key (`root#pane`) of the agent working on this stage.
   public var agent: String?
+  /// A Project name, `none` (no Project) or, from older cards, a path.
+  public var project: String?
+  /// `ok` / `failed`: what the column's agent reported when it finished.
+  public var result: String?
+  public var note: String?
+  /// When the card moved to Done (ISO 8601); the file's mtime stands in when absent.
+  public var doneAt: String?
 
-  public static let stages = ["plan", "impl", "check-A", "check-B", "submit", "done"]
+  public static let columns = ["inbox", "plan", "impl", "review", "done"]
+  public static let stages = ["plan", "impl", "review", "done"]
+  /// Read as `review`; the file keeps them until the card moves.
+  static let legacyStages = ["submit", "check-A", "check-B"]
   public static let lanes = ["code", "research"]
+  public static let results = ["ok", "failed"]
+  public static let noProject = "none"
+
+  /// The board column of a stage: none is Inbox, the old review-ish stages are Review.
+  public static func column(stage: String?) -> String {
+    guard let stage else { return "inbox" }
+    return legacyStages.contains(stage) ? "review" : columns.contains(stage) ? stage : "inbox"
+  }
+
+  /// A checked-off TODO is Done whatever its stage.
+  public var column: String { done ? "done" : Self.column(stage: stage) }
 
   public init(path: String, title: String, priority: Int = 2, due: String? = nil, done: Bool = false) {
     self.path = path; self.title = title; self.priority = priority; self.due = due; self.done = done
@@ -51,6 +73,10 @@ public struct ClairTodo: Equatable, Sendable {
       case "branch": t.branch = value.isEmpty ? nil : value
       case "pr": t.pr = value.isEmpty ? nil : value
       case "agent": t.agent = value.isEmpty ? nil : value
+      case "project": t.project = value.isEmpty ? nil : value
+      case "result": t.result = value.isEmpty ? nil : value
+      case "note": t.note = value.isEmpty ? nil : value
+      case "doneAt": t.doneAt = value.isEmpty ? nil : value
       default: t.extra[key] = value
       }
     }
@@ -59,11 +85,12 @@ public struct ClairTodo: Equatable, Sendable {
 
   public func with(_ change: (inout ClairTodo) -> Void) -> ClairTodo { var c = self; change(&c); return c }
 
-  static let keys: Set<String> = ["title", "priority", "due", "done", "stage", "lane", "retry", "branch", "pr", "agent"]
+  static let keys: Set<String> = ["title", "priority", "due", "done", "stage", "lane", "retry", "branch", "pr", "agent", "project", "result", "note", "doneAt"]
 
   /// The workflow keys present, in file order.
   var workflow: [(String, String)] {
-    [("stage", stage), ("lane", lane), ("retry", retry.map(String.init)), ("branch", branch), ("pr", pr), ("agent", agent)]
+    [("stage", stage), ("lane", lane), ("retry", retry.map(String.init)), ("branch", branch), ("pr", pr), ("agent", agent),
+     ("project", project), ("result", result), ("note", note), ("doneAt", doneAt)]
       .compactMap { k, v in v.map { (k, $0) } }
   }
 
@@ -101,8 +128,9 @@ public struct ClairTodo: Equatable, Sendable {
   }
 
   /// Why `priority` / `due` cannot be written, or nil when they can.
-  public static func invalid(priority: Int?, due: String?, stage: String? = nil, lane: String? = nil, retry: Int? = nil) -> String? {
-    if let stage, !stage.isEmpty, !stages.contains(stage) { return "stage must be one of \(stages.joined(separator: ", "))" }
+  public static func invalid(priority: Int?, due: String?, stage: String? = nil, lane: String? = nil, retry: Int? = nil, result: String? = nil) -> String? {
+    if let stage, !stage.isEmpty, !columns.contains(stage), !legacyStages.contains(stage) { return "stage must be one of \(columns.joined(separator: ", "))" }
+    if let result, !result.isEmpty, !results.contains(result) { return "result must be ok or failed" }
     if let lane, !lane.isEmpty, !lanes.contains(lane) { return "lane must be code or research" }
     if let retry, retry < 0 { return "retry must be 0 or more" }
     if let priority, !(1...3).contains(priority) { return "priority must be 1, 2 or 3" }
@@ -179,11 +207,11 @@ Use the commands (`clair todo.list` … or the `mcp__clair__todo_*` tools) rathe
 clair todo.list done=false                     # JSON: path, title, priority, due, done, extra keys; priority → due order
 clair todo.add title="Fix login" priority=1 due=2026-10-30 body="context"
 clair todo.update path=<path> done=true appendBody="result: shipped"   # also title / priority / due ("" clears)
-clair todo.update path=<path> stage=impl lane=code agent=<terminal key>          # workflow keys: stage, lane, retry, branch, pr, agent
-clair todo.update path=<path> stage=impl appendBody="- impl <terminal key> <one-line note>"   # every stage change: one history line
+clair todo.update path=<path> project=<Project name | none>      # the Project a card belongs to ("none" = no Project, "" clears)
+clair todo.update path=<path> result=ok note="<one line>"       # a column's agent reports when it finishes (result ok|failed)
 ```
 
-Workflow artifacts sit next to the TODO: `~/.clair/todo/<TODO file name without .md>/plan.md` and `review.md`. A sandboxed child cannot see `~/.clair`, so the concierge puts plan.md's text into the child's prompt and writes review.md itself. Set `project:` (Project name or path) on a staged TODO so the board can link its pane.
+A TODO is a card on Clair's board. Its `stage` is its column: none = inbox, then plan, impl, review, done. The owner drags a card to a column and Clair starts that column's agent. Only the concierge's own `todo.update stage=` starts one too; from any other caller `stage` is only recorded. Workflow artifacts sit next to the TODO: `~/.clair/todo/<TODO file name without .md>/plan.md` and `review.md` (starting with a `## 要約` section). Other keys: `lane`, `retry` (shown only), `branch`, `pr`, `agent`.
 
 
 ## Add

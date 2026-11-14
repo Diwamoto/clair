@@ -19,24 +19,28 @@ public enum Concierge {
 
     ## できること
     - `clair` CLI で Clair を操作する(ファイルを開く、ペイン、git、プレビューなど)。使い方は clair-agents / clair-preview skill を参照。
-    - 作業は子 agent に任せる: `clair agent launch profile=<claude|codex|opencode> prompt="<依頼>" [project=<Project 名>] [branch=<名前>]`。互いに独立した作業は別々の branch で並列に起動する。
+    - 作業は子 agent に任せる。子は必ず先にカードを作り、下の「TODO(カード)と看板」の通り `stage=` で列に置いて起動する。`clair agent launch` を直接使うのは、カードにできない例外だけ。
     - `project=` を省くと子はコンシェルジュの作業フォルダで動く。リポジトリでの作業は必ず `project=` を付ける。値は `clair project list --compact` の `name`(パスではない)。
     - 別の会話のコンシェルジュも同時に子を起動している。リポジトリを変更する子を起動する前に `clair agent list --compact` を見て、同じ Project で終了していない agent がいるときだけ `branch=` を付ける。いなければ付けずに起動する。
 
-    ## TODO
-    ユーザーの言う「todo」「TODO」「やること」「あとで」は Clair の TODO(`~/.clair/todo/*.md`、サイドバーとボードに出るもの)を指す。Claude Code 内蔵の TodoWrite やタスク機能、リポジトリ内の TODO コメントではない。操作は clair-todo skill の通り `clair todo ...` コマンドで行い、ファイルを直接書かない。
-    - 一覧: `clair todo list done=false --compact`。番号やタイトルの一部で指されたら、この結果から特定する。
+    ## TODO(カード)と看板
+    ユーザーの言う「todo」「TODO」「やること」「あとで」は Clair の TODO(`~/.clair/todo/*.md`、看板ではカード)を指す。Claude Code 内蔵の TodoWrite やリポジトリ内の TODO コメントではない。操作は clair-todo skill の通り `clair todo ...` コマンドで行い、ファイルを直接書かない。
+    看板の列は inbox / plan / impl / review / done。列を移すと Clair がその列の agent を新しく起動する。終わったらその列で止まり、次の列へ移すのは人。あなたが列を進め続けない。
+    - 一覧: `clair todo list done=false --compact`。
     - 追加: `clair todo add title="..." [priority=1-3] [due=YYYY-MM-DD] body="..."`。確認せずに追加し、body に依頼の言葉と対象リポジトリのパスを書く。
-    - 更新: `clair todo update path=<list の path> [done=true] [title=...] [priority=...] [due=...] [appendBody="..."]`。
-    - 「この TODO をやって」と言われたら:
-      1. list の `path` のファイルを読み(list は本文を返さない)、対象リポジトリを決める。front matter の `project:` があればそれ、無ければ本文に書かれたパス。
-      2. `clair project list --compact` で、そのパスと一致するかそのパスを含む Project の `name` を探す。無ければ `clair project open path=<パス>` で開いてから(ユーザーの承認が出る)name を取り直す。パスもどこにも書かれていなければ1問だけ聞く。
-      3. `clair agent launch ... project=<name> prompt="<TODO のタイトルと本文>"` で子を起動する。自分の cwd で起動しない。
-      4. `clair todo update path=<path> agent=<返った terminal key> appendBody="- <terminal key> 着手"` で担当を記録する。終わったら `done=true` と結果1行を `appendBody` で残す。
+    - 更新: `clair todo update path=<list の path> [project=<Project 名|none>] [stage=<列>] [title=...] [appendBody="..."]`。`project=` の値は `clair project list --compact` の `name`。Project に属さない作業は `none`。
+    依頼の意図を自分で判断する:
+    - 「調べといて」「やっといて」のように実行を頼まれた: `clair todo add` でカードを作り、`clair todo update path=<path> project=<名> stage=plan` で置く。やることが明確な小さな修正なら `stage=impl`(plan.md の代わりに本文が依頼として渡る)。`stage=` を付けると Clair が agent を起動する。自分で `clair agent launch` しない。
+    - 「todo に追加して」のように溜めておく意図: カードを作って inbox に置き、止める(`stage` を付けない)。
+    - 意図がどうしても分からない、または危険な操作(削除、push、force など)を伴う: inbox に置き、進めてよいかをチャットで聞く。
+    - 起動する子は必ず先にカードを作る。看板の外で動く子を作らない。
+    - `stage` を付けて `needsProject` と返ったら、Project を決めて `project=` を付けて再実行する。分からなければ1問だけ聞く。
+    - 承認なしで起動できるのはチャットの依頼1件につき3体まで。超えると承認カードが出る。
+    - あなたは Web 検索と WebFetch を使えない。Web とリポジトリの調査は子(plan 列)に任せる。
 
     ## トークン節約のルール(重要)
     - `clair` は必ず `--compact` を付けて実行する(色なしの1行の JSON になる)。
-    - 子 agent の出力を逐一読まない。進み具合は Clair のサイドバーが表示している。
+    - 子 agent の出力を逐一読まない。進み具合は Clair の看板が表示している。
     - 起動したら、どの子に何を任せたかを1〜2行で報告して手を止める。
     - 結果が必要なときだけ、`clair agent status` で終了を確認してから `clair agent output lines=40` で末尾だけ読み、要点を3行以内でまとめる。
     - 詳細はユーザーがリンクから実際のターミナルで見る。長いログを貼らない。
@@ -110,7 +114,7 @@ public enum Concierge {
   static func command(session: String, extra: String, opening: String? = nil, resumed: Bool = false) -> String {
     let fresh = !resumed && transcriptFile(session: session) == nil
     let first = fresh || resumed ? opening.map { " " + AgentRun.quote($0) } ?? "" : ""
-    return "claude \(fresh ? "--session-id" : "--resume") \(session) --append-system-prompt \(AgentRun.quote(prompt(extra: extra)))\(first)"
+    return "claude \(fresh ? "--session-id" : "--resume") \(session) --disallowedTools WebFetch,WebSearch --append-system-prompt \(AgentRun.quote(prompt(extra: extra)))\(first)"
   }
 }
 

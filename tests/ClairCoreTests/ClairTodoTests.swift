@@ -31,7 +31,9 @@ final class ClairTodoWriteTests: XCTestCase {
     XCTAssertEqual(t.extra, ["kr": "K1"])
     let again = ClairTodo.parse(path: "/t.md", text: t.with { $0.stage = "check-A"; $0.lane = nil }.render(onto: "---\nlane: code\nkr: K1\n---\nbody"))
     XCTAssertEqual(again.stage, "check-A"); XCTAssertNil(again.lane); XCTAssertEqual(again.pr, "https://g/p#1"); XCTAssertEqual(again.extra, ["kr": "K1"])
-    XCTAssertNotNil(ClairTodo.invalid(priority: nil, due: nil, stage: "review"))
+    XCTAssertNotNil(ClairTodo.invalid(priority: nil, due: nil, stage: "bogus"))
+    XCTAssertNil(ClairTodo.invalid(priority: nil, due: nil, stage: "review", result: "ok"))
+    XCTAssertNotNil(ClairTodo.invalid(priority: nil, due: nil, result: "maybe"))
     XCTAssertNil(ClairTodo.invalid(priority: nil, due: nil, stage: "check-B", lane: "research", retry: 0))
   }
 
