@@ -52,3 +52,9 @@ Prefer narrow, fast checks (`make test`, a single test filter, unit tests)
 during development. Run broader suites (`make foundation`, `make lint`) only
 when finishing a slice or before committing. Do not repeatedly launch the full
 app or simulator for every small change.
+
+After a local build or test run passes and the servers/apps you started are
+stopped, run `make clean` to delete the build output (`.build`). It refuses
+while a running process (another session's app, daemon, test, or build) still
+uses the output; leave it then. Keep `.cache/ghostty` — it is a fetch cache,
+not build output.

@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-.PHONY: help doctor dev dev-daemon-restart dev-ios build-mobile-simulator lint-swift lint ci
+.PHONY: help doctor dev dev-daemon-restart dev-ios build-mobile-simulator lint-swift lint ci clean
 .PHONY: build mobile-build test test-integration check foundation
 .PHONY: perf perf-budget perf-startup
 
@@ -56,3 +56,9 @@ lint-swift: ## Check Swift formatting.
 lint: lint-swift ## Run all formatting and static checks.
 
 ci: lint foundation build-mobile-simulator ## Run the checks GitHub Actions runs.
+
+clean: ## Delete local build output (.build) unless a running process still uses it.
+	@if pgrep -fl "$(CURDIR)/" || pgrep -xl 'swift-build|swift-test|swift-package|xcodebuild'; then \
+		echo "clean: skipped — the processes above still use the build output"; exit 1; \
+	fi
+	@rm -rf .build packages/*/.build

@@ -77,7 +77,9 @@ operation, or deletion of user work — ask first for each.
      `make dev` if one is up; if another session owns it, do not rebuild the
      bundle under it — render the affected view offscreen or ask;
    - before committing a larger slice: `make foundation` / `make lint`.
-   Stop every server or app you started.
+   Stop every server or app you started. Once verification passes, run
+   `make clean` to delete the build output (`.build`); it refuses while any
+   process still uses it — then leave it and say so in the report.
 5. **Commit** with [`session-commit`](../session-commit/SKILL.md): only this
    session's hunks, English conventional message, the attribution trailers.
 6. **Report** in Japanese: what changed (paths), how it was verified (with
