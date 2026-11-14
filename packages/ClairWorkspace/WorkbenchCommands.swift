@@ -254,7 +254,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var conciergeCwd = ""
   /// Where a card without a Project starts its agent ("" = `~/Projects`).
   public var conciergeWorkdir = ""
-  /// Concierge terminal key → agents it started in the current chat request; cleared when its turn ends (`agent.report done`).
+  /// Concierge terminal key → agents it started in the current chat request; cleared only when the owner sends the next request.
   public var conciergeLaunches: [String: Int] = [:]
   /// Each folder's concierge chats by their latest Claude Code session. Launches are never persisted, so this is
   /// what lets a chat resume after a Clair restart. A changed prompt or folder starts over.
