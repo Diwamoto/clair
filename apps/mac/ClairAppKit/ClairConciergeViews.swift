@@ -1046,7 +1046,7 @@
               Image(systemName: "plus").font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textTertiary).frame(width: 22, height: 22)
             }.buttonStyle(HoverWashStyle(radius: Radius.control)).help(tr("カードを追加")).accessibilityLabel(tr("カードを追加"))
           }
-        }.padding(.leading, 6)
+        }.frame(height: 22).padding(.leading, 6)  // the Inbox "+" is 22pt: every header takes its height so the rows line up
         ScrollView {
           VStack(spacing: 6) {
             ForEach(items, id: \.todo.path) { card($0).transition(.opacity) }
