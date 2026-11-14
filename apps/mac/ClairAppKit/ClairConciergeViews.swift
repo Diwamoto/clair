@@ -45,7 +45,7 @@
     /// Text put into the composer from outside (a board card's "コンシェルジュに頼む"); cleared once taken.
     @Binding var ask: String?
     /// A request typed into a running concierge (resets its per-request launch cap).
-    var sent: () -> Void = {}
+    let onSent: () -> Void
     /// nil until the transcript has been read once, so the empty state never flashes over a loading chat.
     @State private var messages: [AgentHistory.Message]?
     /// Kept across leaving and reopening the chat (the view is rebuilt each time).
@@ -74,8 +74,8 @@
     @MainActor private static var sent: [String: String] = [:]
 
     init(session: String?, terminal: (key: String, pane: Int, launch: AgentLaunch)?, status: AgentSession.Status?,
-         start: @escaping (String) -> Void, ask: Binding<String?>) {
-      self.session = session; self.terminal = terminal; self.status = status; self.start = start; _ask = ask
+         start: @escaping (String) -> Void, ask: Binding<String?>, onSent: @escaping () -> Void = {}) {
+      self.session = session; self.terminal = terminal; self.status = status; self.start = start; _ask = ask; self.onSent = onSent
       _messages = State(initialValue: session.flatMap { Self.read[$0] })
       _pending = State(initialValue: session.flatMap { Self.sent[$0] })
     }
@@ -442,7 +442,7 @@
       guard !text.isEmpty else { return }
       guard let pane else { draft = ""; show(text); return start(text) }
       guard ClairGhosttySurfaceView.send(text, toPane: pane) else { return }
-      sent()
+      onSent()
       draft = ""; show(text)
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { ClairGhosttySurfaceView.pressReturn(inPane: pane) }
     }
@@ -817,7 +817,7 @@
     }
 
     /// The first lines of a TODO file after its front matter.
-    static func bodyStart(_ path: String) -> String {
+    nonisolated static func bodyStart(_ path: String) -> String {
       let rows = ((try? String(contentsOfFile: path, encoding: .utf8)) ?? "").split(separator: "\n", omittingEmptySubsequences: false)
       var body = rows[...]
       if rows.first?.trimmingCharacters(in: .whitespaces) == "---",

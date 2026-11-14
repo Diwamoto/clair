@@ -1634,11 +1634,6 @@ import Observation
         if st.palette == .search { searchSelection = 0; runSearch() }
       }
       .onChange(of: st.debugNavigationGeneration) { sidebarMode = "ladybug" }
-      // A file opened while the concierge chat covers the panes would land hidden behind it.
-      .onChange(of: sidebarMode, initial: true) { _, mode in store.conciergeShown = mode == "concierge" }
-      .onChange(of: st.active) {
-        if !store.conciergeFiles.contains(where: { $0.project == st.project && $0.path == st.active }) { leaveConciergeOverlay() }
-      }
       .onChange(of: store.debugSession?.frames.first) { _, frame in
         if sidebarMode == "ladybug", let frame { openDebugFrame(frame) }
       }
@@ -1719,6 +1714,11 @@ import Observation
       .overlay(alignment: .bottom) { if !glass { Rectangle().fill(C.surfaceActive).frame(height: 1) } }
       .onChange(of: glass) { NotificationCenter.default.post(name: Notification.Name("ClairLayoutTitlebar"), object: nil) }
       // #78: here, not on the body's chain (at the type checker's limit). The titlebar stays mounted on both screens.
+      // Also #78. A file opened while the concierge chat covers the panes would land hidden behind it.
+      .onChange(of: sidebarMode, initial: true) { _, mode in store.conciergeShown = mode == "concierge" }
+      .onChange(of: st.active) {
+        if !store.conciergeFiles.contains(where: { $0.project == st.project && $0.path == st.active }) { leaveConciergeOverlay() }
+      }
       .task(id: conciergeBoard) {
         // The concierge and its children rewrite the TODO files while the board is open.
         while conciergeBoard, !Task.isCancelled {
@@ -3489,7 +3489,7 @@ import Observation
                 session: chat, terminal: c.map { ($0.key, $0.pane, $0.launch) }, status: status(chat),
                 start: { startConcierge(chat: chat, $0); conciergeChat = chat }, ask: $conciergeAsk,
                 // A new chat request is the only thing that resets the concierge's launch cap: an owner action, not an agent report.
-                sent: { if let c { store.state.conciergeLaunches[c.key] = nil } })
+                onSent: { if let c { store.state.conciergeLaunches[c.key] = nil } })
               .id(chat)
               .transition(reduceMotion ? .opacity : .asymmetric(insertion: .opacity.combined(with: .offset(y: 8)), removal: .opacity))
             }

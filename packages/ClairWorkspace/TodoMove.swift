@@ -42,7 +42,7 @@ enum ClairColumnSkills {
 
 extension WorkbenchState {
   /// Where a card without a Project starts its agent.
-  var workdir: String { conciergeWorkdir.isEmpty ? FileManager.default.homeDirectoryForCurrentUser.appending(path: "Projects").path : conciergeWorkdir }
+  var workdir: String { conciergeWorkdir.isEmpty ? URL.homeDirectory.appending(path: "Projects").path : conciergeWorkdir }
 
   /// The folder behind a card's `project:` (`none` = the work folder), without opening it.
   func columnRoot(_ project: String) -> String? {

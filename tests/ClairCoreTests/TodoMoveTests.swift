@@ -102,6 +102,16 @@ import Testing
     for c in cases { #expect(s.isConcierge(c.key) == c.want, "\(c.key ?? "nil")") }
   }
 
+  /// ADR-0028 Validation: a child's `todo.update stage=` cannot pass as the concierge, so it only records the stage.
+  @Test func aChildCannotClaimToBeTheConcierge() throws {
+    let home = try Self.home(), root = try Self.repo(home)
+    let (_, concierge) = Self.state(root: root)
+    let child = WorkbenchState.terminalKey(root, 7)
+    let spoofed = WorkbenchIPCRequest(command: "todo.update", input: ["stage": .string("impl"), "parent": .string(concierge)], caller: child)
+    #expect(spoofed.callerAsParent().input["parent"] == .string(child))
+    #expect(WorkbenchIPCRequest(command: "todo.update", input: ["parent": .string(concierge)]).callerAsParent().input["parent"] == nil)
+  }
+
   @Test func conciergeCapNeedsTheApprovalCard() throws {
     let home = try Self.home(), root = try Self.repo(home)
     var (s, concierge) = Self.state(root: root)
