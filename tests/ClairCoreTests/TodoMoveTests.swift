@@ -72,6 +72,19 @@ import Testing
     #expect(try Self.read(path).branch == "todo-fix-thing")
   }
 
+  @Test func aMoveClosesOnlyTheCardsOwnAgent() throws {
+    let home = try Self.home(), root = try Self.repo(home)
+    var (s, concierge) = Self.state(root: root)
+    let path = try Self.card(home, "forged", project: "p")
+    try ClairTodo.parse(path: path, text: try String(contentsOfFile: path, encoding: .utf8)).with { $0.agent = concierge }.save(appendBody: nil)
+    try s.moveTodo(path: path, stage: "inbox", home: home)
+    #expect(s.terminal(concierge) != nil, "a forged agent= must not close another pane")
+    try s.moveTodo(path: path, stage: "plan", home: home)
+    let plan = try #require(try Self.read(path).agent)
+    try s.moveTodo(path: path, stage: "inbox", home: home)
+    #expect(s.terminal(plan) == nil, "the card's own agent is closed")
+  }
+
   @Test func doneRefusesADirtyWorktreeUnlessForced() throws {
     let home = try Self.home(), root = try Self.repo(home)
     var s = Self.state(root: root).state

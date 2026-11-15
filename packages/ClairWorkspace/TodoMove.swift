@@ -90,6 +90,12 @@ extension WorkbenchState {
     return out.joined(separator: "\n")
   }
 
+  /// `key` is a live pane started by `columnPrompt` for the card at `path`.
+  func cardAgent(_ key: String, path: String) -> Bool {
+    guard let t = terminal(key), let opening = withLayoutCopy(t.project).launches[t.pane]?.opening else { return false }
+    return opening.contains("\nカード: \(path)\n")
+  }
+
   /// The single entry point that starts column agents. `concierge` is the calling concierge's terminal key, counted against its cap.
   mutating func moveTodo(path: String, stage: String, force: Bool = false, concierge: String? = nil, home: URL = .homeDirectory) throws(CommandError) {
     guard ClairTodo.columns.contains(stage) else { throw CommandError(.invalidInput, "stage must be one of \(ClairTodo.columns.joined(separator: ", "))") }
@@ -100,7 +106,8 @@ extension WorkbenchState {
     let launching = ["plan", "impl", "review"].contains(stage)
     let origin = t.project.flatMap { p in projects.first { $0.origin == nil && ($0.name == p || $0.path == p) } }
     let worktree = t.branch.flatMap { b in projects.first { $0.branch == b && $0.origin != nil && $0.origin == origin?.path } }
-    var live: String? = t.agent.flatMap { terminal($0) != nil ? $0 : nil }
+    // `agent` is writable by any `todo.update`, so close only a pane this card's column launch opened.
+    var live: String? = t.agent.flatMap { cardAgent($0, path: path) ? $0 : nil }
 
     var input: CommandInput = [:]
     var launchProject: WorkbenchProject?
