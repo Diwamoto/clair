@@ -117,11 +117,13 @@ import Testing
   @Test func doneKeepsABranchTheCardDidNotMake() throws {
     let home = try Self.home(), root = try Self.repo(home)
     var s = Self.state(root: root).state
-    WorkbenchGit.run(root, ["branch", "keep"])
     let path = try Self.card(home, "forged branch", project: "p")
-    try Self.read(path).with { $0.branch = "keep" }.save(appendBody: nil)
-    try s.moveTodo(path: path, stage: "done", force: true, home: home)
-    #expect(WorkbenchGit.branchExists(root, "keep"))
+    for other in ["keep", "todo-another-card"] {  // any branch, or another card's
+      WorkbenchGit.run(root, ["branch", other])
+      try Self.read(path).with { $0.branch = other; $0.done = false }.save(appendBody: nil)
+      try s.moveTodo(path: path, stage: "done", force: true, home: home)
+      #expect(WorkbenchGit.branchExists(root, other), "\(other)")
+    }
   }
 
   @Test func doneRefusesADirtyWorktreeUnlessForced() throws {

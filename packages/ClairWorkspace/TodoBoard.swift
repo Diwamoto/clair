@@ -48,7 +48,7 @@ extension WorkbenchState {
   public func board(_ todos: [ClairTodo], now: Date = .now) -> (cards: [TodoBoardCard], archived: [TodoBoardCard]) {
     let sessions = agentSessions
     let all = todos.map { t -> TodoBoardCard in
-      let live = t.agent.flatMap(terminal)
+      let live = t.agent.flatMap { cardAgent($0, path: t.path) ? terminal($0) : nil }  // a forged agent= shows no pane
       let session = live.flatMap { l in sessions.first { $0.project == l.project && $0.pane == l.pane } }
       let named = t.project.flatMap { p in projects.first { $0.name == p || $0.path == p }?.name }
       let column = t.column

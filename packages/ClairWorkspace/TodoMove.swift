@@ -93,7 +93,8 @@ extension WorkbenchState {
   /// `key` is a live pane started by `columnPrompt` for the card at `path`.
   func cardAgent(_ key: String, path: String) -> Bool {
     guard let t = terminal(key), let opening = withLayoutCopy(t.project).launches[t.pane]?.opening else { return false }
-    return opening.contains("\nカード: \(path)\n")
+    // The fixed third line, not a substring a card body could carry.
+    return opening.split(separator: "\n", omittingEmptySubsequences: false).dropFirst(2).first == "カード: \(path)"
   }
 
   /// The single entry point that starts column agents. `concierge` is the calling concierge's terminal key, counted against its cap.
@@ -107,11 +108,13 @@ extension WorkbenchState {
     let origin = t.project.flatMap { p in projects.first { $0.origin == nil && ($0.name == p || $0.path == p) } }
     // Found on disk too: the owner may have closed the worktree's Project since the impl launch.
     // `branch` is writable by any `todo.update`: only a branch `branchName` made is the card's to remove.
-    let cardBranch = t.branch.flatMap { $0.hasPrefix("todo-") ? $0 : nil }
+    let base = Self.branchName(for: path)
+    let cardBranch = t.branch.flatMap { b in b == base || (b.hasPrefix(base + "-") && Int(b.dropFirst(base.count + 1)) != nil) ? b : nil }
     let worktree = cardBranch.flatMap { b in origin.flatMap { WorkbenchGit.managedWorktree($0, branch: b, open: projects) } }
     // `agent` is writable by any `todo.update`, so close only a pane this card's column launch opened.
     var live: String? = t.agent.flatMap { cardAgent($0, path: path) ? $0 : nil }
 
+    let before = projects  // a launch that fails its preflight must not leave a Project it opened
     var input: CommandInput = [:]
     var launchProject: WorkbenchProject?
     var branch = t.branch
@@ -126,7 +129,6 @@ extension WorkbenchState {
         launchProject = (stage == "plan" ? nil : worktree.map { addProject($0) }) ?? p
         input["project"] = .string(launchProject!.name)
         if stage == "impl", worktree == nil {
-          let base = Self.branchName(for: path)
           branch = (1...).lazy.map { $0 == 1 ? base : "\(base)-\($0)" }.first { !WorkbenchGit.branchExists(p.path, $0) }!
           input["branch"] = .string(branch!)
         }
@@ -136,7 +138,7 @@ extension WorkbenchState {
       input["profile"] = .string("claude")
       input["opening"] = .string(columnPrompt(t, body: ClairTodo.split(text).body.trimmingCharacters(in: .whitespacesAndNewlines),
                                               stage: stage, project: name, root: root, branch: branch, home: home))
-      if case .failure(let e) = CommandRegistry.workbench.preflight("agent.launch", input, self) { throw e }
+      if case .failure(let e) = CommandRegistry.workbench.preflight("agent.launch", input, self) { projects = before; throw e }
     }
     if stage == "done", let o = origin, let b = cardBranch, WorkbenchGit.branchExists(o.path, b) {
       if let loss = Self.worktreeLoss(worktree?.path, branch: b, root: o.path), !force {
