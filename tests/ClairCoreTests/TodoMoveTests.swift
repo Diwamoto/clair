@@ -85,6 +85,19 @@ import Testing
     #expect(s.terminal(plan) == nil, "the card's own agent is closed")
   }
 
+  @Test func aFailedMoveDoesNotKeepTheClosedAgent() throws {
+    let home = try Self.home(), root = try Self.repo(home)
+    var s = Self.state(root: root).state
+    let path = try Self.card(home, "locked", project: "p")
+    try s.moveTodo(path: path, stage: "impl", home: home)
+    let agent = try #require(try Self.read(path).agent)
+    let wt = try #require(s.projects.first { $0.origin == root })
+    WorkbenchGit.run(root, ["worktree", "lock", wt.path])  // a single --force does not remove a locked worktree
+    do { try s.moveTodo(path: path, stage: "done", force: true, home: home); Issue.record("locked worktree was removed") } catch {}
+    let t = try Self.read(path)
+    #expect(s.terminal(agent) == nil && t.agent == nil && t.stage == "impl")
+  }
+
   @Test func doneRefusesADirtyWorktreeUnlessForced() throws {
     let home = try Self.home(), root = try Self.repo(home)
     var s = Self.state(root: root).state

@@ -141,7 +141,12 @@ extension WorkbenchState {
       }
     }
 
-    if let key = live { closeTerminal(key); live = nil }
+    if let key = live {
+      closeTerminal(key); live = nil
+      // Record the closed agent now: a launch or worktree removal that fails below must not leave the card pointing at it.
+      var closed = ClairTodo.parse(path: path, text: text); closed.agent = nil
+      try? closed.save(appendBody: nil)
+    }
     t.agent = nil; t.result = nil; t.note = nil; t.doneAt = nil
     t.done = stage == "done"
     t.stage = stage == "inbox" ? nil : stage
