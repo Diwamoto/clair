@@ -267,6 +267,7 @@
           .onKeyPress(keys: ["c"]) { $0.modifiers == .control ? interrupt() : .ignored }
           // `@` completion: ↑↓ moves, ⏎ / ⇥ inserts the highlighted path.
           .onKeyPress(keys: [.upArrow, .downArrow, .return, .tab]) { key in
+            if Self.composing { return .ignored }  // the IME owns ⏎ / ↑↓ while converting
             if key.key == .return, key.modifiers.contains(.shift) {
               (NSApp.keyWindow?.firstResponder as? NSTextView)?.insertNewlineIgnoringFieldEditor(nil)
               return .handled
@@ -438,6 +439,8 @@
 
     /// Types the text into the concierge PTY, then a real Return key press so the TUI reads it as a submit, not a pasted newline.
     private func send() {
+      // ⏎ that commits an IME conversion is not a submit: `draft` lacks the uncommitted text (a trailing 「？」 was lost).
+      guard !Self.composing else { return }
       let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
       guard !text.isEmpty else { return }
       guard let pane else { draft = ""; show(text); return start(text) }
@@ -446,6 +449,9 @@
       draft = ""; show(text)
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { ClairGhosttySurfaceView.pressReturn(inPane: pane) }
     }
+
+    /// The focused field editor holds uncommitted IME text.
+    private static var composing: Bool { (NSApp.keyWindow?.firstResponder as? NSTextView)?.hasMarkedText() ?? false }
 
     private func interrupt() -> KeyPress.Result {
       guard working, let pane, ClairGhosttySurfaceView.pressEscape(inPane: pane) else { return .ignored }
