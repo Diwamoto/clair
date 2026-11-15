@@ -6,6 +6,26 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.42.0] - 2026-11-15
+
+### Added
+- Clair opens on the concierge. A titlebar switch (or ⌃⌘0) moves between the concierge and a Project's workspace, and the chat column can be resized or folded.
+- The concierge shows a board of every TODO across Projects in Inbox, Plan, Impl, Review and Done columns. Dragging a card to Plan, Impl or Review starts an agent for that step, and Impl works in its own branch and worktree.
+- Board cards show their agent's live screen. Click a card to type to its agent or answer its prompts without leaving the concierge.
+- ⌥⌘Y and ⌥⌘N answer the oldest agent waiting for permission. ⌥⌘Y first shows what the agent is asking, and a second press approves.
+- Files opened from the concierge appear in an editor column beside the board.
+- Each board column can use its own skill per Project, chosen once with the agent and remembered.
+- The concierge can start up to three agents per request without asking. Beyond that it shows an approval card.
+
+### Changed
+- TODOs live on the concierge board. The TODO sidebar panel and its activity-bar icon are gone.
+
+### Fixed
+- Moving a card closes only the agent that card started, never another pane named in the card.
+- A card's worktree and branch are cleaned up on Done even after its Project was closed, and only the card's own branch is removed.
+- Clair asks before a move stops an agent that is waiting for input.
+- A card move that fails part-way no longer leaves the card pointing at a stopped agent.
+
 ## [0.41.2] - 2026-11-13
 
 ### Fixed
@@ -780,7 +800,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.41.2...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.42.0...HEAD
+[0.42.0]: https://github.com/Diwamoto/clair/compare/v0.41.2...v0.42.0
 [0.41.2]: https://github.com/Diwamoto/clair/compare/v0.41.1...v0.41.2
 [0.41.1]: https://github.com/Diwamoto/clair/compare/v0.41.0...v0.41.1
 [0.41.0]: https://github.com/Diwamoto/clair/compare/v0.40.0...v0.41.0
