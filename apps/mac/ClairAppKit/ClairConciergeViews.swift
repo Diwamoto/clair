@@ -1184,7 +1184,8 @@
     // MARK: Moving
 
     private func requestMove(_ c: TodoBoardCard, _ stage: String) {
-      guard c.state == .running else { return move(c, stage) }
+      // Any live agent, an input-waiting one included: the move closes its pane.
+      guard c.pane != nil, c.state == .running || c.state == .blocked else { return move(c, stage) }
       confirm(ClairDialog(title: tr("実行中の agent を終了して移しますか"), message: tr("「%@」の agent は実行中です。", c.todo.title),
                           confirm: tr("終了して移す"), destructive: true) { _ in move(c, stage) })
     }

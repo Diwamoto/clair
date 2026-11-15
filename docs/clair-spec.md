@@ -509,7 +509,7 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   コンシェルジュ側に点)と ⌃⌘0 で、コンシェルジュと Project の workspace を行き来する。コンシェルジュの画面では activity bar を出さない。
   コンシェルジュの画面の「ボード」(#78)は TODO(カード)を全 Project 横断のかんばんに並べる。列は Inbox / Plan / Impl / Review / Done の 5 つを横に並べ、
   入りきらなければ横にスクロールする。カードは列の間をどの向きにもドラッグで移せ、移すとその列の agent が起動する(移す先の仕様はモデル側の `todo.move`)。
-  実行中のカードを移すときは「実行中の agent を終了して移しますか」と確認する。`project` の無いカードを Plan / Impl / Review に移すと、Project を選ぶ
+  実行中・入力待ちのカードを移すときは「実行中の agent を終了して移しますか」と確認する。`project` の無いカードを Plan / Impl / Review に移すと、Project を選ぶ
   一覧(「Project なし」が先頭、次に Project を新しい順)を出し、選んだ値を `todo.update` で記録して移し直す。Done に移して worktree の変更が失われる
   ときは確認してから `force` で移し直す。
   カードはタイトル、状態(実行中 / 入力待ち / 完了 / 失敗 / 完了(結果未報告)。担当 agent の無い待機中は出さない)、Project、`note`、担当 pane の画面の末尾 14 行
