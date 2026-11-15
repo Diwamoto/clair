@@ -82,7 +82,7 @@ extension WorkbenchState {
     out.append("")
     switch ClairColumnSkills.choice(project: project, stage: stage, root: root, home: home) {
     case nil:
-      out.append("この Project の \(stage) 列で使う skill がまだ決まっていません。最初に \(root)/.claude/skills/ を調べ、使う skill(または使わない)を理由つきでユーザーに提案し、ターミナルでの回答を待ってください。Clair の既定は \(skill) です。決まったら `clair todo.skill project=\(project) stage=\(stage) skill=<名前|none>` で記録してから作業を始めてください。")
+      out.append("この Project の \(stage) 列で使う skill がまだ決まっていません。ユーザーには聞かず、\(root)/.claude/skills/ を調べて自分で選んでください(合うものが無ければ Clair の既定 \(skill))。選んだら `clair todo.skill project=\(project) stage=\(stage) skill=<名前|none>` で記録し、選んだ理由を 1 行書いてからすぐ作業を始めてください。")
     case "none"?: out.append("skill は使わず、上の指示だけで進めてください。")
     case let name?: out.append("skill `\(name)` を使って進めてください。")
     }

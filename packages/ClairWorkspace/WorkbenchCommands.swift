@@ -1021,7 +1021,7 @@ extension CommandRegistry {
       try s.moveTodo(path: path, stage: i["stage"]!.string!, force: i["force"]?.bool == true)
       return try todoSave(ClairTodo.parse(path: path, text: (try? String(contentsOfFile: path, encoding: .utf8)) ?? ""), appendBody: nil)
     },
-    // Records which skill a column uses for a Project (the agent asked the owner in its terminal first).
+    // Records which skill a column uses for a Project (the column agent picks it itself).
     cmd("todo.skill", "列の skill を記録", .write,
         params: [CommandParam("project", .string), CommandParam("stage", .string, allowed: ["plan", "impl", "review"]),
                  CommandParam("skill", .string)],

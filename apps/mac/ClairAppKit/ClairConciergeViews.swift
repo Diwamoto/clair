@@ -1125,7 +1125,7 @@
           }
         }
         HStack(spacing: 6) {
-          if let label { Circle().fill(label.1).frame(width: 6, height: 6); Text(label.0) }
+          if let label { Circle().fill(label.1).frame(width: 6, height: 6); Text(label.0).foregroundStyle(c.state == .blocked ? C.attention : C.textTertiary) }
           if let p = c.project { Text(verbatim: label == nil ? p : "· \(p)").lineLimit(1) }
         }.font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
         if let note = c.note, !note.isEmpty {
@@ -1137,7 +1137,8 @@
       .padding(10).frame(maxWidth: .infinity, alignment: .leading)
       .modifier(Boxed(fill: on ? C.surfaceActive : C.canvas, line: on ? L.ring : L.strong))
       .overlay {
-        if flash == c.todo.path {
+        // A card waiting on the owner wears the same attention ring as a flashed card.
+        if flash == c.todo.path || c.state == .blocked {
           RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(C.attention, lineWidth: 2).transition(.opacity)
         }
       }
