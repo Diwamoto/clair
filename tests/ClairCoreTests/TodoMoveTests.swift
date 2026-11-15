@@ -98,6 +98,32 @@ import Testing
     #expect(s.terminal(agent) == nil && t.agent == nil && t.stage == "impl")
   }
 
+  @Test func aClosedWorktreeProjectIsStillTheCards() throws {
+    let home = try Self.home(), root = try Self.repo(home)
+    var s = Self.state(root: root).state
+    let path = try Self.card(home, "closed wt", project: "p")
+    try s.moveTodo(path: path, stage: "impl", home: home)
+    let wt = try #require(s.projects.first { $0.origin == root })
+    s.projects.removeAll { $0.path == wt.path }  // the owner closed the worktree's Project
+    try s.moveTodo(path: path, stage: "review", home: home)
+    #expect(try Self.read(path).branch == "todo-closed-wt")
+    #expect(s.projects.contains { $0.path == wt.path && $0.origin == root }, "review reopens the worktree")
+    s.projects.removeAll { $0.path == wt.path }
+    try s.moveTodo(path: path, stage: "done", home: home)
+    #expect(!FileManager.default.fileExists(atPath: wt.path))
+    #expect(!WorkbenchGit.branchExists(root, "todo-closed-wt"))
+  }
+
+  @Test func doneKeepsABranchTheCardDidNotMake() throws {
+    let home = try Self.home(), root = try Self.repo(home)
+    var s = Self.state(root: root).state
+    WorkbenchGit.run(root, ["branch", "keep"])
+    let path = try Self.card(home, "forged branch", project: "p")
+    try Self.read(path).with { $0.branch = "keep" }.save(appendBody: nil)
+    try s.moveTodo(path: path, stage: "done", force: true, home: home)
+    #expect(WorkbenchGit.branchExists(root, "keep"))
+  }
+
   @Test func doneRefusesADirtyWorktreeUnlessForced() throws {
     let home = try Self.home(), root = try Self.repo(home)
     var s = Self.state(root: root).state

@@ -190,7 +190,7 @@ extension WorkbenchState {
     if let open = projects.first(where: { $0.path == p.path }) { return open }
     var name = p.name, n = 2
     while projects.contains(where: { $0.name == name }) { name = "\(p.name) \(n)"; n += 1 }
-    var added = WorkbenchProject(name: name, path: p.path)
+    var added = WorkbenchProject(name: name, path: p.path, origin: p.origin, branch: p.branch)
     added.color = WorkbenchProject.randomColor()
     projects.append(added)
     return added

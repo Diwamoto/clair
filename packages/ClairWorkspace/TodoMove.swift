@@ -57,8 +57,8 @@ extension WorkbenchState {
   }
 
   /// What a worktree would lose when removed: uncommitted files, or commits no other branch or remote has.
-  static func worktreeLoss(_ wt: String, branch: String, root: String) -> String? {
-    if !WorkbenchGit.run(wt, ["status", "--porcelain"]).out.isEmpty { return "uncommitted changes" }
+  static func worktreeLoss(_ wt: String?, branch: String, root: String) -> String? {
+    if let wt, !WorkbenchGit.run(wt, ["status", "--porcelain"]).out.isEmpty { return "uncommitted changes" }
     let r = WorkbenchGit.run(root, ["rev-list", "--count", branch, "--not", "--exclude=refs/heads/\(branch)", "--branches", "--remotes"])
     return r.ok && r.out == "0" ? nil : "unpushed commits"
   }
@@ -105,7 +105,10 @@ extension WorkbenchState {
     var t = ClairTodo.parse(path: path, text: text)
     let launching = ["plan", "impl", "review"].contains(stage)
     let origin = t.project.flatMap { p in projects.first { $0.origin == nil && ($0.name == p || $0.path == p) } }
-    let worktree = t.branch.flatMap { b in projects.first { $0.branch == b && $0.origin != nil && $0.origin == origin?.path } }
+    // Found on disk too: the owner may have closed the worktree's Project since the impl launch.
+    // `branch` is writable by any `todo.update`: only a branch `branchName` made is the card's to remove.
+    let cardBranch = t.branch.flatMap { $0.hasPrefix("todo-") ? $0 : nil }
+    let worktree = cardBranch.flatMap { b in origin.flatMap { WorkbenchGit.managedWorktree($0, branch: b, open: projects) } }
     // `agent` is writable by any `todo.update`, so close only a pane this card's column launch opened.
     var live: String? = t.agent.flatMap { cardAgent($0, path: path) ? $0 : nil }
 
@@ -120,7 +123,7 @@ extension WorkbenchState {
         branch = nil
       } else {
         guard let p = origin else { throw CommandError(.preconditionFailed, "no project \(name)") }
-        launchProject = (stage == "plan" ? nil : worktree) ?? p
+        launchProject = (stage == "plan" ? nil : worktree.map { addProject($0) }) ?? p
         input["project"] = .string(launchProject!.name)
         if stage == "impl", worktree == nil {
           let base = Self.branchName(for: path)
@@ -135,9 +138,9 @@ extension WorkbenchState {
                                               stage: stage, project: name, root: root, branch: branch, home: home))
       if case .failure(let e) = CommandRegistry.workbench.preflight("agent.launch", input, self) { throw e }
     }
-    if stage == "done", let wt = worktree, let o = origin, let b = t.branch {
-      if let loss = Self.worktreeLoss(wt.path, branch: b, root: o.path), !force {
-        throw CommandError(.preconditionFailed, "dirtyWorktree: \(loss) in \(wt.path); move with force=true to discard")
+    if stage == "done", let o = origin, let b = cardBranch, WorkbenchGit.branchExists(o.path, b) {
+      if let loss = Self.worktreeLoss(worktree?.path, branch: b, root: o.path), !force {
+        throw CommandError(.preconditionFailed, "dirtyWorktree: \(loss) in \(worktree?.path ?? b); move with force=true to discard")
       }
     }
 
@@ -153,13 +156,17 @@ extension WorkbenchState {
     var history: String?
     switch stage {
     case "done":
-      if let wt = worktree, let o = origin, let b = t.branch {
-        let r = WorkbenchGit.run(o.path, ["worktree", "remove"] + (force ? ["--force"] : []) + [wt.path], merge: true)
-        guard r.ok else { throw CommandError(.preconditionFailed, r.out) }
+      if let o = origin, let b = cardBranch {
+        if let wt = worktree {
+          let r = WorkbenchGit.run(o.path, ["worktree", "remove"] + (force ? ["--force"] : []) + [wt.path], merge: true)
+          guard r.ok else { throw CommandError(.preconditionFailed, r.out) }
+          for open in projects where open.path == wt.path {
+            layouts[open.name] = nil
+            if project == open.name { project = ""; switchProject(to: o) }
+          }
+          projects.removeAll { $0.path == wt.path }
+        }
         WorkbenchGit.run(o.path, ["branch", "-D", b])
-        layouts[wt.name] = nil
-        projects.removeAll { $0.name == wt.name }
-        if project == wt.name { project = ""; switchProject(to: o) }
         t.branch = nil
       }
       t.doneAt = ISO8601DateFormatter().string(from: .now)

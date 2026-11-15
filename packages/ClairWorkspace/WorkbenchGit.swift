@@ -42,11 +42,23 @@ public struct GitReview: Sendable, Codable, Equatable {
 public enum WorkbenchGit {
   /// A Clair-managed worktree of `origin` on a new `branch`, outside the repository (worktree.create, agent.launch).
   static func createWorktree(_ origin: WorkbenchProject, branch b: String) -> Result<WorkbenchProject, CommandError> {
-    let dir = worktreeBase.appending(path: origin.name).appending(path: b.replacingOccurrences(of: "/", with: "-"))
+    let dir = worktreeDir(origin, branch: b)
     try? FileManager.default.createDirectory(at: dir.deletingLastPathComponent(), withIntermediateDirectories: true)
     let r = run(origin.path, ["worktree", "add", "-b", b, dir.path], merge: true)
     guard r.ok, let path = WorkbenchProject.normalized(dir.path) else { return .failure(CommandError(.preconditionFailed, r.out)) }
     return .success(WorkbenchProject(name: "\(origin.name) · \(b)", path: path, origin: origin.path, branch: b))
+  }
+
+  /// Where `createWorktree` puts `branch` of `origin`.
+  static func worktreeDir(_ origin: WorkbenchProject, branch b: String) -> URL {
+    worktreeBase.appending(path: origin.name).appending(path: b.replacingOccurrences(of: "/", with: "-"))
+  }
+
+  /// The managed worktree of `branch`, opened as a Project or not, while its folder exists.
+  static func managedWorktree(_ origin: WorkbenchProject, branch b: String, open: [WorkbenchProject]) -> WorkbenchProject? {
+    if let p = open.first(where: { $0.branch == b && $0.origin == origin.path }) { return p }
+    return WorkbenchProject.normalized(worktreeDir(origin, branch: b).path)
+      .map { WorkbenchProject(name: "\(origin.name) · \(b)", path: $0, origin: origin.path, branch: b) }
   }
 
   /// Managed worktrees root. Tests point this at a temp dir.
