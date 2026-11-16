@@ -6,6 +6,19 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.44.0] - 2026-11-16
+
+### Added
+- The concierge chat's model menu lists the models you have actually used, and a new menu sets the reasoning effort.
+- A menu lists every concierge chat.
+
+### Changed
+- The concierge chat stays responsive in long conversations: unchanged transcripts are not re-read and only changed replies are redrawn.
+
+### Fixed
+- Switching concierge chats scrolls the selected tab into view.
+- The tab strip scrolls with trackballs and other devices whose scroll events have no target window.
+
 ## [0.43.0] - 2026-11-16
 
 ### Added
@@ -815,7 +828,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.43.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.44.0...HEAD
+[0.44.0]: https://github.com/Diwamoto/clair/compare/v0.43.0...v0.44.0
 [0.43.0]: https://github.com/Diwamoto/clair/compare/v0.42.0...v0.43.0
 [0.42.0]: https://github.com/Diwamoto/clair/compare/v0.41.2...v0.42.0
 [0.41.2]: https://github.com/Diwamoto/clair/compare/v0.41.1...v0.41.2
