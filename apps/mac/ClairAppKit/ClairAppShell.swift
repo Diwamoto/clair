@@ -4558,6 +4558,23 @@ import Observation
         default: w.zoom(nil)  // "Maximize" / "Fill" / unset
         }
       }
+      // A plain wheel / trackball only sends vertical deltas, which a horizontal scroll view ignores:
+      // inside the tab strip, turn them into sideways scrolling (Shift and trackpads already work).
+      private var wheelMonitor: Any?
+      override func viewDidMoveToWindow() {
+        wheelMonitor.map(NSEvent.removeMonitor); wheelMonitor = nil
+        guard window != nil else { return }
+        wheelMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] e in
+          guard let self, let sv = self.enclosingScrollView, e.window === self.window,
+                abs(e.scrollingDeltaY) > abs(e.scrollingDeltaX),
+                sv.bounds.contains(sv.convert(e.locationInWindow, from: nil)) else { return e }
+          let clip = sv.contentView, maxX = max(0, (sv.documentView?.frame.width ?? 0) - clip.bounds.width)
+          let step = e.hasPreciseScrollingDeltas ? e.scrollingDeltaY : e.scrollingDeltaY * 10
+          clip.scroll(to: NSPoint(x: min(max(0, clip.bounds.origin.x - step), maxX), y: clip.bounds.origin.y))
+          sv.reflectScrolledClipView(clip)
+          return nil
+        }
+      }
     }
     func makeNSView(context: Context) -> Area { Area() }
     func updateNSView(_ nsView: Area, context: Context) {}
