@@ -971,6 +971,9 @@
     @State private var project = ""
     @State private var query = ""
     @State private var pastOpen = false
+    /// Columns the owner opened past the first `limit` cards.
+    @State private var expanded: Set<String> = []
+    private static let limit = 10
     @State private var dropTarget: String?
     @State private var picking: (card: TodoBoardCard, stage: String)?
     @State private var pickQuery = ""
@@ -1095,7 +1098,8 @@
         }.frame(height: 22).padding(.leading, 6)  // the Inbox "+" is 22pt: every header takes its height so the rows line up
         ScrollView {
           VStack(spacing: 6) {
-            ForEach(items, id: \.todo.path) { card($0).transition(.opacity) }
+            ForEach(capped(items, stage), id: \.todo.path) { card($0).transition(.opacity) }
+            more(items.count, stage)
             if stage == "done", !past.isEmpty { pastSection(past) }
           }.padding(6)
         }.clairScroller()
@@ -1111,6 +1115,19 @@
         }
       }
       .frame(width: width)
+    }
+
+    /// The first `limit` items unless the column is opened (a search shows everything it matched).
+    private func capped<T>(_ items: [T], _ key: String) -> [T] {
+      expanded.contains(key) || !query.isEmpty ? items : Array(items.prefix(Self.limit))
+    }
+
+    @ViewBuilder private func more(_ total: Int, _ key: String) -> some View {
+      if total > Self.limit, !expanded.contains(key), query.isEmpty {
+        Button { expanded.insert(key) } label: {
+          Text(tr("さらに表示（残り %@ 件）", total - Self.limit)).frame(maxWidth: .infinity).frame(height: RowHeight.default).contentShape(Rectangle())
+        }.buttonStyle(HoverWashStyle(radius: Radius.card)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+      }
     }
 
     private func pastSection(_ past: [TodoBoardCard]) -> some View {
@@ -1213,7 +1230,7 @@
         BoardHead(title: tr("その他のエージェント"), count: others.count).frame(height: 22).padding(.leading, 6)
         ScrollView {
           VStack(spacing: 6) {
-            ForEach(others, id: \.session.id) { a in
+            ForEach(capped(others, "others"), id: \.session.id) { a in
               let (text, color) = statusLabel(a.session.status)
               HStack(alignment: .top, spacing: 0) {
                 Button { peek(a) } label: {
@@ -1231,6 +1248,7 @@
                   .help(tr("ターミナルを開く")).accessibilityLabel(tr("ターミナルを開く"))
               }.modifier(Boxed(fill: C.surfaceHover))
             }
+            more(others.count, "others")
           }.padding(6)
         }.clairScroller()
         .frame(maxHeight: .infinity, alignment: .top)
