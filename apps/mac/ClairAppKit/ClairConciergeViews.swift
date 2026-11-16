@@ -1062,8 +1062,8 @@
         .frame(maxHeight: .infinity, alignment: .top)
         .background(W.soft, in: RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous).strokeBorder(targeted ? L.ring : Color.clear))
-        .dropDestination(for: String.self) { paths, _ in
-          guard let path = paths.first, let c = (cards + archived).first(where: { $0.todo.path == path }), c.column != stage else { return false }
+        .dropDestination(for: URL.self) { urls, _ in
+          guard let path = urls.first?.path, let c = (cards + archived).first(where: { $0.todo.path == path }), c.column != stage else { return false }
           requestMove(c, stage)
           return true
         } isTargeted: { on in
@@ -1144,7 +1144,8 @@
       }
       .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: flash == c.todo.path)
       .id(c.todo.path)
-      .draggable(c.todo.path)
+      // A file URL, not a bare string: the concierge chat takes it as a path to ask about, the columns move it.
+      .draggable(URL(fileURLWithPath: c.todo.path))
       .onTapGesture {
         selected = c.todo.path
         if let a { peek(a) }
