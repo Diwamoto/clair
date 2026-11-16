@@ -878,6 +878,11 @@ import Foundation
       guard let surface = kept[key]?.ghosttySurface else { return false }
       return (try? surface.sendText("1")) != nil
     }
+    /// Types `text` and presses Return on the kept surface of daemon session `key`: a line into an unshown concierge.
+    @discardableResult static func submit(_ text: String, key: String) -> Bool {
+      guard let surface = kept[key]?.ghosttySurface, (try? surface.sendText(text)) != nil else { return false }
+      return press(36, on: surface)
+    }
     @discardableResult static func pressEscape(key: String) -> Bool { press(53, on: kept[key]?.ghosttySurface) }
 
     private static func press(_ keyCode: UInt32, on surface: GhosttySurfaceHandle?) -> Bool {

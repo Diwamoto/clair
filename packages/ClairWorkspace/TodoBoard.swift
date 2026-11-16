@@ -27,6 +27,16 @@ public struct TodoBoardCard: Equatable, Sendable {
       .map { String($0.dropFirst(2)) }
   }
 
+  /// Lines telling the concierge which cards newly reached done / failed / blocked / unreported since `before`
+  /// (path → state). A card seen for the first time is not news, so the first poll only seeds `before`.
+  public static func changes(_ cards: [TodoBoardCard], since before: [String: State]) -> [String] {
+    cards.compactMap { c in
+      guard let old = before[c.todo.path], old != c.state, [.done, .failed, .blocked, .unreported].contains(c.state) else { return nil }
+      let note = c.note.map { " — \(String($0.prefix(200)))" } ?? ""
+      return "[看板] \(c.todo.title)(\(c.column))が \(c.state.rawValue) になりました\(note) path=\(c.todo.path)"
+    }
+  }
+
   /// Cards containing every word of `query` in the title, body, research.md, plan.md, review.md, note, branch or PR URL.
   // ponytail: reads the two artifacts on every call; index them if a board of hundreds feels slow.
   public static func search(_ cards: [TodoBoardCard], _ query: String) -> [TodoBoardCard] {

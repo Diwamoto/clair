@@ -482,6 +482,7 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   shell を持つ agent は defaults を書ける。`~/.claude` は対象外)。限界: 再起動で復元した pane はそのまま起動し直す(承認は新規起動のときだけ)。`--add-dir` の追加フォルダはハッシュしない。ホストの Project を閉じると
   コンシェルジュも外れる(次の送信で同じ会話を起動し直す)。チャットを開いていない間は surface がマウントされないので、
   `agent.output` / `agent.send` はコンシェルジュの画面を読めない。
+  コンシェルジュが動いている間、Clair は 2 秒ごとに看板を読み、カードの状態が `done` / `failed` / `blocked` / `unreported` に変わると最初のコンシェルジュに `[看板] <タイトル>(<列>)が <状態> になりました — <note> path=<パス>` を 1 行入力して Return を押す(初回の読み込みは記録だけ。オーナーの送信ではないので起動上限の数え直しはしない。2026-11-16 オーナー依頼)。
   コンシェルジュは `agent.launch project=` で表示中の Project を切り替えずに別の Project へ
   子を起動できる。他の agent が `parent` 付きで別の Project を指定すると preconditionFailed になる。
   `agent.launch sandbox=true`(#75、profile は `claude`、prompt 必須)は子を Docker Sandboxes の microVM で動かす。

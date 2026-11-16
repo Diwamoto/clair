@@ -1765,10 +1765,17 @@ import Observation
       .onChange(of: st.active) {
         if !store.conciergeFiles.contains(where: { $0.project == st.project && $0.path == st.active }) { leaveConciergeOverlay() }
       }
-      .task(id: conciergeBoard) {
+      .task(id: conciergeBoard || !st.concierges().isEmpty) {
         // The concierge and its children rewrite the TODO files while the board is open.
-        while conciergeBoard, !Task.isCancelled {
+        // While a concierge runs, card state changes are typed into it so it follows the board without being asked.
+        var seen: [String: TodoBoardCard.State]?
+        while conciergeBoard || !st.concierges().isEmpty, !Task.isCancelled {
           todos = ClairTodo.list()
+          let cards = st.board(todos, now: Date()).cards
+          if let seen, let c = st.concierge() {
+            for line in TodoBoardCard.changes(cards, since: seen) { ClairGhosttySurfaceView.submit(line, key: c.key) }
+          }
+          seen = Dictionary(cards.map { ($0.todo.path, $0.state) }, uniquingKeysWith: { a, _ in a })
           try? await Task.sleep(for: .seconds(2))
         }
       }

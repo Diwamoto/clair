@@ -37,4 +37,16 @@ final class TodoBoardTests: XCTestCase {
     ]
     for c in cases { XCTAssertEqual(TodoBoardCard.history(c.text), c.want, c.name) }
   }
+
+  func testChanges() {
+    let s = WorkbenchState()
+    let card = s.board([ClairTodo(path: "a", title: "A").with { $0.stage = "impl"; $0.result = "ok"; $0.note = "n" }]).cards
+    let cases: [(name: String, before: [String: TodoBoardCard.State], want: Int)] = [
+      ("first sight is not news", [:], 0),
+      ("unchanged", ["a": .done], 0),
+      ("running to done", ["a": .running], 1),
+    ]
+    for c in cases { XCTAssertEqual(TodoBoardCard.changes(card, since: c.before).count, c.want, c.name) }
+    XCTAssertEqual(TodoBoardCard.changes(card, since: ["a": .running]).first, "[看板] A(impl)が done になりました — n path=a")
+  }
 }
