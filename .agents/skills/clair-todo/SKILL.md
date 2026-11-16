@@ -28,7 +28,7 @@ clair todo.update path=<path> project=<Project name | none>      # the Project a
 clair todo.update path=<path> result=ok note="<one line>"       # a column's agent reports when it finishes (result ok|failed)
 ```
 
-A TODO is a card on Clair's board. Its `stage` is its column: none = inbox, then plan, impl, review, done. The owner drags a card to a column and Clair starts that column's agent. Only the concierge's own `todo.update stage=` starts one too; from any other caller `stage` is only recorded. Workflow artifacts sit next to the TODO: `~/.clair/todo/<TODO file name without .md>/plan.md` and `review.md` (starting with a `## 要約` section). Other keys: `lane`, `retry` (shown only), `branch`, `pr`, `agent`.
+A TODO is a card on Clair's board. Its `stage` is its column: none = inbox, then plan, impl, review, done. The owner drags a card to a column and Clair starts that column's agent. Only the concierge's own `todo.update stage=` starts one too; from any other caller `stage` is only recorded. Moving an Inbox card to `research` starts an agent that investigates and writes `research.md` while the card stays in Inbox; the owner decides whether to go. Workflow artifacts sit next to the TODO: `~/.clair/todo/<TODO file name without .md>/research.md`, `plan.md` and `review.md` (starting with a `## 要約` section). Other keys: `lane`, `retry` (shown only), `branch`, `pr`, `agent`.
 
 
 ## Add
