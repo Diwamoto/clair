@@ -528,9 +528,23 @@
 
     var body: some View {
       HStack(spacing: 6) {
-        ScrollView(.horizontal) {
-          HStack(spacing: 6) { ForEach(chats, id: \.id) { tab($0.id, $0.status) } }
-        }.scrollIndicators(.never)
+        // A wheel scrolls nothing horizontally, so the selected tab is scrolled into view and every chat is in the list menu.
+        ScrollViewReader { proxy in
+          ScrollView(.horizontal) {
+            HStack(spacing: 6) { ForEach(chats, id: \.id) { tab($0.id, $0.status).id($0.id) } }
+          }.scrollIndicators(.automatic)
+            .onChange(of: selected, initial: true) { _, id in withAnimation { proxy.scrollTo(id) } }
+        }
+        Menu {
+          ForEach(chats.reversed(), id: \.id) { c in
+            Button { select(c.id) } label: {
+              Label(titles[c.id] ?? tr("新しい会話"), systemImage: c.id == selected ? "checkmark" : (c.status == nil ? "circle" : "circle.fill"))
+            }
+          }
+        } label: {
+          Image(systemName: "list.bullet").font(.system(size: 12)).foregroundStyle(C.textSecondary).frame(width: 26, height: 26)
+        }.menuStyle(.button).menuIndicator(.hidden).buttonStyle(HoverWashStyle(radius: Radius.card)).fixedSize()
+          .help(tr("会話の一覧")).accessibilityLabel(tr("会話の一覧"))
         Button(action: new) {
           Image(systemName: "plus").font(.system(size: 12)).foregroundStyle(C.textSecondary).frame(width: 26, height: 26)
         }.buttonStyle(HoverWashStyle(radius: Radius.card)).help(tr("新しい会話")).accessibilityLabel(tr("新しい会話"))
