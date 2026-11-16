@@ -3486,22 +3486,23 @@ import Observation
           let status = { (id: String) in st.concierge(chat: id).flatMap { c in st.agentSessions.first { $0.project == c.project && $0.pane == c.pane }?.status } }
           let c = st.concierge(chat: chat)
           HStack(spacing: 0) {
+            ConciergeTabs(
+              // A new chat stays a tab while its first request waits on the approval card.
+              chats: (chats + [chat, conciergeDraft].filter { !chats.contains($0) && ($0 == chat || ConciergeChatView.isSending($0)) })
+                .reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }.map { ($0, status($0)) }, selected: chat,
+              select: { id in withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration)) { conciergeChat = id } },
+              close: { id in
+                if let c = st.concierge(chat: id) { store.closeTerminal(c.key) }
+                store.run("concierge.close", ["chat": .string(id)], confirmed: true)
+                conciergeChat = nil
+              },
+              new: {
+                withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration)) {
+                  conciergeDraft = UUID().uuidString.lowercased(); conciergeChat = conciergeDraft
+                }
+              })
+            Divider()
             VStack(spacing: 0) {
-              ConciergeTabs(
-                // A new chat stays a tab while its first request waits on the approval card.
-                chats: (chats + [chat, conciergeDraft].filter { !chats.contains($0) && ($0 == chat || ConciergeChatView.isSending($0)) })
-                  .reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }.map { ($0, status($0)) }, selected: chat,
-                select: { id in withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration)) { conciergeChat = id } },
-                close: { id in
-                  if let c = st.concierge(chat: id) { store.closeTerminal(c.key) }
-                  store.run("concierge.close", ["chat": .string(id)], confirmed: true)
-                  conciergeChat = nil
-                },
-                new: {
-                  withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration)) {
-                    conciergeDraft = UUID().uuidString.lowercased(); conciergeChat = conciergeDraft
-                  }
-                })
               ConciergeChatView(
                 session: chat, terminal: c.map { ($0.key, $0.pane, $0.launch) }, status: status(chat),
                 start: { startConcierge(chat: chat, $0); conciergeChat = chat }, ask: $conciergeAsk,

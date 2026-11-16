@@ -516,7 +516,8 @@
     }
   }
 
-  /// The concierge's chats as tabs over the chat, as tall as the board's header so the two line up; ＋ starts a new one.
+  /// The concierge's chats as a vertical list at the screen's left edge. Folded to a thin rail (list toggle, ＋) and
+  /// opened only to switch: picking a chat folds it again.
   struct ConciergeTabs: View {
     /// Each chat by its session id, with its terminal's state while it runs.
     let chats: [(id: String, status: AgentSession.Status?)]
@@ -525,31 +526,25 @@
     let close: (String) -> Void
     let new: () -> Void
     @State private var titles: [String: String] = [:]
+    @State private var open = false
 
     var body: some View {
-      HStack(spacing: 6) {
-        // A wheel scrolls nothing horizontally, so the selected tab is scrolled into view and every chat is in the list menu.
-        ScrollViewReader { proxy in
-          ScrollView(.horizontal) {
-            HStack(spacing: 6) { ForEach(chats, id: \.id) { tab($0.id, $0.status).id($0.id) } }
-          }.scrollIndicators(.automatic)
-            .onChange(of: selected, initial: true) { _, id in withAnimation { proxy.scrollTo(id) } }
-        }
-        Menu {
-          ForEach(chats.reversed(), id: \.id) { c in
-            Button { select(c.id) } label: {
-              Label(titles[c.id] ?? tr("新しい会話"), systemImage: c.id == selected ? "checkmark" : (c.status == nil ? "circle" : "circle.fill"))
-            }
+      VStack(alignment: .leading, spacing: 6) {
+        HStack(spacing: 6) {
+          railButton(open ? "sidebar.left" : "list.bullet", tr("会話の一覧")) { withAnimation(.easeOut(duration: Motion.screenDuration)) { open.toggle() } }
+          if open { Spacer() }
+          if open { railButton("plus", tr("新しい会話")) { new(); open = false } }
+        }.frame(height: 52)
+        if open {
+          ScrollView {
+            VStack(alignment: .leading, spacing: 4) { ForEach(chats.reversed(), id: \.id) { tab($0.id, $0.status) } }
           }
-        } label: {
-          Image(systemName: "list.bullet").font(.system(size: 12)).foregroundStyle(C.textSecondary).frame(width: 26, height: 26)
-        }.menuStyle(.button).menuIndicator(.hidden).buttonStyle(HoverWashStyle(radius: Radius.card)).fixedSize()
-          .help(tr("会話の一覧")).accessibilityLabel(tr("会話の一覧"))
-        Button(action: new) {
-          Image(systemName: "plus").font(.system(size: 12)).foregroundStyle(C.textSecondary).frame(width: 26, height: 26)
-        }.buttonStyle(HoverWashStyle(radius: Radius.card)).help(tr("新しい会話")).accessibilityLabel(tr("新しい会話"))
+        } else {
+          railButton("plus", tr("新しい会話"), action: new)
+        }
+        Spacer(minLength: 0)
       }
-      .padding(.horizontal, 16).frame(height: 52)
+      .padding(.horizontal, 7).frame(width: open ? 240 : 40, alignment: .leading).frame(maxHeight: .infinity, alignment: .top)
       // A chat's title is its first request, so it is read once its transcript exists and never changes.
       .task(id: chats.map(\.id)) {
         while !Task.isCancelled {
@@ -565,14 +560,20 @@
       }
     }
 
+    private func railButton(_ icon: String, _ label: String, action: @escaping () -> Void) -> some View {
+      Button(action: action) {
+        Image(systemName: icon).font(.system(size: 12)).foregroundStyle(C.textSecondary).frame(width: 26, height: 26)
+      }.buttonStyle(HoverWashStyle(radius: Radius.card)).help(label).accessibilityLabel(label)
+    }
+
     private func tab(_ id: String, _ status: AgentSession.Status?) -> some View {
       let on = id == selected
       return HStack(spacing: 6) {
-        Button { select(id) } label: {
+        Button { select(id); withAnimation(.easeOut(duration: Motion.screenDuration)) { open = false } } label: {
           HStack(spacing: 6) {
             Circle().fill(status.map { statusLabel($0).1 } ?? C.textMuted).frame(width: 6, height: 6)
-            Text(titles[id] ?? tr("新しい会話")).lineLimit(1).frame(maxWidth: 140, alignment: .leading)
-          }
+            Text(titles[id] ?? tr("新しい会話")).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+          }.contentShape(Rectangle())
         }.buttonStyle(.plain)
         if on && chats.count > 1 {
           Button { close(id) } label: { Image(systemName: "xmark").font(.system(size: 9, weight: .semibold)).foregroundStyle(C.textTertiary) }
