@@ -4565,9 +4565,10 @@ import Observation
         wheelMonitor.map(NSEvent.removeMonitor); wheelMonitor = nil
         guard window != nil else { return }
         wheelMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] e in
-          guard let self, let sv = self.enclosingScrollView, e.window === self.window,
+          // Mouse utilities (trackball drivers) post wheel events with no window, so hit-test the pointer instead.
+          guard let self, let sv = self.enclosingScrollView, let w = self.window, e.window == nil || e.window === w,
                 abs(e.scrollingDeltaY) > abs(e.scrollingDeltaX),
-                sv.bounds.contains(sv.convert(e.locationInWindow, from: nil)) else { return e }
+                sv.bounds.contains(sv.convert(w.mouseLocationOutsideOfEventStream, from: nil)) else { return e }
           let clip = sv.contentView, maxX = max(0, (sv.documentView?.frame.width ?? 0) - clip.bounds.width)
           let step = e.hasPreciseScrollingDeltas ? e.scrollingDeltaY : e.scrollingDeltaY * 10
           clip.scroll(to: NSPoint(x: min(max(0, clip.bounds.origin.x - step), maxX), y: clip.bounds.origin.y))
