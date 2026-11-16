@@ -6,6 +6,22 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.47.0] - 2026-11-17
+
+### Added
+- The concierge effort menu shows the current effort level.
+- ⌘W closes the shown concierge chat and keeps it in history; ⌘B folds the chat list and ⌘D opens a new chat.
+- Other agents cards on the board show a live screen thumbnail.
+
+### Changed
+- Concierge chat list rows are plainer and taller, with an archive action.
+
+### Fixed
+- Showing a board card's thumbnail no longer replaces its running agent with a login shell.
+- Empty board columns keep their full width so cards can be dropped into them.
+- The hidden concierge terminal redraws when it docks in to ask a question.
+- The thinking spinner stays until the concierge's reply is shown.
+
 ## [0.46.0] - 2026-11-16
 
 ### Added
@@ -855,7 +871,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.46.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.47.0...HEAD
+[0.47.0]: https://github.com/Diwamoto/clair/compare/v0.46.0...v0.47.0
 [0.46.0]: https://github.com/Diwamoto/clair/compare/v0.45.0...v0.46.0
 [0.45.0]: https://github.com/Diwamoto/clair/compare/v0.44.0...v0.45.0
 [0.44.0]: https://github.com/Diwamoto/clair/compare/v0.43.0...v0.44.0
