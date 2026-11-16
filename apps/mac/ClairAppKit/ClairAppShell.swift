@@ -447,6 +447,9 @@ import Observation
     var conciergeTerminal = false
     /// The chat the concierge screen shows (nil = its latest); ⌘W closes it there.
     var conciergeChat: String?
+    /// ⌘B on the concierge screen folds the chat list; ⌘D opens a new chat (2026-11-17 owner request).
+    var conciergeTabsHidden = false
+    var conciergeNewChat = 0
 
     /// Ends `chat`'s concierge and moves it to the history (its transcript stays, so it can be reopened).
     func closeConciergeChat(_ chat: String) {
@@ -484,6 +487,8 @@ import Observation
         selectConciergeFile(conciergeFiles[(i + (id == "tab.next" ? 1 : n - 1)) % n]); return .success(.ok)
       }
       if id == "terminal.show", conciergeShown { conciergeTerminal.toggle(); return .success(.ok) }
+      if id == "sidebar.toggle", conciergeShown { conciergeTabsHidden.toggle(); return .success(.ok) }
+      if id == "pane.splitRight", conciergeShown { conciergeNewChat += 1; return .success(.ok) }
       let previousEditor = (state.project, state.active)
       if id.hasPrefix("debug.") { syncDebugPhase() }
       // `file.save` from any caller (⌘S, CLI, MCP) writes the buffer first; a failed write keeps the dirty marker.
@@ -3529,7 +3534,13 @@ import Observation
           let chat = store.conciergeChat.flatMap { chats.contains($0) || $0 == conciergeDraft || st.conciergeHistory.contains($0) ? $0 : nil } ?? chats.last ?? conciergeDraft
           let status = { (id: String) in st.concierge(chat: id).flatMap { c in st.agentSessions.first { $0.project == c.project && $0.pane == c.pane }?.status } }
           let c = st.concierge(chat: chat)
+          let newChat = {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration)) {
+              conciergeDraft = UUID().uuidString.lowercased(); store.conciergeChat = conciergeDraft
+            }
+          }
           HStack(spacing: 0) {
+            if !store.conciergeTabsHidden {
             ConciergeTabs(
               // A new chat stays a tab while its first request waits on the approval card.
               chats: (chats + [chat, conciergeDraft].filter { !chats.contains($0) && !st.conciergeHistory.contains($0) && ($0 == chat || ConciergeChatView.isSending($0)) })
@@ -3537,12 +3548,9 @@ import Observation
               history: st.conciergeHistory, selected: chat,
               select: { id in withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration)) { store.conciergeChat = id } },
               close: { store.closeConciergeChat($0) },
-              new: {
-                withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration)) {
-                  conciergeDraft = UUID().uuidString.lowercased(); store.conciergeChat = conciergeDraft
-                }
-              })
+              new: newChat)
             Divider()
+            }
             VStack(spacing: 0) {
               ConciergeChatView(
                 session: chat, terminal: c.map { ($0.key, $0.pane, $0.launch) }, status: status(chat),
@@ -3588,6 +3596,7 @@ import Observation
             }
           }
           .frame(maxHeight: .infinity)
+          .onChange(of: store.conciergeNewChat) { newChat() }
           .safeAreaInset(edge: .bottom, spacing: 0) {
             // Unmounted when closed; the shell lives on in the daemon under its key, so ⌘J reattaches with its scrollback.
             // ponytail: one shared scratch shell in ~; per-chat shells or a draggable height if one is not enough.
