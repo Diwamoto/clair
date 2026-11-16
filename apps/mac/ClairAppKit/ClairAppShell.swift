@@ -463,6 +463,13 @@ import Observation
     public func run(_ id: String, _ input: CommandInput = [:], confirmed: Bool = false) -> Result<CommandResult, CommandError> {
       // ⌘W on the concierge screen closes the column's tab; the file stays open in its Project.
       if id == "pane.close", conciergeShown, let f = conciergeFile { closeConciergeFile(f); return .success(.ok) }
+      // Ctrl-Tab / Ctrl-Shift-Tab on the concierge screen cycle the column's tabs, wrapping at the ends.
+      if id == "tab.next" || id == "tab.previous", conciergeShown, let f = conciergeFile,
+        let i = conciergeFiles.firstIndex(of: f)
+      {
+        let n = conciergeFiles.count
+        selectConciergeFile(conciergeFiles[(i + (id == "tab.next" ? 1 : n - 1)) % n]); return .success(.ok)
+      }
       if id == "terminal.show", conciergeShown { conciergeTerminal.toggle(); return .success(.ok) }
       let previousEditor = (state.project, state.active)
       if id.hasPrefix("debug.") { syncDebugPhase() }
