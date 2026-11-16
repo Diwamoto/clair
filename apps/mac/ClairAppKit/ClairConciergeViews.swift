@@ -58,7 +58,7 @@
     @FocusState private var focused: Bool
     @State private var dropTarget = false
     /// The conversation's API-equivalent cost and latest model, and its context size / window (`agent.list`'s numbers).
-    @State private var chat: (cost: Double?, model: String?) = (nil, nil)
+    @State private var chat: (cost: Double?, model: String?, effort: String?) = (nil, nil, nil)
     @State private var context: (tokens: Int?, limit: Int?) = (nil, nil)
     /// Files under the concierge's folder for `@` completion, scanned on the first `@`.
     @State private var files: [WorkbenchFile]?
@@ -308,11 +308,11 @@
             } label: {
               Text(chat.model.map(Self.shortModel) ?? tr("モデル")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
             }.menuStyle(.borderlessButton).fixedSize().help(tr("コンシェルジュのモデルを切り替え"))
-            // Claude Code's own `/effort <level>`; the transcript doesn't record the level, so the label stays generic.
+            // Claude Code's own `/effort <level>`; the label shows the level the latest reply ran at.
             Menu {
               ForEach(Self.efforts, id: \.self) { e in Button(e) { command("/effort \(e)", pane) } }
             } label: {
-              Text(tr("エフォート")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+              Text(chat.effort ?? tr("エフォート")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
             }.menuStyle(.borderlessButton).fixedSize().help(tr("コンシェルジュのエフォートを切り替え"))
             Menu {
               Button(tr("圧縮 (/compact)")) { command("/compact", pane) }
@@ -503,7 +503,7 @@
             let (chat, read, context) = await Task.detached {
               let h = AgentHistoryReader.chat(file: file)
               let read = (h?.messages ?? []).filter { $0.role != "thinking" }
-              return ((h?.estimatedUSD, h?.model), read, AgentContext.claude(session: session, cwd: cwd))
+              return ((h?.estimatedUSD, h?.model, h?.effort), read, AgentContext.claude(session: session, cwd: cwd))
             }.value
             self.chat = chat; self.context = context
             Self.read[session] = read
@@ -530,7 +530,9 @@
     let selected: String
     let select: (String) -> Void
     let close: (String) -> Void
+    let archive: (String) -> Void
     let new: () -> Void
+    @State private var hovered: String?
     @State private var titles: [String: String] = [:]
     @State private var open = false
 
@@ -543,7 +545,7 @@
         }.frame(height: 52)
         if open {
           ScrollView {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
               ForEach(chats.reversed(), id: \.id) { tab($0.id, $0.status) }
               if !history.isEmpty {
                 Text(tr("履歴")).font(.system(size: 11, weight: .semibold)).foregroundStyle(C.textTertiary).padding(.top, 10).padding(.leading, 6)
@@ -580,20 +582,27 @@
 
     private func tab(_ id: String, _ status: AgentSession.Status?, closable: Bool = true) -> some View {
       let on = id == selected
-      return HStack(spacing: 6) {
+      return HStack(spacing: 8) {
         Button { select(id); withAnimation(.easeOut(duration: Motion.screenDuration)) { open = false } } label: {
-          HStack(spacing: 6) {
-            Circle().fill(status.map { statusLabel($0).1 } ?? C.textMuted).frame(width: 6, height: 6)
-            Text(titles[id] ?? tr("新しい会話")).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
-          }.contentShape(Rectangle())
+          HStack(spacing: 8) {
+            Circle().fill(status.map { statusLabel($0).1 } ?? C.textMuted).frame(width: 7, height: 7)
+            Text(titles[id] ?? tr("新しい会話")).font(.system(size: 14, weight: on ? .semibold : .regular)).lineLimit(1)
+              .foregroundStyle(on ? C.textPrimary : C.textSecondary).frame(maxWidth: .infinity, alignment: .leading)
+          }.frame(maxHeight: .infinity).contentShape(Rectangle())
         }.buttonStyle(.plain)
-        if on && closable && chats.count > 1 {
-          Button { close(id) } label: { Image(systemName: "xmark").font(.system(size: 9, weight: .semibold)).foregroundStyle(C.textTertiary) }
-            .buttonStyle(.plain).help(tr("会話を閉じる")).accessibilityLabel(tr("会話を閉じる"))
+        if on || hovered == id {
+          if on && closable && chats.count > 1 { rowButton("xmark", tr("会話を閉じる")) { close(id) } }
+          rowButton("archivebox", tr("アーカイブ")) { archive(id) }
         }
       }
-      .modifier(TodoBoardView.Chip(on: on))
+      .padding(.horizontal, 8).frame(height: 36)
+      .onHover { hovered = $0 ? id : (hovered == id ? nil : hovered) }
       .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    private func rowButton(_ icon: String, _ label: String, action: @escaping () -> Void) -> some View {
+      Button(action: action) { Image(systemName: icon).font(.system(size: 11, weight: .semibold)).foregroundStyle(C.textTertiary) }
+        .buttonStyle(.plain).help(label).accessibilityLabel(label)
     }
   }
 

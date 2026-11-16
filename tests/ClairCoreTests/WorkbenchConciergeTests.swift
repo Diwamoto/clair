@@ -224,6 +224,13 @@ final class WorkbenchConciergeTests: XCTestCase {
     try r.execute("concierge.open", ["chat": .string(both[1].session)], confirmed: true, state: &s).get()
     XCTAssertEqual(s.conciergeChats, [cleared, both[1].session])
     XCTAssertEqual(s.conciergeHistory, [])
+    // Archiving drops a chat from both the open chats and the history.
+    try r.execute("concierge.close", ["chat": .string(both[1].session)], confirmed: true, state: &s).get()
+    try r.execute("concierge.archive", ["chat": .string(both[1].session)], confirmed: true, state: &s).get()
+    try r.execute("concierge.archive", ["chat": .string(cleared)], confirmed: true, state: &s).get()
+    XCTAssertEqual(s.conciergeChats, [])
+    XCTAssertTrue(s.concierges().isEmpty)
+    XCTAssertEqual(s.conciergeHistory, [])
     try r.execute("settings.concierge", ["prompt": .string("new")], confirmed: true, state: &s).get()
     XCTAssertEqual(s.conciergeChats, [])
     XCTAssertEqual(s.conciergeHistory, [])

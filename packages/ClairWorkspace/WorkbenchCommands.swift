@@ -913,6 +913,14 @@ extension CommandRegistry {
       }
       return .ok
     },
+    // Drops a chat from the list and the history; its transcript file stays on disk.
+    cmd("concierge.archive", "コンシェルジュの会話をアーカイブ", .write, ai: false, params: [CommandParam("chat", .string)], palette: false) { s, i in
+      let chat = i["chat"]!.string!
+      if let c = s.concierge(chat: chat) { s.closeTerminal(c.key) }
+      for k in s.conciergeSessions.keys { s.conciergeSessions[k]?.removeAll { $0 == chat } }
+      for k in s.conciergeClosed.keys { s.conciergeClosed[k]?.removeAll { $0 == chat } }
+      return .ok
+    },
     cmd("tab.open", "ファイルを開く", .read, params: [CommandParam("path", .string)],
         preflight: { s, i throws(CommandError) in
           try require(s.untitled.contains(i["path"]!.string!) || s.files.contains { $0.path == i["path"]?.string && $0.status != "D" },

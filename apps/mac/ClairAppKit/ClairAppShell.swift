@@ -458,6 +458,13 @@ import Observation
       conciergeChat = nil
     }
 
+    /// Drops `chat` from the list and the history (its transcript stays on disk).
+    func archiveConciergeChat(_ chat: String) {
+      if let c = state.concierge(chat: chat) { closeTerminal(c.key) }
+      run("concierge.archive", ["chat": .string(chat)], confirmed: true)
+      if conciergeChat == chat { conciergeChat = nil }
+    }
+
     func selectConciergeFile(_ f: ConciergeFile) {
       run("file.open", ["path": .string(URL(fileURLWithPath: f.root).appending(path: f.path).standardizedFileURL.path)])
     }
@@ -3548,6 +3555,7 @@ import Observation
               history: st.conciergeHistory, selected: chat,
               select: { id in withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration)) { store.conciergeChat = id } },
               close: { store.closeConciergeChat($0) },
+              archive: { store.archiveConciergeChat($0) },
               new: newChat)
             Divider()
             }
