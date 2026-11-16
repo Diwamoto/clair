@@ -1000,12 +1000,13 @@
         Rectangle().fill(L.hairline).frame(height: 1)
         GeometryReader { geo in
           // Five columns share the width; below the minimum the columns scroll sideways instead of squeezing.
-          let count = CGFloat(ClairTodo.columns.count)
+          let count = CGFloat(ClairTodo.columns.count + (others.isEmpty ? 0 : 1))
           let width = max(220, (geo.size.width - Self.pad * 2 - Self.gap * (count - 1)) / count)
           ScrollViewReader { proxy in
             ScrollView(.horizontal) {
               HStack(alignment: .top, spacing: Self.gap) {
                 ForEach(ClairTodo.columns, id: \.self) { column($0, shown: shown, past: past, width: width) }
+                if !others.isEmpty { othersColumn(width: width) }
               }
               .padding(.horizontal, Self.pad).padding(.vertical, 16).frame(height: geo.size.height, alignment: .top)
               // A card moving columns or changing state slides in place instead of jumping.
@@ -1017,10 +1018,6 @@
               withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration)) { proxy.scrollTo(path) }
             }
           }
-        }
-        if !others.isEmpty {
-          Rectangle().fill(L.hairline).frame(height: 1)
-          othersBand
         }
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).background(C.canvas)
@@ -1206,31 +1203,36 @@
       .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
     }
 
-    private var othersBand: some View {
-      VStack(alignment: .leading, spacing: 6) {
-        BoardHead(title: tr("エージェント"), count: others.count).padding(.horizontal, Self.pad)
-        ScrollView(.horizontal) {
-          HStack(spacing: Self.gap) {
+    /// The right-edge column: live agents no card holds (manual, concierge children), so every agent in Clair is on the board.
+    private func othersColumn(width: CGFloat) -> some View {
+      VStack(alignment: .leading, spacing: 8) {
+        BoardHead(title: tr("その他のエージェント"), count: others.count).frame(height: 22).padding(.leading, 6)
+        ScrollView {
+          VStack(spacing: 6) {
             ForEach(others, id: \.session.id) { a in
               let (text, color) = statusLabel(a.session.status)
-              HStack(spacing: 0) {
+              HStack(alignment: .top, spacing: 0) {
                 Button { peek(a) } label: {
-                  HStack(spacing: 8) {
-                    Circle().fill(color).frame(width: 6, height: 6)
-                    Text(a.title).foregroundStyle(C.textPrimary).lineLimit(1).frame(maxWidth: 220, alignment: .leading)
-                    Text(verbatim: "\(text) · \(a.session.project)").foregroundStyle(C.textTertiary).lineLimit(1)
-                  }.font(Typography.font(Typography.chrome)).padding(.leading, 10).padding(.trailing, 4)
-                    .frame(height: RowHeight.default).contentShape(Rectangle())
+                  VStack(alignment: .leading, spacing: 4) {
+                    Text(a.title).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textPrimary).lineLimit(2)
+                    HStack(spacing: 6) {
+                      Circle().fill(color).frame(width: 6, height: 6)
+                      Text(verbatim: "\(text) · \(a.session.project)").lineLimit(1)
+                    }.font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+                  }.frame(maxWidth: .infinity, alignment: .leading).padding(10).contentShape(Rectangle())
                 }.buttonStyle(.plain).help(tr("クイックルック"))
                 Button { openAgent(a.session) } label: {
                   Image(systemName: "arrow.up.right").font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textMuted).frame(width: 22, height: 22)
-                }.buttonStyle(HoverWashStyle(radius: Radius.control)).padding(.trailing, 4)
+                }.buttonStyle(HoverWashStyle(radius: Radius.control)).padding(6)
                   .help(tr("ターミナルを開く")).accessibilityLabel(tr("ターミナルを開く"))
               }.modifier(Boxed(fill: C.surfaceHover))
             }
-          }.padding(.horizontal, Self.pad)
-        }
-      }.padding(.vertical, 10)
+          }.padding(6)
+        }.clairScroller()
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(W.soft, in: RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous))
+      }
+      .frame(width: width)
     }
 
     // MARK: Moving
