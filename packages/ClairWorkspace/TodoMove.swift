@@ -65,6 +65,7 @@ extension WorkbenchState {
 
   private static func columnInstruction(_ stage: String, branch: String?) -> String {
     switch stage {
+    case "research": "あなたは看板の Inbox のカードの調査担当です。コードは変更せず、やるかやらないかを判断する材料を調べて research.md に書いてください。結論を出すのは人です。報告後もこのペインでユーザーの追加質問に答えてください。"
     case "plan": "あなたは看板の Plan 列の担当です。コードは変更せず、調べて実装計画を plan.md に書いてください。"
     case "impl": "あなたは看板の Impl 列の担当です。下の計画に従って、この worktree で実装してください。"
     default: "あなたは看板の Review 列の担当です。branch \(branch ?? "(なし)") の diff を自己検証し、review.md を書いてください。"
@@ -99,12 +100,14 @@ extension WorkbenchState {
 
   /// The single entry point that starts column agents. `concierge` is the calling concierge's terminal key, counted against its cap.
   mutating func moveTodo(path: String, stage: String, force: Bool = false, concierge: String? = nil, home: URL = .homeDirectory) throws(CommandError) {
-    guard ClairTodo.columns.contains(stage) else { throw CommandError(.invalidInput, "stage must be one of \(ClairTodo.columns.joined(separator: ", "))") }
+    guard ClairTodo.moveStages.contains(stage) else { throw CommandError(.invalidInput, "stage must be one of \(ClairTodo.moveStages.joined(separator: ", "))") }
     guard ClairTodo.isTodoFile(path, home: home), let text = try? String(contentsOfFile: path, encoding: .utf8) else {
       throw CommandError(.preconditionFailed, "no TODO file \(path) in ~/.clair/todo")
     }
     var t = ClairTodo.parse(path: path, text: text)
-    let launching = ["plan", "impl", "review"].contains(stage)
+    // `research` runs an agent on an Inbox card and leaves it in Inbox.
+    if stage == "research", t.column != "inbox" { throw CommandError(.preconditionFailed, "research runs only on an Inbox card") }
+    let launching = ["research", "plan", "impl", "review"].contains(stage)
     let origin = t.project.flatMap { p in projects.first { $0.origin == nil && ($0.name == p || $0.path == p) } }
     // Found on disk too: the owner may have closed the worktree's Project since the impl launch.
     // `branch` is writable by any `todo.update`: only a branch `branchName` made is the card's to remove.
@@ -126,7 +129,7 @@ extension WorkbenchState {
         branch = nil
       } else {
         guard let p = origin else { throw CommandError(.preconditionFailed, "no project \(name)") }
-        launchProject = (stage == "plan" ? nil : worktree.map { addProject($0) }) ?? p
+        launchProject = (stage == "plan" || stage == "research" ? nil : worktree.map { addProject($0) }) ?? p
         input["project"] = .string(launchProject!.name)
         if stage == "impl", worktree == nil {
           branch = (1...).lazy.map { $0 == 1 ? base : "\(base)-\($0)" }.first { !WorkbenchGit.branchExists(p.path, $0) }!
@@ -154,7 +157,7 @@ extension WorkbenchState {
     }
     t.agent = nil; t.result = nil; t.note = nil; t.doneAt = nil
     t.done = stage == "done"
-    t.stage = stage == "inbox" ? nil : stage
+    t.stage = stage == "inbox" || stage == "research" ? nil : stage
     var history: String?
     switch stage {
     case "done":

@@ -1196,6 +1196,7 @@
         if c.pane != nil { Button(tr("ペインを開く")) { openPane(c) } }
         if let p = diffProject(c) { Button(tr("diff を開く")) { openDiff(p) } }
         if let pr = c.todo.pr, let url = URL(string: pr), url.scheme == "https" { Button(tr("PR を開く")) { NSWorkspace.shared.open(url) } }
+        if c.column == "inbox" { Button(tr("調査する")) { requestMove(c, "research") } }
         if c.column != "done" { Button(tr("コンシェルジュに頼む")) { ask(c) } }
       }
       .accessibilityElement(children: .contain)

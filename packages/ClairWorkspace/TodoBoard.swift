@@ -27,7 +27,7 @@ public struct TodoBoardCard: Equatable, Sendable {
       .map { String($0.dropFirst(2)) }
   }
 
-  /// Cards containing every word of `query` in the title, body, plan.md, review.md, note, branch or PR URL.
+  /// Cards containing every word of `query` in the title, body, research.md, plan.md, review.md, note, branch or PR URL.
   // ponytail: reads the two artifacts on every call; index them if a board of hundreds feels slow.
   public static func search(_ cards: [TodoBoardCard], _ query: String) -> [TodoBoardCard] {
     let words = query.lowercased().split(whereSeparator: \.isWhitespace)
@@ -55,7 +55,7 @@ extension WorkbenchState {
       let state: TodoBoardCard.State =
         if t.result == "failed" { .failed }
         else if t.result == "ok" { .done }
-        else if column == "inbox" || column == "done" || t.agent == nil { .idle }
+        else if column == "done" || t.agent == nil { .idle }  // an Inbox card can carry a research agent
         else {
           switch session?.status {
           case .running?: .running
@@ -66,7 +66,7 @@ extension WorkbenchState {
           }
         }
       let dir = (t.path as NSString).deletingPathExtension
-      let artifacts = ["plan.md", "review.md"].map { "\(dir)/\($0)" }.filter { FileManager.default.fileExists(atPath: $0) }
+      let artifacts = ["research.md", "plan.md", "review.md"].map { "\(dir)/\($0)" }.filter { FileManager.default.fileExists(atPath: $0) }
       let text = (try? String(contentsOfFile: t.path, encoding: .utf8)) ?? ""
       let doneAt = column == "done"
         ? t.doneAt.flatMap { ISO8601DateFormatter().date(from: $0) }

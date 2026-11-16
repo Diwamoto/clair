@@ -158,7 +158,7 @@ extension LocalizedStrings {
 
     // Commands (registry titles)
     "ボード": "Board", "あなた待ち": "Waiting on you", "あなた待ちだけ表示": "Show only cards waiting on you", "すべての Project": "All Projects",
-    "稼働中": "Running", "差し戻し上限超過": "Over the send-back limit", "diff を開く": "Open Diff", "PR を開く": "Open PR", "TODO を開く": "Open TODO", "コンシェルジュに頼む": "Ask the Concierge", "TODO「%@」(%@)を進めて。": "Move the TODO \"%@\" (%@) forward.",
+    "稼働中": "Running", "差し戻し上限超過": "Over the send-back limit", "diff を開く": "Open Diff", "PR を開く": "Open PR", "TODO を開く": "Open TODO", "コンシェルジュに頼む": "Ask the Concierge", "調査する": "Research", "TODO「%@」(%@)を進めて。": "Move the TODO \"%@\" (%@) forward.",
     "ボードはまだ空です": "The board is empty", "コンシェルジュに頼むと、担当するエージェントと stage 付きの TODO がここに並びます。": "Ask the concierge, and its agents and staged TODOs line up here.",
     "その他のエージェント": "Other agents", "カードを検索": "Search cards", "カードを追加": "Add card", "過去の完了 %@ 件": "%@ earlier completed",
     "失敗": "Failed", "完了(結果未報告)": "Done (no result reported)", "PR を作る": "Create PR",

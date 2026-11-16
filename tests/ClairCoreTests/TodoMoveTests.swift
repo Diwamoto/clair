@@ -72,6 +72,22 @@ import Testing
     #expect(try Self.read(path).branch == "todo-fix-thing")
   }
 
+  @Test func researchRunsAnAgentAndKeepsTheCardInInbox() throws {
+    let home = try Self.home(), root = try Self.repo(home)
+    var s = Self.state(root: root).state
+    let path = try Self.card(home, "maybe", project: "p")
+    try s.moveTodo(path: path, stage: "research", home: home)
+    let t = try Self.read(path)
+    #expect(t.column == "inbox" && t.stage == nil && t.branch == nil)
+    let agent = try #require(t.agent)
+    #expect(s.terminal(agent) != nil)
+    #expect(s.board([t]).cards.first?.pane != nil, "the Inbox card shows its research pane")
+    try s.moveTodo(path: path, stage: "plan", home: home)
+    #expect(s.terminal(agent) == nil, "moving on closes the research agent")
+    do { try s.moveTodo(path: path, stage: "research", home: home); Issue.record("research left a plan card") }
+    catch { #expect(error.message.contains("Inbox")) }
+  }
+
   @Test func aMoveClosesOnlyTheCardsOwnAgent() throws {
     let home = try Self.home(), root = try Self.repo(home)
     var (s, concierge) = Self.state(root: root)

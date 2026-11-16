@@ -992,7 +992,7 @@ extension CommandRegistry {
         // "" clears a workflow key.
         func text(_ k: String) -> String?? { i[k]?.string.map { $0.isEmpty ? nil : $0 } }
         if let v = text("stage") {
-          if concierge != nil { move = ClairTodo.column(stage: v) } else { t.stage = v == "inbox" ? nil : v }
+          if concierge != nil { move = v == "research" ? v : ClairTodo.column(stage: v) } else { t.stage = v == "inbox" || v == "research" ? nil : v }
         }
         if let v = text("lane") { t.lane = v }
         if let v = i["retry"]?.int { t.retry = v }
@@ -1010,7 +1010,7 @@ extension CommandRegistry {
     },
     // The single entry point that starts column agents; GUI-only, so any other caller gets the approval card.
     cmd("todo.move", "カードを列へ移す", .write, ai: false,
-        params: [CommandParam("path", .string), CommandParam("stage", .string, allowed: ClairTodo.columns),
+        params: [CommandParam("path", .string), CommandParam("stage", .string, allowed: ClairTodo.moveStages),
                  CommandParam("force", .bool, required: false)],
         palette: false,
         preflight: { _, i throws(CommandError) in
@@ -1023,7 +1023,7 @@ extension CommandRegistry {
     },
     // Records which skill a column uses for a Project (the column agent picks it itself).
     cmd("todo.skill", "列の skill を記録", .write,
-        params: [CommandParam("project", .string), CommandParam("stage", .string, allowed: ["plan", "impl", "review"]),
+        params: [CommandParam("project", .string), CommandParam("stage", .string, allowed: ["research", "plan", "impl", "review"]),
                  CommandParam("skill", .string)],
         palette: false,
         preflight: { s, i throws(CommandError) in

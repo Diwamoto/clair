@@ -3,6 +3,28 @@ import Foundation
 /// The skills a board column's agent starts from. Keep each text identical to `.agents/skills/<name>/SKILL.md`.
 public enum ClairColumnSkill {
   public static let all: [(name: String, markdown: String)] = [
+    ("clair-research", #"""
+---
+name: clair-research
+description: Clair の看板で Inbox のカードの「調査する」で起動された agent 向け。やる・やらないの判断材料を調べて research.md に書き、結果を Clair に報告し、そのまま追加質問に答える。
+---
+
+# Clair Research
+
+あなたは Clair の看板の Inbox にあるカードの調査担当です。コードは変更しません。やるかやらないかを決めるのはユーザーで、あなたはその材料を出します。
+
+1. カードのタイトルと本文を読み、リポジトリ、関連する spec や ADR、必要なら Web を調べる。
+2. `~/.clair/todo/<カードのファイル名(.md なし)>/research.md` を書く。ディレクトリが無ければ作る。冒頭に `## 要約` の節を置き、推奨(やる / やらない / 保留)と理由を数行でまとめる(検索に使われる)。続けて、現状、実現方法の候補と規模感、リスクや前提、未決事項(ユーザーに聞きたいこと)を書く。
+3. 終わったら、結果を報告する。
+
+```sh
+clair todo update path=<カードのパス> result=ok note="<推奨: やる|やらない|保留 — 理由を1行>" --compact
+```
+
+4. 報告したらペインを閉じずに待ち、ユーザーの追加の質問や深掘りに答える。わかったことが増えたら research.md を更新する。
+
+調査できないときは `result=failed` と理由を `note` に書く。カードは Inbox のままで、`stage` は変えない。Plan へ進めるかはユーザーが決める。
+"""# + "\n"),
     ("clair-plan", #"""
 ---
 name: clair-plan
