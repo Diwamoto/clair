@@ -169,10 +169,12 @@
 
     private static let terminalHeight: CGFloat = 380
 
-    /// Waiting on a reply: something was just sent, or the last turn is the user's and the agent has not reported finishing.
+    /// Waiting on a reply: something was just sent, or the current turn (since the last user line) has not reported finishing.
+    /// Narration mid-turn ("let me look…") is not the end of the turn, so it must not drop the spinner or Esc.
     private var working: Bool {
-      let asked = pending != nil || pane != nil && messages?.last(where: { $0.role != "tool" }).map { $0.role == "user" && !$0.text.hasPrefix(Self.interrupted) } == true
-      return asked && (status == nil || status == .running)
+      if pending != nil { return status == nil || status == .running }
+      guard pane != nil, let last = messages?.last(where: { $0.role == "user" }), !last.text.hasPrefix(Self.interrupted) else { return false }
+      return status == .running || status == nil && messages?.last(where: { $0.role != "tool" })?.role == "user"
     }
 
     /// What Claude Code writes to the transcript as a user turn when Esc stops it.
