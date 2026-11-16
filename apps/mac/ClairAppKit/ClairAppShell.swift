@@ -1639,9 +1639,7 @@ import Observation
       .frame(minWidth: 900, minHeight: 560)
       .clairMenuHost(menus)
       .overlay {
-        if let d = todoDraft {
-          TodoEditor(todo: d.todo, isNew: d.isNew, save: { todoDraft = nil; saveTodo($0) }, cancel: { todoDraft = nil })
-        } else if st.palette == .search { searchOverlay }
+        if st.palette == .search { searchOverlay }
         else if let p = st.palette { paletteView(p) }
       }
       .animation(.easeOut(duration: 0.09), value: st.palette == nil)
@@ -2371,8 +2369,6 @@ import Observation
     @State private var approvalPreview: (path: String, title: String, project: String, screen: String)?
 
     @State private var todos: [ClairTodo] = []
-    /// The TODO in the add / edit modal, and whether it is a new one.
-    @State private var todoDraft: (todo: ClairTodo, isNew: Bool)?
 
     private func saveTodo(_ t: ClairTodo) {
       var t = t
@@ -3560,7 +3556,7 @@ import Observation
               cards: board.cards, archived: board.archived, others: otherAgents(board.cards),
               agent: boardAgent, projects: Array(st.projects.map(\.name).reversed()),
               run: { store.run($0, $1) }, confirm: { menus.ask($0) }, reload: { todos = ClairTodo.list() },
-              newCard: { todoDraft = (ClairTodo(path: "", title: ""), true) },
+              newCard: { saveTodo(ClairTodo(path: "", title: $0)) },
               openAgent: focusConciergeChild,
               openPane: { card in
                 guard let p = card.project, let pane = card.pane else { return }

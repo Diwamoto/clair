@@ -955,7 +955,8 @@
     let run: (String, CommandInput) -> Result<CommandResult, CommandError>
     let confirm: (ClairDialog) -> Void
     let reload: () -> Void
-    let newCard: () -> Void
+    /// Adds an Inbox card with this title.
+    let newCard: (String) -> Void
     let openAgent: (AgentSession) -> Void
     let openPane: (TodoBoardCard) -> Void
     let openFile: (String) -> Void
@@ -975,6 +976,8 @@
     @State private var expanded: Set<String> = []
     private static let limit = 10
     @State private var dropTarget: String?
+    @State private var draft = ""
+    @FocusState private var draftFocused: Bool
     @State private var picking: (card: TodoBoardCard, stage: String)?
     @State private var pickQuery = ""
     @FocusState private var pickFocused: Bool
@@ -1091,13 +1094,14 @@
           BoardHead(title: stage.capitalized, count: items.count)
           Spacer(minLength: 0)
           if stage == "inbox" {
-            Button(action: newCard) {
+            Button { draftFocused = true } label: {
               Image(systemName: "plus").font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textTertiary).frame(width: 22, height: 22)
             }.buttonStyle(HoverWashStyle(radius: Radius.control)).help(tr("カードを追加")).accessibilityLabel(tr("カードを追加"))
           }
         }.frame(height: 22).padding(.leading, 6)  // the Inbox "+" is 22pt: every header takes its height so the rows line up
         ScrollView {
           VStack(spacing: 6) {
+            if stage == "inbox" { quickAdd }
             ForEach(capped(items, stage), id: \.todo.path) { card($0).transition(.opacity) }
             more(items.count, stage)
             if stage == "done", !past.isEmpty { pastSection(past) }
@@ -1115,6 +1119,21 @@
         }
       }
       .frame(width: width)
+    }
+
+    /// Type a title and press Return: the card lands in Inbox and the field stays ready for the next one.
+    private var quickAdd: some View {
+      TextField(tr("TODO を追加…"), text: $draft)
+        .focused($draftFocused).textFieldStyle(.plain).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textPrimary)
+        .padding(.horizontal, 10).frame(height: RowHeight.control)
+        .modifier(Boxed(radius: Radius.card))
+        .onSubmit {
+          let t = draft.trimmingCharacters(in: .whitespaces)
+          guard !t.isEmpty else { return }
+          newCard(t); draft = ""; draftFocused = true
+        }
+        .onExitCommand { draft = ""; draftFocused = false }
+        .accessibilityLabel(tr("カードを追加"))
     }
 
     /// The first `limit` items unless the column is opened (a search shows everything it matched).
