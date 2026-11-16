@@ -349,4 +349,17 @@ final class AgentHistoryTests: XCTestCase {
     XCTAssertNil(CommandRegistry.historyPeriod(["since": .string("2026-11-06"), "until": .string("2026-11-05")]))
     XCTAssertEqual(CommandRegistry.historyPeriod([:], now: Date(timeIntervalSince1970: 1_800_000_000))!.end, .distantFuture)
   }
+
+  func testEndsInterruptedReadsTheLastTurnEntry() throws {
+    let file = URL.temporaryDirectory.appending(path: "clair-int-\(UUID().uuidString).jsonl")
+    defer { try? FileManager.default.removeItem(at: file) }
+    let go = #"{"type":"user","message":{"content":"Go"}}"#
+    let tool = #"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{}}]}}"#
+    let stop = #"{"type":"user","message":{"content":[{"type":"text","text":"[Request interrupted by user for tool use]"}]}}"#
+    let meta = #"{"type":"system","subtype":"x"}"#
+    for (lines, want) in [([go, tool], false), ([go, tool, stop, meta], true), ([go, stop, go], false)] {
+      try lines.joined(separator: "\n").write(to: file, atomically: true, encoding: .utf8)
+      XCTAssertEqual(AgentHistoryReader.endsInterrupted(file: file), want, "\(lines.count) lines")
+    }
+  }
 }

@@ -455,12 +455,16 @@ public enum WorkbenchFiles {
         if v?.isRegularFile == true, v?.isSymbolicLink != true { out.insert(raw) }
         continue
       }
-      guard let e = FileManager.default.enumerator(atPath: url.path) else { continue }
+      // URL enumerator with prefetched keys: `fileAttributes` reads every file's xattrs and dominated scans.
+      let keys: Set<URLResourceKey> = [.isRegularFileKey, .isSymbolicLinkKey]
+      guard let e = FileManager.default.enumerator(at: url, includingPropertiesForKeys: Array(keys)) else { continue }
+      let prefix = (realpath(url.path, nil).map { p in defer { free(p) }; return String(cString: p) } ?? url.path).count + 1  // enumerator yields realpaths
       var inner: [String] = []
-      while let rel = e.nextObject() as? String {
-        if skipped.contains((rel as NSString).lastPathComponent) { e.skipDescendants(); continue }
-        guard e.fileAttributes?[.type] as? FileAttributeType == .typeRegular else { continue }  // lstat: symlinks are skipped
-        inner.append(raw + rel)
+      for case let u as URL in e {
+        if skipped.contains(u.lastPathComponent) { e.skipDescendants(); continue }
+        let v = try? u.resourceValues(forKeys: keys)
+        guard v?.isRegularFile == true, v?.isSymbolicLink != true else { continue }
+        inner.append(raw + String(u.path.dropFirst(prefix)))
         if inner.count > ignoredFolderCap { break }
       }
       if inner.count <= ignoredFolderCap { out.formUnion(inner) }

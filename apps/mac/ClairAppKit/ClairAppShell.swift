@@ -1227,6 +1227,24 @@ import Observation
       }
     }
 
+    /// Esc stops a Claude Code turn without its Stop hook, so a `working` report would stay forever:
+    /// a running agent whose transcript ends in the interrupt line is settled as seen-done (idle).
+    func settleInterruptedAgents() async {
+      let running = state.agentSessions.filter { $0.status == .running }.compactMap { s -> (String, String)? in
+        guard let l = state.agentLaunch(in: s.project, pane: s.pane), let id = l.session ?? l.concierge,
+              state.agentReports[s.id]?.state == .working else { return nil }
+        return (s.id, id)
+      }
+      guard !running.isEmpty else { return }
+      let stopped = await Task.detached {
+        running.filter { Concierge.transcriptFile(session: $0.1).map(AgentHistoryReader.endsInterrupted) == true }.map(\.0)
+      }.value
+      for key in stopped where state.agentReports[key]?.state == .working {
+        state.agentReports[key]?.state = .done
+        state.agentReports[key]?.seen = true
+      }
+    }
+
     /// The agent's name and the terminal's own title (OSC 0/2, e.g. Claude Code's "✳ topic") for a notice.
     private func noticeSource(_ project: String, _ pane: Int) -> (agent: String, session: String) {
       let agent = state.agentLaunch(in: project, pane: pane)
@@ -1674,6 +1692,7 @@ import Observation
       .task {
         while !Task.isCancelled {
           await store.refreshDetectedAgents()
+          await store.settleInterruptedAgents()
           try? await Task.sleep(for: .seconds(2))
         }
       }

@@ -429,6 +429,29 @@ public enum AgentHistoryReader {
     readFile(file, provider: provider, full: true)?.messages ?? []
   }
 
+  /// The Claude Code session was stopped with Esc: its last turn entry is the "[Request interrupted by user…" line.
+  /// Claude Code runs no Stop hook on an interrupt, so this is how a `working` report learns the turn ended.
+  /// Reads only the file's last 16 KB.
+  public static func endsInterrupted(file: URL) -> Bool {
+    guard let h = try? FileHandle(forReadingFrom: file) else { return false }
+    defer { try? h.close() }
+    let size = (try? h.seekToEnd()) ?? 0
+    try? h.seek(toOffset: size > 16_384 ? size - 16_384 : 0)
+    let lines = String(decoding: (try? h.readToEnd()) ?? Data(), as: UTF8.self).split(separator: "\n")
+    for line in lines.reversed() {
+      guard let o = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any] else { continue }  // also the cut first line
+      switch o["type"] as? String {
+      case "assistant": return false
+      case "user":
+        let content = (o["message"] as? [String: Any])?["content"]
+        let texts = (content as? String).map { [$0] } ?? ((content as? [[String: Any]]) ?? []).compactMap { $0["text"] as? String }
+        return texts.contains { $0.hasPrefix("[Request interrupted by user") }
+      default: continue
+      }
+    }
+    return false
+  }
+
   /// The concierge chat: a Claude Code session in full, with each tool call as a `tool` message
   /// whose text is `name\targument` (see `toolLine`), plus the cost and latest model.
   public static func chat(file: URL) -> AgentHistory? {
