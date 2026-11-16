@@ -6,6 +6,18 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.46.0] - 2026-11-16
+
+### Added
+- Inbox cards are added from an inline field at the top of the column: type a title and press Return.
+- The concierge is told when a board card finishes, fails or gets blocked.
+- Markdown files open as a preview in the concierge editor column.
+- Ctrl-Tab cycles the concierge file tabs.
+- Finished Plan cards offer an Open plan.md button.
+
+### Changed
+- Each board column shows up to 10 cards, with a Show more button for the rest.
+
 ## [0.45.0] - 2026-11-16
 
 ### Added
@@ -843,7 +855,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.45.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.46.0...HEAD
+[0.46.0]: https://github.com/Diwamoto/clair/compare/v0.45.0...v0.46.0
 [0.45.0]: https://github.com/Diwamoto/clair/compare/v0.44.0...v0.45.0
 [0.44.0]: https://github.com/Diwamoto/clair/compare/v0.43.0...v0.44.0
 [0.43.0]: https://github.com/Diwamoto/clair/compare/v0.42.0...v0.43.0
