@@ -256,7 +256,7 @@ import Observation
     private let scanFiles: @Sendable (String) -> [WorkbenchFile]
 
     /// The first window's store: Finder / `open -a` requests (the app as the default editor) land here.
-    private static weak var main: ClairWorkbenchStore?
+    private(set) static weak var main: ClairWorkbenchStore?
     private static var pendingOpens: [String] = []
 
     /// ADR-0022: Clair is quitting; Claude Code must stop finding it.
@@ -900,7 +900,7 @@ import Observation
     static func terminalKey(root: String, pane: Int) -> String { "\(root)#\(pane)" }
 
     /// Every agent pane's daemon key in every open Project, with what it runs.
-    private func launchCommands() -> [String: (cwd: String, command: String)] {
+    func launchCommands() -> [String: (cwd: String, command: String)] {
       var out: [String: (cwd: String, command: String)] = [:]
       for p in state.projects {
         let launches = p.name == state.project ? state.launches : state.layouts[p.name]?.launches ?? [:]

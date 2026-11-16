@@ -825,8 +825,10 @@ import Foundation
     static func borrow(key: String, cwd: String) -> (view: ClairGhosttySurfaceView, home: NSView?) {
       let home = kept[key]?.superview
       if let v = reusable(key: key) { return (v, home) }
-      // No `--command`: the agent's shell already runs in the daemon; this only attaches to it.
-      let v = ClairGhosttySurfaceView(launch: (ClairDaemonLauncher.attachCommand(key: key, cwd: cwd, command: nil), cwd))
+      // Attach with the pane's own launch: the daemon replaces a shell whose cwd/command differ, so a bare
+      // attach would kill the agent and leave a login shell in its place.
+      let l = ClairWorkbenchStore.main?.launchCommands()[key]
+      let v = ClairGhosttySurfaceView(launch: (ClairDaemonLauncher.attachCommand(key: key, cwd: l?.cwd ?? cwd, command: l?.command), l?.cwd ?? cwd))
       keep(v, key: key)
       return (v, nil)
     }
