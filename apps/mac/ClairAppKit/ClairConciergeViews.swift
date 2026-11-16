@@ -1164,7 +1164,7 @@
 
     private var othersBand: some View {
       VStack(alignment: .leading, spacing: 6) {
-        BoardHead(title: tr("その他のエージェント"), count: others.count).padding(.horizontal, Self.pad)
+        BoardHead(title: tr("エージェント"), count: others.count).padding(.horizontal, Self.pad)
         ScrollView(.horizontal) {
           HStack(spacing: Self.gap) {
             ForEach(others, id: \.session.id) { a in

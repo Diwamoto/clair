@@ -2285,10 +2285,9 @@ import Observation
       return (s, card.todo.title, WorkbenchState.terminalKey(project.path, pane))
     }
 
-    /// Manual agent panes: on no card and not started by the concierge (those always have a card).
-    private func otherAgents(_ cards: [TodoBoardCard]) -> [BoardAgent] {
-      let owned = Set(cards.compactMap { boardAgent($0)?.session.id } + st.conciergeChildren().map(\.session.id))
-      return st.agentSessions.filter { !Concierge.isPane($0.pane) && !$0.status.isExited && !owned.contains($0.id) }.compactMap { s in
+    /// Every live agent pane: the board doubles as the one agent overview, so a card's agent shows here too (2026-11-16 owner request).
+    private func otherAgents() -> [BoardAgent] {
+      st.agentSessions.filter { !Concierge.isPane($0.pane) && !$0.status.isExited }.compactMap { s in
         st.projects.first { $0.name == s.project }.map { (s, s.activity ?? s.title, WorkbenchState.terminalKey($0.path, s.pane)) }
       }
     }
@@ -3503,7 +3502,7 @@ import Observation
             }
             let board = st.board(todos, now: Date())
             TodoBoardView(
-              cards: board.cards, archived: board.archived, others: otherAgents(board.cards),
+              cards: board.cards, archived: board.archived, others: otherAgents(),
               agent: boardAgent, projects: Array(st.projects.map(\.name).reversed()),
               run: { store.run($0, $1) }, confirm: { menus.ask($0) }, reload: { todos = ClairTodo.list() },
               newCard: { todoDraft = (ClairTodo(path: "", title: ""), true) },
