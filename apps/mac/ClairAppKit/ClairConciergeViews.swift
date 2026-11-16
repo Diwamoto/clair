@@ -324,7 +324,16 @@
       // and reads any other file (PDF, text) itself, so the chat stays plain text.
       // ponytail: file drops only; a pasted clipboard image would need a temp PNG, add if asked.
       .dropDestination(for: URL.self) { urls, _ in
-        let paths = urls.filter(\.isFileURL).map { $0.path.replacing(" ", with: "\\ ") }
+        // A TODO card goes in as `TODO「<title>」(<path>)`: the path is its unique id (todo.update takes it),
+        // the title tells the concierge which one we mean.
+        let todoDir = ClairTodo.dir().standardizedFileURL.path + "/"
+        let paths = urls.filter(\.isFileURL).map { url -> String in
+          let path = url.standardizedFileURL.path
+          if path.hasPrefix(todoDir), path.hasSuffix(".md"), let text = try? String(contentsOfFile: path, encoding: .utf8) {
+            return tr("TODO「%@」(%@)", ClairTodo.parse(path: path, text: text).title, path)
+          }
+          return path.replacing(" ", with: "\\ ")
+        }
         guard !paths.isEmpty else { return false }
         draft += (draft.isEmpty || draft.hasSuffix(" ") || draft.hasSuffix("\n") ? "" : " ") + paths.joined(separator: " ") + " "
         focused = true
