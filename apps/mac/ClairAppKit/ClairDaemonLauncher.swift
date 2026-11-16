@@ -63,6 +63,21 @@ import Foundation
       return parts.map(shellQuote).joined(separator: " ")
     }
 
+    /// Starts the shell for `key` in the daemon without a surface, so an agent launched into a pane nobody shows
+    /// (another Project, the concierge board) runs now. A surface mounted later attaches to it (`open` is idempotent per key).
+    // ponytail: 80x24 until a surface attaches and resizes; Ghostty's own TERM/TERMINFO only once one does.
+    @MainActor public static func startHeadless(key: String, cwd: String, command: String) {
+      var env = shellEnvironment.filter { ClairLocalTerminalHost.forwardedEnvironment.contains($0.key) }
+      env["TERM"] = "xterm-256color"; env["COLORTERM"] = "truecolor"
+      Task.detached(priority: .userInitiated) {
+        ensureRunning()
+        for _ in 0..<50 {
+          if case .opened? = try? client.terminal(.open(key: key, cwd: cwd, command: command, rows: 24, columns: 80, environment: env)) { return }
+          try? await Task.sleep(for: .milliseconds(100))
+        }
+      }
+    }
+
     /// Whether the daemon still runs a shell for `key`. Without a daemon nothing runs; when the daemon answers
     /// but this query fails, it says yes, so a caller never swaps the command under a live shell.
     static func hasLiveShell(key: String) -> Bool {

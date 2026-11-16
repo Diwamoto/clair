@@ -480,6 +480,7 @@ import Observation
       let closing =
         id == "pane.close" ? Self.terminalKey(root: activeRoot ?? state.project, pane: state.tree.focused)
         : { () -> String? in if id == "agent.close", case .string(let key)? = input["key"] { key } else { nil } }()
+      let launchedBefore = Set(launchCommands().keys)
       let r: Result<CommandResult, CommandError>
       if id == "project.open", input.count == 1, case .string(let raw)? = input["path"],
         let path = WorkbenchProject.normalized(raw)
@@ -502,6 +503,10 @@ import Observation
           state.notices.markRead(project: state.project, pane: pane)
         }
         if id == "agent.report" { agentReported(input) }
+        // A launch (todo.move, scheduled, CLI) into a pane that is not on screen would otherwise wait for its surface.
+        for (key, l) in launchCommands() where !launchedBefore.contains(key) {
+          ClairDaemonLauncher.startHeadless(key: key, cwd: l.cwd, command: l.command)
+        }
         if id == "notice.post", let n = state.notices.items.first, n.kind == .posted, !n.read { announce(n, true) }
         if id == "notice.toggle", state.noticesOpen { noticeStack = [] }
         // `clair open` / Finder usually come while another app is in front: bring the file into view.
@@ -865,6 +870,16 @@ import Observation
     /// Names the daemon shell behind one terminal pane. Keyed on the project path, not its name, so two
     /// projects with the same folder name never share a shell.
     static func terminalKey(root: String, pane: Int) -> String { "\(root)#\(pane)" }
+
+    /// Every agent pane's daemon key in every open Project, with what it runs.
+    private func launchCommands() -> [String: (cwd: String, command: String)] {
+      var out: [String: (cwd: String, command: String)] = [:]
+      for p in state.projects {
+        let launches = p.name == state.project ? state.launches : state.layouts[p.name]?.launches ?? [:]
+        for (pane, l) in launches where !l.command.isEmpty { out[Self.terminalKey(root: p.path, pane: pane)] = (l.cwd, l.command) }
+      }
+      return out
+    }
 
     var activeRoot: String? { state.projects.first { $0.name == state.project }?.path }
 
