@@ -130,6 +130,9 @@ import Foundation
     public var onFocus: (() -> Void)?
     public var wantsFocus = false {
       didSet {
+        // A surface revealed with focus (the concierge's hidden terminal docking in) may hold a frame libghostty
+        // dropped while it was invisible; an idle TUI never redraws on its own, so it shows blank. Re-render it.
+        if wantsFocus, !oldValue { DispatchQueue.main.async { [weak self] in self?.ghosttySurface?.refresh() } }
         guard wantsFocus, !oldValue, let window, window.firstResponder !== self else { return }
         DispatchQueue.main.async { [weak self] in
           guard let self, self.wantsFocus else { return }
