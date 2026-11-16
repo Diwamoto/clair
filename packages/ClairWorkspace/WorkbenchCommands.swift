@@ -777,7 +777,7 @@ extension CommandRegistry {
       if i["sandbox"]?.bool == true { launch.sandbox = "clair-" + launch.run! }
       let axis: PaneTree.Axis = i["direction"]?.string == "down" ? .vertical : .horizontal
       let pane = s.withLayout(home.project.name) { l in
-        let id = home.pane.map { l.tree.split($0, axis, kind: .terminal) } ?? { l.tree.splitFocused(.vertical, kind: .terminal); return l.tree.focused }()
+        let id = home.pane.map { l.tree.split($0, axis, kind: .terminal) } ?? { l.tree.splitFocused(axis, kind: .terminal); return l.tree.focused }()
         l.launches[id] = launch
         return id
       }

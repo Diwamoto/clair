@@ -806,8 +806,10 @@ import Foundation
       guard let v = kept[key] else { return nil }
       // A split/close/move re-makes the pane before SwiftUI drops the old host, so the kept view is
       // still mounted here; take it over instead of starting a fresh `clair attach` (which lost scrollback).
-      // A different window showing the same key keeps its view.
-      if let w = v.window, w !== NSApp.keyWindow { return nil }
+      // A different window showing the same key keeps its view. With Clair in the background there is no key
+      // window: take it over, or a concierge launch re-making panes leaves each on a fresh, blank-replaying attach.
+      // ponytail: assumes the re-made pane is in the view's own window; pass the host window if two windows split at once.
+      if let w = v.window, let key = NSApp.keyWindow, w !== key { return nil }
       v.removeFromSuperview()
       return v
     }

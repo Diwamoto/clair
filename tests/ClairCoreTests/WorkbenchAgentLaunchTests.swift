@@ -64,6 +64,22 @@ final class WorkbenchAgentLaunchTests: XCTestCase {
     XCTAssertNotNil(s.launches[ida])
   }
 
+  // A launch with no pane to split beside (the concierge's children, TODO column agents) opens side by side.
+  func testLaunchWithoutParentPaneSplitsSideBySide() throws {
+    func axis(_ n: PaneTree.Node, _ id: Int) -> PaneTree.Axis? {
+      guard case .split(let ax, _, let a, let b) = n else { return nil }
+      if case .leaf(id, _) = b { return ax }
+      return axis(a, id) ?? axis(b, id)
+    }
+    var (s, _) = try opened()
+    try r.execute("pane.focus", ["id": .int(3)], state: &s).get()
+    guard case .pane(let right) = try r.execute("agent.launch", ["profile": .string("claude")], confirmed: true, state: &s).get() else { return XCTFail() }
+    XCTAssertEqual(axis(s.tree.root, right), .horizontal)
+    guard case .pane(let down) = try r.execute("agent.launch", ["profile": .string("claude"), "direction": .string("down")], confirmed: true, state: &s).get()
+    else { return XCTFail() }
+    XCTAssertEqual(axis(s.tree.root, down), .vertical)
+  }
+
   func testResumeUsesProviderCommandAndRejectsUnsafeIDs() throws {
     XCTAssertEqual(AgentLaunch(profile: "claude", cwd: "/x", resume: "abc-123").command, "claude --resume abc-123")
     XCTAssertEqual(AgentLaunch(profile: "codex", cwd: "/x", resume: "abc-123").command, "codex resume abc-123")
