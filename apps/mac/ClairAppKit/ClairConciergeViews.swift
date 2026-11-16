@@ -1267,6 +1267,7 @@
                       Circle().fill(color).frame(width: 6, height: 6)
                       Text(verbatim: "\(text) · \(a.session.project)").lineLimit(1)
                     }.font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+                    CardScreen(agent: a, path: "")
                   }.frame(maxWidth: .infinity, alignment: .leading).padding(10).contentShape(Rectangle())
                 }.buttonStyle(.plain).help(tr("クイックルック"))
                 Button { openAgent(a.session) } label: {
