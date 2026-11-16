@@ -443,6 +443,8 @@ import Observation
     var conciergeFile: ConciergeFile?
     /// Set by the shell while the concierge screen is up: `file.open` then lands in the column instead of the IDE.
     var conciergeShown = false
+    /// ⌘J on the concierge screen: a scratch shell docked under the board, for a quick command (2026-11-16 owner request).
+    var conciergeTerminal = false
 
     func selectConciergeFile(_ f: ConciergeFile) {
       run("file.open", ["path": .string(URL(fileURLWithPath: f.root).appending(path: f.path).standardizedFileURL.path)])
@@ -461,6 +463,7 @@ import Observation
     public func run(_ id: String, _ input: CommandInput = [:], confirmed: Bool = false) -> Result<CommandResult, CommandError> {
       // ⌘W on the concierge screen closes the column's tab; the file stays open in its Project.
       if id == "pane.close", conciergeShown, let f = conciergeFile { closeConciergeFile(f); return .success(.ok) }
+      if id == "terminal.show", conciergeShown { conciergeTerminal.toggle(); return .success(.ok) }
       let previousEditor = (state.project, state.active)
       if id.hasPrefix("debug.") { syncDebugPhase() }
       // `file.save` from any caller (⌘S, CLI, MCP) writes the buffer first; a failed write keeps the dirty marker.
@@ -3542,6 +3545,20 @@ import Observation
               conciergeEditorColumn
             }
           }
+          .frame(maxHeight: .infinity)
+          .safeAreaInset(edge: .bottom, spacing: 0) {
+            // Unmounted when closed; the shell lives on in the daemon under its key, so ⌘J reattaches with its scrollback.
+            // ponytail: one shared scratch shell in ~; per-chat shells or a draggable height if one is not enough.
+            if store.conciergeTerminal {
+              VStack(spacing: 0) {
+                Divider()
+                ClairGhosttySurface(
+                  launch: (ClairDaemonLauncher.attachCommand(key: Self.scratchKey, cwd: NSHomeDirectory(), command: nil), NSHomeDirectory()),
+                  sessionKey: Self.scratchKey, focused: true)
+              }
+              .frame(height: 260)
+            }
+          }
           // Opaque: the panes stay mounted underneath, and the translucent divider let their terminal text show through.
           .background(C.canvas)
           .paneCard(focused: false)
@@ -3551,6 +3568,8 @@ import Observation
         .animation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration), value: sidebarMode == "concierge")
       }
     }
+
+    private static let scratchKey = "concierge-scratch"
 
     /// Right of the board: tabs for the files opened from the concierge screen, over the real editor. ponytail: language
     /// features use the file's Project root, but the buffers are keyed by relative path, so two Projects' same-named files collide.
