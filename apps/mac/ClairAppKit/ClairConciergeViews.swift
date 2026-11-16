@@ -1115,7 +1115,7 @@
             ForEach(capped(items, stage), id: \.todo.path) { card($0).transition(.opacity) }
             more(items.count, stage)
             if stage == "done", !past.isEmpty { pastSection(past) }
-          }.padding(6)
+          }.padding(6).frame(maxWidth: .infinity)  // an empty column still spans its width so it takes drops
         }.clairScroller()
         .frame(maxHeight: .infinity, alignment: .top)
         .background(W.soft, in: RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous))
