@@ -117,7 +117,8 @@ public struct ProjectLayout: Sendable, Codable, Equatable {
   public var expanded: Set<String> = []
   /// Recently opened files, newest first (Compare With… lists them first).
   public var recent: [String] = []
-  /// V07: live agent terminals by pane id. Never persisted — restore must not silently respawn agents.
+  /// Agent terminals by pane id. Interactive ones are persisted so a restart keeps a board card's `agent=` link and
+  /// can resume the reported session; delegated runs and the concierge are not (a restore must not re-run a task).
   public var launches: [Int: AgentLaunch] = [:]
   /// Preview pane id → bound file, persisted so a restored preview keeps showing its own file.
   public var previews: [Int: String] = [:]
@@ -125,7 +126,7 @@ public struct ProjectLayout: Sendable, Codable, Equatable {
   public var editorFiles: [Int: String] = [:]
   /// Every pane closed in this Project only; not persisted (restore reopens the layout).
   public var panesClosed = false
-  private enum CodingKeys: String, CodingKey { case tree, tabs, active, dirty, expanded, diffTabs, activeDiff, tabOrder, recent, previews, editorFiles }
+  private enum CodingKeys: String, CodingKey { case tree, tabs, active, dirty, expanded, launches, diffTabs, activeDiff, tabOrder, recent, previews, editorFiles }
 
   public init() {}
 
@@ -162,6 +163,7 @@ public struct ProjectLayout: Sendable, Codable, Equatable {
     recent = try c.decodeIfPresent([String].self, forKey: .recent) ?? []
     previews = try c.decodeIfPresent([Int: String].self, forKey: .previews) ?? [:]
     editorFiles = try c.decodeIfPresent([Int: String].self, forKey: .editorFiles) ?? [:]
+    launches = (try c.decodeIfPresent([Int: AgentLaunch].self, forKey: .launches) ?? [:]).filter(\.value.persists)
   }
 }
 
@@ -531,6 +533,7 @@ extension WorkbenchState {
   public func save(to url: URL) throws {
     var s = self
     if !s.project.isEmpty { s.layouts[s.project] = s.layout }
+    s.layouts = s.layouts.mapValues { var l = $0; l.launches = l.launches.filter(\.value.persists); return l }
     let data = try JSONEncoder().encode(WorkspaceSnapshot(projects: s.projects, project: s.project, layouts: s.layouts, toggles: s.toggles, choices: s.choices, shortcuts: s.shortcuts, fileAssociations: s.fileAssociations, fonts: s.fonts, favorites: s.favorites, conciergePrompt: s.conciergePrompt, conciergeCwd: s.conciergeCwd, conciergeWorkdir: s.conciergeWorkdir, conciergeSessions: s.conciergeSessions))
     try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     try data.write(to: url, options: .atomic)

@@ -85,6 +85,8 @@ public struct AgentLaunch: Sendable, Codable, Equatable {
     self.folders = folders?.isEmpty == true ? nil : folders
     run = prompt == nil ? nil : UUID().uuidString.lowercased()
   }
+  /// Saved with the workspace: an interactive agent. A delegated run would re-run its task; the concierge restores on its own.
+  var persists: Bool { run == nil && concierge == nil }
   public var command: String {
     guard let p = AgentProfile.named(profile) else { return "" }
     // Last on the line: `--add-dir` is variadic and would swallow a prompt after it.

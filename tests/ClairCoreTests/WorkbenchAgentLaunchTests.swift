@@ -108,12 +108,16 @@ final class WorkbenchAgentLaunchTests: XCTestCase {
     XCTAssertEqual(s.launches.count, 1)
   }
 
-  func testLaunchesAreNotPersisted() throws {
+  func testOnlyInteractiveLaunchesArePersisted() throws {
     var (s, _) = try opened()
-    try r.execute("agent.launch", ["profile": .string("opencode")], confirmed: true, state: &s).get()
+    guard case .pane(let a) = try r.execute("agent.launch", ["profile": .string("claude"), "opening": .string("カード")], confirmed: true, state: &s).get()
+    else { return XCTFail() }
+    try r.execute("agent.launch", ["profile": .string("claude"), "prompt": .string("task")], confirmed: true, state: &s).get()
     let url = URL.temporaryDirectory.appending(path: "clair-v07-\(UUID().uuidString).json")
     try s.save(to: url)
-    XCTAssertTrue(try XCTUnwrap(WorkbenchState.restore(from: url)).launches.isEmpty)
+    let restored = try XCTUnwrap(WorkbenchState.restore(from: url)).launches
+    XCTAssertEqual(Array(restored.keys), [a])  // the delegated run would re-run its task
+    XCTAssertEqual(restored[a]?.opening, "カード")
   }
 
   // Mobile registered-profile launch = this same command over V02 IPC: only a profile id, cwd is host-resolved.
