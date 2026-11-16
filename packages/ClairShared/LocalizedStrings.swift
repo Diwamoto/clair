@@ -744,7 +744,7 @@ extension LocalizedStrings {
     "%@ MiB を超えるファイルは開けません。": "Files over %@ MiB cannot be opened.",
     "UTF-8 のテキストではないため開けません。": "Cannot open: not UTF-8 text.",
     "プレビューを開く (⌘⇧V)": "Open Preview (⌘⇧V)",
-    "プレビューを開く": "Open Preview",
+    "プレビューを開く": "Open Preview", "エディタに戻る": "Back to Editor",
     "ファイルを選択してください。": "Select a file.",
     "表で編集 (⌘⇧V)": "Edit as Table (⌘⇧V)",
     "表エディタを開く": "Open Table Editor",

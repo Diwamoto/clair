@@ -1497,6 +1497,8 @@ import Observation
     /// The concierge chat column; 0 = folded away.
     @AppStorage("clair.conciergeChatWidth") private var conciergeChatWidth = 460.0
     @AppStorage("clair.conciergeEditorWidth") private var conciergeEditorWidth = 560.0
+    /// Concierge file tabs showing the Markdown preview instead of the editor.
+    @State private var conciergePreviews: Set<ClairWorkbenchStore.ConciergeFile> = []
     /// The concierge chat moves aside for the pane board once one of its children is live (no manual toggle).
 
     /// Width when the current drag began, so a drag that snaps the sidebar shut reopens (⌘B) at it.
@@ -3483,7 +3485,7 @@ import Observation
           onTitle: { store.title(pane: $0, $1) },
           title: { terminalTabTitle(st.project, $0) },
           onRatio: { store.run("pane.setRatio", ["id": .int($0), "ratio": .double($1)]) },
-          editor: activeEditor,
+          editor: activeEditor(),
           diff: diff == nil ? nil : st.diffPane.map { ($0, AnyView(VStack(spacing: 0) { diffContent })) },
           run: { _ = store.run($0, $1) }, dragging: $draggingPane, draggingTab: $draggingTab)
           // A drag dropped outside every pane (or on the tab bar) never reaches a zone: clear it once the mouse is up.
@@ -3614,7 +3616,19 @@ import Observation
           }.padding(.horizontal, 8)
         }.scrollIndicators(.never).frame(height: 44)
         Divider()
-        if let f = store.conciergeFile, f.project == st.project, f.path == st.active { activeEditor } else { C.canvas }
+        if let f = store.conciergeFile, f.project == st.project, f.path == st.active {
+          if conciergePreviews.contains(f) {
+            MarkdownPreviewPane(buffers: store.buffers, root: store.activeRoot, path: f.path,
+              theme: st.choices["previewTheme"], fontSize: Double(st.choices["previewFontSize"] ?? "") ?? 13)
+              .overlay(alignment: .topTrailing) {
+                Button { conciergePreviews.remove(f) } label: { Image(systemName: "pencil") }
+                  .buttonStyle(.borderless).help(tr("エディタに戻る")).accessibilityLabel(tr("エディタに戻る")).padding(8)
+              }
+          } else {
+            // The eye button previews in this column; the workspace preview pane sits hidden under the concierge.
+            activeEditor(onPreview: MarkdownPreview.isMarkdown(f.path) ? { conciergePreviews.insert(f) } : nil)
+          }
+        } else { C.canvas }
       }
       .frame(width: max(conciergeEditorWidth, 320))
       .overlay(alignment: .leading) {
@@ -3636,7 +3650,7 @@ import Observation
     }
 
     /// The active Project's editor pane; its own property keeps the `PaneView` call within the type checker's budget.
-    private var activeEditor: EditorPane {
+    private func activeEditor(onPreview: (() -> Void)? = nil) -> EditorPane {
       EditorPane(buffers: store.buffers, root: store.activeRoot, path: st.active,
         softWrap: st.toggles["softWrap"] == true, style: editorStyle,
         previewTheme: st.choices["previewTheme"], previewFontSize: Double(st.choices["previewFontSize"] ?? "") ?? 13,
@@ -3650,7 +3664,7 @@ import Observation
           _ = store.run("debug.breakpoint", ["path": .string(root + "/" + path), "line": .int(line)])
         },
         onDefinition: { store.run("editor.definition") },
-        onPreview: { store.run("editor.markdownPreview") },
+        onPreview: onPreview ?? { store.run("editor.markdownPreview") },
         onEdit: { store.edited($0) }, onCaret: { store.editorSelectionChanged($0, $1, in: $2) }, previews: st.previews, editorFiles: st.editorFiles,
         home: homeShortcuts(st), history: { AnyView(historyTab($0)) }, custom: { customTab($0) })
     }
