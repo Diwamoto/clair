@@ -172,9 +172,11 @@
     /// Waiting on a reply: something was just sent, or the current turn (since the last user line) has not reported finishing.
     /// Narration mid-turn ("let me look…") is not the end of the turn, so it must not drop the spinner or Esc.
     private var working: Bool {
-      if pending != nil { return status == nil || status == .running }
+      if pending != nil { return true }
       guard pane != nil, let last = messages?.last(where: { $0.role == "user" }), !last.text.hasPrefix(Self.interrupted) else { return false }
-      return status == .running || status == nil && messages?.last(where: { $0.role != "tool" })?.role == "user"
+      // The hook reports the turn finished before the transcript poll shows the reply, so keep spinning until a reply is the
+      // last line. ponytail: a turn that ends on a tool line spins until the next send; add a timeout if that shows up.
+      return status == .running || messages?.last?.role != "assistant"
     }
 
     /// What Claude Code writes to the transcript as a user turn when Esc stops it.
