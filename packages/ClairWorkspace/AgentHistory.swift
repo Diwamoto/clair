@@ -32,6 +32,8 @@ public struct AgentHistory: Sendable, Identifiable {
   public var models: [ModelCost] = []
   /// Claude Code: the model of the latest real (non-synthetic) reply.
   public var model: String? = nil
+  /// Claude Code: the effort level the latest reply ran at (`/effort`), when the transcript records it.
+  public var effort: String? = nil
 
   public struct ModelCost: Sendable, Equatable {
     public let name: String
@@ -495,6 +497,7 @@ public enum AgentHistoryReader {
       var claudeUnknownModel = false
       var claudeMessageModels: [String: String] = [:]
       var lastModel: String?
+      var lastEffort: String?
       var claudeUnpricedModels: Set<String> = []
       var turnEvents: [(user: Bool, date: Date)] = []
       var sessionID = file.deletingPathExtension().lastPathComponent
@@ -546,7 +549,7 @@ public enum AgentHistoryReader {
           if let id = row["sessionId"] as? String { sessionID = id }
           cwd = cwd ?? row["cwd"] as? String
           let message = row["message"] as? [String: Any] ?? [:]
-          if type == "assistant", let model = message["model"] as? String, model != "<synthetic>" { lastModel = model }
+          if type == "assistant", let model = message["model"] as? String, model != "<synthetic>" { lastModel = model; lastEffort = row["effort"] as? String ?? lastEffort }
           if type == "assistant", let usage = message["usage"] as? [String: Any] {
             let model = message["model"] as? String ?? ""
             if let estimated = claudeEstimatedCost(model: model, usage: usage) {
@@ -615,7 +618,7 @@ public enum AgentHistoryReader {
       return AgentHistory(id: "\(provider.rawValue):\(sessionID)", provider: provider,
                           title: String(title.prefix(100)), date: messages.last?.date ?? .distantPast,
                           messages: messages, estimatedUSD: cost, project: cwd, source: full ? nil : file,
-                          turns: turns(turnEvents), models: models, model: lastModel)
+                          turns: turns(turnEvents), models: models, model: lastModel, effort: lastEffort)
   }
 
   /// Pairs each prompt with the last provider activity before the next prompt. Unanswered prompts are dropped.
