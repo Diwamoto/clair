@@ -184,7 +184,7 @@
 
     @ViewBuilder private func row(_ m: AgentHistory.Message, header: Bool) -> some View {
       if m.role != "user" {
-        Reply(message: m, header: header).padding(.top, header ? 0 : -10)
+        Reply(message: m, header: header).equatable().padding(.top, header ? 0 : -10)
       } else if m.text.hasPrefix(Self.interrupted) {
         Label(tr("中断しました"), systemImage: "stop.circle")
           .font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
@@ -490,11 +490,12 @@
             }.value
             self.chat = chat; self.context = context
             Self.read[session] = read
+            // A rewrite with no new turn (Claude Code touches the file often) must not re-lay out the whole chat.
             // The first read lands as is; later ones slide new turns in.
-            withAnimation(messages == nil || reduceMotion ? nil : .easeOut(duration: Motion.screenDuration)) {
+            if read != messages { withAnimation(messages == nil || reduceMotion ? nil : .easeOut(duration: Motion.screenDuration)) {
               messages = read
               if read.last?.role == "user" || read.contains(where: { $0.role == "user" && $0.text == pending }) { pending = nil }
-            }
+            } }
           }
         } else if messages == nil { messages = [] }
         try? await Task.sleep(for: .seconds(1))
@@ -662,10 +663,13 @@
   }
 
   /// One assistant message: bubble-less Markdown under the avatar header (once per run), copy on hover.
-  private struct Reply: View {
+  private struct Reply: View, @MainActor Equatable {
     let message: AgentHistory.Message
     let header: Bool
     @State private var hovered = false
+
+    // Only a changed message re-renders (and re-parses its Markdown); a new turn below leaves earlier replies alone.
+    static func == (a: Self, b: Self) -> Bool { a.message == b.message && a.header == b.header }
 
     var body: some View {
       VStack(alignment: .leading, spacing: 10) {

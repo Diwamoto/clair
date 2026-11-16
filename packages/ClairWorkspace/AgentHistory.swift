@@ -8,7 +8,7 @@ public struct AgentHistory: Sendable, Identifiable {
     case codex = "Codex", claude = "Claude Code", opencode = "OpenCode"
   }
 
-  public struct Message: Sendable, Identifiable {
+  public struct Message: Sendable, Identifiable, Equatable {
     public let id: String
     public let role: String
     public let text: String
