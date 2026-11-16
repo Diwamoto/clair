@@ -445,6 +445,15 @@ import Observation
     var conciergeShown = false
     /// ⌘J on the concierge screen: a scratch shell docked under the board, for a quick command (2026-11-16 owner request).
     var conciergeTerminal = false
+    /// The chat the concierge screen shows (nil = its latest); ⌘W closes it there.
+    var conciergeChat: String?
+
+    /// Ends `chat`'s concierge and moves it to the history (its transcript stays, so it can be reopened).
+    func closeConciergeChat(_ chat: String) {
+      if let c = state.concierge(chat: chat) { closeTerminal(c.key) }
+      run("concierge.close", ["chat": .string(chat)], confirmed: true)
+      conciergeChat = nil
+    }
 
     func selectConciergeFile(_ f: ConciergeFile) {
       run("file.open", ["path": .string(URL(fileURLWithPath: f.root).appending(path: f.path).standardizedFileURL.path)])
@@ -463,6 +472,10 @@ import Observation
     public func run(_ id: String, _ input: CommandInput = [:], confirmed: Bool = false) -> Result<CommandResult, CommandError> {
       // ⌘W on the concierge screen closes the column's tab; the file stays open in its Project.
       if id == "pane.close", conciergeShown, let f = conciergeFile { closeConciergeFile(f); return .success(.ok) }
+      // No file in the column: ⌘W closes the chat on screen instead (2026-11-16 owner request).
+      if id == "pane.close", conciergeShown, let chat = conciergeChat ?? state.conciergeChats.last, state.conciergeChats.contains(chat) {
+        closeConciergeChat(chat); return .success(.ok)
+      }
       // Ctrl-Tab / Ctrl-Shift-Tab on the concierge screen cycle the column's tabs, wrapping at the ends.
       if id == "tab.next" || id == "tab.previous", conciergeShown, let f = conciergeFile,
         let i = conciergeFiles.firstIndex(of: f)
@@ -1510,7 +1523,6 @@ import Observation
     @State private var conciergePromptDraft = ""
     @State private var conciergeAsk: String?
     /// The shown concierge chat; one not (or no longer) in `conciergeChats` falls back to the latest.
-    @State private var conciergeChat: String?
     /// The chat ＋ opened: shown as a tab until its first send makes it one of `conciergeChats`.
     @State private var conciergeDraft = UUID().uuidString.lowercased()
     @State private var conciergeCwdDraft = ""
@@ -3514,30 +3526,27 @@ import Observation
         ZStack {
         if sidebarMode == "concierge" {
           let chats = st.conciergeChats
-          let chat = conciergeChat.flatMap { chats.contains($0) || $0 == conciergeDraft ? $0 : nil } ?? chats.last ?? conciergeDraft
+          let chat = store.conciergeChat.flatMap { chats.contains($0) || $0 == conciergeDraft || st.conciergeHistory.contains($0) ? $0 : nil } ?? chats.last ?? conciergeDraft
           let status = { (id: String) in st.concierge(chat: id).flatMap { c in st.agentSessions.first { $0.project == c.project && $0.pane == c.pane }?.status } }
           let c = st.concierge(chat: chat)
           HStack(spacing: 0) {
             ConciergeTabs(
               // A new chat stays a tab while its first request waits on the approval card.
-              chats: (chats + [chat, conciergeDraft].filter { !chats.contains($0) && ($0 == chat || ConciergeChatView.isSending($0)) })
-                .reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }.map { ($0, status($0)) }, selected: chat,
-              select: { id in withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration)) { conciergeChat = id } },
-              close: { id in
-                if let c = st.concierge(chat: id) { store.closeTerminal(c.key) }
-                store.run("concierge.close", ["chat": .string(id)], confirmed: true)
-                conciergeChat = nil
-              },
+              chats: (chats + [chat, conciergeDraft].filter { !chats.contains($0) && !st.conciergeHistory.contains($0) && ($0 == chat || ConciergeChatView.isSending($0)) })
+                .reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }.map { ($0, status($0)) },
+              history: st.conciergeHistory, selected: chat,
+              select: { id in withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration)) { store.conciergeChat = id } },
+              close: { store.closeConciergeChat($0) },
               new: {
                 withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration)) {
-                  conciergeDraft = UUID().uuidString.lowercased(); conciergeChat = conciergeDraft
+                  conciergeDraft = UUID().uuidString.lowercased(); store.conciergeChat = conciergeDraft
                 }
               })
             Divider()
             VStack(spacing: 0) {
               ConciergeChatView(
                 session: chat, terminal: c.map { ($0.key, $0.pane, $0.launch) }, status: status(chat),
-                start: { startConcierge(chat: chat, $0); conciergeChat = chat }, ask: $conciergeAsk,
+                start: { startConcierge(chat: chat, $0); store.conciergeChat = chat }, ask: $conciergeAsk,
                 // A new chat request is the only thing that resets the concierge's launch cap: an owner action, not an agent report.
                 onSent: { if let c { store.state.conciergeLaunches[c.key] = nil } })
               .id(chat)

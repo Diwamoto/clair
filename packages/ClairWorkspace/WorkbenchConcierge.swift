@@ -126,6 +126,9 @@ extension WorkbenchState {
   /// The chats of `conciergeDir`, oldest first, each by its current session id; shown before any of them runs.
   public var conciergeChats: [String] { conciergeSessions[WorkbenchProject.normalized(conciergeDir) ?? conciergeDir] ?? [] }
 
+  /// The closed chats of `conciergeDir`, oldest first; picking one and sending resumes it.
+  public var conciergeHistory: [String] { conciergeClosed[WorkbenchProject.normalized(conciergeDir) ?? conciergeDir] ?? [] }
+
   /// Running concierge terminals, first chat first.
   public func concierges() -> [(project: String, pane: Int, session: String, key: String, launch: AgentLaunch)] {
     projects.flatMap { p in

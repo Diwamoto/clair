@@ -259,6 +259,8 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   /// Each folder's concierge chats by their latest Claude Code session. Launches are never persisted, so this is
   /// what lets a chat resume after a Clair restart. A changed prompt or folder starts over.
   public var conciergeSessions: [String: [String]] = [:]
+  /// Each folder's closed chats, newest last: the history a closed chat is reopened from (its transcript stays).
+  public var conciergeClosed: [String: [String]] = [:]
   /// `"tpl=terraform,j2=python"` ⇄ the map (the settings list sends this). Malformed or empty pairs are dropped.
   public static func parseAssociations(_ text: String) -> [String: String] {
     var map: [String: String] = [:]
@@ -891,6 +893,7 @@ extension CommandRegistry {
       let host = s.addProject(WorkbenchProject(name: URL(fileURLWithPath: path).lastPathComponent, path: path))
       let session = i["chat"]?.string ?? UUID().uuidString.lowercased()
       if s.conciergeSessions[path]?.contains(session) != true { s.conciergeSessions[path, default: []].append(session) }
+      s.conciergeClosed[path]?.removeAll { $0 == session }
       let pane = (s.concierges().map(\.pane).min() ?? 0) - 1
       var launch = AgentLaunch(
         profile: "claude", cwd: path, resume: Concierge.transcriptFile(session: session) == nil ? nil : session, concierge: session,
@@ -903,7 +906,11 @@ extension CommandRegistry {
     cmd("concierge.close", "コンシェルジュの会話を閉じる", .write, ai: false, params: [CommandParam("chat", .string)], palette: false) { s, i in
       let chat = i["chat"]!.string!
       if let c = s.concierge(chat: chat) { s.closeTerminal(c.key) }
-      for k in s.conciergeSessions.keys { s.conciergeSessions[k]?.removeAll { $0 == chat } }
+      for k in s.conciergeSessions.keys where s.conciergeSessions[k]?.contains(chat) == true {
+        s.conciergeSessions[k]?.removeAll { $0 == chat }
+        // ponytail: history capped at 50 per folder; a searchable archive if more is ever wanted.
+        s.conciergeClosed[k] = Array(((s.conciergeClosed[k] ?? []).filter { $0 != chat } + [chat]).suffix(50))
+      }
       return .ok
     },
     cmd("tab.open", "ファイルを開く", .read, params: [CommandParam("path", .string)],
@@ -1507,7 +1514,7 @@ extension CommandRegistry {
       let before = (s.conciergePrompt, s.conciergeCwd)
       if let v = i["prompt"]?.string { s.conciergePrompt = v }
       if let v = i["cwd"]?.string { s.conciergeCwd = v }
-      if before != (s.conciergePrompt, s.conciergeCwd) { s.conciergeSessions = [:] }
+      if before != (s.conciergePrompt, s.conciergeCwd) { s.conciergeSessions = [:]; s.conciergeClosed = [:] }
       return .ok
     },
     cmd("sidebar.toggle", "サイドバーの表示切替", .read, ai: false, shortcut: "⌘B") { s, _ in s.sidebarHidden.toggle(); return .ok },

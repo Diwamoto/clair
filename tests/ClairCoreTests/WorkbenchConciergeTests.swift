@@ -219,8 +219,14 @@ final class WorkbenchConciergeTests: XCTestCase {
     try r.execute("concierge.close", ["chat": .string(both[1].session)], confirmed: true, state: &s).get()
     XCTAssertEqual(s.conciergeChats, [cleared])
     XCTAssertEqual(s.concierges().map(\.pane), [-1])
+    XCTAssertEqual(s.conciergeHistory, [both[1].session])
+    // Reopening a closed chat from the history moves it back to the open chats.
+    try r.execute("concierge.open", ["chat": .string(both[1].session)], confirmed: true, state: &s).get()
+    XCTAssertEqual(s.conciergeChats, [cleared, both[1].session])
+    XCTAssertEqual(s.conciergeHistory, [])
     try r.execute("settings.concierge", ["prompt": .string("new")], confirmed: true, state: &s).get()
     XCTAssertEqual(s.conciergeChats, [])
+    XCTAssertEqual(s.conciergeHistory, [])
   }
 
   func testResumedChatCarriesTheRequestThatWokeIt() {

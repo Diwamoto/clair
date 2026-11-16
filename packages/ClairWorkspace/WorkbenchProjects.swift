@@ -531,6 +531,7 @@ private struct WorkspaceSnapshot: Codable {
   var conciergeCwd: String?
   var conciergeWorkdir: String?
   var conciergeSessions: [String: [String]]?
+  var conciergeClosed: [String: [String]]?
 }
 
 extension WorkbenchState {
@@ -538,7 +539,7 @@ extension WorkbenchState {
     var s = self
     if !s.project.isEmpty { s.layouts[s.project] = s.layout }
     s.layouts = s.layouts.mapValues { var l = $0; l.launches = l.launches.filter(\.value.persists); return l }
-    let data = try JSONEncoder().encode(WorkspaceSnapshot(projects: s.projects, project: s.project, layouts: s.layouts, toggles: s.toggles, choices: s.choices, shortcuts: s.shortcuts, fileAssociations: s.fileAssociations, fonts: s.fonts, favorites: s.favorites, conciergePrompt: s.conciergePrompt, conciergeCwd: s.conciergeCwd, conciergeWorkdir: s.conciergeWorkdir, conciergeSessions: s.conciergeSessions))
+    let data = try JSONEncoder().encode(WorkspaceSnapshot(projects: s.projects, project: s.project, layouts: s.layouts, toggles: s.toggles, choices: s.choices, shortcuts: s.shortcuts, fileAssociations: s.fileAssociations, fonts: s.fonts, favorites: s.favorites, conciergePrompt: s.conciergePrompt, conciergeCwd: s.conciergeCwd, conciergeWorkdir: s.conciergeWorkdir, conciergeSessions: s.conciergeSessions, conciergeClosed: s.conciergeClosed))
     try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     try data.write(to: url, options: .atomic)
   }
@@ -556,6 +557,7 @@ extension WorkbenchState {
     s.conciergeCwd = snap.conciergeCwd ?? ""
     s.conciergeWorkdir = snap.conciergeWorkdir ?? ""
     s.conciergeSessions = (snap.conciergeSessions ?? [:]).mapValues { $0.filter(AgentProfile.isSessionID) }
+    s.conciergeClosed = (snap.conciergeClosed ?? [:]).mapValues { $0.filter(AgentProfile.isSessionID) }
     // A pin whose item is gone stays (dimmed in the column) until the user removes it, like Finder's.
     s.favorites = (snap.favorites ?? []).filter { $0.hasPrefix("/") }
     for (k, v) in snap.fonts ?? [:] where s.fonts[k] != nil && WorkbenchState.isValidFontFamily(v) { s.fonts[k] = v }

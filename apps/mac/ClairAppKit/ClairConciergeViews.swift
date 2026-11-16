@@ -523,6 +523,8 @@
   struct ConciergeTabs: View {
     /// Each chat by its session id, with its terminal's state while it runs.
     let chats: [(id: String, status: AgentSession.Status?)]
+    /// Closed chats, oldest first: picking one shows it, and sending resumes it.
+    let history: [String]
     let selected: String
     let select: (String) -> Void
     let close: (String) -> Void
@@ -539,7 +541,13 @@
         }.frame(height: 52)
         if open {
           ScrollView {
-            VStack(alignment: .leading, spacing: 4) { ForEach(chats.reversed(), id: \.id) { tab($0.id, $0.status) } }
+            VStack(alignment: .leading, spacing: 4) {
+              ForEach(chats.reversed(), id: \.id) { tab($0.id, $0.status) }
+              if !history.isEmpty {
+                Text(tr("履歴")).font(.system(size: 11, weight: .semibold)).foregroundStyle(C.textTertiary).padding(.top, 10).padding(.leading, 6)
+                ForEach(history.reversed(), id: \.self) { tab($0, nil, closable: false) }
+              }
+            }
           }
         } else {
           railButton("plus", tr("新しい会話"), action: new)
@@ -548,9 +556,9 @@
       }
       .padding(.horizontal, 7).frame(width: open ? 240 : 40, alignment: .leading).frame(maxHeight: .infinity, alignment: .top)
       // A chat's title is its first request, so it is read once its transcript exists and never changes.
-      .task(id: chats.map(\.id)) {
+      .task(id: chats.map(\.id) + history) {
         while !Task.isCancelled {
-          let missing = chats.map(\.id).filter { titles[$0] == nil }
+          let missing = (chats.map(\.id) + history).filter { titles[$0] == nil }
           let found = await Task.detached {
             missing.compactMap { id in
               Concierge.transcriptFile(session: id).flatMap { AgentHistoryReader.chat(file: $0)?.title }.map { (id, $0) }
@@ -568,7 +576,7 @@
       }.buttonStyle(HoverWashStyle(radius: Radius.card)).help(label).accessibilityLabel(label)
     }
 
-    private func tab(_ id: String, _ status: AgentSession.Status?) -> some View {
+    private func tab(_ id: String, _ status: AgentSession.Status?, closable: Bool = true) -> some View {
       let on = id == selected
       return HStack(spacing: 6) {
         Button { select(id); withAnimation(.easeOut(duration: Motion.screenDuration)) { open = false } } label: {
@@ -577,7 +585,7 @@
             Text(titles[id] ?? tr("新しい会話")).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
           }.contentShape(Rectangle())
         }.buttonStyle(.plain)
-        if on && chats.count > 1 {
+        if on && closable && chats.count > 1 {
           Button { close(id) } label: { Image(systemName: "xmark").font(.system(size: 9, weight: .semibold)).foregroundStyle(C.textTertiary) }
             .buttonStyle(.plain).help(tr("会話を閉じる")).accessibilityLabel(tr("会話を閉じる"))
         }
