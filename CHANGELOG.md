@@ -6,6 +6,21 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.43.0] - 2026-11-16
+
+### Added
+- Dragging a TODO card onto the concierge chat hands it over by title and file path, so the concierge knows which TODO you mean.
+
+### Changed
+- Board column agents now choose the skill for their step themselves.
+
+### Fixed
+- Pressing Return to confirm a Japanese (IME) conversion in the concierge chat no longer sends the message early or drops the last character.
+- The board's agent band lists every running agent.
+- Cards whose agent is blocked now show the attention ring.
+- A plain mouse wheel or trackball scrolls the tab strip sideways.
+- Agents started by the concierge or a board column open side by side instead of always stacking, and their panes no longer come back blank when Clair is in the background.
+
 ## [0.42.0] - 2026-11-15
 
 ### Added
@@ -800,7 +815,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.42.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.43.0...HEAD
+[0.43.0]: https://github.com/Diwamoto/clair/compare/v0.42.0...v0.43.0
 [0.42.0]: https://github.com/Diwamoto/clair/compare/v0.41.2...v0.42.0
 [0.41.2]: https://github.com/Diwamoto/clair/compare/v0.41.1...v0.41.2
 [0.41.1]: https://github.com/Diwamoto/clair/compare/v0.41.0...v0.41.1
