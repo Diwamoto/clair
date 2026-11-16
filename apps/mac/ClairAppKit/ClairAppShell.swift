@@ -1700,7 +1700,7 @@ import Observation
                 .buttonStyle(.hoverWash).help(tr("フォルダを開く"))
             }
             .frame(minWidth: g.size.width, minHeight: g.size.height, alignment: .leading)
-            .background(TitlebarArea())
+            .background(TitlebarArea(wheelScrollsStrip: true))
           }
         }
         HStack(spacing: 4) {
@@ -4561,7 +4561,10 @@ import Observation
   /// Our SwiftUI titlebar covers AppKit's, so its empty areas re-implement the native titlebar: drag moves the window and
   /// a double-click does what System Settings › Desktop & Dock › "Double-click a window's title bar to" says.
   private struct TitlebarArea: NSViewRepresentable {
+    /// Only the tab strip's own area turns the wheel sideways; the others would swallow scrolls of whatever encloses them.
+    var wheelScrollsStrip = false
     final class Area: NSView {
+      var wheelScrollsStrip = false
       // Only this view's mouseDown should move the window; a tab above it owns its own drag.
       override var mouseDownCanMoveWindow: Bool { false }
       override func mouseDown(with event: NSEvent) {
@@ -4578,13 +4581,14 @@ import Observation
       private var wheelMonitor: Any?
       override func viewDidMoveToWindow() {
         wheelMonitor.map(NSEvent.removeMonitor); wheelMonitor = nil
-        guard window != nil else { return }
+        guard window != nil, wheelScrollsStrip else { return }
         wheelMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] e in
           // Mouse utilities (trackball drivers) post wheel events with no window, so hit-test the pointer instead.
           guard let self, let sv = self.enclosingScrollView, let w = self.window, e.window == nil || e.window === w,
                 abs(e.scrollingDeltaY) > abs(e.scrollingDeltaX),
                 sv.bounds.contains(sv.convert(w.mouseLocationOutsideOfEventStream, from: nil)) else { return e }
           let clip = sv.contentView, maxX = max(0, (sv.documentView?.frame.width ?? 0) - clip.bounds.width)
+          guard maxX > 0 else { return e }  // nothing to scroll: leave the event alone
           let step = e.hasPreciseScrollingDeltas ? e.scrollingDeltaY : e.scrollingDeltaY * 10
           clip.scroll(to: NSPoint(x: min(max(0, clip.bounds.origin.x - step), maxX), y: clip.bounds.origin.y))
           sv.reflectScrolledClipView(clip)
@@ -4592,7 +4596,7 @@ import Observation
         }
       }
     }
-    func makeNSView(context: Context) -> Area { Area() }
+    func makeNSView(context: Context) -> Area { let a = Area(); a.wheelScrollsStrip = wheelScrollsStrip; return a }
     func updateNSView(_ nsView: Area, context: Context) {}
   }
 
