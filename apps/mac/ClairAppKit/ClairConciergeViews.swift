@@ -247,8 +247,15 @@
       .padding(.horizontal, 24).frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // ponytail: Claude Code's model aliases; read them from the CLI if it grows a way to list them.
-    private static let models = ["default", "opus", "sonnet", "haiku"]
+    /// Claude Code's aliases, then every model id it has run (`~/.claude/stats-cache.json` → `modelUsage`), newest first.
+    /// ponytail: the CLI can't list models; a model never run yet is reached by its alias until Claude Code can.
+    static func models(statsCache: URL = URL.homeDirectory.appending(path: ".claude/stats-cache.json")) -> [String] {
+      let used = (try? Data(contentsOf: statsCache))
+        .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }?["modelUsage"] as? [String: Any]
+      let ids = (used?.keys.filter { $0.hasPrefix("claude-") } ?? []).sorted { $0.localizedStandardCompare($1) == .orderedDescending }
+      return ["default", "opus", "opus[1m]", "sonnet", "sonnet[1m]", "haiku"] + ids
+    }
+    private static let efforts = ["low", "medium", "high", "xhigh", "max"]
 
     private static let starters: [(icon: String, text: String)] = [
       ("checkmark.seal", "未コミットの変更をレビューして"), ("testtube.2", "テストを実行して、失敗を直して"),
@@ -293,10 +300,16 @@
           // Switches the running concierge's model with Claude Code's own `/model <alias>`.
           if let pane {
             Menu {
-              ForEach(Self.models, id: \.self) { m in Button(m) { command("/model \(m)", pane) } }
+              ForEach(Self.models(), id: \.self) { m in Button(m) { command("/model \(m)", pane) } }
             } label: {
               Text(chat.model.map(Self.shortModel) ?? tr("モデル")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
             }.menuStyle(.borderlessButton).fixedSize().help(tr("コンシェルジュのモデルを切り替え"))
+            // Claude Code's own `/effort <level>`; the transcript doesn't record the level, so the label stays generic.
+            Menu {
+              ForEach(Self.efforts, id: \.self) { e in Button(e) { command("/effort \(e)", pane) } }
+            } label: {
+              Text(tr("エフォート")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+            }.menuStyle(.borderlessButton).fixedSize().help(tr("コンシェルジュのエフォートを切り替え"))
             Menu {
               Button(tr("圧縮 (/compact)")) { command("/compact", pane) }
             } label: {
