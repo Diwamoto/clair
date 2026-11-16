@@ -161,7 +161,7 @@ extension LocalizedStrings {
     "稼働中": "Running", "差し戻し上限超過": "Over the send-back limit", "diff を開く": "Open Diff", "PR を開く": "Open PR", "TODO を開く": "Open TODO", "コンシェルジュに頼む": "Ask the Concierge", "調査する": "Research", "TODO「%@」(%@)を進めて。": "Move the TODO \"%@\" (%@) forward.",
     "ボードはまだ空です": "The board is empty", "コンシェルジュに頼むと、担当するエージェントと stage 付きの TODO がここに並びます。": "Ask the concierge, and its agents and staged TODOs line up here.",
     "その他のエージェント": "Other agents", "カードを検索": "Search cards", "カードを追加": "Add card", "過去の完了 %@ 件": "%@ earlier completed",
-    "失敗": "Failed", "完了(結果未報告)": "Done (no result reported)", "PR を作る": "Create PR",
+    "失敗": "Failed", "完了(結果未報告)": "Done (no result reported)", "PR を作る": "Create PR", "plan.md を開く": "Open plan.md",
     "実行中の agent を終了して移しますか": "Stop the running agent and move the card?", "「%@」の agent は実行中です。": "The agent of \"%@\" is running.",
     "終了して移す": "Stop and move", "変更を破棄して Done に移しますか": "Discard changes and move to Done?", "破棄して移す": "Discard and move",
     "カードを移せません": "Cannot move the card", "Project を設定できません": "Cannot set the Project", "Project を選ぶ": "Choose a Project",

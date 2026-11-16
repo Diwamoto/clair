@@ -1172,6 +1172,10 @@
           Text(note).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary).lineLimit(3).fixedSize(horizontal: false, vertical: true)
         }
         CardScreen(agent: a, path: c.todo.path)
+        // A finished Plan card offers its plan.md, so the owner reads it before moving the card to Impl.
+        if c.column == "plan", c.state == .done || c.state == .unreported, let plan = c.artifacts.first(where: { $0.hasSuffix("/plan.md") }) {
+          action(tr("plan.md を開く")) { openFile(plan) }.accessibilityLabel(tr("plan.md を開く"))
+        }
         if c.column == "review" { action(tr("PR を作る")) { makePR(c) }.accessibilityLabel(tr("PR を作る")) }
       }
       .padding(10).frame(maxWidth: .infinity, alignment: .leading)
