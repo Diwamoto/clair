@@ -6,6 +6,21 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.45.0] - 2026-11-16
+
+### Added
+- Board cards in the Inbox can be researched first: an agent writes up a go/no-go recommendation while the card stays in the Inbox.
+- ⌘J toggles a scratch terminal under the board.
+- Concierge chats are listed in a folded vertical rail at the left edge.
+- Agents that no board card holds are shown in an "Other agents" column at the right edge of the board.
+
+### Fixed
+- A board card's agent starts right away, even when its pane is not on screen.
+- A board card stays linked to its agent across a restart of Clair or the Mac.
+- Scroll views inside the title bar scroll vertically again; only the tab strip turns the wheel sideways.
+- The concierge spinner and Esc keep working while the agent narrates mid-turn.
+- An agent interrupted with Esc no longer stays "running" forever, and background rescans of ignored folders are much cheaper.
+
 ## [0.44.0] - 2026-11-16
 
 ### Added
@@ -828,7 +843,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.44.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.45.0...HEAD
+[0.45.0]: https://github.com/Diwamoto/clair/compare/v0.44.0...v0.45.0
 [0.44.0]: https://github.com/Diwamoto/clair/compare/v0.43.0...v0.44.0
 [0.43.0]: https://github.com/Diwamoto/clair/compare/v0.42.0...v0.43.0
 [0.42.0]: https://github.com/Diwamoto/clair/compare/v0.41.2...v0.42.0
