@@ -588,9 +588,11 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   (取り消せば未保存のまま。再起動では残らない。2026-10-29 オーナー依頼)。explorer の「新しいファイル…」は従来どおり先に名前を尋ねる。SwiftUI 標準の
   New Window は File menu から外し、shortcut も持たない(2026-10-16 オーナー依頼)
 - `clair open path:line:column` は path を所有する open Project の active pane へ
-  file を開く。該当 Project がなければ Git root を新規 Project として開く。どの
-  Project にも Git repository にも属さない ad-hoc file は Project を作らず、
-  active Project のタブ列の末尾に開く(root からの相対パス `../…`、explorer には出さない)
+  file を開く。どの open Project にも属さない file は(Git repository 内でも)Project を作らず、
+  active Project のタブ列の末尾に開く(root からの相対パス `../…`、explorer には出さない。
+  agent が多数の repository の file を開いてタブバーが溢れるため、2026-11-17 オーナー依頼)。
+  managed worktree の Project は、別 Project へ切り替えたときにタブ・diff・未保存・起動中 agent・
+  editor 以外のペインが何も無ければ自動で閉じる
 - `clair open --wait <path>` は開いたあと、その file のタブがどの open Project からも
   閉じられるまで終了しない(`$VISUAL` / git の editor 用。Claude Code の Ctrl+G など)。
   設定の「連携」と palette から `~/.claude/settings.json` の `env.VISUAL` に設定・解除できる。

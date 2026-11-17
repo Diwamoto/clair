@@ -268,8 +268,8 @@ final class WorkbenchProjectTests: XCTestCase {
     XCTAssertEqual(isOpen(b + "/y.txt", &s), .text("closed"))
   }
 
-  // V11 `clair open`: the owning open Project wins (deepest root), else a Git root, else an ad-hoc tab.
-  func testFileOpenResolvesOwnerThenGitRootThenFolder() throws {
+  // V11 `clair open`: the owning open Project wins (deepest root), else an ad-hoc tab in the active Project.
+  func testFileOpenResolvesOwnerElseAdHocTab() throws {
     let outer = try folder("outer", ["a.txt", "inner/b.txt"]), inner = outer + "/inner"
     var s = WorkbenchState()
     open(outer, &s); open(inner, &s); open(outer, &s)
@@ -280,15 +280,30 @@ final class WorkbenchProjectTests: XCTestCase {
 
     let repo = try folder("repo", ["src/m.swift", ".git/HEAD"])
     r.execute("file.open", ["path": .string(repo + "/src/m.swift")], state: &s)
-    XCTAssertEqual(s.projects.last?.path, repo); XCTAssertEqual(s.active, "src/m.swift")  // Git root, not src/
+    XCTAssertEqual(s.projects.count, 2); XCTAssertEqual(s.project, "outer")  // another repo: an ad-hoc tab, no new Project
+    XCTAssertEqual(s.active, "../repo/src/m.swift")
 
     let loose = try folder("loose/deep", ["n.txt"])
     r.execute("file.open", ["path": .string(loose + "/n.txt")], state: &s)
-    XCTAssertEqual(s.projects.last?.path, repo); XCTAssertEqual(s.active, "../loose/deep/n.txt")  // no repo: an ad-hoc tab
+    XCTAssertEqual(s.projects.count, 2); XCTAssertEqual(s.active, "../loose/deep/n.txt")
 
     let skipped = try folder("outer/node_modules", ["p.js"])
     r.execute("file.open", ["path": .string(skipped + "/p.js")], state: &s)  // not in the scan, still opens
     XCTAssertEqual(s.project, "outer"); XCTAssertEqual(s.active, "node_modules/p.js")
+  }
+
+  // An emptied managed worktree Project closes when the user switches away; one with a tab stays.
+  func testIdleWorktreeProjectClosesOnSwitch() throws {
+    let a = try folder("ia", ["x.txt"]), wt = try folder("iwt", ["y.txt"])
+    var s = WorkbenchState()
+    open(a, &s)
+    s.openProject(WorkbenchProject(name: "iwt", path: wt, origin: a, branch: "todo-x"))
+    r.execute("file.open", ["path": .string(wt + "/y.txt")], state: &s)
+    open(a, &s)
+    XCTAssertEqual(s.projects.count, 2, "a worktree with a tab stays")
+    s.switchProject(to: s.projects[1]); s.tabs = []
+    open(a, &s)
+    XCTAssertEqual(s.projects.map(\.name), ["ia"]); XCTAssertNil(s.layouts["iwt"])
   }
 
   // Ad-hoc: outside every open Project and Git repository → a tab at the end of the active Project.

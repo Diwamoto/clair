@@ -201,9 +201,10 @@ extension WorkbenchState {
   /// Opens an absolute, normalized file path in its owning Project. The requested file opens immediately;
   /// the GUI fills the rest of a newly discovered Project in the background instead of blocking on a full walk.
   mutating func openFile(_ file: String) {
-    // Ad-hoc (outside every open Project and Git repository): a tab at the end of the active Project, relative to its
-    // root (`../..`), instead of turning the file's folder (say `~`) into a Project. Not added to the explorer.
-    if owner(of: file) == nil, WorkbenchProject.gitRoot(containing: file) == nil,
+    // Ad-hoc (outside every open Project, Git repository or not): a tab at the end of the active Project, relative to its
+    // root (`../..`), instead of turning the file's repository or folder into a Project — agents open files across many
+    // repositories and each new Project crowded the tab bar (2026-11-17 owner request). Not added to the explorer.
+    if owner(of: file) == nil,
       let root = projects.first(where: { $0.name == project })?.path
     {
       openTab(WorkbenchFiles.relative(file, from: root)); return
@@ -344,6 +345,16 @@ extension WorkbenchState {
     // A tree that was never scanned (switched away before the deferred scan landed) is not a cache: reconciling the
     // tabs against it on return would close every tab.
     if !project.isEmpty { layouts[project] = layout; if !files.isEmpty { filesCache[project] = files } }
+    // A managed worktree Project left with nothing in it (no tab, diff, unsaved change, launch or non-editor pane) closes
+    // itself, so board cards do not pile worktrees up in the tab bar (2026-11-17 owner request). One never shown has no
+    // layout yet and stays.
+    let idle = projects.filter { q in
+      q.origin != nil && q.name != p.name && layouts[q.name].map { l in
+        l.tabs.isEmpty && l.diffTabs.isEmpty && l.dirty.isEmpty && l.launches.isEmpty && l.tree.leaves.allSatisfy { $0.kind == .editor }
+      } == true
+    }.map(\.name)
+    projects.removeAll { idle.contains($0.name) }
+    for n in idle { layouts[n] = nil; filesCache[n] = nil }
     project = p.name
     // A revisited Project shows its last tree at once; the GUI rescans in the background (a scan walks the disk and runs `git status`).
     let cached = filesCache[p.name]
