@@ -6,6 +6,12 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.49.0] - 2026-11-17
+
+### Changed
+- The concierge now runs as Claude Code terminals instead of a chat: each pane is one conversation, split, closed, resized and swapped like the IDE's panes (⌘D, ⌘⇧D, ⌘W). The chat view remains as an experimental setting.
+- Board column agents pick their model from the card's difficulty: Sonnet by default, Opus or Fable for complex cards.
+
 ## [0.48.0] - 2026-11-17
 
 ### Added
@@ -888,7 +894,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.48.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.49.0...HEAD
+[0.49.0]: https://github.com/Diwamoto/clair/compare/v0.48.0...v0.49.0
 [0.48.0]: https://github.com/Diwamoto/clair/compare/v0.47.0...v0.48.0
 [0.47.0]: https://github.com/Diwamoto/clair/compare/v0.46.0...v0.47.0
 [0.46.0]: https://github.com/Diwamoto/clair/compare/v0.45.0...v0.46.0
