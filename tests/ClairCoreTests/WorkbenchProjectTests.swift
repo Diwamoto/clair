@@ -107,6 +107,17 @@ final class WorkbenchProjectTests: XCTestCase {
     XCTAssertNil(WorkbenchState.restore(from: url))
   }
 
+  func testAutoApproveTogglesSurviveRestore() throws {
+    var s = WorkbenchState()
+    s.toggles[WorkbenchState.autoApproveKey("agent.launch")] = true
+    s.toggles[WorkbenchState.autoApproveKey("todo.update")] = false
+    let url = tmp.appending(path: "ws.json")
+    try s.save(to: url)
+    let got = try XCTUnwrap(WorkbenchState.restore(from: url, scanFiles: false))
+    XCTAssertEqual(got.toggles[WorkbenchState.autoApproveKey("agent.launch")], true)
+    XCTAssertEqual(got.toggles[WorkbenchState.autoApproveKey("todo.update")], false)
+  }
+
   func testDeferredRestoreDoesNotScanBeforeFirstFrame() throws {
     let a = try folder("deferred", ["src/one.txt", "two.txt"])
     var s = WorkbenchState()

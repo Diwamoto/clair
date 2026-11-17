@@ -549,7 +549,7 @@ extension WorkbenchState {
     guard let data = try? Data(contentsOf: url), let snap = try? JSONDecoder().decode(WorkspaceSnapshot.self, from: data)
     else { return nil }
     var s = WorkbenchState()
-    for (k, v) in snap.toggles where s.toggles[k] != nil { s.toggles[k] = v }
+    for (k, v) in snap.toggles where s.toggles[k] != nil || WorkbenchState.toggleKeys.contains(k) { s.toggles[k] = v }
     for (k, v) in snap.choices ?? [:] where WorkbenchState.choiceOptions[k]?.contains(v) == true { s.choices[k] = v }
     for (id, key) in snap.shortcuts ?? [:] where key.isEmpty || WorkbenchState.canonicalShortcut(key) == key { s.shortcuts[id] = key }
     if let a = snap.fileAssociations { s.fileAssociations = a }
