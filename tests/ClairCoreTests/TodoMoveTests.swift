@@ -115,6 +115,15 @@ import Testing
     #expect(next.stage == "impl" && next.concierge == concierge)
     try s.moveTodo(path: path, stage: "review", home: home)
     #expect(s.autoAdvance(try Self.read(path).with { $0.result = "ok" }, caller: try Self.read(path).agent) == nil, "Review → Done is the owner's")
+    // Through todo.update's input: judged on the card on disk, and never alongside stage / agent / done.
+    try s.moveTodo(path: path, stage: "plan", home: home)
+    let disk = try Self.read(path), own = try #require(disk.agent)
+    #expect(s.autoAdvance(["parent": .string(own)], card: disk, result: "ok")?.stage == "impl")
+    for forged: CommandInput in [["stage": .string("impl")], ["agent": .string(own)], ["done": .bool(false)]] {
+      #expect(s.autoAdvance(forged.merging(["parent": .string(own)]) { a, _ in a }, card: disk, result: "ok") == nil, "\(forged)")
+    }
+    #expect(s.autoAdvance(["parent": .string(concierge)], card: disk.with { $0.agent = concierge }, result: "ok") == nil,
+            "a pane not opened for the card is not its agent")
   }
 
   @Test func aMoveClosesOnlyTheCardsOwnAgent() throws {

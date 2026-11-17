@@ -108,6 +108,14 @@ extension WorkbenchState {
     return (next, parent.flatMap { isConcierge($0) ? $0 : nil })
   }
 
+  /// `todo.update`'s automatic move, judged on the card as it was on disk before this update (`card`) with the
+  /// reported `result`: the caller cannot name itself the agent or pick the column in the same call, and a call that
+  /// also moves, reassigns or closes the card is not automatic.
+  func autoAdvance(_ i: CommandInput, card: ClairTodo, result: String?) -> (stage: String, concierge: String?)? {
+    guard i["stage"] == nil, i["agent"] == nil, i["done"] == nil else { return nil }
+    return autoAdvance(card.with { $0.result = result }, caller: i["parent"]?.string)
+  }
+
   /// The single entry point that starts column agents. `concierge` is the calling concierge's terminal key, counted against
   /// its cap unless `counted` is false (an automatic move the owner already agreed to, ADR-0030).
   mutating func moveTodo(path: String, stage: String, force: Bool = false, concierge: String? = nil, counted: Bool = true,

@@ -81,7 +81,6 @@ public struct DecisionSheet: Codable, Equatable, Sendable {
 
   /// Decodes an agent's sheet and checks it: unique ids, options where a choice is asked, recommendations that exist,
   /// and HTML previews that are files inside the card's folder.
-  // ponytail: containment is checked on standardized paths, not resolved symlinks (same ceiling as FileProposal).
   public static func validate(_ json: String, card: String) throws(CommandError) -> DecisionSheet {
     let sheet: DecisionSheet
     do { sheet = try JSONDecoder().decode(Self.self, from: Data(json.utf8)) } catch {
@@ -91,6 +90,7 @@ public struct DecisionSheet: Codable, Equatable, Sendable {
     s.state = .pending; s.answers = [:]; s.comment = nil; s.asker = nil
     guard !s.questions.isEmpty, s.questions.count <= maxQuestions else { throw CommandError(.invalidInput, "1 to \(maxQuestions) questions") }
     guard Set(s.questions.map(\.id)).count == s.questions.count else { throw CommandError(.invalidInput, "question ids must be unique") }
+    // Symlinks resolved: the preview gets read access to this folder, so it must not lead elsewhere.
     let dir = URL(fileURLWithPath: folder(card: card)).standardizedFileURL.path
     for (qi, q) in s.questions.enumerated() {
       guard !q.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CommandError(.invalidInput, "question \(q.id) has no prompt") }
@@ -109,7 +109,10 @@ public struct DecisionSheet: Codable, Equatable, Sendable {
       for (oi, o) in options.enumerated() {
         guard let html = o.html else { continue }
         let abs = URL(fileURLWithPath: html.hasPrefix("/") ? html : dir + "/" + html).standardizedFileURL.path
-        guard abs.hasPrefix(dir + "/"), FileManager.default.fileExists(atPath: abs) else {
+        let real = URL(fileURLWithPath: abs).resolvingSymlinksInPath().path
+        let realDir = URL(fileURLWithPath: dir).resolvingSymlinksInPath().path
+        let linked = (try? FileManager.default.destinationOfSymbolicLink(atPath: dir)) != nil
+        guard abs.hasPrefix(dir + "/"), !linked, real.hasPrefix(realDir + "/"), FileManager.default.fileExists(atPath: abs) else {
           throw CommandError(.invalidInput, "\(html) is not a file in \(dir)")
         }
         s.questions[qi].options![oi].html = abs

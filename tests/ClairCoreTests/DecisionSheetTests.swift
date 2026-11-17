@@ -49,6 +49,16 @@ import Testing
     do { try loaded.answer([:], comment: nil, card: card); Issue.record("answered twice") } catch {}
   }
 
+  @Test func aSymlinkedCardFolderGetsNoPreview() throws {
+    let card = try Self.card()
+    let elsewhere = URL(fileURLWithPath: (card as NSString).deletingLastPathComponent).appending(path: "linked.md").path
+    try FileManager.default.createSymbolicLink(atPath: DecisionSheet.folder(card: elsewhere), withDestinationPath: DecisionSheet.folder(card: card))
+    let json = #"{"questions":[{"id":"a","prompt":"p","options":[{"id":"x","label":"X","html":"a.html"}]}]}"#
+    _ = try DecisionSheet.validate(json, card: card)
+    do throws(CommandError) { _ = try DecisionSheet.validate(json, card: elsewhere); Issue.record("previewed through a symlinked folder") }
+    catch { #expect(error.message.contains("is not a file")) }
+  }
+
   @Test func aPendingSheetHoldsTheCard() throws {
     let card = try Self.card()
     try DecisionSheet.validate(#"{"questions":[{"id":"q","kind":"text","prompt":"?"}]}"#, card: card).save(card: card)

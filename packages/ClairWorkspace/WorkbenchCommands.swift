@@ -1028,8 +1028,14 @@ extension CommandRegistry {
         if let v = text("note") { t.note = v }
         if let v = text("difficulty") { t.difficulty = v }
       }
-      let saved = try todoSave(t, appendBody: i["appendBody"]?.string)
-      if move == nil, let next = s.autoAdvance(t, caller: i["parent"]?.string) {
+      // ADR-0030: judged on the card as it was on disk, so a caller cannot name itself the agent or pick the column in
+      // the same call; a call that also moves or reassigns the card is not an automatic move.
+      let next = move == nil ? s.autoAdvance(i, card: ClairTodo.parse(path: path, text: text), result: t.result) : nil
+      // The column's note would be cleared by the move: keep it in the body.
+      let kept = next.flatMap { _ in t.note.map { "- \(ClairTodo.parse(path: path, text: text).column) の結果: \($0)" } }
+      let body = [i["appendBody"]?.string, kept].compactMap { $0 }.joined(separator: "\n")
+      let saved = try todoSave(t, appendBody: body.isEmpty ? nil : body)
+      if let next {
         try s.moveTodo(path: path, stage: next.stage, concierge: next.concierge, counted: false)
         return try todoSave(ClairTodo.parse(path: path, text: (try? String(contentsOfFile: path, encoding: .utf8)) ?? text), appendBody: nil)
       }
@@ -1422,9 +1428,17 @@ extension CommandRegistry {
     cmd("ask.post", "判断シートで質問", .additive,
         params: [CommandParam("card", .string), CommandParam("questions", .string),
                  CommandParam("parent", .string, required: false)], palette: false,
-        preflight: { _, i throws(CommandError) in
-          try require(ClairTodo.isTodoFile(i["card"]!.string!), "no TODO file \(i["card"]!.string!) in ~/.clair/todo")
-          _ = try DecisionSheet.validate(i["questions"]!.string!, card: i["card"]!.string!)
+        preflight: { s, i throws(CommandError) in
+          let card = i["card"]!.string!
+          try require(ClairTodo.isTodoFile(card), "no TODO file \(card) in ~/.clair/todo")
+          // Only the card's own column agent or a concierge asks, and never over another asker's open sheet.
+          let caller = i["parent"]?.string
+          try require(caller.map { s.isConcierge($0) || s.cardAgent($0, path: card) } == true,
+                      "only the card's own agent or the concierge can ask about \(card)")
+          if let open = DecisionSheet.load(card: card), open.state == .pending, open.asker != caller {
+            throw CommandError(.preconditionFailed, "another agent's sheet on \(card) is still unanswered")
+          }
+          _ = try DecisionSheet.validate(i["questions"]!.string!, card: card)
           return .additive
         }) { _, i throws(CommandError) in
       let card = i["card"]!.string!
