@@ -143,6 +143,13 @@ extension WorkbenchState {
     concierges().first { c in chat.map { (c.launch.session ?? c.session) == $0 } ?? true }
   }
 
+  /// The concierge terminal key whose request started this card's live column agent; nil when the owner moved it.
+  public func boardConcierge(_ card: TodoBoardCard) -> String? {
+    guard let key = card.todo.agent, let t = terminal(key), let parent = withLayoutCopy(t.project).launches[t.pane]?.parent,
+          isConcierge(parent) else { return nil }
+    return parent
+  }
+
   /// Agents a concierge launched (their `parent` is a concierge terminal).
   public func conciergeChildren() -> [(session: AgentSession, launch: AgentLaunch)] {
     let keys = Set(concierges().map(\.key))

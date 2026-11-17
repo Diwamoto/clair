@@ -453,7 +453,7 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   クリックでボードの上にカードの pane の本物のターミナルをクイックルックとして重ね、コンシェルジュの画面のまま子 agent に直接入力・承認できる(その pane の surface を
   借りて表示し、閉じると元の pane に返す。開いている間 PTY はクイックルックの大きさになる。背景のクリックか閉じるボタンで閉じる。
   Esc はターミナルに渡す。2026-11-12 オーナー依頼)。
-  コンシェルジュ画面では ⌘J(`terminal.show`)がボードとエディタ列の下に高さ 260 の一時ターミナル(ホームディレクトリの shell、daemon の key `concierge-scratch`)を開閉する。閉じても shell は daemon に残り、次の ⌘J で同じ画面に戻る。どの Project の layout にも出さない(2026-11-16 オーナー依頼)。⌘B(`sidebar.toggle`)は左のチャット一覧を畳む / 出す、⌘D(`pane.splitRight`)は新しいチャットを開く(2026-11-17 オーナー依頼)。
+  コンシェルジュ画面では ⌘J(`terminal.show`)がボードとエディタ列の下に高さ 260 の一時ターミナル(ホームディレクトリの shell、daemon の key `concierge-scratch`)を開閉する。閉じても shell は daemon に残り、次の ⌘J で同じ画面に戻る。どの Project の layout にも出さない(2026-11-16 オーナー依頼)。オーナーが手で動かしたカードはどのチャットにも入力しない(2026-11-17)。⌘B(`sidebar.toggle`)は左のチャット一覧を畳む / 出す、⌘D(`pane.splitRight`)は新しいチャットを開く(2026-11-17 オーナー依頼)。
   画面の文字を読むために、まだ一度も表示していない pane の surface は、カードの裏で見えない状態に一度だけ載せて保持する(保持された surface は
   画面の外でも動き続ける。載せている間、その pane の PTY は固定の大きさになり、Project 側が表示するときに戻る。daemon の terminal journal を
   headless VT に流して読む方式は未実装)。カードに属さない動いている agent pane(コンシェルジュの子・手動起動)は
@@ -482,7 +482,7 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   shell を持つ agent は defaults を書ける。`~/.claude` は対象外)。限界: 再起動で復元した pane はそのまま起動し直す(承認は新規起動のときだけ)。`--add-dir` の追加フォルダはハッシュしない。ホストの Project を閉じると
   コンシェルジュも外れる(次の送信で同じ会話を起動し直す)。チャットを開いていない間は surface がマウントされないので、
   `agent.output` / `agent.send` はコンシェルジュの画面を読めない。
-  コンシェルジュが動いている間、Clair は 2 秒ごとに看板を読み、カードの状態が `done` / `failed` / `blocked` / `unreported` に変わると最初のコンシェルジュに `[看板] <タイトル>(<列>)が <状態> になりました — <note> path=<パス>` を 1 行入力して Return を押す(初回の読み込みは記録だけ。オーナーの送信ではないので起動上限の数え直しはしない。2026-11-16 オーナー依頼)。
+  コンシェルジュが動いている間、Clair は 2 秒ごとに看板を読み、カードの状態が `done` / `failed` / `blocked` / `unreported` に変わると、そのカードの列 agent を起動したコンシェルジュ(チャット)にだけ `[看板] <タイトル>(<列>)が <状態> になりました — <note> path=<パス>` を 1 行入力して Return を押す(初回の読み込みは記録だけ。オーナーの送信ではないので起動上限の数え直しはしない。2026-11-16 オーナー依頼)。
   コンシェルジュは `agent.launch project=` で表示中の Project を切り替えずに別の Project へ
   子を起動できる。他の agent が `parent` 付きで別の Project を指定すると preconditionFailed になる。
   `agent.launch sandbox=true`(#75、profile は `claude`、prompt 必須)は子を Docker Sandboxes の microVM で動かす。

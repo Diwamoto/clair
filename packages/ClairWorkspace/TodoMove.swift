@@ -186,7 +186,11 @@ extension WorkbenchState {
       t.agent = key; t.branch = branch
       let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"
       history = "- \(stage) \(key) \(f.string(from: .now))"
-      if let concierge { conciergeLaunches[concierge, default: 0] += 1 }
+      if let concierge {
+        conciergeLaunches[concierge, default: 0] += 1
+        // The card's state changes go back to this concierge's chat only (`boardConcierge`).
+        withLayout(launchProject!.name) { $0.launches[pane]?.parent = concierge }
+      }
     }
     do { try t.save(appendBody: history) } catch { throw CommandError(.preconditionFailed, error.localizedDescription) }
   }

@@ -1794,8 +1794,11 @@ import Observation
         while conciergeBoard || !st.concierges().isEmpty, !Task.isCancelled {
           todos = ClairTodo.list()
           let cards = st.board(todos, now: Date()).cards
-          if let seen, let c = st.concierge() {
-            for line in TodoBoardCard.changes(cards, since: seen) { ClairGhosttySurfaceView.submit(line, key: c.key) }
+          // Each card's news goes only to the concierge chat that moved it, not whichever chat is open.
+          if let seen {
+            for c in st.concierges() {
+              for line in TodoBoardCard.changes(cards.filter { st.boardConcierge($0) == c.key }, since: seen) { ClairGhosttySurfaceView.submit(line, key: c.key) }
+            }
           }
           seen = Dictionary(cards.map { ($0.todo.path, $0.state) }, uniquingKeysWith: { a, _ in a })
           try? await Task.sleep(for: .seconds(2))

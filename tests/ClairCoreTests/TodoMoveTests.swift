@@ -88,6 +88,16 @@ import Testing
     catch { #expect(error.message.contains("Inbox")) }
   }
 
+  @Test func boardNewsGoesToTheConciergeThatMovedTheCard() throws {
+    let home = try Self.home(), root = try Self.repo(home)
+    var (s, concierge) = Self.state(root: root)
+    let mine = try Self.card(home, "mine", project: "p"), owners = try Self.card(home, "owners", project: "p")
+    try s.moveTodo(path: mine, stage: "plan", concierge: concierge, home: home)
+    try s.moveTodo(path: owners, stage: "plan", home: home)
+    let cards = s.board([try Self.read(mine), try Self.read(owners)]).cards
+    #expect(cards.map { s.boardConcierge($0) } == [concierge, nil])
+  }
+
   @Test func aMoveClosesOnlyTheCardsOwnAgent() throws {
     let home = try Self.home(), root = try Self.repo(home)
     var (s, concierge) = Self.state(root: root)
