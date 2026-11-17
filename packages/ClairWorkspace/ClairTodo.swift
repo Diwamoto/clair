@@ -25,6 +25,8 @@ public struct ClairTodo: Equatable, Sendable {
   public var note: String?
   /// When the card moved to Done (ISO 8601); the file's mtime stands in when absent.
   public var doneAt: String?
+  /// `simple` / `complex`, set by the concierge; picks the column agent's model (`model(stage:)`).
+  public var difficulty: String?
 
   public static let columns = ["inbox", "plan", "impl", "review", "done"]
   public static let stages = ["plan", "impl", "review", "done"]
@@ -35,6 +37,13 @@ public struct ClairTodo: Equatable, Sendable {
   public static let lanes = ["code", "research"]
   public static let results = ["ok", "failed"]
   public static let noProject = "none"
+  public static let difficulties = ["simple", "complex"]
+
+  /// The column agent's `--model`: Sonnet by default; a complex card gets Opus, or Fable for plan/review. Never Fable for impl.
+  public func model(stage: String) -> String {
+    guard difficulty == "complex" else { return "sonnet" }
+    return stage == "plan" || stage == "review" ? "fable" : "opus"
+  }
 
   /// The board column of a stage: none is Inbox, the old review-ish stages are Review.
   public static func column(stage: String?) -> String {
@@ -79,6 +88,7 @@ public struct ClairTodo: Equatable, Sendable {
       case "result": t.result = value.isEmpty ? nil : value
       case "note": t.note = value.isEmpty ? nil : value
       case "doneAt": t.doneAt = value.isEmpty ? nil : value
+      case "difficulty": t.difficulty = value.isEmpty ? nil : value
       default: t.extra[key] = value
       }
     }
@@ -87,12 +97,12 @@ public struct ClairTodo: Equatable, Sendable {
 
   public func with(_ change: (inout ClairTodo) -> Void) -> ClairTodo { var c = self; change(&c); return c }
 
-  static let keys: Set<String> = ["title", "priority", "due", "done", "stage", "lane", "retry", "branch", "pr", "agent", "project", "result", "note", "doneAt"]
+  static let keys: Set<String> = ["title", "priority", "due", "done", "stage", "lane", "retry", "branch", "pr", "agent", "project", "result", "note", "doneAt", "difficulty"]
 
   /// The workflow keys present, in file order.
   var workflow: [(String, String)] {
     [("stage", stage), ("lane", lane), ("retry", retry.map(String.init)), ("branch", branch), ("pr", pr), ("agent", agent),
-     ("project", project), ("result", result), ("note", note), ("doneAt", doneAt)]
+     ("project", project), ("result", result), ("note", note), ("doneAt", doneAt), ("difficulty", difficulty)]
       .compactMap { k, v in v.map { (k, $0) } }
   }
 

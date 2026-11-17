@@ -61,7 +61,7 @@ public struct AgentLaunch: Sendable, Codable, Equatable {
   public var concierge: String?
   /// #76: `settings.concierge` prompt at launch. Fixed, like `folders`: a changed command replaces the live shell.
   public var conciergePrompt: String?
-  /// The concierge's `--model` / `--effort`, picked before its first message. Fixed at launch like `conciergePrompt`.
+  /// `--model` / `--effort`: the concierge's, picked before its first message; a column agent's `model` comes from its card. Fixed at launch like `conciergePrompt`.
   public var model: String?
   public var effort: String?
   /// First message of an interactive agent (the profile's `open` form); for a concierge, the request typed
@@ -97,7 +97,9 @@ public struct AgentLaunch: Sendable, Codable, Equatable {
     let dirs = profile == "claude" ? (folders ?? []).map { " --add-dir \(AgentRun.quote($0))" }.joined() : ""
     if let concierge, AgentProfile.isSessionID(concierge) { return Concierge.command(session: concierge, extra: conciergePrompt ?? "", opening: opening, resumed: resume == concierge, model: model, effort: effort) + dirs }
     if let resume, let prefix = p.resume, AgentProfile.isSessionID(resume) { return "\(prefix) \(resume)\(dirs)" }
-    if prompt == nil, let opening, let open = p.open { return "\(open) \(AgentRun.quote(opening))\(dirs)" }
+    // A column agent's model, from its card's difficulty.
+    let picked = model.map { " --model \(AgentRun.quote($0))" } ?? ""
+    if prompt == nil, let opening, let open = p.open { return "\(open)\(picked) \(AgentRun.quote(opening))\(dirs)" }
     guard let prompt, let run else { return p.command + dirs }
     // `script` keeps a TTY for the agent while recording it, and exits with the agent's status.
     // Wrapped in /bin/sh so the user's login shell (zsh, fish, …) only sees one quoted argument.
@@ -115,7 +117,7 @@ public struct AgentLaunch: Sendable, Codable, Equatable {
         """
       agent = "/bin/sh -c \(q(steps))"
     } else {
-      agent = "\(batch) \(q(prompt))\(dirs)"
+      agent = "\(batch)\(picked) \(q(prompt))\(dirs)"
     }
     let inner = "mkdir -p \(q(AgentRun.directory.path)); script -q \(q(r.log.path)) \(agent); echo $? > \(q(r.exit.path))"
     return "/bin/sh -c \(q(inner))"

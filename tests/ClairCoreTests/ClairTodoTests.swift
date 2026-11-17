@@ -105,3 +105,14 @@ final class ClairTodoCommandTests: XCTestCase {
     }
   }
 }
+
+final class ClairTodoModelTests: XCTestCase {
+  func testDifficultyPicksModelAndImplNeverFable() {
+    var t = ClairTodo.parse(path: "/x.md", text: "---\ntitle: a\ndifficulty: complex\n---\n")
+    XCTAssertEqual(["research", "plan", "impl", "review"].map { t.model(stage: $0) }, ["opus", "fable", "opus", "fable"])
+    t.difficulty = nil
+    XCTAssertEqual(["research", "plan", "impl", "review"].map { t.model(stage: $0) }, Array(repeating: "sonnet", count: 4))
+    var l = AgentLaunch(profile: "claude", cwd: "/tmp", opening: "hi"); l.model = "sonnet"
+    XCTAssertTrue(l.command.hasPrefix("claude --model 'sonnet' "), l.command)
+  }
+}

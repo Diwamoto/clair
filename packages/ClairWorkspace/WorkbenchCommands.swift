@@ -748,6 +748,7 @@ extension CommandRegistry {
           // A Project other than the shown one, without switching to it (#72 schedules).
           CommandParam("project", .string, required: false),
           CommandParam("sandbox", .bool, required: false),
+          CommandParam("model", .string, required: false),
         ], palette: false,
         preflight: { s, i throws(CommandError) in
           try require(i["resume"]?.string.map(AgentProfile.isSessionID) ?? true, "invalid session id")
@@ -755,6 +756,8 @@ extension CommandRegistry {
             try require(i["prompt"] == nil, "prompt and opening are exclusive")
             try require(AgentProfile.named(i["profile"]!.string!)?.open != nil, "\(i["profile"]!.string!) cannot open with a message")
           }
+          try require(i["model"]?.string.map { $0.wholeMatch(of: /[A-Za-z0-9._\[\]-]+/) != nil } != false, "model is not a model name")
+          try require(i["model"] == nil || i["profile"]!.string! == "claude", "model needs profile=claude")
           if i["sandbox"]?.bool == true {
             try require(i["profile"]!.string! == "claude" && i["prompt"]?.string?.isEmpty == false, "sandbox needs profile=claude and a prompt")
           }
@@ -777,6 +780,7 @@ extension CommandRegistry {
         parent: i["parent"]?.string, resume: i["resume"]?.string,
         opening: i["opening"]?.string.flatMap { $0.isEmpty ? nil : $0 }, review: i["review"]?.bool == true, folders: home.project.folders)
       if i["sandbox"]?.bool == true { launch.sandbox = "clair-" + launch.run! }
+      launch.model = i["model"]?.string
       let axis: PaneTree.Axis = i["direction"]?.string == "down" ? .vertical : .horizontal
       let pane = s.withLayout(home.project.name) { l in
         let id = home.pane.map { l.tree.split($0, axis, kind: .terminal) } ?? { l.tree.splitFocused(axis, kind: .terminal); return l.tree.focused }()
@@ -983,6 +987,7 @@ extension CommandRegistry {
                  CommandParam("pr", .string, required: false), CommandParam("agent", .string, required: false),
                  CommandParam("project", .string, required: false), CommandParam("result", .string, required: false),
                  CommandParam("note", .string, required: false),
+                 CommandParam("difficulty", .string, required: false, allowed: ClairTodo.difficulties + [""]),
                  CommandParam("parent", .string, required: false)],  // the calling terminal, set by the IPC layer (callerAsParent)
         palette: false,
         preflight: { s, i throws(CommandError) in
@@ -1021,6 +1026,7 @@ extension CommandRegistry {
         if let v = text("project") { t.project = v }
         if let v = text("result") { t.result = v }
         if let v = text("note") { t.note = v }
+        if let v = text("difficulty") { t.difficulty = v }
       }
       let saved = try todoSave(t, appendBody: i["appendBody"]?.string)
       guard let move, let concierge else { return saved }

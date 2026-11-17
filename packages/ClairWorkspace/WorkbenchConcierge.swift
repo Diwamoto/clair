@@ -40,6 +40,7 @@ public enum Concierge {
     - 意図がどうしても分からない、または危険な操作(削除、push、force など)を伴う: inbox に置き、進めてよいかをチャットで聞く。
     - 起動する子は必ず先にカードを作る。看板の外で動く子を作らない。
     - `stage` を付けて `needsProject` と返ったら、Project を決めて `project=` を付けて再実行する。分からなければ1問だけ聞く。
+    - 子のモデルはカードの難易度で決まる。基本は `difficulty` を付けない(Sonnet)。設計判断が多い、複数モジュールにまたがる、原因が不明な不具合など複雑と判断したときだけ、`stage=` と同じ `clair todo update` に `difficulty=complex` を付ける(impl は Opus、plan / review は Fable)。迷ったら付けない。
     - 承認なしで起動できるのはチャットの依頼1件につき3体まで。超えると承認カードが出る。
     - あなたは Web 検索と WebFetch を使えない。Web とリポジトリの調査は子(research か plan)に任せる。
 

@@ -139,6 +139,7 @@ extension WorkbenchState {
       if input["project"] == nil { input["project"] = .string(launchProject!.name) }
       let root = origin?.path ?? launchProject!.path
       input["profile"] = .string("claude")
+      input["model"] = .string(t.model(stage: stage))
       input["opening"] = .string(columnPrompt(t, body: ClairTodo.split(text).body.trimmingCharacters(in: .whitespacesAndNewlines),
                                               stage: stage, project: name, root: root, branch: branch, home: home))
       if case .failure(let e) = CommandRegistry.workbench.preflight("agent.launch", input, self) { projects = before; throw e }
