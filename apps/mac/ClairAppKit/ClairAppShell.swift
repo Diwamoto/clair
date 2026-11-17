@@ -1548,6 +1548,8 @@ import Observation
     @State private var headInfo: WorkbenchGit.HeadInfo?
     @State private var groupDropTarget: String?
     @State private var hoveredGroup: String?
+    /// Origin Projects whose managed worktrees are unfolded into sub-groups (GUI-local; folded by default).
+    @State private var openWorktrees: Set<String> = []
     @State private var noticeDrag: (id: Int, x: CGFloat)?
     @State private var rootFolded = false
     @State private var menus = ClairMenuController()
@@ -1747,8 +1749,9 @@ import Observation
         GeometryReader { g in
           ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: glass ? 8 : 4) {
-              ForEach(Array(st.projects.enumerated()), id: \.element.name) { i, p in
-                if i > 0, !glass { Rectangle().fill(Color(white: 0.95, opacity: 0.09)).frame(width: 1, height: 22).padding(.horizontal, 4) }
+              // A managed worktree of an open Project nests inside its origin's group (canvas Main), not as a group of its own.
+              ForEach(Array(st.projects.enumerated()).filter { _, p in !isNestedWorktree(p) }, id: \.element.name) { i, p in
+                if p.name != st.projects.first(where: { !isNestedWorktree($0) })?.name, !glass { Rectangle().fill(Color(white: 0.95, opacity: 0.09)).frame(width: 1, height: 22).padding(.horizontal, 4) }
                 projectGroup(p, colorKey: p.color.flatMap { DesignTokens.GroupColor.resolve($0) == nil ? nil : $0 } ?? projectColors[i % projectColors.count].rawValue)
               }
               Button { store.run("project.choose") } label: { Image(systemName: "plus").font(Typography.font(Typography.sidebar)).foregroundStyle(C.chromeInk).frame(width: RowHeight.control, height: RowHeight.control) }
@@ -1938,12 +1941,45 @@ import Observation
             }
           }.padding(.leading, 4)
           .transition(reduceMotion ? .opacity : .scale(scale: 0.05, anchor: .leading).combined(with: .opacity))
+          worktreeChip(p, colorKey: colorKey, color: color)
         }
       }
       // Glass: one tinted vessel holds the chip and its tabs (canvas Tokens `GLASS の中身`).
       .padding(.horizontal, glass ? 4 : 0).frame(height: glass ? 36 : nil)
       .background(glass ? color.opacity(active ? 0.16 : 0.07) : .clear, in: Capsule())
       .overlay(Capsule().stroke(glass ? color.opacity(active ? 0.5 : 0.24) : .clear))
+    }
+
+    private func isNestedWorktree(_ p: WorkbenchProject) -> Bool {
+      p.origin.map { o in st.projects.contains { $0.origin == nil && $0.path == o } } ?? false
+    }
+
+    /// The origin's managed worktrees: one folded chip (branch glyph + count) that unfolds them into sub-groups.
+    /// A worktree that is the active Project is always shown, so the user never loses where they are.
+    @ViewBuilder private func worktreeChip(_ p: WorkbenchProject, colorKey: String, color: Color) -> some View {
+      let worktrees = p.origin == nil ? st.projects.filter { $0.origin == p.path } : []
+      if !worktrees.isEmpty {
+        let open = openWorktrees.contains(p.name) || worktrees.contains { $0.name == st.project }
+        let toggle = {
+          withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration)) {
+            if openWorktrees.contains(p.name) { openWorktrees.remove(p.name) } else { openWorktrees.insert(p.name) }
+          }
+        }
+        HStack(spacing: 4) {
+          Image(systemName: "arrow.triangle.branch").font(.system(size: Typography.chromeSize(10)))
+          Text("\(worktrees.count)").font(Typography.font(Typography.chrome))
+        }
+        .foregroundStyle(C.textMuted).padding(.horizontal, 7).frame(height: 20)
+        .background(color.opacity(0.1), in: RoundedRectangle(cornerRadius: Radius.control))
+        .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(color.opacity(0.28)))
+        .contentShape(Rectangle()).onTapGesture(perform: toggle)
+        .accessibilityElement(children: .combine).accessibilityAddTraits(.isButton).accessibilityAction(.default, toggle)
+        .help(tr("worktree %d 件: %@", worktrees.count, worktrees.compactMap(\.branch).joined(separator: ", ")))
+        .padding(.leading, 6)
+        if open {
+          ForEach(worktrees, id: \.name) { wt in AnyView(projectGroup(wt, colorKey: colorKey)).padding(.leading, 4) }
+        }
+      }
     }
 
     /// Tabs drag their `dragID`; a group chip drags this prefix plus its Project name, so neither drop target takes the other.
