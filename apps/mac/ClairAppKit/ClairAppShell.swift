@@ -5384,7 +5384,7 @@ import Observation
             .task(id: id) { start(id, false) }
           }
         }
-        .paneCard(focused: id == focused)
+        // No `paneCard`: the concierge screen is already one card, and a card per pane nested a second rim inside it.
         .opacity(id == focused ? 1 : 0.75)
         .simultaneousGesture(TapGesture().onEnded { if id != focused { onFocus(id) } })
       case .split(let axis, let ratio, let a, let b):
