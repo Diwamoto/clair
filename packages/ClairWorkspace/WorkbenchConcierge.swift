@@ -117,6 +117,8 @@ public enum Concierge {
     return dirs.lazy.map { $0.appending(path: "\(session).jsonl") }.first { FileManager.default.fileExists(atPath: $0.path) }
   }
 
+  static let greeting = "コンシェルジュです。何をやりますか？"
+
   /// `opening` rides as Claude's initial prompt, so a request sent before the TUI was up is never lost.
   /// `resumed`: launched onto an existing chat (the previous concierge's), so the request that woke it rides along.
   /// A fresh one flips to `--resume` once its transcript exists and must not repeat its opening then.
@@ -124,7 +126,9 @@ public enum Concierge {
     let fresh = !resumed && transcriptFile(session: session) == nil
     let first = fresh || resumed ? opening.map { " " + AgentRun.quote($0) } ?? "" : ""
     let picked = (model.map { " --model \(AgentRun.quote($0))" } ?? "") + (effort.map { " --effort \(AgentRun.quote($0))" } ?? "")
-    return "claude \(fresh ? "--session-id" : "--resume") \(session)\(picked) --disallowedTools WebFetch,WebSearch --append-system-prompt \(AgentRun.quote(prompt(extra: extra)))\(first)"
+    // A new CLI chat (no opening request) greets above Claude Code's banner, so the pane reads as the concierge, not a bare `claude`.
+    let greeting = fresh && opening == nil ? "printf '%s\\n\\n' \(AgentRun.quote(Self.greeting)); " : ""
+    return "\(greeting)claude \(fresh ? "--session-id" : "--resume") \(session)\(picked) --disallowedTools WebFetch,WebSearch --append-system-prompt \(AgentRun.quote(prompt(extra: extra)))\(first)"
   }
 }
 
