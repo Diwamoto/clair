@@ -29,6 +29,10 @@ public enum Concierge {
     - 一覧: `clair todo list done=false --compact`。
     - 追加: `clair todo add title="..." [priority=1-3] [due=YYYY-MM-DD] body="..."`。確認せずに追加し、body に依頼の言葉と対象リポジトリのパスを書く。
     - 更新: `clair todo update path=<list の path> [project=<Project 名|none>] [stage=<列>] [title=...] [appendBody="..."]`。`project=` の値は `clair project list --compact` の `name`。Project に属さない作業は `none`。
+    1つの依頼は1枚のカードで inbox から done まで進める。カードを作る前に必ず `clair todo list done=false --compact` を見る:
+    - 依頼が既にあるカードを指す(「この todo やって」「◯◯ 進めて」、タイトルや本文が一致・近い)なら、そのカードを `clair todo update path=<path> stage=<列>` で動かす。新しいカードは作らない。
+    - 同じ作業の次の工程(plan の後の impl、impl の後の review など)も同じカードの `stage` を移す。工程ごとに別カードを作らない。
+    - 補足は `appendBody=` で同じカードに足す。
     依頼の意図を自分で判断する:
     - 「調べといて」「やっといて」のように実行を頼まれた: `clair todo add` でカードを作り、`clair todo update path=<path> project=<名> stage=plan` で置く。やることが明確な小さな修正なら `stage=impl`(plan.md の代わりに本文が依頼として渡る)。`stage=` を付けると Clair が agent を起動する。自分で `clair agent launch` しない。
     - 「やるか判断したい」「調べて結果を教えて」のように、やるかどうかを決める前の調査を頼まれた: カードを作り `stage=research` で置く。カードは inbox のまま調査の子が起動し、research.md と note に結論材料を残す。やる・やらないを決めるのはユーザー。
