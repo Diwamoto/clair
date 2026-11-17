@@ -3698,7 +3698,11 @@ import Observation
               }
           } else {
             // The eye button previews in this column; the workspace preview pane sits hidden under the concierge.
-            activeEditor(onPreview: MarkdownPreview.isMarkdown(f.path) ? { conciergePreviews.insert(f) } : nil)
+            {
+              var e = activeEditor(onPreview: MarkdownPreview.isMarkdown(f.path) ? { conciergePreviews.insert(f) } : nil)
+              e.alwaysShowsPreview = true
+              return e
+            }()
           }
         } else { C.canvas }
       }

@@ -462,6 +462,8 @@
     let root: String?
     var path: String?
     var focused = false
+    /// The concierge column's editor is never a focused workspace pane but still offers the preview button.
+    var alwaysShowsPreview = false
     var onFocus: (() -> Void)? = nil
     var softWrap = false
     var style = EditorStyle()
@@ -536,7 +538,7 @@
                 EditorFindBar(buffers: buffers, path: path, request: request)
               } else if buffers.highlightsLoading.contains(path) {
                 ProgressView().controlSize(.small).padding(8)
-              } else if focused, let onPreview, MarkdownPreview.isMarkdown(path) || TableFile.separator(path) != nil || path.lowercased().hasSuffix(".html") || path.lowercased().hasSuffix(".htm") {
+              } else if focused || alwaysShowsPreview, let onPreview, MarkdownPreview.isMarkdown(path) || TableFile.separator(path) != nil || path.lowercased().hasSuffix(".html") || path.lowercased().hasSuffix(".htm") {
                 Button(action: onPreview) { Image(systemName: "eye") }
                   .buttonStyle(.borderless).help(tr("プレビューを開く (⌘⇧V)")).accessibilityLabel(tr("プレビューを開く"))
                   .padding(8)
