@@ -19,6 +19,13 @@ final class AgentContextTokensTests: XCTestCase {
     XCTAssertNil(AgentContext.claude(session: "../x", cwd: "/", home: home, env: [:]).tokens)
   }
 
+  func testCompactBoundaryAfterLatestReplyReplacesStaleUsage() {
+    let reply = #"{"type":"assistant","message":{"usage":{"input_tokens":10,"cache_read_input_tokens":150000}}}"#
+    func scan(_ lines: [String]) -> Int? { AgentContext.scan(Data(lines.joined(separator: "\n").utf8)).tokens }
+    XCTAssertEqual(scan([reply, #"{"type":"system","subtype":"compact_boundary","compactMetadata":{"postTokens":26870}}"#]), 26870)
+    XCTAssertNil(scan([reply, #"{"type":"system","subtype":"compact_boundary","compactMetadata":{"trigger":"manual"}}"#]))
+  }
+
   func testLimitFollowsClaudeCodeModelPrecedence() throws {
     let (home, _) = try fixture()
     let cwd = home.appending(path: "repo")

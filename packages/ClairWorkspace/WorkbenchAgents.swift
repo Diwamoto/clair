@@ -264,13 +264,18 @@ public enum AgentContext {
 
   /// The latest usage, and the latest in-session `/model` switch (its `<local-command-stdout>`).
   static func scan(_ data: Data) -> (tokens: Int?, model: String?) {
-    var tokens: Int?, model: String?
-    for line in data.split(separator: 10).reversed() where tokens == nil || model == nil {
+    var tokens: Int?, model: String?, compacted = false
+    for line in data.split(separator: 10).reversed() where (tokens == nil && !compacted) || model == nil {
       guard let o = try? JSONSerialization.jsonObject(with: line) as? [String: Any], o["isSidechain"] as? Bool != true else { continue }
       let message = o["message"] as? [String: Any]
+      // A `/compact` after the latest reply: usage before it is stale. Its size if Claude Code wrote one, else unknown.
+      if tokens == nil, !compacted, o["subtype"] as? String == "compact_boundary" {
+        compacted = true
+        tokens = ((o["compactMetadata"] as? [String: Any])?["postTokens"] as? NSNumber)?.intValue
+      }
       if model == nil, let text = (o["content"] ?? message?["content"]) as? String,
         text.hasPrefix("<local-command-stdout>Set model to") { model = text }
-      if tokens == nil, o["type"] as? String == "assistant", message?["model"] as? String != "<synthetic>",
+      if tokens == nil, !compacted, o["type"] as? String == "assistant", message?["model"] as? String != "<synthetic>",
         let usage = message?["usage"] as? [String: Any] {
         tokens = ["input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"]
           .reduce(0) { $0 + ((usage[$1] as? NSNumber)?.intValue ?? 0) }
