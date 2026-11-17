@@ -37,7 +37,7 @@
     }
   }
 
-  private struct HTMLWebView: NSViewRepresentable {
+  struct HTMLWebView: NSViewRepresentable {
     let html: String
     let directory: URL?
 

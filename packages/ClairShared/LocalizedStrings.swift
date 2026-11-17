@@ -4,6 +4,18 @@
 
 extension LocalizedStrings {
   static let english: [String: String] = [
+    "この判断シートは見つかりません": "This decision sheet was not found",
+    "回答できませんでした": "Could not answer",
+    "判断": "Decision",
+    "%@ 問。推奨を選んだ状態で開いています。": "%@ questions. Opened with the recommendations selected.",
+    "回答済み": "Answered",
+    "全体へのコメント(任意)": "Comment on the whole sheet (optional)",
+    "回答は質問した agent に届きます": "Answers go to the agent that asked",
+    "まとめて回答": "Answer all",
+    "任意(空なら agent が決める)": "Optional (left empty, the agent decides)",
+    "推奨": "Recommended",
+    "判断する(%@ 問)": "Decide (%@ questions)",
+    "判断シートを開く": "Open the decision sheet",
     // Concierge (ADR-0020)
     "ツールを %@ 回実行": "Ran %@ tools", "圧縮 (/compact)": "Compact (/compact)", "新しい会話": "New conversation", "会話を閉じる": "Close conversation", "会話の一覧": "All conversations", "履歴": "History",
     "エフォート": "Effort", "コンシェルジュのエフォートを切り替え": "Switch the concierge's effort",

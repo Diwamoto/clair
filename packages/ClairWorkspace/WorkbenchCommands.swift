@@ -1029,6 +1029,10 @@ extension CommandRegistry {
         if let v = text("difficulty") { t.difficulty = v }
       }
       let saved = try todoSave(t, appendBody: i["appendBody"]?.string)
+      if move == nil, let next = s.autoAdvance(t, caller: i["parent"]?.string) {
+        try s.moveTodo(path: path, stage: next.stage, concierge: next.concierge, counted: false)
+        return try todoSave(ClairTodo.parse(path: path, text: (try? String(contentsOfFile: path, encoding: .utf8)) ?? text), appendBody: nil)
+      }
       guard let move, let concierge else { return saved }
       try s.moveTodo(path: path, stage: move, concierge: concierge)
       return try todoSave(ClairTodo.parse(path: path, text: (try? String(contentsOfFile: path, encoding: .utf8)) ?? text), appendBody: nil)
@@ -1412,6 +1416,48 @@ extension CommandRegistry {
     cmd("finder.proposal", "提案の結果を取得", .read, params: [CommandParam("id", .string)], palette: false,
         preflight: { s, i throws(CommandError) in try require(s.fileProposals[i["id"]!.string!] != nil, "no proposal \(i["id"]!)"); return .read }) { s, i in
       .text(s.fileProposals[i["id"]!.string!]!.report)
+    },
+    // ADR-0030: an agent asks the owner about a card. Asking changes nothing but the card's ask.json, so no approval;
+    // the answers come back typed into the asker's pane (`parent`, set by the IPC layer).
+    cmd("ask.post", "判断シートで質問", .additive,
+        params: [CommandParam("card", .string), CommandParam("questions", .string),
+                 CommandParam("parent", .string, required: false)], palette: false,
+        preflight: { _, i throws(CommandError) in
+          try require(ClairTodo.isTodoFile(i["card"]!.string!), "no TODO file \(i["card"]!.string!) in ~/.clair/todo")
+          _ = try DecisionSheet.validate(i["questions"]!.string!, card: i["card"]!.string!)
+          return .additive
+        }) { _, i throws(CommandError) in
+      let card = i["card"]!.string!
+      var sheet = try DecisionSheet.validate(i["questions"]!.string!, card: card)
+      sheet.asker = i["parent"]?.string
+      do { try sheet.save(card: card) } catch { throw CommandError(.preconditionFailed, error.localizedDescription) }
+      return .text("判断シートを出しました。回答はこのペインに届きます。ここでターンを終えて待ってください。")
+    },
+    cmd("ask.open", "判断シートを開く", .read, params: [CommandParam("card", .string)], palette: false,
+        preflight: { _, i throws(CommandError) in
+          try require(DecisionSheet.load(card: i["card"]!.string!) != nil, "no decision sheet for \(i["card"]!.string!)"); return .read
+        }) { s, i in
+      s.openTab(DecisionSheet.tabPath(card: i["card"]!.string!))
+      return .ok
+    },
+    // The sheet's まとめて回答 button: the owner's own answer, so agents cannot call it.
+    cmd("ask.answer", "判断シートに回答", .write, ai: false,
+        params: [CommandParam("card", .string), CommandParam("answers", .string), CommandParam("comment", .string, required: false)],
+        palette: false,
+        preflight: { _, i throws(CommandError) in
+          try require(DecisionSheet.pending(card: i["card"]!.string!), "no pending decision sheet for \(i["card"]!.string!)")
+          guard let a = try? JSONDecoder().decode([String: [String]].self, from: Data(i["answers"]!.string!.utf8)) else {
+            throw CommandError(.invalidInput, "answers must be JSON {question id: [option ids or text]}")
+          }
+          _ = try DecisionSheet.load(card: i["card"]!.string!)!.checked(a)
+          return .write
+        }) { _, i throws(CommandError) in
+      let card = i["card"]!.string!
+      var sheet = DecisionSheet.load(card: card)!
+      try sheet.answer(try! JSONDecoder().decode([String: [String]].self, from: Data(i["answers"]!.string!.utf8)),
+                       comment: i["comment"]?.string, card: card)
+      let sent = sheet.asker.map { WorkbenchState.keyInput($0, sheet.reply(card: card)) } ?? false
+      return .text(sent ? "ok" : "回答を記録しました(質問した agent のペインが無いため、届けていません)")
     },
     // The proposal tab's 適用 button is the approval; trash makes it destructive (the GUI passes `confirmed`).
     cmd("finder.applyProposal", "提案を適用", .write, ai: false,

@@ -98,6 +98,25 @@ import Testing
     #expect(cards.map { s.boardConcierge($0) } == [concierge, nil])
   }
 
+  @Test func anOkFromTheCardsAgentMovesOnUnlessAQuestionIsOpen() throws {
+    let home = try Self.home(), root = try Self.repo(home)
+    var (s, concierge) = Self.state(root: root)
+    let path = try Self.card(home, "auto", project: "p")
+    try s.moveTodo(path: path, stage: "plan", concierge: concierge, home: home)
+    let agent = try #require(try Self.read(path).agent)
+    let ok = try Self.read(path).with { $0.result = "ok" }
+    #expect(s.autoAdvance(ok, caller: "/elsewhere#9") == nil, "only the card's own agent moves it on")
+    #expect(s.autoAdvance(ok.with { $0.result = "failed" }, caller: agent) == nil)
+    try DecisionSheet.validate(#"{"questions":[{"id":"q","kind":"text","prompt":"?"}]}"#, card: path).save(card: path)
+    #expect(s.autoAdvance(ok, caller: agent) == nil, "an open question holds the card")
+    var sheet = try #require(DecisionSheet.load(card: path))
+    try sheet.answer([:], comment: nil, card: path)
+    let next = try #require(s.autoAdvance(ok, caller: agent))
+    #expect(next.stage == "impl" && next.concierge == concierge)
+    try s.moveTodo(path: path, stage: "review", home: home)
+    #expect(s.autoAdvance(try Self.read(path).with { $0.result = "ok" }, caller: try Self.read(path).agent) == nil, "Review → Done is the owner's")
+  }
+
   @Test func aMoveClosesOnlyTheCardsOwnAgent() throws {
     let home = try Self.home(), root = try Self.repo(home)
     var (s, concierge) = Self.state(root: root)

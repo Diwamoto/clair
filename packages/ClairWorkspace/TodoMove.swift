@@ -66,7 +66,7 @@ extension WorkbenchState {
   private static func columnInstruction(_ stage: String, branch: String?) -> String {
     switch stage {
     case "research": "あなたは看板の Inbox のカードの調査担当です。コードは変更せず、やるかやらないかを判断する材料を調べて research.md に書いてください。結論を出すのは人です。報告後もこのペインでユーザーの追加質問に答えてください。"
-    case "plan": "あなたは看板の Plan 列の担当です。コードは変更せず、調べて実装計画を plan.md に書いてください。"
+    case "plan": "あなたは看板の Plan 列の担当です。コードは変更せず、自分で調べて方式を決め、判断シートでユーザーに確認し、回答を織り込んだ実装用の plan.md を書いてください。"
     case "impl": "あなたは看板の Impl 列の担当です。下の計画に従って、この worktree で実装してください。"
     default: "あなたは看板の Review 列の担当です。branch \(branch ?? "(なし)") の diff を自己検証し、review.md を書いてください。"
     }
@@ -87,6 +87,7 @@ extension WorkbenchState {
     case "none"?: out.append("skill は使わず、上の指示だけで進めてください。")
     case let name?: out.append("skill `\(name)` を使って進めてください。")
     }
+    out.append("ユーザーに確認したいことは文章で聞かず `clair ask post card=\(t.path) questions='<JSON>' --compact` の判断シートで聞き、ターンを終えて回答を待ってください(書き方は skill の「判断シート」)。")
     out.append("終わったら `clair todo update path=\(t.path) result=ok|failed note=\"<1行>\" --compact` で報告してください。")
     return out.joined(separator: "\n")
   }
@@ -98,8 +99,19 @@ extension WorkbenchState {
     return opening.split(separator: "\n", omittingEmptySubsequences: false).dropFirst(2).first == "カード: \(path)"
   }
 
-  /// The single entry point that starts column agents. `concierge` is the calling concierge's terminal key, counted against its cap.
-  mutating func moveTodo(path: String, stage: String, force: Bool = false, concierge: String? = nil, home: URL = .homeDirectory) throws(CommandError) {
+  /// ADR-0030: the column a card moves on to after its own column agent reports `ok` with no question left open
+  /// (Plan → Impl → Review; Review → Done stays the owner's), and the concierge whose chat follows the card.
+  func autoAdvance(_ t: ClairTodo, caller: String?) -> (stage: String, concierge: String?)? {
+    guard t.result == "ok", let caller, caller == t.agent, cardAgent(caller, path: t.path), !DecisionSheet.pending(card: t.path),
+          let next = ["plan": "impl", "impl": "review"][t.column] else { return nil }
+    let parent = terminal(caller).flatMap { withLayoutCopy($0.project).launches[$0.pane]?.parent }
+    return (next, parent.flatMap { isConcierge($0) ? $0 : nil })
+  }
+
+  /// The single entry point that starts column agents. `concierge` is the calling concierge's terminal key, counted against
+  /// its cap unless `counted` is false (an automatic move the owner already agreed to, ADR-0030).
+  mutating func moveTodo(path: String, stage: String, force: Bool = false, concierge: String? = nil, counted: Bool = true,
+                         home: URL = .homeDirectory) throws(CommandError) {
     guard ClairTodo.moveStages.contains(stage) else { throw CommandError(.invalidInput, "stage must be one of \(ClairTodo.moveStages.joined(separator: ", "))") }
     guard ClairTodo.isTodoFile(path, home: home), let text = try? String(contentsOfFile: path, encoding: .utf8) else {
       throw CommandError(.preconditionFailed, "no TODO file \(path) in ~/.clair/todo")
@@ -188,7 +200,7 @@ extension WorkbenchState {
       let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"
       history = "- \(stage) \(key) \(f.string(from: .now))"
       if let concierge {
-        conciergeLaunches[concierge, default: 0] += 1
+        if counted { conciergeLaunches[concierge, default: 0] += 1 }
         // The card's state changes go back to this concierge's chat only (`boardConcierge`).
         withLayout(launchProject!.name) { $0.launches[pane]?.parent = concierge }
       }

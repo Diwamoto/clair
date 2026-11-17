@@ -315,6 +315,8 @@ extension WorkbenchState {
   nonisolated(unsafe) public static var screenText: (_ pane: Int) -> String? = { _ in nil }
   /// Types `text` into a terminal pane of the active Project and presses Return, installed by the GUI.
   nonisolated(unsafe) public static var screenInput: (_ pane: Int, _ text: String) -> Bool = { _, _ in false }
+  /// Types a line and Return into any kept terminal by key (`root#pane`), whichever Project it is in. Set by the app.
+  nonisolated(unsafe) public static var keyInput: (_ key: String, _ text: String) -> Bool = { _, _ in false }
 
   /// The active-Project terminal behind `key` that `agent.send` may type into.
   func inputPane(_ key: String) throws(CommandError) -> Int {

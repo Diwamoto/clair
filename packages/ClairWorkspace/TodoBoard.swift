@@ -20,6 +20,8 @@ public struct TodoBoardCard: Equatable, Sendable {
   public var history: [String] = []
   /// Existing `~/.clair/todo/<name>/{plan,review}.md`, next to the TODO file.
   public var artifacts: [String] = []
+  /// Questions on the card's unanswered decision sheet (ADR-0030); the card waits on the owner while this is > 0.
+  public var asking = 0
 
   static func history(_ text: String) -> [String] {
     ClairTodo.split(text).body.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
@@ -32,7 +34,7 @@ public struct TodoBoardCard: Equatable, Sendable {
   public static func changes(_ cards: [TodoBoardCard], since before: [String: State]) -> [String] {
     cards.compactMap { c in
       guard let old = before[c.todo.path], old != c.state, [.done, .failed, .blocked, .unreported].contains(c.state) else { return nil }
-      let note = c.note.map { " — \(String($0.prefix(200)))" } ?? ""
+      let note = c.asking > 0 ? " — 判断シートで \(c.asking) 問を質問中(オーナーが看板から答えます)" : c.note.map { " — \(String($0.prefix(200)))" } ?? ""
       return "[看板] \(c.todo.title)(\(c.column))が \(c.state.rawValue) になりました\(note) path=\(c.todo.path)"
     }
   }
@@ -62,8 +64,10 @@ extension WorkbenchState {
       let session = live.flatMap { l in sessions.first { $0.project == l.project && $0.pane == l.pane } }
       let named = t.project.flatMap { p in projects.first { $0.name == p || $0.path == p }?.name }
       let column = t.column
+      let sheet = DecisionSheet.load(card: t.path).flatMap { $0.state == .pending ? $0 : nil }
       let state: TodoBoardCard.State =
-        if t.result == "failed" { .failed }
+        if sheet != nil && column != "done" { .blocked }
+        else if t.result == "failed" { .failed }
         else if t.result == "ok" { .done }
         else if column == "done" || t.agent == nil { .idle }  // an Inbox card can carry a research agent
         else {
@@ -76,7 +80,7 @@ extension WorkbenchState {
           }
         }
       let dir = (t.path as NSString).deletingPathExtension
-      let artifacts = ["research.md", "plan.md", "review.md"].map { "\(dir)/\($0)" }.filter { FileManager.default.fileExists(atPath: $0) }
+      let artifacts = ["research.md", "plan.md", "review.md", "decisions.md"].map { "\(dir)/\($0)" }.filter { FileManager.default.fileExists(atPath: $0) }
       let text = (try? String(contentsOfFile: t.path, encoding: .utf8)) ?? ""
       let doneAt = column == "done"
         ? t.doneAt.flatMap { ISO8601DateFormatter().date(from: $0) }
@@ -85,7 +89,7 @@ extension WorkbenchState {
       return TodoBoardCard(
         todo: t, column: column, project: live?.project ?? named ?? t.project, pane: live?.pane, state: state, doneAt: doneAt,
         body: ClairTodo.split(text).body.trimmingCharacters(in: .whitespacesAndNewlines),
-        history: TodoBoardCard.history(text), artifacts: artifacts)
+        history: TodoBoardCard.history(text), artifacts: artifacts, asking: column == "done" ? 0 : sheet?.questions.count ?? 0)
     }
     let cutoff = now.addingTimeInterval(-Double(doneDays) * 86400)
     func old(_ c: TodoBoardCard) -> Bool { c.column == "done" && (c.doneAt ?? .distantPast) < cutoff }

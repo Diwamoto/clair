@@ -48,7 +48,8 @@ skill が `~/.clair/concierge` に無く、Clair も遷移させないので、�
 - コンシェルジュ画面を Clair の入口にする。画面は `チャット | 看板 | エディタ` の3列で、Project の workspace は
   詳細画面になる。titlebar 右端のボタンと ⌃⌘0 で切り替える。
 - 看板の列は Inbox / Plan / Impl / Review / Done。列を移すのは人で、Plan / Impl / Review に移すと Clair が
-  その列の agent を新しく起動する。終わったらその列で止まり、次へは人が移す。工程間の受け渡しは
+  その列の agent を新しく起動する。終わったらその列で止まり、次へは人が移す(2026-11-18 [ADR-0030](0030-decision-sheet.md) で
+  Plan→Impl→Review を自動にした)。工程間の受け渡しは
   `plan.md`・`review.md`・diff だけ。
 - カードの実体は `~/.clair/todo/*.md` のまま。TODO の UI(サイドバーと activity bar)は削除する。
 - 列の skill は Clair が既定を同梱する。Project×列ごとに、agent がリポジトリの skill を調べて提案し、人が承認した結果を記録する。

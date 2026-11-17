@@ -303,6 +303,7 @@ import Observation
       }
       WorkbenchState.screenText = { ClairGhosttySurfaceView.screenText(inPane: $0) }
       WorkbenchState.screenInput = { ClairGhosttySurfaceView.send($1, toPane: $0) && ClairGhosttySurfaceView.pressReturn(inPane: $0) }
+      WorkbenchState.keyInput = { ClairGhosttySurfaceView.submit($1, key: $0) }
       let server = WorkbenchIPCServer(callerOf: { pid in
         let keys = DispatchQueue.main.sync {
           MainActor.assumeIsolated {
@@ -513,6 +514,7 @@ import Observation
     }
 
     func selectConciergeFile(_ f: ConciergeFile) {
+      if let card = DecisionSheet.card(tab: f.path) { run("ask.open", ["card": .string(card)]); return }
       run("file.open", ["path": .string(URL(fileURLWithPath: f.root).appending(path: f.path).standardizedFileURL.path)])
     }
 
@@ -597,7 +599,7 @@ import Observation
           NSApp?.activate(ignoringOtherApps: true)
           if let w = NSApp?.windows.first(where: { $0.isMiniaturized && $0.title != "Pair a device" }) { w.deminiaturize(nil) }
         }
-        if id == "file.open", conciergeShown, let p = state.active, let root = activeRoot {
+        if id == "file.open" || id == "ask.open", conciergeShown, let p = state.active, let root = activeRoot {
           let f = ConciergeFile(project: state.project, root: root, path: p)
           if !conciergeFiles.contains(f) { conciergeFiles.append(f) }
           conciergeFile = f
@@ -3234,6 +3236,20 @@ import Observation
 
     /// Tabs that are not files: a browser's columns, or an agent's file-operation proposal.
     private func customTab(_ path: String) -> AnyView? {
+      if let card = DecisionSheet.card(tab: path) {
+        guard let sheet = DecisionSheet.load(card: card) else {
+          return AnyView(Text(tr("この判断シートは見つかりません")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+            .frame(maxWidth: .infinity, maxHeight: .infinity).background(C.canvas))
+        }
+        return AnyView(DecisionSheetView(sheet: sheet, card: card) { answers, comment in
+          var input: CommandInput = ["card": .string(card), "answers": .string(answers)]
+          if !comment.isEmpty { input["comment"] = .string(comment) }
+          // The まとめて回答 button is the owner's answer.
+          let r = store.run("ask.answer", input, confirmed: true)
+          if case .failure(let e) = r { menus.ask(ClairDialog(title: tr("回答できませんでした"), message: e.message) { _ in }) }
+          todos = ClairTodo.list()
+        }.id("\(card)#\(sheet.state.rawValue)"))
+      }
       if FileBrowser.root(tab: path) != nil {
         return AnyView(FileBrowserView(model: store.browser(path), tab: path, reveal: st.browserReveal, menus: menus, host: browserHost).id(path))
       }

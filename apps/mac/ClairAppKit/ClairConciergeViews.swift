@@ -1213,6 +1213,8 @@
       }
     }
 
+    private func openSheet(_ c: TodoBoardCard) { _ = run("ask.open", ["card": .string(c.todo.path)]) }
+
     private func action(_ title: String, _ run: @escaping () -> Void) -> some View {
       Button(action: run) {
         Text(title).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary).lineLimit(1)
@@ -1243,6 +1245,8 @@
           Text(note).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary).lineLimit(3).fixedSize(horizontal: false, vertical: true)
         }
         CardScreen(agent: a, path: c.todo.path)
+        // ADR-0030: the agent's questions wait here; the sheet opens in the editor column.
+        if c.asking > 0 { action(tr("判断する(%@ 問)", c.asking)) { openSheet(c) }.accessibilityLabel(tr("判断シートを開く")) }
         // A finished Plan card offers its plan.md, so the owner reads it before moving the card to Impl.
         if c.column == "plan", c.state == .done || c.state == .unreported, let plan = c.artifacts.first(where: { $0.hasSuffix("/plan.md") }) {
           action(tr("plan.md を開く")) { openFile(plan) }.accessibilityLabel(tr("plan.md を開く"))
@@ -1263,7 +1267,7 @@
       .draggable(URL(fileURLWithPath: c.todo.path))
       .onTapGesture {
         selected = c.todo.path
-        if let a { peek(a) }
+        if c.asking > 0 { openSheet(c) } else if let a { peek(a) }
       }
       .contextMenu {
         Button(tr("TODO を開く")) { openFile(c.todo.path) }
