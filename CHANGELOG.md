@@ -6,6 +6,19 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.50.0] - 2026-11-18
+
+### Added
+- Decision sheets: agents ask you their questions on a board card instead of in a chat or pane. The card shows "判断する", the sheet opens beside the board with the recommended answers preselected and optional HTML previews per option, and one "まとめて回答" sends every answer back to the agent and records it with the card.
+- Board cards move on by themselves: once the plan is agreed through the sheet, Plan moves to Impl and a finished Impl moves to Review. Moving a reviewed card to Done stays yours.
+- A new CLI concierge greets you above Claude Code's banner.
+
+### Changed
+- The Plan agent researches the card itself, confirms its approach with you through a decision sheet, and writes plan.md for the implementing agent rather than for you to read.
+
+### Fixed
+- Concierge terminals no longer sit inside a second, nested pane frame.
+
 ## [0.49.0] - 2026-11-17
 
 ### Changed
@@ -894,7 +907,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.49.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.50.0...HEAD
+[0.50.0]: https://github.com/Diwamoto/clair/compare/v0.49.0...v0.50.0
 [0.49.0]: https://github.com/Diwamoto/clair/compare/v0.48.0...v0.49.0
 [0.48.0]: https://github.com/Diwamoto/clair/compare/v0.47.0...v0.48.0
 [0.47.0]: https://github.com/Diwamoto/clair/compare/v0.46.0...v0.47.0
