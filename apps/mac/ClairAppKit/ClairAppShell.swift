@@ -805,6 +805,8 @@ import Observation
     /// Menu/palette entry point. Saving may materialise and write a 10 MiB snapshot, so the native
     /// UI acknowledges the shortcut immediately and completes the durable write off-main.
     public func performFromUI(_ id: String, _ input: CommandInput = [:]) {
+      // The concierge screen owns ⌘W (its editor column / chat); the IDE rewrites below would close a Project tab.
+      if id == "pane.close", conciergeShown { _ = run("pane.close"); return }
       // Nothing but the empty editor (or the home screen) left: ⌘W quits like ⌘Q, confirmation included.
       // The editor showing a diff: ⌘W closes that diff tab (the command does it), never the file tab behind it.
       if id == "pane.close", state.tree.focused == state.diffPane { _ = run("pane.close"); return }
