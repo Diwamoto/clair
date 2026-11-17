@@ -147,9 +147,10 @@ extension WorkbenchState {
     }
   }
 
-  /// The running terminal of `chat` (its current session id), or the first running one.
+  /// The running terminal of `chat` (its current session id, or the one it started with: a CLI pane keeps that across
+  /// `/clear`), or the first running one.
   public func concierge(chat: String? = nil) -> (project: String, pane: Int, session: String, key: String, launch: AgentLaunch)? {
-    concierges().first { c in chat.map { (c.launch.session ?? c.session) == $0 } ?? true }
+    concierges().first { c in chat.map { (c.launch.session ?? c.session) == $0 || c.session == $0 } ?? true }
   }
 
   /// The concierge terminal key whose request started this card's live column agent; nil when the owner moved it.

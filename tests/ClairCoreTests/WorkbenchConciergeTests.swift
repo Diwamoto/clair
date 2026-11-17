@@ -225,6 +225,8 @@ final class WorkbenchConciergeTests: XCTestCase {
     try r.execute("agent.report", ["state": .string("done"), "session": .string(cleared), "parent": .string(both[0].key)], state: &s).get()
     XCTAssertEqual(s.conciergeChats, [cleared, both[1].session])
     XCTAssertEqual(s.concierge(chat: cleared)?.pane, -1)
+    // A CLI concierge pane keeps the chat it opened: that still finds the terminal.
+    XCTAssertEqual(s.concierge(chat: both[0].session)?.pane, -1)
     try r.execute("concierge.close", ["chat": .string(both[1].session)], confirmed: true, state: &s).get()
     XCTAssertEqual(s.conciergeChats, [cleared])
     XCTAssertEqual(s.concierges().map(\.pane), [-1])

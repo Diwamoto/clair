@@ -128,6 +128,9 @@ import Foundation
     /// U06: the store's focused pane is the one source of truth. A click lands on this NSView
     /// (SwiftUI's tap gesture never sees it), so report it; a store focus change moves the keyboard here.
     public var onFocus: (() -> Void)?
+    /// A real Return key from the keyboard (never the shell's `submit` / `pressReturn`, which go straight to the surface):
+    /// the owner's own request in a CLI concierge.
+    public var onSubmit: (() -> Void)?
     public var wantsFocus = false {
       didSet {
         // A surface revealed with focus (the concierge's hidden terminal docking in) may hold a frame libghostty
@@ -448,6 +451,7 @@ import Foundation
     // MARK: - Keyboard input
 
     public override func keyDown(with event: NSEvent) {
+      if event.keyCode == 36, !event.isARepeat, !hasMarkedText() { onSubmit?() }  // kVK_Return
       if let ghosttySurface {
         let action: GhosttyKeyAction = event.isARepeat ? .repeatKey : .press
         // AppKit's input method owns printable keys while composing. Keep its
@@ -1164,12 +1168,13 @@ import Foundation
     let sessionKey: String
     let focused: Bool
     let onFocus: (() -> Void)?
+    let onSubmit: (() -> Void)?
     public init(
       launch: (command: String, cwd: String)? = nil, pane: Int? = nil, sessionKey: String, focused: Bool = false,
       onFocus: (() -> Void)? = nil, onFacts: ((Int, Int?, (title: String, body: String)?) -> Void)? = nil, onTitle: ((String) -> Void)? = nil,
-      onOpenFile: ((String, Int?, Int?) -> Void)? = nil
+      onOpenFile: ((String, Int?, Int?) -> Void)? = nil, onSubmit: (() -> Void)? = nil
     ) {
-      self.onOpenFile = onOpenFile
+      self.onOpenFile = onOpenFile; self.onSubmit = onSubmit
       self.launch = launch; self.pane = pane; self.sessionKey = sessionKey; self.onFacts = onFacts; self.onTitle = onTitle
       self.focused = focused; self.onFocus = onFocus
     }
@@ -1188,6 +1193,7 @@ import Foundation
       v.onTitle = onTitle
       v.onOpenFile = onOpenFile
       v.onFocus = onFocus
+      v.onSubmit = onSubmit
       v.wantsFocus = focused
       v.agentCommand = !(launch?.command ?? "").isEmpty
       if let pane { ClairGhosttySurfaceView.register(v, pane: pane) }
@@ -1199,6 +1205,7 @@ import Foundation
       nsView.onTitle = onTitle
       nsView.onOpenFile = onOpenFile
       nsView.onFocus = onFocus
+      nsView.onSubmit = onSubmit
       nsView.wantsFocus = focused
     }
   }

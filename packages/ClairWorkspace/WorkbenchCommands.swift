@@ -32,7 +32,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public enum Palette: String, Sendable, Codable { case commands, files, search, symbols, references, branches, compare, recent }
 
   public static let sections = ["一般", "AIプロバイダー", "使用状況", "エディタ", "ターミナル", "通知", "モバイル", "アップデート"]
-  public static let toggleKeys = ["restoreLayout", "confirmClose", "hideQuota", "preventSleepOnBattery", "formatOnSave", "showWhitespace", "softWrap", "terminalApprovals", "lineNumbers", "terminalCursorBlink", "notifyEnabled", "notifyOnBell", "notifyOnExit", "notifyWhenActive", "notifySound", "autoEqualize", "focusExpand"]
+  public static let toggleKeys = ["restoreLayout", "confirmClose", "hideQuota", "preventSleepOnBattery", "formatOnSave", "showWhitespace", "softWrap", "terminalApprovals", "lineNumbers", "terminalCursorBlink", "notifyEnabled", "notifyOnBell", "notifyOnExit", "notifyWhenActive", "notifySound", "autoEqualize", "focusExpand", "conciergeChatUI"]
     + AgentProfile.all.map { agentKey($0.id) } + autoApproveCommands.keys.sorted().map(autoApproveKey)
   /// ADR-0027: commands the owner may let an agent in a Clair terminal run without the approval card. Off by default.
   public static let autoApproveCommands = [
@@ -79,7 +79,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
     "terminalFontSize": "ターミナルの文字サイズ", "terminalCursorStyle": "ターミナルのカーソルの形",
     "notifyEnabled": "通知を有効にする", "notifyOnBell": "入力待ち・通知要求で通知", "notifyOnExit": "終了で通知",
     "notifyWhenActive": "Clair が前面のときも通知", "notifySound": "通知のサウンド", "language": "言語",
-    "autoEqualize": "ペインを均等に再配置", "focusExpand": "フォーカスしたペインを拡大", "focusExpandRatio": "拡大したペインの割合",
+    "autoEqualize": "ペインを均等に再配置", "focusExpand": "フォーカスしたペインを拡大", "conciergeChatUI": "コンシェルジュをチャットで表示(実験的)", "focusExpandRatio": "拡大したペインの割合",
     "previewTheme": "Markdown プレビューのテーマ", "board.doneDays": "Done に出す日数", "previewFontSize": "Markdown プレビューの文字サイズ",
   ].merging(AgentProfile.all.map { (agentKey($0.id), "\($0.title) を使う") }) { a, _ in a }
     .merging(autoApproveCommands.map { (autoApproveKey($0.key), "承認なしで許可: \($0.value)") }) { a, _ in a }
@@ -238,7 +238,7 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var palette: Palette?
   /// E17: definition-jump history for ⌃- / ⌃⇧-. Transient (not in `WorkspaceSnapshot`).
   public var navigation = NavigationHistory()
-  public var toggles = ["restoreLayout": true, "confirmClose": true, "hideQuota": false, "preventSleepOnBattery": false, "formatOnSave": false, "showWhitespace": false, "softWrap": false, "terminalApprovals": true, "lineNumbers": true, "terminalCursorBlink": true, "notifyEnabled": true, "notifyOnBell": true, "notifyOnExit": true, "notifyWhenActive": false, "notifySound": false, "autoEqualize": false, "focusExpand": false]
+  public var toggles = ["restoreLayout": true, "confirmClose": true, "hideQuota": false, "preventSleepOnBattery": false, "formatOnSave": false, "showWhitespace": false, "softWrap": false, "terminalApprovals": true, "lineNumbers": true, "terminalCursorBlink": true, "notifyEnabled": true, "notifyOnBell": true, "notifyOnExit": true, "notifyWhenActive": false, "notifySound": false, "autoEqualize": false, "focusExpand": false, "conciergeChatUI": false]
     .merging(AgentProfile.all.map { (WorkbenchState.agentKey($0.id), true) }) { a, _ in a }
     .merging(WorkbenchState.autoApproveDefaults.map { (WorkbenchState.autoApproveKey($0), true) }) { a, _ in a }
   // Font sizes default to what Clair shipped with (mock editor 12px, terminal 13pt), not the smallest option.
