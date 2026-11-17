@@ -7,6 +7,7 @@ extension LocalizedStrings {
     // Concierge (ADR-0020)
     "ツールを %@ 回実行": "Ran %@ tools", "圧縮 (/compact)": "Compact (/compact)", "新しい会話": "New conversation", "会話を閉じる": "Close conversation", "会話の一覧": "All conversations", "履歴": "History",
     "エフォート": "Effort", "コンシェルジュのエフォートを切り替え": "Switch the concierge's effort",
+    "起動するモデル": "Model to start with", "起動するエフォート": "Effort to start with",
     "コンテキスト": "Context", "この会話の API 換算の推定額": "Estimated API-equivalent cost of this conversation",
     "コンシェルジュ": "Concierge", "コンシェルジュを開く": "Open Concierge", "起動": "Start", "入力待ち": "Waiting for input",
     "ペイン": "Panes", "この Project を一度開くと画面が表示されます": "Open this Project once to show its screen",

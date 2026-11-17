@@ -872,11 +872,14 @@ extension CommandRegistry {
     // what it would read (the GUI asks first), so the CLI cannot start one past a changed prompt source.
     cmd("concierge.open", "コンシェルジュを開く", .external, ai: false,
         params: [CommandParam("message", .string, required: false), CommandParam("cwd", .string, required: false),
-                 CommandParam("chat", .string, required: false)],
+                 CommandParam("chat", .string, required: false), CommandParam("model", .string, required: false),
+                 CommandParam("effort", .string, required: false)],
         palette: false,
         preflight: { s, i throws(CommandError) in
           let chat = i["chat"]?.string
           try require(chat.map(AgentProfile.isSessionID) != false, "chat is not a session id")
+          try require(i["model"]?.string.map { $0.wholeMatch(of: /[A-Za-z0-9._\[\]-]+/) != nil } != false, "model is not a model name")
+          try require(i["effort"]?.string.map(Concierge.efforts.contains) != false, "effort is not one of \(Concierge.efforts)")
           if chat.flatMap({ s.concierge(chat: $0) }) == nil {
             let cwd = i["cwd"]?.string ?? s.conciergeDir
             try require(cwd == s.conciergeDir, "the concierge folder changed; open it again")
@@ -899,6 +902,7 @@ extension CommandRegistry {
         profile: "claude", cwd: path, resume: Concierge.transcriptFile(session: session) == nil ? nil : session, concierge: session,
         opening: i["message"]?.string.flatMap { $0.isEmpty ? nil : $0 }, folders: host.folders)
       launch.conciergePrompt = s.conciergePrompt
+      launch.model = i["model"]?.string; launch.effort = i["effort"]?.string
       s.withLayout(host.name) { $0.launches[pane] = launch }
       return .ok
     },

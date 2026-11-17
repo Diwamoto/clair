@@ -61,6 +61,9 @@ public struct AgentLaunch: Sendable, Codable, Equatable {
   public var concierge: String?
   /// #76: `settings.concierge` prompt at launch. Fixed, like `folders`: a changed command replaces the live shell.
   public var conciergePrompt: String?
+  /// The concierge's `--model` / `--effort`, picked before its first message. Fixed at launch like `conciergePrompt`.
+  public var model: String?
+  public var effort: String?
   /// First message of an interactive agent (the profile's `open` form); for a concierge, the request typed
   /// before it was running. Unlike `prompt`, the agent stays open in its terminal afterwards.
   public var opening: String?
@@ -92,7 +95,7 @@ public struct AgentLaunch: Sendable, Codable, Equatable {
     // Last on the line: `--add-dir` is variadic and would swallow a prompt after it.
     // ponytail: Claude Code only; other CLIs still see just the cwd until their flags are verified.
     let dirs = profile == "claude" ? (folders ?? []).map { " --add-dir \(AgentRun.quote($0))" }.joined() : ""
-    if let concierge, AgentProfile.isSessionID(concierge) { return Concierge.command(session: concierge, extra: conciergePrompt ?? "", opening: opening, resumed: resume == concierge) + dirs }
+    if let concierge, AgentProfile.isSessionID(concierge) { return Concierge.command(session: concierge, extra: conciergePrompt ?? "", opening: opening, resumed: resume == concierge, model: model, effort: effort) + dirs }
     if let resume, let prefix = p.resume, AgentProfile.isSessionID(resume) { return "\(prefix) \(resume)\(dirs)" }
     if prompt == nil, let opening, let open = p.open { return "\(open) \(AgentRun.quote(opening))\(dirs)" }
     guard let prompt, let run else { return p.command + dirs }

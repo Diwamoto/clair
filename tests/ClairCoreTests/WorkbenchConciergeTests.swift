@@ -21,6 +21,15 @@ final class WorkbenchConciergeTests: XCTestCase {
     return (s, dir.path)
   }
 
+  func testOpenStartsWithThePickedModelAndEffort() throws {
+    var (s, _) = try opened()
+    XCTAssertEqual(r.execute("concierge.open", ["model": .string("opus; rm -rf ~")], confirmed: true, state: &s).failure?.code, .preconditionFailed)
+    XCTAssertNotNil(r.execute("concierge.open", ["effort": .string("huge")], confirmed: true, state: &s).failure)
+    try r.execute("concierge.open", ["model": .string("opus[1m]"), "effort": .string("high")], confirmed: true, state: &s).get()
+    let command = try XCTUnwrap(s.launches[Concierge.pane]?.command)
+    XCTAssertTrue(command.contains(" --model 'opus[1m]' --effort 'high' "), command)
+  }
+
   func testOpenIsGUIOnlyStartsOnceOffTheLayout() throws {
     var (s, root) = try opened()
     XCTAssertEqual(r.commands.first { $0.id == "concierge.open" }?.aiAvailable, false)

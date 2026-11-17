@@ -465,6 +465,7 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   タイルとボードのカードの出入り・状態や stage の変化、画面の出入り(depth)、会話タブの切替は Motion の時間で動かす(視差効果を減らす設定では止める)。
   composer の「モデル」メニューは動いているコンシェルジュに `/model <alias>` を送る(2026-11-10 オーナー依頼)。
   候補はエイリアスと `~/.claude/stats-cache.json` に残る実行済みモデル ID。「エフォート」メニューは `/effort <level>`(low〜max)を送る(2026-11-16 オーナー依頼)。
+  起動前の新しい会話でも同じ 2 つのメニューを出し、選んだ値を次に起動するコンシェルジュの `--model` / `--effort` にする(GUI の defaults に残し、default で外す。`concierge.open` の `model` / `effort`、2026-11-17 オーナー依頼)。
   本体の terminal はどの Project の layout・タブ・ターミナル一覧にも出さない(ホスト Project の
   `launches` に layout が使わない負の pane id(`-1`, `-2`, …)で持ち、daemon の shell key は `<root>#-1` など。2026-11-10 オーナー依頼)。
   surface はチャットの裏に見えない状態でマウントし、コンシェルジュがターミナルでの承認や質問を待つ(`blocked`)

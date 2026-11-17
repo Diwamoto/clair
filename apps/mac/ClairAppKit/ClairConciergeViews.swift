@@ -50,6 +50,9 @@
     @State private var messages: [AgentHistory.Message]?
     /// Kept across leaving and reopening the chat (the view is rebuilt each time).
     @SceneStorage("concierge.draft") private var draft = ""
+    /// Model / effort the next new chat starts with (`startConcierge` reads them); "" = Claude Code's default.
+    @AppStorage("concierge.model") private var launchModel = ""
+    @AppStorage("concierge.effort") private var launchEffort = ""
     /// Shown until the transcript catches up with what was just sent.
     @State private var pending: String?
     /// The first request of a new chat has not reached the transcript a few seconds after sending: Claude Code is
@@ -259,7 +262,7 @@
       let ids = (used?.keys.filter { $0.hasPrefix("claude-") } ?? []).sorted { $0.localizedStandardCompare($1) == .orderedDescending }
       return ["default", "opus", "opus[1m]", "sonnet", "sonnet[1m]", "haiku"] + ids
     }
-    private static let efforts = ["low", "medium", "high", "xhigh", "max"]
+    private static let efforts = Concierge.efforts
 
     private static let starters: [(icon: String, text: String)] = [
       ("checkmark.seal", "未コミットの変更をレビューして"), ("testtube.2", "テストを実行して、失敗を直して"),
@@ -319,6 +322,19 @@
             } label: {
               contextLabel
             }.menuStyle(.borderlessButton).fixedSize().help(tr("コンテキスト"))
+          } else {
+            // Not running yet: pick what it starts with, so a new chat never has to start on the default and switch.
+            Menu {
+              ForEach(Self.models(), id: \.self) { m in Button(m) { launchModel = m == "default" ? "" : m } }
+            } label: {
+              Text(launchModel.isEmpty ? tr("モデル") : launchModel).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+            }.menuStyle(.borderlessButton).fixedSize().help(tr("起動するモデル"))
+            Menu {
+              Button("default") { launchEffort = "" }
+              ForEach(Self.efforts, id: \.self) { e in Button(e) { launchEffort = e } }
+            } label: {
+              Text(launchEffort.isEmpty ? tr("エフォート") : launchEffort).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+            }.menuStyle(.borderlessButton).fixedSize().help(tr("起動するエフォート"))
           }
           Spacer(minLength: 0)
           if let cost = chat.cost {

@@ -101,6 +101,9 @@ public enum Concierge {
   public static func isApproved(_ fingerprint: String) -> Bool { approvals.string(forKey: approvalKey) == fingerprint }
   public static func approve(_ fingerprint: String) { approvals.set(fingerprint, forKey: approvalKey) }
 
+  /// Claude Code's `--effort` / `/effort` levels.
+  public static let efforts = ["low", "medium", "high", "xhigh", "max"]
+
   /// Claude Code keeps each session at `~/.claude/projects/<cwd slug>/<id>.jsonl`; the slug is not
   /// something to re-derive, so look the id up one level down.
   public static func transcriptFile(session: String, home: URL = .homeDirectory) -> URL? {
@@ -112,10 +115,11 @@ public enum Concierge {
   /// `opening` rides as Claude's initial prompt, so a request sent before the TUI was up is never lost.
   /// `resumed`: launched onto an existing chat (the previous concierge's), so the request that woke it rides along.
   /// A fresh one flips to `--resume` once its transcript exists and must not repeat its opening then.
-  static func command(session: String, extra: String, opening: String? = nil, resumed: Bool = false) -> String {
+  static func command(session: String, extra: String, opening: String? = nil, resumed: Bool = false, model: String? = nil, effort: String? = nil) -> String {
     let fresh = !resumed && transcriptFile(session: session) == nil
     let first = fresh || resumed ? opening.map { " " + AgentRun.quote($0) } ?? "" : ""
-    return "claude \(fresh ? "--session-id" : "--resume") \(session) --disallowedTools WebFetch,WebSearch --append-system-prompt \(AgentRun.quote(prompt(extra: extra)))\(first)"
+    let picked = (model.map { " --model \(AgentRun.quote($0))" } ?? "") + (effort.map { " --effort \(AgentRun.quote($0))" } ?? "")
+    return "claude \(fresh ? "--session-id" : "--resume") \(session)\(picked) --disallowedTools WebFetch,WebSearch --append-system-prompt \(AgentRun.quote(prompt(extra: extra)))\(first)"
   }
 }
 

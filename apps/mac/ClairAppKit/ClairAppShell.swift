@@ -2360,6 +2360,8 @@ import Observation
       // A running concierge takes messages straight from the chat (its surface is mounted there).
       guard st.concierge(chat: chat) == nil else { return }
       var input: CommandInput = ["message": .string(message), "chat": .string(chat)]
+      // Picked in the composer before the first send; empty = Claude Code's own default.
+      for k in ["model", "effort"] { if let v = UserDefaults.standard.string(forKey: "concierge.\(k)"), !v.isEmpty { input[k] = .string(v) } }
       let cwd = st.conciergeDir
       input["cwd"] = .string(cwd)
       let fingerprint = Concierge.fingerprint(prompt: st.conciergePrompt, cwd: cwd)
