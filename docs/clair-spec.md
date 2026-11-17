@@ -592,7 +592,9 @@ adapter は追加層である([ADR-0002](decisions/0002-layered-agent-remote-con
   active Project のタブ列の末尾に開く(root からの相対パス `../…`、explorer には出さない。
   agent が多数の repository の file を開いてタブバーが溢れるため、2026-11-17 オーナー依頼)。
   managed worktree の Project は、別 Project へ切り替えたときにタブ・diff・未保存・起動中 agent・
-  editor 以外のペインが何も無ければ自動で閉じる
+  editor 以外のペインが何も無ければ自動で閉じる。titlebar では元 Project が開いている worktree を独立したタブグループにせず、
+  元のグループの中の 1 つの chip(branch 記号と件数、既定で折りたたみ)に入れ、押すと sub-group として展開する。
+  active な worktree は常に展開して見せる(Design canvas Main)
 - `clair open --wait <path>` は開いたあと、その file のタブがどの open Project からも
   閉じられるまで終了しない(`$VISUAL` / git の editor 用。Claude Code の Ctrl+G など)。
   設定の「連携」と palette から `~/.claude/settings.json` の `env.VISUAL` に設定・解除できる。
