@@ -6,6 +6,23 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.48.0] - 2026-11-17
+
+### Added
+- A new concierge chat lets you pick the model and effort before it starts.
+
+### Changed
+- Board-card worktrees now fold into their origin project's tab group behind one chip that unfolds them; the active worktree stays visible.
+
+### Fixed
+- The preview button now shows on the concierge column's editor, so research and plan notes can be previewed.
+- Moving a board card advances its existing card instead of adding a new one per stage.
+- Files opened from the board or by agents no longer flood the tab bar with extra projects; an emptied worktree project closes when you switch away.
+- The concierge context meter resets after /compact.
+- ⌘W in the concierge editor column closes the editor tab instead of the project tab.
+- Board card updates go only to the concierge chat that moved the card.
+- Agent auto-approve toggles now persist across restarts.
+
 ## [0.47.0] - 2026-11-17
 
 ### Added
@@ -871,7 +888,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.47.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.48.0...HEAD
+[0.48.0]: https://github.com/Diwamoto/clair/compare/v0.47.0...v0.48.0
 [0.47.0]: https://github.com/Diwamoto/clair/compare/v0.46.0...v0.47.0
 [0.46.0]: https://github.com/Diwamoto/clair/compare/v0.45.0...v0.46.0
 [0.45.0]: https://github.com/Diwamoto/clair/compare/v0.44.0...v0.45.0
