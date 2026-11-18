@@ -3255,6 +3255,7 @@ import Observation
           // The まとめて回答 button is the owner's answer.
           let r = store.run("ask.answer", input, confirmed: true)
           if case .failure(let e) = r { menus.ask(ClairDialog(title: tr("回答できませんでした"), message: e.message) { _ in }) }
+          else { store.run("tab.close", ["path": .string(path)]) }
           todos = ClairTodo.list()
         }.id("\(card)#\(sheet.state.rawValue)"))
       }
