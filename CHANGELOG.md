@@ -6,6 +6,18 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.52.0] - 2026-11-18
+
+### Added
+- Each multiple-choice question on a decision sheet has its own optional note field, sent to the agent with your choice.
+
+### Changed
+- Decision sheets now open as a compact panel in the bottom-right corner instead of a wide tab, and close themselves once you answer. × or Esc closes the panel without answering.
+
+### Fixed
+- The overall comment on a decision sheet accepts line breaks (⌘Return still sends).
+- The board can be made narrower than its header.
+
 ## [0.51.0] - 2026-11-18
 
 ### Added
@@ -912,7 +924,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.51.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.52.0...HEAD
+[0.52.0]: https://github.com/Diwamoto/clair/compare/v0.51.0...v0.52.0
 [0.51.0]: https://github.com/Diwamoto/clair/compare/v0.50.0...v0.51.0
 [0.50.0]: https://github.com/Diwamoto/clair/compare/v0.49.0...v0.50.0
 [0.49.0]: https://github.com/Diwamoto/clair/compare/v0.48.0...v0.49.0
