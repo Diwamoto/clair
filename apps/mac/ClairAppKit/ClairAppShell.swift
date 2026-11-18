@@ -482,6 +482,14 @@ import Observation
       if conciergeLeaves[conciergeTree.focused] == nil { conciergeLeaves[conciergeTree.focused] = UUID().uuidString.lowercased() }
     }
 
+    /// The chat list on the CLI column: a chat already in a pane gets the focus, else it replaces the focused pane's chat
+    /// (that chat keeps running and stays listed). Picking is the owner's ask, so a stopped chat starts (resumed) again.
+    func showConciergeChat(_ chat: String) {
+      if let leaf = conciergeLeaves.first(where: { $0.value == chat })?.key { conciergeTree.focus(leaf); return }
+      conciergeTried.remove(chat)
+      conciergeLeaves[conciergeTree.focused] = chat
+    }
+
     /// The IDE's pane commands, applied to the concierge column; false = not one of them.
     private func runConciergePane(_ id: String) -> Bool {
       switch id {
@@ -3655,6 +3663,24 @@ import Observation
           }
           HStack(spacing: 0) {
             if st.toggles["conciergeChatUI"] != true {
+              // The chat list (2026-11-18 owner request): every chat at a glance; picking one shows it in the focused pane.
+              if !store.conciergeTabsHidden {
+                let shown = store.conciergeLeaves[store.conciergeTree.focused] ?? chat
+                ConciergeTabs(
+                  chats: (chats + store.conciergeLeaves.values.sorted().filter { !chats.contains($0) && !st.conciergeHistory.contains($0) })
+                    .map { ($0, status($0)) },
+                  history: st.conciergeHistory, selected: shown,
+                  select: { store.showConciergeChat($0) },
+                  close: { id in
+                    if let leaf = store.conciergeLeaves.first(where: { $0.value == id })?.key { store.closeConciergeLeaf(leaf) } else { store.closeConciergeChat(id) }
+                  },
+                  archive: { id in
+                    if let leaf = store.conciergeLeaves.first(where: { $0.value == id })?.key { store.closeConciergeLeaf(leaf) }
+                    store.archiveConciergeChat(id)
+                  },
+                  new: { _ = store.run("pane.splitRight") })
+                Divider()
+              }
               conciergePanes.frame(width: conciergeChatWidth < 20 ? 0 : conciergeChatWidth).clipped()
             } else {
             if !store.conciergeTabsHidden {
@@ -3753,7 +3779,7 @@ import Observation
       }
       return ConciergePanes(
         node: tree.maximized.map { PaneTree.Node.leaf(id: $0, kind: .terminal) } ?? tree.root, focused: tree.focused,
-        terminal: terminal,
+        terminal: terminal, chat: { store.conciergeLeaves[$0] },
         title: { leaf in
           terminal(leaf).flatMap { c in st.agentSessions.first { $0.project == c.project && $0.pane == c.pane }?.activity } ?? tr("コンシェルジュ")
         },
@@ -5359,6 +5385,7 @@ import Observation
     let node: PaneTree.Node
     let focused: Int
     let terminal: (Int) -> (project: String, pane: Int, session: String, key: String, launch: AgentLaunch)?
+    let chat: (Int) -> String?
     let title: (Int) -> String
     /// (leaf, again): `again` is the owner's button, past a refused approval.
     let start: (Int, Bool) -> Void
@@ -5378,7 +5405,7 @@ import Observation
     }
 
     private func child(_ n: PaneTree.Node) -> ConciergePanes {
-      ConciergePanes(node: n, focused: focused, terminal: terminal, title: title, start: start, onFocus: onFocus, onClose: onClose,
+      ConciergePanes(node: n, focused: focused, terminal: terminal, chat: chat, title: title, start: start, onFocus: onFocus, onClose: onClose,
                      onSwap: onSwap, onRatio: onRatio, onEqualize: onEqualize, onSubmit: onSubmit)
     }
 
@@ -5397,7 +5424,8 @@ import Observation
               Button(tr("起動")) { start(id, true) }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity).background(C.surface)
-            .task(id: id) { start(id, false) }
+            // Keyed by the leaf's chat too: picking another chat from the list starts it in the same pane.
+            .task(id: "\(id)-\(chat(id) ?? "")") { start(id, false) }
           }
         }
         // No `paneCard`: the concierge screen is already one card, and a card per pane nested a second rim inside it.
