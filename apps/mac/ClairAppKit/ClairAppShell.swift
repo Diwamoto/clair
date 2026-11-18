@@ -482,12 +482,23 @@ import Observation
       if conciergeLeaves[conciergeTree.focused] == nil { conciergeLeaves[conciergeTree.focused] = UUID().uuidString.lowercased() }
     }
 
-    /// The chat list on the CLI column: a chat already in a pane gets the focus, else it replaces the focused pane's chat
-    /// (that chat keeps running and stays listed). Picking is the owner's ask, so a stopped chat starts (resumed) again.
+    /// The chat list on the CLI column: a chat already in a pane gets the focus, else it opens in a new pane beside the
+    /// focused one — it only takes the focused pane over when that pane holds an unstarted new chat, so opening a past
+    /// chat never replaces the current one. Picking is the owner's ask, so a stopped chat starts (resumed) again.
     func showConciergeChat(_ chat: String) {
       if let leaf = conciergeLeaves.first(where: { $0.value == chat })?.key { conciergeTree.focus(leaf); return }
       conciergeTried.remove(chat)
+      if let current = conciergeLeaves[conciergeTree.focused], Self.isStartedConcierge(current, in: state) {
+        conciergeTree.splitFocused(.horizontal)
+        if state.toggles["autoEqualize"] == true { conciergeTree.equalize() }
+      }
       conciergeLeaves[conciergeTree.focused] = chat
+    }
+
+    /// A chat with a terminal, a place in the list or history, or a transcript — anything but a blank new pane.
+    static func isStartedConcierge(_ chat: String, in state: WorkbenchState) -> Bool {
+      state.concierge(chat: chat) != nil || state.conciergeChats.contains(chat) || state.conciergeHistory.contains(chat)
+        || Concierge.transcriptFile(session: chat) != nil
     }
 
     /// The IDE's pane commands, applied to the concierge column; false = not one of them.
