@@ -3760,8 +3760,8 @@ import Observation
               VStack(spacing: 0) {
                 Divider()
                 ClairGhosttySurface(
-                  launch: (ClairDaemonLauncher.attachCommand(key: Self.scratchKey, cwd: NSHomeDirectory(), command: nil), NSHomeDirectory()),
-                  sessionKey: Self.scratchKey, focused: true)
+                  // A plain shell: the command stays empty, since `ClairGhosttySurface` wraps it in `clair attach` itself.
+                  launch: ("", NSHomeDirectory()), sessionKey: Self.scratchKey, focused: true)
               }
               .frame(height: 260)
             }
