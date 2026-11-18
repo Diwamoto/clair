@@ -34,8 +34,13 @@ import Testing
     var s = WorkbenchState(); let tabs = s.tabs
     _ = try r.execute("ask.open", ["card": .string(card)], state: &s).get()
     #expect(s.decisionSheet == card && s.tabs == tabs, "a panel, not a tab")
-    _ = try r.execute("ask.answer", ["card": .string(card), "answers": .string("{}")], confirmed: true, state: &s).get()
+    #expect(throws: CommandError.self) {
+      try r.execute("ask.answer", ["card": .string(card), "answers": .string("{}"), "notes": .string(#"{"zz":"x"}"#)], confirmed: true, state: &s).get()
+    }
+    _ = try r.execute("ask.answer", ["card": .string(card), "answers": .string("{}"), "notes": .string(#"{"q":" 理由 "}"#)],
+                      confirmed: true, state: &s).get()
     #expect(s.decisionSheet == nil)
+    #expect(try #require(DecisionSheet.load(card: card)).summary.contains("— 補足: 理由"))
   }
 
   @Test func acceptsAndAnswers() throws {

@@ -3247,8 +3247,8 @@ import Observation
       let close = { store.state.decisionSheet = nil }
       Group {
         if let sheet = DecisionSheet.load(card: card) {
-          DecisionSheetView(sheet: sheet, card: card, close: close) { answers, comment in
-            var input: CommandInput = ["card": .string(card), "answers": .string(answers)]
+          DecisionSheetView(sheet: sheet, card: card, close: close) { answers, notes, comment in
+            var input: CommandInput = ["card": .string(card), "answers": .string(answers), "notes": .string(notes)]
             if !comment.isEmpty { input["comment"] = .string(comment) }
             // The まとめて回答 button is the owner's answer.
             let r = store.run("ask.answer", input, confirmed: true)

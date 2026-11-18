@@ -1458,20 +1458,30 @@ extension CommandRegistry {
     },
     // The sheet's まとめて回答 button: the owner's own answer, so agents cannot call it.
     cmd("ask.answer", "判断シートに回答", .write, ai: false,
-        params: [CommandParam("card", .string), CommandParam("answers", .string), CommandParam("comment", .string, required: false)],
+        params: [CommandParam("card", .string), CommandParam("answers", .string), CommandParam("comment", .string, required: false),
+                 CommandParam("notes", .string, required: false)],
         palette: false,
         preflight: { _, i throws(CommandError) in
           try require(DecisionSheet.pending(card: i["card"]!.string!), "no pending decision sheet for \(i["card"]!.string!)")
           guard let a = try? JSONDecoder().decode([String: [String]].self, from: Data(i["answers"]!.string!.utf8)) else {
             throw CommandError(.invalidInput, "answers must be JSON {question id: [option ids or text]}")
           }
-          _ = try DecisionSheet.load(card: i["card"]!.string!)!.checked(a)
+          let sheet = DecisionSheet.load(card: i["card"]!.string!)!
+          _ = try sheet.checked(a)
+          if let n = i["notes"]?.string {
+            guard let notes = try? JSONDecoder().decode([String: String].self, from: Data(n.utf8)) else {
+              throw CommandError(.invalidInput, "notes must be JSON {question id: text}")
+            }
+            _ = try sheet.checked(notes: notes)
+          }
           return .write
         }) { s, i throws(CommandError) in
       let card = i["card"]!.string!
       var sheet = DecisionSheet.load(card: card)!
       try sheet.answer(try! JSONDecoder().decode([String: [String]].self, from: Data(i["answers"]!.string!.utf8)),
-                       comment: i["comment"]?.string, card: card)
+                       comment: i["comment"]?.string,
+                       notes: i["notes"]?.string.flatMap { try? JSONDecoder().decode([String: String].self, from: Data($0.utf8)) } ?? [:],
+                       card: card)
       if s.decisionSheet == card { s.decisionSheet = nil }
       let sent = sheet.asker.map { WorkbenchState.keyInput($0, sheet.reply(card: card)) } ?? false
       return .text(sent ? "ok" : "回答を記録しました(質問した agent のペインが無いため、届けていません)")

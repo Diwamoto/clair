@@ -15,13 +15,14 @@
     let sheet: DecisionSheet
     let card: String
     let close: () -> Void
-    /// Answers as JSON (`{question id: [option ids or text]}`) and the overall comment.
-    let submit: (String, String) -> Void
+    /// Answers as JSON (`{question id: [option ids or text]}`), per-question notes as JSON, and the overall comment.
+    let submit: (String, String, String) -> Void
     @State private var picked: [String: Set<String>]
     @State private var texts: [String: String]
+    @State private var notes: [String: String]
     @State private var comment = ""
 
-    init(sheet: DecisionSheet, card: String, close: @escaping () -> Void, submit: @escaping (String, String) -> Void) {
+    init(sheet: DecisionSheet, card: String, close: @escaping () -> Void, submit: @escaping (String, String, String) -> Void) {
       self.sheet = sheet; self.card = card; self.close = close; self.submit = submit
       let answered = sheet.state == .answered
       _picked = State(initialValue: Dictionary(uniqueKeysWithValues: sheet.questions.filter { $0.kind != .text }.map {
@@ -30,6 +31,7 @@
       _texts = State(initialValue: Dictionary(uniqueKeysWithValues: sheet.questions.filter { $0.kind == .text }.map {
         ($0.id, answered ? sheet.answers[$0.id]?.first ?? "" : "")
       }))
+      _notes = State(initialValue: sheet.notes)
       _comment = State(initialValue: sheet.comment ?? "")
     }
 
@@ -52,7 +54,7 @@
         ScrollView {
           VStack(alignment: .leading, spacing: 12) {
             ForEach(Array(sheet.questions.enumerated()), id: \.element.id) { i, q in question(i + 1, q) }
-            field(tr("全体へのコメント(任意)"), text: $comment)
+            commentEditor
           }.padding(16).clairScroller()
         }
         Rectangle().fill(L.hairlineFaint).frame(height: 1)
@@ -76,7 +78,8 @@
       for (id, set) in picked { answers[id] = sheet.questions.first { $0.id == id }?.options?.map(\.id).filter(set.contains) ?? [] }
       for (id, text) in texts { answers[id] = [text] }
       let enc = JSONEncoder(); enc.outputFormatting = .sortedKeys
-      submit(String(decoding: (try? enc.encode(answers)) ?? Data("{}".utf8), as: UTF8.self), comment)
+      submit(String(decoding: (try? enc.encode(answers)) ?? Data("{}".utf8), as: UTF8.self),
+             String(decoding: (try? enc.encode(notes)) ?? Data("{}".utf8), as: UTF8.self), comment)
     }
 
     private func question(_ n: Int, _ q: DecisionSheet.Question) -> some View {
@@ -93,6 +96,7 @@
           field(tr("任意(空なら agent が決める)"), text: Binding(get: { texts[q.id] ?? "" }, set: { texts[q.id] = $0 }))
         } else {
           ForEach(q.options ?? [], id: \.id) { o in option(q, o) }
+          field(tr("補足(任意)"), text: Binding(get: { notes[q.id] ?? "" }, set: { notes[q.id] = $0 }))
         }
       }
       .padding(12).frame(maxWidth: .infinity, alignment: .leading)
@@ -137,6 +141,21 @@
       }
       .buttonStyle(.plain).disabled(!pending)
       .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
+    }
+
+    /// Return inserts a newline here (a TextField would end editing); ⌘Return still sends.
+    private var commentEditor: some View {
+      TextEditor(text: $comment).scrollContentBackground(.hidden)
+        .font(Typography.font(Typography.chrome)).foregroundStyle(C.textPrimary)
+        .frame(minHeight: 64, maxHeight: 160).padding(.horizontal, 6).padding(.vertical, 6)
+        .overlay(alignment: .topLeading) {
+          if comment.isEmpty {
+            Text(tr("全体へのコメント(任意)")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted)
+              .padding(.horizontal, 11).padding(.vertical, 6).allowsHitTesting(false)
+          }
+        }
+        .overlay(RoundedRectangle(cornerRadius: Radius.control).strokeBorder(L.strong))
+        .disabled(!pending).accessibilityLabel(tr("全体へのコメント(任意)"))
     }
 
     private func field(_ placeholder: String, text: Binding<String>) -> some View {

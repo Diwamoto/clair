@@ -46,8 +46,10 @@ public struct DecisionSheet: Codable, Equatable, Sendable {
   /// Question id → chosen option ids, or the typed text as one element.
   public var answers: [String: [String]] = [:]
   public var comment: String?
+  /// Question id → the owner's free-text note beside a choice.
+  public var notes: [String: String] = [:]
 
-  enum CodingKeys: String, CodingKey { case title, questions, asker, state, answers, comment }
+  enum CodingKeys: String, CodingKey { case title, questions, asker, state, answers, comment, notes }
   public init(from d: Decoder) throws {
     let c = try d.container(keyedBy: CodingKeys.self)
     title = try c.decodeIfPresent(String.self, forKey: .title)
@@ -56,6 +58,7 @@ public struct DecisionSheet: Codable, Equatable, Sendable {
     state = try c.decodeIfPresent(State.self, forKey: .state) ?? .pending
     answers = try c.decodeIfPresent([String: [String]].self, forKey: .answers) ?? [:]
     comment = try c.decodeIfPresent(String.self, forKey: .comment)
+    notes = try c.decodeIfPresent([String: String].self, forKey: .notes) ?? [:]
   }
 
   public static let maxQuestions = 20
@@ -84,7 +87,7 @@ public struct DecisionSheet: Codable, Equatable, Sendable {
       throw CommandError(.invalidInput, #"questions must be JSON {"title":…,"questions":[{"id":…,"kind":"single|multi|text","prompt":…,"context":…,"options":[{"id":…,"label":…,"detail":…,"html":…}],"recommended":…}]}"#)
     }
     var s = sheet
-    s.state = .pending; s.answers = [:]; s.comment = nil; s.asker = nil
+    s.state = .pending; s.answers = [:]; s.comment = nil; s.notes = [:]; s.asker = nil
     guard !s.questions.isEmpty, s.questions.count <= maxQuestions else { throw CommandError(.invalidInput, "1 to \(maxQuestions) questions") }
     guard Set(s.questions.map(\.id)).count == s.questions.count else { throw CommandError(.invalidInput, "question ids must be unique") }
     // Symlinks resolved: the preview gets read access to this folder, so it must not lead elsewhere.
@@ -137,6 +140,17 @@ public struct DecisionSheet: Codable, Equatable, Sendable {
     return out
   }
 
+  /// Notes must name a question; blank ones are dropped.
+  public func checked(notes: [String: String]) throws(CommandError) -> [String: String] {
+    var out: [String: String] = [:]
+    for (id, text) in notes {
+      guard questions.contains(where: { $0.id == id }) else { throw CommandError(.invalidInput, "no question \(id)") }
+      let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+      if !t.isEmpty { out[id] = t }
+    }
+    return out
+  }
+
   /// The answers as Markdown: what goes to decisions.md and, flattened, into the agent's pane.
   public var summary: String {
     var lines: [String] = []
@@ -145,7 +159,8 @@ public struct DecisionSheet: Codable, Equatable, Sendable {
       let value = q.kind == .text
         ? (picked.first ?? "(回答なし — agent が決める)")
         : picked.isEmpty ? "(回答なし — agent が決める)" : picked.compactMap { p in q.options?.first { $0.id == p }?.label }.joined(separator: " / ")
-      lines.append("\(i + 1). \(q.prompt) → \(value)")
+      let note = notes[q.id].map { " — 補足: \($0)" } ?? ""
+      lines.append("\(i + 1). \(q.prompt) → \(value)\(note)")
     }
     if let c = comment?.trimmingCharacters(in: .whitespacesAndNewlines), !c.isEmpty { lines.append("コメント: \(c)") }
     return lines.joined(separator: "\n")
@@ -157,9 +172,11 @@ public struct DecisionSheet: Codable, Equatable, Sendable {
   }
 
   /// Records the answers: the sheet, then a dated block appended to decisions.md.
-  mutating func answer(_ answers: [String: [String]], comment: String?, card: String, now: Date = .now) throws(CommandError) {
+  mutating func answer(_ answers: [String: [String]], comment: String?, notes: [String: String] = [:], card: String,
+                       now: Date = .now) throws(CommandError) {
     guard state == .pending else { throw CommandError(.preconditionFailed, "the sheet is already answered") }
     self.answers = try checked(answers)
+    self.notes = try checked(notes: notes)
     self.comment = comment
     state = .answered
     let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd HH:mm"
