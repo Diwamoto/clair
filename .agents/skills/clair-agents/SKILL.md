@@ -19,7 +19,7 @@ Inside Clair, use its panes proactively; the user wants this without being asked
 - Before starting, look at what the other panes are doing (`clair agent list`, then
   `clair agent output` on the relevant keys) so you don't duplicate or collide with their work.
 - To hand an already running agent more work, type into its pane instead of launching a new one:
-  `clair agent send key="<key>" text="<message>"` (presses Return; asks for approval in Clair).
+  `clair agent send key="<key>" text="<message>"` (any Project; presses Return; asks for approval in Clair).
 - Clean up: close finished child panes (§3) before you report back.
 
 Works only inside a Clair terminal: `echo $CLAIR_TERMINAL_KEY` must print `<root>#<pane>`, and `clair`

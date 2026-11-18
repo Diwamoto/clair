@@ -807,8 +807,11 @@ extension CommandRegistry {
     // Typing into someone else's terminal steers their session, so it always asks first.
     cmd("agent.send", "エージェントに入力を送る", .write,
         params: [CommandParam("key", .string), CommandParam("text", .string)], palette: false,
-        preflight: { s, i throws(CommandError) in _ = try s.inputPane(i["key"]!.string!); return .write }) { s, i in
-      WorkbenchState.screenInput(try! s.inputPane(i["key"]!.string!), i["text"]!.string!) ? .ok : .text("pane is not mounted")
+        preflight: { s, i throws(CommandError) in
+          guard s.terminal(i["key"]!.string!) != nil else { throw CommandError(.preconditionFailed, "\(i["key"]!.string!) is not an open terminal") }
+          return .write
+        }) { s, i in
+      s.sendInput(i["key"]!.string!, i["text"]!.string!) ? .ok : .text("no running shell takes input")
     },
     // Closing your own finished child is housekeeping; anything else ends someone's session and needs approval.
     cmd("agent.close", "エージェントのペインを閉じる", .read,

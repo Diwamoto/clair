@@ -37,6 +37,13 @@ final class WorkbenchAgentLaunchTests: XCTestCase {
     _ = try r.execute("agent.launch", ["profile": .string("claude"), "prompt": .string("hi"), "project": .string(otherName)], confirmed: true, state: &s).get()
     XCTAssertEqual(s.project, shown)
     XCTAssertTrue(s.agentSessions.contains { $0.project == otherName })
+    // agent.send reaches that child by key though its Project is not shown (a headless Plan child, say).
+    let child = WorkbenchState.terminalKey(other.path, try XCTUnwrap(s.agentSessions.first { $0.project == otherName }).pane)
+    var sent: [String] = []
+    WorkbenchState.keyInput = { k, t in sent.append("\(k) \(t)"); return true }
+    defer { WorkbenchState.keyInput = { _, _ in false } }
+    XCTAssertEqual(try r.execute("agent.send", ["key": .string(child), "text": .string("hi")], confirmed: true, state: &s).get(), .ok)
+    XCTAssertEqual(sent, ["\(child) hi"])
     XCTAssertEqual(r.execute("agent.launch", ["profile": .string("claude"), "project": .string("gone")], confirmed: true, state: &s).failure?.code, .preconditionFailed)
   }
 

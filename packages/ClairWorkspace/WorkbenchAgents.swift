@@ -318,12 +318,11 @@ extension WorkbenchState {
   /// Types a line and Return into any kept terminal by key (`root#pane`), whichever Project it is in. Set by the app.
   nonisolated(unsafe) public static var keyInput: (_ key: String, _ text: String) -> Bool = { _, _ in false }
 
-  /// The active-Project terminal behind `key` that `agent.send` may type into.
-  func inputPane(_ key: String) throws(CommandError) -> Int {
-    guard let t = terminal(key), t.project == project else {
-      throw CommandError(.preconditionFailed, "\(key) is not a terminal in the active Project")
-    }
-    return t.pane
+  /// Types into the open terminal behind `key`, in any Project: the shown pane's surface, else the kept surface or
+  /// the daemon shell (a headless child in another Project). false when nothing takes the input.
+  func sendInput(_ key: String, _ text: String) -> Bool {
+    guard let t = terminal(key) else { return false }
+    return (t.project == project && Self.screenInput(t.pane, text)) || Self.keyInput(key, text)
   }
 
   /// What `agent.output` reads: a delegated run's log, else any terminal pane's rendered screen.

@@ -14,6 +14,8 @@
       environment: [String: String])
     case read(sessionID: String, epoch: UInt64?, offset: UInt64?, waitMilliseconds: Int)
     case input(sessionID: String, bytes: Data)
+    /// Input to the running shell for `key`, without attaching (`agent.send` to a pane no surface shows).
+    case inputKey(key: String, bytes: Data)
     case resize(sessionID: String, rows: UInt16, columns: UInt16)
     /// The user closed the pane: end that shell. (Detaching is just dropping the attachment.)
     case close(key: String)
@@ -74,6 +76,10 @@
       case .read(let id, let epoch, let offset, let wait):
         return read(id: id, epoch: epoch, offset: offset, wait: wait)
       case .input(let id, let bytes):
+        return input(id: id, bytes: bytes)
+      case .inputKey(let key, let bytes):
+        guard let id = lock.withLock({ byKey[key].flatMap { $0.process.isRunning ? $0.sessionID.rawValue : nil } })
+        else { return .rejected }
         return input(id: id, bytes: bytes)
       case .resize(let id, let rows, let columns):
         guard let entry = entry(id: id), let size = try? ClairTerminalSize(rows: rows, columns: columns),

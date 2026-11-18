@@ -87,6 +87,18 @@ import Foundation
       return pid != nil
     }
 
+    /// Types `text` and Return into the daemon shell for `key` when no surface shows it (a headless agent in
+    /// another Project). Return goes ~0.2 s later in its own write, so a TUI reads it as a key press, not a paste.
+    static func submit(_ text: String, key: String) -> Bool {
+      let client = client
+      guard case .accepted? = try? client.terminal(.inputKey(key: key, bytes: Data(text.utf8))) else { return false }
+      Task.detached {
+        try? await Task.sleep(for: .milliseconds(200))
+        _ = try? client.terminal(.inputKey(key: key, bytes: Data("\r".utf8)))
+      }
+      return true
+    }
+
     /// The user closed the pane: end that shell. Best effort; the daemon may already be gone.
     public static func closeSession(key: String) {
       _ = try? client.terminal(.close(key: key))

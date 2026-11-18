@@ -303,7 +303,7 @@ import Observation
       }
       WorkbenchState.screenText = { ClairGhosttySurfaceView.screenText(inPane: $0) }
       WorkbenchState.screenInput = { ClairGhosttySurfaceView.send($1, toPane: $0) && ClairGhosttySurfaceView.pressReturn(inPane: $0) }
-      WorkbenchState.keyInput = { ClairGhosttySurfaceView.submit($1, key: $0) }
+      WorkbenchState.keyInput = { ClairGhosttySurfaceView.submit($1, key: $0) || ClairDaemonLauncher.submit($1, key: $0) }
       let server = WorkbenchIPCServer(callerOf: { pid in
         let keys = DispatchQueue.main.sync {
           MainActor.assumeIsolated {

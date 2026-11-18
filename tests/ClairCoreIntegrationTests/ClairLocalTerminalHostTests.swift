@@ -217,6 +217,10 @@ import Testing
         #expect(try daemon.client.terminal(.close(key: "pane-a")) == .rejected)
         try b.send(Data("still\n".utf8))
         #expect(try daemon.read(b, until: "<still>"))
+        // agent.send to a headless pane: input by key, no attachment; a closed key takes none.
+        #expect(try daemon.client.terminal(.inputKey(key: "pane-b", bytes: Data("bykey\n".utf8))) == .accepted)
+        #expect(try daemon.read(b, until: "<bykey>"))
+        #expect(try daemon.client.terminal(.inputKey(key: "pane-a", bytes: Data("x".utf8))) == .rejected)
       }
     }
 
