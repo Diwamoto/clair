@@ -1061,7 +1061,9 @@
           }
         }
       }
-      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).background(C.canvas)
+      // minWidth 0: the header's fixed chips must not floor the board's width; the columns already scroll sideways,
+      // so the chat and editor columns can squeeze the board as far as the owner drags them. The header clips at its end.
+      .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).clipped().background(C.canvas)
       .overlay { quickLook }
       .overlay { projectPicker }
       // An exited agent leaves the list, and its quick look with it.
@@ -1073,8 +1075,8 @@
     private var header: some View {
       let waiting = cards.filter(needsYou).count
       return HStack(spacing: 8) {
-        Text(tr("ボード")).font(Typography.font(Typography.title)).foregroundStyle(C.textPrimary)
-        Text(tr("%@ 件", cards.count)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted)
+        Text(tr("ボード")).font(Typography.font(Typography.title)).foregroundStyle(C.textPrimary).fixedSize()
+        Text(tr("%@ 件", cards.count)).font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted).fixedSize()
         Spacer(minLength: 0)
         HStack(spacing: 6) {
           Image(systemName: "magnifyingglass").font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted)
@@ -1082,7 +1084,7 @@
             .font(Typography.font(Typography.chrome)).foregroundStyle(C.textPrimary)
             .accessibilityLabel(tr("カードを検索"))
         }
-        .padding(.horizontal, 8).frame(width: 180, height: RowHeight.default).modifier(Boxed())
+        .padding(.horizontal, 8).frame(minWidth: 80, maxWidth: 180).frame(height: RowHeight.default).modifier(Boxed())
         Button { waitingOnly.toggle() } label: {
           HStack(spacing: 6) {
             Circle().fill(waiting == 0 ? C.textMuted : C.attention).frame(width: 6, height: 6)
@@ -1090,7 +1092,7 @@
             Text(verbatim: "\(waiting)").font(Typography.font(Typography.chrome, family: .mono)).foregroundStyle(C.textMuted)
           }.modifier(Chip(on: waitingOnly))
         }
-        .buttonStyle(HoverWashStyle(radius: Radius.card)).help(tr("あなた待ちだけ表示"))
+        .buttonStyle(HoverWashStyle(radius: Radius.card)).help(tr("あなた待ちだけ表示")).fixedSize()
         .accessibilityAddTraits(waitingOnly ? .isSelected : [])
         Menu {
           Picker(tr("Project"), selection: $project) {
