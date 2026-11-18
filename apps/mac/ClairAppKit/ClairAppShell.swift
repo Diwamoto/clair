@@ -1736,8 +1736,8 @@ import Observation
       // Agent notices, approval cards and the update toast share the bottom-right corner (owner, 2026-11-06).
       .overlay(alignment: .bottomTrailing) {
         VStack(alignment: .trailing, spacing: 8) {
-          noticeStackView
-          if let card = st.decisionSheet { decisionSheetPanel(card) }
+          // The sheet takes the corner while open; its notices stay unread in the notice panel (⇧⌘H).
+          if let card = st.decisionSheet { decisionSheetPanel(card) } else { noticeStackView }
           if let p = approvalPreview {
             AgentApprovalPreview(title: p.title, project: p.project, screen: p.screen,
               dismiss: { withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration)) { approvalPreview = nil } })
