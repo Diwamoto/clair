@@ -3690,7 +3690,8 @@ import Observation
                     store.archiveConciergeChat(id)
                   },
                   new: { _ = store.run("pane.splitRight") })
-                Divider()
+                .paneCard(focused: false)
+                conciergeGap
               }
               conciergePanes.frame(width: conciergeChatWidth < 20 ? 0 : conciergeChatWidth).clipped()
             } else {
@@ -3704,7 +3705,8 @@ import Observation
               close: { store.closeConciergeChat($0) },
               archive: { store.archiveConciergeChat($0) },
               new: newChat)
-            Divider()
+            .paneCard(focused: false)
+            conciergeGap
             }
             VStack(spacing: 0) {
               ConciergeChatView(
@@ -3716,9 +3718,10 @@ import Observation
               .transition(reduceMotion ? .opacity : .asymmetric(insertion: .opacity.combined(with: .offset(y: 8)), removal: .opacity))
             }
             .frame(width: conciergeChatWidth < 20 ? 0 : conciergeChatWidth).clipped()
+            .paneCard(focused: false)
             }
             // Dragged under 160pt the chat folds away; drag the edge back out to reopen it.
-            Divider().overlay {
+            conciergeGap.overlay {
               SplitHandle(horizontal: true, ratio: conciergeChatWidth, total: 1, onRatio: { w in
                 conciergeChatWidth = w < 160 ? 0 : min(w, 1200)
               }, onDoubleClick: { conciergeChatWidth = conciergeChatWidth < 20 ? 460 : 0 })
@@ -3746,9 +3749,10 @@ import Observation
                 sidebarMode = "shield"; reloadChanges()
               },
               selected: $boardSelected, flash: boardFlash)
+            .paneCard(focused: false)
             if !store.conciergeFiles.isEmpty {
-              Divider()
-              conciergeEditorColumn
+              conciergeGap
+              conciergeEditorColumn.paneCard(focused: false)
             }
           }
           .frame(maxHeight: .infinity)
@@ -3758,17 +3762,19 @@ import Observation
             // ponytail: one shared scratch shell in ~; per-chat shells or a draggable height if one is not enough.
             if store.conciergeTerminal {
               VStack(spacing: 0) {
-                Divider()
+                if glass { Color.clear.frame(height: DesignTokens.Glass.inset) } else { Divider() }
                 ClairGhosttySurface(
                   // A plain shell: the command stays empty, since `ClairGhosttySurface` wraps it in `clair attach` itself.
                   launch: ("", NSHomeDirectory()), sessionKey: Self.scratchKey, focused: true)
+                .paneCard(focused: false)
               }
               .frame(height: 260)
             }
           }
           // Opaque: the panes stay mounted underneath, and the translucent divider let their terminal text show through.
-          .background(C.canvas)
-          .paneCard(focused: false)
+          // Glass: each column is its own card (like the workbench panes) with the wallpaper between them.
+          // ponytail: the wallpaper restarts at this frame, so its glow sits a little off the window's; fine at a 10pt gap.
+          .background { if glass { GlassWallpaper() } else { C.canvas } }
           .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98)))
         }
         }
@@ -3777,6 +3783,11 @@ import Observation
     }
 
     private static let scratchKey = "concierge-scratch"
+
+    /// Between the concierge screen's columns: a hairline, or a wallpaper gap between glass cards.
+    @ViewBuilder private var conciergeGap: some View {
+      if glass { Color.clear.frame(width: DesignTokens.Glass.inset) } else { Divider() }
+    }
 
     /// The CLI concierge column: each leaf is a concierge's own Claude Code terminal (started on first show, after the
     /// same approval as the chat), laid out like the IDE's panes.
@@ -3806,7 +3817,7 @@ import Observation
         onEqualize: { store.conciergeTree.equalize() },
         // An owner's Return in a concierge is a new request: the only thing that resets its launch cap.
         onSubmit: { leaf in if let c = terminal(leaf) { store.state.conciergeLaunches[c.key] = nil } })
-      .background(C.canvas)
+      .background(glass ? .clear : C.canvas)
       .onAppear { store.seedConciergeTree() }
       // A board card's "コンシェルジュに頼む": typed into the focused concierge, not sent (the owner presses Return).
       .onChange(of: conciergeAsk, initial: true) { _, text in
@@ -5407,6 +5418,7 @@ import Observation
     let onRatio: (Int, Double) -> Void
     let onEqualize: () -> Void
     let onSubmit: (Int) -> Void
+    @Environment(\.clairGlass) private var glass
 
     private func lastLeaf(_ n: PaneTree.Node) -> Int {
       switch n {
@@ -5439,7 +5451,7 @@ import Observation
             .task(id: "\(id)-\(chat(id) ?? "")") { start(id, false) }
           }
         }
-        // No `paneCard`: the concierge screen is already one card, and a card per pane nested a second rim inside it.
+        .paneCard(focused: id == focused)
         .opacity(id == focused ? 1 : 0.75)
         .simultaneousGesture(TapGesture().onEnded { if id != focused { onFocus(id) } })
       case .split(let axis, let ratio, let a, let b):
@@ -5448,9 +5460,9 @@ import Observation
           let total = h ? g.size.width : g.size.height
           ZStack(alignment: .topLeading) {
             if h {
-              HStack(spacing: 0) { child(a).frame(width: total * ratio); Rectangle().fill(L.paneDivider).frame(width: 1); child(b) }
+              HStack(spacing: 0) { child(a).frame(width: total * ratio); Rectangle().fill(glass ? .clear : L.paneDivider).frame(width: glass ? DesignTokens.Glass.inset : 1); child(b) }
             } else {
-              VStack(spacing: 0) { child(a).frame(height: total * ratio); Rectangle().fill(L.paneDivider).frame(height: 1); child(b) }
+              VStack(spacing: 0) { child(a).frame(height: total * ratio); Rectangle().fill(glass ? .clear : L.paneDivider).frame(height: glass ? DesignTokens.Glass.inset : 1); child(b) }
             }
             let at = total * ratio + 0.5
             SplitHandle(horizontal: h, ratio: ratio, total: total, onRatio: { onRatio(lastLeaf(a), $0) }, onDoubleClick: onEqualize)
