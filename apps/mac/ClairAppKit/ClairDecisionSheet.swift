@@ -8,20 +8,21 @@
   private typealias C = DesignTokens.Color
   private typealias L = DesignTokens.Line
 
-  /// ADR-0030 (DecisionSheet artboard): an agent's questions about a card as a tab in the concierge editor column.
+  /// ADR-0030 (DecisionSheet artboard): an agent's questions about a card as a panel floating in the window's bottom-right corner.
   /// Recommended options start selected; an option's HTML preview is drawn inside it with the HTML preview pane's
   /// WebView rules. 「まとめて回答」 sends every answer at once; an answered sheet is read-only.
   struct DecisionSheetView: View {
     let sheet: DecisionSheet
     let card: String
+    let close: () -> Void
     /// Answers as JSON (`{question id: [option ids or text]}`) and the overall comment.
     let submit: (String, String) -> Void
     @State private var picked: [String: Set<String>]
     @State private var texts: [String: String]
     @State private var comment = ""
 
-    init(sheet: DecisionSheet, card: String, submit: @escaping (String, String) -> Void) {
-      self.sheet = sheet; self.card = card; self.submit = submit
+    init(sheet: DecisionSheet, card: String, close: @escaping () -> Void, submit: @escaping (String, String) -> Void) {
+      self.sheet = sheet; self.card = card; self.close = close; self.submit = submit
       let answered = sheet.state == .answered
       _picked = State(initialValue: Dictionary(uniqueKeysWithValues: sheet.questions.filter { $0.kind != .text }.map {
         ($0.id, Set(answered ? sheet.answers[$0.id] ?? [] : $0.recommended ?? []))
@@ -40,6 +41,9 @@
           HStack(spacing: 8) {
             Circle().fill(pending ? C.attention : C.textMuted).frame(width: 6, height: 6)
             Text(sheet.title ?? tr("判断")).font(Typography.font(Typography.title)).foregroundStyle(C.textPrimary).lineLimit(2)
+            Spacer(minLength: 0)
+            Button(action: close) { Image(systemName: "xmark").foregroundStyle(C.textTertiary) }
+              .buttonStyle(.plain).keyboardShortcut(.cancelAction).accessibilityLabel(tr("閉じる"))
           }
           Text(pending ? tr("%@ 問。推奨を選んだ状態で開いています。", sheet.questions.count) : tr("回答済み"))
             .font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)

@@ -229,6 +229,8 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var settingsOpen = false
   /// The notice list panel (⇧⌘H). Transient.
   public var noticesOpen = false
+  /// The card whose decision sheet floats in the bottom-right corner (ADR-0030), nil when closed.
+  public var decisionSheet: String?
   /// Transient UI navigation request. The sidebar selection itself belongs to the app shell.
   public var debugNavigationGeneration = 0
   /// ⌘B hides the sidebar panel (activity bar stays). Transient.
@@ -1451,7 +1453,7 @@ extension CommandRegistry {
         preflight: { _, i throws(CommandError) in
           try require(DecisionSheet.load(card: i["card"]!.string!) != nil, "no decision sheet for \(i["card"]!.string!)"); return .read
         }) { s, i in
-      s.openTab(DecisionSheet.tabPath(card: i["card"]!.string!))
+      s.decisionSheet = i["card"]!.string!
       return .ok
     },
     // The sheet's まとめて回答 button: the owner's own answer, so agents cannot call it.
@@ -1465,11 +1467,12 @@ extension CommandRegistry {
           }
           _ = try DecisionSheet.load(card: i["card"]!.string!)!.checked(a)
           return .write
-        }) { _, i throws(CommandError) in
+        }) { s, i throws(CommandError) in
       let card = i["card"]!.string!
       var sheet = DecisionSheet.load(card: card)!
       try sheet.answer(try! JSONDecoder().decode([String: [String]].self, from: Data(i["answers"]!.string!.utf8)),
                        comment: i["comment"]?.string, card: card)
+      if s.decisionSheet == card { s.decisionSheet = nil }
       let sent = sheet.asker.map { WorkbenchState.keyInput($0, sheet.reply(card: card)) } ?? false
       return .text(sent ? "ok" : "回答を記録しました(質問した agent のペインが無いため、届けていません)")
     },

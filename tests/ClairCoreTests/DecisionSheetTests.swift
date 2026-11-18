@@ -28,6 +28,16 @@ import Testing
     catch { #expect(error.message.contains(why), "\(json): \(error.message)") }
   }
 
+  @Test func openShowsThePanelAndAnsweringClosesIt() throws {
+    let card = try Self.card(), r = CommandRegistry.workbench
+    try DecisionSheet.validate(#"{"questions":[{"id":"q","kind":"text","prompt":"?"}]}"#, card: card).save(card: card)
+    var s = WorkbenchState(); let tabs = s.tabs
+    _ = try r.execute("ask.open", ["card": .string(card)], state: &s).get()
+    #expect(s.decisionSheet == card && s.tabs == tabs, "a panel, not a tab")
+    _ = try r.execute("ask.answer", ["card": .string(card), "answers": .string("{}")], confirmed: true, state: &s).get()
+    #expect(s.decisionSheet == nil)
+  }
+
   @Test func acceptsAndAnswers() throws {
     let card = try Self.card()
     let json = #"{"title":"T","questions":[{"id":"how","prompt":"この方式で進めます","options":[{"id":"a","label":"A","html":"a.html"},{"id":"b","label":"B"}],"recommended":"a"},{"id":"tags","kind":"multi","prompt":"どれ","options":[{"id":"x","label":"X"},{"id":"y","label":"Y"}],"recommended":["x","y"]},{"id":"note","kind":"text","prompt":"文言"}]}"#

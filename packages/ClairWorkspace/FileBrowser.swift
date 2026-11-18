@@ -14,7 +14,6 @@ public enum FileBrowser {
   /// Tabs that are not Project files (a browser, a history chat, a proposal) and so survive a rescan of the tree.
   public static func isVirtualTab(_ path: String) -> Bool {
     root(tab: path) != nil || AgentHistory.id(tab: path) != nil || FileProposal.id(tab: path) != nil
-      || DecisionSheet.card(tab: path) != nil
   }
 
   public struct Entry: Sendable, Equatable, Identifiable {

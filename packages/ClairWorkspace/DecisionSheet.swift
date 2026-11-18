@@ -59,9 +59,6 @@ public struct DecisionSheet: Codable, Equatable, Sendable {
   }
 
   public static let maxQuestions = 20
-  public static let tabPrefix = "ask:"
-  public static func tabPath(card: String) -> String { tabPrefix + card }
-  public static func card(tab path: String) -> String? { path.hasPrefix(tabPrefix) ? String(path.dropFirst(tabPrefix.count)) : nil }
 
   /// `~/.clair/todo/<name>/` — where the card's research.md / plan.md live.
   public static func folder(card: String) -> String { (card as NSString).deletingPathExtension }

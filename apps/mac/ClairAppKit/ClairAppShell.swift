@@ -522,7 +522,6 @@ import Observation
     }
 
     func selectConciergeFile(_ f: ConciergeFile) {
-      if let card = DecisionSheet.card(tab: f.path) { run("ask.open", ["card": .string(card)]); return }
       run("file.open", ["path": .string(URL(fileURLWithPath: f.root).appending(path: f.path).standardizedFileURL.path)])
     }
 
@@ -607,7 +606,7 @@ import Observation
           NSApp?.activate(ignoringOtherApps: true)
           if let w = NSApp?.windows.first(where: { $0.isMiniaturized && $0.title != "Pair a device" }) { w.deminiaturize(nil) }
         }
-        if id == "file.open" || id == "ask.open", conciergeShown, let p = state.active, let root = activeRoot {
+        if id == "file.open", conciergeShown, let p = state.active, let root = activeRoot {
           let f = ConciergeFile(project: state.project, root: root, path: p)
           if !conciergeFiles.contains(f) { conciergeFiles.append(f) }
           conciergeFile = f
@@ -1738,6 +1737,7 @@ import Observation
       .overlay(alignment: .bottomTrailing) {
         VStack(alignment: .trailing, spacing: 8) {
           noticeStackView
+          if let card = st.decisionSheet { decisionSheetPanel(card) }
           if let p = approvalPreview {
             AgentApprovalPreview(title: p.title, project: p.project, screen: p.screen,
               dismiss: { withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration)) { approvalPreview = nil } })
@@ -3242,23 +3242,33 @@ import Observation
         removeFavorite: { store.run("finder.removeFavorite", ["path": .string($0)]) })
     }
 
+    /// ADR-0030: the decision sheet floats in the bottom-right corner; answering closes it.
+    @ViewBuilder private func decisionSheetPanel(_ card: String) -> some View {
+      let close = { store.state.decisionSheet = nil }
+      Group {
+        if let sheet = DecisionSheet.load(card: card) {
+          DecisionSheetView(sheet: sheet, card: card, close: close) { answers, comment in
+            var input: CommandInput = ["card": .string(card), "answers": .string(answers)]
+            if !comment.isEmpty { input["comment"] = .string(comment) }
+            // The まとめて回答 button is the owner's answer.
+            let r = store.run("ask.answer", input, confirmed: true)
+            if case .failure(let e) = r { menus.ask(ClairDialog(title: tr("回答できませんでした"), message: e.message) { _ in }) }
+            todos = ClairTodo.list()
+          }.id("\(card)#\(sheet.state.rawValue)")
+        } else {
+          Text(tr("この判断シートは見つかりません")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+            .frame(maxWidth: .infinity).padding(16).background(C.canvas).onTapGesture(perform: close)
+        }
+      }
+      .frame(width: 420).frame(maxHeight: 560)
+      .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+      .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(L.strong))
+      .shadow(color: .black.opacity(0.25), radius: 16, y: 6)
+      .transition(.move(edge: .trailing).combined(with: .opacity))
+    }
+
     /// Tabs that are not files: a browser's columns, or an agent's file-operation proposal.
     private func customTab(_ path: String) -> AnyView? {
-      if let card = DecisionSheet.card(tab: path) {
-        guard let sheet = DecisionSheet.load(card: card) else {
-          return AnyView(Text(tr("この判断シートは見つかりません")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
-            .frame(maxWidth: .infinity, maxHeight: .infinity).background(C.canvas))
-        }
-        return AnyView(DecisionSheetView(sheet: sheet, card: card) { answers, comment in
-          var input: CommandInput = ["card": .string(card), "answers": .string(answers)]
-          if !comment.isEmpty { input["comment"] = .string(comment) }
-          // The まとめて回答 button is the owner's answer.
-          let r = store.run("ask.answer", input, confirmed: true)
-          if case .failure(let e) = r { menus.ask(ClairDialog(title: tr("回答できませんでした"), message: e.message) { _ in }) }
-          else { store.run("tab.close", ["path": .string(path)]) }
-          todos = ClairTodo.list()
-        }.id("\(card)#\(sheet.state.rawValue)"))
-      }
       if FileBrowser.root(tab: path) != nil {
         return AnyView(FileBrowserView(model: store.browser(path), tab: path, reveal: st.browserReveal, menus: menus, host: browserHost).id(path))
       }
