@@ -446,91 +446,6 @@ import Observation
     var conciergeShown = false
     /// ⌘J on the concierge screen: a scratch shell docked under the board, for a quick command (2026-11-16 owner request).
     var conciergeTerminal = false
-    /// The chat the concierge screen shows (nil = its latest); ⌘W closes it there.
-    var conciergeChat: String?
-    /// ⌘B on the concierge screen folds the chat list; ⌘D opens a new chat (2026-11-17 owner request).
-    var conciergeTabsHidden = false
-    var conciergeNewChat = 0
-    /// The CLI concierge (2026-11-17 owner request; the chat is the `conciergeChatUI` experiment): the column is a split
-    /// layout of concierge terminals, one chat per leaf, split / closed / focused with the IDE's pane commands.
-    /// Leaves keep the chat they opened (`concierge(chat:)` also finds it after `/clear`).
-    // ponytail: GUI-local; a restart reopens only the latest chat (the rest stay in `conciergeChats`, shown by the chat UI).
-    // Persist the layout in the workspace if more than one pane should come back.
-    var conciergeTree = PaneTree(single: .terminal)
-    var conciergeLeaves: [Int: String] = [:]
-    /// Chats already started (or refused) once, so returning to the screen never asks for approval again on its own.
-    var conciergeTried: Set<String> = []
-    var conciergeCLI: Bool { conciergeShown && state.toggles["conciergeChatUI"] != true }
-
-    /// First show: the running concierges, else the latest chat (resumed), else a new one.
-    func seedConciergeTree() {
-      guard conciergeLeaves.isEmpty else { return }
-      let running = state.concierges().map(\.session)
-      let chats = running.isEmpty ? [state.conciergeChats.last ?? UUID().uuidString.lowercased()] : running
-      conciergeTree = PaneTree(single: .terminal)
-      conciergeLeaves[conciergeTree.focused] = chats[0]
-      for chat in chats.dropFirst() { conciergeTree.splitFocused(.horizontal); conciergeLeaves[conciergeTree.focused] = chat }
-      conciergeTree.equalize()
-    }
-
-    /// ⌘W on a concierge pane: end its chat (to the history) and drop the pane; the last pane stays, empty, to start anew.
-    func closeConciergeLeaf(_ id: Int) {
-      if let chat = conciergeLeaves.removeValue(forKey: id) {
-        closeConciergeChat(state.concierge(chat: chat).map { $0.launch.session ?? $0.session } ?? chat)
-      }
-      conciergeTree.close(id)
-      if conciergeLeaves[conciergeTree.focused] == nil { conciergeLeaves[conciergeTree.focused] = UUID().uuidString.lowercased() }
-    }
-
-    /// The chat list on the CLI column: a chat already in a pane gets the focus, else it opens in a new pane beside the
-    /// focused one — it only takes the focused pane over when that pane holds an unstarted new chat, so opening a past
-    /// chat never replaces the current one. Picking is the owner's ask, so a stopped chat starts (resumed) again.
-    func showConciergeChat(_ chat: String) {
-      if let leaf = conciergeLeaves.first(where: { $0.value == chat })?.key { conciergeTree.focus(leaf); return }
-      conciergeTried.remove(chat)
-      if let current = conciergeLeaves[conciergeTree.focused], Self.isStartedConcierge(current, in: state) {
-        conciergeTree.splitFocused(.horizontal)
-        if state.toggles["autoEqualize"] == true { conciergeTree.equalize() }
-      }
-      conciergeLeaves[conciergeTree.focused] = chat
-    }
-
-    /// A chat with a terminal, a place in the list or history, or a transcript — anything but a blank new pane.
-    static func isStartedConcierge(_ chat: String, in state: WorkbenchState) -> Bool {
-      state.concierge(chat: chat) != nil || state.conciergeChats.contains(chat) || state.conciergeHistory.contains(chat)
-        || Concierge.transcriptFile(session: chat) != nil
-    }
-
-    /// The IDE's pane commands, applied to the concierge column; false = not one of them.
-    private func runConciergePane(_ id: String) -> Bool {
-      switch id {
-      case "pane.splitRight", "pane.splitDown":
-        conciergeTree.splitFocused(id == "pane.splitRight" ? .horizontal : .vertical)
-        conciergeLeaves[conciergeTree.focused] = UUID().uuidString.lowercased()
-        if state.toggles["autoEqualize"] == true { conciergeTree.equalize() }
-      case "pane.close": closeConciergeLeaf(conciergeTree.focused)
-      case "pane.focusNext": conciergeTree.focusNext()
-      case "pane.focusPrevious": conciergeTree.focusPrevious()
-      case "pane.maximize": conciergeTree.toggleMaximize()
-      case "pane.equalize": conciergeTree.equalize()
-      default: return false
-      }
-      return true
-    }
-
-    /// Ends `chat`'s concierge and moves it to the history (its transcript stays, so it can be reopened).
-    func closeConciergeChat(_ chat: String) {
-      if let c = state.concierge(chat: chat) { closeTerminal(c.key) }
-      run("concierge.close", ["chat": .string(chat)], confirmed: true)
-      conciergeChat = nil
-    }
-
-    /// Drops `chat` from the list and the history (its transcript stays on disk).
-    func archiveConciergeChat(_ chat: String) {
-      if let c = state.concierge(chat: chat) { closeTerminal(c.key) }
-      run("concierge.archive", ["chat": .string(chat)], confirmed: true)
-      if conciergeChat == chat { conciergeChat = nil }
-    }
 
     func selectConciergeFile(_ f: ConciergeFile) {
       run("file.open", ["path": .string(URL(fileURLWithPath: f.root).appending(path: f.path).standardizedFileURL.path)])
@@ -549,11 +464,8 @@ import Observation
     public func run(_ id: String, _ input: CommandInput = [:], confirmed: Bool = false) -> Result<CommandResult, CommandError> {
       // ⌘W on the concierge screen closes the column's tab; the file stays open in its Project.
       if id == "pane.close", conciergeShown, let f = conciergeFile { closeConciergeFile(f); return .success(.ok) }
-      if conciergeCLI, runConciergePane(id) { return .success(.ok) }
-      // No file in the column: ⌘W closes the chat on screen instead (2026-11-16 owner request).
-      if id == "pane.close", conciergeShown, let chat = conciergeChat ?? state.conciergeChats.last, state.conciergeChats.contains(chat) {
-        closeConciergeChat(chat); return .success(.ok)
-      }
+      // No file in the column: nothing on the board screen to close (the IDE's panes are hidden under it).
+      if id == "pane.close", conciergeShown { return .success(.ok) }
       // Ctrl-Tab / Ctrl-Shift-Tab on the concierge screen cycle the column's tabs, wrapping at the ends.
       if id == "tab.next" || id == "tab.previous", conciergeShown, let f = conciergeFile,
         let i = conciergeFiles.firstIndex(of: f)
@@ -562,8 +474,6 @@ import Observation
         selectConciergeFile(conciergeFiles[(i + (id == "tab.next" ? 1 : n - 1)) % n]); return .success(.ok)
       }
       if id == "terminal.show", conciergeShown { conciergeTerminal.toggle(); return .success(.ok) }
-      if id == "sidebar.toggle", conciergeShown { conciergeTabsHidden.toggle(); return .success(.ok) }
-      if id == "pane.splitRight", conciergeShown { conciergeNewChat += 1; return .success(.ok) }
       let previousEditor = (state.project, state.active)
       if id.hasPrefix("debug.") { syncDebugPhase() }
       // `file.save` from any caller (⌘S, CLI, MCP) writes the buffer first; a failed write keeps the dirty marker.
@@ -1589,12 +1499,9 @@ import Observation
     /// The concierge screen is the chat beside the board; the board's TODOs are polled while it is up.
     private var conciergeBoard: Bool { sidebarMode == "concierge" }
     @AppStorage("clair.sidebarWidth") private var sidebarWidth = 242.0
-    /// The concierge chat column; 0 = folded away.
-    @AppStorage("clair.conciergeChatWidth") private var conciergeChatWidth = 460.0
     @AppStorage("clair.conciergeEditorWidth") private var conciergeEditorWidth = 560.0
     /// Concierge file tabs showing the Markdown preview instead of the editor.
     @State private var conciergePreviews: Set<ClairWorkbenchStore.ConciergeFile> = []
-    /// The concierge chat moves aside for the pane board once one of its children is live (no manual toggle).
 
     /// Width when the current drag began, so a drag that snaps the sidebar shut reopens (⌘B) at it.
     @State private var sidebarDragFrom: Double?
@@ -1602,12 +1509,6 @@ import Observation
     @State private var debugPID = ""
     struct AssociationDraft: Identifiable, Equatable { let id = UUID(); var ext: String; var lang: String }
     @State private var associationRows: [AssociationDraft] = []
-    @State private var conciergePromptDraft = ""
-    @State private var conciergeAsk: String?
-    /// The shown concierge chat; one not (or no longer) in `conciergeChats` falls back to the latest.
-    /// The chat ＋ opened: shown as a tab until its first send makes it one of `conciergeChats`.
-    @State private var conciergeDraft = UUID().uuidString.lowercased()
-    @State private var conciergeCwdDraft = ""
     @State private var notificationTestResult: String?
     @State private var quota: [ProviderQuota] = []
     @State private var quotaHovered = false
@@ -2473,39 +2374,20 @@ import Observation
 
     // MARK: concierge (ADR-0020)
 
-    /// #76: a new concierge starts only once the user has approved what it reads (prompt, cwd, its project files).
-    private func startConcierge(chat: String, _ message: String) {
-      // A running concierge takes messages straight from the chat (its surface is mounted there).
-      guard st.concierge(chat: chat) == nil else { return }
-      var input: CommandInput = ["message": .string(message), "chat": .string(chat)]
-      // Picked in the composer before the first send; empty = Claude Code's own default.
-      for k in ["model", "effort"] { if let v = UserDefaults.standard.string(forKey: "concierge.\(k)"), !v.isEmpty { input[k] = .string(v) } }
-      let cwd = st.conciergeDir
-      input["cwd"] = .string(cwd)
-      let fingerprint = Concierge.fingerprint(prompt: st.conciergePrompt, cwd: cwd)
-      if Concierge.isApproved(fingerprint) { store.run("concierge.open", input, confirmed: true); return }
-      let prompt = st.conciergePrompt
-      Task.detached { [store] in
-        let ok = store.requestMCPApproval("concierge.open", ["cwd": .string(cwd), "prompt": .string(prompt)], .external)
-        await MainActor.run {
-          guard ok else { ConciergeChatView.unsend(chat); conciergeAsk = message; return }
-          Concierge.approve(fingerprint)
-          store.run("concierge.open", input, confirmed: true)
-        }
-      }
-    }
-
-    /// A changed prompt or folder ends the running concierge, so the next open starts one with them.
-    private func saveConcierge(_ input: CommandInput) {
-      let before = (st.conciergePrompt, st.conciergeDir)
-      store.run("settings.concierge", input)
-      if before != (st.conciergePrompt, st.conciergeDir) { for c in st.concierges() { store.closeTerminal(c.key) } }
-    }
-
     /// Leaving the concierge for a pane or file hands the sidebar back to the file tree.
     private func leaveConcierge() { sidebarMode = "folder" }
     /// A tab click must show that tab, which the full-width concierge chat would cover.
     private func leaveConciergeOverlay() { if sidebarMode == "concierge" { leaveConcierge() } }
+
+    /// A board card's "頼む" / "PR を作る": typed (not sent) into the IDE's focused terminal, else its first one; the owner
+    /// reads it and presses Return. No terminal pane: the text goes to the pasteboard.
+    private func typeIntoTerminal(_ text: String) {
+      leaveConcierge()
+      let leaves = st.tree.leaves.filter { $0.kind == .terminal }
+      guard let pane = (leaves.first { $0.id == st.tree.focused } ?? leaves.first)?.id else { return copyToPasteboard(text) }
+      store.run("pane.focus", ["id": .int(pane)])
+      ClairGhosttySurfaceView.send(text, toPane: pane); ClairGhosttySurfaceView.focus(pane: pane)
+    }
 
     /// A pane tile opens the real terminal: leave the concierge and focus that pane in its Project.
     private func focusConciergeChild(_ s: AgentSession) {
@@ -3719,74 +3601,12 @@ import Observation
         if let old, old != new { store.closeTerminal(old) }
       }
       .overlay(alignment: .leading) {
-        // The concierge screen: chat on the left, the board on the right (running agents first; a click opens the terminal).
+        // The board screen (2026-11-24 owner request): the board, plus an editor column for the files opened from it.
+        // Talking to agents happens in the IDE's own terminals; a card's "頼む" / "PR を作る" is typed into the focused one.
         // A persistent ZStack so the screen recedes and emerges (Motion `depth`) instead of popping.
         ZStack {
         if sidebarMode == "concierge" {
-          let chats = st.conciergeChats
-          let chat = store.conciergeChat.flatMap { chats.contains($0) || $0 == conciergeDraft || st.conciergeHistory.contains($0) ? $0 : nil } ?? chats.last ?? conciergeDraft
-          let status = { (id: String) in st.concierge(chat: id).flatMap { c in st.agentSessions.first { $0.project == c.project && $0.pane == c.pane }?.status } }
-          let c = st.concierge(chat: chat)
-          let newChat = {
-            withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration)) {
-              conciergeDraft = UUID().uuidString.lowercased(); store.conciergeChat = conciergeDraft
-            }
-          }
           HStack(spacing: 0) {
-            if st.toggles["conciergeChatUI"] != true {
-              // The chat list (2026-11-18 owner request): every chat at a glance; picking one shows it in the focused pane.
-              if !store.conciergeTabsHidden {
-                let shown = store.conciergeLeaves[store.conciergeTree.focused] ?? chat
-                ConciergeTabs(
-                  chats: (chats + store.conciergeLeaves.values.sorted().filter { !chats.contains($0) && !st.conciergeHistory.contains($0) })
-                    .map { ($0, status($0)) },
-                  history: st.conciergeHistory, selected: shown,
-                  select: { store.showConciergeChat($0) },
-                  close: { id in
-                    if let leaf = store.conciergeLeaves.first(where: { $0.value == id })?.key { store.closeConciergeLeaf(leaf) } else { store.closeConciergeChat(id) }
-                  },
-                  archive: { id in
-                    if let leaf = store.conciergeLeaves.first(where: { $0.value == id })?.key { store.closeConciergeLeaf(leaf) }
-                    store.archiveConciergeChat(id)
-                  },
-                  new: { _ = store.run("pane.splitRight") })
-                .paneCard(focused: false)
-                conciergeGap
-              }
-              conciergePanes.frame(width: conciergeChatWidth < 20 ? 0 : conciergeChatWidth).clipped()
-            } else {
-            if !store.conciergeTabsHidden {
-            ConciergeTabs(
-              // A new chat stays a tab while its first request waits on the approval card.
-              chats: (chats + [chat, conciergeDraft].filter { !chats.contains($0) && !st.conciergeHistory.contains($0) && ($0 == chat || ConciergeChatView.isSending($0)) })
-                .reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }.map { ($0, status($0)) },
-              history: st.conciergeHistory, selected: chat,
-              select: { id in withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration)) { store.conciergeChat = id } },
-              close: { store.closeConciergeChat($0) },
-              archive: { store.archiveConciergeChat($0) },
-              new: newChat)
-            .paneCard(focused: false)
-            conciergeGap
-            }
-            VStack(spacing: 0) {
-              ConciergeChatView(
-                session: chat, terminal: c.map { ($0.key, $0.pane, $0.launch) }, status: status(chat),
-                start: { startConcierge(chat: chat, $0); store.conciergeChat = chat }, ask: $conciergeAsk,
-                // A new chat request is the only thing that resets the concierge's launch cap: an owner action, not an agent report.
-                onSent: { if let c { store.state.conciergeLaunches[c.key] = nil } })
-              .id(chat)
-              .transition(reduceMotion ? .opacity : .asymmetric(insertion: .opacity.combined(with: .offset(y: 8)), removal: .opacity))
-            }
-            .frame(width: conciergeChatWidth < 20 ? 0 : conciergeChatWidth).clipped()
-            .paneCard(focused: false)
-            }
-            // Dragged under 160pt the chat folds away; drag the edge back out to reopen it.
-            conciergeGap.overlay {
-              SplitHandle(horizontal: true, ratio: conciergeChatWidth, total: 1, onRatio: { w in
-                conciergeChatWidth = w < 160 ? 0 : min(w, 1200)
-              }, onDoubleClick: { conciergeChatWidth = conciergeChatWidth < 20 ? 460 : 0 })
-                .frame(width: 8)
-            }
             let board = st.board(todos, now: Date())
             TodoBoardView(
               cards: board.cards, archived: board.archived, others: otherAgents(board.cards),
@@ -3801,8 +3621,8 @@ import Observation
                 leaveConcierge()
               },
               openFile: { path in store.run("file.open", ["path": .string(path)]) },
-              ask: { card in conciergeAsk = tr("TODO「%@」(%@)を進めて。", card.todo.title, card.todo.path) + "\n" },
-              makePR: { card in conciergeAsk = tr("TODO「%@」(%@) の PR を作って。", card.todo.title, card.todo.path) },
+              ask: { card in typeIntoTerminal(tr("TODO「%@」(%@)を進めて。", card.todo.title, card.todo.path)) },
+              makePR: { card in typeIntoTerminal(tr("TODO「%@」(%@) の PR を作って。", card.todo.title, card.todo.path)) },
               diffProject: { card in card.todo.branch.flatMap { b in st.projects.first { $0.branch == b }?.name } },
               openDiff: { name in
                 if name != st.project { store.run("project.switch", ["name": .string(name)]) }
@@ -3816,7 +3636,6 @@ import Observation
             }
           }
           .frame(maxHeight: .infinity)
-          .onChange(of: store.conciergeNewChat) { newChat() }
           .safeAreaInset(edge: .bottom, spacing: 0) {
             // Unmounted when closed; the shell lives on in the daemon under its key, so ⌘J reattaches with its scrollback.
             // ponytail: one shared scratch shell in ~; per-chat shells or a draggable height if one is not enough.
@@ -3847,43 +3666,6 @@ import Observation
     /// Between the concierge screen's columns: a hairline, or a wallpaper gap between glass cards.
     @ViewBuilder private var conciergeGap: some View {
       if glass { Color.clear.frame(width: DesignTokens.Glass.inset) } else { Divider() }
-    }
-
-    /// The CLI concierge column: each leaf is a concierge's own Claude Code terminal (started on first show, after the
-    /// same approval as the chat), laid out like the IDE's panes.
-    private var conciergePanes: some View {
-      let tree = store.conciergeTree
-      let terminal = { (leaf: Int) in store.conciergeLeaves[leaf].flatMap { st.concierge(chat: $0) } }
-      let start = { (leaf: Int, again: Bool) in
-        guard let chat = store.conciergeLeaves[leaf], again || !store.conciergeTried.contains(chat) else { return }
-        store.conciergeTried.insert(chat)
-        startConcierge(chat: chat, "")
-      }
-      return ConciergePanes(
-        node: tree.maximized.map { PaneTree.Node.leaf(id: $0, kind: .terminal) } ?? tree.root, focused: tree.focused,
-        terminal: terminal, chat: { store.conciergeLeaves[$0] },
-        title: { leaf in
-          terminal(leaf).flatMap { c in st.agentSessions.first { $0.project == c.project && $0.pane == c.pane }?.activity } ?? tr("コンシェルジュ")
-        },
-        start: start,
-        onFocus: { store.conciergeTree.focus($0) },
-        onClose: { store.closeConciergeLeaf($0) },
-        onSwap: { a, b in
-          let leaf = { (pane: Int) in store.conciergeLeaves.keys.first { terminal($0)?.pane == pane } }
-          guard let la = leaf(a), let lb = leaf(b) else { return }
-          (store.conciergeLeaves[la], store.conciergeLeaves[lb]) = (store.conciergeLeaves[lb], store.conciergeLeaves[la])
-        },
-        onRatio: { store.conciergeTree.setRatio(splitContaining: $0, $1) },
-        onEqualize: { store.conciergeTree.equalize() },
-        // An owner's Return in a concierge is a new request: the only thing that resets its launch cap.
-        onSubmit: { leaf in if let c = terminal(leaf) { store.state.conciergeLaunches[c.key] = nil } })
-      .background(glass ? .clear : C.canvas)
-      .onAppear { store.seedConciergeTree() }
-      // A board card's "コンシェルジュに頼む": typed into the focused concierge, not sent (the owner presses Return).
-      .onChange(of: conciergeAsk, initial: true) { _, text in
-        guard let text, !text.isEmpty, let c = terminal(store.conciergeTree.focused) else { return }
-        ClairGhosttySurfaceView.send(text, toPane: c.pane); ClairGhosttySurfaceView.focus(pane: c.pane); conciergeAsk = nil
-      }
     }
 
     /// Right of the board: tabs for the files opened from the concierge screen, over the real editor. ponytail: language
@@ -4032,27 +3814,6 @@ import Observation
                 switchRow(profile.title, WorkbenchState.agentKey(profile.id),
                   note: ProviderQuota.sources.contains(profile.id) ? tr("ステータスバーの利用枠にも表示します。") : nil)
               }
-            }
-            SettingsCard(title: tr("コンシェルジュ")) {
-              VStack(alignment: .leading, spacing: 6) {
-                Text(tr("作業フォルダ")).font(Typography.font(Typography.sidebar))
-                TextField(tr("空欄なら ~/.clair/concierge"), text: $conciergeCwdDraft)
-                  .textFieldStyle(.roundedBorder).accessibilityLabel(tr("作業フォルダ"))
-                  .onSubmit { saveConcierge(["cwd": .string(conciergeCwdDraft)]) }
-                Text(tr("そのフォルダのプロジェクトスキルと CLAUDE.md が読み込まれます。")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
-                Text(tr("指示")).font(Typography.font(Typography.sidebar)).padding(.top, 6)
-                TextEditor(text: $conciergePromptDraft)
-                  .font(Typography.font(Typography.sidebar)).frame(height: 120)
-                  .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(L.strong)).accessibilityLabel(tr("指示"))
-                Button(tr("保存")) {
-                  saveConcierge(["prompt": .string(conciergePromptDraft), "cwd": .string(conciergeCwdDraft)])
-                }
-                Text(tr("変えて保存すると今のコンシェルジュを終了し、次に開いたときに新しい内容で起動します。内容が変わると起動前に確認します。")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
-              }
-              .padding(.vertical, 8)
-              .onAppear { conciergePromptDraft = st.conciergePrompt; conciergeCwdDraft = st.conciergeCwd }
-              switchRow(tr("コンシェルジュをチャットで表示(実験的)"), "conciergeChatUI",
-                note: tr("オフのときはコンシェルジュを Claude Code のターミナルとして出し、⌘D / ⌘⇧D で分割して並べます。"))
             }
             integrationCard
           case "エディタ":
@@ -4966,8 +4727,8 @@ import Observation
   /// the rule read as a stray line rather than a state (mock review
   /// feedback). Both now share the `washSelected` tint and there is no
   /// rule; see checklist §2.4, 2026-09-20 amendment.
-  /// ADR-0028: the titlebar switch between the concierge (control plane) and the IDE (a Project workspace).
-  /// A lens slides between the two icons; a dot on the concierge side while an agent waits on you. ⌃⌘0 flips it.
+  /// ADR-0028: the titlebar switch between the board (control plane) and the IDE (a Project workspace).
+  /// A lens slides between the two icons; a dot on the board side while an agent waits on you. ⌃⌘0 flips it.
   // ponytail: matchedGeometryEffect approximates the Liquid Glass morph; use `glassEffect` once the minimum macOS is 26.
   private struct ScreenSwitch: View {
     let concierge: Bool
@@ -4980,7 +4741,7 @@ import Observation
     var body: some View {
       Button { withAnimation(reduceMotion ? nil : .spring(duration: Motion.screenDuration, bounce: 0.25)) { toggle() } } label: {
         HStack(spacing: 0) {
-          icon("brain.head.profile", on: concierge)
+          icon("rectangle.split.3x1", on: concierge)
             .overlay(alignment: .topTrailing) { if waiting && !concierge { Circle().fill(C.attention).frame(width: 6, height: 6).offset(x: -3, y: 3) } }
           icon("chevron.left.forwardslash.chevron.right", on: !concierge)
         }
@@ -4988,8 +4749,8 @@ import Observation
       }
       .buttonStyle(.plain)
       .keyboardShortcut("0", modifiers: [.command, .control])
-      .help(concierge ? tr("IDE に切り替え (⌃⌘0)") : tr("コンシェルジュに切り替え (⌃⌘0)"))
-      .accessibilityLabel(concierge ? tr("IDE に切り替え") : tr("コンシェルジュに切り替え"))
+      .help(concierge ? tr("IDE に切り替え (⌃⌘0)") : tr("ボードに切り替え (⌃⌘0)"))
+      .accessibilityLabel(concierge ? tr("IDE に切り替え") : tr("ボードに切り替え"))
     }
 
     private func icon(_ name: String, on: Bool) -> some View {
@@ -5456,78 +5217,6 @@ import Observation
             // Drawn after both panes so it sits above their terminal/editor NSViews, which otherwise take the drag.
             let at = total * ratio + 0.5
             SplitHandle(horizontal: h, ratio: ratio, total: total, onRatio: { onRatio(lastLeaf(a), $0) }, onDoubleClick: { run("pane.equalize", [:]) })
-              .frame(width: h ? 7 : g.size.width, height: h ? g.size.height : 7)
-              .position(x: h ? at : g.size.width / 2, y: h ? g.size.height / 2 : at)
-          }
-        }
-      }
-    }
-  }
-  /// The CLI concierge column (`ClairWorkbenchStore.conciergeTree`): `PaneView`'s look and gestures, with each leaf a
-  /// concierge terminal (`<root>#-n`) instead of a Project pane. A leaf with no running concierge starts one.
-  private struct ConciergePanes: View {
-    let node: PaneTree.Node
-    let focused: Int
-    let terminal: (Int) -> (project: String, pane: Int, session: String, key: String, launch: AgentLaunch)?
-    let chat: (Int) -> String?
-    let title: (Int) -> String
-    /// (leaf, again): `again` is the owner's button, past a refused approval.
-    let start: (Int, Bool) -> Void
-    let onFocus: (Int) -> Void
-    let onClose: (Int) -> Void
-    /// Two concierge panes (the header drag carries the concierge pane id, so its preview snapshots the right surface).
-    let onSwap: (Int, Int) -> Void
-    let onRatio: (Int, Double) -> Void
-    let onEqualize: () -> Void
-    let onSubmit: (Int) -> Void
-    @Environment(\.clairGlass) private var glass
-
-    private func lastLeaf(_ n: PaneTree.Node) -> Int {
-      switch n {
-      case .leaf(let id, _): id
-      case .split(_, _, _, let b): lastLeaf(b)
-      }
-    }
-
-    private func child(_ n: PaneTree.Node) -> ConciergePanes {
-      ConciergePanes(node: n, focused: focused, terminal: terminal, chat: chat, title: title, start: start, onFocus: onFocus, onClose: onClose,
-                     onSwap: onSwap, onRatio: onRatio, onEqualize: onEqualize, onSubmit: onSubmit)
-    }
-
-    var body: some View {
-      switch node {
-      case .leaf(let id, _):
-        VStack(spacing: 0) {
-          if let t = terminal(id) {
-            PaneHeaderView(id: t.pane, label: title(id), focused: id == focused, onSwap: onSwap, onDragStart: {}, onClose: { onClose(id) })
-            ClairGhosttySurface(launch: (t.launch.command, t.launch.cwd), pane: t.pane, sessionKey: t.key, focused: id == focused,
-                                onFocus: { if id != focused { onFocus(id) } }, onSubmit: { onSubmit(id) })
-              .id(t.key)
-          } else {
-            VStack(spacing: 12) {
-              Text(tr("コンシェルジュ")).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textMuted)
-              Button(tr("起動")) { start(id, true) }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity).background(C.surface)
-            // Keyed by the leaf's chat too: picking another chat from the list starts it in the same pane.
-            .task(id: "\(id)-\(chat(id) ?? "")") { start(id, false) }
-          }
-        }
-        .paneCard(focused: id == focused)
-        .opacity(id == focused ? 1 : 0.75)
-        .simultaneousGesture(TapGesture().onEnded { if id != focused { onFocus(id) } })
-      case .split(let axis, let ratio, let a, let b):
-        GeometryReader { g in
-          let h = axis == .horizontal
-          let total = h ? g.size.width : g.size.height
-          ZStack(alignment: .topLeading) {
-            if h {
-              HStack(spacing: 0) { child(a).frame(width: total * ratio); Rectangle().fill(glass ? .clear : L.paneDivider).frame(width: glass ? DesignTokens.Glass.inset : 1); child(b) }
-            } else {
-              VStack(spacing: 0) { child(a).frame(height: total * ratio); Rectangle().fill(glass ? .clear : L.paneDivider).frame(height: glass ? DesignTokens.Glass.inset : 1); child(b) }
-            }
-            let at = total * ratio + 0.5
-            SplitHandle(horizontal: h, ratio: ratio, total: total, onRatio: { onRatio(lastLeaf(a), $0) }, onDoubleClick: onEqualize)
               .frame(width: h ? 7 : g.size.width, height: h ? g.size.height : 7)
               .position(x: h ? at : g.size.width / 2, y: h ? g.size.height / 2 : at)
           }

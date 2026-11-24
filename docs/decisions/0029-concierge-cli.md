@@ -1,14 +1,14 @@
 ---
 id: ADR-0029
 title: "コンシェルジュをチャットではなく Claude Code のターミナル(CLI)で出す"
-status: accepted
+status: superseded
 date: 2026-11-17
 deciders:
   - Daiki
 related_projects: []
 related_issues: []
 supersedes: []
-superseded_by: []
+superseded_by: [ADR-0031]
 ---
 
 # ADR-0029: コンシェルジュを CLI で出す
