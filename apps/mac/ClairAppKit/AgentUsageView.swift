@@ -7,9 +7,18 @@ import SwiftUI
 private typealias C = DesignTokens.Color
 private typealias L = DesignTokens.Line
 
+/// The usage screen's accents, borrowed from scheme colours so light and dark both hold.
+private enum Ink {
+  static let blue = C.codeFunc
+  static let purple = C.codeKeyword
+  static let orange = C.codeNumber
+  static let amber = C.attention
+  static let green = C.success
+}
+
 /// 設定 › 使用状況 (canvas: SettingsUsage). Activity is the prompts the user sent, across all three provider histories.
-/// Every chart is grayscale — the canvas gives colour only to diff, debug and tab groups — so magnitude is lightness and
-/// an agent is told apart by its icon.
+/// Each card has its own accent so the work reads at a glance (canvas: SettingsUsage); activity volume is the
+/// green ramp, and an agent is told apart by its icon.
 struct AgentUsageView: View {
   let projects: [WorkbenchProject]
   /// Active Project name; the commit chart starts on it.
@@ -120,21 +129,24 @@ struct AgentUsageView: View {
     if let f, f.previousWeek > 0 { change = Int((Double(f.week - f.previousWeek) / Double(f.previousWeek) * 100).rounded()) }
     let hours = f?.busiestHours ?? []
     return HStack(alignment: .top, spacing: 10) {
-      UsageTile(title: tr("今日"), value: f.map { "\($0.today)" } ?? "—", unit: tr("件"), sub: f.map { tr("昨日 %@ 件", $0.yesterday) })
-      UsageTile(title: tr("直近7日"), value: f.map { "\($0.week)" } ?? "—", unit: tr("件"),
-                sub: change.map { tr("前週比 %@%", ($0 >= 0 ? "+" : "") + "\($0)") }) {
+      UsageTile(title: "⚡ " + tr("今日"), value: f.map { "\($0.today)" } ?? "—", unit: tr("件"), sub: f.map { tr("昨日 %@ 件", $0.yesterday) },
+                accent: Ink.blue)
+      UsageTile(title: "📈 " + tr("直近7日"), value: f.map { "\($0.week)" } ?? "—", unit: tr("件"),
+                sub: change.map { ($0 >= 0 ? "▲ " : "▼ ") + tr("前週比 %@%", ($0 >= 0 ? "+" : "") + "\($0)") },
+                subTint: change.map { $0 >= 0 ? Ink.green : C.textTertiary }, accent: Ink.purple) {
         if let spark = f?.spark, spark.contains(where: { $0 > 0 }) {
           Chart(Array(spark.enumerated()), id: \.offset) { point in
             LineMark(x: .value("日", point.offset), y: .value("件", point.element))
-              .foregroundStyle(C.textSecondary).lineStyle(StrokeStyle(lineWidth: 1.5)).interpolationMethod(.monotone)
+              .foregroundStyle(Ink.purple).lineStyle(StrokeStyle(lineWidth: 2)).interpolationMethod(.monotone)
           }
           .chartXAxis(.hidden).chartYAxis(.hidden).frame(height: 24)
           .accessibilityLabel(tr("直近 14 日の依頼数"))
         }
       }
-      UsageTile(title: tr("連続日数"), value: f.map { "\($0.streak)" } ?? "—", unit: tr("日"), sub: f.map { tr("最長 %@ 日", $0.longest) })
-      UsageTile(title: tr("よく使う時間帯"), value: hours.first.map { "\($0)" } ?? "—", unit: hours.isEmpty ? nil : tr("時台"),
-                sub: hours.count > 1 ? tr("次いで %@ 時台", hours[1]) : nil)
+      UsageTile(title: "🔥 " + tr("連続日数"), value: f.map { "\($0.streak)" } ?? "—", unit: tr("日"), sub: f.map { tr("最長 %@ 日", $0.longest) },
+                accent: Ink.orange)
+      UsageTile(title: "⏰ " + tr("よく使う時間帯"), value: hours.first.map { "\($0)" } ?? "—", unit: hours.isEmpty ? nil : tr("時台"),
+                sub: hours.count > 1 ? tr("次いで %@ 時台", hours[1]) : nil, accent: Ink.amber)
     }
   }
 
@@ -167,7 +179,7 @@ struct AgentUsageView: View {
   }
 
   private static func heatFill(_ level: Int) -> Color {
-    level == 0 ? C.surfaceActive : C.textSecondary.opacity([0, 0.25, 0.45, 0.7, 0.95][level])
+    level == 0 ? C.surfaceActive : Ink.green.opacity([0, 0.25, 0.45, 0.7, 0.95][level])
   }
 
   private struct HourTotal: Identifiable {
@@ -184,7 +196,7 @@ struct AgentUsageView: View {
     return VStack(alignment: .leading, spacing: 12) {
       Chart((0..<24).map { HourTotal(hour: $0, count: totals[$0]) }) { point in
         BarMark(x: .value(tr("時"), point.hour), y: .value(tr("件"), point.count))
-          .foregroundStyle(C.textSecondary).cornerRadius(2)
+          .foregroundStyle(Ink.green).cornerRadius(2)
       }
       .chartXScale(domain: -0.6...23.9)
       .chartXAxis {
@@ -268,13 +280,13 @@ struct AgentUsageView: View {
         if let now, let then {
           let diff = now - then
           Text(tr("今日まで %@(先月同日 %@)", format(now), (diff >= 0 ? "+" : "−") + format(abs(diff))))
-            .font(Typography.font(Typography.sidebar)).foregroundStyle(C.textSecondary).monospacedDigit()
+            .font(Typography.font(Typography.sidebar).weight(.semibold)).foregroundStyle(diff >= 0 ? Ink.green : C.textSecondary).monospacedDigit()
         }
       }
       Chart(points) { point in
         LineMark(x: .value(tr("日"), point.day), y: .value(cost ? "USD" : tr("件"), point.value), series: .value(tr("月"), point.month))
-          .foregroundStyle(point.month == thisName ? C.textPrimary : C.textTertiary)
-          .lineStyle(point.month == thisName ? StrokeStyle(lineWidth: 2) : StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+          .foregroundStyle(point.month == thisName ? Ink.blue : C.textTertiary)
+          .lineStyle(point.month == thisName ? StrokeStyle(lineWidth: 2.5) : StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
       }
       .chartXScale(domain: 1...31)
       .chartXAxis {
@@ -300,7 +312,7 @@ struct AgentUsageView: View {
   private func legendLine(_ title: String, dashed: Bool) -> some View {
     HStack(spacing: 6) {
       Path { $0.move(to: .init(x: 0, y: 1)); $0.addLine(to: .init(x: 16, y: 1)) }
-        .stroke(dashed ? C.textTertiary : C.textPrimary, style: StrokeStyle(lineWidth: 2, dash: dashed ? [4, 3] : []))
+        .stroke(dashed ? C.textTertiary : Ink.blue, style: StrokeStyle(lineWidth: 2, dash: dashed ? [4, 3] : []))
         .frame(width: 16, height: 2)
       Text(title).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textSecondary)
     }
@@ -344,14 +356,14 @@ struct AgentUsageView: View {
       if root == nil {
         placeholder(tr("Project を開くと、依頼とコミットを並べて表示します。"))
       } else {
-        dayBars(tr("依頼・追記"), dates.map { DayCount(date: $0, count: prompts[$0] ?? 0) }, ink: C.textSecondary, start: start)
+        dayBars(tr("依頼・追記"), dates.map { DayCount(date: $0, count: prompts[$0] ?? 0) }, ink: Ink.blue, start: start)
         switch commits {
         case .none:
           ProgressView().controlSize(.small).frame(maxWidth: .infinity, minHeight: 60)
         case .some(.none):
           placeholder(tr("この Project は Git リポジトリではないため、コミット数を表示できません。"))
         case .some(.some(let counts)):
-          dayBars(tr("コミット"), dates.map { DayCount(date: $0, count: counts[$0] ?? 0) }, ink: C.textTertiary, start: start)
+          dayBars(tr("コミット"), dates.map { DayCount(date: $0, count: counts[$0] ?? 0) }, ink: Ink.green, start: start)
         }
         note(tr("直近 30 日 · あなたのコミット(merge を除く)"))
       }
@@ -416,7 +428,7 @@ struct AgentUsageView: View {
         }
         Chart(Array(bins.enumerated()), id: \.offset) { bin in
           BarMark(x: .value(tr("待ち時間"), tr(Self.binTitles[bin.offset])), y: .value(tr("件"), bin.element))
-            .foregroundStyle(C.textSecondary).cornerRadius(2)
+            .foregroundStyle(Ink.purple).cornerRadius(2)
         }
         .chartXScale(domain: Self.binTitles.map { tr($0) })
         .chartXAxis {
@@ -461,9 +473,9 @@ struct AgentUsageView: View {
       } else {
         Chart(values) { value in
           AreaMark(x: .value(tr("時"), value.hour), y: .value(tr("本"), value.value))
-            .interpolationMethod(.stepEnd).foregroundStyle(C.textSecondary.opacity(0.16))
+            .interpolationMethod(.stepEnd).foregroundStyle(Ink.orange.opacity(0.22))
           LineMark(x: .value(tr("時"), value.hour), y: .value(tr("本"), value.value))
-            .interpolationMethod(.stepEnd).foregroundStyle(C.textSecondary).lineStyle(StrokeStyle(lineWidth: 1.5))
+            .interpolationMethod(.stepEnd).foregroundStyle(Ink.orange).lineStyle(StrokeStyle(lineWidth: 1.5))
         }
         .chartXScale(domain: 0.0...24.0)
         .chartYScale(domain: 0...max(ceil(peak?.value ?? 1), 1))
@@ -556,7 +568,9 @@ struct AgentUsageView: View {
       if let share {
         Capsule().fill(C.surfaceActive)
           .overlay(alignment: .leading) {
-            GeometryReader { proxy in Capsule().fill(C.textSecondary).frame(width: max(2, proxy.size.width * share)) }
+            GeometryReader { proxy in
+              Capsule().fill(LinearGradient(colors: [Ink.blue, Ink.purple], startPoint: .leading, endPoint: .trailing)).frame(width: max(2, proxy.size.width * share))
+            }
           }
           .frame(width: 120, height: 6)
           .help(String(format: "%.1f%%", share * 100))
@@ -582,7 +596,9 @@ struct AgentUsageView: View {
             let resumable = projects.contains { $0.path == history.project }
             Divider().overlay(L.hairlineSoft)
             GridRow {
-              Text("\(index + 1)").foregroundStyle(C.textTertiary)
+              // Gold, silver, bronze for the top three.
+              Text("\(index + 1)").foregroundStyle([Ink.amber, C.textSecondary, Ink.orange].dropFirst(index).first ?? C.textTertiary)
+                .fontWeight(index < 3 ? .bold : .regular)
               HStack(spacing: 6) {
                 ProviderBrandIcon(provider: history.provider.rawValue, size: 14)
                 Text(history.title).lineLimit(1).truncationMode(.tail)
@@ -638,7 +654,7 @@ private struct ActivityCalendar: View {
   }
 
   private static func fill(_ level: Int) -> Color {
-    level == 0 ? C.surfaceActive : C.textSecondary.opacity([0, 0.25, 0.45, 0.7, 0.95][level])
+    level == 0 ? C.surfaceActive : Ink.green.opacity([0, 0.25, 0.45, 0.7, 0.95][level])
   }
 
   private func detail(for date: Date) -> String {
@@ -782,28 +798,43 @@ private struct UsageTile<Extra: View>: View {
   let value: String
   var unit: String? = nil
   var sub: String? = nil
+  var subTint: Color? = nil
+  /// Tints the tile and its number; nil keeps the plain tile.
+  var accent: Color? = nil
   @ViewBuilder var extra: Extra
 
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
-      Text(title).font(.system(size: Typography.sidebar.size, weight: .medium)).foregroundStyle(C.textTertiary)
+      Text(title).font(.system(size: Typography.sidebar.size, weight: accent == nil ? .medium : .semibold)).foregroundStyle(C.textTertiary)
       HStack(alignment: .firstTextBaseline, spacing: 4) {
-        Text(value).font(.system(size: 28, weight: .semibold, design: .rounded)).foregroundStyle(C.textPrimary)
+        Text(value).font(.system(size: 28, weight: .semibold, design: .rounded)).foregroundStyle(accent ?? C.textPrimary)
           .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
         if let unit { Text(unit).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary) }
       }
-      if let sub { Text(sub).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary).monospacedDigit() }
+      if let sub {
+        Text(sub).font(Typography.font(Typography.sidebar).weight(subTint == nil ? .regular : .semibold))
+          .foregroundStyle(subTint ?? C.textTertiary).monospacedDigit()
+      }
       extra
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(12)
-    .background(C.canvas, in: RoundedRectangle(cornerRadius: Radius.card))
+    .background {
+      let shape = RoundedRectangle(cornerRadius: Radius.card)
+      ZStack {
+        shape.fill(C.canvas)
+        if let accent {
+          shape.fill(LinearGradient(colors: [accent.opacity(0.22), accent.opacity(0.06)], startPoint: .topLeading, endPoint: .bottomTrailing))
+          shape.strokeBorder(accent.opacity(0.35), lineWidth: 1)
+        }
+      }
+    }
   }
 }
 
 extension UsageTile where Extra == EmptyView {
-  init(title: String, value: String, unit: String? = nil, sub: String? = nil) {
-    self.init(title: title, value: value, unit: unit, sub: sub, extra: { EmptyView() })
+  init(title: String, value: String, unit: String? = nil, sub: String? = nil, subTint: Color? = nil, accent: Color? = nil) {
+    self.init(title: title, value: value, unit: unit, sub: sub, subTint: subTint, accent: accent, extra: { EmptyView() })
   }
 }
 
