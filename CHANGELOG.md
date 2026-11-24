@@ -6,6 +6,20 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.54.0] - 2026-11-24
+
+### Added
+- Settings > General > Tab layout = Vertical moves the Project tabs out of the titlebar into a column beside the activity bar, with search on top and the command palette and settings at the bottom.
+
+### Changed
+- The concierge screen is now a board-only screen. You talk to agents in the IDE's own terminals, and a card's ask / make-PR is typed into the focused IDE terminal.
+- The usage screen is now in colour: each overview card has its own accent, the activity calendar and heatmap use a green ramp, and the three costliest sessions are ranked gold, silver and bronze.
+- Agents can now send input to terminals in any Project, not only the one on screen.
+- Scrolling the titlebar tab strip with the mouse wheel now runs the other way.
+
+### Removed
+- The concierge chat column, chat list, chat UI toggle and concierge settings card.
+
 ## [0.53.0] - 2026-11-18
 
 ### Changed
@@ -934,7 +948,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.53.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.54.0...HEAD
+[0.54.0]: https://github.com/Diwamoto/clair/compare/v0.53.0...v0.54.0
 [0.53.0]: https://github.com/Diwamoto/clair/compare/v0.52.0...v0.53.0
 [0.52.0]: https://github.com/Diwamoto/clair/compare/v0.51.0...v0.52.0
 [0.51.0]: https://github.com/Diwamoto/clair/compare/v0.50.0...v0.51.0
