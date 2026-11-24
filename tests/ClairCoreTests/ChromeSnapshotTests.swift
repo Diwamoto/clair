@@ -37,9 +37,10 @@
       store.run("tab.open", ["path": .string("apple/ClairApp/ProjectWorkspace.swift")])
       store.edited("apple/ClairApp/ProjectWorkspace.swift")
       var mode = "folder"
-      for (name, prep) in [("native", {}), ("palette", { store.run("palette.commands") }), ("quickopen", { store.run("palette.files") }), ("search", { store.run("palette.search") }),
+      let vertical = { (on: Bool) in store.run("settings.choose", ["key": .string("tabLayout"), "value": .string(on ? "縦" : "横")], confirmed: true) }
+      for (name, prep) in [("native", {}), ("vertical", { vertical(true) }), ("native-again", { vertical(false) }), ("palette", { store.run("palette.commands") }), ("quickopen", { store.run("palette.files") }), ("search", { store.run("palette.search") }),
                            ("glass", { store.run("settings.choose", ["key": .string("material"), "value": .string("Liquid Glass")], confirmed: true) }),
-                           ("glass-split", { store.run("pane.splitRight"); store.run("pane.splitDown") }),
+                           ("glass-vertical", { vertical(true) }), ("glass-split", { vertical(false);  store.run("pane.splitRight"); store.run("pane.splitDown") }),
                            ("glass-debug", { mode = "ladybug" }), ("glass-agents", { mode = "terminal" }),
                            ("glass-changes", { mode = "shield" }), ("glass-concierge", { mode = "concierge" }),
                            ("glass-settings", { mode = "folder"; store.run("settings.open") })] as [(String, () -> Void)] {

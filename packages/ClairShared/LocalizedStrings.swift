@@ -73,6 +73,8 @@ extension LocalizedStrings {
     "インターフェース": "Interface",
     "外観": "Appearance",
     "素材": "Material", "クラシック": "Classic",
+    "タブの配置": "Tab layout", "横": "Horizontal", "縦": "Vertical",
+    "縦にすると、タブを titlebar から左端の列へ移し、検索を上、コマンドと設定を下に置きます。": "Vertical moves the tabs from the titlebar into a column at the left edge, with search on top and commands and settings at the bottom.",
     "Liquid Glass は黒い壁紙の上にガラスのパネルを浮かべます。すぐに切り替わります。": "Liquid Glass floats glass panels over a black wallpaper. Takes effect immediately.",
     "エディタ、ターミナル、サイドバーの配色をまとめて切り替えます。": "Switches the colors of the editor, terminal, and sidebar together.",
     "言語": "Language",

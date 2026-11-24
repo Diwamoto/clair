@@ -1698,6 +1698,7 @@ import Observation
           VStack(spacing: 0) {
             titlebar
             HStack(spacing: 0) {
+              if verticalTabs { tabColumn }
               if sidebarMode != "concierge" { activityBar }
               // The concierge is its own screen (the control plane), not a panel of a Project's workspace.
               let sidebarShown = !st.sidebarHidden && sidebarMode != "concierge"
@@ -1815,38 +1816,28 @@ import Observation
       HStack(spacing: 0) {
         Color.clear.frame(width: 76 + 25)  // room for the native traffic lights (inset 5pt by AppDelegate)
         // The scroll view swallows clicks on its empty tail, so the strip itself spans the viewport and carries the titlebar area.
-        GeometryReader { g in
-          ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: glass ? 8 : 4) {
-              // A managed worktree of an open Project nests inside its origin's group (canvas Main), not as a group of its own.
-              ForEach(Array(st.projects.enumerated()).filter { _, p in !isNestedWorktree(p) }, id: \.element.name) { i, p in
-                if p.name != st.projects.first(where: { !isNestedWorktree($0) })?.name, !glass { Rectangle().fill(Color(white: 0.95, opacity: 0.09)).frame(width: 1, height: 22).padding(.horizontal, 4) }
-                projectGroup(p, colorKey: p.color.flatMap { DesignTokens.GroupColor.resolve($0) == nil ? nil : $0 } ?? projectColors[i % projectColors.count].rawValue)
+        if verticalTabs { Spacer(minLength: 0) } else {
+          GeometryReader { g in
+            ScrollView(.horizontal, showsIndicators: false) {
+              HStack(spacing: glass ? 8 : 4) {
+                ForEach(Array(tabGroups.enumerated()), id: \.element.0.name) { n, g in
+                  if n > 0, !glass { Rectangle().fill(Color(white: 0.95, opacity: 0.09)).frame(width: 1, height: 22).padding(.horizontal, 4) }
+                  projectGroup(g.0, colorKey: g.1)
+                }
+                openFolderButton
               }
-              Button { store.run("project.choose") } label: { Image(systemName: "plus").font(Typography.font(Typography.sidebar)).foregroundStyle(C.chromeInk).frame(width: RowHeight.control, height: RowHeight.control) }
-                .buttonStyle(.hoverWash).help(tr("フォルダを開く"))
+              .frame(minWidth: g.size.width, minHeight: g.size.height, alignment: .leading)
+              .background(TitlebarArea(wheelScrollsStrip: true))
             }
-            .frame(minWidth: g.size.width, minHeight: g.size.height, alignment: .leading)
-            .background(TitlebarArea(wheelScrollsStrip: true))
           }
         }
         HStack(spacing: 4) {
-          Button { store.run("palette.search") } label: {
-            HStack(spacing: 4) {
-              Image(systemName: "magnifyingglass").font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted)
-              Text(tr("ファイル、シンボル")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
-              Spacer(minLength: 0)
-              Text("⌘⇧F").font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted)
-            }
-            .padding(.horizontal, glass ? 12 : 8).frame(width: 200, height: glass ? RowHeight.control : RowHeight.default)
-            .fieldWell(radius: Radius.pill())
-          }.buttonStyle(HoverWashStyle(radius: Radius.pill())).help(tr("検索"))
+          if !verticalTabs { searchField.frame(width: 200) }
           ScreenSwitch(concierge: conciergeBoard, waiting: st.agentSessions.contains { $0.status == .blocked && !Concierge.isPane($0.pane) }) {
             sidebarMode = conciergeBoard ? "folder" : "concierge"
             if !conciergeBoard, st.sidebarHidden { store.run("sidebar.toggle") }
           }
-          titlebarAction("command", tr("コマンドパレット"), on: st.palette == .commands) { store.run("palette.commands") }
-          titlebarAction("gearshape", tr("設定"), on: st.settingsOpen) { store.run(st.settingsOpen ? "settings.close" : "settings.open") }
+          if !verticalTabs { titlebarActions }
         }.padding(.horizontal, 12)
       }
       // Glass: centred in the strip down to the panels' top edge (the native lights follow, see AppDelegate).
@@ -1889,6 +1880,61 @@ import Observation
       }
     }
 
+    /// 設定 › 一般 › タブの配置.
+    private var verticalTabs: Bool { st.choices["tabLayout"] == "縦" }
+
+    /// Top-level tab groups with their colour key. A managed worktree of an open Project nests inside its origin's
+    /// group (canvas Main), not as a group of its own.
+    private var tabGroups: [(WorkbenchProject, String)] {
+      st.projects.filter { !isNestedWorktree($0) }.enumerated().map { i, p in
+        (p, p.color.flatMap { DesignTokens.GroupColor.resolve($0) == nil ? nil : $0 } ?? projectColors[i % projectColors.count].rawValue)
+      }
+    }
+
+    private var openFolderButton: some View {
+      Button { store.run("project.choose") } label: { Image(systemName: "plus").font(Typography.font(Typography.sidebar)).foregroundStyle(C.chromeInk).frame(width: RowHeight.control, height: RowHeight.control) }
+        .buttonStyle(.hoverWash).help(tr("フォルダを開く"))
+    }
+
+    private var searchField: some View {
+      Button { store.run("palette.search") } label: {
+        HStack(spacing: 4) {
+          Image(systemName: "magnifyingglass").font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted)
+          Text(tr("ファイル、シンボル")).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
+          Spacer(minLength: 0)
+          Text("⌘⇧F").font(Typography.font(Typography.chrome)).foregroundStyle(C.textMuted)
+        }
+        .padding(.horizontal, glass ? 12 : 8).frame(maxWidth: .infinity).frame(height: glass ? RowHeight.control : RowHeight.default)
+        .fieldWell(radius: Radius.pill())
+      }.buttonStyle(HoverWashStyle(radius: Radius.pill())).help(tr("検索"))
+    }
+
+    @ViewBuilder private var titlebarActions: some View {
+      titlebarAction("command", tr("コマンドパレット"), on: st.palette == .commands) { store.run("palette.commands") }
+      titlebarAction("gearshape", tr("設定"), on: st.settingsOpen) { store.run(st.settingsOpen ? "settings.close" : "settings.open") }
+    }
+
+    /// タブの配置 = 縦 (owner, 2026-11-24): the titlebar's tab groups stack in a column at the window's left edge,
+    /// left of the activity bar, with search on top and the command palette and settings at the bottom.
+    // ponytail: fixed width; make it draggable like the sidebar if a 240pt column proves too narrow.
+    private var tabColumn: some View {
+      VStack(spacing: 8) {
+        searchField
+        ScrollView(.vertical, showsIndicators: false) {
+          VStack(alignment: .leading, spacing: glass ? 8 : 10) {
+            ForEach(tabGroups, id: \.0.name) { p, key in projectGroup(p, colorKey: key, vertical: true) }
+            openFolderButton
+          }.frame(maxWidth: .infinity, alignment: .leading)
+        }.clairScroller()
+        HStack(spacing: 4) { Spacer(minLength: 0); titlebarActions }
+      }
+      .padding(8)
+      .frame(width: 240).frame(maxHeight: .infinity)
+      .environment(\.clairFillTabs, true)
+      .chromeBackground()
+      .overlay(alignment: .trailing) { if !glass { Rectangle().fill(C.surfaceActive).frame(width: 1) } }
+    }
+
     private func titlebarAction(_ icon: String, _ help: String, on: Bool, _ action: @escaping () -> Void) -> some View {
       Button(action: action) {
         Image(systemName: icon).font(Typography.font(Typography.sidebar)).foregroundStyle(on ? C.chromeInk : C.textMuted)
@@ -1903,7 +1949,7 @@ import Observation
 
     /// A chip toggles its group's tab strip (GUI-local), active or not — opening one of its tabs switches Project.
     /// An inactive group with no tabs has nothing to fold, so its chip switches to that Project instead.
-    private func projectGroup(_ p: WorkbenchProject, colorKey: String) -> some View {
+    private func projectGroup(_ p: WorkbenchProject, colorKey: String, vertical: Bool = false) -> some View {
       let color = DesignTokens.GroupColor.resolve(colorKey) ?? DesignTokens.GroupColor.gray.color
       let active = st.project == p.name
       let tabs = active ? st.titlebarTabs : (st.layouts[p.name]?.titlebarTabs ?? [])
@@ -1921,7 +1967,9 @@ import Observation
           }
         }
       }
-      return HStack(spacing: 0) {
+      let vessel = vertical ? AnyShape(RoundedRectangle(cornerRadius: Radius.card)) : AnyShape(Capsule())
+      let stack = vertical ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2)) : AnyLayout(HStackLayout(spacing: 0))
+      return stack {
         // Not a Button: a Button's press tracking swallows the drag, so the chip taps like a file tab does.
         Group {
           // The chip carries its group colour as its own fill/border (mock
@@ -1964,9 +2012,9 @@ import Observation
         }
         .clairContextMenu(menus) { projectMenu(p, colorKey: colorKey, folded: folded) }
         if !folded {
-          HStack(spacing: 4) {
+          (vertical ? AnyLayout(VStackLayout(spacing: 2)) : AnyLayout(HStackLayout(spacing: 4))) {
             ForEach(Array(orderedTabs.enumerated()), id: \.element) { i, tab in
-              if i > 0, !glass { Rectangle().fill(L.chromeSoft).frame(width: 1, height: 18) }
+              if i > 0, !glass, !vertical { Rectangle().fill(L.chromeSoft).frame(width: 1, height: 18) }
               switch tab {
               case .file(let path):
                 fileTab(path, projectActive: active, project: p.name,
@@ -2009,14 +2057,15 @@ import Observation
               }
             }
           }.padding(.leading, 4)
-          .transition(reduceMotion ? .opacity : .scale(scale: 0.05, anchor: .leading).combined(with: .opacity))
-          worktreeChip(p, colorKey: colorKey, color: color)
+          .transition(reduceMotion ? .opacity : .scale(scale: 0.05, anchor: vertical ? .top : .leading).combined(with: .opacity))
+          worktreeChip(p, colorKey: colorKey, color: color, vertical: vertical)
         }
       }
       // Glass: one tinted vessel holds the chip and its tabs (canvas Tokens `GLASS の中身`).
-      .padding(.horizontal, glass ? 4 : 0).frame(height: glass ? 36 : nil)
-      .background(glass ? color.opacity(active ? 0.16 : 0.07) : .clear, in: Capsule())
-      .overlay(Capsule().stroke(glass ? color.opacity(active ? 0.5 : 0.24) : .clear))
+      .padding(.horizontal, glass ? 4 : 0).padding(.vertical, glass && vertical ? 5 : 0).frame(height: glass && !vertical ? 36 : nil)
+      .frame(maxWidth: vertical ? .infinity : nil, alignment: .leading)
+      .background(glass ? color.opacity(active ? 0.16 : 0.07) : .clear, in: vessel)
+      .overlay(vessel.stroke(glass ? color.opacity(active ? 0.5 : 0.24) : .clear))
     }
 
     private func isNestedWorktree(_ p: WorkbenchProject) -> Bool {
@@ -2025,7 +2074,7 @@ import Observation
 
     /// The origin's managed worktrees: one folded chip (branch glyph + count) that unfolds them into sub-groups.
     /// A worktree that is the active Project is always shown, so the user never loses where they are.
-    @ViewBuilder private func worktreeChip(_ p: WorkbenchProject, colorKey: String, color: Color) -> some View {
+    @ViewBuilder private func worktreeChip(_ p: WorkbenchProject, colorKey: String, color: Color, vertical: Bool = false) -> some View {
       let worktrees = p.origin == nil ? st.projects.filter { $0.origin == p.path } : []
       if !worktrees.isEmpty {
         let open = openWorktrees.contains(p.name) || worktrees.contains { $0.name == st.project }
@@ -2046,7 +2095,7 @@ import Observation
         .help(tr("worktree %d 件: %@", worktrees.count, worktrees.compactMap(\.branch).joined(separator: ", ")))
         .padding(.leading, 6)
         if open {
-          ForEach(worktrees, id: \.name) { wt in AnyView(projectGroup(wt, colorKey: colorKey)).padding(.leading, 4) }
+          ForEach(worktrees, id: \.name) { wt in AnyView(projectGroup(wt, colorKey: colorKey, vertical: vertical)).padding(.leading, 4) }
         }
       }
     }
@@ -3954,6 +4003,7 @@ import Observation
             SettingsCard(title: tr("インターフェース")) {
               choiceRow(tr("外観"), "appearance", note: tr("エディタ、ターミナル、サイドバーの配色をまとめて切り替えます。"))
               choiceRow(tr("素材"), "material", note: tr("Liquid Glass は黒い壁紙の上にガラスのパネルを浮かべます。すぐに切り替わります。"))
+              choiceRow(tr("タブの配置"), "tabLayout", note: tr("縦にすると、タブを titlebar から左端の列へ移し、検索を上、コマンドと設定を下に置きます。"))
               choiceRow(tr("言語"), "language")
               switchRow(tr("ステータスバーの利用枠を隠す"), "hideQuota")
             }
@@ -4893,7 +4943,7 @@ import Observation
           let clip = sv.contentView, maxX = max(0, (sv.documentView?.frame.width ?? 0) - clip.bounds.width)
           guard maxX > 0 else { return e }  // nothing to scroll: leave the event alone
           let step = e.hasPreciseScrollingDeltas ? e.scrollingDeltaY : e.scrollingDeltaY * 10
-          clip.scroll(to: NSPoint(x: min(max(0, clip.bounds.origin.x - step), maxX), y: clip.bounds.origin.y))
+          clip.scroll(to: NSPoint(x: min(max(0, clip.bounds.origin.x + step), maxX), y: clip.bounds.origin.y))
           sv.reflectScrolledClipView(clip)
           return nil
         }
@@ -5075,6 +5125,7 @@ import Observation
     @State private var isDropTarget = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.clairGlass) private var glass
+    @Environment(\.clairFillTabs) private var fill
 
     var body: some View {
       let tint = selected ? C.chromeInk : C.textTertiary
@@ -5092,7 +5143,7 @@ import Observation
         .allowsHitTesting(selected || isHovered)
       }
       // Glass: a 26pt capsule inside the group's vessel; flat: the 38pt cell control.
-      .padding(.horizontal, glass ? 12 : 8).frame(width: 200, height: glass ? RowHeight.default : ChromeBudget.cellControl)
+      .padding(.horizontal, glass ? 12 : 8).frame(width: fill ? nil : 200, height: glass || fill ? RowHeight.default : ChromeBudget.cellControl)
       .background(
         selected ? (glass ? DesignTokens.Glass.capsuleSelected : W.selected) : isHovered ? (glass ? DesignTokens.Glass.capsuleFill : W.soft) : .clear,
         in: RoundedRectangle(cornerRadius: Radius.pill()))
@@ -5493,3 +5544,12 @@ import Observation
     }
   }
 #endif
+
+private struct FillTabsKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+  /// Titlebar tabs are 200pt wide; in the vertical tab column they fill its width.
+  var clairFillTabs: Bool {
+    get { self[FillTabsKey.self] }
+    set { self[FillTabsKey.self] = newValue }
+  }
+}
