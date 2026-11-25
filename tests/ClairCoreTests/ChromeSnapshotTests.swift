@@ -38,7 +38,7 @@
       store.edited("apple/ClairApp/ProjectWorkspace.swift")
       var mode = "folder"
       let vertical = { (on: Bool) in store.run("settings.choose", ["key": .string("tabLayout"), "value": .string(on ? "縦" : "横")], confirmed: true) }
-      for (name, prep) in [("native", {}), ("vertical", { vertical(true) }), ("native-again", { vertical(false) }), ("palette", { store.run("palette.commands") }), ("quickopen", { store.run("palette.files") }), ("search", { store.run("palette.search") }),
+      for (name, prep) in [("native", {}), ("vertical", { vertical(true); for f in ["README.md", "AGENTS.md", "THIRD_PARTY_NOTICES.md"] { store.run("tab.open", ["path": .string(f)]) } }), ("vertical-folded", { UserDefaults.standard.set(true, forKey: "clair.tabColumnCollapsed") }), ("vertical-narrow", { UserDefaults.standard.set(false, forKey: "clair.tabColumnCollapsed"); UserDefaults.standard.set(130.0, forKey: "clair.tabColumnWidth") }), ("native-again", { vertical(false); UserDefaults.standard.removeObject(forKey: "clair.tabColumnWidth") }), ("palette", { store.run("palette.commands") }), ("quickopen", { store.run("palette.files") }), ("search", { store.run("palette.search") }),
                            ("glass", { store.run("settings.choose", ["key": .string("material"), "value": .string("Liquid Glass")], confirmed: true) }),
                            ("glass-vertical", { vertical(true) }), ("glass-split", { vertical(false);  store.run("pane.splitRight"); store.run("pane.splitDown") }),
                            ("glass-debug", { mode = "ladybug" }), ("glass-agents", { mode = "terminal" }),

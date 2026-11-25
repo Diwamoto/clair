@@ -1499,6 +1499,11 @@ import Observation
     /// The concierge screen is the chat beside the board; the board's TODOs are polled while it is up.
     private var conciergeBoard: Bool { sidebarMode == "concierge" }
     @AppStorage("clair.sidebarWidth") private var sidebarWidth = 242.0
+    /// タブの配置 = 縦: the tab column's width when open, whether it is folded to its icon rail, and the hover peek.
+    @AppStorage("clair.tabColumnWidth") private var tabColumnWidth = 240.0
+    @AppStorage("clair.tabColumnCollapsed") private var tabColumnCollapsed = false
+    @State private var tabColumnPeek = false
+    @State private var tabColumnPeekTask: Task<Void, Never>?
     @AppStorage("clair.conciergeEditorWidth") private var conciergeEditorWidth = 560.0
     /// Concierge file tabs showing the Markdown preview instead of the editor.
     @State private var conciergePreviews: Set<ClairWorkbenchStore.ConciergeFile> = []
@@ -1599,7 +1604,7 @@ import Observation
           VStack(spacing: 0) {
             titlebar
             HStack(spacing: 0) {
-              if verticalTabs { tabColumn }
+              if verticalTabs { tabColumnSlot }
               if sidebarMode != "concierge" { activityBar }
               // The concierge is its own screen (the control plane), not a panel of a Project's workspace.
               let sidebarShown = !st.sidebarHidden && sidebarMode != "concierge"
@@ -1815,24 +1820,64 @@ import Observation
       titlebarAction("gearshape", tr("設定"), on: st.settingsOpen) { store.run(st.settingsOpen ? "settings.close" : "settings.open") }
     }
 
-    /// タブの配置 = 縦 (owner, 2026-11-24): the titlebar's tab groups stack in a column at the window's left edge,
-    /// left of the activity bar, with search on top and the command palette and settings at the bottom.
-    // ponytail: fixed width; make it draggable like the sidebar if a 240pt column proves too narrow.
-    private var tabColumn: some View {
+    /// タブの配置 = 縦 (owner, 2026-11-24/25; Chrome's vertical tabs): the titlebar's tab groups stack in a column at the
+    /// window's left edge, left of the activity bar — search on top, fold / command palette / settings stacked at the
+    /// bottom. The column is resizable; folded it is an icon rail as wide as the activity bar, and hovering the rail
+    /// floats the full column over the workbench until the pointer leaves.
+    private var tabColumnSlot: some View {
+      let open = !tabColumnCollapsed || tabColumnPeek
+      return Color.clear.frame(width: tabColumnCollapsed ? ChromeBudget.activityBarWidth : tabColumnWidth)
+        .overlay(alignment: .leading) {
+          tabColumn(compact: !open).frame(width: open ? tabColumnWidth : ChromeBudget.activityBarWidth)
+            .background {
+              // The peek floats over the activity bar and sidebar, so it needs a ground of its own.
+              if tabColumnCollapsed && tabColumnPeek {
+                Group { if glass { GlassWallpaper() } else { DesignTokens.Color.chrome } }
+                  .shadow(color: .black.opacity(0.35), radius: 12, x: 4)
+              }
+            }
+            .onHover { inside in
+              tabColumnPeekTask?.cancel()
+              guard tabColumnCollapsed else { tabColumnPeek = false; return }
+              // A short dwell so sweeping the pointer past the rail does not flash the column open.
+              tabColumnPeekTask = Task { @MainActor in
+                if inside { try? await Task.sleep(for: .milliseconds(250)) }
+                guard !Task.isCancelled else { return }
+                withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration)) { tabColumnPeek = inside }
+              }
+            }
+        }
+        .overlay(alignment: .trailing) {
+          if !tabColumnCollapsed {
+            SplitHandle(horizontal: true, ratio: tabColumnWidth, total: 1, onRatio: { w in tabColumnWidth = min(max(w, 140), 480) })
+              .frame(width: 6).offset(x: 3)
+          }
+        }
+        .zIndex(1)
+    }
+
+    private func tabColumn(compact: Bool) -> some View {
       VStack(spacing: 8) {
-        searchField
+        if compact { titlebarAction("magnifyingglass", tr("検索"), on: false) { store.run("palette.search") } } else { searchField }
         ScrollView(.vertical, showsIndicators: false) {
-          VStack(alignment: .leading, spacing: glass ? 8 : 10) {
-            ForEach(tabGroups, id: \.0.name) { p, key in projectGroup(p, colorKey: key, vertical: true) }
+          VStack(alignment: compact ? .center : .leading, spacing: compact ? 8 : 10) {
+            ForEach(tabGroups, id: \.0.name) { p, key in projectGroup(p, colorKey: key, vertical: true, compact: compact) }
             openFolderButton
-          }.frame(maxWidth: .infinity, alignment: .leading)
+          }.frame(maxWidth: .infinity, alignment: compact ? .center : .leading)
         }.clairScroller()
-        HStack(spacing: 4) { Spacer(minLength: 0); titlebarActions }
+        VStack(spacing: 4) {
+          titlebarAction("sidebar.left", tabColumnCollapsed ? tr("タブ列を広げる") : tr("タブ列をたたむ"), on: false) {
+            tabColumnPeekTask?.cancel(); tabColumnPeek = false
+            withAnimation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration)) { tabColumnCollapsed.toggle() }
+          }
+          titlebarActions
+        }.frame(maxWidth: .infinity, alignment: compact ? .center : .leading)
       }
-      .padding(8)
-      .frame(width: 240).frame(maxHeight: .infinity)
-      .environment(\.clairFillTabs, true)
+      .padding(.vertical, 8).padding(.horizontal, compact ? 6 : 8)
+      .frame(maxHeight: .infinity)
+      .environment(\.clairTabWidth, compact ? .icon : .fill)
       .chromeBackground()
+      .clipped()
       .overlay(alignment: .trailing) { if !glass { Rectangle().fill(C.surfaceActive).frame(width: 1) } }
     }
 
@@ -1850,7 +1895,7 @@ import Observation
 
     /// A chip toggles its group's tab strip (GUI-local), active or not — opening one of its tabs switches Project.
     /// An inactive group with no tabs has nothing to fold, so its chip switches to that Project instead.
-    private func projectGroup(_ p: WorkbenchProject, colorKey: String, vertical: Bool = false) -> some View {
+    private func projectGroup(_ p: WorkbenchProject, colorKey: String, vertical: Bool = false, compact: Bool = false) -> some View {
       let color = DesignTokens.GroupColor.resolve(colorKey) ?? DesignTokens.GroupColor.gray.color
       let active = st.project == p.name
       let tabs = active ? st.titlebarTabs : (st.layouts[p.name]?.titlebarTabs ?? [])
@@ -1868,7 +1913,6 @@ import Observation
           }
         }
       }
-      let vessel = vertical ? AnyShape(RoundedRectangle(cornerRadius: Radius.card)) : AnyShape(Capsule())
       let stack = vertical ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2)) : AnyLayout(HStackLayout(spacing: 0))
       return stack {
         // Not a Button: a Button's press tracking swallows the drag, so the chip taps like a file tab does.
@@ -1877,11 +1921,15 @@ import Observation
           // review feedback: a small dot beside the label read as an
           // afterthought), not a separate dot — active groups get the
           // stronger alpha pair, matching the titlebar's active tab group.
-          Text(p.displayName).font(Typography.font(Typography.chromeStrong)).foregroundStyle(active ? C.textPrimary : C.textSecondary).lineLimit(1).fixedSize()
-            .padding(.horizontal, 10).frame(height: RowHeight.default)
-            // Glass: the vessel around the whole group carries the colour, so the chip itself is bare.
-            .background(glass ? .clear : color.opacity(active ? 0.22 : 0.1), in: RoundedRectangle(cornerRadius: Radius.card))
-            .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(glass ? .clear : color.opacity(active ? 0.55 : 0.28)))
+          // Vertical: the name truncates to the column ("…"); the icon rail shows its first letter.
+          Text(compact ? String(p.displayName.prefix(1)).uppercased() : p.displayName)
+            .font(Typography.font(Typography.chromeStrong)).foregroundStyle(active ? C.textPrimary : C.textSecondary)
+            .lineLimit(1).truncationMode(.tail).fixedSize(horizontal: !vertical, vertical: false)
+            .padding(.horizontal, compact ? 0 : 10).frame(minWidth: compact ? RowHeight.control : nil).frame(height: RowHeight.default)
+            // Glass: the vessel around the whole group carries the colour, so the chip itself is bare. Vertical groups
+            // have no vessel (Chrome: a coloured label and a coloured line down the tabs), so the chip keeps its colour.
+            .background(glass && !vertical ? .clear : color.opacity(active ? 0.22 : 0.1), in: RoundedRectangle(cornerRadius: Radius.card))
+            .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(glass && !vertical ? .clear : color.opacity(active ? 0.55 : 0.28)))
           .overlay(alignment: .topTrailing) {
             // Only agents waiting for input badge the chip; plain bells / exits stay in the notification popover.
             let waiting = st.agentSessions.filter { $0.project == p.name && $0.status == .attention }.count
@@ -1957,16 +2005,17 @@ import Observation
                 .help(target.path)
               }
             }
-          }.padding(.leading, 4)
+          }.padding(.leading, vertical ? (compact ? 0 : 8) : 4)
+          .overlay(alignment: .leading) { if vertical && !compact { Capsule().fill(color.opacity(0.6)).frame(width: 2) } }
           .transition(reduceMotion ? .opacity : .scale(scale: 0.05, anchor: vertical ? .top : .leading).combined(with: .opacity))
-          worktreeChip(p, colorKey: colorKey, color: color, vertical: vertical)
+          if !compact { worktreeChip(p, colorKey: colorKey, color: color, vertical: vertical) }
         }
       }
-      // Glass: one tinted vessel holds the chip and its tabs (canvas Tokens `GLASS の中身`).
-      .padding(.horizontal, glass ? 4 : 0).padding(.vertical, glass && vertical ? 5 : 0).frame(height: glass && !vertical ? 36 : nil)
-      .frame(maxWidth: vertical ? .infinity : nil, alignment: .leading)
-      .background(glass ? color.opacity(active ? 0.16 : 0.07) : .clear, in: vessel)
-      .overlay(vessel.stroke(glass ? color.opacity(active ? 0.5 : 0.24) : .clear))
+      .frame(maxWidth: vertical ? .infinity : nil, alignment: compact ? .center : .leading)
+      // Glass: one tinted vessel holds the chip and its tabs (canvas Tokens `GLASS の中身`). Horizontal only.
+      .padding(.horizontal, glass && !vertical ? 4 : 0).frame(height: glass && !vertical ? 36 : nil)
+      .background(glass && !vertical ? color.opacity(active ? 0.16 : 0.07) : .clear, in: Capsule())
+      .overlay(Capsule().stroke(glass && !vertical ? color.opacity(active ? 0.5 : 0.24) : .clear))
     }
 
     private func isNestedWorktree(_ p: WorkbenchProject) -> Bool {
@@ -3785,7 +3834,7 @@ import Observation
             SettingsCard(title: tr("インターフェース")) {
               choiceRow(tr("外観"), "appearance", note: tr("エディタ、ターミナル、サイドバーの配色をまとめて切り替えます。"))
               choiceRow(tr("素材"), "material", note: tr("Liquid Glass は黒い壁紙の上にガラスのパネルを浮かべます。すぐに切り替わります。"))
-              choiceRow(tr("タブの配置"), "tabLayout", note: tr("縦にすると、タブを titlebar から左端の列へ移し、検索を上、コマンドと設定を下に置きます。"))
+              choiceRow(tr("タブの配置"), "tabLayout", note: tr("縦にすると、タブを titlebar から左端の列へ移します。列は幅を変えられ、たたむとアイコンだけになります。"))
               choiceRow(tr("言語"), "language")
               switchRow(tr("ステータスバーの利用枠を隠す"), "hideQuota")
             }
@@ -4886,25 +4935,30 @@ import Observation
     @State private var isDropTarget = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.clairGlass) private var glass
-    @Environment(\.clairFillTabs) private var fill
+    @Environment(\.clairTabWidth) private var width
 
     var body: some View {
       let tint = selected ? C.chromeInk : C.textTertiary
+      let fill = width != .fixed
       HStack(spacing: 4) {
+        if width == .icon { Spacer(minLength: 0) }
         tabIcon(tint: tint)
-        Text(name).font(Typography.font(selected ? Typography.chromeStrong : Typography.chrome)).foregroundStyle(tint).lineLimit(1).truncationMode(.tail)
-        Spacer(minLength: 0)
-        if dirty { Circle().fill(selected ? C.textTertiary : C.textMuted).frame(width: 6, height: 6) }
-        Button(action: onClose) {
-          Image(systemName: "xmark").font(Typography.font(Typography.micro)).foregroundStyle(C.textTertiary)
+        if width != .icon {
+          Text(name).font(Typography.font(selected ? Typography.chromeStrong : Typography.chrome)).foregroundStyle(tint).lineLimit(1).truncationMode(.tail)
+          Spacer(minLength: 0)
+          if dirty { Circle().fill(selected ? C.textTertiary : C.textMuted).frame(width: 6, height: 6) }
+          Button(action: onClose) {
+            Image(systemName: "xmark").font(Typography.font(Typography.micro)).foregroundStyle(C.textTertiary)
+          }
+          .buttonStyle(.hoverWash)
+          .help(tr("閉じる"))
+          .opacity((selected || isHovered) ? 1 : 0)
+          .allowsHitTesting(selected || isHovered)
         }
-        .buttonStyle(.hoverWash)
-        .help(tr("閉じる"))
-        .opacity((selected || isHovered) ? 1 : 0)
-        .allowsHitTesting(selected || isHovered)
+        if width == .icon { Spacer(minLength: 0) }
       }
       // Glass: a 26pt capsule inside the group's vessel; flat: the 38pt cell control.
-      .padding(.horizontal, glass ? 12 : 8).frame(width: fill ? nil : 200, height: glass || fill ? RowHeight.default : ChromeBudget.cellControl)
+      .padding(.horizontal, width == .icon ? 0 : glass ? 12 : 8).frame(width: fill ? nil : 200, height: glass || fill ? RowHeight.default : ChromeBudget.cellControl)
       .background(
         selected ? (glass ? DesignTokens.Glass.capsuleSelected : W.selected) : isHovered ? (glass ? DesignTokens.Glass.capsuleFill : W.soft) : .clear,
         in: RoundedRectangle(cornerRadius: Radius.pill()))
@@ -5234,11 +5288,12 @@ import Observation
   }
 #endif
 
-private struct FillTabsKey: EnvironmentKey { static let defaultValue = false }
+/// Titlebar tabs are 200pt wide; the vertical tab column fills its width with them, or shows icons only while folded.
+enum TabWidth { case fixed, fill, icon }
+private struct TabWidthKey: EnvironmentKey { static let defaultValue = TabWidth.fixed }
 extension EnvironmentValues {
-  /// Titlebar tabs are 200pt wide; in the vertical tab column they fill its width.
-  var clairFillTabs: Bool {
-    get { self[FillTabsKey.self] }
-    set { self[FillTabsKey.self] = newValue }
+  var clairTabWidth: TabWidth {
+    get { self[TabWidthKey.self] }
+    set { self[TabWidthKey.self] = newValue }
   }
 }
