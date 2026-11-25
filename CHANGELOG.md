@@ -6,6 +6,12 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.55.0] - 2026-11-25
+
+### Changed
+- The vertical tab column now works like Chrome's: names truncate to its width, you can resize it from its edge, fold it to an icon rail, and hover the folded rail to peek it open over the workbench. Groups show as a coloured label with a coloured line down their tabs.
+- The usage screen's activity calendar and weekday × hour heatmap now shade by deciles of your own counts, so heavy days stand out instead of everything showing at full strength.
+
 ## [0.54.0] - 2026-11-24
 
 ### Added
@@ -948,7 +954,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.54.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.55.0...HEAD
+[0.55.0]: https://github.com/Diwamoto/clair/compare/v0.54.0...v0.55.0
 [0.54.0]: https://github.com/Diwamoto/clair/compare/v0.53.0...v0.54.0
 [0.53.0]: https://github.com/Diwamoto/clair/compare/v0.52.0...v0.53.0
 [0.52.0]: https://github.com/Diwamoto/clair/compare/v0.51.0...v0.52.0
