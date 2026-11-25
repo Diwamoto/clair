@@ -167,21 +167,6 @@ struct AgentUsageView: View {
     return calendar
   }()
 
-  /// Same five lightness steps as the activity calendar above, so a cell's darkness means the same count in both.
-  private static func heatLevel(_ count: Int) -> Int {
-    switch count {
-    case 0: 0
-    case 1...3: 1
-    case 4...7: 2
-    case 8...12: 3
-    default: 4
-    }
-  }
-
-  private static func heatFill(_ level: Int) -> Color {
-    level == 0 ? C.surfaceActive : Ink.green.opacity([0, 0.25, 0.45, 0.7, 0.95][level])
-  }
-
   private struct HourTotal: Identifiable {
     let hour: Int
     let count: Int
@@ -193,6 +178,7 @@ struct AgentUsageView: View {
     let totals = (0..<24).map { hour in grid.reduce(0) { $0 + $1[hour] } }
     let names = Self.weekdays
     let labeledHours = [0, 6, 12, 18, 23]
+    let heat = UsageHeat(grid.flatMap { $0 })
     return VStack(alignment: .leading, spacing: 12) {
       Chart((0..<24).map { HourTotal(hour: $0, count: totals[$0]) }) { point in
         BarMark(x: .value(tr("時"), point.hour), y: .value(tr("件"), point.count))
@@ -219,7 +205,7 @@ struct AgentUsageView: View {
               .overlay(alignment: .trailing) { Text(names[day]).font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary).fixedSize() }
             ForEach(0..<24, id: \.self) { hour in
               RoundedRectangle(cornerRadius: 2)
-                .fill(Self.heatFill(Self.heatLevel(grid[day][hour])))
+                .fill(UsageHeat.fill(heat.level(grid[day][hour])))
                 .frame(width: 10, height: 10)
                 .help(tr("%@ %@時台: %@ 件", names[day], hour, grid[day][hour]))
                 .accessibilityLabel(tr("%@ %@時台: %@ 件", names[day], hour, grid[day][hour]))
@@ -242,7 +228,7 @@ struct AgentUsageView: View {
         Text(tr("棒は時間帯ごとの合計"))
         Spacer()
         Text(tr("少"))
-        ForEach(0..<5, id: \.self) { RoundedRectangle(cornerRadius: 2).fill(Self.heatFill($0)).frame(width: 10, height: 10) }
+        ForEach(0...UsageHeat.steps, id: \.self) { RoundedRectangle(cornerRadius: 2).fill(UsageHeat.fill($0)).frame(width: 10, height: 10) }
         Text(tr("多"))
       }
       .font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
@@ -643,20 +629,6 @@ private struct ActivityCalendar: View {
     return stride(from: 0, to: cells.count, by: 7).map { Array(cells[$0..<min($0 + 7, cells.count)]) }
   }
 
-  private static func level(_ count: Int) -> Int {
-    switch count {
-    case 0: 0
-    case 1...3: 1
-    case 4...7: 2
-    case 8...12: 3
-    default: 4
-    }
-  }
-
-  private static func fill(_ level: Int) -> Color {
-    level == 0 ? C.surfaceActive : Ink.green.opacity([0, 0.25, 0.45, 0.7, 0.95][level])
-  }
-
   private func detail(for date: Date) -> String {
     let usage = days[date]
     let lines = AgentHistory.Provider.allCases.compactMap { provider -> String? in
@@ -669,6 +641,7 @@ private struct ActivityCalendar: View {
 
   var body: some View {
     let columns = weeks
+    let heat = UsageHeat(columns.joined().compactMap { $0.map(count(on:)) })
     return VStack(alignment: .leading, spacing: 8) {
       ScrollView(.horizontal, showsIndicators: false) {
         HStack(alignment: .top, spacing: 2) {
@@ -680,7 +653,7 @@ private struct ActivityCalendar: View {
               ForEach(0..<7, id: \.self) { row in
                 if row < columns[index].count, let date = columns[index][row] {
                   RoundedRectangle(cornerRadius: 2)
-                    .fill(Self.fill(Self.level(count(on: date))))
+                    .fill(UsageHeat.fill(heat.level(count(on: date))))
                     .frame(width: 10, height: 10)
                     .contentShape(Rectangle())
                     .onHover { hovering in
@@ -725,11 +698,31 @@ private struct ActivityCalendar: View {
         Text(tr("直近 1 年 · 右端が今日"))
         Spacer()
         Text(tr("少"))
-        ForEach(0..<5, id: \.self) { RoundedRectangle(cornerRadius: 2).fill(Self.fill($0)).frame(width: 10, height: 10) }
+        ForEach(0...UsageHeat.steps, id: \.self) { RoundedRectangle(cornerRadius: 2).fill(UsageHeat.fill($0)).frame(width: 10, height: 10) }
         Text(tr("多"))
       }
       .font(Typography.font(Typography.sidebar)).foregroundStyle(C.textTertiary)
     }
+  }
+}
+
+/// Lightness steps for the calendar and the weekday × hour grid, relative to the counts on screen: 0 is empty,
+/// and 1–10 split the non-zero counts at their deciles, so a heavy user still sees light and dark days.
+struct UsageHeat {
+  static let steps = 10
+  let cuts: [Int]
+
+  init(_ counts: [Int]) {
+    let busy = counts.filter { $0 > 0 }.sorted()
+    cuts = busy.isEmpty ? [] : (1..<Self.steps).map { busy[busy.count * $0 / Self.steps] }
+  }
+
+  func level(_ count: Int) -> Int {
+    count <= 0 ? 0 : 1 + cuts.filter { count > $0 }.count
+  }
+
+  static func fill(_ level: Int) -> Color {
+    level == 0 ? C.surfaceActive : Ink.green.opacity(0.12 + 0.88 * Double(level) / Double(steps))
   }
 }
 
