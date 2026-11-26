@@ -1467,10 +1467,22 @@ import Observation
     /// A closed window's store. The next window takes it back, so a window close keeps unsaved buffers,
     /// preview bindings and the IPC socket the way `window.restart` does (spec §7).
     @MainActor private static var parked: ClairWorkbenchStore?
-    @State private var store: ClairWorkbenchStore = MainActor.assumeIsolated {
-      defer { parked = nil }
-      return parked ?? ClairWorkbenchStore()
+    /// `@State` evaluates its initial value on every `ClairWindowRoot()` (each pass of the App's body) and keeps only the
+    /// first. A store built there each time restored the workspace and rescanned the Project nonstop (#82: most of an idle
+    /// Clair's CPU), so the throwaways are empty boxes and only the kept one ever builds its store.
+    @MainActor private final class StoreBox {
+      nonisolated init() {}
+      private var made: ClairWorkbenchStore?
+      var store: ClairWorkbenchStore {
+        if let made { return made }
+        defer { ClairWindowRoot.parked = nil }
+        let s = ClairWindowRoot.parked ?? ClairWorkbenchStore()
+        made = s
+        return s
+      }
     }
+    @State private var box = StoreBox()
+    private var store: ClairWorkbenchStore { box.store }
 
     public init() {}
 
