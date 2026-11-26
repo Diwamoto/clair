@@ -257,6 +257,7 @@ extension LocalizedStrings {
     "%@を%@しました。": "%2$@ed %1$@.",
     "%@を%@できません: %@": "Could not %2$@ %1$@: %3$@",
     "このファイルの言語サーバーはありません": "No language server for this file",
+    "構文エラーのため整形できません": "Cannot format: syntax error",
     "言語サーバーが応答しません": "The language server is not responding",
     "参照が見つかりません": "No references found",
     "定義が見つかりません": "No definition found",

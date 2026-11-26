@@ -479,7 +479,7 @@ import Observation
       // `file.save` from any caller (⌘S, CLI, MCP) writes the buffer first; a failed write keeps the dirty marker.
       if id == "file.save", let p = state.active, let root = activeRoot, buffers.isOpen(p) {
         let formatting = state.toggles["formatOnSave"] == true && !savingFormatted.contains(p)
-        if formatting { formatBuffer(p) }
+        let builtin = formatting && formatBuffer(p, explicit: false)
         do {
           try buffers.save(p, root: root)
         } catch {
@@ -488,7 +488,7 @@ import Observation
         }
         buffers.language.save(root + "/" + p, root: root)
         // A language server formats asynchronously: save what it returns as a second write.
-        if formatting, !DocumentFormatter.supports(p) { formatWithServer(p, root: root, thenSave: true) }
+        if formatting, !builtin { formatWithServer(p, root: root, thenSave: true) }
       }
       let closing =
         id == "pane.close" ? Self.terminalKey(root: activeRoot ?? state.project, pane: state.tree.focused)
@@ -554,7 +554,7 @@ import Observation
           }
         }
         if id == "editor.format", let p = state.active {
-          if DocumentFormatter.supports(p) { formatBuffer(p) } else if let root = activeRoot { formatWithServer(p, root: root, thenSave: false) }
+          if !formatBuffer(p, explicit: true), let root = activeRoot { formatWithServer(p, root: root, thenSave: false) }
         }
         if let p = state.active, let features = buffers.features(p) {
           switch id {
@@ -1050,15 +1050,21 @@ import Observation
       run("palette.references")
     }
 
-    private func formatBuffer(_ path: String) {
-      guard case .ready(let m)? = buffers.peek(path) else { return }
-      let old = m.buffer.snapshot
-      let text = old.string()
-      guard let formatted = DocumentFormatter.format(path, text), formatted != text else { return }
+    /// false when no built-in formatter (JSON/SQL) handles `path`, so its language server should be asked.
+    private func formatBuffer(_ path: String, explicit: Bool) -> Bool {
+      guard case .ready(let m)? = buffers.peek(path) else { return false }
+      let text = m.buffer.snapshot.string()
+      guard DocumentFormatter.builtin(path, text) != nil else { return false }
+      guard let formatted = DocumentFormatter.format(path, text) else {
+        if explicit { languageNotice = tr("構文エラーのため整形できません") }
+        return true
+      }
+      guard formatted != text else { return true }
       // Only the changed lines, through the live view: rebuilding the surface lost the scroll position.
       let change = DocumentFormatter.changedLines(from: text, to: formatted)
       let range = TextUTF8Range(UTF8Offset(change.range.lowerBound), UTF8Offset(change.range.upperBound))
       commit([TextEdit(range: range, replacement: change.replacement)], to: path, manager: m, label: tr("ドキュメントの整形"))
+      return true
     }
 
     /// Workspace commands must never synchronously encode and replace the persistence file on the

@@ -42,11 +42,61 @@ final class DocumentFormatterTests: XCTestCase {
     XCTAssertNil(JSONFormatter.format(#"{"a":1} trailing"#))
   }
 
-  func testDocumentFormatterOnlySupportsJSON() {
-    XCTAssertTrue(DocumentFormatter.supports("a/b.JSON"))
-    XCTAssertFalse(DocumentFormatter.supports("a/b.md"))
+  func testBuiltinFormatterByExtensionOrSniffedText() {
+    XCTAssertEqual(DocumentFormatter.builtin("a/b.JSON", ""), .json)
+    XCTAssertEqual(DocumentFormatter.builtin("q.sql", ""), .sql)
+    XCTAssertNil(DocumentFormatter.builtin("a/b.md", "{}"))
     XCTAssertNil(DocumentFormatter.format("a.md", "{}"))
     XCTAssertEqual(DocumentFormatter.format("a.json", "{\"a\":1}"), "{\n  \"a\": 1\n}\n")
+    // No extension: JSON / SQL by content.
+    XCTAssertEqual(DocumentFormatter.format(".eslintrc", " [1,2]"), "[\n  1,\n  2\n]\n")
+    XCTAssertEqual(DocumentFormatter.builtin("scratch/query", "\n select 1"), .sql)
+    XCTAssertNil(DocumentFormatter.builtin("Makefile", "all:\n\tgo build"))
+  }
+
+  func testSQLFormatterLaysOutClauses() {
+    let sql = """
+      -- users
+      select u.id, count(*) as n, 'it''s' from users u left join orders o on o.user_id = u.id \
+      where u.age between 18 and 30 and o.status in ('a', 'b') group by u.id order by n desc limit 10; \
+      select * from (select id from t) x
+      """
+    let want = """
+      -- users
+      SELECT
+        u.id,
+        count(*) AS n,
+        'it''s'
+      FROM
+        users u
+        LEFT JOIN orders o ON o.user_id = u.id
+      WHERE
+        u.age BETWEEN 18 AND 30
+        AND o.status IN ('a', 'b')
+      GROUP BY
+        u.id
+      ORDER BY
+        n DESC
+      LIMIT
+        10;
+
+      SELECT
+        *
+      FROM
+        (
+          SELECT
+            id
+          FROM
+            t
+        ) x
+
+      """
+    XCTAssertEqual(SQLFormatter.format(sql), want)
+    XCTAssertEqual(SQLFormatter.format(want), want)  // idempotent
+    XCTAssertEqual(
+      SQLFormatter.format("insert into t (a, b) values (1, 'x'), ($1, :n) on conflict (a) do update set b = excluded.b;\n/* x */"),
+      "INSERT INTO\n  t (a, b)\nVALUES\n  (1, 'x'),\n  ($1, :n)\nON CONFLICT (a) DO UPDATE\nSET\n  b = excluded.b;\n\n/* x */\n")
+    XCTAssertEqual(SQLFormatter.format("select a::int -- why\nfrom t"), "SELECT\n  a::int -- why\nFROM\n  t\n")
   }
 
   func testFormatCommandRequiresAnOpenFormattableFile() throws {
@@ -61,6 +111,8 @@ final class DocumentFormatterTests: XCTestCase {
     s.tabs.append("main.go"); s.active = "main.go"
     XCTAssertNoThrow(try CommandRegistry.workbench.execute("editor.format", state: &s).get())
     XCTAssertTrue(DocumentFormatter.mayFormat("a/b.swift"))
+    XCTAssertTrue(DocumentFormatter.mayFormat("a/query.sql"))
+    XCTAssertTrue(DocumentFormatter.mayFormat("a/.eslintrc"))
     XCTAssertFalse(DocumentFormatter.mayFormat("a/b.md"))
   }
 
