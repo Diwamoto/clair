@@ -6,6 +6,16 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.56.0] - 2026-11-26
+
+### Added
+- The status bar shows a file's language as a menu: pick one to override the detected language for that file. Highlighting, the language server and formatting all follow it, and the choice is remembered with the workspace.
+- JSON and SQL files format with built-in formatters, no external tool needed. Invalid JSON now reports a syntax error instead of silently doing nothing.
+
+### Changed
+- Folding the vertical tab column now only slides its width, so tabs stay in place. Folded groups keep their colour line and initial, and the hover peek opens faster.
+- The board/IDE switch lives in the vertical tab column, and when the titlebar strip has nothing left in it, it goes away so the sidebar and panels reach the top of the window.
+
 ## [0.55.0] - 2026-11-25
 
 ### Changed
@@ -954,7 +964,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.55.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.56.0...HEAD
+[0.56.0]: https://github.com/Diwamoto/clair/compare/v0.55.0...v0.56.0
 [0.55.0]: https://github.com/Diwamoto/clair/compare/v0.54.0...v0.55.0
 [0.54.0]: https://github.com/Diwamoto/clair/compare/v0.53.0...v0.54.0
 [0.53.0]: https://github.com/Diwamoto/clair/compare/v0.52.0...v0.53.0
