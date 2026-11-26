@@ -6,6 +6,22 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.57.0] - 2026-11-26
+
+### Added
+- Type a request in the board's request field to create a card in a chosen Project and start its agent right away.
+- Clicking a card opens its agent's terminal so you can continue the conversation; a card whose agent has stopped resumes its earlier session.
+
+### Changed
+- Each board card is now one agent that takes the request from investigation to a verified result. Columns show the card's state (Inbox, running, waiting on a decision, done, not done) instead of stages, so cards are no longer dragged between them.
+- Finished cards show just the result, the reason and whether a decision is still open.
+
+### Removed
+- The staged board pipeline: moving cards between stages, automatic advancing, per-column skills and the concierge agent with its settings and board news. Existing cards still load.
+
+### Fixed
+- An idle Clair no longer keeps one CPU core busy rescanning Projects in the background.
+
 ## [0.56.0] - 2026-11-26
 
 ### Added
@@ -964,7 +980,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.56.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.57.0...HEAD
+[0.57.0]: https://github.com/Diwamoto/clair/compare/v0.56.0...v0.57.0
 [0.56.0]: https://github.com/Diwamoto/clair/compare/v0.55.0...v0.56.0
 [0.55.0]: https://github.com/Diwamoto/clair/compare/v0.54.0...v0.55.0
 [0.54.0]: https://github.com/Diwamoto/clair/compare/v0.53.0...v0.54.0
