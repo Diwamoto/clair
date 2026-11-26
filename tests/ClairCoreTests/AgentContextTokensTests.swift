@@ -62,7 +62,7 @@ final class AgentContextTokensTests: XCTestCase {
 
   func testUnknownContextEncodesAsNull() throws {
     let row = WorkbenchAgent(key: "k", project: "p", pane: 1, profile: "codex", cwd: "/", status: "idle", exitCode: nil,
-      activity: nil, delegated: false, parent: nil, concierge: false)
+      activity: nil, delegated: false, parent: nil)
     let json = String(decoding: try JSONEncoder().encode(row), as: UTF8.self)
     XCTAssertTrue(json.contains(#""contextTokens":null"#) && json.contains(#""contextLimit":null"#), json)
   }

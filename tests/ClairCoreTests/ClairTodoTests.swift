@@ -24,17 +24,14 @@ final class ClairTodoTests: XCTestCase {
 }
 
 final class ClairTodoWriteTests: XCTestCase {
-  func testWorkflowKeysRoundTrip() {
-    let t = ClairTodo.parse(path: "/t.md", text: "---\ntitle: x\nstage: impl\nlane: code\nretry: 2\npr: \"https://g/p#1\"\nkr: K1\n---\nbody")
-    XCTAssertEqual([t.stage, t.lane, t.pr], ["impl", "code", "https://g/p#1"])
-    XCTAssertEqual(t.retry, 2)
+  func testCardKeysRoundTrip() {
+    let t = ClairTodo.parse(path: "/t.md", text: "---\ntitle: x\nsession: s1\npr: \"https://g/p#1\"\nkr: K1\n---\nbody")
+    XCTAssertEqual([t.session, t.pr], ["s1", "https://g/p#1"])
     XCTAssertEqual(t.extra, ["kr": "K1"])
-    let again = ClairTodo.parse(path: "/t.md", text: t.with { $0.stage = "check-A"; $0.lane = nil }.render(onto: "---\nlane: code\nkr: K1\n---\nbody"))
-    XCTAssertEqual(again.stage, "check-A"); XCTAssertNil(again.lane); XCTAssertEqual(again.pr, "https://g/p#1"); XCTAssertEqual(again.extra, ["kr": "K1"])
-    XCTAssertNotNil(ClairTodo.invalid(priority: nil, due: nil, stage: "bogus"))
-    XCTAssertNil(ClairTodo.invalid(priority: nil, due: nil, stage: "review", result: "ok"))
+    let again = ClairTodo.parse(path: "/t.md", text: t.with { $0.session = nil; $0.note = "n" }.render(onto: "---\nsession: s1\nkr: K1\n---\nbody"))
+    XCTAssertNil(again.session); XCTAssertEqual(again.note, "n"); XCTAssertEqual(again.pr, "https://g/p#1"); XCTAssertEqual(again.extra, ["kr": "K1"])
+    XCTAssertNil(ClairTodo.invalid(priority: nil, due: nil, result: "ok"))
     XCTAssertNotNil(ClairTodo.invalid(priority: nil, due: nil, result: "maybe"))
-    XCTAssertNil(ClairTodo.invalid(priority: nil, due: nil, stage: "check-B", lane: "research", retry: 0))
   }
 
   func testSaveKeepsBodyAndUnknownKeys() throws {
@@ -107,11 +104,7 @@ final class ClairTodoCommandTests: XCTestCase {
 }
 
 final class ClairTodoModelTests: XCTestCase {
-  func testDifficultyPicksModelAndImplNeverFable() {
-    var t = ClairTodo.parse(path: "/x.md", text: "---\ntitle: a\ndifficulty: complex\n---\n")
-    XCTAssertEqual(["research", "plan", "impl", "review"].map { t.model(stage: $0) }, ["opus", "fable", "opus", "fable"])
-    t.difficulty = nil
-    XCTAssertEqual(["research", "plan", "impl", "review"].map { t.model(stage: $0) }, Array(repeating: "sonnet", count: 4))
+  func testModelGoesOnTheCommand() {
     var l = AgentLaunch(profile: "claude", cwd: "/tmp", opening: "hi"); l.model = "sonnet"
     XCTAssertTrue(l.command.hasPrefix("claude --model 'sonnet' "), l.command)
   }

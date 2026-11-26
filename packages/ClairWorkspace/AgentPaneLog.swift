@@ -135,7 +135,7 @@ extension WorkbenchState {
       return AgentPaneRecord(
         key: Self.terminalKey(root, s.pane), project: s.project, cwd: l.cwd, profile: l.profile, activity: activity.text,
         activityState: activity.state, branch: projects.first { $0.path == l.cwd }?.branch, start: now,
-        end: exit == nil ? nil : now, exitCode: exit ?? nil, parent: l.parent, sessionID: l.session ?? l.concierge ?? l.resume)
+        end: exit == nil ? nil : now, exitCode: exit ?? nil, parent: l.parent, sessionID: l.session ?? l.resume)
     }
   }
 }

@@ -431,6 +431,14 @@ public enum AgentHistoryReader {
     readFile(file, provider: provider, full: true)?.messages ?? []
   }
 
+  /// Claude Code keeps each session at `~/.claude/projects/<cwd slug>/<id>.jsonl`; the slug is not something to
+  /// re-derive, so look the id up one level down.
+  public static func claudeTranscript(session: String, home: URL = .homeDirectory) -> URL? {
+    let root = home.appending(path: ".claude/projects")
+    let dirs = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? []
+    return dirs.lazy.map { $0.appending(path: "\(session).jsonl") }.first { FileManager.default.fileExists(atPath: $0.path) }
+  }
+
   /// The Claude Code session was stopped with Esc: its last turn entry is the "[Request interrupted by user…" line.
   /// Claude Code runs no Stop hook on an interrupt, so this is how a `working` report learns the turn ended.
   /// Reads only the file's last 16 KB.
@@ -454,7 +462,7 @@ public enum AgentHistoryReader {
     return false
   }
 
-  /// The concierge chat: a Claude Code session in full, with each tool call as a `tool` message
+  /// A Claude Code session in full, with each tool call as a `tool` message
   /// whose text is `name\targument` (see `toolLine`), plus the cost and latest model.
   public static func chat(file: URL) -> AgentHistory? {
     readFile(file, provider: .claude, full: true, tools: true)

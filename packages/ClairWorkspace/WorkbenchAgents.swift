@@ -57,15 +57,12 @@ public struct AgentLaunch: Sendable, Codable, Equatable {
   public var run: String?
   /// Provider session id to reopen instead of starting a fresh chat.
   public var resume: String?
-  /// ADR-0020: the fixed Claude Code session id of Clair's concierge.
-  public var concierge: String?
-  /// #76: `settings.concierge` prompt at launch. Fixed, like `folders`: a changed command replaces the live shell.
-  public var conciergePrompt: String?
-  /// `--model` / `--effort`: the concierge's, picked before its first message; a column agent's `model` comes from its card. Fixed at launch like `conciergePrompt`.
+  /// `--model` (Claude Code only, `agent.launch model=`). Fixed at launch: a changed command replaces the live shell.
   public var model: String?
-  public var effort: String?
-  /// First message of an interactive agent (the profile's `open` form); for a concierge, the request typed
-  /// before it was running. Unlike `prompt`, the agent stays open in its terminal afterwards.
+  /// #82: the TODO card (`~/.clair/todo/*.md`) this agent works on. Set only by `todo.run`, never by a caller.
+  public var card: String?
+  /// First message of an interactive agent (the profile's `open` form). Unlike `prompt`, the agent stays open in its
+  /// terminal afterwards.
   public var opening: String?
   /// A read-only review run: uses the profile's `reviewBatch` so it can post findings with `clair review.*`.
   public var review: Bool?
@@ -79,25 +76,23 @@ public struct AgentLaunch: Sendable, Codable, Equatable {
   /// #75: sbx sandbox this batch run executes in (`clair-<run>`), removed by agent.close.
   public var sandbox: String?
   public init(
-    profile: String, cwd: String, prompt: String? = nil, parent: String? = nil, resume: String? = nil, concierge: String? = nil,
+    profile: String, cwd: String, prompt: String? = nil, parent: String? = nil, resume: String? = nil,
     opening: String? = nil, review: Bool = false, folders: [String]? = nil
   ) {
-    self.profile = profile; self.cwd = cwd; self.prompt = prompt; self.parent = parent; self.resume = resume; self.concierge = concierge
+    self.profile = profile; self.cwd = cwd; self.prompt = prompt; self.parent = parent; self.resume = resume
     self.opening = opening
     self.review = review ? true : nil
     self.folders = folders?.isEmpty == true ? nil : folders
     run = prompt == nil ? nil : UUID().uuidString.lowercased()
   }
-  /// Saved with the workspace: an interactive agent. A delegated run would re-run its task; the concierge restores on its own.
-  var persists: Bool { run == nil && concierge == nil }
+  /// Saved with the workspace: an interactive agent. A delegated run would re-run its task.
+  var persists: Bool { run == nil }
   public var command: String {
     guard let p = AgentProfile.named(profile) else { return "" }
     // Last on the line: `--add-dir` is variadic and would swallow a prompt after it.
     // ponytail: Claude Code only; other CLIs still see just the cwd until their flags are verified.
     let dirs = profile == "claude" ? (folders ?? []).map { " --add-dir \(AgentRun.quote($0))" }.joined() : ""
-    if let concierge, AgentProfile.isSessionID(concierge) { return Concierge.command(session: concierge, extra: conciergePrompt ?? "", opening: opening, resumed: resume == concierge, model: model, effort: effort) + dirs }
     if let resume, let prefix = p.resume, AgentProfile.isSessionID(resume) { return "\(prefix) \(resume)\(dirs)" }
-    // A column agent's model, from its card's difficulty.
     let picked = model.map { " --model \(AgentRun.quote($0))" } ?? ""
     if prompt == nil, let opening, let open = p.open { return "\(open)\(picked) \(AgentRun.quote(opening))\(dirs)" }
     guard let prompt, let run else { return p.command + dirs }
@@ -226,14 +221,13 @@ public struct WorkbenchAgent: Sendable, Codable, Equatable {
   public let delegated: Bool
   /// Terminal key of the agent that launched this one.
   public let parent: String?
-  public let concierge: Bool
   /// Tokens in the agent's context as of its latest reply, and the window they fill. nil when unknown
   /// (no reported session, or a provider whose usage Clair does not read).
   public var contextTokens: Int? = nil
   public var contextLimit: Int? = nil
 
   enum CodingKeys: String, CodingKey {
-    case key, project, pane, profile, cwd, status, exitCode, activity, delegated, parent, concierge, contextTokens, contextLimit
+    case key, project, pane, profile, cwd, status, exitCode, activity, delegated, parent, contextTokens, contextLimit
   }
   /// Writes unknown context as `null` rather than dropping the key (agent.list contract).
   public func encode(to encoder: Encoder) throws {
@@ -242,7 +236,6 @@ public struct WorkbenchAgent: Sendable, Codable, Equatable {
     try c.encode(profile, forKey: .profile); try c.encode(cwd, forKey: .cwd); try c.encode(status, forKey: .status)
     try c.encodeIfPresent(exitCode, forKey: .exitCode); try c.encodeIfPresent(activity, forKey: .activity)
     try c.encode(delegated, forKey: .delegated); try c.encodeIfPresent(parent, forKey: .parent)
-    try c.encode(concierge, forKey: .concierge)
     try c.encode(contextTokens, forKey: .contextTokens); try c.encode(contextLimit, forKey: .contextLimit)
   }
 }
@@ -347,8 +340,7 @@ extension WorkbenchState {
       let p = projects.first(where: { $0.path == String(key[..<i]) })
     else { return nil }
     let l = withLayoutCopy(p.name)
-    let open = l.tree.leaves.contains { $0.id == pane && $0.kind == .terminal } || (Concierge.isPane(pane) && l.launches[pane]?.concierge != nil)
-    return open ? (p.name, pane) : nil
+    return l.tree.leaves.contains { $0.id == pane && $0.kind == .terminal } ? (p.name, pane) : nil
   }
 
   /// Removes the terminal pane behind `root#pane`, in any Project, with its launch.
@@ -367,7 +359,7 @@ extension WorkbenchState {
 
   /// Drops the launches of closed panes; a closed sandboxed child takes its sandbox with it (#75).
   mutating func pruneLaunches() {
-    for (id, l) in launches where !Concierge.isPane(id) && !tree.leaves.contains(where: { $0.id == id }) {
+    for (id, l) in launches where !tree.leaves.contains(where: { $0.id == id }) {
       if let name = l.sandbox { AgentRun.removeSandbox(name) }
       launches[id] = nil
     }
@@ -386,7 +378,7 @@ extension WorkbenchState {
       guard let t = terminal(parent), let p = projects.first(where: { $0.name == t.project }) else {
         throw CommandError(.preconditionFailed, "calling terminal \(parent) is not open in Clair")
       }
-      return (p, Concierge.isPane(t.pane) ? nil : t.pane)  // the concierge has no pane to split; children open in its Project
+      return (p, t.pane)
     }
     guard let p = projects.first(where: { $0.name == project }) else { throw CommandError(.preconditionFailed, "no active project") }
     return (p, nil)
@@ -453,25 +445,23 @@ extension WorkbenchState {
       case .idle: status = "idle"
       case .exited(let code): status = "exited"; exitCode = code
       }
-      let session = l.session ?? l.concierge ?? l.resume
+      let session = l.session ?? l.resume
       let context = l.profile == "claude" ? session.map { AgentContext.claude(session: $0, cwd: s.cwd) } : nil
       return WorkbenchAgent(
         key: Self.terminalKey(root, s.pane), project: s.project, pane: s.pane, profile: l.profile, cwd: s.cwd,
         status: status, exitCode: exitCode, activity: s.activity, delegated: l.run != nil, parent: l.parent,
-        concierge: l.concierge != nil,
         contextTokens: context?.tokens, contextLimit: context?.limit)
     }
   }
 
   /// After the daemon lost its shells (Mac restart, Clair quit), an agent pane reopens the conversation its
   /// agent last reported instead of a fresh one. `live(key)` says a shell still runs for `root#pane`: those
-  /// keep their command, since a changed command replaces the live shell. Delegated runs and the concierge
-  /// keep their own commands.
+  /// keep their command, since a changed command replaces the live shell. Delegated runs keep their own commands.
   public mutating func resumeReportedAgents(live: (String) -> Bool) {
     for p in projects {
       withLayout(p.name) { layout in
         for (pane, l) in layout.launches {
-          guard let session = l.session, l.resume != session, l.run == nil, l.concierge == nil,
+          guard let session = l.session, l.resume != session, l.run == nil,
             AgentProfile.named(l.profile)?.resume != nil, !live(Self.terminalKey(p.path, pane))
           else { continue }
           layout.launches[pane]?.resume = session

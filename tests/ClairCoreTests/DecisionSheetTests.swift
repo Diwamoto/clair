@@ -77,7 +77,10 @@ import Testing
   @Test func aPendingSheetHoldsTheCard() throws {
     let card = try Self.card()
     try DecisionSheet.validate(#"{"questions":[{"id":"q","kind":"text","prompt":"?"}]}"#, card: card).save(card: card)
-    let c = WorkbenchState().board([ClairTodo(path: card, title: "c").with { $0.stage = "plan"; $0.result = "ok" }]).cards.first
+    let c = WorkbenchState().board([ClairTodo(path: card, title: "c").with { $0.agent = "/gone#1" }]).cards.first
     #expect(c?.state == .blocked && c?.asking == 1)
+    // A done card still says the owner has something to decide.
+    let done = WorkbenchState().board([ClairTodo(path: card, title: "c").with { $0.result = "ok"; $0.doneAt = ISO8601DateFormatter().string(from: .now) }]).cards.first
+    #expect(done?.state == .done && done?.asking == 1)
   }
 }

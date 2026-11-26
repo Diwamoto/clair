@@ -310,7 +310,7 @@ import Observation
             store.state.projects.flatMap { p in
               let tree = p.name == store.state.project ? store.state.tree : store.state.layouts[p.name]?.tree
               return (tree?.leaves ?? []).filter { $0.kind == .terminal }.map { ClairWorkbenchStore.terminalKey(root: p.path, pane: $0.id) }
-            } + store.state.concierges().map(\.key)
+            }
           }
         }
         return ClairCLIProcessScanner.terminal(of: pid, keys: keys)
@@ -516,7 +516,7 @@ import Observation
           state.notices.markRead(project: state.project, pane: pane)
         }
         if id == "agent.report" { agentReported(input) }
-        // A launch (todo.move, scheduled, CLI) into a pane that is not on screen would otherwise wait for its surface.
+        // A launch (todo.run, scheduled, CLI) into a pane that is not on screen would otherwise wait for its surface.
         for (key, l) in launchCommands() where !launchedBefore.contains(key) {
           ClairDaemonLauncher.startHeadless(key: key, cwd: l.cwd, command: l.command)
         }
@@ -1255,13 +1255,13 @@ import Observation
     /// a running agent whose transcript ends in the interrupt line is settled as seen-done (idle).
     func settleInterruptedAgents() async {
       let running = state.agentSessions.filter { $0.status == .running }.compactMap { s -> (String, String)? in
-        guard let l = state.agentLaunch(in: s.project, pane: s.pane), let id = l.session ?? l.concierge,
+        guard let l = state.agentLaunch(in: s.project, pane: s.pane), let id = l.session,
               state.agentReports[s.id]?.state == .working else { return nil }
         return (s.id, id)
       }
       guard !running.isEmpty else { return }
       let stopped = await Task.detached {
-        running.filter { Concierge.transcriptFile(session: $0.1).map(AgentHistoryReader.endsInterrupted) == true }.map(\.0)
+        running.filter { AgentHistoryReader.claudeTranscript(session: $0.1).map(AgentHistoryReader.endsInterrupted) == true }.map(\.0)
       }.value
       for key in stopped where state.agentReports[key]?.state == .working {
         state.agentReports[key]?.state = .done
@@ -1334,8 +1334,7 @@ import Observation
     private var fanOutGrants: [String: Date] = [:]
     nonisolated func approve(_ id: String, _ input: CommandInput, _ risk: CommandRisk, caller: String?) -> Bool {
       if DispatchQueue.main.sync(execute: { MainActor.assumeIsolated { state.autoApproves(id, risk: risk, caller: caller) } }) { return true }
-      // Not for the concierge: a grant would lift its per-request launch cap (ADR-0028), the guard against an injected concierge.
-      let fanOut = id == "agent.launch" && !DispatchQueue.main.sync(execute: { MainActor.assumeIsolated { state.isConcierge(caller) } }) ? caller : nil
+      let fanOut = id == "agent.launch" ? caller : nil
       if let fanOut, DispatchQueue.main.sync(execute: { MainActor.assumeIsolated { fanOutGrants[fanOut].map { $0 > Date() } ?? false } }) {
         return true
       }
@@ -1752,20 +1751,10 @@ import Observation
       .onChange(of: st.active) {
         if !store.conciergeFiles.contains(where: { $0.project == st.project && $0.path == st.active }) { leaveConciergeOverlay() }
       }
-      .task(id: conciergeBoard || !st.concierges().isEmpty) {
-        // The concierge and its children rewrite the TODO files while the board is open.
-        // While a concierge runs, card state changes are typed into it so it follows the board without being asked.
-        var seen: [String: TodoBoardCard.State]?
-        while conciergeBoard || !st.concierges().isEmpty, !Task.isCancelled {
+      .task(id: conciergeBoard) {
+        // Card agents rewrite the TODO files while the board is open.
+        while conciergeBoard, !Task.isCancelled {
           todos = ClairTodo.list()
-          let cards = st.board(todos, now: Date()).cards
-          // Each card's news goes only to the concierge chat that moved it, not whichever chat is open.
-          if let seen {
-            for c in st.concierges() {
-              for line in TodoBoardCard.changes(cards.filter { st.boardConcierge($0) == c.key }, since: seen) { ClairGhosttySurfaceView.submit(line, key: c.key) }
-            }
-          }
-          seen = Dictionary(cards.map { ($0.todo.path, $0.state) }, uniquingKeysWith: { a, _ in a })
           try? await Task.sleep(for: .seconds(2))
         }
       }
@@ -1848,7 +1837,7 @@ import Observation
 
     /// Board ⇄ IDE. Vertical tabs carry it in the column; folded, it shows only the current screen.
     private func screenSwitch(compact: Bool) -> some View {
-      ScreenSwitch(concierge: conciergeBoard, waiting: st.agentSessions.contains { $0.status == .blocked && !Concierge.isPane($0.pane) }, compact: compact) {
+      ScreenSwitch(concierge: conciergeBoard, waiting: st.agentSessions.contains { $0.status == .blocked }, compact: compact) {
         sidebarMode = conciergeBoard ? "folder" : "concierge"
         if !conciergeBoard, st.sidebarHidden { store.run("sidebar.toggle") }
       }
@@ -2479,16 +2468,6 @@ import Observation
     /// A tab click must show that tab, which the full-width concierge chat would cover.
     private func leaveConciergeOverlay() { if sidebarMode == "concierge" { leaveConcierge() } }
 
-    /// A board card's "頼む" / "PR を作る": typed (not sent) into the IDE's focused terminal, else its first one; the owner
-    /// reads it and presses Return. No terminal pane: the text goes to the pasteboard.
-    private func typeIntoTerminal(_ text: String) {
-      leaveConcierge()
-      let leaves = st.tree.leaves.filter { $0.kind == .terminal }
-      guard let pane = (leaves.first { $0.id == st.tree.focused } ?? leaves.first)?.id else { return copyToPasteboard(text) }
-      store.run("pane.focus", ["id": .int(pane)])
-      ClairGhosttySurfaceView.send(text, toPane: pane); ClairGhosttySurfaceView.focus(pane: pane)
-    }
-
     /// A pane tile opens the real terminal: leave the concierge and focus that pane in its Project.
     private func focusConciergeChild(_ s: AgentSession) {
       if s.project != st.project { store.run("project.switch", ["name": .string(s.project)]) }
@@ -2506,7 +2485,7 @@ import Observation
     /// Every live agent pane no card holds: the board's right-edge "Other agents" column, so the board manages every agent in Clair.
     private func otherAgents(_ cards: [TodoBoardCard]) -> [BoardAgent] {
       let held = Set(cards.compactMap { c in c.pane.map { "\(c.project ?? "")\u{0}\($0)" } })
-      return st.agentSessions.filter { !Concierge.isPane($0.pane) && !$0.status.isExited && !held.contains("\($0.project)\u{0}\($0.pane)") }.compactMap { s in
+      return st.agentSessions.filter { !$0.status.isExited && !held.contains("\($0.project)\u{0}\($0.pane)") }.compactMap { s in
         st.projects.first { $0.name == s.project }.map { (s, s.activity ?? s.title, WorkbenchState.terminalKey($0.path, s.pane)) }
       }
     }
@@ -2553,7 +2532,7 @@ import Observation
     }
 
     private var sessionList: some View {
-      SessionList(sessions: st.agentSessions.filter { !Concierge.isPane($0.pane) }, current: st.project, projects: st.projects) { s in
+      SessionList(sessions: st.agentSessions, current: st.project, projects: st.projects) { s in
         if s.project != st.project { store.run("project.switch", ["name": .string(s.project)]) }
         store.run("pane.focus", ["id": .int(s.pane)])
       } openHistory: { historyTabs[$0.id] = $0; store.run("history.open", ["id": .string($0.id)]) }
@@ -3712,7 +3691,15 @@ import Observation
               cards: board.cards, archived: board.archived, others: otherAgents(board.cards),
               agent: boardAgent, projects: Array(st.projects.map(\.name).reversed()),
               run: { store.run($0, $1) }, confirm: { menus.ask($0) }, reload: { todos = ClairTodo.list() },
-              newCard: { saveTodo(ClairTodo(path: "", title: $0)) },
+              request: { title, project, start in
+                var t = ClairTodo(path: ClairTodo.newPath(title: title), title: title)
+                t.project = project
+                do { try t.save() } catch { return fileError(error) }
+                if start, case .failure(let e) = store.run("todo.run", ["path": .string(t.path)]) {
+                  menus.ask(ClairDialog(title: tr("agent を起動できません"), message: e.message) { _ in })
+                }
+                todos = ClairTodo.list()
+              },
               openAgent: focusConciergeChild,
               openPane: { card in
                 guard let p = card.project, let pane = card.pane else { return }
@@ -3721,13 +3708,6 @@ import Observation
                 leaveConcierge()
               },
               openFile: { path in store.run("file.open", ["path": .string(path)]) },
-              ask: { card in typeIntoTerminal(tr("TODO「%@」(%@)を進めて。", card.todo.title, card.todo.path)) },
-              makePR: { card in typeIntoTerminal(tr("TODO「%@」(%@) の PR を作って。", card.todo.title, card.todo.path)) },
-              diffProject: { card in card.todo.branch.flatMap { b in st.projects.first { $0.branch == b }?.name } },
-              openDiff: { name in
-                if name != st.project { store.run("project.switch", ["name": .string(name)]) }
-                sidebarMode = "shield"; reloadChanges()
-              },
               selected: $boardSelected, flash: boardFlash)
             .paneCard(focused: false)
             if !store.conciergeFiles.isEmpty {

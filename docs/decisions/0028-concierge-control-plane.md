@@ -1,7 +1,7 @@
 ---
 id: ADR-0028
 title: "コンシェルジュを看板中心のコントロールプレーンにし、工程は人が列を移して進める"
-status: accepted
+status: superseded
 date: 2026-11-13
 deciders:
   - Daiki
@@ -9,7 +9,8 @@ related_projects: []
 related_issues: []
 supersedes:
   - ADR-0020
-superseded_by: []
+superseded_by:
+  - ADR-0032
 ---
 
 # ADR-0028: コンシェルジュを看板中心のコントロールプレーンにする

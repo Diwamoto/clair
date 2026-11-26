@@ -9,7 +9,7 @@
   private typealias L = DesignTokens.Line
   private typealias W = DesignTokens.Wash
 
-  // The board screen (ADR-0028, 2026-11-24 revision): the TODO board and its agents.
+  // The board screen (ADR-0031, #82): the TODO board, one agent per card.
 
   func statusLabel(_ s: AgentSession.Status) -> (String, Color) {
     switch s {
@@ -148,7 +148,7 @@
           Text(verbatim: text).font(.system(size: 9, design: .monospaced)).foregroundStyle(C.textSecondary)
             .lineLimit(agent == nil ? 4 : Self.lines)
             .frame(maxWidth: .infinity, alignment: agent == nil ? .topLeading : .bottomLeading)
-            .frame(height: agent == nil ? nil : 156, alignment: .bottomLeading)
+            .frame(height: agent == nil ? nil : 72, alignment: .bottomLeading)
             .padding(8).clipped()
             .modifier(Boxed(fill: W.soft, line: L.hairline, radius: Radius.control))
         }
@@ -172,7 +172,7 @@
       .task(id: path) { if agent == nil { head = await Task.detached { Self.bodyStart(path) }.value } }
     }
 
-    static let lines = 14
+    static let lines = 6
     /// The last `lines` rows of a screen read, trailing blanks dropped.
     static func tail(_ text: String) -> String {
       var rows = text.split(separator: "\n", omittingEmptySubsequences: false).map { $0.replacing(/\s+$/, with: "") }
@@ -255,12 +255,12 @@
     }
   }
 
-  /// #78 / ADR-0028: the kanban. Five columns (Inbox, Plan, Impl, Review, Done) of every Project's cards; a drag moves a card
-  /// and the model starts the column's agent. Drawn flat like the chat beside it: one ground, hairline boxes, mono heads,
-  /// colour only on the status dots.
+  /// #82: the board. One card is one agent; the columns are states (Inbox, 実行中, 判断待ち, 完了, 未完了) of every Project's
+  /// cards, so nothing is dragged. A one-line request with a Project makes a card and starts its agent. Drawn flat: one
+  /// ground, hairline boxes, mono heads, colour only on the status dots.
   struct TodoBoardView: View {
     let cards: [TodoBoardCard]
-    /// Done cards past the display window; reached from the end of the Done column and by search.
+    /// Done cards past the display window; reached from the end of the 完了 column and by search.
     let archived: [TodoBoardCard]
     /// Agent panes on no card (started by hand in a Project).
     let others: [BoardAgent]
@@ -270,16 +270,11 @@
     let run: (String, CommandInput) -> Result<CommandResult, CommandError>
     let confirm: (ClairDialog) -> Void
     let reload: () -> Void
-    /// Adds an Inbox card with this title.
-    let newCard: (String) -> Void
+    /// Makes a card from a one-line request in a Project (nil = Project なし); `start` also runs its agent.
+    let request: (_ title: String, _ project: String?, _ start: Bool) -> Void
     let openAgent: (AgentSession) -> Void
     let openPane: (TodoBoardCard) -> Void
     let openFile: (String) -> Void
-    let ask: (TodoBoardCard) -> Void
-    let makePR: (TodoBoardCard) -> Void
-    /// The worktree Project of the card's branch, if Clair has it open; nil hides "diff を開く".
-    let diffProject: (TodoBoardCard) -> String?
-    let openDiff: (String) -> Void
     @Binding var selected: String?
     /// The card an approval key just answered.
     let flash: String?
@@ -290,21 +285,25 @@
     /// Columns the owner opened past the first `limit` cards.
     @State private var expanded: Set<String> = []
     private static let limit = 10
-    @State private var dropTarget: String?
     @State private var draft = ""
     @FocusState private var draftFocused: Bool
-    @State private var picking: (card: TodoBoardCard, stage: String)?
+    /// The request field's Project, kept across launches ("" = Project なし).
+    @AppStorage("clair.boardRequestProject") private var requestProject = ""
+    @State private var picking: TodoBoardCard?
     @State private var pickQuery = ""
     @FocusState private var pickFocused: Bool
     /// The agent pane in quick look, by session id, and whether its terminal can be shown (a live shell).
     @State private var peeked: String?
     @State private var peekLive = false
+    /// A card just run: its quick look opens once its agent's pane shows up.
+    @State private var peekWhenLive: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let gap: CGFloat = 8
     private static let pad: CGFloat = 24
+    private static let titles = ["inbox": "Inbox", "running": "実行中", "blocked": "判断待ち", "done": "完了", "failed": "未完了"]
 
-    private func needsYou(_ c: TodoBoardCard) -> Bool { c.state == .blocked || c.state == .failed }
+    private func needsYou(_ c: TodoBoardCard) -> Bool { c.column == "blocked" || c.column == "failed" }
 
     private func visible(_ list: [TodoBoardCard]) -> [TodoBoardCard] {
       (query.isEmpty ? list : TodoBoardCard.search(list, query))
@@ -318,21 +317,22 @@
       let past = visible(archived)
       return VStack(alignment: .leading, spacing: 0) {
         header
+        requestRow
         Rectangle().fill(L.hairline).frame(height: 1)
         GeometryReader { geo in
-          // Five columns share the width; below the minimum the columns scroll sideways instead of squeezing.
-          let count = CGFloat(ClairTodo.columns.count + (others.isEmpty ? 0 : 1))
+          // The columns share the width; below the minimum they scroll sideways instead of squeezing.
+          let count = CGFloat(TodoBoardCard.columns.count + (others.isEmpty ? 0 : 1))
           let width = max(220, (geo.size.width - Self.pad * 2 - Self.gap * (count - 1)) / count)
           ScrollViewReader { proxy in
             ScrollView(.horizontal) {
               HStack(alignment: .top, spacing: Self.gap) {
-                ForEach(ClairTodo.columns, id: \.self) { column($0, shown: shown, past: past, width: width) }
+                ForEach(TodoBoardCard.columns, id: \.self) { column($0, shown: shown, past: past, width: width) }
                 if !others.isEmpty { othersColumn(width: width) }
               }
               .padding(.horizontal, Self.pad).padding(.vertical, 16).frame(height: geo.size.height, alignment: .top)
-              // A card moving columns or changing state slides in place instead of jumping.
+              // A card changing state slides in place instead of jumping.
               .animation(reduceMotion ? nil : .easeOut(duration: Motion.screenDuration),
-                         value: (shown + past).map { "\($0.todo.path)\($0.column)\($0.state)" })
+                         value: (shown + past).map { "\($0.todo.path)\($0.state)" })
             }.clairScroller()
             .onChange(of: selected) { _, path in
               guard let path else { return }
@@ -342,12 +342,16 @@
         }
       }
       // minWidth 0: the header's fixed chips must not floor the board's width; the columns already scroll sideways,
-      // so the chat and editor columns can squeeze the board as far as the owner drags them. The header clips at its end.
+      // so the editor column can squeeze the board as far as the owner drags it. The header clips at its end.
       .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).clipped().background(C.canvas)
       .overlay { quickLook }
       .overlay { projectPicker }
       // An exited agent leaves the list, and its quick look with it.
       .onChange(of: agents.map(\.session.id)) { _, ids in if let peeked, !ids.contains(peeked) { self.peeked = nil } }
+      .onChange(of: cards) { _, now in
+        guard let path = peekWhenLive, let a = now.first(where: { $0.todo.path == path }).flatMap(agent) else { return }
+        peekWhenLive = nil; peek(a)
+      }
     }
 
     // MARK: Header
@@ -401,56 +405,69 @@
       }
     }
 
+    // MARK: Request
+
+    /// Return makes the card and starts its agent in the chosen Project without switching to it; ⌘Return only files it
+    /// in Inbox. The field empties and keeps the focus for the next request.
+    private var requestRow: some View {
+      let target = projects.contains(requestProject) ? requestProject : ""
+      func submit(_ start: Bool) {
+        let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        request(t, target.isEmpty ? nil : target, start); draft = ""; draftFocused = true
+      }
+      return HStack(spacing: 8) {
+        TextField(tr("依頼を1行で…"), text: $draft)
+          .focused($draftFocused).textFieldStyle(.plain).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textPrimary)
+          .padding(.horizontal, 12).frame(height: RowHeight.control)
+          .modifier(Boxed(line: draftFocused ? L.ring : L.strong, radius: Radius.card))
+          .onSubmit { submit(true) }
+          .onExitCommand { draft = ""; draftFocused = false }
+          .accessibilityLabel(tr("依頼"))
+        Menu {
+          Picker(tr("Project"), selection: $requestProject) {
+            Text(tr("Project なし")).tag("")
+            ForEach(projects, id: \.self) { Text($0).tag($0) }
+          }.pickerStyle(.inline).labelsHidden()
+        } label: {
+          HStack(spacing: 6) {
+            Text(target.isEmpty ? tr("Project なし") : target).lineLimit(1)
+            Image(systemName: "chevron.down").font(.system(size: Typography.chromeSize(9), weight: .semibold)).foregroundStyle(C.textMuted)
+          }.modifier(Chip(on: false))
+        }
+        .menuStyle(.button).buttonStyle(HoverWashStyle(radius: Radius.card)).menuIndicator(.hidden).fixedSize()
+        .accessibilityLabel(tr("依頼する Project"))
+        Button { submit(true) } label: {
+          HStack(spacing: 6) {
+            Text(tr("依頼する"))
+            Text(verbatim: "⏎").font(Typography.font(Typography.chrome, family: .mono)).foregroundStyle(C.textMuted)
+          }.modifier(Chip(on: true))
+        }
+        .buttonStyle(HoverWashStyle(radius: Radius.card)).fixedSize().disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
+        // ⌘Return: file the request in Inbox without starting an agent.
+        Button("") { submit(false) }.keyboardShortcut(.return, modifiers: .command).opacity(0).frame(width: 0, height: 0)
+          .accessibilityHidden(true)
+      }
+      .padding(.horizontal, Self.pad).padding(.bottom, 12)
+    }
+
     // MARK: Columns
 
-    private func column(_ stage: String, shown: [TodoBoardCard], past: [TodoBoardCard], width: CGFloat) -> some View {
-      let items = shown.filter { $0.column == stage }
-      let targeted = dropTarget == stage
+    private func column(_ name: String, shown: [TodoBoardCard], past: [TodoBoardCard], width: CGFloat) -> some View {
+      let items = shown.filter { $0.column == name }
       return VStack(alignment: .leading, spacing: 8) {
-        HStack(spacing: 6) {
-          BoardHead(title: stage.capitalized, count: items.count)
-          Spacer(minLength: 0)
-          if stage == "inbox" {
-            Button { draftFocused = true } label: {
-              Image(systemName: "plus").font(Typography.font(Typography.sidebarMicro)).foregroundStyle(C.textTertiary).frame(width: 22, height: 22)
-            }.buttonStyle(HoverWashStyle(radius: Radius.control)).help(tr("カードを追加")).accessibilityLabel(tr("カードを追加"))
-          }
-        }.frame(height: 22).padding(.leading, 6)  // the Inbox "+" is 22pt: every header takes its height so the rows line up
+        BoardHead(title: Self.titles[name].map { tr($0) } ?? name, count: items.count).frame(height: 22).padding(.leading, 6)
         ScrollView {
           VStack(spacing: 6) {
-            if stage == "inbox" { quickAdd }
-            ForEach(capped(items, stage), id: \.todo.path) { card($0).transition(.opacity) }
-            more(items.count, stage)
-            if stage == "done", !past.isEmpty { pastSection(past) }
-          }.padding(6).frame(maxWidth: .infinity)  // an empty column still spans its width so it takes drops
+            ForEach(capped(items, name), id: \.todo.path) { card($0).transition(.opacity) }
+            more(items.count, name)
+            if name == "done", !past.isEmpty { pastSection(past) }
+          }.padding(6).frame(maxWidth: .infinity)
         }.clairScroller()
         .frame(maxHeight: .infinity, alignment: .top)
         .background(W.soft, in: RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Radius.overlay, style: .continuous).strokeBorder(targeted ? L.ring : Color.clear))
-        .dropDestination(for: URL.self) { urls, _ in
-          guard let path = urls.first?.path, let c = (cards + archived).first(where: { $0.todo.path == path }), c.column != stage else { return false }
-          requestMove(c, stage)
-          return true
-        } isTargeted: { on in
-          if on { dropTarget = stage } else if dropTarget == stage { dropTarget = nil }
-        }
       }
       .frame(width: width)
-    }
-
-    /// Type a title and press Return: the card lands in Inbox and the field stays ready for the next one.
-    private var quickAdd: some View {
-      TextField(tr("TODO を追加…"), text: $draft)
-        .focused($draftFocused).textFieldStyle(.plain).font(Typography.font(Typography.sidebar)).foregroundStyle(C.textPrimary)
-        .padding(.horizontal, 10).frame(height: RowHeight.control)
-        .modifier(Boxed(radius: Radius.card))
-        .onSubmit {
-          let t = draft.trimmingCharacters(in: .whitespaces)
-          guard !t.isEmpty else { return }
-          newCard(t); draft = ""; draftFocused = true
-        }
-        .onExitCommand { draft = ""; draftFocused = false }
-        .accessibilityLabel(tr("カードを追加"))
     }
 
     /// The first `limit` items unless the column is opened (a search shows everything it matched).
@@ -484,14 +501,13 @@
 
     // MARK: Cards
 
-    private func state(_ s: TodoBoardCard.State) -> (String, Color)? {
-      switch s {
+    private func state(_ c: TodoBoardCard) -> (String, Color)? {
+      switch c.state {
       case .idle: nil
       case .running: (tr("実行中"), C.success)
-      case .blocked: (tr("入力待ち"), C.attention)
+      case .blocked: (c.asking > 0 ? tr("判断待ち") : tr("承認待ち"), C.attention)
       case .done: (tr("完了"), C.textMuted)
-      case .failed: (tr("失敗"), C.danger)
-      case .unreported: (tr("完了(結果未報告)"), C.textMuted)
+      case .failed, .unreported: (tr("未完了"), C.danger)
       }
     }
 
@@ -504,13 +520,36 @@
       }.buttonStyle(HoverWashStyle(radius: Radius.control))
     }
 
+    /// A finished card's three answers: done or not, why (`note`), and whether the owner has to decide something.
+    private func result(_ c: TodoBoardCard) -> some View {
+      let ok = c.state == .done
+      let why = c.note.flatMap { $0.isEmpty ? nil : $0 } ?? (c.state == .unreported ? tr("報告せずに止まった") : nil)
+      return Grid(alignment: .topLeading, horizontalSpacing: 8, verticalSpacing: 3) {
+        GridRow {
+          Text(tr("結果")).foregroundStyle(C.textTertiary)
+          Text(ok ? tr("完了") : tr("未完了")).foregroundStyle(ok ? C.textSecondary : C.danger)
+        }
+        GridRow {
+          Text(tr("理由")).foregroundStyle(C.textTertiary)
+          Text(why ?? "—").foregroundStyle(why == nil ? C.textMuted : C.textSecondary).lineLimit(3).fixedSize(horizontal: false, vertical: true)
+        }
+        GridRow {
+          Text(tr("判断")).foregroundStyle(C.textTertiary)
+          Text(c.asking > 0 ? tr("要(%@ 問)", c.asking) : tr("不要")).foregroundStyle(c.asking > 0 ? C.attention : C.textMuted)
+        }
+      }
+      .font(Typography.font(Typography.chrome)).frame(maxWidth: .infinity, alignment: .leading)
+      .padding(.horizontal, 8).padding(.vertical, 6).modifier(Boxed(fill: W.soft, line: L.hairline, radius: Radius.control))
+      .accessibilityElement(children: .combine)
+    }
+
     private func card(_ c: TodoBoardCard) -> some View {
       let a = agent(c)
-      let label = state(c.state)
+      let label = state(c)
       let on = selected == c.todo.path
       return VStack(alignment: .leading, spacing: 8) {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-          Text(c.todo.title).font(Typography.font(Typography.sidebar)).foregroundStyle(c.column == "done" ? C.textTertiary : C.textPrimary)
+          Text(c.todo.title).font(Typography.font(Typography.sidebar)).foregroundStyle(c.state == .done ? C.textTertiary : C.textPrimary)
             .lineLimit(3).fixedSize(horizontal: false, vertical: true)
           Spacer(minLength: 0)
           if let a {
@@ -520,20 +559,17 @@
           }
         }
         HStack(spacing: 6) {
-          if let label { Circle().fill(label.1).frame(width: 6, height: 6); Text(label.0).foregroundStyle(c.state == .blocked ? C.attention : C.textTertiary) }
+          if let label { Circle().fill(label.1).frame(width: 6, height: 6); Text(label.0).foregroundStyle(label.1 == C.textMuted ? C.textTertiary : label.1) }
           if let p = c.project { Text(verbatim: label == nil ? p : "· \(p)").lineLimit(1) }
         }.font(Typography.font(Typography.chrome)).foregroundStyle(C.textTertiary)
-        if let note = c.note, !note.isEmpty {
-          Text(note).font(Typography.font(Typography.chrome)).foregroundStyle(C.textSecondary).lineLimit(3).fixedSize(horizontal: false, vertical: true)
+        switch c.column {
+        case "done", "failed": result(c)
+        case "inbox": CardScreen(agent: nil, path: c.todo.path)
+        default: CardScreen(agent: a, path: c.todo.path)
         }
-        CardScreen(agent: a, path: c.todo.path)
-        // ADR-0030: the agent's questions wait here; the sheet opens in the editor column.
+        // ADR-0030: the agent's questions wait here; the sheet opens in a floating panel.
         if c.asking > 0 { action(tr("判断する(%@ 問)", c.asking)) { openSheet(c) }.accessibilityLabel(tr("判断シートを開く")) }
-        // A finished Plan card offers its plan.md, so the owner reads it before moving the card to Impl.
-        if c.column == "plan", c.state == .done || c.state == .unreported, let plan = c.artifacts.first(where: { $0.hasSuffix("/plan.md") }) {
-          action(tr("plan.md を開く")) { openFile(plan) }.accessibilityLabel(tr("plan.md を開く"))
-        }
-        if c.column == "review" { action(tr("PR を作る")) { makePR(c) }.accessibilityLabel(tr("PR を作る")) }
+        if c.state == .idle { action(tr("実行")) { runCard(c) }.accessibilityLabel(tr("agent を起動")) }
       }
       .padding(10).frame(maxWidth: .infinity, alignment: .leading)
       .modifier(Boxed(fill: on ? C.surfaceActive : C.canvas, line: on ? L.ring : L.strong))
@@ -545,26 +581,28 @@
       }
       .animation(reduceMotion ? nil : .easeOut(duration: Motion.overlayDuration), value: flash == c.todo.path)
       .id(c.todo.path)
-      // A file URL, not a bare string: the concierge chat takes it as a path to ask about, the columns move it.
-      .draggable(URL(fileURLWithPath: c.todo.path))
-      .onTapGesture {
-        selected = c.todo.path
-        if c.asking > 0 { openSheet(c) } else if let a { peek(a) }
-      }
+      .onTapGesture { open(c) }
       .contextMenu {
         Button(tr("TODO を開く")) { openFile(c.todo.path) }
         ForEach(c.artifacts, id: \.self) { path in Button((path as NSString).lastPathComponent) { openFile(path) } }
         if c.pane != nil { Button(tr("ペインを開く")) { openPane(c) } }
-        if let p = diffProject(c) { Button(tr("diff を開く")) { openDiff(p) } }
         if let pr = c.todo.pr, let url = URL(string: pr), url.scheme == "https" { Button(tr("PR を開く")) { NSWorkspace.shared.open(url) } }
-        if c.column == "inbox" { Button(tr("調査する")) { requestMove(c, "research") } }
-        if c.column != "done" { Button(tr("コンシェルジュに頼む")) { ask(c) } }
+        if a == nil { Button(c.state == .idle ? tr("実行") : tr("会話を再開")) { runCard(c) } }
       }
       .accessibilityElement(children: .contain)
       .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
     }
 
-    /// The right-edge column: live agents no card holds (manual, concierge children), so every agent in Clair is on the board.
+    /// A click opens the card's conversation: its sheet when it asks, its live terminal, or — once its agent's pane is
+    /// gone — the agent again on the card's own conversation (`todo.run` resumes it). An Inbox card only selects.
+    private func open(_ c: TodoBoardCard) {
+      selected = c.todo.path
+      if c.asking > 0 { return openSheet(c) }
+      if let a = agent(c) { return peek(a) }
+      if c.state != .idle { runCard(c) }
+    }
+
+    /// The right-edge column: live agents no card holds (started by hand), so every agent in Clair is on the board.
     private func othersColumn(width: CGFloat) -> some View {
       VStack(alignment: .leading, spacing: 8) {
         BoardHead(title: tr("その他のエージェント"), count: others.count).frame(height: 22).padding(.leading, 6)
@@ -598,37 +636,29 @@
       .frame(width: width)
     }
 
-    // MARK: Moving
+    // MARK: Running
 
-    private func requestMove(_ c: TodoBoardCard, _ stage: String) {
-      // Any live agent, an input-waiting one included: the move closes its pane.
-      guard c.pane != nil, c.state == .running || c.state == .blocked else { return move(c, stage) }
-      confirm(ClairDialog(title: tr("実行中の agent を終了して移しますか"), message: tr("「%@」の agent は実行中です。", c.todo.title),
-                          confirm: tr("終了して移す"), destructive: true) { _ in move(c, stage) })
-    }
-
-    private func move(_ c: TodoBoardCard, _ stage: String, force: Bool = false) {
-      var input: CommandInput = ["path": .string(c.todo.path), "stage": .string(stage)]
-      if force { input["force"] = .bool(true) }
-      guard case .failure(let e) = run("todo.move", input) else { return reload() }
-      if e.message.contains("needsProject") {
-        pickQuery = ""; picking = (c, stage)
-      } else if e.message.contains("dirtyWorktree") {
-        confirm(ClairDialog(title: tr("変更を破棄して Done に移しますか"), message: e.message, confirm: tr("破棄して移す"), destructive: true) { _ in
-          move(c, stage, force: true)
-        })
-      } else {
-        confirm(ClairDialog(title: tr("カードを移せません"), message: e.message) { _ in })
+    /// `todo.run`: starts (or resumes) the card's one agent, then shows its terminal. A card without a Project asks for one.
+    private func runCard(_ c: TodoBoardCard) {
+      switch run("todo.run", ["path": .string(c.todo.path)]) {
+      case .success:
+        peekWhenLive = c.todo.path; reload()
+      case .failure(let e) where e.message.contains("needsProject"):
+        pickQuery = ""; picking = c
+      case .failure(let e) where e.message.contains("agentOpen"):
+        if let a = agent(c) { peek(a) }
+      case .failure(let e):
+        confirm(ClairDialog(title: tr("agent を起動できません"), message: e.message) { _ in })
       }
     }
 
     private func choose(_ name: String?) {
-      guard let p = picking else { return }
+      guard let c = picking else { return }
       picking = nil
-      if case .failure(let e) = run("todo.update", ["path": .string(p.card.todo.path), "project": .string(name ?? "none")]) {
+      if case .failure(let e) = run("todo.update", ["path": .string(c.todo.path), "project": .string(name ?? "none")]) {
         return confirm(ClairDialog(title: tr("Project を設定できません"), message: e.message) { _ in })
       }
-      move(p.card, p.stage)
+      runCard(c)
     }
 
     /// The Project palette for a card that has none: "Project なし" first, then the Projects, most recent first.

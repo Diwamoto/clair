@@ -45,8 +45,8 @@ Use the requested browser when the user explicitly asks for one, or when a runni
 }
 
 public enum ClairSkills {
-  /// The skills that are one plain `SKILL.md`: the TODO skill and the board columns' skills.
-  static let plain: [(name: String, markdown: String)] = [(ClairTodoSkill.name, ClairTodoSkill.markdown)] + ClairColumnSkill.all
+  /// The skills that are one plain `SKILL.md`: the TODO skill and the card agent's skill.
+  static let plain: [(name: String, markdown: String)] = [(ClairTodoSkill.name, ClairTodoSkill.markdown), (ClairCardSkill.name, ClairCardSkill.markdown)]
 
   public static func isInstalled(home: URL = .homeDirectory) -> Bool {
     ClairAgentSkill.isInstalled(home: home) && ClairPreviewSkill.isInstalled(home: home)

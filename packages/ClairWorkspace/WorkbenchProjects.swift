@@ -118,7 +118,7 @@ public struct ProjectLayout: Sendable, Codable, Equatable {
   /// Recently opened files, newest first (Compare With… lists them first).
   public var recent: [String] = []
   /// Agent terminals by pane id. Interactive ones are persisted so a restart keeps a board card's `agent=` link and
-  /// can resume the reported session; delegated runs and the concierge are not (a restore must not re-run a task).
+  /// can resume the reported session; delegated runs are not (a restore must not re-run a task).
   public var launches: [Int: AgentLaunch] = [:]
   /// Preview pane id → bound file, persisted so a restored preview keeps showing its own file.
   public var previews: [Int: String] = [:]
@@ -374,7 +374,7 @@ extension WorkbenchState {
     if l.activeDiff.map(l.diffTabs.contains) != true { l.activeDiff = nil }
     if !l.tree.isValid { l.tree = PaneTree(single: .editor) }
     if l.activeDiff != nil { l.tree.ensureEditorAtLeft() }  // layouts saved while a diff covered the whole pane area may have no editor
-    l.launches = l.launches.filter { id, _ in Concierge.isPane(id) || l.tree.leaves.contains { $0.id == id } }
+    l.launches = l.launches.filter { id, _ in l.tree.leaves.contains { $0.id == id } }
     l.previews = l.previews.filter { id, _ in l.tree.leaves.contains { $0.id == id } }
     l.editorFiles = l.editorFiles.filter { id, file in l.tabs.contains(file) && l.tree.leaves.contains { $0.id == id && $0.kind == .editor } }
     layout = l
@@ -539,11 +539,6 @@ private struct WorkspaceSnapshot: Codable {
   var languageOverrides: [String: String]?
   var fonts: [String: String]?
   var favorites: [String]?
-  var conciergePrompt: String?
-  var conciergeCwd: String?
-  var conciergeWorkdir: String?
-  var conciergeSessions: [String: [String]]?
-  var conciergeClosed: [String: [String]]?
 }
 
 extension WorkbenchState {
@@ -551,7 +546,7 @@ extension WorkbenchState {
     var s = self
     if !s.project.isEmpty { s.layouts[s.project] = s.layout }
     s.layouts = s.layouts.mapValues { var l = $0; l.launches = l.launches.filter(\.value.persists); return l }
-    let data = try JSONEncoder().encode(WorkspaceSnapshot(projects: s.projects, project: s.project, layouts: s.layouts, toggles: s.toggles, choices: s.choices, shortcuts: s.shortcuts, fileAssociations: s.fileAssociations, languageOverrides: s.languageOverrides, fonts: s.fonts, favorites: s.favorites, conciergePrompt: s.conciergePrompt, conciergeCwd: s.conciergeCwd, conciergeWorkdir: s.conciergeWorkdir, conciergeSessions: s.conciergeSessions, conciergeClosed: s.conciergeClosed))
+    let data = try JSONEncoder().encode(WorkspaceSnapshot(projects: s.projects, project: s.project, layouts: s.layouts, toggles: s.toggles, choices: s.choices, shortcuts: s.shortcuts, fileAssociations: s.fileAssociations, languageOverrides: s.languageOverrides, fonts: s.fonts, favorites: s.favorites))
     try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     try data.write(to: url, options: .atomic)
   }
@@ -566,11 +561,6 @@ extension WorkbenchState {
     for (id, key) in snap.shortcuts ?? [:] where key.isEmpty || WorkbenchState.canonicalShortcut(key) == key { s.shortcuts[id] = key }
     if let a = snap.fileAssociations { s.fileAssociations = a }
     s.languageOverrides = snap.languageOverrides ?? [:]
-    s.conciergePrompt = snap.conciergePrompt ?? ""
-    s.conciergeCwd = snap.conciergeCwd ?? ""
-    s.conciergeWorkdir = snap.conciergeWorkdir ?? ""
-    s.conciergeSessions = (snap.conciergeSessions ?? [:]).mapValues { $0.filter(AgentProfile.isSessionID) }
-    s.conciergeClosed = (snap.conciergeClosed ?? [:]).mapValues { $0.filter(AgentProfile.isSessionID) }
     // A pin whose item is gone stays (dimmed in the column) until the user removes it, like Finder's.
     s.favorites = (snap.favorites ?? []).filter { $0.hasPrefix("/") }
     for (k, v) in snap.fonts ?? [:] where s.fonts[k] != nil && WorkbenchState.isValidFontFamily(v) { s.fonts[k] = v }

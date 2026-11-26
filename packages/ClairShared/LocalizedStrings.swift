@@ -174,14 +174,16 @@ extension LocalizedStrings {
 
     // Commands (registry titles)
     "ボード": "Board", "あなた待ち": "Waiting on you", "あなた待ちだけ表示": "Show only cards waiting on you", "すべての Project": "All Projects",
-    "稼働中": "Running", "差し戻し上限超過": "Over the send-back limit", "diff を開く": "Open Diff", "PR を開く": "Open PR", "TODO を開く": "Open TODO", "コンシェルジュに頼む": "Ask the Concierge", "調査する": "Research", "TODO「%@」(%@)を進めて。": "Move the TODO \"%@\" (%@) forward.",
+    "稼働中": "Running", "差し戻し上限超過": "Over the send-back limit", "diff を開く": "Open Diff", "PR を開く": "Open PR", "TODO を開く": "Open TODO",
     "ボードはまだ空です": "The board is empty", "コンシェルジュに頼むと、担当するエージェントと stage 付きの TODO がここに並びます。": "Ask the concierge, and its agents and staged TODOs line up here.",
-    "その他のエージェント": "Other agents", "カードを検索": "Search cards", "カードを追加": "Add card", "過去の完了 %@ 件": "%@ earlier completed",
-    "失敗": "Failed", "完了(結果未報告)": "Done (no result reported)", "PR を作る": "Create PR", "plan.md を開く": "Open plan.md",
-    "実行中の agent を終了して移しますか": "Stop the running agent and move the card?", "「%@」の agent は実行中です。": "The agent of \"%@\" is running.",
-    "終了して移す": "Stop and move", "変更を破棄して Done に移しますか": "Discard changes and move to Done?", "破棄して移す": "Discard and move",
-    "カードを移せません": "Cannot move the card", "Project を設定できません": "Cannot set the Project", "Project を選ぶ": "Choose a Project",
-    "TODO「%@」(%@) の PR を作って。": "Create a PR for the TODO \"%@\" (%@).",
+    // #82: one card, one agent.
+    "依頼を1行で…": "One-line request…", "依頼する Project": "Project for the request", "依頼する": "Request", "Inbox": "Inbox",
+    "判断待ち": "Waiting on a decision", "承認待ち": "Waiting for approval", "未完了": "Not done", "結果": "Result", "理由": "Reason",
+    "要(%@ 問)": "Needed (%@)", "不要": "Not needed", "報告せずに止まった": "Stopped without reporting", "実行": "Run",
+    "agent を起動": "Start the agent", "会話を再開": "Resume the conversation", "agent を起動できません": "Can't start the agent",
+    "その他のエージェント": "Other agents", "カードを検索": "Search cards", "過去の完了 %@ 件": "%@ earlier completed",
+    "失敗": "Failed",
+    "Project を設定できません": "Cannot set the Project", "Project を選ぶ": "Choose a Project",
     "ペインを右に分割": "Split Pane Right", "ペインを下に分割": "Split Pane Down", "ターミナルを開く": "Open Terminal", "ボードと並べて表示": "Show Beside the Board", "チャットだけを表示": "Show Chat Only",
     "ペインのフォーカスを右へ": "Focus Next Pane", "ペインのフォーカスを左へ": "Focus Previous Pane", "ペインにフォーカス": "Focus Pane",
     "ペインを最大化": "Maximize Pane", "分割を均等化": "Equalize Splits", "分割比を変更": "Change Split Ratio",

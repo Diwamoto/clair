@@ -38,12 +38,10 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public static let autoApproveCommands = [
     "agent.launch": "エージェントの起動", "agent.send": "エージェントへの入力", "pane.close": "ペインを閉じる",
     "pane.move": "ペインの移動", "pane.swap": "ペインの入れ替え", "tab.close": "タブを閉じる", "diff.close": "差分タブを閉じる",
-    "notice.markRead": "通知の既読", "todo.update": "TODO の更新", "todo.skill": "列の skill の記録",
+    "notice.markRead": "通知の既読", "todo.update": "TODO の更新",
   ]
-  /// ADR-0027 addendum: on until the owner turns them off. A `todo.update` that would start an agent is gated separately.
-  static let autoApproveDefaults = ["todo.update", "todo.skill"]
-  /// Concierge-started agents allowed without a card per chat request.
-  public static let conciergeLaunchCap = 3
+  /// ADR-0027 addendum: on until the owner turns them off.
+  static let autoApproveDefaults = ["todo.update"]
   public static func autoApproveKey(_ id: String) -> String { "autoApprove.\(id)" }
   /// True when `id` may skip the card: the owner turned it on, the caller is a Clair terminal, and the runtime risk
   /// is no higher than the command's fixed risk (a dirty `tab.close` is destructive and still asks).
@@ -51,20 +49,9 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
     guard caller != nil, toggles[Self.autoApproveKey(id)] == true, Self.autoApproveCommands[id] != nil,
       let fixed = registry.commands.first(where: { $0.id == id })?.risk
     else { return false }
-    if id == "agent.launch", isConcierge(caller), conciergeLaunches[caller!, default: 0] >= Self.conciergeLaunchCap { return false }
     return risk <= fixed
   }
 
-  /// A concierge `todo.update` whose stage would start an agent past the per-request cap: that needs the approval card.
-  func conciergeOverCap(_ i: CommandInput) -> Bool {
-    guard let stage = i["stage"]?.string, let parent = i["parent"]?.string, isConcierge(parent) else { return false }
-    return ["plan", "impl", "review"].contains(ClairTodo.column(stage: stage)) && conciergeLaunches[parent, default: 0] >= Self.conciergeLaunchCap
-  }
-
-  /// `key` is a running concierge terminal.
-  public func isConcierge(_ key: String?) -> Bool {
-    key.flatMap(terminal).flatMap { withLayoutCopy($0.project).launches[$0.pane] }?.concierge != nil
-  }
   /// Per-agent "使う" switch: off hides the agent from launch menus and the status bar's usage meter.
   public static func agentKey(_ id: String) -> String { "agent.\(id)" }
   /// Closed-set settings (the mock's segmented controls). The first option is the default.
@@ -253,19 +240,6 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var fileAssociations = ["tpl": "terraform"]
   /// Language picked for one file in the status bar: absolute path → editor language id. Wins over detection.
   public var languageOverrides: [String: String] = [:]
-  /// #76: the one concierge's extra instructions (after `Concierge.basePrompt`) and its working directory
-  /// ("" = the active Project root). User-only (`settings.concierge` is ai: false).
-  public var conciergePrompt = ""
-  public var conciergeCwd = ""
-  /// Where a card without a Project starts its agent ("" = `~/Projects`).
-  public var conciergeWorkdir = ""
-  /// Concierge terminal key → agents it started in the current chat request; cleared only when the owner sends the next request.
-  public var conciergeLaunches: [String: Int] = [:]
-  /// Each folder's concierge chats by their latest Claude Code session. Launches are never persisted, so this is
-  /// what lets a chat resume after a Clair restart. A changed prompt or folder starts over.
-  public var conciergeSessions: [String: [String]] = [:]
-  /// Each folder's closed chats, newest last: the history a closed chat is reopened from (its transcript stays).
-  public var conciergeClosed: [String: [String]] = [:]
   /// `"tpl=terraform,j2=python"` ⇄ the map (the settings list sends this). Malformed or empty pairs are dropped.
   public static func parseAssociations(_ text: String) -> [String: String] {
     var map: [String: String] = [:]
@@ -573,13 +547,19 @@ extension CommandRegistry {
     if !ok { throw CommandError(.preconditionFailed, message()) }
   }
 
+  /// A card's `project=`: an open Project's name, `none`, or "" (clears it).
+  private static func requireProject(_ s: WorkbenchState, _ i: CommandInput) throws(CommandError) {
+    if let p = i["project"]?.string, !p.isEmpty {
+      try require(p == ClairTodo.noProject || s.projects.contains { $0.name == p }, "no project \(p)")
+    }
+  }
+
   private static func launchHome(_ s: WorkbenchState, _ i: CommandInput) throws(CommandError) -> (project: WorkbenchProject, pane: Int?) {
     guard let name = i["project"]?.string else { return try s.launchHome(i["parent"]?.string) }
     if let parent = i["parent"]?.string {
       let home = try s.launchHome(parent)
       if home.project.name == name { return home }
-      let caller = s.terminal(parent).flatMap { s.withLayoutCopy($0.project).launches[$0.pane] }
-      try require(caller?.concierge != nil, "only the concierge launches into another project")
+      throw CommandError(.preconditionFailed, "an agent launches only into its own project")
     }
     guard let p = s.projects.first(where: { $0.name == name }) else { throw CommandError(.preconditionFailed, "no project \(name)") }
     return (p, nil)
@@ -793,7 +773,6 @@ extension CommandRegistry {
         return id
       }
       if home.project.name == s.project { s.panesClosed = false }
-      if let parent = i["parent"]?.string, s.isConcierge(parent) { s.conciergeLaunches[parent, default: 0] += 1 }
       return i["parent"] == nil ? .pane(pane) : .text(WorkbenchState.terminalKey(home.project.path, pane))
     },
     // V16: fan-in. `key` is the `root#pane` terminal key agent.launch returned.
@@ -870,71 +849,14 @@ extension CommandRegistry {
       s.agentReports[NotificationLog.paneKey(t.project, t.pane)] = AgentReport(state: AgentReport.State(rawValue: i["state"]!.string!)!)
       // The provider session to reopen after a restart; an empty or odd id (hook could not read it) is ignored.
       if let session = i["session"]?.string, AgentProfile.isSessionID(session) {
-        if Concierge.isPane(t.pane), let l = s.withLayoutCopy(t.project).launches[t.pane], let old = l.session ?? l.concierge {
-          s.conciergeSessions[l.cwd] = s.conciergeSessions[l.cwd]?.map { $0 == old ? session : $0 }
-        }
         s.withLayout(t.project) { $0.launches[t.pane]?.session = session }
+        // #82: a card keeps its agent's conversation, so running it again resumes it after the pane is gone.
+        if let card = s.withLayoutCopy(t.project).launches[t.pane]?.card, ClairTodo.isTodoFile(card),
+           let text = try? String(contentsOfFile: card, encoding: .utf8) {
+          let c = ClairTodo.parse(path: card, text: text)
+          if c.session != session { try? c.with { $0.session = session }.save() }
+        }
       }
-      return .ok
-    },
-    // ADR-0020: start the concierge of `chat` (a session id; a new one starts a new chat) unless it runs. It stays off every
-    // layout (a negative pane); the chat shows it. GUI-only (ai: false): an agent
-    // must not spawn a concierge; it launches children through agent.launch instead.
-    // #76: a new one starts only in the `cwd` the user approved, and only while that approval still matches
-    // what it would read (the GUI asks first), so the CLI cannot start one past a changed prompt source.
-    cmd("concierge.open", "コンシェルジュを開く", .external, ai: false,
-        params: [CommandParam("message", .string, required: false), CommandParam("cwd", .string, required: false),
-                 CommandParam("chat", .string, required: false), CommandParam("model", .string, required: false),
-                 CommandParam("effort", .string, required: false)],
-        palette: false,
-        preflight: { s, i throws(CommandError) in
-          let chat = i["chat"]?.string
-          try require(chat.map(AgentProfile.isSessionID) != false, "chat is not a session id")
-          try require(i["model"]?.string.map { $0.wholeMatch(of: /[A-Za-z0-9._\[\]-]+/) != nil } != false, "model is not a model name")
-          try require(i["effort"]?.string.map(Concierge.efforts.contains) != false, "effort is not one of \(Concierge.efforts)")
-          if chat.flatMap({ s.concierge(chat: $0) }) == nil {
-            let cwd = i["cwd"]?.string ?? s.conciergeDir
-            try require(cwd == s.conciergeDir, "the concierge folder changed; open it again")
-            try require(Concierge.isApproved(Concierge.fingerprint(prompt: s.conciergePrompt, cwd: cwd)),
-                        "what the concierge reads changed since it was approved; open it from Clair's concierge view")
-          }
-          return .external
-        }) { s, i in
-      AgentRun.pruneSandboxes(keep: s.openSandboxes)
-      if let chat = i["chat"]?.string, s.concierge(chat: chat) != nil { return .ok }
-      // Its folder is a Project (added without switching to it), so children launched without `project=` start there too.
-      try? FileManager.default.createDirectory(atPath: s.conciergeDir, withIntermediateDirectories: true)
-      let path = WorkbenchProject.normalized(s.conciergeDir) ?? s.conciergeDir
-      let host = s.addProject(WorkbenchProject(name: URL(fileURLWithPath: path).lastPathComponent, path: path))
-      let session = i["chat"]?.string ?? UUID().uuidString.lowercased()
-      if s.conciergeSessions[path]?.contains(session) != true { s.conciergeSessions[path, default: []].append(session) }
-      s.conciergeClosed[path]?.removeAll { $0 == session }
-      let pane = (s.concierges().map(\.pane).min() ?? 0) - 1
-      var launch = AgentLaunch(
-        profile: "claude", cwd: path, resume: Concierge.transcriptFile(session: session) == nil ? nil : session, concierge: session,
-        opening: i["message"]?.string.flatMap { $0.isEmpty ? nil : $0 }, folders: host.folders)
-      launch.conciergePrompt = s.conciergePrompt
-      launch.model = i["model"]?.string; launch.effort = i["effort"]?.string
-      s.withLayout(host.name) { $0.launches[pane] = launch }
-      return .ok
-    },
-    // Forgets a chat; the GUI ends its shell first (`closeTerminal` also kills the daemon session).
-    cmd("concierge.close", "コンシェルジュの会話を閉じる", .write, ai: false, params: [CommandParam("chat", .string)], palette: false) { s, i in
-      let chat = i["chat"]!.string!
-      if let c = s.concierge(chat: chat) { s.closeTerminal(c.key) }
-      for k in s.conciergeSessions.keys where s.conciergeSessions[k]?.contains(chat) == true {
-        s.conciergeSessions[k]?.removeAll { $0 == chat }
-        // ponytail: history capped at 50 per folder; a searchable archive if more is ever wanted.
-        s.conciergeClosed[k] = Array(((s.conciergeClosed[k] ?? []).filter { $0 != chat } + [chat]).suffix(50))
-      }
-      return .ok
-    },
-    // Drops a chat from the list and the history; its transcript file stays on disk.
-    cmd("concierge.archive", "コンシェルジュの会話をアーカイブ", .write, ai: false, params: [CommandParam("chat", .string)], palette: false) { s, i in
-      let chat = i["chat"]!.string!
-      if let c = s.concierge(chat: chat) { s.closeTerminal(c.key) }
-      for k in s.conciergeSessions.keys { s.conciergeSessions[k]?.removeAll { $0 == chat } }
-      for k in s.conciergeClosed.keys { s.conciergeClosed[k]?.removeAll { $0 == chat } }
       return .ok
     },
     cmd("tab.open", "ファイルを開く", .read, params: [CommandParam("path", .string)],
@@ -974,111 +896,67 @@ extension CommandRegistry {
     },
     cmd("todo.add", "TODO を追加", .additive,
         params: [CommandParam("title", .string), CommandParam("priority", .int, required: false),
-                 CommandParam("due", .string, required: false), CommandParam("body", .string, required: false)],
+                 CommandParam("due", .string, required: false), CommandParam("body", .string, required: false),
+                 CommandParam("project", .string, required: false)],
         palette: false,
-        preflight: { _, i throws(CommandError) in
+        preflight: { s, i throws(CommandError) in
           try require(!i["title"]!.string!.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "title is empty")
           if let why = ClairTodo.invalid(priority: i["priority"]?.int, due: i["due"]?.string) { throw CommandError(.invalidInput, why) }
+          try requireProject(s, i)
           return .additive
         }) { _, i throws(CommandError) in
       let title = i["title"]!.string!
       let due = i["due"]?.string.flatMap { $0.isEmpty ? nil : $0 }
-      let t = ClairTodo(path: ClairTodo.newPath(title: title), title: title, priority: i["priority"]?.int ?? 2, due: due)
+      var t = ClairTodo(path: ClairTodo.newPath(title: title), title: title, priority: i["priority"]?.int ?? 2, due: due)
+      t.project = i["project"]?.string.flatMap { $0.isEmpty ? nil : $0 }
       return try todoSave(t, appendBody: i["body"]?.string)
     },
     cmd("todo.update", "TODO を更新", .write,
         params: [CommandParam("path", .string), CommandParam("title", .string, required: false),
                  CommandParam("priority", .int, required: false), CommandParam("due", .string, required: false),
                  CommandParam("done", .bool, required: false), CommandParam("appendBody", .string, required: false),
-                 CommandParam("stage", .string, required: false), CommandParam("lane", .string, required: false),
-                 CommandParam("retry", .int, required: false), CommandParam("branch", .string, required: false),
-                 CommandParam("pr", .string, required: false), CommandParam("agent", .string, required: false),
-                 CommandParam("project", .string, required: false), CommandParam("result", .string, required: false),
-                 CommandParam("note", .string, required: false),
-                 CommandParam("difficulty", .string, required: false, allowed: ClairTodo.difficulties + [""]),
-                 CommandParam("parent", .string, required: false)],  // the calling terminal, set by the IPC layer (callerAsParent)
+                 CommandParam("branch", .string, required: false), CommandParam("pr", .string, required: false),
+                 CommandParam("agent", .string, required: false), CommandParam("project", .string, required: false),
+                 CommandParam("result", .string, required: false), CommandParam("note", .string, required: false)],
         palette: false,
         preflight: { s, i throws(CommandError) in
-          if let why = ClairTodo.invalid(priority: nil, due: nil, stage: i["stage"]?.string, lane: i["lane"]?.string, retry: i["retry"]?.int, result: i["result"]?.string) {
-            throw CommandError(.invalidInput, why)
-          }
-          if let p = i["project"]?.string, !p.isEmpty {
-            try require(p == ClairTodo.noProject || s.projects.contains { $0.name == p }, "no project \(p)")
-          }
+          if let why = ClairTodo.invalid(priority: nil, due: nil, result: i["result"]?.string) { throw CommandError(.invalidInput, why) }
+          try requireProject(s, i)
           try require(ClairTodo.isTodoFile(i["path"]!.string!), "no TODO file \(i["path"]!.string!) in ~/.clair/todo")
           if let title = i["title"]?.string { try require(!title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "title is empty") }
           if let why = ClairTodo.invalid(priority: i["priority"]?.int, due: i["due"]?.string) { throw CommandError(.invalidInput, why) }
-          // Decided after every check: an approved card must not let the run write a file that is not a TODO.
-          return s.conciergeOverCap(i) ? .external : .write
-        }) { s, i throws(CommandError) in
+          return .write
+        }) { _, i throws(CommandError) in
       let path = i["path"]!.string!
       guard let text = try? String(contentsOf: URL(fileURLWithPath: path), encoding: .utf8) else { throw CommandError(.preconditionFailed, "cannot read \(path)") }
-      // Only the concierge's own terminal may start an agent through a stage change; every other caller just records it.
-      let concierge = i["parent"]?.string.flatMap { s.isConcierge($0) ? $0 : nil }
-      var move: String?
       let t = ClairTodo.parse(path: path, text: text).with { t in
         if let v = i["title"]?.string { t.title = v }
         if let v = i["priority"]?.int { t.priority = v }
         if let v = i["due"]?.string { t.due = v.isEmpty ? nil : v }  // due="" clears it
         if let v = i["done"]?.bool { t.done = v }
-        // "" clears a workflow key.
+        // "" clears a card key.
         func text(_ k: String) -> String?? { i[k]?.string.map { $0.isEmpty ? nil : $0 } }
-        if let v = text("stage") {
-          if concierge != nil { move = v == "research" ? v : ClairTodo.column(stage: v) } else { t.stage = v == "inbox" || v == "research" ? nil : v }
-        }
-        if let v = text("lane") { t.lane = v }
-        if let v = i["retry"]?.int { t.retry = v }
         if let v = text("branch") { t.branch = v }
         if let v = text("pr") { t.pr = v }
         if let v = text("agent") { t.agent = v }
         if let v = text("project") { t.project = v }
-        if let v = text("result") { t.result = v }
+        if let v = text("result") {
+          t.result = v
+          t.doneAt = v.map { _ in ISO8601DateFormatter().string(from: .now) }  // when a done card leaves the board
+        }
         if let v = text("note") { t.note = v }
-        if let v = text("difficulty") { t.difficulty = v }
       }
-      // ADR-0030: judged on the card as it was on disk, so a caller cannot name itself the agent or pick the column in
-      // the same call; a call that also moves or reassigns the card is not an automatic move.
-      let next = move == nil ? s.autoAdvance(i, card: ClairTodo.parse(path: path, text: text), result: t.result) : nil
-      // The column's note would be cleared by the move: keep it in the body.
-      let kept = next.flatMap { _ in t.note.map { "- \(ClairTodo.parse(path: path, text: text).column) の結果: \($0)" } }
-      let body = [i["appendBody"]?.string, kept].compactMap { $0 }.joined(separator: "\n")
-      let saved = try todoSave(t, appendBody: body.isEmpty ? nil : body)
-      if let next {
-        try s.moveTodo(path: path, stage: next.stage, concierge: next.concierge, counted: false)
-        return try todoSave(ClairTodo.parse(path: path, text: (try? String(contentsOfFile: path, encoding: .utf8)) ?? text), appendBody: nil)
-      }
-      guard let move, let concierge else { return saved }
-      try s.moveTodo(path: path, stage: move, concierge: concierge)
-      return try todoSave(ClairTodo.parse(path: path, text: (try? String(contentsOfFile: path, encoding: .utf8)) ?? text), appendBody: nil)
+      return try todoSave(t, appendBody: i["appendBody"]?.string)
     },
-    // The single entry point that starts column agents; GUI-only, so any other caller gets the approval card.
-    cmd("todo.move", "カードを列へ移す", .write, ai: false,
-        params: [CommandParam("path", .string), CommandParam("stage", .string, allowed: ClairTodo.moveStages),
-                 CommandParam("force", .bool, required: false)],
-        palette: false,
+    // #82: the one entry point that starts a card's agent; GUI-only, so any other caller gets the approval card.
+    cmd("todo.run", "カードの agent を起動", .write, ai: false, params: [CommandParam("path", .string)], palette: false,
         preflight: { _, i throws(CommandError) in
           try require(ClairTodo.isTodoFile(i["path"]!.string!), "no TODO file \(i["path"]!.string!) in ~/.clair/todo")
           return .write
         }) { s, i throws(CommandError) in
       let path = i["path"]!.string!
-      try s.moveTodo(path: path, stage: i["stage"]!.string!, force: i["force"]?.bool == true)
+      try s.runTodo(path: path)
       return try todoSave(ClairTodo.parse(path: path, text: (try? String(contentsOfFile: path, encoding: .utf8)) ?? ""), appendBody: nil)
-    },
-    // Records which skill a column uses for a Project (the column agent picks it itself).
-    cmd("todo.skill", "列の skill を記録", .write,
-        params: [CommandParam("project", .string), CommandParam("stage", .string, allowed: ["research", "plan", "impl", "review"]),
-                 CommandParam("skill", .string)],
-        palette: false,
-        preflight: { s, i throws(CommandError) in
-          let project = i["project"]!.string!
-          guard let root = s.columnRoot(project) else { throw CommandError(.preconditionFailed, "no project \(project)") }
-          try require(ClairColumnSkills.isValid(i["skill"]!.string!, root: root), "no skill \(i["skill"]!.string!)")
-          return .write
-        }) { s, i throws(CommandError) in
-      let project = i["project"]!.string!
-      do { try ClairColumnSkills.record(project: project, stage: i["stage"]!.string!, skill: i["skill"]!.string!, root: s.columnRoot(project)!) }
-      catch { throw CommandError(.preconditionFailed, error.localizedDescription) }
-      return .ok
     },
     // #72: the GUI fires these (ClairWorkbenchStore.runSchedules). add/remove are user-only: an agent must not
     // schedule itself to run later.
@@ -1439,10 +1317,9 @@ extension CommandRegistry {
         preflight: { s, i throws(CommandError) in
           let card = i["card"]!.string!
           try require(ClairTodo.isTodoFile(card), "no TODO file \(card) in ~/.clair/todo")
-          // Only the card's own column agent or a concierge asks, and never over another asker's open sheet.
+          // Only the card's own agent asks, and never over another asker's open sheet.
           let caller = i["parent"]?.string
-          try require(caller.map { s.isConcierge($0) || s.cardAgent($0, path: card) } == true,
-                      "only the card's own agent or the concierge can ask about \(card)")
+          try require(caller.map { s.cardAgent($0, path: card) } == true, "only the card's own agent can ask about \(card)")
           if let open = DecisionSheet.load(card: card), open.state == .pending, open.asker != caller {
             throw CommandError(.preconditionFailed, "another agent's sheet on \(card) is still unanswered")
           }
@@ -1592,27 +1469,6 @@ extension CommandRegistry {
     cmd("settings.fileAssociations", "拡張子の言語を設定", .write, ai: false,
         params: [CommandParam("value", .string)]) { s, i in
       s.fileAssociations = WorkbenchState.parseAssociations(i["value"]!.string!); return .ok
-    },
-    // #76: ai: false — an agent that rewrote these would direct every later task.
-    cmd("settings.concierge", "コンシェルジュの指示と作業フォルダを設定", .write, ai: false,
-        params: [CommandParam("prompt", .string, required: false), CommandParam("cwd", .string, required: false),
-                 CommandParam("workdir", .string, required: false)],
-        palette: false,
-        preflight: { _, i throws(CommandError) in
-          for key in ["cwd", "workdir"] {
-            if let dirPath = i[key]?.string, !dirPath.isEmpty {
-              var dir: ObjCBool = false
-              try require(dirPath.hasPrefix("/") && FileManager.default.fileExists(atPath: dirPath, isDirectory: &dir) && dir.boolValue, "\(key) is not an absolute directory")
-            }
-          }
-          return .write
-        }) { s, i in
-      if let v = i["workdir"]?.string { s.conciergeWorkdir = v }
-      let before = (s.conciergePrompt, s.conciergeCwd)
-      if let v = i["prompt"]?.string { s.conciergePrompt = v }
-      if let v = i["cwd"]?.string { s.conciergeCwd = v }
-      if before != (s.conciergePrompt, s.conciergeCwd) { s.conciergeSessions = [:]; s.conciergeClosed = [:] }
-      return .ok
     },
     cmd("sidebar.toggle", "サイドバーの表示切替", .read, ai: false, shortcut: "⌘B") { s, _ in s.sidebarHidden.toggle(); return .ok },
     cmd("editor.zoomIn", "文字を大きく", .read, ai: false, shortcut: "⌘=") { s, _ in s.stepEditorFontSize(1); return .ok },
