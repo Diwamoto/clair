@@ -1,48 +1,18 @@
 import Foundation
 
-/// Whole-document formatters that don't need a language server: JSON and SQL, picked by extension or — for a file
-/// without one (`.eslintrc`, `query`, a scratch file) — by sniffing its text. Other source files go through the
-/// language server's `textDocument/formatting`.
+/// Whole-document formatters that don't need a language server: JSON and SQL. The caller passes the file's
+/// editor language (detected, or picked in the status bar); other languages go to the language server's
+/// `textDocument/formatting`.
 public enum DocumentFormatter {
-  public enum Builtin { case json, sql }
+  /// Whether `language` (an `EditorLanguageID` raw value) is formatted here rather than by a server.
+  public static func isBuiltin(_ language: String?) -> Bool { language == "json" || language == "sql" }
 
-  /// The built-in formatter for `path`, or nil when its language server formats it.
-  public static func builtin(_ path: String, _ text: String) -> Builtin? {
-    switch (path as NSString).pathExtension.lowercased() {
-    case "json": return .json
-    case "sql": return .sql
-    case "":
-      let t = text.drop { $0.isWhitespace }
-      if t.first == "{" || t.first == "[" { return .json }
-      let word = t.prefix { $0.isLetter }.uppercased()
-      return sqlStarts.contains(word) ? .sql : nil
-    default: return nil
-    }
-  }
-
-  static let sqlStarts: Set<String> = [
-    "SELECT", "WITH", "INSERT", "UPDATE", "DELETE", "CREATE", "ALTER", "DROP", "TRUNCATE", "EXPLAIN", "MERGE", "GRANT",
-  ]
-
-  /// Files `editor.format` is offered for: JSON/SQL here, an extensionless file (sniffed when formatted), or a
-  /// language whose server may format it (the GUI asks the server and reports when it cannot).
-  // ponytail: mirrors the extensions of `EditorLanguageID` that have a formatting-capable server; keep in step.
-  public static func mayFormat(_ path: String) -> Bool {
-    let ext = (path as NSString).pathExtension.lowercased()
-    return ["json", "sql", ""].contains(ext) || serverFormatted.contains(ext)
-  }
-
-  static let serverFormatted: Set<String> = [
-    "go", "ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "rs", "swift", "c", "h", "rb", "java", "php", "tf", "tfvars", "hcl",
-    "sh", "bash", "zsh", "html", "htm", "css", "yaml", "yml", "toml",
-  ]
-
-  /// nil when no built-in formatter handles `path`, or `text` doesn't parse.
-  public static func format(_ path: String, _ text: String) -> String? {
-    switch builtin(path, text) {
-    case .json: JSONFormatter.format(text)
-    case .sql: SQLFormatter.format(text)
-    case nil: nil
+  /// nil when `language` isn't built in, or `text` doesn't parse as it.
+  public static func format(language: String?, _ text: String) -> String? {
+    switch language {
+    case "json": JSONFormatter.format(text)
+    case "sql": SQLFormatter.format(text)
+    default: nil
     }
   }
 

@@ -553,6 +553,11 @@ import Observation
           default: break
           }
         }
+        if id == "editor.language", let p = state.active {
+          EditorLanguageID.overrides = state.languageOverrides  // before the rebuild below re-detects
+          languageNotice = nil
+          buffers.relanguage(p)
+        }
         if id == "editor.format", let p = state.active {
           if !formatBuffer(p, explicit: true), let root = activeRoot { formatWithServer(p, root: root, thenSave: false) }
         }
@@ -740,7 +745,7 @@ import Observation
       let path = root + "/" + rel
       let at = try? m.buffer.snapshot.position(at: caret, columnUnit: UTF16Unit.self, rounding: .down)
       let from = EditorLocation(path: path, line: (at?.line.value ?? 0) + 1, column: at?.column.value ?? 0)
-      guard EditorLanguageID.detect(path: rel)?.languageServer != nil else {
+      guard EditorLanguageID.detect(path: path)?.languageServer != nil else {
         languageNotice = tr("このファイルの言語サーバーはありません")
         return
       }
@@ -914,7 +919,7 @@ import Observation
     /// `textDocument/formatting` into the buffer as one undo unit (through the view when it is live, so the server and
     /// highlighting see it like typing). With `thenSave` (format on save) a changed buffer is saved again.
     private func formatWithServer(_ path: String, root: String, thenSave: Bool) {
-      guard EditorLanguageID.detect(path: path)?.languageServer != nil else {
+      guard EditorLanguageID.detect(path: root + "/" + path)?.languageServer != nil else {
         if !thenSave { languageNotice = tr("このファイルの言語サーバーはありません") }
         return
       }
@@ -1005,7 +1010,7 @@ import Observation
     /// ⌘⇧O: the active file's symbols in the list palette.
     private func showFileSymbols() {
       guard let rel = state.active, let root = activeRoot else { return }
-      guard EditorLanguageID.detect(path: rel)?.languageServer != nil else {
+      guard EditorLanguageID.detect(path: root + "/" + rel)?.languageServer != nil else {
         languageNotice = tr("このファイルの言語サーバーはありません")
         return
       }
@@ -1050,12 +1055,13 @@ import Observation
       run("palette.references")
     }
 
-    /// false when no built-in formatter (JSON/SQL) handles `path`, so its language server should be asked.
+    /// false when no built-in formatter (JSON/SQL) handles `path`'s language, so its language server should be asked.
     private func formatBuffer(_ path: String, explicit: Bool) -> Bool {
-      guard case .ready(let m)? = buffers.peek(path) else { return false }
+      guard let root = activeRoot, case .ready(let m)? = buffers.peek(path) else { return false }
+      let language = EditorLanguageID.detect(path: root + "/" + path)?.rawValue
+      guard DocumentFormatter.isBuiltin(language) else { return false }
       let text = m.buffer.snapshot.string()
-      guard DocumentFormatter.builtin(path, text) != nil else { return false }
-      guard let formatted = DocumentFormatter.format(path, text) else {
+      guard let formatted = DocumentFormatter.format(language: language, text) else {
         if explicit { languageNotice = tr("構文エラーのため整形できません") }
         return true
       }
@@ -1681,6 +1687,7 @@ import Observation
         ColorSchemeChoice(setting: MaterialChoice(setting: st.choices["material"]) == .glass ? ColorSchemeChoice.dark.rawValue : st.choices["appearance"]).apply()
       }
       .onChange(of: st.fileAssociations, initial: true) { _, v in EditorLanguageID.associations = v }
+      .onChange(of: st.languageOverrides, initial: true) { _, v in EditorLanguageID.overrides = v }
       .onChange(of: terminalStyle, initial: true) { _, v in ClairGhosttySurfaceView.style = v }
       .onChange(of: st.palette) {
         query = ""; selection = 0; paletteHighlight = 0; paletteMeasured = false
@@ -4511,6 +4518,19 @@ import Observation
           if st.active.map(store.buffers.isOpen) == true {
             // ponytail: Clair opens UTF-8 only (other encodings are refused at load), so this is a label, not a switch.
             Text("UTF-8").footerItem().help(tr("文字コード — Clair は UTF-8 のファイルだけを開きます"))
+          }
+          if let rel = st.active, let root = store.activeRoot, store.buffers.isOpen(rel) {
+            let path = root + "/" + rel
+            let picked = st.languageOverrides[path]
+            Menu {
+              Button(tr("自動検出")) { store.run("editor.language", ["language": .string("")]) }.disabled(picked == nil)
+              Divider()
+              ForEach(EditorLanguageID.allCases, id: \.rawValue) { id in
+                Button(id.rawValue) { store.run("editor.language", ["language": .string(id.rawValue)]) }.disabled(picked == id.rawValue)
+              }
+            } label: { Text(EditorLanguageID.detect(path: path)?.rawValue ?? tr("プレーンテキスト")).footerItem(capsule: true) }
+            .menuStyle(.button).buttonStyle(.hoverWash).menuIndicator(.hidden).fixedSize(horizontal: true, vertical: false)
+            .help(tr("言語モード — クリックでこのファイルの言語を指定"))
           }
           // One HStack, not a Group: a Group would hang a popover on each of its children.
           HStack(spacing: 10) { languageStatus }.footerItem().footerPopover("language", $footerHover) { languageHover }

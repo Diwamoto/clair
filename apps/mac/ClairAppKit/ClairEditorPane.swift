@@ -90,8 +90,8 @@
     /// Full parse, for a freshly opened file. `nil`/empty covers both "no
     /// vendored grammar for this extension" and "grammar/query failed to
     /// build" — either way the file still opens, just colorless.
-    func reset(_ path: String, snapshot: TextSnapshot) -> SyntaxResult {
-      guard let id = EditorLanguageID.detect(path: path), let highlighter = try? SyntaxHighlighter(languageID: id)
+    func reset(_ path: String, language id: EditorLanguageID?, snapshot: TextSnapshot) -> SyntaxResult {
+      guard let id, let highlighter = try? SyntaxHighlighter(languageID: id)
       else { return SyntaxResult(spans: [], folds: [], revision: snapshot.revision) }
       highlighters[path] = highlighter
       let spans = (try? highlighter.reset(to: snapshot)) ?? []
@@ -242,6 +242,13 @@
     /// Rebuilds the surface from the buffer after it was changed outside the view (a review suggestion applied).
     func refresh(_ path: String) { revisions[path, default: 0] += 1 }
 
+    /// The file's language changed (status bar): re-highlight and reopen it on the new language's server.
+    func relanguage(_ path: String) {
+      if let open = languagePaths.removeValue(forKey: path) { language.close(open.path, root: open.root) }
+      dropHighlights([path])
+      refresh(path)
+    }
+
     func drop(_ paths: Set<String>) {
       for path in paths {
         dropBlame(path)
@@ -311,15 +318,16 @@
       }
     }
 
-    func startHighlighting(_ path: String, manager: EditorTransactionManager, view: ClairEditorView) {
+    func startHighlighting(_ path: String, root: String, manager: EditorTransactionManager, view: ClairEditorView) {
       syntaxViews[path, default: []].append(WeakView(view: view))
       if let cached = syntaxResults[path], cached.revision == manager.buffer.snapshot.revision { cached.apply(to: view) }
       guard highlightTasks[path] == nil, syntaxResults[path] == nil else { return }
       highlightsLoading.insert(path)
       let snapshot = manager.buffer.snapshot
       let syntax = self.syntax
+      let language = EditorLanguageID.detect(path: root + "/" + path)
       highlightTasks[path] = Task { [weak self] in
-        let result = await syntax.reset(path, snapshot: snapshot)
+        let result = await syntax.reset(path, language: language, snapshot: snapshot)
         guard !Task.isCancelled else { return }
         self?.publish(path, result)
         self?.highlightsLoading.remove(path)
@@ -840,7 +848,7 @@
       }
       // E11: kick off this file's initial background highlight parse once,
       // when its `ClairEditorView` is first created.
-      buffers.startHighlighting(path, manager: manager, view: view)
+      buffers.startHighlighting(path, root: root, manager: manager, view: view)
       buffers.startBlame(path, root: root, snapshot: manager.buffer.snapshot)
       view.softWrap = softWrap
       scroll.hasHorizontalScroller = !softWrap

@@ -116,7 +116,7 @@
           let path = root + "/" + rel
           return [
             "uri": URL(fileURLWithPath: path).absoluteString, "isActive": rel == state.active, "label": (rel as NSString).lastPathComponent,
-            "languageId": EditorLanguageID.detect(path: rel)?.lspLanguageID ?? "plaintext", "isDirty": state.dirty.contains(rel),
+            "languageId": EditorLanguageID.detect(path: path)?.lspLanguageID ?? "plaintext", "isDirty": state.dirty.contains(rel),
           ]
         }
         done(.text([ClaudeIDE.json(["tabs": tabs])]))

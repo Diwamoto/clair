@@ -307,7 +307,8 @@ macOS の `NSTextInputClient` は行ローカルの UTF-16 空間で答える(�
   - rename(F2 / `editor.rename`): prepareRename の範囲に入力欄を出し、確定で workspace 全体の編集を適用する
   - クイックフィックス(⌘. / `editor.codeAction`): 選択範囲かキャレットの code action を一覧し、選ぶと編集と server command を実行する
   - server からの編集(rename、code action、`workspace/applyEdit`)は、active Project で開いている buffer へは未保存の 1 transaction として、それ以外のファイルへは disk へ直接書く。file の作成・改名・削除を含む編集は適用しない
-  - 整形(`editor.format`)は JSON・SQL を内蔵 formatter で(拡張子なしのファイルは中身から JSON・SQL を判定)、それ以外は server の formatting。保存時に整形は server の結果を受け取ってから再保存する
+  - ファイルの言語は拡張子(と設定の «拡張子の言語»)から自動で決め、status bar の言語メニュー(`editor.language`)でファイルごとに指定し直せる。指定はファイルの絶対パスごとに保存され、ハイライト・language server・整形のすべてがそれに従う
+  - 整形(`editor.format`)はその言語で行う: JSON・SQL は内蔵 formatter、それ以外は server の formatting。保存時に整形は server の結果を受け取ってから再保存する
   - ファイル内のシンボル(⌘⇧O)と問題の一覧(⌘⇧M、開いている文書の診断を重要度順)を参照一覧と同じ palette に出す
   - 保存時に `didSave` を送る
 

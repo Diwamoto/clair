@@ -42,11 +42,20 @@ public enum EditorLanguageID: String, Sendable, CaseIterable {
   private static let associationLock = NSLock()
   nonisolated(unsafe) private static var associationStore: [String: String] = [:]
 
+  /// Per-file language the user picked in the status bar: absolute path → language id. Wins over everything else.
+  /// The app pushes `WorkbenchState.languageOverrides` here.
+  public static var overrides: [String: String] {
+    get { associationLock.withLock { overrideStore } }
+    set { associationLock.withLock { overrideStore = newValue } }
+  }
+  nonisolated(unsafe) private static var overrideStore: [String: String] = [:]
+
   /// Extension-first detection; shell also accepts an extensionless file
   /// whose first line is a `#!` shebang naming a shell. A file whose
   /// extension matches nothing here returns `nil` — the caller (E11 wiring
   /// in `ClairAppKit`) must leave `highlights` empty in that case, not error.
   public static func detect(path: String, shebangLine: String? = nil) -> EditorLanguageID? {
+    if let picked = overrides[path].flatMap(EditorLanguageID.init(rawValue:)) { return picked }
     let name = (path as NSString).lastPathComponent
     let ext = (name as NSString).pathExtension.lowercased()
     if let mapped = associations[ext].flatMap(EditorLanguageID.init(rawValue:)) { return mapped }

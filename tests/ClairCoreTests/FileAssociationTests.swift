@@ -15,6 +15,14 @@ final class FileAssociationTests: XCTestCase {
     XCTAssertEqual(EditorLanguageID.detect(path: "a.md"), .markdown)
   }
 
+  func testPerFileOverrideWinsOverExtension() {
+    defer { EditorLanguageID.overrides = [:] }
+    EditorLanguageID.overrides = ["/r/query": "sql", "/r/a.txt": "json"]
+    XCTAssertEqual(EditorLanguageID.detect(path: "/r/query"), .sql)
+    XCTAssertEqual(EditorLanguageID.detect(path: "/r/a.txt"), .json)
+    XCTAssertNil(EditorLanguageID.detect(path: "/other/query"))
+  }
+
   func testParseAndFormatRoundTrip() {
     let map = WorkbenchState.parseAssociations(" .TPL = terraform, j2=python, bad, x= ")
     XCTAssertEqual(map, ["tpl": "terraform", "j2": "python"])

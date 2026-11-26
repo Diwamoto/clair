@@ -42,16 +42,14 @@ final class DocumentFormatterTests: XCTestCase {
     XCTAssertNil(JSONFormatter.format(#"{"a":1} trailing"#))
   }
 
-  func testBuiltinFormatterByExtensionOrSniffedText() {
-    XCTAssertEqual(DocumentFormatter.builtin("a/b.JSON", ""), .json)
-    XCTAssertEqual(DocumentFormatter.builtin("q.sql", ""), .sql)
-    XCTAssertNil(DocumentFormatter.builtin("a/b.md", "{}"))
-    XCTAssertNil(DocumentFormatter.format("a.md", "{}"))
-    XCTAssertEqual(DocumentFormatter.format("a.json", "{\"a\":1}"), "{\n  \"a\": 1\n}\n")
-    // No extension: JSON / SQL by content.
-    XCTAssertEqual(DocumentFormatter.format(".eslintrc", " [1,2]"), "[\n  1,\n  2\n]\n")
-    XCTAssertEqual(DocumentFormatter.builtin("scratch/query", "\n select 1"), .sql)
-    XCTAssertNil(DocumentFormatter.builtin("Makefile", "all:\n\tgo build"))
+  func testBuiltinFormatterGoesByLanguage() {
+    XCTAssertTrue(DocumentFormatter.isBuiltin("json"))
+    XCTAssertTrue(DocumentFormatter.isBuiltin("sql"))
+    XCTAssertFalse(DocumentFormatter.isBuiltin("go"))
+    XCTAssertFalse(DocumentFormatter.isBuiltin(nil))
+    XCTAssertNil(DocumentFormatter.format(language: "markdown", "{}"))
+    XCTAssertEqual(DocumentFormatter.format(language: "json", "{\"a\":1}"), "{\n  \"a\": 1\n}\n")
+    XCTAssertEqual(DocumentFormatter.format(language: "sql", "select 1"), "SELECT\n  1\n")
   }
 
   func testSQLFormatterLaysOutClauses() {
@@ -99,21 +97,23 @@ final class DocumentFormatterTests: XCTestCase {
     XCTAssertEqual(SQLFormatter.format("select a::int -- why\nfrom t"), "SELECT\n  a::int -- why\nFROM\n  t\n")
   }
 
-  func testFormatCommandRequiresAnOpenFormattableFile() throws {
+  func testFormatCommandRequiresAnOpenFile() throws {
     var s = WorkbenchState()
     s.tabs = []; s.active = nil
     XCTAssertThrowsError(try CommandRegistry.workbench.execute("editor.format", state: &s).get())
-    s.tabs = ["notes.md"]; s.active = "notes.md"
-    XCTAssertThrowsError(try CommandRegistry.workbench.execute("editor.format", state: &s).get())
-    s.tabs.append("data.json"); s.active = "data.json"
+    // Any file: an extensionless one may have had its language picked in the status bar.
+    s.tabs = ["query"]; s.active = "query"
     XCTAssertNoThrow(try CommandRegistry.workbench.execute("editor.format", state: &s).get())
-    // Source files go to their language server, which the GUI asks.
-    s.tabs.append("main.go"); s.active = "main.go"
-    XCTAssertNoThrow(try CommandRegistry.workbench.execute("editor.format", state: &s).get())
-    XCTAssertTrue(DocumentFormatter.mayFormat("a/b.swift"))
-    XCTAssertTrue(DocumentFormatter.mayFormat("a/query.sql"))
-    XCTAssertTrue(DocumentFormatter.mayFormat("a/.eslintrc"))
-    XCTAssertFalse(DocumentFormatter.mayFormat("a/b.md"))
+  }
+
+  func testLanguageCommandPinsAndClearsTheActiveFile() throws {
+    var s = WorkbenchState()
+    s.projects = [WorkbenchProject(name: "p", path: "/r")]; s.project = "p"
+    s.tabs = ["query"]; s.active = "query"
+    XCTAssertNoThrow(try CommandRegistry.workbench.execute("editor.language", ["language": .string("sql")], state: &s).get())
+    XCTAssertEqual(s.languageOverrides, ["/r/query": "sql"])
+    XCTAssertNoThrow(try CommandRegistry.workbench.execute("editor.language", ["language": .string("")], state: &s).get())
+    XCTAssertEqual(s.languageOverrides, [:])
   }
 
   func testChangedLinesKeepsUnchangedLinesOutOfTheEdit() {

@@ -251,6 +251,8 @@ public struct WorkbenchState: Sendable, Codable, Equatable {
   public var shortcuts: [String: String] = [:]
   /// File extension (lowercased, no dot) → editor language id. Overrides the built-in detection.
   public var fileAssociations = ["tpl": "terraform"]
+  /// Language picked for one file in the status bar: absolute path → editor language id. Wins over detection.
+  public var languageOverrides: [String: String] = [:]
   /// #76: the one concierge's extra instructions (after `Concierge.basePrompt`) and its working directory
   /// ("" = the active Project root). User-only (`settings.concierge` is ai: false).
   public var conciergePrompt = ""
@@ -1679,10 +1681,19 @@ extension CommandRegistry {
         preflight: { s, _ throws(CommandError) in try require(s.active != nil, tr("ファイルが開かれていません")); return .read }) { _, _ in .ok },
     // The language server's `textDocument/formatting`, else a server-free formatter (JSON via `DocumentFormatter`).
     // The GUI performs the actual buffer edit, like editor.fold.
+    // Whether the file's language can be formatted is only known to the GUI (built-in or server); it reports a miss.
     cmd("editor.format", "ドキュメントを整形", .write, ai: false, shortcut: "⌃⌥F",
+        preflight: { s, _ throws(CommandError) in try require(s.active != nil, tr("ファイルが開かれていません")); return .write }) { _, _ in .ok },
+    // The status bar's language menu: "" returns the active file to automatic detection.
+    cmd("editor.language", "ファイルの言語を指定", .write, ai: false, params: [CommandParam("language", .string)],
         preflight: { s, _ throws(CommandError) in
-          try require(s.active.map(DocumentFormatter.mayFormat) == true, tr("対応していないファイル形式です")); return .write
-        }) { _, _ in .ok },
+          try require(s.active != nil && s.projects.contains { $0.name == s.project }, tr("ファイルが開かれていません")); return .write
+        }) { s, i in
+      let path = s.projects.first { $0.name == s.project }!.path + "/" + s.active!
+      let language = i["language"]!.string!
+      s.languageOverrides[path] = language.isEmpty ? nil : language
+      return .ok
+    },
     // Language features at the active editor's caret; like editor.definition the registry validates and the GUI asks
     // the language server and shows the result on the view.
     cmd("editor.hover", "ホバー情報を表示", .read, ai: false,
