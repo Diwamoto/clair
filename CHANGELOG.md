@@ -6,6 +6,12 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.57.1] - 2026-11-27
+
+### Fixed
+- HTML previews now show their styles as soon as they open, instead of staying blank or unstyled until the file is edited.
+- HTML files outside the Project (such as an agent's artifact opened with `clair preview`) load their stylesheets, scripts and data files from their own folder; `fetch` and JavaScript modules work there too.
+
 ## [0.57.0] - 2026-11-26
 
 ### Added
@@ -980,7 +986,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.57.0...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.57.1...HEAD
+[0.57.1]: https://github.com/Diwamoto/clair/compare/v0.57.0...v0.57.1
 [0.57.0]: https://github.com/Diwamoto/clair/compare/v0.56.0...v0.57.0
 [0.56.0]: https://github.com/Diwamoto/clair/compare/v0.55.0...v0.56.0
 [0.55.0]: https://github.com/Diwamoto/clair/compare/v0.54.0...v0.55.0
