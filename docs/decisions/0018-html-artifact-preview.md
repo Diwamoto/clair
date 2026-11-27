@@ -29,3 +29,12 @@ HTML artifact のインタラクションを Clair 内で確かめられるよ�
 既存の Markdown / CSV preview と同じ pane 操作を使い、editor の性能上の
 不変条件を維持する。local file の参照を必要とするサイト全体のプレビューは
 別の設計課題とする。
+
+## Addendum (2026-11-27)
+
+`loadFileURL` でフォルダの読み取りを許可してから `loadHTMLString` する方式は、最初の読み込みが
+「Frame load interrupted」で空白になり(編集するまで CSS も出ない)、Project 外のファイル
+(`clair preview` した agent の artifact)には base URL が付かなかった。WebKit の file:// 許可に頼らず、
+`clair-preview://file/` を base URL にして Clair の scheme handler がプレビュー対象ファイル自身のフォルダの
+ファイルだけを返す(`..` と symlink で外に出る path は返さない)。同一 origin なので `fetch` と ES module も
+同じフォルダ内で動く。判断シートの選択肢の HTML も同じ WebView を使う。
