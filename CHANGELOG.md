@@ -6,6 +6,13 @@ All notable changes to Clair are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.58.0] - 2026-11-27
+
+### Added
+- An HTML tools panel in the sidebar: tools that ship with Clair and your own HTML files, each opened in a pane of its own. Drop `.html` files on the panel to add them.
+- A built-in Terraform Plan Picker: paste a `terraform` or `terragrunt` plan, pick resources one by one or in bulk, and copy an apply command with `-target` for just those.
+- Agents can add and open HTML tools with `clair tool add` and `clair tool open` (after your approval), and the bundled preview skill now shows generated HTML this way.
+
 ## [0.57.1] - 2026-11-27
 
 ### Fixed
@@ -986,7 +993,8 @@ First public release of Clair, a native macOS workbench for coding with AI agent
 - **Mobile companion (preview)**: iOS app that pairs with the Mac to follow agent conversations, review diffs and attach to terminal sessions.
 - **Updates**: installed apps check for signed updates and install them on restart.
 
-[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.57.1...HEAD
+[Unreleased]: https://github.com/Diwamoto/clair/compare/v0.58.0...HEAD
+[0.58.0]: https://github.com/Diwamoto/clair/compare/v0.57.1...v0.58.0
 [0.57.1]: https://github.com/Diwamoto/clair/compare/v0.57.0...v0.57.1
 [0.57.0]: https://github.com/Diwamoto/clair/compare/v0.56.0...v0.57.0
 [0.56.0]: https://github.com/Diwamoto/clair/compare/v0.55.0...v0.56.0
