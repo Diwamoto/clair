@@ -384,7 +384,7 @@ public enum WorkbenchCLI {
   /// one is resolved here (`clair project open path=.`). Project-relative paths (tab.open, review.*) are left alone.
   static let pathArguments: Set<String> = [
     "project.open path", "project.addFolder path", "project.removeFolder path",
-    "file.open path", "file.isOpen path", "file.preview path", "debug.breakpoint path",
+    "file.open path", "file.isOpen path", "file.preview path", "tool.add path", "debug.breakpoint path",
     "finder.open path", "finder.reveal path", "finder.propose folder", "finder.addFavorite path", "finder.removeFavorite path",
     "history.list project",
   ]

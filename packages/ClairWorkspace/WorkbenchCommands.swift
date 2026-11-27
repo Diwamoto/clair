@@ -565,6 +565,24 @@ extension CommandRegistry {
     return (p, nil)
   }
 
+  /// An HTML tool's pane (a `.preview` leaf on its absolute path): focus the one already showing it, else split
+  /// the focused pane; with every pane closed it becomes the only pane.
+  static func openToolPane(_ s: inout WorkbenchState, _ path: String) -> CommandResult {
+    if !s.panesClosed, let pane = s.tree.leaves.first(where: { $0.kind == .preview && s.previews[$0.id] == path }) {
+      if s.tree.maximized != nil { s.tree.toggleMaximize() }
+      s.tree.focus(pane.id)
+      return .pane(pane.id)
+    }
+    if s.panesClosed {
+      s.tree = PaneTree(single: .preview); s.editorFiles = [:]; s.previews = [:]; s.panesClosed = false
+    } else {
+      if s.tree.maximized != nil { s.tree.toggleMaximize() }
+      s.tree.focus(s.tree.split(s.tree.focused, .horizontal, kind: .preview))
+    }
+    s.previews[s.tree.focused] = path
+    return .pane(s.tree.focused)
+  }
+
   private static func todoJSON(_ object: Any) -> String {
     String(decoding: (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes])) ?? Data("null".utf8), as: UTF8.self)
   }
@@ -1255,6 +1273,31 @@ extension CommandRegistry {
       s.previews[id] = active
       s.tree.focus(id)
       return .pane(id)
+    },
+    // ADR-0033: HTML tools — 標準 (shipped) + マイツール (`~/.clair/tools`), each opened as a pane showing only its page.
+    cmd("tool.list", "HTML ツール一覧", .read, palette: false) { _, _ in
+      .text(todoJSON(HTMLTools.list().map { ["name": $0.name, "path": $0.path, "builtin": $0.builtin] as [String: Any] }))
+    },
+    // User-only like `file.preview`: from a terminal it waits on an approval card (the page runs JavaScript).
+    cmd("tool.add", "HTML ツールを追加", .additive, ai: false,
+        params: [CommandParam("path", .string), CommandParam("open", .bool, required: false)], palette: false,
+        preflight: { _, i throws(CommandError) in
+          let path = i["path"]!.string!
+          try require(HTMLTools.isHTML(path), tr("HTML ファイルを指定してください"))
+          try require(WorkbenchProject.normalizedFile(path) != nil, "not a file \(path)")
+          return .additive
+        }) { s, i throws(CommandError) in
+      let copy: String
+      do { copy = try HTMLTools.add(WorkbenchProject.normalizedFile(i["path"]!.string!)!) } catch {
+        throw CommandError(.preconditionFailed, error.localizedDescription)
+      }
+      return i["open"]?.bool == false ? .text(copy) : openToolPane(&s, copy)
+    },
+    cmd("tool.open", "HTML ツールを開く", .additive, ai: false, params: [CommandParam("name", .string)], palette: false,
+        preflight: { _, i throws(CommandError) in
+          try require(HTMLTools.find(i["name"]!.string!) != nil, "no HTML tool \(i["name"]!.string!)"); return .additive
+        }) { s, i in
+      openToolPane(&s, HTMLTools.find(i["name"]!.string!)!.path)
     },
     // ADR-0025: the file browser — Finder's column view as an editor tab (`finder:<folder>`), any folder on disk.
     cmd("finder.open", "ファイルブラウザを開く", .read, ai: false, params: [CommandParam("path", .string, required: false)],

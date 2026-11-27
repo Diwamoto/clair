@@ -19,12 +19,22 @@
         let _ = buffers.edits[path]
         HTMLWebView(html: manager.buffer.snapshot.string(), directory: HTMLPreviewPane.directory(root: root, path: path))
           .accessibilityLabel(tr("HTML プレビュー"))
+      } else if let html = diskHTML {
+        // Not open in an editor (an HTML tool's pane, ADR-0033): the file as saved.
+        HTMLWebView(html: html, directory: HTMLPreviewPane.directory(root: root, path: path))
+          .accessibilityLabel(tr("HTML プレビュー"))
       } else {
         Text(tr("HTML ファイルを開くとプレビューを表示します。"))
           .font(Typography.font(Typography.chrome)).foregroundStyle(DesignTokens.Color.textTertiary)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
           .background(DesignTokens.Color.canvas)
       }
+    }
+
+    // ponytail: read on every body pass (HTMLWebView reloads only when the text changed); watch the file if tools get large.
+    private var diskHTML: String? {
+      guard let file = path.hasPrefix("/") ? path : root.map({ ($0 as NSString).appendingPathComponent(path) }) else { return nil }
+      return try? String(contentsOfFile: file, encoding: .utf8)
     }
 
     /// The file's own containing folder (symlinks resolved). `path` is relative to `root`, or absolute; a file

@@ -523,7 +523,7 @@ import Observation
         if id == "notice.post", let n = state.notices.items.first, n.kind == .posted, !n.read { announce(n, true) }
         if id == "notice.toggle", state.noticesOpen { noticeStack = [] }
         // `clair open` / Finder usually come while another app is in front: bring the file into view.
-        if id == "file.open" || id == "file.preview" {
+        if id == "file.open" || id == "file.preview" || id == "tool.add" || id == "tool.open" {
           NSApp?.activate(ignoringOtherApps: true)
           if let w = NSApp?.windows.first(where: { $0.isMiniaturized && $0.title != "Pair a device" }) { w.deminiaturize(nil) }
         }
@@ -2019,7 +2019,7 @@ import Observation
                   onClose: {
                     if !active { store.run("project.switch", ["name": .string(p.name)]) }
                     store.run("pane.focus", ["id": .int(id)]); store.run("pane.close")
-                  }, icon: tab == .graph(id) ? "point.3.connected.trianglepath.dotted" : tab == .preview(id) ? "eye" : "terminal",
+                  }, icon: tab == .graph(id) ? "point.3.connected.trianglepath.dotted" : tab == .preview(id) ? previewIcon(p.name, id) : "terminal",
                   providerIcon: tab == .terminal(id) ? agent?.title : nil,
                   onMove: active ? { from in store.run("tab.reorder", ["source": .string(from), "target": .string(tab.dragID)]) } : nil)
                 .help(title)
@@ -2115,8 +2115,18 @@ import Observation
 
     /// The shell's OSC title; an agent whose title is just its folder name (Codex) shows its profile name instead.
     private func previewTabTitle(_ project: String, _ pane: Int) -> String {
-      let path = project == st.project ? st.previews[pane] : st.layouts[project]?.previews[pane]
+      let path = previewPath(project, pane)
+      // An HTML tool's pane (ADR-0033) is named after the tool, like a file's tab.
+      if let path, HTMLTools.isTool(path) { return (path as NSString).lastPathComponent }
       return path.map { tr("プレビュー: %@", ($0 as NSString).lastPathComponent) } ?? tr("プレビュー")
+    }
+
+    private func previewIcon(_ project: String, _ pane: Int) -> String {
+      previewPath(project, pane).map { HTMLTools.isTool($0) } == true ? HTMLToolsSidebar.mode : "eye"
+    }
+
+    private func previewPath(_ project: String, _ pane: Int) -> String? {
+      project == st.project ? st.previews[pane] : st.layouts[project]?.previews[pane]
     }
 
     private func terminalTabTitle(_ project: String, _ pane: Int) -> String {
@@ -2215,7 +2225,7 @@ import Observation
       VStack(spacing: 0) {
         // Glass: the icons sit in a floating capsule only as tall as they are; the column keeps its 48pt cell.
         VStack(spacing: glass ? 4 : 2) {
-          ForEach(["folder", Self.browserMode, "shield", "terminal", "ladybug"], id: \.self) { icon in
+          ForEach(["folder", Self.browserMode, HTMLToolsSidebar.mode, "shield", "terminal", "ladybug"], id: \.self) { icon in
             activityBarButton(icon)
           }
         }
@@ -2253,6 +2263,19 @@ import Observation
 
     private var sidebar: some View {
       VStack(spacing: 0) {
+        if sidebarMode == HTMLToolsSidebar.mode {
+          HTMLToolsSidebar(
+            current: st.tree.leaves.first { $0.id == st.tree.focused && $0.kind == .preview }.flatMap { st.previews[$0.id] },
+            open: { store.run("tool.open", ["name": .string($0)]) },
+            add: { paths in
+              for p in paths {
+                if case .failure(let e) = store.run("tool.add", ["path": .string(p), "open": .bool(false)]) {
+                  menus.ask(ClairDialog(title: tr("追加できませんでした"), message: e.message) { _ in })
+                }
+              }
+            },
+            menus: menus)
+        } else {
         // Lazy: a Project can list thousands of files, and an eager tree makes accessibility traversal (and layout) block the main thread.
         ScrollView { LazyVStack(alignment: .leading, spacing: 0) { sidebarMode == "shield" ? AnyView(changesList) : sidebarMode == "terminal" ? AnyView(sessionList) : sidebarMode == "ladybug" ? AnyView(debugPanel) : sidebarMode == Self.browserMode ? AnyView(browserSidebar) : AnyView(explorer) }.clairScroller() }
         Spacer(minLength: 0)
@@ -2266,6 +2289,7 @@ import Observation
           }
             .buttonStyle(HoverWashStyle(radius: Radius.pill(Radius.control)))
             .padding(.horizontal, 12).padding(.vertical, 8)
+        }
         }
       }
       .frame(width: sidebarWidth)

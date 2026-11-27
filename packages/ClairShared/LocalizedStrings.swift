@@ -846,6 +846,15 @@ extension LocalizedStrings {
     "正常終了": "Exited",
     "完了": "Done", "エージェントから": "From an agent", "通知を出す": "Post Notification", "未読 %@": "%@ unread", "ほか %@ 件 · ⇧⌘H で一覧": "%@ more · ⇧⌘H to list", "通知一覧": "Notifications",
     "異常終了 (exit %@)": "Failed (exit %@)",
+    // ADR-0033: HTML tools
+    "標準": "Built-in",
+    "マイツール": "My Tools",
+    "生成した HTML をここへドロップすると追加されます": "Drop generated HTML here to add it",
+    ".html をドロップして追加": "Drop .html to add",
+    "Clair に同梱": "Ships with Clair",
+    "HTML ツール一覧": "List HTML Tools",
+    "HTML ツールを追加": "Add HTML Tool",
+    "HTML ツールを開く": "Open HTML Tool",
     // ADR-0025: file browser and agent file proposals
     "よく使う項目": "Favorites",
     "よく使う項目に追加": "Add to Favorites",
